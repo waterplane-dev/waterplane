@@ -40,6 +40,8 @@ export const GUARDS = [
   { test: "trafficarchive", tier: "edit", paths: ["scripts/traffic-archive.mjs"] },
   { test: "exposure-core", tier: "edit", paths: ["tools/exposure/**"] },
   { test: "exposure-parse", tier: "edit", paths: ["tools/exposure/**"] },
+  { test: "exposure-targets", tier: "edit", paths: ["tools/exposure/**"] },
+  { test: "exposure-play", tier: "edit", paths: ["tools/exposure/**"] },
   { test: "reachdashboard", tier: "edit", paths: ["scripts/reach-dashboard.mjs", "scripts/traffic-archive.mjs"] },
   { test: "tokenstatspins", tier: "edit", paths: [...WEB, "packages/extensions/*/web/**"] },
   { test: "hostshape", tier: "edit", paths: [...HOST, ...SKILLS, "eslint.config.js", "tools/skillmap.mjs"] },
@@ -102,7 +104,7 @@ export const GUARDS = [
 
 const TIER_RANK = { edit: 0, commit: 1, push: 2 };
 
-/** `**` any depth, `*` within one segment. Minimal on purpose: node's path.matchesGlob is 22.5+, engines say 20.12. */
+/** `**` any depth, `*` within one segment. Minimal on purpose: no dependency on node's path.matchesGlob (experimental in 22). */
 export function globRe(glob) {
   let re = "";
   for (let i = 0; i < glob.length; i++) {

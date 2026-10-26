@@ -80,3 +80,8 @@ A failed git pull or push of a repo raises a *needs you* notification naming the
 While a repo's last pull or push failed and nobody has handled it, its git button carries a red worded chip ("push failed" / "pull failed"). It goes away, saying so, when the next pull or push of that verb succeeds or the person taps done.
 - asked: 2026-10-25
 - shipped: 52910130
+
+### R-git-017 · shipped
+The git sheet's Explain button has the desktop explain, in plain words, what a push would send and a pull would bring (fetching first), under focus boxes that are all ticked by default: security, what changes for users, whether a deploy is needed and of which components (e.g. web app only, functions only, an app needing a store release), data and migrations, breaking changes, dependencies and cost, surprises the commit messages do not mention, and what to check by hand — plus an optional focus in the person's own words. It reads only; nothing is pushed or pulled by it.
+- asked: 2026-10-26 — "have another button to let ai explain the summary of the changes that are about to be pushed and if there are ones to pull also what is there to pull"
+- shipped: cd22d678

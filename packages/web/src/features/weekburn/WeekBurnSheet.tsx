@@ -13,7 +13,7 @@ import { Sheet, Empty, Unavailable, Button, Hint, Row, RowTitle, RowSub, Explain
 import { SHEET } from "../../sheetNames";
 import { useRemoteResource } from "../../useRemoteResource";
 import { saveWeekBurn } from "./actions";
-import { BRANCH_NOTE, burnRows, hiddenWorktreesNote, startLine, lastWeekHere, runningWords, sameAsLastOffered, saveVerb, stopChoices, toggleDir } from "./logic";
+import { PICK_NOTE, burnRows, hiddenWorktreesNote, startLine, lastWeekHere, runningWords, sameAsLastOffered, saveVerb, stopChoices, toggleDir } from "./logic";
 
 const baseName = (dir: string) => dir.split("/").filter(Boolean).pop() ?? dir;
 
@@ -78,7 +78,7 @@ export function WeekBurnSheet() {
           </div>
         </div>
 
-        <Hint>{BRANCH_NOTE}</Hint>
+        <Hint>{PICK_NOTE}</Hint>
 
         {verb.kind === "none"
           ? <Hint>{verb.why}</Hint>

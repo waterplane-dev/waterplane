@@ -489,11 +489,11 @@ export function osvFindings(batchResp, deps, vulnDetails = {}) {
  *  repo = GET /repos/{r}; workflowPerms = GET …/actions/permissions/workflow; protection = branch
  *  protection of the default branch (null = none); rulesets = GET …/rulesets; org = GET /orgs/{o}.
  * `settings` values are strings (B2 "scanning on, push protection off", B3 on/off, B4 none/protection/
- * ruleset, B5 read/write, B6 on/off) for the next run to diff; a setting that cannot be read is in
+ * ruleset (when gh cannot read it, "none"/"protection" from `scorecardBranch`, provenance in `notes.B4` = {source, score, date}, never in the diffed value), B5 read/write, B6 on/off) for the next run to diff; a setting that cannot be read is in
  * `absent`, not in `settings`. B5 "write" is an alert finding every run; B7 is a digest finding.
  */
-export function ghRepoSettings({ repo, workflowPerms, protection, rulesets, org, dependabotConfigPresent, hasManifests }) {
-  const settings = {}, findings = [], abs = [];
+export function ghRepoSettings({ repo, workflowPerms, protection, rulesets, org, dependabotConfigPresent, hasManifests, scorecardBranch }) {
+  const settings = {}, notes = {}, findings = [], abs = [];
   const sa = repo?.security_and_analysis;
   const st = (o) => o?.status;
   if (st(sa?.secret_scanning)) {
@@ -501,8 +501,20 @@ export function ghRepoSettings({ repo, workflowPerms, protection, rulesets, org,
   } else abs.push(absent("B2", "secret scanning is not readable with this token"));
   if (st(sa?.dependabot_security_updates)) settings.B3 = st(sa.dependabot_security_updates) === "enabled" ? "on" : "off";
   else abs.push(absent("B3", "Dependabot security updates are not readable with this token"));
-  if (protection === undefined && rulesets === undefined) abs.push(absent("B4", "branch protection is not readable with this token"));
-  else settings.B4 = protection ? "protection" : Array.isArray(rulesets) && rulesets.length ? "ruleset" : "none";
+  if (protection === undefined && rulesets === undefined) {
+    // gh could not read it: OpenSSF Scorecard's public Branch-Protection check is the fallback reading
+    const sc = scorecardBranch;
+    if (sc && typeof sc.score === "number" && sc.score >= 0) {
+      settings.B4 = sc.score === 0 ? "none" : "protection"; // same vocabulary as the gh path: a re-score must not read as a change
+      notes.B4 = { source: "scorecard", score: sc.score, date: sc.date ?? null };
+    } else abs.push(absent("B4", sc === undefined
+      ? "branch protection is not readable with this token"
+      : "branch protection is not readable with this token, and Scorecard's Branch-Protection check is inconclusive or not scored"));
+  } else settings.B4 = protection ? "protection" : Array.isArray(rulesets) && rulesets.length ? "ruleset" : "none";
+  if (settings.B4 === "none") {
+    findings.push(finding({ measure: "B4", subject: "default-branch", level: "digest", sources: [notes.B4 ? "openssf scorecard" : "github branch rules"],
+      text: "The default branch has no ruleset and no branch protection: a force-push or a deletion of it would go through." }));
+  }
   const perm = workflowPerms?.default_workflow_permissions;
   if (perm) {
     settings.B5 = perm;
@@ -518,7 +530,7 @@ export function ghRepoSettings({ repo, workflowPerms, protection, rulesets, org,
     findings.push(finding({ measure: "B7", subject: "dependabot.yml", level: "digest", sources: ["repo files"],
       text: "The repo has dependency manifests but no .github/dependabot.yml." }));
   }
-  return { settings, findings, absent: abs };
+  return { settings, notes, findings, absent: abs };
 }
 
 /** B2 alert per open secret-scanning alert. */
@@ -651,4 +663,122 @@ export function npmVerifyFinding(pkg, version, stdout) {
   const why = (fails.length ? fails : lines.slice(-1)).join("; ").slice(0, 300) || "no output";
   return finding({ measure: "C1", subject: `npm:${pkg}:verify`, version, level: "alert", sources: ["npm-verify"],
     text: `npm-verify --check failed for ${pkg}@${version}: ${why}` });
+}
+
+// ---- phase 3: C5-C7 (outside-the-repo upkeep), D1 (Play target API), D3 (Connect IQ crash groups) ------------
+
+const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/** C5: a privacy-policy URL's final reading (`{ok,status,finalUrl}` or `{ok:false,why}`); anything but 200 is a high alert, no answer is absent. */
+export function privacyUrlFinding(url, res) {
+  if (!res?.ok) return { findings: [], absent: [absent("C5", `${url}: ${res?.why ?? "no answer"}`, true)] };
+  if (res.status === 200) return { findings: [], absent: [] };
+  const via = res.finalUrl && res.finalUrl !== url ? ` (final URL ${res.finalUrl})` : "";
+  return { findings: [finding({ measure: "C5", subject: url, level: "alert", severity: "high", sources: ["http"],
+    text: `The privacy-policy URL answers HTTP ${res.status}, not 200${via}.` })], absent: [] };
+}
+
+/**
+ * C6 from an RDAP domain object: the `expiration` event. <=45 days (or past) is an alert; the version is the
+ * expiry date, so a renewal is a new key. The text carries the date only (no countdown): an "until the reading changes" accept compares it. Returns `{findings, absent, reading}` (reading = the date, for the row).
+ */
+export function rdapExpiryFinding(rdap, domain, now) {
+  const ev = (Array.isArray(rdap?.events) ? rdap.events : []).find((e) => e?.eventAction === "expiration");
+  const t = Date.parse(ev?.eventDate ?? "");
+  if (!ev || Number.isNaN(t)) return { findings: [], absent: [absent("C6", `RDAP for ${domain} lists no expiration date`)] };
+  const date = ymd(t), days = Math.floor((t - new Date(now).getTime()) / DAY);
+  if (days > 45) return { findings: [], absent: [], reading: date };
+  const text = days < 0 ? `${domain} expired on ${date}.` : `${domain} expires on ${date}.`;
+  return { findings: [finding({ measure: "C6", subject: `domain:${domain}`, version: date, level: "alert", severity: days < 0 ? "critical" : "moderate", sources: ["rdap"], text })], absent: [], reading: date };
+}
+
+/**
+ * C7: a check a machine cannot make (npm 2FA, the trusted publisher) is confirmed by hand with a date.
+ * No date is absent with the how-to; >365 days old is an alert, 335-365 a digest; a bad or future date is `error`.
+ */
+export function manualConfirmFinding(pkg, dateStr, now) {
+  const none = { findings: [], absent: [] };
+  if (dateStr === undefined || dateStr === null || dateStr === "")
+    return { ...none, absent: [absent("C7", "not confirmed by hand: check 2FA and the trusted publisher on npmjs.com, then pass --npm-2fa-confirmed <date>")] };
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr)) ? Date.parse(`${dateStr}T00:00:00Z`) : NaN;
+  if (Number.isNaN(t) || ymd(t) !== dateStr) return { ...none, error: `bad --npm-2fa-confirmed ${dateStr} (want YYYY-MM-DD)` };
+  const age = Math.floor((new Date(now).getTime() - t) / DAY);
+  if (age < 0) return { ...none, error: `--npm-2fa-confirmed ${dateStr} is in the future` };
+  const subject = `npm:${pkg}:2fa`;
+  if (age > 365) return { ...none, findings: [finding({ measure: "C7", subject, level: "alert", sources: ["manual"], text: `npm 2FA and the trusted publisher: last confirmed ${dateStr}, over 12 months ago.` })] };
+  if (age >= 335) return { ...none, findings: [finding({ measure: "C7", subject, level: "digest", sources: ["manual"], text: `npm 2FA and the trusted publisher: last confirmed ${dateStr}, due within 30 days.` })] };
+  return none;
+}
+
+/** The tracked files D1 reads for a targetSdk: build files and top-level scripts, never a template, fixture, test or example. */
+export const targetSdkFiles = (files) => files.filter((f) => !/(^|\/)(templates?|fixtures?|tests?|examples?|__tests__|testdata)\//.test(f))
+  .filter((f) => /(^|\/)(build\.gradle(\.kts)?|variables\.gradle|libs\.versions\.toml|AndroidManifest\.xml)$/.test(f) || /^[^/]+\/[^/]*\.sh$|^[^/]*\.sh$/.test(f));
+
+/**
+ * The targetSdk LITERALS in tracked build files ({path,text}[]): gradle `targetSdk(Version) = 36` / `targetSdkVersion 36`,
+ * a version catalog `targetSdk = "36"`, a shell build's `--target-sdk-version 36`, a manifest `android:targetSdkVersion="36"`.
+ * A non-literal (`rootProject.ext.targetSdkVersion`) matches nothing here, so it resolves only through a literal
+ * elsewhere (variables.gradle) and is never guessed. (Template/fixture/test/example paths are skipped by the caller.) Several values: the LOWEST, with its file. None: null.
+ */
+export function targetSdkReadings(files) {
+  const all = [];
+  for (const { path, text } of files ?? []) {
+    for (const raw of String(text ?? "").split("\n")) {
+      const line = raw.trim();
+      if (/^(\/\/|#|\*|\/\*|<!--)/.test(line)) continue;
+      for (const m of line.matchAll(/\btargetSdk(?:Version)?\b\s*[=:]?\s*["']?(\d{2,3})["']?(?![\w.])|--target-sdk-version[ =](\d{2,3})\b/g)) all.push({ value: +(m[1] ?? m[2]), file: path });
+    }
+  }
+  if (!all.length) return null;
+  const low = all.reduce((a, b) => (b.value < a.value ? b : a));
+  return { value: low.value, file: low.file, all };
+}
+
+/** Play's rule: by 31 Aug of year Y, new apps and updates target API Y-1990 (2024->34, 2025->35, 2026->36). */
+const PLAY_API_KNOWN = { 2024: 34, 2025: 35, 2026: 36 };
+const PLAY_KNOWN_LAST = 2026;
+const requiredApi = (y) => PLAY_API_KNOWN[y] ?? y - 1990;
+
+/**
+ * D1: targetSdk against Play's required API. The requirement in force is the last deadline passed (31 Aug, end of day, UTC);
+ * below it is a high alert. Below the next one with it within 60 days is moderate. The version is the required API,
+ * so the finding re-keys each year; a year past the known table says "expected".
+ */
+export function targetApiFinding(targetSdk, file, now, pkg = "app") {
+  const t = new Date(now).getTime(), y = new Date(t).getUTCFullYear();
+  const dl = (yr) => Date.UTC(yr, 7, 31, 23, 59, 59);
+  const mk = (yr, severity, text) => finding({ measure: "D1", subject: `play:${pkg}:targetSdk`, version: String(requiredApi(yr)), level: "alert", severity, sources: ["build-files"],
+    text: `${text}${yr > PLAY_KNOWN_LAST ? " (the requirement for that year is expected, not yet published)" : ""} targetSdk ${targetSdk} in ${file}.` });
+  const inForce = t > dl(y) ? y : y - 1;
+  if (targetSdk < requiredApi(inForce)) return [mk(inForce, "high", `Play has required API ${requiredApi(inForce)} since 31 Aug ${inForce} for new apps and updates;`)];
+  const next = t > dl(y) ? y + 1 : y;
+  const left = Math.floor((dl(next) - t) / DAY);
+  if (targetSdk < requiredApi(next) && left <= 60) return [mk(next, "moderate", `Play requires API ${requiredApi(next)} by 31 Aug ${next};`)];
+  return [];
+}
+
+/**
+ * D3 from the Connect IQ ERA checker's exit code (its contract: 0 = nothing new, 10 = act, 2 = cannot reach) and output.
+ * On 10, stdout is a JSON array: one alert per element ({key, app, channel, version, error, count, last, top}).
+ */
+export function eraFindings(status, stdout, stderr) {
+  const lastErr = String(stderr ?? "").split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? "no output";
+  const bad = (why, unreachable = true) => ({ findings: [], absent: [absent("D3", why, unreachable)] });
+  if (status === 0) return { findings: [], absent: [] };
+  if (status === 2) return bad(`ERA checker could not reach its source: ${lastErr}`);
+  if (status !== 10) return bad(`ERA checker exited ${status ?? "without a status"}: ${lastErr}`);
+  let arr;
+  try { arr = JSON.parse(stdout); } catch { return bad("ERA checker exited 10 but printed no JSON"); }
+  if (!Array.isArray(arr)) return bad("ERA checker exited 10 but printed no JSON array");
+  // The script's seen-state is never advanced here, so a growing group keeps its key: re-key by a decade bucket of the
+  // count (1, 10, 100, ...) in the SUBJECT (not the version: it is no app version an accept could wait for) so a tenfold growth alerts again and daily growth does not. The text is stable within a bucket.
+  const bucket = (n) => (Number.isFinite(+n) && +n >= 1 ? 10 ** Math.min(4, Math.floor(Math.log10(+n))) : 1);
+  const stores = {};
+  const findings = arr.filter((e) => e && typeof e === "object" && e.key).map((e) => {
+    const b = bucket(e.count);
+    stores[`D3.${e.key}.count`] = String(e.count ?? "");
+    return finding({ measure: "D3", subject: `ciq:${e.key}#${b}+`, level: "alert", severity: "high", sources: ["era"],
+      text: `${e.app} ${e.channel} v${e.version}: ${e.error}, ${b}+ times (top ${e.top}); the count is in the row` });
+  });
+  return findings.length ? { findings, absent: [], stores } : bad("ERA checker exited 10 but listed no crash group");
 }

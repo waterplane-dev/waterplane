@@ -329,6 +329,15 @@ test("the commit-message draft may take the toolless engine, and routes on its O
   assert.equal(SIDECAR_ENV.commit, "WATERPLANE_SIDECAR_COMMIT");
 });
 
+test("the change brief may take the toolless engine too, on its OWN knob", () => {
+  // Commits, stat, diffs and layout are IN the prompt (`changebrief.ts`).
+  const env = { WATERPLANE_SIDECAR_EXPLAIN: "openai-compat:http://localhost:11434/v1|gemma4:e4b" };
+  assert.equal(sidecarPlan("explain", env).engine, "openai-compat");
+  assert.equal(sidecarPlan("commit", env).engine, "claude-p");
+  assert.equal(sidecarPlan("explain", { WATERPLANE_SIDECAR_COMMIT: "openai-compat:http://x/v1|m" }).engine, "claude-p");
+  assert.equal(SIDECAR_ENV.explain, "WATERPLANE_SIDECAR_EXPLAIN");
+});
+
 // ── 5. workspace trust: a tool task never runs where the CLI would have asked ──
 //
 // Measured on claude 2.1.289: `claude -p` in a folder nobody trusted loads the

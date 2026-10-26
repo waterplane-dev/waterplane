@@ -32,7 +32,7 @@ import { stripRows } from "../../downloadState";
 import { appRows, buildsOf, NO_INSTALL, readyApps } from "../../installPolicy";
 import type { LauncherProps } from "./types";
 import {
-  type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, repoGroupsOf,
+  type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, activityOpenKeys, repoGroupsOf,
   repoOfCwd, rollupByRepo, rollupTotal, sessionRepoLabelIn, sessionRepoNameIn, sessionRowBranchIn, sessionRowTitleIn,
   sessionNumbersOf, sortSessions, starredByRepoOf,
 } from "./model";
@@ -494,23 +494,19 @@ export function useLauncherModel(p: LauncherProps) {
     : `${SHEET.automation.toLowerCase()} — run a prompt on its own at a time you pick (once, every week, or around a usage window)`;
 
   /**
-   * The launcher's activity badge: what has NOT settled on this phone.
-   *
-   * Failed rows count too — a gravestone is the one thing on that screen
-   * somebody has to come back to. Host-side waiting work is deliberately not
-   * summed in: it is not this device's to be nagged about.
-   *
-   * It used to have to add a second ledger's rows to this, because a failed
-   * queue row retired after an hour and its words moved there — so the badge
-   * counted the first hour of a dead send and nothing after it, while the list
-   * itself held eighty-four of them. Nothing retires now, so the queue IS the
-   * count. A row the user has FILED is not counted, which is what makes the
-   * badge answer "is there anything left to decide" rather than "has anything
-   * ever gone wrong".
+   * The launcher's activity badge: what is still open — this phone's unsettled
+   * sends plus the desktop rows that wait on a person (`activityOpenKeys` says
+   * which and why). Failed sends count: a gravestone is the one thing on that
+   * screen somebody has to come back to. A row FILED or marked done here is not
+   * counted, so the badge answers "is there anything left to decide" rather
+   * than "has anything ever gone wrong". Keys, because the menu entry opens on
+   * exactly these.
    */
-  const activityBadge = outbox.filter((e) =>
-    (e.status === "queued" || e.status === "failed") && !activityFiled.has(`queue:${e.ackId}`)
-    && !activityConfirmedDone.has(`queue:${e.ackId}`)).length;
+  const activityKeys = useMemo(
+    () => activityOpenKeys(outbox, intents, { has: (k) => activityFiled.has(k) || activityConfirmedDone.has(k) }),
+    [outbox, intents, activityFiled, activityConfirmedDone],
+  );
+  const activityBadge = activityKeys.length;
   /** The download queue at a glance, for the menu chip and the menu's own
    *  entry — bytes, not files (`features/pull`'s `pullSummary`). */
   const pullRecords = usePullRecords();
@@ -557,7 +553,7 @@ export function useLauncherModel(p: LauncherProps) {
     starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,
     // chips
-    scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, dl, appsReady,
+    scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, activityKeys, dl, appsReady,
     // the other lists
     visibleRecent, hiddenRecent, reopenable, hiddenCount,
   };

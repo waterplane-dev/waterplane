@@ -45,9 +45,9 @@ export type ActivityKind = "prompt" | "answer" | "upload" | "action" | "sweep" |
  */
 export type DeliveryTruth = "landed" | "unconfirmed" | "unsubmitted" | "refused" | "unreachable" | "unknown";
 
-/** The filter chips, and the bucket a row is sorted into. `all` is a chip only. */
+/** The filter chips, and the bucket a row is sorted into. `open` and `all` are chips only. */
 export type ActivityBucket = "needsYou" | "failed" | "running" | "waiting" | "scheduled" | "done";
-export type ActivityFilter = "all" | ActivityBucket | "dismissed";
+export type ActivityFilter = "open" | "all" | ActivityBucket | "dismissed";
 
 /**
  * Every action any row can offer. An id rather than a handler, because this

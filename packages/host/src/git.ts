@@ -771,6 +771,23 @@ async function pullOnce(wt: string): Promise<{ ok: boolean; output?: string; err
 }
 
 /**
+ * The rules GitHub names when a ruleset (GH013, `remote: - <rule>` lines) or classic branch
+ * protection (GH006, `remote: error: <rule>` lines) refuses a push, plus the page that lists them —
+ * as a clause, or "" when the remote named none. Only the remote's own words, never a guess.
+ */
+function ruleWords(lines: string[]): string {
+  const rules: string[] = [];
+  let page = "";
+  for (const l of lines) {
+    const at = /^remote:\s+Review all repository rules at (\S+)/.exec(l);
+    if (at) { page = at[1]; continue; }
+    const r = /^remote:\s+(?:- |error: )(.+?)\s*$/.exec(l);
+    if (r && !/^GH0\d\d:/.test(r[1]) && !rules.includes(r[1])) rules.push(r[1].replace(/\.$/, ""));
+  }
+  return (rules.length ? `: ${rules.join("; ")}` : "") + (page ? ` (rules: ${page})` : "");
+}
+
+/**
  * What a refused push says on the phone. A pre-push hook (the local CI) prints
  * its steps to git's STDOUT, so stderr alone held only node's warnings and
  * git's closing "failed to push" — the step that failed was in the half that
@@ -796,7 +813,9 @@ export function pushFailureText(stdout: string, stderr: string, tail = 40): stri
     const passed = lines.some((l) => /^local CI passed\b/.test(l)) ? "The pre-push check passed, but the" : "The";
     const moved = /fetch first|non-fast-forward/.test(why)
       ? ` — ${ref} moved on the remote while this ran. Pull, then push again.`
-      : ` — ${why}`;
+      : /repository rule violations|protected branch hook declined/.test(why)
+        ? ` — a branch rule on the remote blocks this push${ruleWords(lines)}. Nothing changed there; your commits are still here.`
+        : ` — ${why}`;
     return `${passed} remote refused ${ref}${moved}\n\n${rejected[0]}\n${body}`;
   }
   return body;

@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { BRAND, nodeMeetsMin, nodeTooOldSentence } from "@waterplane/shared";
 
-// import.meta.dirname is undefined before Node 20.11 (and the host needs 20.12, NODE_MIN): refuse in words, not a TypeError.
+// import.meta.dirname is undefined before Node 20.11 (the host's floor is NODE_MIN, 22.12): refuse in words, not a TypeError.
 if (!nodeMeetsMin(process.versions.node)) {
   console.error(`[${BRAND.slug}] ${nodeTooOldSentence(process.versions.node)}`);
   process.exit(1);

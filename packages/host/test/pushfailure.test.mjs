@@ -27,7 +27,23 @@ test("a green check then a refused push says the remote moved, ahead of 20k of e
 
 test("a refusal without a hook names git's reason", () => {
   const t = pushFailureText("To x\n!\trefs/heads/dev:refs/heads/dev\t[remote rejected] (protected branch hook declined)\nDone\n", "error: failed to push some refs to 'x'\n");
-  assert.match(t, /^The remote refused dev — \[remote rejected\] \(protected branch hook declined\)/);
+  assert.match(t, /^The remote refused dev — a branch rule on the remote blocks this push\. Nothing changed there; your commits are still here\./);
+  assert.match(t, /\[remote rejected\] \(protected branch hook declined\)/);
+});
+
+test("a ruleset refusal (GH013) names the remote's rules and the page that lists them", () => {
+  const stdout = "To github.com:x/y.git\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (push declined due to repository rule violations)\nDone\n";
+  const stderr = "remote: error: GH013: Repository rule violations found for refs/heads/main.\nremote: Review all repository rules at https://github.com/x/y/rules?ref=refs%2Fheads%2Fmain\nremote: \nremote: - Changes must be made through a pull request.\nremote: \nremote: - Required status check \"local-ci\" is expected.\nremote: \nerror: failed to push some refs to 'github.com:x/y.git'\n";
+  const t = pushFailureText(stdout, stderr);
+  assert.match(t, /^The remote refused main — a branch rule on the remote blocks this push: Changes must be made through a pull request; Required status check "local-ci" is expected \(rules: https:\/\/github\.com\/x\/y\/rules\?ref=refs%2Fheads%2Fmain\)\. Nothing changed there/);
+});
+
+test("classic protection (GH006) names its rule, not the GH006 header", () => {
+  const stdout = "!\trefs/heads/main:refs/heads/main\t[remote rejected] (protected branch hook declined)\n";
+  const stderr = "remote: error: GH006: Protected branch update failed for refs/heads/main.\nremote: error: Changes must be made through a pull request.\n";
+  const t = pushFailureText(stdout, stderr);
+  assert.match(t, /blocks this push: Changes must be made through a pull request\. Nothing changed/);
+  assert.doesNotMatch(t.split("\n")[0], /GH006/);
 });
 
 test("no hook: git's own words, unchanged", () => {

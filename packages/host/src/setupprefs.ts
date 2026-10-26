@@ -23,8 +23,9 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { ContextLimitsStore, setContextLimitsStore } from "./contextlimits.js";
-import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, OPT_INS, cleanAutoCompactDefault, type OptInChoice } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, OPT_INS, cleanAutoCompactDefault, type ComplianceAcceptRequest, type OptInChoice } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
+import { setExposureAccept } from "./exposure.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 interface Doc {
@@ -32,6 +33,10 @@ interface Doc {
   ignored: Record<string, string[]>;
   /** What the person said about each opt-in offer, per repo (`optins.ts`). Not a check: nothing here is counted. */
   optIns: Record<string, Record<string, OptInChoice>>;
+  /** When this desktop last saw each offer's words sent, per repo (`optins.ts`'s
+   *  `noteOptInSends`). Remembered because the session that carried them, and
+   *  its history, are gone once it closes. */
+  optInSent: Record<string, Record<string, number>>;
 }
 
 function key(worktree: string): string {
@@ -40,13 +45,13 @@ function key(worktree: string): string {
 
 export class SetupPrefsStore {
   private path: string;
-  private doc: Doc = { ignored: {}, optIns: {} };
+  private doc: Doc = { ignored: {}, optIns: {}, optInSent: {} };
 
   constructor(root: string) {
     this.path = join(hostStateDir(root), "setupprefs.json");
     try {
       if (existsSync(this.path)) {
-        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown };
+        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown; optInSent?: unknown };
         // Cleaned on the way IN too: a hand-edit must not put an unreadable
         // window or a non-advisory id where the checklist reads it.
         if (raw?.autoCompactDefault != null) {
@@ -67,6 +72,16 @@ export class SetupPrefsStore {
               if (OPT_INS.some((d) => d.id === id) && (c === "declined" || c === "done")) m[id] = c;
             }
             if (Object.keys(m).length) this.doc.optIns[k] = m;
+          }
+        }
+        if (raw?.optInSent && typeof raw.optInSent === "object" && !Array.isArray(raw.optInSent)) {
+          for (const [k, v] of Object.entries(raw.optInSent as Record<string, unknown>)) {
+            if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+            const m: Record<string, number> = {};
+            for (const [id, at] of Object.entries(v as Record<string, unknown>)) {
+              if (OPT_INS.some((d) => d.id === id) && typeof at === "number" && Number.isFinite(at) && at > 0) m[id] = at;
+            }
+            if (Object.keys(m).length) this.doc.optInSent[k] = m;
           }
         }
       }
@@ -129,6 +144,21 @@ export class SetupPrefsStore {
     return { ok: true };
   }
 
+  optInSentTimes(worktree: string): Record<string, number> {
+    return { ...(this.doc.optInSent[key(worktree)] ?? {}) };
+  }
+
+  /** Remember that an offer's words were sent at `at`. Only ever moves forward;
+   *  writes only when it did, so a history event per captured output is free. */
+  noteOptInSent(worktree: string, id: string, at: number): void {
+    if (!OPT_INS.some((d) => d.id === id) || !Number.isFinite(at) || at <= 0) return;
+    const k = key(worktree);
+    const cur = this.doc.optInSent[k] ?? {};
+    if ((cur[id] ?? 0) >= at) return;
+    this.doc.optInSent[k] = { ...cur, [id]: at };
+    this.save();
+  }
+
   private save(): void {
     try {
       mkdirSync(join(this.path, ".."), { recursive: true });
@@ -164,6 +194,15 @@ export function ignoredChecks(worktree: string): string[] {
   return current?.ignored(worktree) ?? [];
 }
 
+/**
+ * Accept (or stop accepting) an exposure finding: the `{reason, until}` extension
+ * of "a person said leave this", but it lives in the watch's own accepts file
+ * (`exposure.ts`) because the release gate reads that file, not this store.
+ */
+export function acceptCheck(worktree: string, req: ComplianceAcceptRequest): { ok: true } | { ok: false; error: string } {
+  return setExposureAccept(worktree, req);
+}
+
 /** What the person said about each opt-in offer in this repo — empty without a store. */
 export function optInChoices(worktree: string): Record<string, OptInChoice> {
   return current?.optInChoices(worktree) ?? {};
@@ -172,4 +211,13 @@ export function optInChoices(worktree: string): Record<string, OptInChoice> {
 export function setOptInChoice(worktree: string, id: string, choice: OptInChoice | null): { ok: true } | { ok: false; error: string } {
   if (!current) return { ok: false, error: "no preference store is installed on this host" };
   return current.setOptInChoice(worktree, id, choice);
+}
+
+/** When this desktop last saw each offer's words sent in this repo — empty without a store. */
+export function optInSentTimes(worktree: string): Record<string, number> {
+  return current?.optInSentTimes(worktree) ?? {};
+}
+
+export function noteOptInSent(worktree: string, id: string, at: number): void {
+  current?.noteOptInSent(worktree, id, at);
 }

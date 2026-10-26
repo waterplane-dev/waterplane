@@ -22,7 +22,7 @@ const deps = {
   repoName: (cwd) => cwd.split("/").pop(),
 };
 const input = (over = {}) => ({ now: NOW, online: true, hostSeenAt: NOW - 1000, deps, ...over });
-const counts = (over = {}) => ({ all: 0, needsYou: 0, failed: 0, running: 0, waiting: 0, scheduled: 0, done: 0, dismissed: 0, ...over });
+const counts = (over = {}) => ({ open: 0, all: 0, needsYou: 0, failed: 0, running: 0, waiting: 0, scheduled: 0, done: 0, dismissed: 0, ...over });
 
 // ── The chip row ────────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ test("…but lit it stays drawn — the chip you are on never goes — and `dism
 test("the chip counts and the rows they open come from the same counter", () => {
   const rows = activityRows(input({ pulls: [pull({ state: "done" }), pull({ id: "p2", state: "failed", error: "gone" })] }));
   const { chips } = activityChips(activityCounts(rows), "all", false);
-  assert.deepEqual(chips.map((c) => c.text), ["all · 2", "failed · 1", "done · 1"]);
+  assert.deepEqual(chips.map((c) => c.text), ["open · 1", "all · 2", "failed · 1", "done · 1"]);
 });
 
 // ── A download ──────────────────────────────────────────────────────────────
@@ -173,4 +173,16 @@ test("…a result naming no place, or another repo, leaves the line whole", () =
 test("…and *picking up the last conversation* stays: no result sentence says it", () => {
   const [r] = activityRows(input({ intents: [ran({ resume: true })] }));
   assert.equal(r.where, "picking up the last conversation");
+});
+
+test("'open' is the to-do cut: a chip while it is a real subset or lit, never a word in the 'nothing' line", () => {
+  const mixed = activityChips(counts({ all: 38, open: 1, needsYou: 1, scheduled: 6, done: 31 }), "open", false);
+  assert.deepEqual(mixed.chips.map((c) => [c.id, c.on]).slice(0, 2), [["open", true], ["all", false]]);
+  assert.doesNotMatch(mixed.none ?? "", /\bopen\b/);
+  // nothing open and not lit: no chip, and the buckets name their own empties
+  const settled = activityChips(counts({ all: 4, done: 4 }), "all", false);
+  assert.ok(!settled.chips.some((c) => c.id === "open"));
+  // lit at 0 (the last open row was just dealt with): still drawn, so the cut says what it is
+  const emptied = activityChips(counts({ all: 4, done: 4 }), "open", false);
+  assert.ok(emptied.chips.some((c) => c.id === "open" && c.on));
 });

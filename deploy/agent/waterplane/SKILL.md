@@ -81,7 +81,7 @@ for the checkout's own tooling).
    ```
    Offer the person the script to read first. The service records the root it was installed with. If
    the download 404s there is no public release yet: use the source route.
-2. **From source** (no release yet, or they want to hack on it) — Node ≥ 20.12, tmux installed first
+2. **From source** (no release yet, or they want to hack on it) — Node ≥ 22.12, tmux installed first
    (`brew install tmux`; on Linux hand the person `sudo apt-get install -y tmux` or their distro's
    equivalent):
    ```bash

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lastWeekHere, runningWords, sameAsLastOffered, saveVerb, savedToast, stopChoices, toggleDir } from "./logic.ts";
+import { PICK_NOTE, lastWeekHere, runningWords, sameAsLastOffered, saveVerb, savedToast, stopChoices, toggleDir } from "./logic.ts";
 
 const status = (over = {}) => ({
   prefs: { repos: [], weekOf: null, recurring: false, lastRepos: ["/a", "/b"], stopPct: 95 },
@@ -79,4 +79,10 @@ test("start line: English weekday, relative days", async () => {
   assert.equal(inWords(40 * 60000), "in 40 min");
   assert.equal(inWords(5 * 3600e3), "in 5 h");
   assert.equal(inWords(0), "now");
+});
+
+test("the sheet says what a tick does: sessions, one commit each, nothing pushed", () => {
+  assert.match(PICK_NOTE, /ticked repo gets unattended sessions/);
+  assert.match(PICK_NOTE, /commits/);
+  assert.match(PICK_NOTE, /Nothing is pushed/);
 });

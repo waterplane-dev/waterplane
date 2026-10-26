@@ -289,6 +289,10 @@ export interface CoreApi {
     openPlugin(pluginId: string): boolean;
     /** One repo's health chart (the readings sheet's `repohealth` door). */
     openRepoHealth(repo: RepoTarget): void;
+    /** The repo-readings checklist on one repo (null = the sheet's own choice), aimed; the setup feature's `openSetup`. */
+    openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch"; focus?: "findings" }): void;
+    /** The context & cost sheet for ONE session by id (null = the attached one); never attaches. */
+    openContext(sessionId: string | null): void;
     /** Automation (the `schedule` sheet), cut to exactly these rules under `label`;
      *  `repoDir` when the cut IS one repo's, so the sheet's foot speaks for that repo. */
     openScheduleCut(ids: string[], label: string, repoDir?: string): void;

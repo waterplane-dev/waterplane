@@ -5,7 +5,11 @@
 // is decided from values, so it is tested in isolation (tools/exposure-core.test.mjs). Why it looks
 // like this: a daily, model-free read of what could hurt the repo from outside beats a release-day
 // surprise; a source it could not read is `absent` (never a pass), and a person's accept lives in a
-// file beside the stored rows, never inside a finding.
+// file beside the stored rows, never inside a finding. The accept logic (PRE_ACCEPTED, semverCmp,
+// applyAccepts, readLastRow) lives in @waterplane/shared so the phone and the CLI agree on it.
+
+import { PRE_ACCEPTED, semverCmp, acceptLive, applyAccepts, readLastRow } from "@waterplane/shared";
+export { PRE_ACCEPTED, semverCmp, acceptLive, applyAccepts, readLastRow };
 
 /** @typedef {"critical"|"high"|"moderate"|"low"|"info"} Severity */
 /** @typedef {{version?:string}|{date?:string}|{change?:string}} Until  until a newer version / a date / the reading changes (change = the finding's text at accept time) */
@@ -20,7 +24,8 @@
 /**
  * @typedef {{
  *   v: 1, at: string, repo: string, dir: string, head?: string, findings: Finding[], absent: Absent[],
- *   readings: {installScripts?: string[], settings?: Record<string,string>, licences?: string[]},
+ *   readings: {installScripts?: string[], settings?: Record<string,string>, licences?: string[], stores?: Record<string,string>},
+ *   only?: string[],
  *   firstRun?: true
  * }} Row
  */
@@ -28,38 +33,6 @@
 const SEVERITY_ORDER = ["info", "low", "moderate", "high", "critical"];
 const sevRank = (s) => SEVERITY_ORDER.indexOf(s);
 const SETTING_SOURCE = "setting change";
-
-/** Built-in accepts, merged UNDER the accepts file's (the file wins). Keys are what parse.mjs emits. */
-export const PRE_ACCEPTED = {
-  "A2:node-pty": { reason: "node-pty is pinned to a pre-release on purpose (SECURITY.md)", at: "2026-10-26" },
-  "A5:web-push": { reason: "MPL-2.0, accepted on purpose", at: "2026-10-26" },
-};
-
-/** Semver-ish compare (-1/0/1); a pre-release sorts below its release, `v` and `+build` ignored. */
-export function semverCmp(a, b) {
-  const split = (s) => {
-    const [core, ...rest] = String(s).trim().replace(/^v/, "").split("+")[0].split("-");
-    return { nums: core.split(".").map((n) => parseInt(n, 10) || 0), pre: rest.length ? rest.join("-").split(".") : null };
-  };
-  const x = split(a), y = split(b);
-  for (let i = 0; i < Math.max(x.nums.length, y.nums.length); i++) {
-    const d = (x.nums[i] ?? 0) - (y.nums[i] ?? 0);
-    if (d) return d < 0 ? -1 : 1;
-  }
-  if (!x.pre && !y.pre) return 0;
-  if (!x.pre) return 1;
-  if (!y.pre) return -1;
-  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
-    const p = x.pre[i], q = y.pre[i];
-    if (p === undefined) return -1;
-    if (q === undefined) return 1;
-    const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
-    if (pn && qn) { if (+p !== +q) return +p < +q ? -1 : 1; }
-    else if (pn !== qn) return pn ? -1 : 1;
-    else if (p !== q) return p < q ? -1 : 1;
-  }
-  return 0;
-}
 
 /** The dedupe + accept key. An advisory id makes A1 and B1 for one package ONE key (one Accept). */
 export function findingKey({ measure, subject, version, advisory }) {
@@ -164,28 +137,6 @@ export function firstRunOff(row) {
   return lines;
 }
 
-const toMs = (d) => (d instanceof Date ? d.getTime() : Date.parse(d));
-
-/** Is this accept still live for this finding? Every condition it names must hold; none => forever. */
-function acceptLive(f, a, now) {
-  const u = a.until;
-  if (!u) return true;
-  if (u.version !== undefined && f.version && semverCmp(f.version, u.version) > 0) return false;
-  if (u.date !== undefined && !(toMs(u.date) > toMs(now))) return false;
-  if (u.change !== undefined && u.change !== f.text) return false;
-  return true;
-}
-
-/** Set `accepted` on every finding with a live accept; PRE_ACCEPTED sits under the file's (file wins). */
-export function applyAccepts(findings, accepts, now) {
-  const all = { ...PRE_ACCEPTED, ...(accepts ?? {}) };
-  return findings.map((f) => {
-    const a = all[f.key];
-    if (!a || !acceptLive(f, a, now)) { const { accepted: _x, ...rest } = f; return rest; }
-    return { ...f, accepted: { reason: a.reason, at: a.at, ...(a.until ? { until: a.until } : {}) } };
-  });
-}
-
 /** A key absent from the previous row's findings (no previous row => everything is new). */
 export const isNew = (f, prevRow) => !(prevRow?.findings ?? []).some((p) => p.key === f.key);
 
@@ -260,17 +211,4 @@ export function renderText(row, prevRow) {
   for (const a of row.absent ?? []) lines.push(`absent ${a.measure}${a.unreachable ? " (unreachable)" : ""}: ${a.why}`);
   if (!lines.length) lines.push("nothing open");
   return lines;
-}
-
-/** The last parseable JSON line of a JSONL string; a torn last line (a crash mid-append) is skipped. */
-export function readLastRow(text) {
-  const lines = String(text ?? "").split("\n");
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].trim()) continue;
-    try {
-      const v = JSON.parse(lines[i]);
-      if (v && typeof v === "object") return v;
-    } catch { /* torn line: try the one before */ }
-  }
-  return null;
 }

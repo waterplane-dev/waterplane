@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  ALLOW_LICENCES, apkCertFinding, dependabotFindings, eolFindings, ghRepoSettings, licenceFindings, marketplaceFindings,
+  ALLOW_LICENCES, apkCertFinding, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings,
   npmAuditFindings, npmPublishedFindings, osvFindings, osvQueries, parseGradleDeps, parseLockfile, parsePyproject,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
@@ -339,7 +339,7 @@ test("ghRepoSettings: readings as strings, B5 write alerts every run, B7 when ma
   const none = ghRepoSettings({ repo: REPO(), workflowPerms: { default_workflow_permissions: "read" }, protection: null, rulesets: [], org: { two_factor_requirement_enabled: true }, dependabotConfigPresent: true, hasManifests: true });
   assert.equal(none.settings.B4, "none");
   assert.equal(none.settings.B5, "read");
-  assert.equal(none.findings.length, 0);
+  assert.deepEqual(none.findings.map((f) => [f.key, f.level]), [["B4:default-branch", "digest"]]);
   const prot = ghRepoSettings({ repo: REPO(), protection: { required_status_checks: {} }, rulesets: [] });
   assert.equal(prot.settings.B4, "protection");
 });
@@ -354,6 +354,25 @@ test("ghRepoSettings: B6 null is absent, not off; a user-owned repo is absent 'n
   const blind = ghRepoSettings({ repo: { owner: { type: "Organization" } } });
   assert.deepEqual(blind.absent.map((a) => a.measure).sort(), ["B2", "B3", "B4", "B5", "B6"]);
   assert.deepEqual(blind.settings, {});
+});
+
+test("ghRepoSettings B4: Scorecard fills it only when gh cannot read it", () => {
+  const b4 = (extra) => ghRepoSettings({ repo: REPO(), ...extra });
+  const sc = (score) => ({ score, reason: "r", date: "2026-10-26" });
+  assert.equal(b4({ scorecardBranch: sc(0) }).settings.B4, "none");
+  assert.equal(b4({ scorecardBranch: sc(8) }).settings.B4, "protection");
+  assert.equal(b4({ scorecardBranch: sc(9) }).settings.B4, "protection"); // a re-score does not change the diffed value
+  assert.deepEqual(b4({ scorecardBranch: sc(8) }).notes.B4, { source: "scorecard", score: 8, date: "2026-10-26" });
+  assert.equal(b4({ protection: null, rulesets: [] }).notes.B4, undefined);
+  for (const s of [sc(-1), null]) {
+    const r = b4({ scorecardBranch: s });
+    assert.equal(r.settings.B4, undefined);
+    assert.match(r.absent.find((a) => a.measure === "B4").why, /Scorecard.*inconclusive or not scored/);
+  }
+  assert.doesNotMatch(b4({}).absent.find((a) => a.measure === "B4").why, /Scorecard/);
+  // gh readable: the Scorecard input is ignored, values unchanged
+  assert.equal(b4({ protection: null, rulesets: [], scorecardBranch: sc(9) }).settings.B4, "none");
+  assert.equal(b4({ protection: { x: 1 }, scorecardBranch: sc(0) }).settings.B4, "protection");
 });
 
 test("secretScanningFindings: an alert per open alert", () => {
@@ -458,4 +477,108 @@ test("licenceFindings: a workspace package of our own is not a dependency (real 
     },
   });
   assert.deepEqual(licenceFindings(packages).map((x) => x.subject), ["leftpad"]);
+});
+
+// ---- phase 3 -------------------------------------------------------------------------------------------
+
+test("privacyUrlFinding: 200 is silent, another final status is a high alert, no answer is absent", () => {
+  assert.deepEqual(privacyUrlFinding("https://example.test/p", { ok: true, status: 200, finalUrl: "https://example.test/p" }), { findings: [], absent: [] });
+  const r = privacyUrlFinding("https://example.test/p", { ok: true, status: 404, finalUrl: "https://example.test/gone" });
+  assert.equal(r.findings[0].key, "C5:https://example.test/p");
+  assert.equal(r.findings[0].severity, "high");
+  assert.match(r.findings[0].text, /404.*https:\/\/example\.test\/gone/);
+  const a = privacyUrlFinding("https://example.test/p", { ok: false, why: "timeout" });
+  assert.equal(a.absent[0].measure, "C5"); assert.equal(a.absent[0].unreachable, true); assert.deepEqual(a.findings, []);
+});
+
+test("rdapExpiryFinding: 45-day edge, past is critical, version is the date, no event is absent", () => {
+  const rd = (d) => ({ events: [{ eventAction: "registration", eventDate: "2010-01-01T00:00:00Z" }, { eventAction: "expiration", eventDate: d }] });
+  assert.deepEqual(rdapExpiryFinding(rd("2026-12-31T00:00:00Z"), "example.test", NOW).findings, []);
+  assert.equal(rdapExpiryFinding(rd("2026-12-31T00:00:00Z"), "example.test", NOW).reading, "2026-12-31");
+  const edge = rdapExpiryFinding(rd("2026-12-10T12:00:00Z"), "example.test", NOW); // exactly 45 days
+  assert.equal(edge.findings[0].key, "C6:domain:example.test@2026-12-10");
+  assert.notEqual(edge.findings[0].severity, "critical");
+  assert.deepEqual(rdapExpiryFinding(rd("2026-12-11T12:00:00Z"), "example.test", NOW).findings, []);
+  const gone = rdapExpiryFinding(rd("2026-10-01T00:00:00Z"), "example.test", NOW);
+  assert.equal(gone.findings[0].severity, "critical"); assert.match(gone.findings[0].text, /expired/);
+  const t1 = rdapExpiryFinding(rd("2026-12-10T12:00:00Z"), "example.test", NOW).findings[0].text;
+  const t2 = rdapExpiryFinding(rd("2026-12-10T12:00:00Z"), "example.test", new Date("2026-11-20T12:00:00Z")).findings[0].text;
+  assert.equal(t1, t2, "no countdown in the text"); assert.match(t1, /2026-12-10/); assert.doesNotMatch(t1, /\bdays\b/);
+  assert.equal(rdapExpiryFinding({ events: [] }, "example.test", NOW).absent[0].measure, "C6");
+});
+
+test("manualConfirmFinding: no date absent, 365/335 day edges, bad and future dates are errors", () => {
+  assert.match(manualConfirmFinding("pkg", undefined, NOW).absent[0].why, /--npm-2fa-confirmed <date>/);
+  assert.match(manualConfirmFinding("pkg", "26-1-1", NOW).error, /bad/);
+  assert.match(manualConfirmFinding("pkg", "2026-02-31", NOW).error, /bad/);
+  assert.match(manualConfirmFinding("pkg", "2026-10-27", NOW).error, /future/);
+  assert.deepEqual(manualConfirmFinding("pkg", "2026-10-26", NOW), { findings: [], absent: [] });
+  assert.deepEqual(manualConfirmFinding("pkg", "2025-12-01", NOW).findings, []); // 329 days
+  const d = manualConfirmFinding("pkg", "2025-11-26", NOW).findings[0]; // 334.5 -> 334
+  assert.equal(d, undefined);
+  const due = manualConfirmFinding("pkg", "2025-11-25", NOW).findings[0]; // 335
+  assert.equal(due.level, "digest"); assert.match(due.text, /due within 30 days/); assert.equal(due.key, "C7:npm:pkg:2fa");
+  assert.equal(manualConfirmFinding("pkg", "2025-10-26", NOW).findings[0].level, "digest"); // 365
+  const old = manualConfirmFinding("pkg", "2025-10-25", NOW).findings[0];
+  assert.equal(old.level, "alert"); assert.match(old.text, /last confirmed 2025-10-25, over 12 months ago/);
+});
+
+test("targetSdkReadings: literal forms, lowest of several, indirection resolved only by a literal, none is null", () => {
+  const r = targetSdkReadings([
+    { path: "app/build.gradle", text: "android {\n  defaultConfig {\n    targetSdkVersion rootProject.ext.targetSdkVersion\n    minSdk 24\n  }\n}" },
+    { path: "variables.gradle", text: "ext {\n  targetSdkVersion = 36\n  compileSdkVersion = 36\n}" },
+  ]);
+  assert.deepEqual([r.value, r.file], [36, "variables.gradle"]);
+  assert.equal(targetSdkReadings([{ path: "app/build.gradle", text: "targetSdkVersion rootProject.ext.targetSdkVersion" }]), null);
+  assert.equal(targetSdkReadings([{ path: "a.gradle.kts", text: "// targetSdk = 20\n  targetSdk = 35" }]).value, 35);
+  const forms = [["targetSdk = 36", 36], ["targetSdkVersion 35", 35], ['targetSdk = "34"', 34], ["build --target-sdk-version 33 x", 33], ['<uses-sdk android:targetSdkVersion="32"/>', 32]];
+  for (const [text, v] of forms) assert.equal(targetSdkReadings([{ path: "f", text }]).value, v, text);
+  const low = targetSdkReadings([{ path: "a/build.gradle", text: "targetSdk = 36" }, { path: "libs.versions.toml", text: 'targetSdk = "34"' }]);
+  assert.deepEqual([low.value, low.file], [34, "libs.versions.toml"]);
+  assert.equal(targetSdkReadings([{ path: "f", text: "compileSdk = 36\nminSdk = 24" }]), null);
+});
+
+test("targetSdkFiles: build files count, template/fixture/test/example paths do not", () => {
+  const files = ["packages/app/android/variables.gradle", "packages/host/templates/android-hello/app/build.gradle.kts", "x/fixtures/a/build.gradle", "tests/b/build.gradle", "examples/c/AndroidManifest.xml", "app/src/__tests__/build.gradle", "build.sh", "templates/build.sh", "README.md"];
+  assert.deepEqual(targetSdkFiles(files), ["packages/app/android/variables.gradle", "build.sh"]);
+});
+
+test("targetApiFinding: the 31 Aug edge, the 60-day window, the yearly re-key and 'expected' past the table", () => {
+  const at = (s) => new Date(s);
+  const f = (sdk, when) => targetApiFinding(sdk, "app/build.gradle", at(when), "com.example.app");
+  // 2026-08-31 (the day itself): 2026's deadline has not passed; 2025's did and is met by 35
+  assert.deepEqual(f(35, "2026-08-31T12:00:00Z").map((x) => x.severity), ["moderate"]);
+  assert.equal(f(35, "2026-08-31T12:00:00Z")[0].version, "36");
+  assert.deepEqual(f(35, "2026-09-01T00:00:00Z").map((x) => x.severity), ["high"]); // passed
+  assert.equal(f(35, "2026-09-01T00:00:00Z")[0].key, "D1:play:com.example.app:targetSdk@36");
+  assert.deepEqual(f(36, "2026-09-01T00:00:00Z"), []);
+  assert.deepEqual(f(35, "2026-07-02T00:00:00Z").map((x) => x.severity), ["moderate"]); // 60 days left
+  assert.deepEqual(f(35, "2026-07-01T00:00:00Z"), []); // 61 days: outside the window
+  assert.equal(f(35, "2026-07-02T00:00:00Z")[0].text, f(35, "2026-08-01T00:00:00Z")[0].text, "no countdown in the text");
+  assert.deepEqual(f(34, "2026-01-10T00:00:00Z").map((x) => x.severity), ["high"]); // 2025's deadline missed
+  assert.equal(f(34, "2026-01-10T00:00:00Z")[0].version, "35");
+  // a year past the table: formula, worded as expected
+  const late = f(36, "2027-07-15T00:00:00Z");
+  assert.equal(late[0].version, "37"); assert.match(late[0].text, /expected/);
+  assert.doesNotMatch(f(35, "2026-09-01T00:00:00Z")[0].text, /expected/);
+});
+
+test("eraFindings: exit 0 nothing, 10 one alert per group, 2 unreachable, garbage unreachable with words", () => {
+  assert.deepEqual(eraFindings(0, "", ""), { findings: [], absent: [] });
+  const out = JSON.stringify([{ key: "appA/prod/Boom/1.2.3/Foo.mc:42", app: "appA", channel: "prod", error: "Boom", version: "1.2.3", count: 7, last: "2026-10-25", top: "Foo.mc:42" }, { key: "appA/prod/Bang/1.2.3/Bar.mc:1", app: "appA", channel: "prod", error: "Bang", version: "1.2.3", count: 1, last: "2026-10-24", top: "Bar.mc:1" }]);
+  const r = eraFindings(10, out, "");
+  assert.equal(r.findings.length, 2);
+  assert.equal(r.findings[0].severity, "high");
+  assert.equal(r.findings[0].key, "D3:ciq:appA/prod/Boom/1.2.3/Foo.mc:42#1+");
+  assert.equal(r.findings[0].text, "appA prod v1.2.3: Boom, 1+ times (top Foo.mc:42); the count is in the row");
+  assert.deepEqual(r.stores, { "D3.appA/prod/Boom/1.2.3/Foo.mc:42.count": "7", "D3.appA/prod/Bang/1.2.3/Bar.mc:1.count": "1" });
+  const at = (n) => eraFindings(10, JSON.stringify([{ key: "k", app: "a", channel: "c", error: "E", version: "1", count: n, last: "d", top: "t" }]), "").findings[0];
+  assert.deepEqual([9, 10, 99, 100, 1234, 99999, 5e6].map((n) => /#(\d+)\+$/.exec(at(n).subject)[1]), ["1", "10", "10", "100", "1000", "10000", "10000"]);
+  assert.equal(at(12).text, at(95).text, "stable inside a bucket"); assert.notEqual(at(95).key, at(100).key);
+  const two = eraFindings(2, "", "noise\nlogin failed\n");
+  assert.equal(two.absent[0].unreachable, true); assert.match(two.absent[0].why, /login failed/);
+  for (const [st, so] of [[10, "not json"], [10, "{}"], [10, "[]"], [1, ""], [null, ""]]) {
+    const g = eraFindings(st, so, "");
+    assert.deepEqual(g.findings, []); assert.equal(g.absent[0].measure, "D3"); assert.equal(g.absent[0].unreachable, true);
+  }
 });

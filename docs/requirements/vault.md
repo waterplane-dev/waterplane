@@ -406,3 +406,9 @@ gcloud CLI credentials are stored in the vault, and no unvaulted copy remains on
 ### R-vault-080 · requested
 A program's release card (`exec`/`fetch`) outlives the program's 90 s wait: the program hears that the card stays and to run again after approving; the card stays on the phone 90 min, a rerun meanwhile joins it with no new card or notification, and an approval after the program stopped waiting is kept 15 min for its next run (then its own lease time, or none for a secret released once).
 - asked: 2026-10-25 (owner: "many secret approvals only wait 90 seconds … I don't look at the phone sometimes")
+
+### R-vault-081 · shipped
+`npm run restart` does not drop live bounded grants and leases (late approvals waiting for their run included): they cross in the same memory-only courier as standing grants, each with its end and spent uses, and are restored only when a value-free check file written by the old process (HMAC under a key that exists only in the courier) vouches for them; anything else is refused in words in one decision row; a reboot or crash still drops them
+- asked: 2026-10-26 (owner: "go ahead with item 1, design the check first")
+- plan: packages/extensions/vault/docs/FOLLOWUPS-PLAN.md §2.4
+- shipped: bd3619f6 fc5f651c

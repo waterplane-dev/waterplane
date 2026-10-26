@@ -1,4 +1,4 @@
-import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type GitLog, type GitPushState, type GitStatus } from "@waterplane/shared";
+import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitLog, type GitPushState, type GitStatus } from "@waterplane/shared";
 import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
 import { readBodyFused } from "./webapiBody";
 
@@ -57,6 +57,13 @@ export const gitApi = {
    */
   gitMessage: (repoId: string) =>
     jpost<{ message?: string; reason?: string; limited?: boolean }>(`/api/repos/${repoId}/git/message`, {}, SLOW_OP_TIMEOUT_MS),
+  /**
+   * Explain what a push would send and a pull would bring, under the ticked
+   * foci (host `changebrief.ts`). POST: it spends, and fetches first. Its own
+   * fuse: a fetch (up to 2 min) and then a sonnet pass over two diffs.
+   */
+  gitExplain: (repoId: string, foci: readonly string[], note: string) =>
+    jpost<ChangeBrief>(`/api/repos/${repoId}/git/explain`, { foci, note }, 330_000),
   /** The branch against its upstream — incoming, outgoing, the shared history (host `gitlog.ts`). */
   gitLog: (repoId: string) => jget<GitLog>(`/api/repos/${repoId}/git/log`),
   /** One commit's message and file stat. */

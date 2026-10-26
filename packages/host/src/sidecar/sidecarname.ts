@@ -116,6 +116,11 @@ export async function runCommitTask(req: NameRequest): Promise<NameRun> {
   return runTextTask("commit", req);
 }
 
+/** And once more, on the `explain` knob — the change brief (`changebrief.ts`). */
+export async function runExplainTask(req: NameRequest): Promise<NameRun> {
+  return runTextTask("explain", req);
+}
+
 async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun> {
   const started = Date.now();
   const since = (): number => Date.now() - started;
@@ -185,7 +190,7 @@ async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun
   if (limit.blocked) {
     // The verb is the TASK's, because this sentence is shown to a person and
     // "nothing was titled" is not true of a commit message that was not written.
-    return { text: "", failed: false, limited: true, detail: limitNote(limit, task === "commit" ? "written" : "titled"), usage, usd, durationMs: since() };
+    return { text: "", failed: false, limited: true, detail: limitNote(limit, task === "name" ? "titled" : "written"), usage, usd, durationMs: since() };
   }
 
   let text = run.stdout;

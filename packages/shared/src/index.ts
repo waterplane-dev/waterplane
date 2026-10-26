@@ -66,8 +66,14 @@ export * from "./wire/install.js";
  *  was not measured is absent rather than zero. */
 export * from "./wire/capture.js";
 
+/** The exposure watch: rows, accepts and the setup-checklist rows built from them — the CLI and
+ *  the phone must agree on what is accepted. */
+export * from "./exposure.js";
+
 /** A repo or worktree: its git state, its setup verdict, the CLI install behind it. */
 export * from "./wire/repo.js";
+/** Always-on context: what a conversation's first request carried, and a repo + desktop's every-turn rows. */
+export * from "./wire/alwayson.js";
 
 /** The reader view's document — the CLI's own conversation log, parsed. */
 export * from "./wire/transcript.js";
@@ -223,6 +229,9 @@ export * from "./sessioncost.js";
 export * from "./contextweight.js";
 /** Every agent-instruction file in a folder, who reads it (Claude Code, Copilot) and when; the repeats between them. */
 export * from "./agentfiles.js";
+/** What this desktop adds to every session, whatever the repo; and the always-on rows and sentences both ends word alike. */
+export * from "./desktopfiles.js";
+export * from "./alwaysonwords.js";
 
 /** Which `autoCompactWindow` a spawned session would see, and from where —
  *  env > repo local > repo > user. Behind the checklist's auto-compact row. */
@@ -259,6 +268,9 @@ export * from "./assess.js";
  *  stamp that says whether a title may be overwritten, and the one display rule
  *  deciding whose name is on a row. */
 export * from "./naming.js";
+
+/** The change brief: the focus list both ends word alike, and its answer's shape. */
+export * from "./changebrief.js";
 
 /** The files an item's words name — images anywhere and the inbox/outbox
  *  transport by full path (the row's thumbnails; anything folding two items

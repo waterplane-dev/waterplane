@@ -692,8 +692,8 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/ActivityRowCard.tsx": 330,
   "activity/activityBucket.ts": 35,
   "activity/activityBulk.ts": 125,
-  "activity/activityChips.ts": 50,
-  "activity/activityFilters.ts": 70,
+  "activity/activityChips.ts": 60,
+  "activity/activityFilters.ts": 85,
   "activity/activityIntentRow.ts": 295,
   "activity/activityIntentWords.ts": 230,
   "activity/activityLabels.ts": 95,
@@ -704,7 +704,7 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/activitySheetTypes.ts": 140,
   "activity/activityTriage.ts": 210,
   "activity/activityTypes.ts": 360,
-  "activity/useActivityModel.ts": 135,
+  "activity/useActivityModel.ts": 145,
 };
 const ACTIVITY_SPLIT_DIRS = ["activity"];
 
@@ -999,10 +999,10 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
-  "webapi/webapiGit.ts": 75, // +pull, +log/show/fetch, +blob progress
+  "webapi/webapiGit.ts": 81, // +pull, +log/show/fetch, +blob progress, +explain
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 103, // +opt-ins (read, choice, and the row cleaner)
+  "webapi/webapiRepoOps.ts": 106, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch)
   "webapi/webapiRepos.ts": 50,
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached

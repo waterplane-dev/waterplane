@@ -1,13 +1,16 @@
 import { FileText, Layers, Loader, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useBackStep } from "./backStep";
 import { askConfirm } from "./Confirm";
 import { repoAccentStyle } from "./format";
 import { useRepoColors } from "./repoColors";
 import { STATUS_LABEL } from "./sessionFacts";
+import { FilterBar, SearchBox } from "./kit";
+import { useHasKeyboard } from "./ShortcutCard";
+import { registerShortcut } from "./shortcuts";
 import {
-  askTabAttach, askTabClose, askTabFile, fileTabKey, fileTabLabel, setFilePinned, tabCloseAsk, tabStripHeight, useSessionTabs,
-  type FileTab, type SessionTab, type TabsSnapshot,
+  askTabAttach, askTabClose, askTabFile, filterStrip, isTabsListPress, fileTabKey, fileTabLabel, setFilePinned, tabCloseAsk, tabStripHeight, useSessionTabs,
+  type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
 import { showToast } from "./toast";
@@ -103,6 +106,10 @@ import { showToast } from "./toast";
  * TAB on the strip's baseline with the number of open tabs — a bare list glyph
  * there read as a second burger right above the header's own.
  *
+ * **Ctrl+E opens the same list from anywhere** (VS Code's quick open), with a
+ * filter box and ↑/↓/Return — and works with the strip switched OFF, so the
+ * list and the chord live on `SessionTabsBar`, not on the strip.
+ *
  * It renders NOTHING with no sessions and no pins: a strip that is permanently empty is
  * furniture, and the height it publishes goes to zero with it so no screen pads
  * itself clear of a bar that is not there.
@@ -122,10 +129,56 @@ export function SessionTabsBar() {
     return () => { document.documentElement.style.removeProperty("--ui-tabs-h"); };
   }, [h]);
 
-  return show ? <Strip /> : null;
+  const [listOpen, setListOpen] = useState(false);
+  useBackStep(listOpen, () => setListOpen(false));
+  // How the list was opened (a keyboard press focuses its filter even where no
+  // keyboard was known yet), and each further press while it is up.
+  const [viaKey, setViaKey] = useState(false);
+  const [kick, setKick] = useState(0);
+  const anyRef = useRef(any);
+  anyRef.current = any;
+  // The last tab closed under the open list: shut it, or its Back step stays.
+  useEffect(() => { if (!any) setListOpen(false); }, [any]);
+  const openRef = useRef(listOpen);
+  openRef.current = listOpen;
+
+  // Ctrl+E from anywhere, VS Code's quick open. Capture phase on `window`, so
+  // a focused xterm or compose box does not take the press first (the CLI's
+  // own ^E, end of line, is the price — the same trade VS Code's terminal
+  // makes). Stands down while an in-app dialog (a close confirm) owns the keys,
+  // and with nothing open at all. Lives HERE, not in the strip: the strip can
+  // be switched off in Settings, and the chord still finds a tab.
+  useEffect(() => {
+    const free = () => anyRef.current && !document.querySelector(DIALOGS);
+    const onKey = (e: KeyboardEvent) => {
+      if (!isTabsListPress(e) || !free()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (openRef.current) { setKick((k) => k + 1); return; }
+      setViaKey(true);
+      setListOpen(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    const off = registerShortcut({
+      id: "tabs.list", mods: ["ctrl"], key: "E",
+      what: () => (openRef.current ? "next tab in the list" : "find an open tab"),
+      when: free,
+    });
+    return () => { window.removeEventListener("keydown", onKey, true); off(); };
+  }, []);
+
+  return (
+    <>
+      {show && <Strip listOpen={listOpen} onList={() => { setViaKey(false); setListOpen((o) => !o); }} />}
+      {listOpen && <ListLayer viaKey={viaKey} kick={kick} onClose={() => setListOpen(false)} />}
+    </>
+  );
 }
 
-function Strip() {
+/** What already owns the keyboard: an in-app dialog (`primaryKey.ts`'s set). */
+const DIALOGS = ".bl-modal-backdrop, [role=dialog][aria-modal=true]";
+
+function Strip({ listOpen, onList }: { listOpen: boolean; onList: () => void }) {
   const s = useSessionTabs<TabsSnapshot>((x) => x);
   // Subscribed for the RE-RENDER, not the value: the hue itself is read inside
   // `repoAccentStyle` off `format.ts`'s module state. This strip is mounted
@@ -153,20 +206,16 @@ function Strip() {
     else strip.scrollLeft = 0;
   }, [s.activeId, s.fileActive, s.order, s.strip.length]);
 
-  const [listOpen, setListOpen] = useState(false);
-  useBackStep(listOpen, () => setListOpen(false));
-
   // The list button grows with its count (215 open is real), and the strip is
   // padded clear of whatever width that is — one number, set on both.
   const allW = { ["--stab-all-w" as string]: `${38 + 7 * String(s.all.length).length}px` };
   return (
     <>
     <button className="stab-all" aria-label="list all open tabs" title="all open tabs as a list" style={allW}
-      aria-expanded={listOpen} onClick={() => setListOpen((o) => !o)}>
+      aria-expanded={listOpen} onClick={onList}>
       <Layers size={14} aria-hidden="true" />
       <span className="stab-all-n">{s.all.length}</span>
     </button>
-    {listOpen && <TabsList s={s} fileOn={fileOn} onClose={() => setListOpen(false)} />}
     <div className="sess-tabs" ref={ref} role="tablist" aria-label="open sessions"
       style={{ ...allW, ["--stab-n" as string]: String(s.count) }}>
       {/* A pinned file on screen is the front tab; the session under the
@@ -187,28 +236,91 @@ function Strip() {
   );
 }
 
+/** The list with its own subscription — it opens with the strip off too. */
+function ListLayer(p: { viaKey: boolean; kick: number; onClose: () => void }) {
+  const s = useSessionTabs<TabsSnapshot>((x) => x);
+  useRepoColors();
+  const fileOn = !!s.fileActive && s.files.some((f) => fileTabKey(f) === s.fileActive);
+  return <TabsList s={s} fileOn={fileOn} {...p} />;
+}
+
 /**
  * Every open tab, top to bottom in the strip's left-to-right order, uncut by
  * the limit — the strip made READABLE: the whole name wraps instead of
  * ellipsizing, with the repo and the state in words under it. A tap opens it
  * exactly as the tab would; the × asks exactly as the tab's does.
+ *
+ * **A filter above the list** (`filterStrip`: every typed word, anywhere in
+ * what the row says), and with it the keyboard: ↑/↓ (or Ctrl+N/P, or Ctrl+E
+ * again) move a highlight, Return opens it, Esc closes. The box takes focus
+ * only where a keyboard is known — a fine pointer, a hardware key seen, or the
+ * Ctrl+E that opened it — because focus on a touch phone is a soft keyboard
+ * over half the list nobody asked to type into.
  */
-function TabsList({ s, fileOn, onClose }: { s: TabsSnapshot; fileOn: boolean; onClose: () => void }) {
+function TabsList({ s, fileOn, viaKey, kick, onClose }: {
+  s: TabsSnapshot; fileOn: boolean; viaKey: boolean; kick: number; onClose: () => void;
+}) {
+  const keyboard = useHasKeyboard();
+  const [query, setQuery] = useState("");
+  const rows = useMemo(() => filterStrip(s.all, query, (st) => STATUS_LABEL[st]), [s.all, query]);
+  const isOn = (x: StripTab) => x.kind === "file" ? fileTabKey(x.file) === s.fileActive : !fileOn && x.tab.id === s.activeId;
+  // The highlight starts on the tab you are on, so the first ↓ is "the next one".
+  const [at, setAt] = useState(() => Math.max(0, s.all.findIndex(isOn)));
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const kicked = useRef(kick);
+
+  const step = (d: number) => setAt((i) => (rows.length ? (i + d + rows.length) % rows.length : 0));
+  useEffect(() => { if (kick !== kicked.current) { kicked.current = kick; step(1); } });
+  useEffect(() => { if (query) setAt(0); }, [query]);
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>(`[data-i="${at}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [at]);
+
+  function open(x: StripTab) {
+    onClose();
+    if (x.kind === "file") askTabFile(x.file); else askTabAttach(x.tab.id);
+  }
   async function close(t: SessionTab) {
     const ask = tabCloseAsk(t.label, t.status !== "exited");
     if (await askConfirm(ask)) askTabClose(t.id);
   }
+  function onKey(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing) return;
+    const ctrl = e.ctrlKey && !e.metaKey && !e.altKey;
+    const k = e.key.toLowerCase();
+    if (e.key === "ArrowDown" || (ctrl && k === "n")) { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowUp" || (ctrl && k === "p")) { e.preventDefault(); step(-1); }
+    else if (e.key === "Enter") { e.preventDefault(); if (rows[at]) open(rows[at]); }
+    // preventDefault: the wide layout's Esc (`escape.ts`) steps Back unless
+    // the press was already answered — this close IS that Back.
+    else if (e.key === "Escape") { e.preventDefault(); onClose(); }
+  }
+
+  const hidden = s.all.length - rows.length;
   return (
     <div className="stab-list-layer">
       <Sheet title={`open tabs · ${s.all.length}`} onClose={onClose}>
-        <ul className="stab-list">
-          {s.all.map((x) => {
+        <div className="stab-list-find">
+          <SearchBox className="grow" value={query} placeholder="type to find a tab"
+            autoFocus={viaKey || keyboard} role="combobox" aria-expanded="true" aria-controls="stab-list"
+            aria-activedescendant={rows[at] ? `stab-row-${at}` : undefined}
+            enterKeyHint="go" spellCheck={false} autoCapitalize="off" autoComplete="off"
+            onChange={(e) => setQuery(e.target.value)} onKeyDown={onKey} />
+          {(viaKey || keyboard) && <span className="stab-list-keys">↑ ↓ to choose · Return opens · Esc closes</span>}
+        </div>
+        {hidden > 0 && (
+          <FilterBar onClear={() => setQuery("")}>{rows.length} of {s.all.length} match “{query.trim()}”</FilterBar>
+        )}
+        <ul className="stab-list" id="stab-list" role="listbox" ref={listRef}>
+          {rows.length === 0 && <li className="stab-list-none">No open tab matches “{query.trim()}”.</li>}
+          {rows.map((x, i) => {
+            const sel = i === at ? " sel" : "";
+            const on = isOn(x) ? " on" : "";
+            const common = { "data-i": i, id: `stab-row-${i}`, role: "option", "aria-selected": i === at, onClick: () => open(x) };
             if (x.kind === "file") {
               const f = x.file;
-              const on = fileTabKey(f) === s.fileActive;
               return (
-                <li key={fileTabKey(f)} className={`stab-row stab-file${on ? " on" : ""}`} style={repoAccentStyle(f.repo)}
-                  onClick={() => { onClose(); askTabFile(f); }}>
+                <li key={fileTabKey(f)} {...common} className={`stab-row stab-file${on}${sel}`} style={repoAccentStyle(f.repo)}>
                   <FileText size={16} className="stab-fico" aria-hidden="true" />
                   <span className="stab-row-text">
                     <span className="stab-row-label">{fileTabLabel(f.path)}</span>
@@ -218,10 +330,8 @@ function TabsList({ s, fileOn, onClose }: { s: TabsSnapshot; fileOn: boolean; on
               );
             }
             const t = x.tab;
-            const on = !fileOn && t.id === s.activeId;
             return (
-              <li key={t.id} className={`stab-row${on ? " on" : ""}`} data-state={t.status} style={repoAccentStyle(t.repo)}
-                onClick={() => { onClose(); askTabAttach(t.id); }}>
+              <li key={t.id} {...common} className={`stab-row${on}${sel}`} data-state={t.status} style={repoAccentStyle(t.repo)}>
                 {t.status === "coding"
                   ? <Loader size={16} className="spin stab-spin" aria-hidden="true" />
                   : <span className="stab-led" aria-hidden="true" />}

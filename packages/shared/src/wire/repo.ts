@@ -1,6 +1,7 @@
 /** A repo or worktree: its git state, its setup verdict, and the CLI install behind it. */
 import type { ContextLimitsView } from "../contextweight.js";
 import type { RepoHealthIndex } from "../healthindex.js";
+import type { RepoInstructionsDoc } from "./alwayson.js";
 
 /**
  * How this desktop's `claude` got onto the PATH, which is the ONLY thing that
@@ -361,11 +362,50 @@ export interface ComplianceCheck {
    * ignoring" a guess about what it would say — the phone draws it folded.
    */
   ignored?: true;
+  /**
+   * A daily WATCH reading — what the outside world says about the repo's dependencies, stores and
+   * published surface (an OpenSSF Scorecard row, say) — rather than a convention the repo itself is
+   * wired to. The phone draws it in the readings sheet's `watch` region, not the set-up checklist;
+   * the badge counts it exactly as before. Exposure rows are watch rows by their `exposure` field
+   * (`isWatchCheck`), so only other contributors set this. Absent = a convention check.
+   */
+  watch?: true;
+  /**
+   * An exposure-watch finding (`id` is `exposure:<key>`), carried as data so the phone can show the
+   * measure, what crosses the line and since when without prising it out of `detail`. Only the
+   * exposure rows have it; the summary row (`exposure`) does not.
+   */
+  exposure?: {
+    key: string;
+    /** The repo's name as the watch knows it. */
+    name: string;
+    measure: string;
+    subject: string;
+    version?: string;
+    severity?: "critical" | "high" | "moderate" | "low" | "info";
+    level: "alert" | "digest";
+    sources: string[];
+    since?: string;
+    /** The line this measure crosses, in words. Absent for a measure with no wording: never invented. */
+    threshold?: string;
+  };
+  /**
+   * A person (or a built-in decision) accepted this finding. It is still measured and still sent,
+   * because hiding it on the host would make "stop accepting" a guess about what the row would say;
+   * the phone draws it under "Accepted (n)". `builtIn` = shipped with waterplane, not typed by
+   * anyone, and nothing in the accepts file overrides it.
+   */
+  accepted?: {
+    reason: string;
+    at: string;
+    until?: { version?: string } | { date?: string } | { change?: string };
+    builtIn?: true;
+  };
 }
 
 /** The checks that are a thing to consider rather than a finding, and the only
  *  ones a person may ignore per repo. One list, read by both ends. */
-export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compact", "apk-install"];
+export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compact", "apk-install", "exposure"];
 
 /**
  * Whether one check is a FINDING — the predicate behind every setup number.
@@ -380,9 +420,13 @@ export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compa
  * Host scope is excluded for the reason `summarize()` gives: one unset
  * GEMINI_API_KEY is a fact about the daemon, and counting it would flag every
  * repo on the machine at once.
+ *
+ * An accepted exposure finding is not one either: it is still measured and
+ * sent, and the phone draws it under "Accepted (n)", but a decision a person
+ * already made must not keep the badge lit.
  */
 export function isSetupFinding(c: ComplianceCheck): boolean {
-  return c.scope !== "host" && c.status !== "pass" && !c.advisory && !c.ignored;
+  return c.scope !== "host" && c.status !== "pass" && !c.advisory && !c.ignored && !c.accepted;
 }
 
 /**
@@ -390,9 +434,10 @@ export function isSetupFinding(c: ComplianceCheck): boolean {
  * side of its line that nobody has ignored. Never a finding (see
  * `isSetupFinding`), so never counted — but still a row that offers its
  * remedy, because "consider" is a suggestion you can take, not one you can't.
+ * An accepted finding is neither a consider nor a finding (see `isSetupFinding`).
  */
 export function isSetupConsider(c: ComplianceCheck): boolean {
-  return c.scope !== "host" && c.status !== "pass" && !!c.advisory && !c.ignored;
+  return c.scope !== "host" && c.status !== "pass" && !!c.advisory && !c.ignored && !c.accepted;
 }
 
 /** Full compliance report for one repo/worktree. */
@@ -426,6 +471,8 @@ export interface ComplianceReport {
    * refuses the fix. Absent from an older desktop, which needed none.
    */
   confirm?: Record<string, string>;
+  /** Every always-on row of this repo and this desktop, for the list under `context-weight`. Absent from an older desktop. */
+  instructions?: RepoInstructionsDoc;
 }
 
 /** Result of ignoring (or un-ignoring) one advisory check in one repo.
@@ -435,6 +482,18 @@ export interface ComplianceIgnoreResult {
   error?: string;
   report?: ComplianceReport;
 }
+
+/** Accept (or stop accepting) one exposure finding. `until` ends the accept: a newer version than
+ *  the one accepted, a date, or the finding's text changing (`change`); none means until undone. */
+export interface ComplianceAcceptRequest {
+  id: string;
+  accept: boolean;
+  reason?: string;
+  until?: { version: string } | { date: string } | { change: true };
+}
+
+/** Result of an accept request; same shape as the ignore result. */
+export type ComplianceAcceptResult = ComplianceIgnoreResult;
 
 /** Result of writing (or clearing) one repo's context-weight thresholds.
  *  `ok:false` means NOTHING was written — an out-of-range number is refused in

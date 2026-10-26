@@ -2,6 +2,7 @@ import type { CostBreakdown } from "../../pricing.js";
 import type { ColdStarts } from "../../sessioncost.js";
 import type { AutoCompactSource } from "../../autocompact.js";
 import type { TokenTotals } from "../telemetry.js";
+import type { SessionCarried } from "../alwayson.js";
 import type { ContextSample, AgentRun, ContextEvent, CompactionLedger, SkillLoad } from "./context.js";
 
 /**
@@ -377,6 +378,12 @@ export interface ContextSeriesDoc {
    * none" and "nobody looked" stay apart.
    */
   skills?: SkillLoad[];
+  /**
+   * What the FIRST request of this conversation carried, read off the CLI log's attachment records
+   * written before the first assistant usage (D2: the initial set; later deltas are only counted).
+   * Absent on an older host and where the log's head could not be read — never a guessed set.
+   */
+  carried?: SessionCarried;
   /**
    * What this conversation's compactions shed, saved and cost.
    *

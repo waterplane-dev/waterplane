@@ -10,11 +10,12 @@ import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
 import { repoOfWorktree } from "../tokenstats.js";
 import { suggestCommitMessage } from "../commitmsg.js";
+import { explainChanges } from "../changebrief.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
-import { checkRepoCompliance, fixRepoCompliance, setCheckIgnored, setRepoContextLimits } from "../compliance.js";
-import { inspectOptIns, standingPromptsOf } from "../optins.js";
+import { checkRepoCompliance, fixRepoCompliance, setCheckAccepted, setCheckIgnored, setRepoContextLimits } from "../compliance.js";
+import { inspectOptIns, optInSightings, standingPromptsOf } from "../optins.js";
 import { setOptInChoice } from "../setupprefs.js";
 import type { OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
 import { REPOHEALTH_TIMEOUT_MS, readRepoHealth, refreshRepoHealth } from "../repohealth.js";
@@ -173,6 +174,15 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   route<RepoReq>("POST", "compliance/ignore/*", async ({ req, res, target }, ctx) => {
     const body = await readJson(req);
     const r = setCheckIgnored(target, String(body?.id ?? ""), body?.ignore !== false);
+    if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
+    json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
+    return true;
+  }),
+  // Accept (or stop accepting) one exposure finding (`exposure.ts`): body is a
+  // ComplianceAcceptRequest; answers with the re-run report like the ignore above.
+  route<RepoReq>("POST", "compliance/accept/*", async ({ req, res, target }, ctx) => {
+    const body = await readJson(req);
+    const r = setCheckAccepted(target, body);
     if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
     json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
     return true;
@@ -388,6 +398,11 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     json(res, await suggestCommitMessage(wt));
     return true;
   }),
+  // POST for the same reason: it spends, and it fetches (refs only).
+  route<RepoReq>("POST", "git/explain/*", async ({ req, res, wt }) => {
+    json(res, await explainChanges(wt, await readJson(req)));
+    return true;
+  }),
   // A pull is seconds (a fetch and a fast-forward or rebase, no hook), so it
   // is one held request, not a job like the push below.
   // Both report their outcome (`gitRef`): a failure is a notification and the
@@ -479,6 +494,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
 function optInReport(target: RepoTarget, ctx: ApiCtx): OptInReport {
   const rows = inspectOptIns(target.worktreePath, {
     standingPrompts: (wt) => { try { return standingPromptsOf(ctx.intents.list(), wt); } catch { return null; } },
+    sightings: (wt) => optInSightings(wt, ctx.intents.list(), ctx.sessions.list().map((s) => ({ cwd: s.cwd, history: ctx.sessions.getHistory(s.id) }))),
   });
   return { repoId: target.id, repoName: target.repoName, rows, checkedAt: Date.now() };
 }

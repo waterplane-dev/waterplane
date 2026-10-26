@@ -16,7 +16,7 @@
     "coding-agent"
   ],
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22.12"
   },
   "workspaces": [
     "packages/shared",

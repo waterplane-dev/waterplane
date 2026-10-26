@@ -101,7 +101,7 @@ export function ActivitySheet(p: ActivitySheetProps) {
         <ActivityList m={m} p={p} />
         {/* Work handed to a paired desktop (absent if it never delegated). Not under a cut:
             "showing the messages that were not delivered" over peer jobs would be a lie. */}
-        {PeerJobs && !m.focus && m.filter === "all" && <PeerJobs sessions={p.sessions} onOpenSession={p.onOpenSession} />}
+        {PeerJobs && !m.focus && (m.filter === "all" || m.filter === "open") && <PeerJobs sessions={p.sessions} onOpenSession={p.onOpenSession} />}
       </div>
     </Sheet>
   );

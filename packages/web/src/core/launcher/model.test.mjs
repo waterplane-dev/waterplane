@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
-  openCountByRepo, queuedChipCut, queuedKeysByRepo, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
+  openCountByRepo, queuedChipCut, queuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
   starredSpared, closeMarked, isCloseSpared, markedWords,
 } from "./model.ts";
 
@@ -204,4 +204,25 @@ test("the quick filter wants every typed word, anywhere in what the row shows", 
   assert.equal(matchesText("garden red", f), true, "words across fields, any order");
   assert.equal(matchesText("garden blue", f), false, "every word must match");
   assert.equal(matchesText("x", [undefined, null, ""]), false);
+});
+
+test("the activity count: unsettled sends plus desktop rows that wait on a person, never self-clearing work", () => {
+  const it = (id, o = {}) => ({ id, cwd: "/r/a", state: "blocked", trigger: { kind: "idle" }, payload: { kind: "prompt" }, target: { kind: "repo" }, ...o });
+  const outbox = [
+    { ackId: "q1", status: "queued" }, { ackId: "q2", status: "failed" }, { ackId: "q3", status: "sent" },
+    { ackId: "q4", status: "queued" }, // filed here
+    { ackId: "L1", status: "queued" }, // a launch the host already holds
+  ];
+  const intents = [
+    it("g1", { blockReason: "gate" }), // an agent-posted item waiting for a tap
+    it("a1", { blockReason: "awaitingAnswer" }),
+    it("w1", { blockReason: "idle" }), // clears itself
+    it("t1", { blockReason: "notYet" }), // a clock
+    it("x1", { blockReason: "gate", archived: true }),
+    it("c1", { blockReason: "gate", groupId: "p1" }), // folded into its sweep's row
+    it("L1", { state: "queued", blockReason: null }),
+    it("d1", { blockReason: "gate" }), // marked done here
+  ];
+  const keys = activityOpenKeys(outbox, intents, new Set(["queue:q4", "intent:d1"]));
+  assert.deepEqual(keys, ["queue:q1", "queue:q2", "intent:g1", "intent:a1"]);
 });

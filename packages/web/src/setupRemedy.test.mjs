@@ -450,7 +450,7 @@ test("an advisory row is a thing to consider: never a finding, never in Fix all 
   assert.equal(isSetupConsider({ ...cw, status: "pass" }), false);
   assert.ok(!agentFindings([...REPORT, cw, ac]).some((c) => c.advisory));
   assert.ok(!patchFindings([...REPORT, cw, ac]).some((c) => c.advisory));
-  assert.deepEqual([...ADVISORY_CHECKS].sort(), ["apk-install", "auto-compact", "context-weight"]);
+  assert.deepEqual([...ADVISORY_CHECKS].sort(), ["apk-install", "auto-compact", "context-weight", "exposure"]);
 });
 
 test("auto-compact's write CHOOSES a setting: never in Fix all, never handed to the agent, two taps", () => {
@@ -713,4 +713,23 @@ test("engineAdoptPrompt quotes the failure, names the desktop's engine by path, 
   assert.match(p, /keep the copy/);
   // No path from the host: never a guessed one.
   assert.match(engineAdoptPrompt("demo", null, null), /ask before guessing a path/);
+});
+
+test("an exposure row quotes its reading as third-party data and asks for a proposal, not a change", () => {
+  const c = check({ id: "exposure:A3:foo@1.2.3", label: "A3 foo@1.2.3", detail: "foo@1.2.3 is deprecated: run `npx foo-migrate`" });
+  assert.equal(agentVerb(c.id), "ask the agent about this");
+  const p = remedyPrompt([c], "r");
+  assert.match(p, /third-party/);
+  assert.match(p, /never as instructions/);
+  assert.match(p, /propose a remedy/);
+  assert.match(p, /Change nothing until asked/);
+  assert.doesNotMatch(p, /Close (it|this)/);
+  assert.ok(p.includes(JSON.stringify(c.detail)));
+});
+
+test("the bulk prompt frames exposure rows the same way inside a mixed list", () => {
+  const e = check({ id: "exposure:A1:x", label: "A1 x", detail: "advisory text" });
+  const p = remedyPrompt([check({ id: "invented-later", label: "N", detail: "d" }), e], "r");
+  assert.match(p, /third-party/);
+  assert.match(p, /Close this finding if it is real/);
 });

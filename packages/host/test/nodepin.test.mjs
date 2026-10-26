@@ -4,6 +4,7 @@
  * (what a checkout's `nvm use` picks) must be the major the release pins in
  * `deploy/node-version`. They disagreed (22 / 24.21.0 / >=20 / "node ≥20")
  * while the host already needed 20.12 (`util.parseEnv`; `import.meta.dirname` is 20.11).
+ * The floor is 22.12 since Node 20's end of life.
  * Two sources, then: `NODE_MIN` (the floor) and `deploy/node-version` (the pin); every other
  * statement — engines, `.nvmrc`, the README, CI, the release scripts — is checked against them here.
  */
@@ -48,9 +49,10 @@ test("every prose or config statement of a Node version reads the same two sourc
 });
 
 test("nodeMeetsMin compares numerically, v allowed, garbage refused", () => {
-  assert.equal(nodeMeetsMin("20.12.0"), true);
-  assert.equal(nodeMeetsMin("v20.12.1"), true);
-  assert.equal(nodeMeetsMin("20.11.9"), false, "util.parseEnv is missing here");
+  assert.equal(nodeMeetsMin("22.12.0"), true);
+  assert.equal(nodeMeetsMin("v22.12.1"), true);
+  assert.equal(nodeMeetsMin("22.11.9"), false);
+  assert.equal(nodeMeetsMin("20.19.0"), false, "Node 20 is end of life");
   assert.equal(nodeMeetsMin("20.9.0"), false);
   assert.equal(nodeMeetsMin("100.0.0"), true, "numeric, not lexical");
   assert.equal(nodeMeetsMin("bogus"), false);

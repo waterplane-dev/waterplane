@@ -42,6 +42,7 @@ import { peerJobOriginAt } from "../peers/serve.js";
 import { createBudgetCalibrator } from "../sessionbudget.js";
 import { backendInfos, onBackendsChanged, primeNewBackendModels } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
+import { noteOptInSends } from "../optins.js";
 
 export function wireSessionEvents(ctx: ServerCtx) {
   // A closed row says how its item SETTLED (`roster.ts`'s `closedRowOf`) —
@@ -113,6 +114,9 @@ export function wireSessionEvents(ctx: ServerCtx) {
   ctx.sessions.on("history", (id: string, entries: HistoryEntry[]) => {
     const frame: HostMessage = { t: "session.history", id, entries };
     for (const ws of ctx.clients) if (ctx.attached.get(ws)?.has(id)) ctx.send(ws, frame);
+    // An opt-in's words sent here are remembered past the session (`optins.ts`).
+    const cwd = ctx.sessions.get(id)?.cwd;
+    if (cwd) noteOptInSends(cwd, entries);
   });
 
   // Fires for every session, including ones the backlog creates internally.

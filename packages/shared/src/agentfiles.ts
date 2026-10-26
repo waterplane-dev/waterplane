@@ -48,6 +48,13 @@ export interface InstructionFile {
   parts: InstructionPart[];
   /** A Copilot setting that is off and so dropped Copilot from this row, by name. */
   off?: string;
+  /** `"desktop"`: a row this desktop adds to every session whatever the repo (`desktopInventory`). Absent = the folder's own. */
+  scope?: "desktop";
+  /**
+   * Set when the row's weight cannot be known from a file (an MCP server's tool schemas arrive when
+   * it connects): the sentence why. Such a row has no parts and is NEVER counted as 0.
+   */
+  unsized?: string;
 }
 
 export interface InstructionTotals { always: number; scoped: number; onDemand: number; files: number }
@@ -158,6 +165,12 @@ function walk(fs: AgentFilesFs, dir: string, keep: (name: string) => boolean, de
 /** A file only Copilot's world writes: AGENTS.md, anything under `.github/` or `.agents/`. */
 export const isCopilotFile = (path: string): boolean => path === "AGENTS.md" || path.startsWith(".github/") || path.startsWith(".agents/");
 
+/** The kind word of a file only CLAUDE.local.md imports. */
+const LOCAL_IMPORT = "imported by CLAUDE.local.md";
+
+/** Why an MCP server row carries no number. */
+export const MCP_UNSIZED = "its tool schemas are sent by the server when it connects — not measurable from the file";
+
 /** Every instruction file in the folder, in a fixed order (always-on families first), and the repeats between them. */
 export function instructionInventory(fs: AgentFilesFs, sw: CopilotSwitches = {}): InstructionInventory {
   const files: InstructionFile[] = [];
@@ -172,17 +185,26 @@ export function instructionInventory(fs: AgentFilesFs, sw: CopilotSwitches = {})
     claudeMds.push(t);
     add({ path: p, kind: "CLAUDE.md", parts: [{ readers: without(["claude", "copilot"], "copilot", sw.claudeMd), when: { kind: "always" }, chars: t.length }], ...offWord(sw.claudeMd, "chat.useClaudeMdFile") }, t);
   }
+  // CLAUDE.local.md: the person's own, gitignored, Claude Code reads it every turn beside CLAUDE.md.
+  const local = fs.read("CLAUDE.local.md");
+  if (local != null) {
+    add({ path: "CLAUDE.local.md", kind: "CLAUDE.local.md", parts: [{ readers: ["claude"], when: { kind: "always" }, chars: local.length }] }, local);
+  }
   const imports = new Set(claudeMds.flatMap(claudeImports));
+  // What only CLAUDE.local.md imports is the person's, like the file itself (D1: listed, not weighed).
+  const localImports = new Set(local == null ? [] : claudeImports(local).filter((p) => !imports.has(p)));
+  const importer = (p: string) => (localImports.has(p) ? LOCAL_IMPORT : "imported by CLAUDE.md");
   const agentsMd = fs.read("AGENTS.md");
   if (agentsMd != null) {
     const readers = without(["copilot"], "copilot", sw.agentsMd);
-    if (imports.has("AGENTS.md")) readers.unshift("claude");
-    add({ path: "AGENTS.md", kind: imports.has("AGENTS.md") ? "AGENTS.md, imported by CLAUDE.md" : "AGENTS.md", parts: [{ readers, when: { kind: "always" }, chars: agentsMd.length }], ...offWord(sw.agentsMd, "chat.useAgentsMdFile") }, agentsMd);
+    const imported = imports.has("AGENTS.md") || localImports.has("AGENTS.md");
+    if (imported) readers.unshift("claude");
+    add({ path: "AGENTS.md", kind: imported ? `AGENTS.md, ${importer("AGENTS.md")}` : "AGENTS.md", parts: [{ readers, when: { kind: "always" }, chars: agentsMd.length }], ...offWord(sw.agentsMd, "chat.useAgentsMdFile") }, agentsMd);
   }
-  for (const imp of imports) {
+  for (const imp of [...imports, ...localImports]) {
     if (imp === "AGENTS.md" || text.has(imp)) continue;
     const t = fs.read(imp);
-    if (t != null) add({ path: imp, kind: "imported by CLAUDE.md", parts: [{ readers: ["claude"], when: { kind: "always" }, chars: t.length }] }, t);
+    if (t != null) add({ path: imp, kind: importer(imp), parts: [{ readers: ["claude"], when: { kind: "always" }, chars: t.length }] }, t);
   }
   const ci = fs.read(".github/copilot-instructions.md");
   if (ci != null) {
@@ -209,6 +231,28 @@ export function instructionInventory(fs: AgentFilesFs, sw: CopilotSwitches = {})
       // A skill with no description read is not a quiet 0: the row says the frontmatter had none.
       const kind = skillDescChars(t) > 0 ? "skill" : "skill — no description found in its frontmatter";
       add({ path: p, kind, parts: classifySkill(t, without(readers, "copilot", sw.skills)), ...offWord(sw.skills, "chat.useAgentSkills") }, t);
+    }
+  }
+  // Subagent definitions: Claude Code lists each one's description to the model every turn; the
+  // body is the subagent's own prompt, sent only when it runs (as `instructionFileWeight` says).
+  for (const p of walk(fs, ".claude/agents", (n) => n.endsWith(".md"), 0)) {
+    const t = fs.read(p);
+    if (t != null) add({ path: p, kind: "subagent", parts: classifySkill(t, ["claude"]) }, t);
+  }
+  // `.mcp.json`: the server NAMES are knowable, their weight is not — each server sends its tool
+  // schemas when it connects. A row per server with no number; never 0, never a guess.
+  const mcp = fs.read(".mcp.json");
+  if (mcp != null) {
+    let names: string[] | null = null;
+    try {
+      const j = JSON.parse(mcp) as { mcpServers?: unknown };
+      const servers = j && typeof j === "object" ? j.mcpServers : undefined;
+      names = servers && typeof servers === "object" && !Array.isArray(servers) ? Object.keys(servers) : [];
+    } catch { names = null; }
+    if (names == null) {
+      files.push({ path: ".mcp.json", kind: ".mcp.json (unreadable)", parts: [], unsized: "the file is not valid JSON, so its servers could not be read" });
+    } else {
+      for (const name of names) files.push({ path: ".mcp.json", kind: `MCP server ${name}`, parts: [], unsized: MCP_UNSIZED });
     }
   }
   // Copilot also reads CLAUDE.md and `.claude/skills`, but a repo with no file of Copilot's own is
@@ -274,6 +318,17 @@ function overlapsOf(files: InstructionFile[], text: Map<string, string>): Instru
 }
 
 /**
+ * Whether the threshold reading (`claudeWeightInput` → `weighContext(...).alwaysOnChars`) counts
+ * this row. D1 (always-on plan, 2026-10-26): the threshold keeps measuring what it always measured.
+ * Subagent descriptions, CLAUDE.local.md and what only it imports (gitignored — the working tree
+ * would drift from the commit the repo-health series weighs) and unsized rows are LISTED with their
+ * own figures, never folded in; desktop rows are not this repo's weight at all.
+ */
+export function countedByThreshold(f: InstructionFile): boolean {
+  return !(f.unsized || f.scope === "desktop" || f.kind === "subagent" || f.kind === "CLAUDE.local.md" || f.kind.endsWith(LOCAL_IMPORT));
+}
+
+/**
  * Claude Code's half as `weighContext`'s input: what it carries every turn apart from skill
  * descriptions (CLAUDE.md, its imports, unscoped rules) and its skills. The one place the
  * inventory and the threshold reading meet, so the host and the extension feed it alike.
@@ -282,6 +337,8 @@ export function claudeWeightInput(files: InstructionFile[]): ContextWeightInput 
   const skills: SkillWeight[] = [];
   let claudeMdChars = 0;
   for (const f of files) {
+    // D1: see `countedByThreshold`.
+    if (!countedByThreshold(f)) continue;
     const mine = f.parts.filter((p) => p.readers.includes("claude"));
     if (!mine.length) continue;
     if (f.kind === "skill") {

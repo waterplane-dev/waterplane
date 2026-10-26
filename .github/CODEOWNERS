@@ -64,5 +64,6 @@
 
 # In-repo extensions.
 /packages/extensions/token-stats/ @johanneshoh
+/packages/extensions/scorecard/ @johanneshoh
 /packages/extensions/requirements/ @johanneshoh
 /packages/extensions/ocr/ @johanneshoh

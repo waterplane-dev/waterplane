@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   activityCounts, activityHeadlineCut, activityRows, dismissBlocker, groupActivity, isActivityDebris, matchesFilter,
   partitionBulk, refireBlocker, sortActivity,
@@ -16,7 +16,8 @@ import type { ActivitySheetProps } from "./activitySheetTypes";
  * The region components below read this and hold no hooks of their own.
  */
 export function useActivityModel(p: ActivitySheetProps) {
-  const [filter, setFilter] = useState<ActivityFilter>("all");
+  /** The chip a person tapped; `null` until they tap one (see `filter` below). */
+  const [picked, setFilter] = useState<ActivityFilter | null>(null);
   /** The caller's shortlist, until the person drops it. Seeded once — a prop
    *  that kept re-asserting itself would make "show everything" a button that
    *  undoes itself on the next render. */
@@ -74,6 +75,17 @@ export function useActivityModel(p: ActivitySheetProps) {
     p.outbox, p.queueBlocked, p.goneLanes, p.intents, p.pulls, p.sessions, p.dismissed, p.confirmedDone]);
 
   const counts = useMemo(() => activityCounts(rows), [rows]);
+  /**
+   * **The sheet lands on what is open**, and falls back to "all" only when
+   * nothing is. Landing on "all" made this a log: one row waiting for a tap
+   * sat under thirty-one done ones. Decided ONCE, on the first paint that has
+   * rows, and latched — acting on the last open row must not flip the screen
+   * to the log under the person's thumb; "open · 0" with its sentence is the
+   * receipt. A tap on any chip wins from then on.
+   */
+  const landing = useRef<ActivityFilter | null>(null);
+  if (landing.current == null && counts.all > 0) landing.current = counts.open > 0 ? "open" : "all";
+  const filter: ActivityFilter = picked ?? landing.current ?? "all";
   const inFilter = useMemo(() => sortActivity(
     rows.filter((r) => (focus ? focus.keys.has(r.key) : matchesFilter(r, filter))), sort,
   ), [rows, filter, sort, focus]);

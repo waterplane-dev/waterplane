@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  OPT_INS, cleanOptInRow, optInActiveWords, optInCut, optInDef, optInMarker, optInPrompt, optInRule, optInWalkPrompt,
+  OPT_INS, cleanOptInRow, optInActiveWords, optInCut, optInDef, optInMarkedIds, optInMarker, optInPrompt, optInRule, optInWalkPrompt,
 } from "../dist/index.js";
 
 test("ids are unique and every agent/schedule offer has a prompt carrying its marker", () => {
@@ -50,6 +50,30 @@ test("optInCut: declined beats on, done is active, unfit is never offered, unkno
   assert.deepEqual(c.unfit.map((r) => r.id), ["npm-supply-chain"]);
   assert.equal(optInActiveWords(c.active[0]), "on");
   assert.equal(optInActiveWords(c.active[1]), "marked done by you");
+  assert.deepEqual(c.started, []);
+});
+
+test("optInCut: a sent or half-done offer is started, not offered; on, done and declined still win", () => {
+  const sent = { at: 5, status: "ended" };
+  const c = optInCut([
+    { id: "requirements", relevant: true, state: "off", detail: "" },
+    { id: "local-ci", relevant: true, state: "off", detail: "", sent },
+    { id: "repo-health-own", relevant: true, state: "off", detail: "", partial: true },
+    { id: "security-review", relevant: true, state: "on", detail: "", sent },
+    { id: "npm-supply-chain", relevant: true, state: "off", detail: "", sent, choice: "done" },
+    { id: "gcp-cleanup", relevant: true, state: "unknown", detail: "", sent, choice: "declined" },
+  ]);
+  assert.deepEqual(c.offered.map((r) => r.id), ["requirements"]);
+  assert.deepEqual(c.started.map((r) => r.id), ["local-ci", "repo-health-own"]);
+  assert.deepEqual(c.active.map((r) => r.id), ["security-review", "npm-supply-chain"]);
+  assert.deepEqual(c.declined.map((r) => r.id), ["gcp-cleanup"]);
+});
+
+test("optInMarkedIds: one marker is a send, none or several (the walk-through) is not", () => {
+  assert.deepEqual(optInMarkedIds(optInPrompt("local-ci", "demo")), ["local-ci"]);
+  assert.deepEqual(optInMarkedIds("plain words"), []);
+  const walk = optInWalkPrompt(["local-ci", "npm-supply-chain"].map((id) => ({ id, relevant: true, state: "off", detail: "" })), "demo");
+  assert.deepEqual(optInMarkedIds(walk), []);
 });
 
 test("walk-through posts each pick as its own item and only quotes postable prompts", () => {
@@ -69,4 +93,8 @@ test("cleanOptInRow drops what it cannot read, never rounds", () => {
   assert.equal(cleanOptInRow({ id: "x", relevant: true, state: "maybe" }), null);
   assert.equal(cleanOptInRow({ id: "x", state: "on" }), null);
   assert.deepEqual(cleanOptInRow({ id: "x", relevant: true, state: "on", choice: "later" }), { id: "x", relevant: true, state: "on", detail: "" });
+  const base = { id: "x", relevant: true, state: "off", detail: "" };
+  assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 7, status: "open" }, partial: true }), { ...base, sent: { at: 7, status: "open" }, partial: true });
+  assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 7, status: "soon" }, partial: "yes" }), base);
+  assert.deepEqual(cleanOptInRow({ ...base, sent: { at: 0, status: "open" } }), base);
 });

@@ -126,7 +126,7 @@ export const ACTION_IDS = [
   "activity.sendNow", "activity.hold", "activity.retarget", "activity.edit", "activity.fix",
   "activity.retry", "activity.answer", "activity.open", "activity.runNow", "activity.cancel",
   "activity.toggle", "activity.download", "activity.save", "activity.discard",
-  "activity.filter.all", "activity.filter.needsYou", "activity.filter.failed", "activity.filter.running",
+  "activity.filter.open", "activity.filter.all", "activity.filter.needsYou", "activity.filter.failed", "activity.filter.running",
   "activity.filter.waiting", "activity.filter.scheduled", "activity.filter.done", "activity.filter.dismissed",
   // Triage. These are the counters that say whether this screen is usable at
   // the size it actually reaches — 217 rows on one real phone, 84 of them

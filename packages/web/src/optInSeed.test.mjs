@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 
 import { optInMarker } from "@waterplane/shared";
 import {
-  declinedHead, noOffersWords, optInSeed, optInWalkSeed, postableOptIns, unfitHead, walkLabel, walkOffered,
+  declinedHead, noOffersWords, optInSeed, optInSentWords, optInWalkSeed, postableOptIns, startedHead, unfitHead, walkLabel,
+  walkOffered,
 } from "./optInSeed.ts";
 
 const repo = { id: "r1", repoName: "myapp", worktreePath: "/dev/myapp" };
@@ -65,4 +66,15 @@ test("folded heads and the empty sentence", () => {
   assert.equal(unfitHead(3), "3 don't fit this repo");
   assert.doesNotMatch(noOffersWords(0, 0), /folded/);
   assert.match(noOffersWords(1, 0), /folded below/);
+});
+
+test("a sent offer says when and what became of it, one sentence per status", () => {
+  const day = () => "24 Oct";
+  const words = (status) => optInSentWords({ at: 1, status }, day);
+  assert.equal(words("waiting"), "Sent 24 Oct — waiting in this repo's backlog.");
+  assert.equal(words("open"), "Sent 24 Oct to a session that is still open.");
+  assert.match(words("ended"), /session has closed, and it is not set up yet/);
+  const all = ["waiting", "running", "done", "failed", "canceled", "open", "ended"].map(words);
+  assert.equal(new Set(all).size, all.length, "every status reads differently");
+  assert.equal(startedHead(2), "Started here · 2");
 });

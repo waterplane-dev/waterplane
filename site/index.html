@@ -159,7 +159,7 @@
 </ul>
 <p>The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a <code>waterplane</code> command with <code>start</code>, <code>doctor</code>, <code>service</code>, <code>update</code> and <code>pair</code>:</p>
 <pre><code>curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh</code></pre>
-<p>Or from source, which also needs <strong>Node ≥ 20.12</strong> and <strong>tmux 3.3+</strong> (every session runs inside it, so it survives a host restart; the installer handles both). The doctor builds what it checks, so it runs before the build:</p>
+<p>Or from source, which also needs <strong>Node ≥ 22.12</strong> and <strong>tmux 3.3+</strong> (every session runs inside it, so it survives a host restart; the installer handles both). The doctor builds what it checks, so it runs before the build:</p>
 <pre><code>git clone https://github.com/waterplane-dev/waterplane.git
 cd waterplane
 npm ci             # installs the lockfile exactly; runs no dependency install scripts

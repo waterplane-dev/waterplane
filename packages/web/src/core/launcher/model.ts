@@ -15,6 +15,7 @@ import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow } from "@water
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
+import { bucketOf } from "../../activity/activityBucket.ts";
 import { isFlagged } from "../sessions/followUpFacts.ts";
 
 /** A session's status bucket — `sessionFacts.tsx`'s `sessionStatus` values. */
@@ -283,6 +284,40 @@ export function queuedKeysByRepo(outbox: readonly OutboxEntry[], intents: readon
     if (i.cwd) bump(i.cwd, intentRowKey(i.id));
   }
   return m;
+}
+
+/**
+ * **The menu's activity count, as the Activity row keys it opens** — what is still open.
+ *
+ * Two sources. This phone's send queue: words not yet on the desktop, and the
+ * failed ones (a gravestone is the one row somebody has to come back to). And
+ * the desktop's rows in the `needsYou` bucket — a dead session, a gate, a box
+ * waiting for an answer, an agent-posted item that waits for a tap. Those will
+ * never move without a person, and leaving them out (the badge used to count
+ * the queue only) meant an item waiting three hours for a tap sat behind the
+ * menu with no mark at all. Host work that clears itself — idle-waits, clocks —
+ * stays out: that is not news.
+ *
+ * Keys, not a number, because the number is a filter: the menu's tap opens
+ * exactly these. Archived and child-of-a-sweep intents are skipped because
+ * Activity draws no row for them; a launch still in the queue counts once,
+ * under the host's row
+ * (`selectActivity`'s dedupe), and not at all unless that row needs you. `marked` is this
+ * phone's filed + confirmed-done marks.
+ */
+export function activityOpenKeys(outbox: readonly OutboxEntry[], intents: readonly Intent[],
+  marked: { has(key: string): boolean }): string[] {
+  const needs = intents.filter((i) => !i.archived && (i.groupId == null || i.groupId === i.id)
+    && bucketOf(i.state, i.blockReason ?? null) === "needsYou");
+  // `selectActivity`'s dedupe: a launch the host already holds drops its queue row.
+  const hostHas = new Set(intents.filter((i) => !i.archived
+    && (i.state === "queued" || i.state === "blocked" || i.state === "starting")).map((i) => i.id));
+  const keys = [
+    ...outbox.filter((e) => (e.status === "queued" || e.status === "failed") && !hostHas.has(e.ackId))
+      .map((e) => queueRowKey(e.ackId)),
+    ...needs.map((i) => intentRowKey(i.id)),
+  ];
+  return keys.filter((k) => !marked.has(k));
 }
 
 /**

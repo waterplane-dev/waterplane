@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claudeWeightInput, copilotWeightWords, instructionInventory, instructionTotals, overlapWords, sharedChars } from "../dist/index.js";
+import { claudeWeightInput, copilotWeightWords, countedByThreshold, instructionInventory, instructionTotals, overlapWords, sharedChars } from "../dist/index.js";
 
 /** A folder as a map of relative path → text. */
 function fsOf(files) {
@@ -118,4 +118,54 @@ test("chat.includeApplyingInstructions off drops Copilot from applyTo instructio
   assert.deepEqual(ts.parts[0].readers, []);
   assert.equal(ts.off, "chat.includeApplyingInstructions");
   assert.deepEqual(files.find((f) => f.path.endsWith("d.instructions.md")).parts[0].readers, ["copilot"]);
+});
+
+// ── the widened inventory (always-on plan P1): CLAUDE.local.md, subagents, .mcp.json — LISTED, never in the threshold (D1) ──
+
+const SKILL = "---\nname: s\ndescription: does a thing when asked to\n---\nbody text here";
+
+test("CLAUDE.local.md is Claude's every turn, its import pulled in, and the threshold ignores both", () => {
+  const base = { "CLAUDE.md": "# project\n", ".claude/skills/s/SKILL.md": SKILL };
+  const inv = instructionInventory(fsOf({ ...base, "CLAUDE.local.md": "mine\n@notes.md\n", "notes.md": "n".repeat(50) }));
+  const local = inv.files.find((f) => f.path === "CLAUDE.local.md");
+  assert.equal(local.kind, "CLAUDE.local.md");
+  assert.deepEqual(local.parts, [{ readers: ["claude"], when: { kind: "always" }, chars: "mine\n@notes.md\n".length }]);
+  const imp = inv.files.find((f) => f.path === "notes.md");
+  assert.equal(imp.kind, "imported by CLAUDE.local.md");
+  assert.equal(countedByThreshold(local), false);
+  assert.equal(countedByThreshold(imp), false);
+  assert.deepEqual(claudeWeightInput(inv.files), claudeWeightInput(instructionInventory(fsOf(base)).files));
+});
+
+test("a file CLAUDE.md imports stays counted even when CLAUDE.local.md imports it too", () => {
+  const inv = instructionInventory(fsOf({ "CLAUDE.md": "@a.md\n", "CLAUDE.local.md": "@a.md\n", "a.md": "a".repeat(40) }));
+  assert.equal(inv.files.find((f) => f.path === "a.md").kind, "imported by CLAUDE.md");
+});
+
+test(".claude/agents/*.md is a subagent: description every turn, body on demand, not in the threshold", () => {
+  const base = { "CLAUDE.md": "# project\n" };
+  const inv = instructionInventory(fsOf({ ...base, ".claude/agents/x.md": SKILL, ".claude/agents/deep/y.md": SKILL }));
+  const subs = inv.files.filter((f) => f.kind === "subagent");
+  assert.deepEqual(subs.map((f) => f.path), [".claude/agents/x.md"], "depth 1 only");
+  assert.deepEqual(subs[0].parts.map((p) => p.when.kind), ["always", "on-demand"]);
+  assert.deepEqual(subs[0].parts[0].readers, ["claude"]);
+  assert.deepEqual(claudeWeightInput(inv.files), claudeWeightInput(instructionInventory(fsOf(base)).files));
+});
+
+test(".mcp.json servers are unsized rows: no chars, no totals, no threshold", () => {
+  const base = { "CLAUDE.md": "# project\n" };
+  const inv = instructionInventory(fsOf({ ...base, ".mcp.json": JSON.stringify({ mcpServers: { a: {}, b: {} } }) }));
+  const mcp = inv.files.filter((f) => f.path === ".mcp.json");
+  assert.deepEqual(mcp.map((f) => f.kind), ["MCP server a", "MCP server b"]);
+  for (const f of mcp) { assert.deepEqual(f.parts, []); assert.match(f.unsized, /when it connects/); }
+  assert.deepEqual(instructionTotals(inv.files, "claude"), instructionTotals(instructionInventory(fsOf(base)).files, "claude"));
+  assert.deepEqual(claudeWeightInput(inv.files), claudeWeightInput(instructionInventory(fsOf(base)).files));
+  assert.equal(inv.overlaps.length, 0);
+});
+
+test("a malformed .mcp.json is one row that says so", () => {
+  const inv = instructionInventory(fsOf({ ".mcp.json": "{ nope" }));
+  assert.equal(inv.files.length, 1);
+  assert.equal(inv.files[0].kind, ".mcp.json (unreadable)");
+  assert.match(inv.files[0].unsized, /not valid JSON/);
 });

@@ -1,0 +1,14 @@
+/* ── scorecard (ScorecardSheet.tsx): the score head, check rows, the accept and scored-as forms.
+   Colours are the theme's tokens only. */
+.sc-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.sc-score { font-size: calc(28px * var(--ui-font, 1)); font-weight: 700; }
+.sc-row { display: flex; flex-direction: column; gap: 4px; }
+.sc-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.sc-n { color: var(--muted); font-size: calc(12.5px * var(--ui-font, 1)); }
+.sc-why { overflow-wrap: anywhere; }
+.sc-details ul { margin: 4px 0 0; padding-left: 16px; overflow-wrap: anywhere; font-size: calc(12px * var(--ui-font, 1)); }
+.sc-details summary, .sc-pass summary { cursor: pointer; }
+.sc-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 14px 8px; }
+.sc-row .sc-form { padding: 4px 0; }
+.sc-form label { display: flex; flex-direction: column; gap: 3px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); }
+.sc-form input, .sc-form textarea { font: inherit; color: var(--fg); background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }

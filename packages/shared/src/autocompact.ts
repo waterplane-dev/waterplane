@@ -67,7 +67,7 @@ export function cleanAutoCompactDefault(raw: unknown): { ok: true; value: string
  * They are never in "Fix all", never counted as "one-tap fixable", and the
  * phone draws them behind a two-tap confirm. One list, read by both ends.
  */
-export const CONFIRM_GATED_FIXES: readonly string[] = ["auto-compact", "android-toolchain", "signing-key"];
+export const CONFIRM_GATED_FIXES: readonly string[] = ["auto-compact", "android-toolchain", "signing-key", "protect-main", "era-seen"];
 
 /**
  * The `android-toolchain` fix installs a JDK and the Android SDK and accepts the SDK licence on

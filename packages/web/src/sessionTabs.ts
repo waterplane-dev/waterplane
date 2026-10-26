@@ -458,6 +458,32 @@ export function tabCloseAsk(label: string, running: boolean): { title: string; l
   };
 }
 
+/**
+ * The list's type-to-filter: every word typed must appear (case-insensitive)
+ * somewhere in what the row SAYS — its name, its repo, its state in words, a
+ * pinned file's path. Words, not a fuzzy score: the list keeps the strip's own
+ * order, so a row never jumps for matching "better". Empty query = all of them.
+ * `statusWord` is the caller's (`STATUS_LABEL` lives in a .tsx this pure file
+ * cannot import).
+ */
+export function filterStrip(all: readonly StripTab[], query: string, statusWord: (s: SessionStatus) => string): StripTab[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [...all];
+  return all.filter((x) => {
+    const hay = (x.kind === "file"
+      ? `${fileTabLabel(x.file.path)} ${x.file.repo} pinned file ${x.file.path}`
+      : `${x.tab.label} ${x.tab.repo} ${statusWord(x.tab.status)}`).toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/** The chord that opens the list from anywhere — Ctrl+E, VS Code's quick
+ *  open. Ctrl only: ⌘E belongs to the browser, and Alt is a typed character on
+ *  a Mac. Pressed again with the list up it steps down the list, as there. */
+export function isTabsListPress(e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing?: boolean }): boolean {
+  return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && e.key.toLowerCase() === "e";
+}
+
 // ── The settings, per device ─────────────────────────────────────────────────
 
 export const tabsEnabled = (): boolean => lsBool(LS.sessionTabs, true);

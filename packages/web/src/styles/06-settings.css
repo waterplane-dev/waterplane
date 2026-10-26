@@ -541,6 +541,12 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 /* The push's note holds the pre-push hook's own lines when it refuses — kept
    as written (line breaks matter in a test log) and scrollable, never clipped. */
 .git-note { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
+/* Explain push & pull: the focus ticks wrap two-up on a phone; the answer is
+   prose and scrolls with the sheet body. */
+.git-explain { display: flex; flex-direction: column; gap: var(--sp-8); overflow-y: auto; }
+.git-explain-foci { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0 var(--sp-8); }
+.git-explain-focus { display: flex; align-items: center; gap: var(--sp-8); min-height: 44px; }
+.git-explain-text { border-top: 1px solid var(--line); padding-top: var(--sp-8); }
 /* A running push's steps and latest lines, under the note. */
 /* Scrolls on its own — the sheet does not, and a hook's steps run past a
    phone screen. Half the height beside a file list; the rest of the sheet

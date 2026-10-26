@@ -128,6 +128,14 @@ export const LS_VIEW = {
    */
   gitZoom: lsKey("gitZoom"),
   /**
+   * The Review sheet's Explain (`GitExplain.tsx`): which focus boxes are ticked
+   * (ids from shared `CHANGE_FOCI`; unset = all) and the person's own focus line.
+   */
+  gitExplainFoci: lsKey("gitExplainFoci"),
+  gitExplainNote: lsKey("gitExplainNote"),
+  /** What the last brief on this phone spent (`ChangeBriefSpend`), told before the next tap. */
+  gitExplainLast: lsKey("gitExplainLast"),
+  /**
    * Whether the Terminal text sheet (`TextDumpLines.tsx`) wraps long lines.
    * Off by default: a terminal grid is already broken into rows, and wrapping
    * them again turns one screen row into two ragged ones. A transcript

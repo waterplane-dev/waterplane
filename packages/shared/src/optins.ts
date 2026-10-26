@@ -34,6 +34,27 @@ export type OptInState = "on" | "off" | "unknown";
 /** What the PERSON said about one offer in one repo. Absent = nothing. */
 export type OptInChoice = "declined" | "done";
 
+/**
+ * What became of the last time this offer's own words were sent in this repo,
+ * as far as this desktop can see — found by the marker (`optInMarker`), never
+ * by a label or a guess:
+ *
+ * - `waiting` / `running` / `done` / `failed` / `canceled` — a posted work row
+ *   (backlog item or schedule) carrying the marker, by its own lifecycle.
+ * - `open` — a live session in this repo was sent the words.
+ * - `ended` — this desktop saw the words sent once, and nothing it holds now
+ *   still carries them (the session closed, the row was cleared).
+ */
+export type OptInSentStatus = "waiting" | "running" | "done" | "failed" | "canceled" | "open" | "ended";
+
+export interface OptInSent {
+  /** When the words were sent or the row was posted (ms epoch). */
+  at: number;
+  status: OptInSentStatus;
+}
+
+const SENT_STATUSES: readonly OptInSentStatus[] = ["waiting", "running", "done", "failed", "canceled", "open", "ended"];
+
 /** What a tap on the offer's verb does. */
 export type OptInAction =
   /** Run the host's own setup fix with this id (`POST …/compliance/fix`). */
@@ -71,6 +92,12 @@ export interface OptInRow {
   /** What the probe saw, one sentence — names the file it read. */
   detail: string;
   choice?: OptInChoice;
+  /** The last send of this offer's words in this repo. Absent = this desktop
+   *  never saw one, which is not proof nobody did it by hand. */
+  sent?: OptInSent;
+  /** The probe saw the work begun but not finished (written, not committed).
+   *  `state` stays `off`: half done is not on. */
+  partial?: true;
 }
 
 /** `GET /api/repos/:id/optins`. */
@@ -97,6 +124,18 @@ export interface OptInChoiceResult {
  */
 export function optInMarker(id: string): string {
   return `(${BRAND.slug} opt-in: ${id})`;
+}
+
+/**
+ * The offers whose marker one text carries — the host's reader of "was this
+ * sent". A text carrying more than one is the walk-through (it quotes every
+ * prompt it offers) and answers `[]`: an interview about an offer is not the
+ * offer being sent.
+ */
+export function optInMarkedIds(text: string): string[] {
+  if (!text.includes(`(${BRAND.slug} opt-in: `)) return [];
+  const ids = OPT_INS.filter((d) => text.includes(optInMarker(d.id))).map((d) => d.id);
+  return ids.length === 1 ? ids : [];
 }
 
 const SECURITY_PROMPT = `Weekly security review of {repo}. Read-only: change no file, commit nothing, push nothing.
@@ -214,6 +253,14 @@ Apply with \`--no-dry-run\` only after I agree. The size metric lags about 24h a
     verb: "open captures",
     action: { kind: "open", to: "capture" },
   },
+  {
+    id: "exposure-watch",
+    title: "Exposure watch",
+    pitch: "Once a day this desktop looks up what the outside world now says about this repo: published advisories on its dependencies, deprecations and, for a private repo, a local Scorecard run. Findings land under watch.",
+    cost: "Spends no tokens and makes no AI call: a daily job runs gh and npm audit-type lookups and, for a private repo, Scorecard locally. A tap only adds this repo to the list it reads.",
+    verb: "watch this repo",
+    action: { kind: "fix", fix: "exposure-watch" },
+  },
 ];
 
 const BY_ID = new Map(OPT_INS.map((d) => [d.id, d]));
@@ -242,7 +289,10 @@ export function optInRule(id: string, tz: string): ScheduleRule | null {
  * Which offers the sheet draws where — ONE function feeding every count and
  * every cut, so the number on a control and the list it opens cannot disagree.
  *
- * - `offered`: relevant, not on, not declined, not marked done — the cards.
+ * - `offered`: relevant, not on, not declined, not marked done, and never
+ *   started here — the untouched cards.
+ * - `started`: the same, but its words were sent here or the probe saw it
+ *   half done — the cards a person has to be told they already began.
  * - `active`: on by probe, or marked done by the person.
  * - `declined`: the person said *not for me*.
  * - `unfit`: does not fit this repo. Behind a count, never an offer.
@@ -252,18 +302,20 @@ export function optInRule(id: string, tz: string): ScheduleRule | null {
  */
 export interface OptInCut {
   offered: OptInRow[];
+  started: OptInRow[];
   active: OptInRow[];
   declined: OptInRow[];
   unfit: OptInRow[];
 }
 
 export function optInCut(rows: readonly OptInRow[]): OptInCut {
-  const cut: OptInCut = { offered: [], active: [], declined: [], unfit: [] };
+  const cut: OptInCut = { offered: [], started: [], active: [], declined: [], unfit: [] };
   for (const r of rows) {
     if (!BY_ID.has(r.id)) continue;
     if (r.choice === "declined") cut.declined.push(r);
     else if (r.state === "on" || r.choice === "done") cut.active.push(r);
     else if (!r.relevant) cut.unfit.push(r);
+    else if (r.sent || r.partial) cut.started.push(r);
     else cut.offered.push(r);
   }
   return cut;
@@ -326,5 +378,11 @@ export function cleanOptInRow(x: unknown): OptInRow | null {
   if (o.state !== "on" && o.state !== "off" && o.state !== "unknown") return null;
   const row: OptInRow = { id: o.id, relevant: o.relevant, state: o.state, detail: typeof o.detail === "string" ? o.detail : "" };
   if (o.choice === "declined" || o.choice === "done") row.choice = o.choice;
+  const sent = o.sent as Record<string, unknown> | null | undefined;
+  if (sent && typeof sent === "object" && typeof sent.at === "number" && Number.isFinite(sent.at) && sent.at > 0
+    && SENT_STATUSES.includes(sent.status as OptInSentStatus)) {
+    row.sent = { at: sent.at, status: sent.status as OptInSentStatus };
+  }
+  if (o.partial === true) row.partial = true;
   return row;
 }

@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import {
   TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
-  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
+  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, filterStrip, isTabsListPress, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
 } from "./sessionTabs.ts";
 
 const tab = (id, createdAt, over = {}) => ({
@@ -290,4 +290,32 @@ test("a saver coming on offers once per spell to stop sharing the tab order", ()
   assert.equal(offerUnsync("battery", true, true), false, "asked this spell");
   assert.equal(offerUnsync("battery", false, false), false, "nothing shared to stop");
   assert.equal(offerUnsync(null, true, false), false);
+});
+
+test("the list's filter: every typed word, anywhere the row says it, in the strip's own order", () => {
+  const word = (st) => ({ done: "idle", coding: "working", wait: "waiting for your answer" })[st] ?? st;
+  const all = [
+    { kind: "session", tab: tab("a", 1, { label: "exposure watch", repo: "myapp", status: "wait" }) },
+    { kind: "file", file: { repoId: "r", repo: "myapp", path: "docs/notes/web.md" } },
+    { kind: "session", tab: tab("b", 2, { label: "watchface crash", repo: "garmin", status: "coding" }) },
+  ];
+  const ids = (q) => filterStrip(all, q, word).map((x) => x.kind === "file" ? x.file.path : x.tab.id);
+  assert.deepEqual(ids(""), ["a", "docs/notes/web.md", "b"]);
+  assert.deepEqual(ids("  "), ["a", "docs/notes/web.md", "b"]);
+  assert.deepEqual(ids("WATCH"), ["a", "b"], "case-insensitive, order kept");
+  assert.deepEqual(ids("watch garmin"), ["b"], "every word must match");
+  assert.deepEqual(ids("working"), ["b"], "the state in words");
+  assert.deepEqual(ids("notes"), ["docs/notes/web.md"], "a pinned file's path");
+  assert.deepEqual(ids("nothing"), []);
+});
+
+test("Ctrl+E opens the list; ⌘E, Alt, Shift and an IME pick do not", () => {
+  const k = (o) => ({ key: "e", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
+  assert.equal(isTabsListPress(k({ ctrlKey: true })), true);
+  assert.equal(isTabsListPress(k({ ctrlKey: true, key: "E" })), true);
+  assert.equal(isTabsListPress(k({ metaKey: true })), false);
+  assert.equal(isTabsListPress(k({ ctrlKey: true, shiftKey: true })), false);
+  assert.equal(isTabsListPress(k({ ctrlKey: true, altKey: true })), false);
+  assert.equal(isTabsListPress(k({ ctrlKey: true, isComposing: true })), false);
+  assert.equal(isTabsListPress(k({ ctrlKey: true, key: "w" })), false);
 });

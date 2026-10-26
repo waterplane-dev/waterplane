@@ -17,20 +17,32 @@
  * and only STAMPED onto the row here; it never changes `state`.
  *
  * `security-review` needs the intent store, which this module must not import:
- * the route hands in `standingPrompts`. `requirements` asks the plugin registry
+ * the route hands in `standingPrompts`.
+ *
+ * **Was it already sent?** Every agent/schedule offer's words end in its marker
+ * (`optInMarker`), so a send is found by the marker in what this desktop holds:
+ * posted work rows and live sessions' histories (the route hands them in as
+ * `sightings`), plus the time `setupprefs.ts` remembered from a session's
+ * history as it was recorded (`noteOptInSends`) — a closed session's history
+ * is deleted with it. That stamps `row.sent`, which never changes `state`:
+ * sent is not on. `requirements` asks the plugin registry
  * through `setupcontrib.ts` whether its fix is registered.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { OPT_INS, REPOHEALTH_OWN_FILE, isStandingSchedule, optInMarker, ruleRecurs, type Intent, type OptInRow, type OptInState } from "@waterplane/shared";
+import {
+  OPT_INS, REPOHEALTH_OWN_FILE, isStandingSchedule, optInMarkedIds, optInMarker, ruleRecurs,
+  type HistoryEntry, type Intent, type Lifecycle, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
+} from "@waterplane/shared";
 import { isAndroidRepo } from "./androidenv.js";
 import { repoSharedDir } from "./branddirs.js";
 import { captureTargetCount } from "./compliance.js";
 import { seriesPathOf } from "./healthwatch.js";
 import { contributedFixIds } from "./plugins/setupcontrib.js";
 import { canReadRepoHealth } from "./repohealth.js";
-import { optInChoices } from "./setupprefs.js";
+import { exposureWatchProbe } from "./exposurewatch.js";
+import { noteOptInSent, optInChoices, optInSentTimes } from "./setupprefs.js";
 
 export interface OptInDeps {
   /** Prompt text of every standing (recurring, live) schedule aimed at this
@@ -40,12 +52,19 @@ export interface OptInDeps {
   fixIds?(): string[];
   /** The person's words. Defaults to the prefs store. */
   choices?(worktree: string): Record<string, "declined" | "done">;
+  /** Where this offer's words are held right now (`optInSightings`); `null` = could not be read. */
+  sightings?(worktree: string): OptInSighting[] | null;
+  /** When a send was last remembered. Defaults to the prefs store. */
+  sentTimes?(worktree: string): Record<string, number>;
 }
+
+/** One place an offer's marked words are held right now. */
+export interface OptInSighting { id: string; at: number; status: OptInSentStatus }
 
 const FILE_CAP = 256 * 1024;
 const SCAN_FILES = 50;
 
-type Probe = { relevant: boolean; state: OptInState; detail: string };
+type Probe = { relevant: boolean; state: OptInState; detail: string; partial?: true };
 
 function read(p: string): string | null {
   try {
@@ -91,7 +110,7 @@ function repoHealthOwn(wt: string): Probe {
   if (committed === null) {
     if (!isGitRepo(wt)) return { relevant: true, state: "unknown", detail: `${rel} could not be read from git: this is not a git repo.` };
     return onDisk
-      ? { relevant: true, state: "off", detail: `${rel} is written but not committed, and only committed readings run.` }
+      ? { relevant: true, state: "off", partial: true, detail: `${rel} is written but not committed, and only committed readings run.` }
       : { relevant: true, state: "off", detail: `${rel} does not exist at HEAD.` };
   }
   try {
@@ -194,9 +213,18 @@ function screenshots(wt: string): Probe {
     : { relevant: true, state: "off", detail: "No capture targets are configured." };
 }
 
+function exposureWatch(wt: string): Probe {
+  if (!isGitRepo(wt)) return unfit("This is not a git repo, so there is nothing for the watch to look up.");
+  return { relevant: true, ...exposureWatchProbe(wt) };
+}
+
 /** One row per catalog entry, in catalog order. Never throws: a probe that does becomes `unknown`. */
 export function inspectOptIns(worktree: string, deps: OptInDeps): OptInRow[] {
   const choices = (deps.choices ?? optInChoices)(worktree);
+  let held: OptInSighting[] = [];
+  try { held = deps.sightings?.(worktree) ?? []; } catch { /* unreadable ⇒ only what was remembered */ }
+  let remembered: Record<string, number> = {};
+  try { remembered = (deps.sentTimes ?? optInSentTimes)(worktree); } catch { /* none */ }
   const probes: Record<string, () => Probe> = {
     "requirements": () => requirements(worktree, deps),
     "repo-health": () => repoHealth(worktree),
@@ -206,6 +234,7 @@ export function inspectOptIns(worktree: string, deps: OptInDeps): OptInRow[] {
     "npm-supply-chain": () => npmSupplyChain(worktree),
     "gcp-cleanup": () => gcpCleanup(worktree),
     "screenshots": () => screenshots(worktree),
+    "exposure-watch": () => exposureWatch(worktree),
   };
   return OPT_INS.map((d) => {
     let p: Probe;
@@ -214,6 +243,8 @@ export function inspectOptIns(worktree: string, deps: OptInDeps): OptInRow[] {
     const row: OptInRow = { id: d.id, ...p };
     const c = choices[d.id];
     if (c) row.choice = c;
+    const sent = sentOf(d.id, held, remembered[d.id]);
+    if (sent) row.sent = sent;
     return row;
   });
 }
@@ -231,4 +262,46 @@ export function standingPromptsOf(intents: readonly Intent[], worktree: string, 
     out.push(i.payload.steps.join("\n"));
   }
   return out;
+}
+
+const ROW_STATUS: Record<Lifecycle, OptInSentStatus> = {
+  queued: "waiting", blocked: "waiting", starting: "waiting", running: "running", done: "done", failed: "failed", canceled: "canceled",
+};
+
+/**
+ * The last send of one offer: the newest place its words are held now, else
+ * the remembered time as `ended`. A remembered time NEWER than everything held
+ * means a later send whose session already closed — that one wins.
+ */
+export function sentOf(id: string, held: readonly OptInSighting[], rememberedAt?: number): OptInSent | undefined {
+  let best: OptInSighting | undefined;
+  for (const h of held) if (h.id === id && (!best || h.at > best.at)) best = h;
+  if (rememberedAt && (!best || rememberedAt > best.at)) return { at: rememberedAt, status: "ended" };
+  return best ? { at: best.at, status: best.status } : undefined;
+}
+
+/** Where marked words are held now: posted prompt rows in this worktree (by
+ *  lifecycle) and live sessions' histories (`open`). The route's `sightings`. */
+export function optInSightings(
+  worktree: string,
+  intents: readonly Intent[],
+  sessions: readonly { cwd: string; history: readonly HistoryEntry[] }[],
+): OptInSighting[] {
+  const wt = realOf(worktree);
+  const out: OptInSighting[] = [];
+  for (const i of intents) {
+    if (i.payload.kind !== "prompt" || realOf(i.cwd) !== wt) continue;
+    for (const id of optInMarkedIds(i.payload.steps.join("\n"))) out.push({ id, at: i.createdAt, status: ROW_STATUS[i.state] ?? "waiting" });
+  }
+  for (const s of sessions) {
+    if (realOf(s.cwd) !== wt) continue;
+    for (const e of s.history) for (const id of optInMarkedIds(e.text)) out.push({ id, at: e.sentAt, status: "open" });
+  }
+  return out;
+}
+
+/** A session's history changed: remember any offer whose words it was sent,
+ *  so the card still knows once the session (and its history) is gone. */
+export function noteOptInSends(cwd: string, entries: readonly HistoryEntry[]): void {
+  for (const e of entries) for (const id of optInMarkedIds(e.text)) noteOptInSent(cwd, id, e.sentAt);
 }

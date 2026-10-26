@@ -55,11 +55,11 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ToggleRight, Wrench, X,
+  Activity, AlertTriangle, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
 } from "lucide-react";
-import { isSetupConsider, isSetupFinding } from "@waterplane/shared";
+import { isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
 import type {
-  ComplianceCheck, ComplianceReport, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
+  ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
 } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
@@ -88,6 +88,11 @@ import type { CoreApi } from "./sdk/types";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { AcceptControl, AcceptedSection, DigestGroup } from "./ExposureAccept";
+import {
+  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, inExposureMainList,
+  WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
+} from "./exposureWords";
 
 const STATUS_ICON = {
   pass: <Check size={16} color="var(--ok)" />,
@@ -95,8 +100,12 @@ const STATUS_ICON = {
   fail: <X size={16} color="var(--dead)" />,
 } as const;
 
-/** `optins` is region 3 (`OptInRegion.tsx`): offers, not readings — counted in nothing. */
-export type ReadingsRegion = "setup" | "series" | "optins";
+/** `optins` is region 3 (`OptInRegion.tsx`): offers, not readings — counted in nothing.
+ *  `watch` is region 4: the checklist rows `isWatchCheck` names (the daily exposure watch and
+ *  Scorecard), drawn by the same `SetupRegion` as set-up so a finding looks and acts the same in
+ *  both — split off because a convention the repo is wired to and an advisory the world published
+ *  about its dependencies are different questions with different owners. */
+export type ReadingsRegion = "setup" | "series" | "optins" | "watch";
 
 // `CLAUDE_MD_KEY` / `DESC_KEY` (the weight stack's two series) live in
 // `repoHealthPlot.ts`, a leaf both regions read, so region 2 never imports this sheet back.
@@ -163,6 +172,10 @@ export function SetupSheet({
   const [cut, setCut] = useState(focus === "findings");
   useEffect(() => { setCut(focus === "findings"); }, [focus]);
   useEffect(() => { setRegion(initialRegion); }, [initialRegion]);
+  /** The badge counts both checklist regions. Aimed at the findings with none left under set-up but
+   *  some under watch, land on watch: a count's tap opens the rows it counted, not an empty cut. */
+  const [landed, setLanded] = useState(false);
+  useEffect(() => { setLanded(false); }, [focus, initialRegion, repoId]);
 
   /** The checklist's WRITE half — a fix in flight, and what it said. The read's
    *  own states belong to its hook; mixing the two is how "the checklist could
@@ -215,6 +228,24 @@ export function SetupSheet({
     }
   }
 
+  /** Accept (or stop accepting) one exposure finding. Returns the host's refusal as text so the
+   *  form keeps what was typed; the re-run report folds the row. */
+  async function setAccepted(req: ComplianceAcceptRequest): Promise<string | null> {
+    if (!repoId) return "No repo is open, so there is nothing to accept.";
+    track(req.accept ? "action:setup.accept" : "action:setup.unaccept");
+    setBusy(true);
+    setFixError(null);
+    try {
+      const r = await api.complianceAccept(repoId, req);
+      if (r.ok && r.report) { checkRes.set(r.report); return null; }
+      return r.error || "the desktop did not store it";
+    } catch (e) {
+      return String((e as Error).message || e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function applyFixes(fixes: string[]): Promise<ComplianceReport | null> {
     if (!repoId || !fixes.length) return null;
     track("action:setup.fix");
@@ -239,7 +270,14 @@ export function SetupSheet({
     return null;
   }
 
-  const checks = report?.checks ?? [];
+  // The checklist read is ONE report; `set-up` and `watch` are two cuts of it by `isWatchCheck`,
+  // and every count, list and bulk button below is the cut's — never the whole report's.
+  const allChecks = report?.checks ?? [];
+  const watchChecks = allChecks.filter(isWatchCheck);
+  const setupChecks = allChecks.filter((c) => !isWatchCheck(c));
+  const checks = region === "watch" ? watchChecks : setupChecks;
+  /** The badge's findings that are NOT in the region on screen — said on the cut, with a way there. */
+  const otherFindings = (region === "watch" ? setupChecks : watchChecks).filter(isSetupFinding).length;
   // Two kinds of open finding, and the difference is not cosmetic: one is an
   // idempotent patch the host writes, the other is work. `Fix all` used to mean
   // only the first, so a repo whose findings were all of the second kind showed
@@ -266,12 +304,18 @@ export function SetupSheet({
       if (!fresh) return;
       now = fresh;
     }
-    const rest = now ? agentFindings(now.checks) : [];
+    const rest = now ? agentFindings(now.checks.filter((c) => isWatchCheck(c) === (region === "watch"))) : [];
     if (rest.length && onRemedy) {
       onRemedy(remedyPrompt(rest, repo.repoName, setupRows()), repo,
         rest.length === 1 ? rest[0].label.toLowerCase() : `${rest.length} setup findings`);
     }
   }
+
+  useEffect(() => {
+    if (landed || !report || !cut || region !== "setup") return;
+    setLanded(true);
+    if (!setupChecks.some(isSetupFinding) && watchChecks.some(isSetupFinding)) setRegion("watch");
+  }, [landed, report, cut, region, setupChecks, watchChecks]);
 
   const plot = view?.plot ?? null;
   const claudeMdSeries = plot?.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null;
@@ -318,15 +362,24 @@ export function SetupSheet({
             <FilterChip on={region === "series"} clears={false} onClick={() => setRegion("series")}>
               <Activity size={14} /> over time
             </FilterChip>
+            <FilterChip on={region === "watch"} clears={false}
+              onClick={() => { setRegion("watch"); setScope(null); }}>
+              <ShieldAlert size={14} /> watch
+            </FilterChip>
             <FilterChip on={region === "optins"} clears={false}
               onClick={() => { setRegion("optins"); setScope(null); }}>
               <ToggleRight size={14} /> opt-ins
             </FilterChip>
-            <Explain of="what this region compares">{region === "optins" ? OPTINS_REGION_WORDS : regionWords(region)}</Explain>
+            <Explain of="what this region compares">{region === "optins" ? OPTINS_REGION_WORDS
+              : region === "watch" ? WATCH_REGION_WORDS : regionWords(region)}</Explain>
           </div>
 
-          {region === "setup" ? (<>
+          {region === "setup" || region === "watch" ? (<>
             <SetupRegion
+              kind={region}
+              elsewhere={cut ? otherFindings : 0}
+              onElsewhere={() => setRegion(region === "watch" ? "setup" : "watch")}
+              onOptIns={() => { setRegion("optins"); setScope(null); }}
               repoId={repoId}
               repo={repo}
               res={checkRes}
@@ -345,6 +398,7 @@ export function SetupSheet({
               forAgent={forAgent.length}
               onFix={applyFixes}
               onIgnore={setIgnored}
+              onAccept={setAccepted}
               onFixAll={() => void fixEverything()}
               onRemedy={onRemedy}
               claudeMdSeries={claudeMdSeries}
@@ -352,7 +406,7 @@ export function SetupSheet({
             />
             {/* Not a check — a choice about this repo, kept beside the checklist
                 because this is the screen a repo's own settings are on. */}
-            {repo && <AskRulesHere repo={repo} say={showToast} />}
+            {repo && region === "setup" && <AskRulesHere repo={repo} say={showToast} />}
           </>) : region === "optins" ? (
             <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
               onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
@@ -378,9 +432,16 @@ export function SetupSheet({
 // ───────────────────────────────────────────────────────────────────────────
 
 function SetupRegion({
-  repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
-  bulkCount, patchable, forAgent, onFix, onIgnore, onFixAll, onRemedy, claudeMdSeries, descSeries,
+  kind, elsewhere, onElsewhere, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
+  bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onFixAll, onRemedy, claudeMdSeries, descSeries,
 }: {
+  /** Which cut of the checklist this is: the conventions, or the daily watch (`isWatchCheck`). */
+  kind: "setup" | "watch";
+  /** Under the findings cut: how many of the badge's findings live in the OTHER region (0 = none / no cut). */
+  elsewhere: number;
+  onElsewhere: () => void;
+  /** The empty watch region's door to the opt-ins region, where the watch is switched on. */
+  onOptIns: () => void;
   repoId: string;
   repo: RepoTarget | null;
   res: ReturnType<typeof useRemoteResource<ComplianceReport>>;
@@ -400,6 +461,8 @@ function SetupRegion({
   onFix: (f: string[]) => Promise<ComplianceReport | null>;
   /** Ignore / stop ignoring an advisory row in this repo. */
   onIgnore: (id: string, ignore: boolean) => void;
+  /** Accept / stop accepting an exposure finding; resolves to a refusal sentence or null. */
+  onAccept: (req: ComplianceAcceptRequest) => Promise<string | null>;
   onFixAll: () => void;
   onRemedy?: (prompt: string, repo: RepoTarget, label: string) => void;
   /** The series' own reading of the two halves of the always-on weight, when
@@ -407,12 +470,55 @@ function SetupRegion({
   claudeMdSeries: RepoHealthPlotSeries | null;
   descSeries: RepoHealthPlotSeries | null;
 }) {
+  function card(c: ComplianceCheck) {
+    if (!report) return null;
+    // Per row, the same two answers as the bulk button. A preset is
+    // preferred where one exists — it is the user's own words, and
+    // editing the preset edits the remedy — but its ABSENCE no
+    // longer means the row has nothing to offer: an open finding
+    // with no host patch gets the prompt built from its own words.
+    // A thing to CONSIDER keeps its remedy: it is a suggestion you
+    // can take, it is only never counted.
+    const open = (isSetupFinding(c) || isSetupConsider(c)) && !c.fix;
+    const rem = open && canAsk ? remedyFor(c.id, presets) : null;
+    const ask = open && canAsk && repo
+      ? rem
+        ? { label: rem.title, run: () => onRemedy!(rem.text, repo, rem.title) }
+        : setupRows().byCheck(c.id)?.agent
+      ? { label: agentVerb(c.id, setupRows()), run: () => runRowAgent(setupRows().byCheck(c.id)!.agent!, repo, c.label) }
+      : { label: agentVerb(c.id, setupRows()), run: () => onRemedy!(remedyPrompt([c], repo.repoName, setupRows()), repo, c.label.toLowerCase()) }
+      : null;
+    // The one row whose finding is a COMPARISON: it quotes a
+    // threshold, so it is the only place that threshold can be
+    // argued with. Everything else here is a fact about the repo.
+    const limits = c.id === "context-weight" && report.contextLimits
+      ? <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
+          setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />
+      : null;
+    const twin = c.id === "context-weight"
+      ? <WeightTwin claudeMd={claudeMdSeries} desc={descSeries} workingTree={c.alwaysOnChars ?? null} />
+      : null;
+    // An exposure finding: the line it crossed and where it was read, then Accept….
+    const xp = c.exposure
+      ? <>
+          <div className="check-detail check-detail-quiet">{exposureMeta(c.exposure)}</div>
+          <AcceptControl check={c} onAccept={onAccept} />
+        </>
+      : null;
+    return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
+      size={report.autoCompactDefault} onIgnore={onIgnore}
+      extra={<>{twin}{limits}{xp}</>} />;
+  }
+  const xcut = exposureCut(allRows);
+
   return (
     <>
       <div className="section-head">
         <span className="section section-hint">
-          Checks a repo follows the conventions: CLAUDE.md tells the agent to use the outbox,
-          inbox/outbox are gitignored and secrets aren&apos;t committed. Re-run regularly.
+          {kind === "watch" ? WATCH_HEAD_WORDS : <>
+            Checks a repo follows the conventions: CLAUDE.md tells the agent to use the outbox,
+            inbox/outbox are gitignored and secrets aren&apos;t committed. Re-run regularly.
+          </>}
         </span>
         <Button onClick={() => res.reload({ quiet: true })} title="re-check">
           <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
@@ -425,6 +531,9 @@ function SetupRegion({
       <Empty res={res} empty={!report} thing="the setup checklist" noun="checklist">
         Nothing in this checklist applies to this repo yet.
       </Empty>
+      {report && kind === "watch" && !allRows.length && (
+        <Hint>{WATCH_EMPTY_WORDS} <button className="link-btn" onClick={onOptIns}>{WATCH_EMPTY_LINK}</button></Hint>
+      )}
       {fixError && <Hint style={{ color: "var(--dead)" }}>Fix failed: {fixError}</Hint>}
       {fixNotes.map((n, i) => <Hint key={i}>{n}</Hint>)}
 
@@ -449,7 +558,11 @@ function SetupRegion({
               matching nothing must still say it is a filter. */}
           {cut && (
             <div className="section filter-bar">
-              <span className="filter-bar-txt">{findingsCutWords(rows.length, allRows.length)}</span>
+              <span className="filter-bar-txt">
+                {findingsCutWords(rows.length, allRows.length)}
+                {elsewhere > 0 && <> · <button className="link-btn" onClick={onElsewhere}>
+                  {cutElsewhereWords(elsewhere, kind === "watch" ? "setup" : "watch")}</button></>}
+              </span>
               <button className="filter-bar-clear" onClick={onClearCut}>
                 <X size={14} /> clear
               </button>
@@ -457,38 +570,12 @@ function SetupRegion({
           )}
 
           <ul className="check-list">
-            {rows.filter((c) => !c.ignored).map((c) => {
-              // Per row, the same two answers as the bulk button. A preset is
-              // preferred where one exists — it is the user's own words, and
-              // editing the preset edits the remedy — but its ABSENCE no
-              // longer means the row has nothing to offer: an open finding
-              // with no host patch gets the prompt built from its own words.
-              // A thing to CONSIDER keeps its remedy: it is a suggestion you
-              // can take, it is only never counted.
-              const open = (isSetupFinding(c) || isSetupConsider(c)) && !c.fix;
-              const rem = open && canAsk ? remedyFor(c.id, presets) : null;
-              const ask = open && canAsk && repo
-                ? rem
-                  ? { label: rem.title, run: () => onRemedy!(rem.text, repo, rem.title) }
-                  : setupRows().byCheck(c.id)?.agent
-                ? { label: agentVerb(c.id, setupRows()), run: () => runRowAgent(setupRows().byCheck(c.id)!.agent!, repo, c.label) }
-                : { label: agentVerb(c.id, setupRows()), run: () => onRemedy!(remedyPrompt([c], repo.repoName, setupRows()), repo, c.label.toLowerCase()) }
-                : null;
-              // The one row whose finding is a COMPARISON: it quotes a
-              // threshold, so it is the only place that threshold can be
-              // argued with. Everything else here is a fact about the repo.
-              const limits = c.id === "context-weight" && report.contextLimits
-                ? <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
-                    setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />
-                : null;
-              const twin = c.id === "context-weight"
-                ? <WeightTwin claudeMd={claudeMdSeries} desc={descSeries} workingTree={c.alwaysOnChars ?? null} />
-                : null;
-              return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
-                size={report.autoCompactDefault} onIgnore={onIgnore}
-                extra={<>{twin}{limits}</>} />;
-            })}
+            {rows.filter((c) => !c.ignored && inExposureMainList(c)).map(card)}
           </ul>
+
+          {/* Digest rows count in nothing and ciqkit has dozens: ONE closed head, the same cards inside.
+              Not under the findings cut — a digest row is not a finding. */}
+          {!cut && <DigestGroup n={xcut.digest.length}>{xcut.digest.map(card)}</DigestGroup>}
 
           {/* What the person said to leave alone here — still measured, so
               "stop ignoring" unfolds a row that says what it says today. Not
@@ -515,6 +602,11 @@ function SetupRegion({
             </>
           )}
 
+          {/* Accepted exposure findings stay visible with their reason, never hidden; like Ignored,
+              not under the findings cut (an accepted row is not a finding). */}
+          {!cut && <AcceptedSection rows={xcut.accepted} now={Date.now()}
+            onStop={(id) => void onAccept({ id, accept: false }).then((err) => { if (err) showToast(err); })} />}
+
           {/* A repo with no CLAUDE.md has nothing to weigh and therefore no
               row — but it will be measured against this line the moment it
               gets one, and this sheet is the only place that line is visible.
@@ -522,7 +614,7 @@ function SetupRegion({
               out of nowhere later. Drawn under the cut as well: the line is
               not a finding, so hiding it with the passing rows would remove a
               control that has nothing to do with the filter. */}
-          {report.contextLimits && !allRows.some((c) => c.id === "context-weight") && (
+          {kind === "setup" && report.contextLimits && !allRows.some((c) => c.id === "context-weight") && (
             <div className="check-row check-pass">
               <div className="check-top"><span className="check-label">Agent context weight</span></div>
               <div className="check-detail">
@@ -628,7 +720,7 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
       <div className="check-detail">{c.detail}</div>
       {/* A short verb on the button, its full effect as TEXT: a title is invisible on a phone. */}
       {c.fix && !fixNeedsConfirm(c.fix) && fixTitle(c.fix) && <Hint>{fixTitle(c.fix)}</Hint>}
-      {consider && (
+      {consider && !c.exposure && (
         <div className="check-acts check-acts-split">
           <Hint as="span">Not counted in the badge. Leaving it is a fine answer.</Hint>
           <Button onClick={() => onIgnore(c.id, true)}>

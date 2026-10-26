@@ -85,7 +85,7 @@ export function LauncherScreen(p: LauncherProps) {
   const { openCwd, refreshRepos } = p.launchCore;
   const { clearExited } = p.verbs;
   const {
-    tab, setTab, navMenu, setNavMenu, dl, appsReady, activityBadge, visibleSessions, visibleExternal, clearFocus, repoGroups,
+    tab, setTab, navMenu, setNavMenu, dl, appsReady, activityBadge, activityKeys, visibleSessions, visibleExternal, clearFocus, repoGroups,
     sessionOrder, resetSessionOrder, waitingTotal, waitingRepliesTotal, limitTotal, codingTotal, starredTotal, flaggedTotal, shellsTotal,
     statusFilter, setStatusFilter, statusFilterActive, toggleStatusFilter, shownSessions, sortedSessions,
     textQuery, setTextQuery, textOn, noRepoCollapsed,
@@ -212,7 +212,11 @@ export function LauncherScreen(p: LauncherProps) {
                 zero. */}
             <button className="more-act" data-hint="activity.open"
               title="activity — every prompt, sweep, build, schedule and download you posted, with what became of it. Select rows here to deal with many at once."
-              onClick={() => { track("overlay:activity"); setNavMenu(false); openActivity(null); }}>
+              onClick={() => {
+                track("overlay:activity"); setNavMenu(false);
+                // A count is a filter: with a number on it, the tap opens those rows.
+                openActivity(activityKeys.length ? { keys: activityKeys, label: `the ${activityKeys.length} ${activityKeys.length === 1 ? "row" : "rows"} still open` } : null);
+              }}>
               <ListOrdered size={ICON} />activity
               {activityBadge > 0 && <span className="mic-badge">{activityBadge}</span>}
             </button>

@@ -10,7 +10,7 @@
     "./fakeapi": "./fakeapi.mjs",
     "./checks": "./checks.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22.12" },
   "scripts": { "test": "node --test" },
   "license": "MIT"
 }

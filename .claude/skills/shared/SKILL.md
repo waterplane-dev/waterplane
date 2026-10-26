@@ -40,7 +40,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   precedence. The next rename edits `brand.ts` VALUES only (`local/no-brand-literal`;
   `tools/brand.test.mjs` lists what cannot import it); `brandmigrate` COPIES localStorage legacy keys
   once, never moves; `statedir` is the state-dir/root precedence; `envresolve`: current name wins,
-  then legacy names newest first, a legacy hit is reported once, never refused; `nodemin`'s `NODE_MIN` (20.12.0, `util.parseEnv`) is the ONE Node floor (package.json
+  then legacy names newest first, a legacy hit is reported once, never refused; `nodemin`'s `NODE_MIN` (22.12.0, Node 20 is end of life) is the ONE Node floor (package.json
   `engines`, doctor, `env.ts`) and `nodepin.test.mjs` pins root `engines` to it — change both together.
 - `queue.ts` — send-queue **transport**: lanes, `holdUntilIdle`+`release`, `retargetEntry`,
   `pendingCreate` (bound on the create's own `createAck`, never on the lane — `create:<cwd>` is per

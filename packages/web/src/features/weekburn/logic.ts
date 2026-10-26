@@ -80,8 +80,13 @@ export function runningWords(r: { posted: number; live: string | null; stoppedTe
   return parts.join(" · ");
 }
 
-export const BRANCH_NOTE =
-  "Each item commits on the repo's current branch, once its tests pass. Nothing is pushed.";
+/**
+ * What ticking a repo DOES, said above the list: a checkbox with no consequence
+ * named reads as a mystery (owner, 2026-10-26).
+ */
+export const PICK_NOTE =
+  "A ticked repo gets unattended sessions from the start time until the stop line, one at a time. " +
+  "Each makes one small fix to the repo's weakest reading and commits it on the current branch, only if the tests pass. Nothing is pushed.";
 
 export interface BurnRepo { worktreePath: string; repoName: string; branch: string; isPrimary: boolean }
 export interface BurnRow { dir: string; title: string; where?: string }

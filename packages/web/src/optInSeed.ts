@@ -10,7 +10,7 @@
  * goes. The catalog and its wording are `shared/optins.ts`'s.
  */
 import { optInDef, optInPrompt, optInRule, optInWalkPrompt } from "@waterplane/shared";
-import type { OptInRow, RepoTarget } from "@waterplane/shared";
+import type { OptInRow, OptInSent, RepoTarget } from "@waterplane/shared";
 import type { SendSeed } from "./sendIntent/sendTypes.ts";
 
 type SeedRepo = Pick<RepoTarget, "id" | "repoName" | "worktreePath">;
@@ -89,6 +89,35 @@ export function declinedHead(n: number): string {
 export function unfitHead(n: number): string {
   return `${n} ${n === 1 ? "doesn't" : "don't"} fit this repo`;
 }
+
+/** The started list's head and its one-line guide. */
+export function startedHead(n: number): string {
+  return `Started here · ${n}`;
+}
+export const STARTED_GUIDE =
+  "You began these in this repo, and the desktop does not see them set up yet. Sending one again starts it over.";
+
+/** The day a send is named by, in the phone's own words — "24 Oct". */
+export function sentDay(at: number): string {
+  return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+/** What became of the last send, one sentence — the host's status, never re-guessed here. */
+export function optInSentWords(sent: OptInSent, day: (at: number) => string = sentDay): string {
+  const on = `Sent ${day(sent.at)}`;
+  switch (sent.status) {
+    case "waiting": return `${on} — waiting in this repo's backlog.`;
+    case "running": return `${on} — running now.`;
+    case "open": return `${on} to a session that is still open.`;
+    case "done": return `${on} — that run finished, but it is not set up yet.`;
+    case "failed": return `${on} — that run failed.`;
+    case "canceled": return `${on} — that row was cancelled.`;
+    case "ended": return `${on} — that session has closed, and it is not set up yet.`;
+  }
+}
+
+/** The second tap's words on a started card's verb: it was sent before. */
+export const SEND_AGAIN_CONFIRM = "already sent — again?";
 
 /** Nothing offered — said plainly, and pointing at what is folded below. */
 export function noOffersWords(declined: number, unfit: number): string {

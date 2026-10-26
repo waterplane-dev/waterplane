@@ -34,6 +34,13 @@ export function activityChips(
   let whole: string | null = null;
   for (const f of ACTIVITY_FILTERS) {
     const on = !focused && filter === f.id;
+    // `open` is a union of the buckets after it, which name their own empties
+    // and their own "all …": it is a chip when it has rows (or is lit), never a
+    // word in the line.
+    if (f.id === "open") {
+      if (on || (counts.open > 0 && counts.open < counts.all)) chips.push({ id: f.id, text: chipText(f.label, { count: counts.open }), on });
+      continue;
+    }
     // `dismissed` is outside `all`'s pool (`matchesFilter`): it never holds the whole of it.
     const isWhole = f.id !== "all" && f.id !== "dismissed" && counts[f.id] === counts.all;
     if (f.id === "all" || on || (counts[f.id] > 0 && !isWhole)) chips.push({ id: f.id, text: chipText(f.label, { count: counts[f.id] }), on });

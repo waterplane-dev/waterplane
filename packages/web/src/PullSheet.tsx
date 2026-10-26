@@ -282,6 +282,20 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </span>
         )}
         <span className="head-acts">
+          {/* The master switch where an automatic row is on screen. It lived only
+              on the rules pane, so a desktop browser holding a 232 MB APK it
+              never wanted had no way to say "not on this machine" from the row
+              that showed it. Same move as `PullBrowserAsk`'s *app only*: the
+              switch alone would let a running transfer finish, so those pause. */}
+          {auto && active.some((r) => !r.local) && (
+            <button className="link-btn" data-hint="pull.auto" onClick={() => {
+              track("action:pull.auto.queue");
+              const running = active.filter((r) => !r.local && r.state === "downloading");
+              setAutoPull(false); setAuto(false);
+              for (const r of running) pulls.pause(r.item.id);
+              showToast(`Auto-download is off in this browser${running.length ? ` and ${running.length === 1 ? running[0].item.name : `${running.length} downloads`} paused` : ""}. Downloads › rules turns it back on.`);
+            }}><X size={12} /> auto off here</button>
+          )}
           {stuck.length > 0 && (
             <button className="link-btn" onClick={() => { pulls.resumeAll(); track("action:pull.resumeall"); }}>
               <RotateCw size={12} /> resume all

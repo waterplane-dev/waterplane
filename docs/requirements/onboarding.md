@@ -133,3 +133,8 @@ The setup checklist mentions low disk space with a recommendation.
 - asked: 2026-10-21
 - shipped: ab5ce674
 
+
+### R-onboarding-023 · shipped
+The Opt-ins list remembers what the person already started in that repo: an offer whose words were sent there (or that is half done, such as readings written but not committed) moves to its own "Started here" list above the fresh offers, saying when it was sent and what became of it (waiting, running, still open, finished, failed, session closed). Sending it again asks once more first, the walk-through only counts offers never started, and any open offer can be marked done by the person.
+- asked: 2026-10-26
+- shipped: 57889170

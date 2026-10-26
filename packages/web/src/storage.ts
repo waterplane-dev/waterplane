@@ -151,7 +151,7 @@ export const KEY_SCOPE = {
   // how this phone is held and read
   toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
   typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
-  readerZoom: "device", scrollZoom: "device", gitZoom: "device", textDumpWrap: "device", closeCustomH: "device",
+  readerZoom: "device", scrollZoom: "device", gitZoom: "device", gitExplainFoci: "device", gitExplainNote: "device", gitExplainLast: "device", textDumpWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device", notifInfoNote: "device", whatsNewSeen: "device",
   // dismissals and the app's own update machinery

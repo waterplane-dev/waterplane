@@ -79,5 +79,5 @@ export { chatCompletion, completionText } from "./sidecar/sidecaropenai.js";
 export type { ChatRequest } from "./sidecar/sidecaropenai.js";
 export { runSummaryTask } from "./sidecar/sidecartasks.js";
 export type { SummaryRequest } from "./sidecar/sidecartasks.js";
-export { runCommitTask, runNameTask } from "./sidecar/sidecarname.js";
+export { runCommitTask, runExplainTask, runNameTask } from "./sidecar/sidecarname.js";
 export type { NameRequest, NameRun } from "./sidecar/sidecarname.js";

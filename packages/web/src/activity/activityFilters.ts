@@ -1,6 +1,16 @@
 import type { ActivityFilter, ActivityRow } from "./activityTypes.ts";
 
+/**
+ * **What is still open: the to-do half of this screen.** Opened on "all", the
+ * sheet read as a log — one row needing a tap under thirty-one done ones. A
+ * union chip, not a bucket: these rows still have something left to happen,
+ * and a person either acts on them or watches them. `scheduled` stays out
+ * (not due — it has its own chip), and so does `done`.
+ */
+export const OPEN_BUCKETS: ReadonlySet<ActivityFilter> = new Set<ActivityFilter>(["needsYou", "failed", "running", "waiting"]);
+
 export const ACTIVITY_FILTERS: { id: ActivityFilter; label: string }[] = [
+  { id: "open", label: "open" },
   { id: "all", label: "all" },
   { id: "needsYou", label: "needs you" },
   { id: "failed", label: "failed" },
@@ -26,6 +36,7 @@ export const ACTIVITY_FILTERS: { id: ActivityFilter; label: string }[] = [
 export function matchesFilter(row: ActivityRow, filter: ActivityFilter): boolean {
   if (filter === "dismissed") return row.dismissedAt != null;
   if (row.dismissedAt != null) return false;
+  if (filter === "open") return OPEN_BUCKETS.has(row.bucket);
   return filter === "all" || row.bucket === filter;
 }
 
@@ -34,12 +45,13 @@ export function matchesFilter(row: ActivityRow, filter: ActivityFilter): boolean
  *  failures is a fact worth stating on this screen. */
 export function activityCounts(rows: readonly ActivityRow[]): Record<ActivityFilter, number> {
   const out: Record<ActivityFilter, number> = {
-    all: 0, needsYou: 0, failed: 0, running: 0, waiting: 0, scheduled: 0, done: 0, dismissed: 0,
+    open: 0, all: 0, needsYou: 0, failed: 0, running: 0, waiting: 0, scheduled: 0, done: 0, dismissed: 0,
   };
   for (const r of rows) {
     if (r.dismissedAt != null) { out.dismissed += 1; continue; }
     out.all += 1;
     out[r.bucket] += 1;
+    if (OPEN_BUCKETS.has(r.bucket)) out.open += 1;
   }
   return out;
 }

@@ -1,0 +1,10 @@
+{
+  "id": "scorecard",
+  "name": "Scorecard",
+  "version": "0.1.0",
+  "apiVersion": "2.0",
+  "description": "Shows the public OpenSSF Scorecard of a repo's GitHub remote: the score, which checks lose points, and a one-tap prompt for the agent to fix one. It reads only the public Scorecard and GitHub APIs (no sign-in, no model call) and only when you look. The repo's owner/name goes to api.github.com to check it is public; a private repo's name is never sent to OpenSSF.",
+  "host": "host/index.mts",
+  "web": "web/index.ts",
+  "optional": true
+}

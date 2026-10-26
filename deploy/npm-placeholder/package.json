@@ -11,5 +11,5 @@
   },
   "keywords": ["claude-code", "claude", "mobile", "remote", "pwa"],
   "files": ["README.md"],
-  "engines": { "node": ">=20.12" }
+  "engines": { "node": ">=22.12" }
 }

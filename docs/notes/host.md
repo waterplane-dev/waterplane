@@ -7442,7 +7442,7 @@ A fork that wants its own wording for the daemon's unattended model calls drops 
 `<config dir>/prompts/<name>.md` (the dir `secrets.ts` and the `.env` load use — `~/.config/waterplane/`,
 or `<PREFIX>CONFIG_DIR`). `promptText(name, fallback)` returns the file when it holds anything, else the
 pinned default, which stays byte for byte what ships. Names: `commit-message` (`commitmsg.ts` system
-prompt), `tab-name` (`naming.ts`, the backlog-row headline pass — the name predates the session tab's),
+prompt), `change-brief` (`changebrief.ts` system prompt — the Review sheet's Explain), `tab-name` (`naming.ts`, the backlog-row headline pass — the name predates the session tab's),
 `review-check`, `review-check-diff`, `review-validate`,
 `review-validate-diff` (`review.ts`: the instruction paragraph above the task), `session-title-system`,
 `session-title`, `session-rename` (`sessions/record.ts`: the session tab title's system prompt, its
@@ -8024,7 +8024,7 @@ Plugin live streams (plugin API 1.4, `api.stream`): the `stream.*` JSON messages
 
 ### `envresolve.ts` and `nodemin.ts` — precedence helpers
 
-`resolveEnv(env, key)` reads a knob across renames: the current name wins, then each legacy name newest first; a legacy hit is REPORTED (once per name by the reader), not refused, so an old `.env` keeps working. The environment is a parameter, so tests hand it a plain object. `nodemin.ts` is the ONE Node floor (`NODE_MIN` 20.12.0): the root `package.json` `engines`, the doctor's `node` row and the early refusal in `env.ts` / `cli/index.ts` cannot disagree, and `packages/host/test/nodepin.test.mjs` holds `engines` to it. 20.12 because `.env` files are read with `util.parseEnv`.
+`resolveEnv(env, key)` reads a knob across renames: the current name wins, then each legacy name newest first; a legacy hit is REPORTED (once per name by the reader), not refused, so an old `.env` keeps working. The environment is a parameter, so tests hand it a plain object. `nodemin.ts` is the ONE Node floor (`NODE_MIN` 22.12.0): the root `package.json` `engines`, the doctor's `node` row and the early refusal in `env.ts` / `cli/index.ts` cannot disagree, and `packages/host/test/nodepin.test.mjs` holds `engines` to it. 20.12 because `.env` files are read with `util.parseEnv`.
 
 ### `brandmigrate.ts` — localStorage across a rename
 

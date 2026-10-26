@@ -2,6 +2,7 @@
   "_comment": "Which OPTIONAL in-repo extensions a release ships, and each one's default switch: { \"<id>\": { \"ship\": true|false, \"on\": true|false, \"experimental\": true|false } }. An extension the public snapshot leaves out carries the same object as its own packages/extensions/<id>/ship.json; an entry here wins. Read by scripts/release/build.mjs.",
   "builtins": {
     "desktop": { "ship": false, "on": false, "experimental": true },
-    "ocr": { "ship": true, "on": false }
+    "ocr": { "ship": true, "on": false },
+    "scorecard": { "ship": true, "on": false }
   }
 }

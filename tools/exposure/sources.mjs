@@ -83,6 +83,25 @@ async function http(url, opts = {}, retry = true) {
   }
 }
 
+/**
+ * GET a URL following redirects (15 s, one retry) and report the FINAL status without reading JSON.
+ * `{ok:true, status, finalUrl}` means we got an answer (any status); `ok:false` = network error, unreachable.
+ */
+export async function httpStatus(url, retry = true) {
+  try {
+    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(FETCH_MS) });
+    await res.body?.cancel().catch(() => {});
+    return { ok: true, status: res.status, finalUrl: res.url || url };
+  } catch (e) {
+    if (retry) return httpStatus(url, false);
+    return fail(`GET ${url}: ${msg(e)}`, true);
+  }
+}
+
+/** RDAP record of a domain via the rdap.org bootstrap; it answers 403 to a request without a user-agent (Node's fetch sends none). */
+export const rdapDomain = (name) =>
+  http(`https://rdap.org/domain/${encodeURIComponent(name)}`, { headers: { accept: "application/rdap+json", "user-agent": "exposure-watch" } });
+
 /** Abbreviated packument of an npm package; a package the registry does not know is `ok` with data null. */
 export const registryDoc = (name) =>
   // 45 s, not 15: the big packuments (typescript-eslint: ~10 MB) need ~6 s alone and far more at 16 in flight
@@ -95,6 +114,19 @@ export const osvVuln = (id) => http(`https://api.osv.dev/v1/vulns/${encodeURICom
 
 /** endoflife.date cycles of a product; an unknown product is `ok` with null. */
 export const eolCycles = (product) => http(`https://endoflife.date/api/${encodeURIComponent(product)}.json`);
+
+/**
+ * OpenSSF Scorecard's public reading of a PUBLIC GitHub repo (no credential). Resolves to
+ * `{ score, reason, date }` of its Branch-Protection check; score -1 = inconclusive. A repo Scorecard has not
+ * scored (404) or without that check is `ok` with null.
+ */
+export async function scorecardBranch(slug) {
+  const r = await http(`https://api.securityscorecards.dev/projects/github.com/${slug}`);
+  if (!r.ok || !r.data) return r;
+  const c = Array.isArray(r.data.checks) ? r.data.checks.find((x) => x?.name === "Branch-Protection") : null;
+  if (!c || typeof c.score !== "number") return ok(null, { status: r.status });
+  return ok({ score: c.score, reason: String(c.reason ?? ""), date: r.data.date ?? null }, { status: r.status });
+}
 
 /** Marketplace extension query by `publisher.name`. */
 export const marketplaceQuery = (extId) =>

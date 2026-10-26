@@ -332,3 +332,7 @@ The schedules sheet is called Automation. Its "Runs on its own, no clock" block,
 ### R-automation-071 · shipped
 A schedule can run a build entry: each occurrence posts one ordinary build run (no agent, no tokens) that says which rule fired it. Parameter values are picked on the rule's form, seeded from the build's defaults; a missing value, an unknown build or a repo this desktop does not serve is refused on save in words, and a build deleted later fails that occurrence in words. On the build sheet an entry with rules wears a clock and one line ("every weekday 07:00 · next in 3h", "paused" said in text) whose tap opens Automation cut to exactly those rules; "run on a clock…" sits in the entry's editor.
 - asked: 2026-10-25 (owner, dictated: "if build tool entries are automated they should link to it and have visual clues for that")
+
+### R-automation-072 · shipped
+The week-end burn sheet says, above its repo list, what ticking a repo does: unattended sessions from the start time to the stop line, one at a time, each one small fix committed on the current branch only if tests pass, nothing pushed.
+- asked: 2026-10-26 (owner, on a screenshot: "this dialogue misses to tell what it will do if I select an item")

@@ -21,14 +21,15 @@ import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, AgentFilesFs } from "@waterplane/shared";
-import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
+import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, AgentFilesFs } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { contextLimitsStore, repoContextLimits } from "./contextlimits.js";
-import { autoCompactDefault, ignoredChecks, setupPrefsStore } from "./setupprefs.js";
+import { exposureChecksFor } from "./exposure.js";
+import { acceptCheck, autoCompactDefault, ignoredChecks, setupPrefsStore } from "./setupprefs.js";
 import { contained, inRoot } from "./paths.js";
 import { INBOX_SUBDIR, OUTBOX_SUBDIR, OUTBOX_SUBDIRS } from "./files.js";
 import { apkInstallCheck, appModulesAsync } from "./apkcheck.js";
@@ -39,6 +40,9 @@ import { scanRepoBuilds, scanRepoBuildsAsync } from "./buildscan.js";
 import { contributedChecks, contributedFixes } from "./plugins/setupcontrib.js";
 import { VISUAL_SKILL_REL, writeVisualCheckSkill } from "./visualskill.js";
 import { writeTextAtomicKeepMode } from "./jsonstore.js";
+import { addExposureTarget } from "./exposurewatch.js";
+import { eraSeenWords, startEraSeen } from "./eraseen.js";
+import { protectMain } from "./protectmain.js";
 
 /**
  * The env layer of the context-weight thresholds — only the fields actually
@@ -452,6 +456,14 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
   const builds = buildsConfiguredRow(worktree, walks?.builds);
   if (builds) checks.push(builds);
 
+  // 5g. The exposure watch's newest reading for this repo, if a series names it
+  // (`exposure.ts`): a summary row plus one per finding; none ⇒ no rows.
+  const exposure = exposureChecksFor(worktree);
+  const eraWords = eraSeenWords(worktree);
+  const exposureSum = eraWords ? exposure.find((c) => c.id === EXPOSURE_SUMMARY_ID) : undefined;
+  if (exposureSum) exposureSum.detail += ` ${eraWords}`;
+  checks.push(...exposure);
+
   // A thing to consider, not a finding (`ADVISORY_CHECKS`): these rows read
   // what a repo costs against a line, and "leave it" is an answer. Marked here,
   // in one place, so no row's own code can forget it; the person's per-repo
@@ -495,6 +507,7 @@ export function androidToolchainRow(worktree: string, probe = probeAndroidEnv, a
 
 /** The `fix` id of the `builds-configured` row: write the shared `builds.json` from what `buildscan` found. */
 export const BUILDS_CONFIGURED_FIX = "builds-configured";
+const EXPOSURE_WATCH_FIX = "exposure-watch";
 const BUILDS_SEED_MAX = 8;
 const BUILDS_LABEL = "Build commands configured";
 
@@ -624,6 +637,13 @@ export function setCheckIgnored(target: RepoTarget, id: string, ignore: boolean)
   const store = setupPrefsStore();
   if (!store) return { ok: false, error: "no setup-preferences store on this host" };
   const r = store.setIgnored(target.worktreePath, id, ignore);
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, report: checkRepoCompliance(target) };
+}
+
+/** Accept (or stop accepting) one exposure finding; hands back the re-run report like `setCheckIgnored`. */
+export function setCheckAccepted(target: RepoTarget, req: ComplianceAcceptRequest): ComplianceAcceptResult {
+  const r = acceptCheck(target.worktreePath, req);
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, report: checkRepoCompliance(target) };
 }
@@ -799,6 +819,26 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
           notes.push(`wrote ${list.length} build${list.length === 1 ? "" : "s"} to ${join(basename(dirname(path)), "builds.json")}`);
         } catch { notes.push("builds.json appeared meanwhile — left as it is"); }
       }
+    }
+
+    if (fixes.includes(EXPOSURE_WATCH_FIX)) {
+      const r = addExposureTarget(wt);
+      if (r.added) applied.push(EXPOSURE_WATCH_FIX);
+      notes.push(r.note);
+    }
+
+    if (fixes.includes(PROTECT_MAIN_FIX)) {
+      // Confirm-gated: the route only gets here with the second tap's token (`confirmgate.ts`).
+      const r = protectMain(wt);
+      if (r.applied) applied.push(PROTECT_MAIN_FIX);
+      notes.push(r.note);
+    }
+
+    if (fixes.includes(ERA_SEEN_FIX)) {
+      // Confirm-gated; starts a detached run (`eraseen.ts`) — the re-read, not this reply, clears the rows.
+      const r = startEraSeen(wt);
+      if (r.applied) applied.push(ERA_SEEN_FIX);
+      notes.push(r.note);
     }
 
     return { ok: true, applied, notes, report: checkRepoCompliance(target) };

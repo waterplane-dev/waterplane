@@ -12,6 +12,7 @@ import { ZoomPair } from "./ZoomPair";
 import { GitMediaDiff, isMediaDiff } from "./GitMediaDiff";
 import { GitTextDiff } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
+import { GitExplain } from "./GitExplain";
 import { GIT_COPIED, GIT_COPY_FAILED, GIT_COPY_LABEL, GIT_FIX_LABEL, gitFailPrompt, type GitFailure } from "./gitFailPrompt";
 import { showToast } from "./toast";
 import { ago } from "./format";
@@ -158,6 +159,8 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   const [showBranches, setShowBranches] = useState(false);
   /** The history view, cut to the side whose count was tapped (`null` = closed). */
   const [logFocus, setLogFocus] = useState<GitLogFocus | null>(null);
+  /** The Explain view over what a push sends and a pull brings (`GitExplain.tsx`). */
+  const [explaining, setExplaining] = useState(false);
   /**
    * A drafted message that is NOT in the box, because the box already had
    * words in it.
@@ -412,7 +415,11 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   // Back — the gesture as much as the arrow — closes this step, not the sheet.
   useBackStep(openFile !== null, () => setOpenFile(null));
   useBackStep(logFocus !== null, () => setLogFocus(null));
+  useBackStep(explaining, () => setExplaining(false));
 
+  if (explaining) {
+    return <GitExplain repoId={repoId} ahead={status?.ahead ?? 0} behind={status?.behind ?? 0} onFetched={refresh} onClose={() => setExplaining(false)} />;
+  }
   if (logFocus) {
     return <GitLogView repoId={repoId} focus={logFocus} onFocus={setLogFocus} onFetched={refresh} onClose={() => setLogFocus(null)} />;
   }
@@ -448,6 +455,11 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
       <Button onClick={() => { void sync(); }} disabled={busy}
         title="pull, then push whatever is still ahead">
         <ArrowDownUp size={14} /> Sync
+      </Button>
+      {/* Last: the one control in this row that spends, and it only reads. */}
+      <Button onClick={() => { track("action:git.explainOpen"); setExplaining(true); }}
+        title="have the desktop explain what a push would send and a pull would bring — security, user-facing changes, what needs deploying">
+        <Sparkles size={14} /> Explain
       </Button>
     </div>
   );

@@ -5,9 +5,23 @@
 //
 //   node tools/exposure.mjs run <repoDir> [--name <n>] [--gh <owner/repo>] [--npm <pkg>]
 //        [--vscode <publisher.ext> --vscode-manifest <path>] [--release-repo <owner/repo> --apk-cert <sha256>]
+//        [--privacy-url <url>]... [--domain <name>] [--npm-2fa-confirmed YYYY-MM-DD]
+//        [--play <package> [--play-key-missing <why>]] [--era-check <script>] [--only <A,B,C,D|ids>]
 //        [--json] [--no-write] [--verbose]
+//   node tools/exposure.mjs run --target <name> [more flags]   # dir/gh/args from <STATE_DIR>/exposure/targets.json
+//   node tools/exposure.mjs targets                  # one `name<TAB>play(0|1)` line per valid target; exit 2 when there are none
+//   node tools/exposure.mjs scorecard --target <name> # a PRIVATE gh repo scored locally by the scorecard CLI -> <STATE_DIR>/scorecard/local/
 //   node tools/exposure.mjs accept <name> <key> --reason "<text>" [--until-version v | --until-date YYYY-MM-DD | --until-change]
 //   node tools/exposure.mjs show <name>              # the newest stored row, no network
+//   node tools/exposure.mjs era-seen --target <name> # the person handled ERA's crash groups: --mark-seen, then read again
+//
+// C5 privacy URLs answer 200, C6 domain expiry, C7 npm 2FA confirmed by hand (dated), D1 Play targetSdk vs the
+// required API, D2 Play vitals (tools/exposure/play.mjs), D3 Connect IQ ERA (<script> --json: 0 nothing new / 10 act /
+// 2 cannot reach). Their readings go to row.readings.stores, never into the B settings diff. --only runs just those
+// measures (a store-only row for a private repo): a letter enables its whole group, an id only that measure; the
+// stores of measures not run are carried from the last row. A --only row MUST use its own --name: findings are
+// compared with the last row, so a full run after an --only row of the same name sees everything as new.
+// Env: EXPOSURE_PLAY_KEY_FILE = path to the Play service-account JSON (the only way D2 gets a key).
 //
 // Exit: 0 = nothing new · 10 = act (a new open alert, an open install-script or setting-change finding)
 // · 2 = a source could not be reached (the reading is unknown, not clean) · 64 = usage / bad input.
@@ -24,23 +38,30 @@ import {
   a4Findings, applyAccepts, carryForward, exitCode, firstRunOff, installScriptReadings, mergeAdvisories, readLastRow, renderText, settingChanges, untilVersionProblem,
 } from "./exposure/core.mjs";
 import {
-  apkCertFinding, dependabotFindings, eolFindings, ghRepoSettings, licenceFindings, marketplaceFindings, npmAuditFindings,
+  apkCertFinding, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings, npmAuditFindings,
   npmPublishedFindings, npmVerifyFinding, osvFindings, osvQueries, parseGradleDeps, parsePyproject, parseLockfile,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
 import * as src from "./exposure/sources.mjs";
+import { collectPlayVitals } from "./exposure/play.mjs";
+import { parseTargets, targetRunArgv } from "./exposure/targets.mjs";
 
-const USAGE = `usage: exposure.mjs run <repoDir> [--name n] [--gh owner/repo] [--npm pkg] [--vscode publisher.ext --vscode-manifest path]
-                         [--release-repo owner/repo --apk-cert sha256] [--json] [--no-write] [--verbose]
+const USAGE = `usage: exposure.mjs run --target <name> [flags] | targets | scorecard --target <name>
+       exposure.mjs run <repoDir> [--name n] [--gh owner/repo] [--npm pkg] [--vscode publisher.ext --vscode-manifest path]
+                         [--release-repo owner/repo --apk-cert sha256]
+                         [--privacy-url url]... [--domain name] [--npm-2fa-confirmed YYYY-MM-DD] [--play package] [--play-key-missing why]
+                         [--era-check script] [--only A,B,C,D|ids] [--json] [--no-write] [--verbose]
        exposure.mjs accept <name> <key> --reason "<text>" [--until-version v | --until-date YYYY-MM-DD | --until-change]
-       exposure.mjs show <name>`;
+       exposure.mjs show <name>
+       exposure.mjs era-seen --target <name>`;
 const die = (m, code = 64) => { process.stderr.write(`${m}\n`); process.exit(code); };
 
-function parseArgs(argv, valued, flags) {
+function parseArgs(argv, valued, flags, repeat = []) {
   const pos = [], o = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (valued.includes(a)) { o[a.slice(2)] = argv[++i]; if (o[a.slice(2)] === undefined) die(`${a} needs a value\n${USAGE}`); }
+    if (repeat.includes(a)) { if (argv[i + 1] === undefined) die(`${a} needs a value\n${USAGE}`); (o[a.slice(2)] ??= []).push(argv[++i]); }
+    else if (valued.includes(a)) { o[a.slice(2)] = argv[++i]; if (o[a.slice(2)] === undefined) die(`${a} needs a value\n${USAGE}`); }
     else if (flags.includes(a)) o[a.slice(2)] = true;
     else if (a.startsWith("--")) die(`unknown argument ${a}\n${USAGE}`);
     else pos.push(a);
@@ -170,7 +191,7 @@ async function collectOther(dir, files, now) {
 }
 
 /** B1-B7 from `gh api`. */
-function collectGh(repoSlug, hasManifests, now) {
+async function collectGh(repoSlug, hasManifests, now) {
   const out = { findings: [], absent: [], settings: {} };
   const gone = (why, unreachable) => { for (const m of ["B1", "B2", "B3", "B4", "B5", "B6"]) out.absent.push(absent(m, why, unreachable)); };
   const repo = src.ghApi(`repos/${repoSlug}`);
@@ -184,8 +205,15 @@ function collectGh(repoSlug, hasManifests, now) {
   const org = owner?.type === "Organization" ? src.ghApi(`orgs/${owner.login}`) : null;
   const dep = src.ghApi(`repos/${repoSlug}/contents/.github/dependabot.yml`);
   const dep2 = dep.ok && !dep.data ? src.ghApi(`repos/${repoSlug}/contents/.github/dependabot.yaml`) : dep;
+  // gh blind to both: ask Scorecard (public API, no credential) - only for a repo GitHub itself says is public
+  let sc;
+  if (!prot.ok && !rules.ok && repo.data.private === false) {
+    const r = await src.scorecardBranch(repoSlug);
+    if (r.ok) sc = r.data; // null = not scored; a failed call stays undefined (plain "not readable")
+  }
   const g = ghRepoSettings({
     repo: repo.data,
+    scorecardBranch: sc,
     workflowPerms: perms.ok ? perms.data : undefined,
     protection: prot.ok ? prot.data : undefined, // 404 -> null -> none
     rulesets: rules.ok ? rules.data : undefined,
@@ -193,12 +221,17 @@ function collectGh(repoSlug, hasManifests, now) {
     dependabotConfigPresent: dep2.ok ? !!dep2.data : true, // unreadable: do not claim it is missing
     hasManifests,
   });
-  out.settings = g.settings; out.findings.push(...g.findings); out.absent.push(...g.absent);
+  out.settings = g.settings; out.notes = g.notes; out.findings.push(...g.findings); out.absent.push(...g.absent);
   // name each failed read by its own cause (a timeout is not a missing token right)
   const failed = { B5: perms, B4: !prot.ok ? prot : rules, B6: org };
   for (const a of out.absent) {
     const r = failed[a.measure];
-    if (r && !r.ok) { a.why = `gh api: ${r.why}`; a.unreachable = !!r.unreachable; }
+    if (r && !r.ok) { a.why = `gh api: ${r.why}${/Scorecard/.test(a.why) ? "; Scorecard's Branch-Protection check is inconclusive or not scored" : ""}`; a.unreachable = !!r.unreachable; }
+  }
+  // A private repo on GitHub's free plan has no branch rules to read or set: say THAT, not a raw 403.
+  const plan = (r) => !r.ok && /Upgrade to GitHub Pro/i.test(String(r.why ?? ""));
+  if (repo.data.private === true && plan(prot) && plan(rules)) {
+    for (const a of out.absent) if (a.measure === "B4") a.why = "a private repo on GitHub's free plan cannot have branch rules (GitHub Pro, or making the repo public, would allow them)";
   }
   const al = src.ghApi(`repos/${repoSlug}/dependabot/alerts?state=open&per_page=100`);
   if (al.ok) out.findings.push(...dependabotFindings(al.data ?? [], now));
@@ -272,10 +305,124 @@ async function collectMarketplace(dir, extId, manifest, now) {
   return out;
 }
 
+/** C5: each privacy-policy URL answers 200 after redirects. */
+async function collectPrivacy(urls) {
+  const out = { findings: [], absent: [] };
+  for (const u of urls) { const r = privacyUrlFinding(u, await src.httpStatus(u)); out.findings.push(...r.findings); out.absent.push(...r.absent); }
+  return out;
+}
+
+/** C6: when the domain expires, from RDAP. */
+async function collectDomain(domain, now) {
+  const out = { findings: [], absent: [], stores: {} };
+  const r = await src.rdapDomain(domain);
+  if (!r.ok) { out.absent.push(absent("C6", `RDAP ${domain}: ${r.why}`, r.unreachable)); return out; }
+  if (!r.data) { out.absent.push(absent("C6", `RDAP has no record of ${domain}`)); return out; }
+  const f = rdapExpiryFinding(r.data, domain, now);
+  out.findings.push(...f.findings); out.absent.push(...f.absent);
+  if (f.reading) out.stores[`C6.${domain}`] = f.reading;
+  return out;
+}
+
+/** D1: the targetSdk literal(s) in the tracked build files against Play's required API. */
+function collectTargetApi(dir, files, pkg, now) {
+  const out = { findings: [], absent: [], stores: {} };
+  const want = targetSdkFiles(files);
+  const texts = want.map((path) => ({ path, text: src.readText(join(dir, path)).data ?? "" }));
+  const t = targetSdkReadings(texts);
+  if (!t) { out.absent.push(absent("D1", "no targetSdk literal in the build files")); return out; }
+  out.findings.push(...targetApiFinding(t.value, t.file, now, pkg));
+  out.stores[`D1.${pkg}`] = `${t.value} (${t.file})`;
+  return out;
+}
+
+/** D3: the Connect IQ ERA checker (read-only: never --mark-seen). */
+function collectEra(script) {
+  // the script allows itself ~900 s (its fetch may fall back to a headless browser): kill later than that, with margin
+  const r = src.run("python3", [script, "--json"], { timeout: 960_000 });
+  if (!r.ok) return { findings: [], absent: [absent("D3", r.why, true)] };
+  return eraFindings(r.data.status, r.data.stdout, r.data.stderr);
+}
+
+/** --only "C,D" / "D3": which measure letters or ids are wanted; undefined = all. */
+function onlyFilter(list) {
+  if (list === undefined) return { want: () => true, wantL: () => true, list: undefined };
+  const w = String(list).split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
+  if (!w.length || w.some((x) => !/^[A-D]\d?$/.test(x))) die(`bad --only ${list} (letters A-D or ids like D3)`);
+  return { want: (m) => w.some((x) => x === m || x === m[0]), wantL: (L) => w.some((x) => x[0] === L), list: w };
+}
+
 // ---- commands ------------------------------------------------------------------------------------------
 
+const targetsFile = () => join(stateDir(), "targets.json");
+
+/** The valid targets from targets.json; a missing or unreadable file is no targets. Problems go to stderr. */
+function loadTargets() {
+  if (!existsSync(targetsFile())) return [];
+  const r = src.readJson(targetsFile());
+  if (!r.ok) { process.stderr.write(`${targetsFile()} is unreadable (${r.why})\n`); return []; }
+  const { targets, problems } = parseTargets(r.data);
+  for (const p of problems) process.stderr.write(`targets.json: ${p}\n`);
+  return targets;
+}
+
+/** `--target <name>` (anywhere in argv) -> the target, or exits. Returns the target and the remaining argv. */
+function pickTarget(argv) {
+  const i = argv.indexOf("--target");
+  if (i < 0 || !argv[i + 1]) die(`--target needs a name\n${USAGE}`);
+  const name = argv[i + 1];
+  const t = loadTargets().find((x) => x.name === name);
+  if (!t) die(`no valid target named ${name} in ${targetsFile()}`, 2);
+  return { t, rest: argv.filter((_, j) => j !== i && j !== i + 1) };
+}
+
+function cmdTargets() {
+  const ts = loadTargets();
+  if (!ts.length) die(`no exposure targets in ${targetsFile()} (add one on the phone, or write the file: {"version":1,"targets":[{"name","dir","gh"}]})`, 2);
+  for (const t of ts) process.stdout.write(`${t.name}\t${t.play ? 1 : 0}\n`);
+}
+
+/** The CLI's JSON reply: the one stdout line that is a JSON object (it may print a "Skipping …" line too). */
+function jsonLine(stdout) {
+  return String(stdout).split("\n").map((l) => l.trim()).find((l) => l.startsWith("{") && l.endsWith("}")) ?? null;
+}
+
+/** A private GitHub repo target, scored locally: gh answers "private", the scorecard CLI reads it with the gh token (child env only). */
+function cmdScorecard(argv) {
+  const { t } = pickTarget(argv);
+  if (!t.gh) { process.stdout.write(`scorecard ${t.name}: no gh repo, skipped\n`); return; }
+  const meta = src.ghApi(`repos/${t.gh}`);
+  if (!meta.ok) { process.stderr.write(`scorecard ${t.name}: cannot ask GitHub (${meta.why})\n`); process.exitCode = 2; return; }
+  if (!meta.data) { process.stderr.write(`scorecard ${t.name}: ${t.gh} not found (404)\n`); process.exitCode = 2; return; }
+  if (meta.data.private !== true) { process.stdout.write(`scorecard ${t.name}: ${t.gh} is public, skipped (the public API scores it)\n`); return; }
+  const tok = src.run("gh", ["auth", "token"], { timeout: 30_000 });
+  const token = tok.ok && tok.data.status === 0 ? tok.data.stdout.trim() : "";
+  if (!token) { process.stderr.write(`scorecard ${t.name}: no gh token (gh auth login)\n`); process.exitCode = 2; return; }
+  const started = Date.now();
+  // GitHub's GraphQL answers a passing 504 now and then; the CLI then prints "Skipping …" instead of
+  // a reply. One retry, never more.
+  const score = () => src.run("scorecard", [`--repo=github.com/${t.gh}`, "--format=json"], { timeout: 15 * 60_000, env: { ...process.env, GITHUB_AUTH_TOKEN: token } });
+  let r = score();
+  if (r.ok && r.data.status === 0 && !jsonLine(r.data.stdout)) r = score();
+  if (!r.ok || r.data.status !== 0) { process.stderr.write(`scorecard ${t.name}: the scorecard CLI failed (${r.ok ? `exit ${r.data.status}: ${r.data.stderr.replace(token, "***").trim().slice(-200)}` : r.why})\n`); process.exitCode = 2; return; }
+  let reply;
+  try { reply = JSON.parse(jsonLine(r.data.stdout) ?? ""); } catch { process.stderr.write(`scorecard ${t.name}: the CLI's output was not JSON\n`); process.exitCode = 2; return; }
+  if (typeof reply?.score !== "number" || !Array.isArray(reply.checks)) { process.stderr.write(`scorecard ${t.name}: the CLI's output has no score and checks\n`); process.exitCode = 2; return; }
+  const dir = join(dirname(stateDir()), "scorecard", "local");
+  const file = join(dir, `${t.gh.replace("/", "__")}.json`);
+  mkdirSync(dir, { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, r.data.stdout, { mode: 0o600 });
+  renameSync(tmp, file);
+  process.stdout.write(`scorecard ${t.name}: ${t.gh} scored locally ${reply.score}/10 in ${Math.round((Date.now() - started) / 1000)}s -> ${file}\n`);
+}
+
 async function cmdRun(argv) {
-  const { pos, o } = parseArgs(argv, ["--name", "--gh", "--npm", "--vscode", "--vscode-manifest", "--release-repo", "--apk-cert"], ["--json", "--no-write", "--verbose"]);
+  if (argv.includes("--target")) {
+    const { t, rest } = pickTarget(argv);
+    argv = targetRunArgv(t, { HOME: homedir(), SITE: process.env.EXPOSURE_SITE ?? "", NPM_2FA_CONFIRMED: process.env.EXPOSURE_NPM_2FA_CONFIRMED ?? "" }, rest);
+  }
+  const { pos, o } = parseArgs(argv, ["--name", "--gh", "--npm", "--vscode", "--vscode-manifest", "--release-repo", "--apk-cert", "--domain", "--npm-2fa-confirmed", "--play", "--play-key-missing", "--era-check", "--only"], ["--json", "--no-write", "--verbose"], ["--privacy-url"]);
   if (pos.length !== 1) die(USAGE);
   const dir = resolve(pos[0]);
   if (!existsSync(dir)) die(`no such directory: ${dir}`);
@@ -284,9 +431,14 @@ async function cmdRun(argv) {
   if (o.vscode && !o["vscode-manifest"]) die("--vscode needs --vscode-manifest <path>");
   if (o["apk-cert"] && !o["release-repo"]) die("--apk-cert needs --release-repo");
   const nowD = new Date(), now = nowD.toISOString();
+  const { want, wantL, list: onlyList } = onlyFilter(o.only);
+  const wantA = wantL("A"), wantB = wantL("B");
+  const c7 = o.npm ? manualConfirmFinding(o.npm, o["npm-2fa-confirmed"], nowD) : null;
+  if (c7?.error) die(c7.error);
 
   const prevText = existsSync(rowsFile(name)) ? src.readText(rowsFile(name)) : null;
   const prev = prevText?.ok ? readLastRow(prevText.data) : null;
+  if (prev && JSON.stringify(prev.only ?? null) !== JSON.stringify(onlyList ?? null)) process.stderr.write(`warning: the last row of ${name} was ${prev.only ? `an --only ${prev.only.join(",")}` : "a full"} run and this one is ${onlyList ? `--only ${onlyList.join(",")}` : "a full run"}: findings are compared with it, so give an --only run its own --name\n`);
   const acc = readAccepts(name);
   if (!acc.ok) die(`${acceptsFile(name)} is unreadable (${acc.why}); fix or remove it`, 2); // before any network work
   const gitList = src.gitFiles(dir), listed = gitList.ok;
@@ -296,27 +448,41 @@ async function cmdRun(argv) {
   })();
 
   const parts = [];
-  const npm = await collectNpm(dir, files, listed);
-  parts.push(npm, await collectOther(dir, files, nowD));
+  const npm = wantA ? await collectNpm(dir, files, listed) : { findings: [], absent: [], installScripts: new Set(), licences: new Set(), complete: false, skipped: true };
+  parts.push(npm);
+  if (wantA) parts.push(await collectOther(dir, files, nowD));
   const hasManifests = files.some((f) => /(^|\/)(package\.json|build\.gradle(\.kts)?|pyproject\.toml)$/.test(f));
-  let settings = {};
-  if (o.gh) { const g = collectGh(o.gh, hasManifests, nowD); parts.push(g); settings = { ...g.settings }; }
-  else parts.push({ findings: [], absent: ["B1", "B2", "B3", "B4", "B5", "B6", "B7"].map((m) => absent(m, "no --gh given")) });
-  if (o.npm) { const c = collectNpmPublished(o.npm); parts.push(c); Object.assign(settings, c.readings); }
-  if (o.vscode) parts.push(await collectMarketplace(dir, o.vscode, o["vscode-manifest"], nowD));
-  if (o["release-repo"]) parts.push(collectRelease(o["release-repo"], o["apk-cert"]));
+  let settings = wantB ? {} : { ...(prev?.readings?.settings ?? {}) }; // a run without B carries the last B/C1 baseline
+  if (o.gh && wantB) { const g = await collectGh(o.gh, hasManifests, nowD); parts.push(g); settings = { ...g.settings }; }
+  else if (wantB) parts.push({ findings: [], absent: ["B1", "B2", "B3", "B4", "B5", "B6", "B7"].map((m) => absent(m, "no --gh given")) });
+  if (o.npm && want("C1")) { const c = collectNpmPublished(o.npm); parts.push(c); Object.assign(settings, c.readings); }
+  if (o.vscode && want("C3")) parts.push(await collectMarketplace(dir, o.vscode, o["vscode-manifest"], nowD));
+  if (o["release-repo"] && want("C2")) parts.push(collectRelease(o["release-repo"], o["apk-cert"]));
+  const stores = {};
+  for (const [k, v] of Object.entries(prev?.readings?.stores ?? {})) if (!want(k.split(".")[0])) stores[k] = v; // measures not run keep their last reading
+  if (o["privacy-url"]?.length && want("C5")) parts.push(await collectPrivacy(o["privacy-url"]));
+  if (o.domain && want("C6")) { const c = await collectDomain(o.domain, nowD); parts.push(c); Object.assign(stores, c.stores); }
+  if (c7 && want("C7")) parts.push(c7);
+  if (o.play && want("D1")) { const c = collectTargetApi(dir, files, o.play, nowD); parts.push(c); Object.assign(stores, c.stores); }
+  if (o.play && want("D2")) {
+    const c = await collectPlayVitals(o.play, { keyFile: process.env.EXPOSURE_PLAY_KEY_FILE || undefined, missingWhy: o["play-key-missing"], now: nowD });
+    parts.push(c); Object.assign(stores, c.readings ?? {});
+  }
+  if (o["era-check"] && want("D3")) { const c = collectEra(o["era-check"]); parts.push(c); Object.assign(stores, c.stores ?? {}); }
 
   const installScripts = [...npm.installScripts].sort();
   const prevReadings = prev?.readings ?? null;
-  const stored = installScriptReadings(prevReadings, installScripts, npm.complete);
-  if (!npm.complete) npm.absent.push(absent("A4", "a tracked lockfile was unreadable: the install-script baseline is kept from the last complete run"));
-  const readings = { ...(stored ? { installScripts: stored } : {}), settings, licences: [...npm.licences].sort() };
+  const stored = wantA ? installScriptReadings(prevReadings, installScripts, npm.complete) : prevReadings?.installScripts;
+  if (wantA && !npm.complete) npm.absent.push(absent("A4", "a tracked lockfile was unreadable: the install-script baseline is kept from the last complete run"));
+  // stores (C6/D1/D2) live beside settings, never in them: settingChanges diffs only `settings`
+  const readings = { ...(stored ? { installScripts: stored } : {}), settings, licences: wantA ? [...npm.licences].sort() : (prevReadings?.licences ?? []), ...(Object.keys(stores).length ? { stores } : {}) };
   let findings = parts.flatMap((p) => p.findings);
-  findings.push(...a4Findings(prevReadings, npm.complete ? installScripts : []), ...settingChanges(prevReadings?.settings ?? null, settings));
+  if (wantA) findings.push(...a4Findings(prevReadings, npm.complete ? installScripts : []));
+  findings.push(...settingChanges(prevReadings?.settings ?? null, settings));
   findings = carryForward(prev, mergeAdvisories(findings), readings, now);
   findings = applyAccepts(findings, acc.data, nowD);
   const head = src.gitHead(dir);
-  const row = { v: 1, at: now, repo: name, dir, ...(head ? { head } : {}), findings, absent: parts.flatMap((p) => p.absent ?? []), readings, ...(prev ? {} : { firstRun: true }) };
+  const row = { v: 1, at: now, repo: name, dir, ...(head ? { head } : {}), findings, absent: parts.flatMap((p) => p.absent ?? []), readings, ...(onlyList ? { only: onlyList } : {}), ...(prev ? {} : { firstRun: true }) };
   const code = exitCode(row, prev);
 
   if (!o["no-write"]) {
@@ -327,6 +493,31 @@ async function cmdRun(argv) {
   if (o.json) process.stdout.write(`${JSON.stringify(row)}\n`);
   else print(row, prev, o.verbose);
   process.exitCode = code;
+}
+
+/**
+ * `era-seen --target <name>`: a person said every crash group ERA lists now is handled (the phone's
+ * two-tap `era-seen` fix). The ERA checker records that itself (`--mark-seen`, its own state file and
+ * contract; a group that grows or recurs is reported again); then the target is read again, so the
+ * stored row says what is left instead of the phone guessing it. A checker that cannot reach ERA
+ * marks nothing (it exits 2 before writing), and this says so and does not re-read.
+ */
+async function cmdEraSeen(argv) {
+  const { t } = pickTarget(argv);
+  const full = targetRunArgv(t, { HOME: homedir(), SITE: process.env.EXPOSURE_SITE ?? "" });
+  const i = full.indexOf("--era-check");
+  if (i < 0 || !full[i + 1]) die(`era-seen ${t.name}: this target has no --era-check script`);
+  // the checker allows itself ~900 s (its fetch may fall back to a headless browser), as in collectEra
+  const r = src.run("python3", [full[i + 1], "--mark-seen", "--json"], { timeout: 960_000 });
+  const status = r.ok ? r.data.status : null;
+  if (status !== 0 && status !== 10) {
+    const why = r.ok ? (r.data.stderr.trim().split("\n").pop() || `exit ${status}`) : r.why;
+    process.stderr.write(`era-seen ${t.name}: nothing marked seen — the ERA checker failed (${why})\n`);
+    process.exitCode = 2;
+    return;
+  }
+  process.stdout.write(`era-seen ${t.name}: ERA's crash groups recorded as seen; reading again\n`);
+  await cmdRun(["--target", t.name]);
 }
 
 /** Text output: absent-because-it-does-not-apply is shown on a first run or with --verbose only. */
@@ -395,7 +586,10 @@ function cmdShow(argv) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === "run") await cmdRun(rest);
+else if (cmd === "targets") cmdTargets();
+else if (cmd === "scorecard") cmdScorecard(rest);
 else if (cmd === "accept") cmdAccept(rest);
 else if (cmd === "show") cmdShow(rest);
+else if (cmd === "era-seen") await cmdEraSeen(rest);
 else die(USAGE);
 

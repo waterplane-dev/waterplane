@@ -224,6 +224,8 @@
 .check-row.check-ignored { border-left-color: var(--line); padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .check-kind { font-weight: var(--fw-regular); color: var(--muted); }
 .check-detail-quiet { color: var(--dim); }
+/* Opt-ins: what became of an offer already sent — read before its pitch. */
+.optin-sent { color: var(--fg); font-weight: var(--fw-semibold); }
 .check-acts-split { justify-content: space-between; align-items: center; gap: var(--sp-8); flex-wrap: wrap; }
 .check-top { display: flex; align-items: center; gap: var(--sp-8); }
 .check-icon { display: inline-flex; flex: 0 0 auto; }

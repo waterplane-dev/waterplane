@@ -11,6 +11,11 @@
  * - **Every count and every list is `optInCut`'s** — the cards, the *On* rows
  *   and the two folded heads come from one call, so a number cannot disagree
  *   with the list it opens. Folded lists start closed; the count IS the list.
+ * - **Begun is not untouched.** An offer whose words this desktop saw sent
+ *   (`row.sent`) or saw half done (`row.partial`) is `started`: its own list,
+ *   above the fresh offers, saying when and what became of it, and its verb
+ *   asks once more before sending again. The walk-through counts only the
+ *   untouched ones.
  * - **Nothing applies itself.** `fix` runs the host's existing idempotent
  *   setup fix (and shows what it said); `open` lands on the screen that does
  *   the job; `agent`/`schedule` SEED the Send sheet (`optInSeed.ts`) — words,
@@ -36,8 +41,10 @@ import { Empty } from "./Empty";
 import { CantInline } from "./Unavailable";
 import { DEVICE_TZ, type SendSeed } from "./sendIntent";
 import {
-  OPTINS_GUIDE, declinedHead, noOffersWords, optInSeed, optInWalkSeed, unfitHead, walkLabel, walkOffered,
+  OPTINS_GUIDE, SEND_AGAIN_CONFIRM, STARTED_GUIDE, declinedHead, noOffersWords, optInSeed, optInSentWords, optInWalkSeed,
+  startedHead, unfitHead, walkLabel, walkOffered,
 } from "./optInSeed";
+import { ConfirmButton } from "./Confirm";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 
@@ -115,7 +122,7 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
   const cut = optInCut(report?.rows ?? []);
 
   /** The primary verb for one card, by its action — or the sentence saying why it is not here. */
-  function primary(row: OptInRow) {
+  function primary(row: OptInRow, again: boolean) {
     const def = optInDef(row.id)!;
     const a = def.action;
     const label = busy === row.id ? "working…" : def.verb;
@@ -130,7 +137,33 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
       return <Button onClick={() => { track("action:optins.capture"); onCapture(repo); }}>{verbIcon(a)} {label}</Button>;
     }
     if (!repo || !onSeed) return <CantInline>No send surface here — open this repo from the launcher to send it.</CantInline>;
+    if (again) {
+      return (
+        <ConfirmButton confirm={SEND_AGAIN_CONFIRM} onConfirm={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>
+          {verbIcon(a)} {label}
+        </ConfirmButton>
+      );
+    }
     return <Button onClick={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>{verbIcon(a)} {label}</Button>;
+  }
+
+  /** One offer card; a started one says what became of it first. */
+  function card(row: OptInRow, started: boolean) {
+    const def = optInDef(row.id)!;
+    return (
+      <li key={row.id} className="check-row optin-card">
+        <div className="check-top"><span className="check-label">{def.title}</span></div>
+        {row.sent && <div className="check-detail optin-sent">{optInSentWords(row.sent)}</div>}
+        <div className="check-detail optin-pitch">{def.pitch}</div>
+        <div className="check-detail check-detail-quiet">{def.cost}</div>
+        {row.detail && <div className="check-detail optin-seen">{row.detail}</div>}
+        <div className="check-acts optin-acts">
+          {primary(row, started && !!row.sent)}
+          <Button onClick={() => void choose(row.id, "done")}><Check size={14} /> mark as done</Button>
+          <Button onClick={() => void choose(row.id, "declined")}><EyeOff size={14} /> not for me</Button>
+        </div>
+      </li>
+    );
   }
 
   return (
@@ -161,29 +194,17 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
           </>
         )}
 
-        {cut.offered.length === 0 ? (
+        {cut.started.length > 0 && (<>
+          <div className="section">{startedHead(cut.started.length)}</div>
+          <Hint>{STARTED_GUIDE}</Hint>
+          <ul className="check-list">{cut.started.map((row) => card(row, true))}</ul>
+        </>)}
+
+        {cut.offered.length > 0 ? (<>
+          {cut.started.length > 0 && <div className="section">Not started</div>}
+          <ul className="check-list">{cut.offered.map((row) => card(row, false))}</ul>
+        </>) : cut.started.length === 0 && (
           <div className="empty">{noOffersWords(cut.declined.length, cut.unfit.length)}</div>
-        ) : (
-          <ul className="check-list">
-            {cut.offered.map((row) => {
-              const def = optInDef(row.id)!;
-              return (
-                <li key={row.id} className="check-row optin-card">
-                  <div className="check-top"><span className="check-label">{def.title}</span></div>
-                  <div className="check-detail optin-pitch">{def.pitch}</div>
-                  <div className="check-detail check-detail-quiet">{def.cost}</div>
-                  {row.detail && <div className="check-detail optin-seen">{row.detail}</div>}
-                  <div className="check-acts optin-acts">
-                    {primary(row)}
-                    {row.state === "unknown" && (
-                      <Button onClick={() => void choose(row.id, "done")}><Check size={14} /> mark as done</Button>
-                    )}
-                    <Button onClick={() => void choose(row.id, "declined")}><EyeOff size={14} /> not for me</Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
         )}
 
         {cut.active.length > 0 && (<>

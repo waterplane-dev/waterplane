@@ -13,7 +13,7 @@ const at = (rel) => fileURLToPath(new URL(`../${rel}`, import.meta.url));
 
 const PINS = {
   "packages/host/src/routes/work.ts": ["workRoutes:value"],
-  "packages/host/src/sidecar.ts": ["ChatRequest:type","ClaudeRoute:type","EnvelopeUsage:type","HeadlessRequest:type","HeadlessRun:type","NameRequest:type","NameRun:type","OpenAIRoute:type","RefusedRoute:type","SIDECAR_ENV:value","SidecarEngine:type","SidecarPlan:type","SidecarTask:type","SummaryRequest:type","ToolTaskRun:type","chatCompletion:value","claudeConfigPath:value","completionText:value","envelopeUsage:value","parseSidecarSpec:value","resetSidecarWarnings:value","runCommitTask:value","runHeadlessClaude:value","runNameTask:value","runSummaryTask:value","runToolTask:value","sidecarPlan:value","trustRefusal:value","workspaceTrust:value"],
+  "packages/host/src/sidecar.ts": ["ChatRequest:type","ClaudeRoute:type","EnvelopeUsage:type","HeadlessRequest:type","HeadlessRun:type","NameRequest:type","NameRun:type","OpenAIRoute:type","RefusedRoute:type","SIDECAR_ENV:value","SidecarEngine:type","SidecarPlan:type","SidecarTask:type","SummaryRequest:type","ToolTaskRun:type","chatCompletion:value","claudeConfigPath:value","completionText:value","envelopeUsage:value","parseSidecarSpec:value","resetSidecarWarnings:value","runCommitTask:value","runExplainTask:value","runHeadlessClaude:value","runNameTask:value","runSummaryTask:value","runToolTask:value","sidecarPlan:value","trustRefusal:value","workspaceTrust:value"],
 };
 
 for (const [rel, want] of Object.entries(PINS)) {

@@ -4,7 +4,7 @@
 import { BRAND, resolveEnv } from "@waterplane/shared";
 
 /** The unattended calls this daemon makes, one routing knob each. */
-export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit";
+export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit" | "explain";
 
 /** How a completion is obtained. */
 export type SidecarEngine = "claude-p" | "openai-compat";
@@ -16,6 +16,7 @@ export const SIDECAR_ENV: Readonly<Record<SidecarTask, string>> = {
   review: `${BRAND.envPrefix}SIDECAR_REVIEW`,
   name: `${BRAND.envPrefix}SIDECAR_NAME`,
   commit: `${BRAND.envPrefix}SIDECAR_COMMIT`,
+  explain: `${BRAND.envPrefix}SIDECAR_EXPLAIN`,
 };
 
 /**
@@ -42,6 +43,10 @@ const NEEDS_TOOLS: Readonly<Record<SidecarTask, boolean>> = {
   // writes nothing — the answer is a sentence a person then reads, edits and
   // commits by hand.
   commit: false,
+  // `explain` (the change brief, `changebrief.ts`) too: the commits, the stat,
+  // the diffs and the repo's layout are IN the prompt; it runs no git of its
+  // own and writes nothing.
+  explain: false,
 };
 
 export interface ClaudeRoute { readonly engine: "claude-p" }

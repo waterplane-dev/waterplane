@@ -134,7 +134,7 @@ The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksum
 curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh
 ```
 
-Or from source, which also needs **Node ≥ 20.12** and **tmux 3.3+** (every session runs inside it,
+Or from source, which also needs **Node ≥ 22.12** and **tmux 3.3+** (every session runs inside it,
 so it survives a host restart; the installer handles both). The doctor builds what it checks, so it
 runs before the build:
 
