@@ -96,6 +96,13 @@ deploy/release-pubkey.pem
 # Scripts that are this desktop's, not the project's: Bitwarden item names and
 # the key's path on this machine.
 !scripts/sync-gemini-key.sh
+# The owner's reach stats (traffic archive + its dashboard): this desktop's numbers about its own
+# repos and apps, not the project's (owner decision, 2026-10-25). The note lives in docs/reach.md.
+!scripts/traffic-archive.mjs
+!scripts/reach-dashboard.mjs
+!scripts/reach-dashboard.html
+!tools/trafficarchive.test.mjs
+!tools/reachdashboard.test.mjs
 # The opencode extension stays PRIVATE (owner decision, 2026-10-04): its host half,
 # readers, tests, e2e and stubs travel with its folder. Core discovers extensions by
 # folder (packages/host/src/plugins/builtin.ts) and builds, type-checks and tests

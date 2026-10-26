@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Boxes, Check, CloudDownload, CloudOff, Download, Loader, PackageCheck, PackagePlus, Pause, Play, Plus,
+  Boxes, Check, CloudDownload, CloudOff, Download, HardDrive, Loader, PackageCheck, PackagePlus, Pause, Play, Plus,
   RotateCw, Save, Settings, Smartphone, Trash2, TriangleAlert, X,
 } from "lucide-react";
 import { BRAND, DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
@@ -26,7 +26,9 @@ import {
   installStatus, nativeInstall, nativeInstallSupported, openInstallSettings,
   readInstallAllow, writeInstallAllow,
 } from "./nativeInstall";
-import { SetLine, SetNote } from "./SettingsKit";
+import { SetLine, SetNote, SetSwitch } from "./SettingsKit";
+import { nativeInfo } from "./webUpdate";
+import { APK_0_1_8, apkNeedWords, apkOk } from "./apkGate";
 
 interface Props {
   repos: RepoTarget[];
@@ -131,6 +133,8 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   // Held by the shell (the save it follows runs with the page frozen), so it is
   // ASKED on open. Undefined: no shell, or one older than the switch.
   const [dropCopy, setDropCopy] = useState<boolean | undefined>(undefined);
+  const [phoneApk, setPhoneApk] = useState("");
+  useEffect(() => { void nativeInfo().then((n) => setPhoneApk(n?.versionName ?? "")); }, []);
   useEffect(() => {
     let live = true;
     void nativeDropAfterSave().then((on) => { if (live) setDropCopy(on); });
@@ -339,41 +343,41 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
             second step nobody wants to take 28 times, and taking it twice made a
             second copy rather than overwriting the first — so the hand-off is
             automatic and the rows say what the folder holds. */}
-        <SetLine>
-          <Button className={autoSave ? "active" : ""}
-            onClick={() => { const on = !autoSave; setAutoSaveOut(on); setAutoSaveState(on); track("action:pull.autosave"); }}>
-            {autoSave ? <Check size={14} /> : <X size={14} />} save to Downloads: {autoSave ? "automatic" : "on tap"}
-          </Button>
-          <SetNote as="span">
-            {nativeSaveSupported()
-              ? "Every file that finishes downloading is put in the phone's Downloads by itself. A file already there is left alone — saving it again would only add a copy beside it."
-              : "In a browser the file is handed to the browser's own downloads, which it may refuse unless a tap asked for it — so here this only covers files you tapped."}
-          </SetNote>
-        </SetLine>
+        <SetSwitch
+          label="save to Downloads automatically" icon={Download} on={autoSave}
+          onChange={() => { const on = !autoSave; setAutoSaveOut(on); setAutoSaveState(on); track("action:pull.autosave"); }}
+          note={nativeSaveSupported()
+            ? "Every file that finishes downloading is put in the phone's Downloads by itself. A file already there is left alone — saving it again would only add a copy beside it."
+            : "In a browser the file is handed to the browser's own downloads, which it may refuse unless a tap asked for it — so here this only covers files you tapped."}
+        />
 
         {/* One copy, not two: once Downloads holds the file, this app's own
             copy is the same bytes again. APKs still install — the shell reads
             the Downloads copy. */}
         {isNativeShell() && (
-          <SetLine>
-            {dropCopy !== undefined && (
-              <Button className={dropCopy ? "active" : ""}
-                onClick={() => {
-                  const on = !dropCopy;
-                  track("action:pull.dropcopy");
-                  void setNativeDropAfterSave(on).then(
-                    () => setDropCopy(on),
-                    (e: unknown) => showToast(`could not change it — ${e instanceof Error ? e.message : String(e)}`));
-                }}>
-                {dropCopy ? <Check size={14} /> : <X size={14} />} keep only the Downloads copy: {dropCopy ? "on" : "off"}
-              </Button>
-            )}
-            <SetNote as="span">
-              {dropCopy === undefined
-                ? "Deleting this app's copy once a file is in Downloads needs a newer build of the app."
-                : "Once a file is in Downloads, this app deletes its own copy. Apps still install from the Downloads copy; delete that one and the file has to be fetched again."}
-            </SetNote>
-          </SetLine>
+          // The shell's own answer draws the switch; the version gate (`apkGate.ts`, shared with
+          // What's new) words the refusal. A new enough shell still being asked draws nothing yet.
+          dropCopy !== undefined ? (
+            <SetSwitch
+              label="keep only the Downloads copy" icon={HardDrive} on={dropCopy}
+              onChange={() => {
+                const on = !dropCopy;
+                track("action:pull.dropcopy");
+                void setNativeDropAfterSave(on).then(
+                  () => setDropCopy(on),
+                  (e: unknown) => showToast(`could not change it — ${e instanceof Error ? e.message : String(e)}`));
+              }}
+              note="Once a file is in Downloads, this app deletes its own copy."
+              more={<p>Apps still install from the Downloads copy; delete that one and the file has to be fetched again.</p>}
+            />
+          ) : !apkOk(APK_0_1_8, phoneApk) && (
+            <SetLine>
+              <SetNote as="span">
+                This switch {apkNeedWords(APK_0_1_8, phoneApk)}.
+              </SetNote>
+              <Button title="open the Apps screen" onClick={() => { track("action:pull.apps"); onOpenApps(); }}>get the APK</Button>
+            </SetLine>
+          )
         )}
 
         {/* Installing is its OWN screen — this is the pointer to it, on the

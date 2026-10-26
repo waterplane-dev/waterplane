@@ -59,6 +59,21 @@ export const sessionsApi = {
     return { lines: d.lines ?? [], history: !!d.history, bounded: !!d.bounded, at: d.at ?? Date.now() };
   },
 
+  /** One session's newest raw PTY output + the seq it ends at (host
+   *  `sessions.screenTail`) — the offline terminal of a session this phone
+   *  never attached (`core/term/screenSweep.ts`). `since` = the seq held; 204
+   *  (→ null) when unchanged. Background, so `timedFetch`, not `nfetch`. */
+  screenTail: async (sessionId: string, since?: number): Promise<{ data: string; seq: number; boot?: string } | null> => {
+    const q = new URLSearchParams({ id: sessionId });
+    if (since != null) q.set("since", String(since));
+    const r = await timedFetch(`/api/screen/tail?${q}`, undefined, TRANSCRIPT_TIMEOUT_MS);
+    if (r.status === 204) return null;
+    if (!r.ok) throw new Error(`${r.status} screen tail`);
+    const d = await readJsonFused<{ data?: unknown; seq?: unknown; boot?: unknown }>(r, TRANSCRIPT_TIMEOUT_MS);
+    if (typeof d.data !== "string" || typeof d.seq !== "number") throw new Error("screen tail shape");
+    return { data: d.data, seq: d.seq, boot: typeof d.boot === "string" ? d.boot : undefined };
+  },
+
   /** The input/result pair a `lite` transcript withheld, for one turn, keyed by
    *  tool_use id. Same fuse as the transcript fetch: this runs on a tap, so a
    *  hang has to become "couldn't load" rather than a spinner that never ends. */

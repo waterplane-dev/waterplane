@@ -105,6 +105,8 @@ interface Props {
   usage?: WindowResets | null;
   /** A build rule's card *edit* landed here: open its form on arrival. */
   scheduleEdit?: { build: BuildConfig; entry: ScheduleEntry } | null;
+  /** A run to open on arrival (a build rule's card *last run*). */
+  focusRun?: string | null;
 }
 
 /* `SETUP_PROMPT` and the editor's one-entry wand live in `buildPrompt.ts`: they
@@ -118,7 +120,7 @@ interface Props {
  * claude session (works when you're rate-limited), watch live output, and
  * download the produced artifact (APK/zip/…).
  */
-export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit }: Props) {
+export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit, focusRun }: Props) {
   const [editing, setEditing] = useState<BuildConfig | null>(null);
   /* The build whose questions are being answered. A tap on a parameterised
      button opens this instead of running — the values ARE part of the command,
@@ -140,6 +142,7 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
      screen of eight runs and three files below them did not say which run
      the files were from. */
   const [sel, setSel] = useState<string | null>(null);
+  useEffect(() => { if (focusRun) setSel(focusRun); }, [focusRun]);
   const selRun = sel === "" ? null : runs.find((r) => r.runId === sel) ?? runs[0] ?? null;
   const logRef = useRef<HTMLPreElement>(null);
   const openRef = useRef<HTMLDivElement>(null);

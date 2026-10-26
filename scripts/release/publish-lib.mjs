@@ -84,7 +84,9 @@ export function verifyReleaseBytes(files, publicKey, { slug, version }) {
  *   actionsEnabled: bool | null  (Actions on the public repo: the npm-publish workflow runs there),
  *   publicClone: { given, ok, why } | null,
  *   mediaClone: { ok, why } | null   (null: no deploy/public-media.json, or the release exists),
- *   assets: releaseAssets() (an APK there = release.json names one), noApk: bool (--no-apk)
+ *   assets: releaseAssets() (an APK there = release.json names one), noApk: bool (--no-apk),
+ *   exposure: { stops, prints } | { error: why } | undefined  (the exposure watch's gate verdict;
+ *             an error or undefined = it did not answer, which refuses)
  * }
  * Returns { checks: [{ name, ok, why }], refused: bool }.
  */
@@ -134,7 +136,26 @@ export function preflight(f) {
     : "could not read whether GitHub Actions are enabled on the public repo (gh api repos/<org>/<slug>/actions/permissions): the npm half runs there");
   if (f.publicClone) add("public clone", f.publicClone.ok, f.publicClone.why);
   if (f.mediaClone) add("media clone", f.mediaClone.ok, f.mediaClone.why);
+  const ex = f.exposure;
+  if (!ex || ex.error !== undefined || !Array.isArray(ex.stops)) soft("exposure watch", false, `exposure watch did not answer: ${ex?.error ?? "not checked"}`);
+  else {
+    const real = ex.stops.filter((s) => !s.synthetic), unread = ex.stops.filter((s) => s.synthetic);
+    const hint = [real.length && "accept with --accept-finding <key>=<reason> if understood", unread.length && "an unreadable source cannot be accepted: fix the source and re-run"].filter(Boolean).join("; ");
+    soft("exposure watch", ex.stops.length === 0, `${ex.stops.map((s) => `${s.key}: ${s.text}`).join("; ")} — ${hint}`);
+  }
   return { checks, refused: checks.some((c) => !c.ok) };
+}
+
+/**
+ * What the gate makes of one `tools/exposure.mjs run --json` process: `{status, stdout, stderr, error}`
+ * (a spawnSync result) → the verdict `{stops, prints}` or `{ error }`, which refuses. Exit 0/10/2 mean
+ * "it answered"; anything else, or output that is not one JSON row, did not answer. `verdict` is
+ * gateVerdict, passed in so this file stays free of tools/.
+ */
+export function exposureResult(r, verdict) {
+  if (r?.error) return { error: r.error.message ?? String(r.error) };
+  if (![0, 10, 2].includes(r?.status)) return { error: `exit ${r?.status}: ${String(r?.stderr ?? "").trim().slice(0, 200)}` };
+  try { return verdict(JSON.parse(r.stdout)); } catch { return { error: "its output was not one JSON row" }; }
 }
 
 /**
@@ -298,4 +319,31 @@ export function readHasShrinkwrap(stdout) {
   if (s === "true") return true;
   if (s === "" || s === "false" || s === "undefined") return false;
   return null;
+}
+
+/** "key=reason" from a repeatable --accept-finding → { key, reason }, or null when either half is empty. */
+export function parseAcceptArg(arg) {
+  const s = String(arg ?? "");
+  const i = s.indexOf("=");
+  if (i <= 0) return null;
+  const key = s.slice(0, i).trim(), reason = s.slice(i + 1).trim();
+  return key && reason ? { key, reason } : null;
+}
+
+/**
+ * Lines for the dependency diff since the last release: `diffsByLockfile` is
+ * [{ path, diff: depDiff(...) }] (a lockfile with no change prints one "no change" line).
+ */
+export function renderDepDiff(tag, diffsByLockfile) {
+  const lines = [];
+  for (const { path, diff, isNew } of diffsByLockfile) {
+    const { added = [], removed = [], gainedInstallScript = [] } = diff ?? {};
+    if (isNew) { lines.push(`  ${path}: new lockfile since ${tag} (${added.length} packages)`); continue; }
+    if (!added.length && !removed.length && !gainedInstallScript.length) { lines.push(`  ${path}: no dependency change since ${tag}`); continue; }
+    lines.push(`  ${path} since ${tag}: +${added.length} added, -${removed.length} removed, ${gainedInstallScript.length} gained an install script`);
+    for (const a of added) lines.push(`    + ${a}`);
+    for (const r of removed) lines.push(`    - ${r}`);
+    for (const g of gainedInstallScript) lines.push(`    ! install script: ${g}`);
+  }
+  return lines;
 }

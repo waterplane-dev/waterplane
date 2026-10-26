@@ -680,6 +680,19 @@ export function pushState(wt: string): GitPushState | null {
   return job ? { running: job.running, startedAt: job.startedAt, result: job.result, progress: job.progress.snapshot() } : null;
 }
 
+/**
+ * True when HEAD has nothing its upstream lacks — every commit is pushed, by
+ * this host or not (a terminal, another machine). A fresh `rev-list`, never
+ * the listing's cached count, which can predate the failure it would clear.
+ * No upstream, or git broke: undefined, never a made-up "nothing to push".
+ */
+export async function nothingToPush(wt: string): Promise<boolean | undefined> {
+  try {
+    const { stdout } = await git(wt, ["rev-list", "--count", "@{u}..HEAD"]);
+    return stdout.trim() === "0";
+  } catch { return undefined; }
+}
+
 /** Worktrees with a pull in flight — a second tap joins nothing, it is refused in words. */
 const pulling = new Set<string>();
 

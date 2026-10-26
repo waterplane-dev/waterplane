@@ -145,7 +145,7 @@ Every treatment (ask at start, ask on use, 8 h lease, keep plaintext, allow in a
 - shipped: c2171799 f430779c 2723cb65 887e6d05 2b6b079d
 
 ### R-vault-030 · shipped
-A fetch nobody answers is counted as denied after 90 s (a program's ask; an ask a person started, R-vault-058, waits longer); "not now" on the card holds that request for a chosen time without further cards or notifications; repeated silence backs off; holds and backoffs are visible, liftable and in the decision log; simultaneous requests for one secret from one program make one card.
+A fetch nobody answers tells the program after 90 s that its card stays (R-vault-080); a card nobody answers is counted as denied (an ask a person started, R-vault-058, waits longer); "not now" on the card holds that request for a chosen time without further cards or notifications; repeated silence backs off; holds and backoffs are visible, liftable and in the decision log; simultaneous requests for one secret from one program make one card.
 - asked: 2026-10-12 (owner: ask at the point of use, per-reader advice)
 - shipped: c2171799 f430779c 2723cb65 887e6d05 2b6b079d
 
@@ -299,7 +299,7 @@ A program started with `python -m X` is the program `X` (`uvicorn`, `backend`), 
 - shipped: 2ae10fea 695184f7 cb01edb3
 
 ### R-vault-058 · shipped
-An ask a person started (`wp-secret grant`, boot unlock, re-arm, a login shown on the phone) waits until answered or cancelled (24 h cap), not 90 s; its card says "waiting for you · since 10:12" with no countdown and how it ends; Ctrl-C in the CLI withdraws it as "cancelled from the desktop" and exits 130, and the CLI prints the host's "still waiting" lines. A program's ask keeps 90 s and the backoff ladder.
+An ask a person started (`wp-secret grant`, boot unlock, re-arm, a login shown on the phone, and since 2026-10-25 every change typed at the desktop: store, remove, export, policy, assign, purge, restore, reset, practice) waits until answered or cancelled (24 h cap), not 90 s; its card says "waiting for you · since 10:12" with no countdown and how it ends; Ctrl-C in the CLI withdraws it as "cancelled from the desktop" and exits 130, and the CLI prints the host's "still waiting" lines. A program's ask keeps 90 s for the program (R-vault-080) and the backoff ladder.
 - asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 4)
 - plan: FOLLOWUPS-PLAN.md §4
 - shipped: eab7d1d3 db8b2e05 cb01edb3 fbc2a492
@@ -403,3 +403,6 @@ The vault refuses to release a secret when the grant has expired, the repo or pu
 gcloud CLI credentials are stored in the vault, and no unvaulted copy remains on the machine.
 - asked: 2026-10-22
 
+### R-vault-080 · requested
+A program's release card (`exec`/`fetch`) outlives the program's 90 s wait: the program hears that the card stays and to run again after approving; the card stays on the phone 90 min, a rerun meanwhile joins it with no new card or notification, and an approval after the program stopped waiting is kept 15 min for its next run (then its own lease time, or none for a secret released once).
+- asked: 2026-10-25 (owner: "many secret approvals only wait 90 seconds … I don't look at the phone sometimes")

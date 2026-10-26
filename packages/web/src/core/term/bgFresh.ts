@@ -52,6 +52,14 @@ export function bgFreshNote(v: BgFresh): string {
 /** True when a hidden app should let go of the terminal stream. */
 export function parksWhenHidden(v: BgFresh): boolean { return v !== "live"; }
 
+/** True when a HIDDEN app still tops up the offline transcripts. Only the
+ *  Android shell: its background link keeps the page alive, so a phone that
+ *  sat in a pocket while turns landed otherwise walks into a dead zone holding
+ *  whatever was cached the last time the screen was on. A browser's hidden tab
+ *  is frozen or throttled to nothing, and `off` means the person chose the
+ *  screen as they left it. */
+export function sweepsWhenHidden(v: BgFresh, nativeShell: boolean): boolean { return nativeShell && v !== "off"; }
+
 /** The catch-up interval while parked, or null for none. */
 export function catchUpMs(v: BgFresh): number | null { return typeof v === "number" ? v : null; }
 

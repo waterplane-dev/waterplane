@@ -38,6 +38,8 @@ export const GUARDS = [
   { test: "backlogpins", tier: "edit", paths: WEB },
   { test: "backstep", tier: "edit", paths: WEB },
   { test: "trafficarchive", tier: "edit", paths: ["scripts/traffic-archive.mjs"] },
+  { test: "exposure-core", tier: "edit", paths: ["tools/exposure/**"] },
+  { test: "exposure-parse", tier: "edit", paths: ["tools/exposure/**"] },
   { test: "reachdashboard", tier: "edit", paths: ["scripts/reach-dashboard.mjs", "scripts/traffic-archive.mjs"] },
   { test: "tokenstatspins", tier: "edit", paths: [...WEB, "packages/extensions/*/web/**"] },
   { test: "hostshape", tier: "edit", paths: [...HOST, ...SKILLS, "eslint.config.js", "tools/skillmap.mjs"] },

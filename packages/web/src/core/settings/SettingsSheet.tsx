@@ -26,13 +26,15 @@
 import {
   Bell, Bot, CloudUpload, CornerDownLeft, Cpu, ExternalLink, Gauge, HardDrive, HelpCircle, KeyRound,
   ListChecks, Lock, Monitor, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon, Waypoints,
-  Activity, BarChart3, DoorClosed, DoorOpen,
+  Activity, BarChart3, CalendarClock, DoorClosed, DoorOpen,
 } from "lucide-react";
 import { BRAND, SYNCED_SETTING_KEYS, envName, type Effort, type PermissionMode } from "@waterplane/shared";
 import { useEffect } from "react";
 import { createStore, useStore } from "../../sdk/store.ts";
 import { settingsOnly, useSettingsOnly } from "../../settingsFocus.ts";
 import { core } from "../api.ts";
+import { SHEET } from "../../sheetNames.ts";
+import { openSchedules } from "../../features/schedule";
 import { featureSettingsRows } from "../settingsRows.ts";
 import { RISKY_PERM_MODES, RISKY_PERM_WARNING } from "./permModes.ts";
 import { setPref, usePref } from "../prefs.ts";
@@ -354,6 +356,12 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
         }}
         note="On, closing a session with uncommitted changes, commits not merged or shells still running asks first."
         more={<p>Off, the close goes straight through and the toast still names what was left behind. Its conversation stays under “Recently closed” either way; uncommitted changes stay in the working tree.</p>}
+      />
+
+      <SetAction
+        id="automation" label={SHEET.automation} icon={CalendarClock} opens
+        onClick={() => { track("overlay:schedule"); openSchedules(null); }}
+        note="Prompts that run on their own: on a clock, every week, or around a usage window."
       />
 
       {/* **Automatic sessions stay open unless asked.** The session a fired

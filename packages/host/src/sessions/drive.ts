@@ -528,6 +528,31 @@ export function scrollback(core: SessionCore, id: string): string {
 }
 
 /**
+ * The newest `max` bytes of a session's output, replayable into a fresh xterm:
+ * the active private modes first (alt-screen above all — a tail cut past the
+ * original `?1049h` would paint the TUI into the normal buffer), then the
+ * newest output from a line boundary. Raw bytes plus the `seq` they end at, so
+ * the phone stores it exactly as it stores the tail of a session it watched —
+ * a resume point a later attach stitches only the delta onto. What a phone
+ * that never attached this session caches for offline (`GET /api/screen/tail`).
+ * Null for an unknown session, `"unchanged"` when `since` is already current.
+ */
+export function screenTail(core: SessionCore, id: string, max: number, since?: number): { data: string; seq: number } | "unchanged" | null {
+  const s = core.sessions.get(id);
+  if (!s) return null;
+  if (since != null && since === s.seq) return "unchanged";
+  const prefix = modePrefix(s.privateModes);
+  const room = Math.max(0, max - prefix.length);
+  const sb = s.scrollback;
+  let body = sb.length > room ? sb.slice(sb.length - room) : sb;
+  if (body.length < sb.length) {
+    const nl = body.indexOf("\n");
+    if (nl >= 0 && nl < 4096) body = body.slice(nl + 1);
+  }
+  return { data: prefix + body, seq: s.seq };
+}
+
+/**
  * The session's CURRENT SCREEN as plain text: the raw capture replayed through
  * a headless VT at the live width, then the last `lines` rows.
  *

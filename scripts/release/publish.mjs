@@ -5,8 +5,8 @@
 // status and view) and prints every command the real run would make.
 //
 //   npm run release:publish -- [--yes] [--build [--apk=<file.apk>]] [--public-clone <dir>]
-//                              [--media-clone <dir>] [--accept <file>] [--allow-dirty] [--no-apk]
-//                              [--npm-from-desktop]
+//                              [--media-clone <dir>] [--accept <file>] [--accept-finding <key>=<reason>]...
+//                              [--allow-dirty] [--no-apk] [--npm-from-desktop]
 //
 //   --yes             really publish. Without it nothing is written, tagged, pushed or uploaded.
 //   --build           run `npm run release:build` first (else dist-release/ must already hold it)
@@ -17,6 +17,8 @@
 //                     walkthrough videos the README links to). Needed until the GitHub release
 //                     exists, whenever that file does; pushed before the public clone.
 //   --accept <file>   passed to release:public (reviewed scan false positives)
+//   --accept-finding <key>=<reason>  accept one exposure-watch finding before the gate reads it
+//                     (repeatable; the reason is required and recorded by tools/exposure.mjs)
 //   --allow-dirty     dry run only: waive the clean-tree / main / built-from-HEAD checks
 //   --no-apk          publish without an Android APK asset, on purpose (else undrafting refuses)
 //   --npm-from-desktop  escape hatch: `npm publish` dist-release's .tgz from THIS desktop, WITHOUT
@@ -33,16 +35,17 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  NPM_WORKFLOW, extractChangelogSection, planSteps, preflight, readHasShrinkwrap, readNpmHasVersion, readProvenance, releaseAssets,
+  NPM_WORKFLOW, exposureResult, extractChangelogSection, planSteps, parseAcceptArg, preflight, readHasShrinkwrap, readNpmHasVersion, readProvenance, releaseAssets, renderDepDiff,
   sha256Hex, shellLine, tagOf, verifyReleaseBytes,
 } from "./publish-lib.mjs";
+import { depDiff, gateVerdict } from "../../tools/exposure/core.mjs";
 import { PUBKEY_PATH, loadPublicKey } from "./sign-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = "dist-release";
 
 // ── args ───────────────────────────────────────────────────────────────────
-const opts = { yes: false, build: false, allowDirty: false, noApk: false, npmFromDesktop: false, apk: null, publicClone: null, mediaClone: null, accept: null };
+const opts = { yes: false, build: false, allowDirty: false, noApk: false, npmFromDesktop: false, apk: null, publicClone: null, mediaClone: null, accept: null, exposureAccepts: [] };
 {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
@@ -62,6 +65,12 @@ const opts = { yes: false, build: false, allowDirty: false, noApk: false, npmFro
     else if (a === "--public-clone" || a.startsWith("--public-clone=")) opts.publicClone = resolve(val("--public-clone"));
     else if (a === "--media-clone" || a.startsWith("--media-clone=")) opts.mediaClone = resolve(val("--media-clone"));
     else if (a === "--accept" || a.startsWith("--accept=")) opts.accept = resolve(val("--accept"));
+    else if (a === "--accept-finding" || a.startsWith("--accept-finding=")) {
+      const v = val("--accept-finding");
+      const p = parseAcceptArg(v);
+      if (!p) die(`--accept-finding ${v}: not <key>=<reason> (the reason is required)`);
+      opts.exposureAccepts.push(p);
+    }
     else if (a === "-h" || a === "--help") {
       const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
       console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
@@ -194,13 +203,48 @@ function gather() {
   return { facts: { ...facts, release: planRelease, publicClone: planRelease === "absent" ? cloneCheck(opts.publicClone) : null, mediaClone: planRelease === "absent" && MEDIA_REPO ? cloneCheck(opts.mediaClone, MEDIA_REPO, "--media-clone") : null }, state: { tag, tagPushed, release: planRelease, releaseAssets: rs.releaseAssets, npmPublished: npmPublished === true }, unknown: [rs.release === "unknown" && `could not tell whether ${TAG} is released: ${rs.why}`, npmPublished === "unknown" && `could not tell whether ${PKG}@${version} is on npm (npm view failed)`].filter(Boolean) };
 }
 
+/** The exposure watch: accepts first, then one run; any failure to answer is `{ error }`, which refuses. */
+function exposureGate() {
+  const tool = join(ROOT, "tools/exposure.mjs");
+  const call = (args) => spawnSync(process.execPath, [tool, ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 1 << 26 });
+  for (const { key, reason } of opts.exposureAccepts) {
+    const r = call(["accept", SLUG, key, "--reason", reason]);
+    if (r.error || r.status !== 0) return { error: `could not accept ${key}: ${r.error?.message ?? (r.stderr || `exit ${r.status}`).trim()}` };
+  }
+  // --no-write: the gate has no C2/C3 inputs, so its row must not enter the daily chain
+  return exposureResult(call(["run", ROOT, "--name", SLUG, "--gh", REPO, "--npm", PKG, "--json", "--no-write"]), gateVerdict);
+}
+
+/** Print-only: what the lockfiles gained since the last released tag (never refuses). */
+function printDepDiff() {
+  const tags = run("git", ["tag", "--merged", "HEAD", "--list", "v*", "--sort=-v:refname"]).out.split("\n").filter(Boolean);
+  const prev = tags.find((t) => t !== TAG);
+  console.log("\ndependency changes since the last release");
+  if (!prev) { console.log("  no previous v* tag on this branch: nothing to compare"); return; }
+  const diffs = ["package-lock.json", "packages/app/package-lock.json", "packages/vscode/package-lock.json"].map((path) => {
+    try {
+      const old = run("git", ["show", `${prev}:${path}`]);
+      const cur = join(ROOT, path);
+      return { path, isNew: !old.ok && existsSync(cur), diff: depDiff(old.ok ? JSON.parse(old.out) : null, existsSync(cur) ? JSON.parse(readFileSync(cur, "utf8")) : null) };
+    } catch (e) { return { path, diff: null, why: e.message }; }
+  });
+  for (const d of diffs.filter((x) => x.diff === null)) console.log(`  ${d.path}: could not compare (${d.why})`);
+  for (const l of renderDepDiff(prev, diffs.filter((x) => x.diff))) console.log(l);
+}
+
 const { facts, state, unknown } = gather();
+facts.exposure = exposureGate();
 const pf = preflight(facts);
 for (const u of unknown) pf.checks.push({ name: "release state", ok: false, why: u });
 const refused = pf.refused || unknown.length > 0;
 
 console.log("\npreflight");
 for (const c of pf.checks) console.log(`  ${c.waived ? "waived" : c.ok ? "ok    " : "REFUSE"} ${c.name}${c.why ? ` — ${c.why}` : ""}${c.waived ? " (--allow-dirty, dry run only)" : ""}`);
+if (facts.exposure?.prints?.length) {
+  console.log("\nexposure watch (not stopping)");
+  for (const p of facts.exposure.prints) console.log(`  ${p.key}: ${p.text}`);
+}
+printDepDiff();
 
 // ── plan ───────────────────────────────────────────────────────────────────
 const notesFile = opts.yes ? join(mkdtempSync(join(tmpdir(), `${SLUG}-notes-`)), "notes.md") : `<tmp>/notes.md (CHANGELOG.md "## ${version}")`;

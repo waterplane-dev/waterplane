@@ -30,7 +30,12 @@ export function pushNotif<T extends Pick<NotificationItem, "kind" | "level" | "h
  * bell stay one predicate instead of the chip waiting for the next rescan.
  */
 export function repoChipKeys(items: readonly NotificationItem[]): string {
-  return items.filter((n) => needsYou(n) && /^(git|build):/.test(n.key ?? "")).map((n) => n.key).sort().join("\n");
+  return repoChipItems(items).map((n) => n.key).sort().join("\n");
+}
+
+/** The items behind those chips — a failed pull, push or build still unhandled. What's new counts and cuts by this. */
+export function repoChipItems<T extends Pick<NotificationItem, "kind" | "level" | "handled" | "key">>(items: readonly T[]): T[] {
+  return items.filter((n) => needsYou(n) && /^(git|build):/.test(n.key ?? ""));
 }
 
 export function needsYouItems<T extends Pick<NotificationItem, "kind" | "level" | "handled">>(items: readonly T[]): T[] {
@@ -91,7 +96,7 @@ export function handledWords(h: NonNullable<NotificationItem["handled"]>): strin
   return `done ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export const INFO_NOTE_TEXT = "Information no longer counts on the bell; it is listed below. Settings › Notifications can push it again.";
+export const INFO_NOTE_TEXT = "Information no longer counts on the bell; it is listed below. Settings › Notifications › push information too can push it again.";
 
 /** Which level a kind lands in, in the settings row's words. */
 export function levelWords(kind: NotificationKind): string {

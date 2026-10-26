@@ -58,6 +58,7 @@ import { manifest as halt } from "./halt";
 import { manifest as askRules } from "./askRules";
 import { manifest as cliRestart } from "./cliRestart";
 import { manifest as repoSync } from "./repoSync";
+import { manifest as whatsnew } from "./whatsnew";
 
 // In-repo EXTENSIONS (packages/extensions/<id>/web): the same contract, globbed, listed after the core.
 const EXTENSION_MODULES = import.meta.glob<{ manifest: FeatureManifest }>("../../../extensions/*/web/index.ts", { eager: true });
@@ -107,6 +108,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   askRules,
   cliRestart,
   repoSync,
+  whatsnew,
   // extensions
   ...EXTENSIONS,
 ];

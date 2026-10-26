@@ -42,6 +42,9 @@ export interface ApiCtx {
   /** The persisted attention items (`attentionstore.ts`) — `/api/repos` derives
    *  `gitFailed`/`buildFailed` from them, the same predicate as the bell. */
   attention?: Pick<import("../attentionstore.js").AttentionStore, "unhandled">;
+  /** Resolve an attention item whose cause the listing saw go away (a failed
+   *  push since pushed another way) — `clients.ts`' resolver, which re-sends the feed. */
+  resolveAttention?: (key: string, note: string) => number;
   /** Build runs in flight — `/api/repos` marks a repo whose build is running. */
   builds?: Pick<import("../builds.js").BuildManager, "runningIn">;
   /** Sessions parked until their files arrive. An inbox POST is the event that
@@ -60,6 +63,8 @@ export interface ApiCtx {
   /** The checker's poll period, passed through so the history can say what
    *  a dense series would have looked like. */
   usagePollMs: number;
+  /** This daemon's boot id (`welcome.bootId`): a resume point is valid only for the boot that issued it. */
+  bootId?: string;
   /** The week-end burn (`weekburn.ts`): `GET|POST /api/weekburn`. */
   weekBurn?: import("../weekburn.js").WeekBurn;
   /** The account facts the socket pushes, as one read (`GET /api/usagenow`, `UsageNowDoc`). */

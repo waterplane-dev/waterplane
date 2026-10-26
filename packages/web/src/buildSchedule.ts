@@ -144,3 +144,13 @@ export function buildRunFromSchedule(i: Intent, intents: readonly Intent[]): { i
   const name = rule.title?.trim() || (rule.payload.kind === "build" ? rule.payload.name ?? rule.payload.buildId : "") || "";
   return name ? { id, name } : null;
 }
+
+/** What a build rule's last run came to, in one word — off the RUN's row,
+ *  never the rule's `lastResult` (that only says the run was posted). */
+export function lastRunWord(run: Intent): string {
+  if (run.state === "failed" || (run.state === "done" && run.result?.ok === false)) return "failed";
+  if (run.state === "done") return "ok";
+  if (run.state === "canceled") return "cancelled";
+  if (run.state === "starting" || run.state === "running") return "running";
+  return "waiting";
+}

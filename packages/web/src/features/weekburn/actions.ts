@@ -14,7 +14,7 @@ export async function saveWeekBurn(body: WeekBurnPost, pickedCount: number): Pro
   const c = core();
   try {
     const next = await api.postWeekBurn(body);
-    c.say.toast(body.sameAsLast ? SAME_AS_LAST_TOAST : savedToast(pickedCount));
+    c.say.toast(body.sameAsLast ? SAME_AS_LAST_TOAST : savedToast(pickedCount, next.plan?.startAt));
     return next;
   } catch (e) {
     c.say.toast(`Not saved: ${e instanceof Error ? e.message : "the desktop did not answer"}`);

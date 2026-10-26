@@ -639,6 +639,7 @@ export class SessionManager extends EventEmitter {
   screenText(id: string, lines = 40): Promise<string> { return drive.screenText(this.core, id, lines); }
   screenLines(id: string, max = SCREENLOG_MAX_LINES): Promise<{ lines: string[]; cols: number; history: boolean; bounded: boolean } | null> { return drive.screenLines(this.core, id, max); }
   screenCells(id: string, lines = 60): Promise<RenderRow[]> { return drive.screenCells(this.core, id, lines); }
+  screenTail(id: string, max: number, since?: number): { data: string; seq: number } | "unchanged" | null { return drive.screenTail(this.core, id, max, since); }
   attachReplay(id: string, resumeSeq?: number): { data: string; seq: number; full: boolean } | null { return drive.attachReplay(this.core, id, resumeSeq); }
   idleMs(id: string): number | null { return drive.idleMs(this.core, id); }
 

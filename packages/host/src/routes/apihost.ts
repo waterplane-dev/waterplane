@@ -7,14 +7,14 @@
  * routes as tables").
  */
 import { statSync } from "node:fs";
-import { ASK_RULE_BACKENDS, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesReply, DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS, envName, type HostSetupFixResult, type HostSetupReport, type RootInfo, type RootPostReply } from "@waterplane/shared";
+import { ASK_RULE_BACKENDS, gitAttentionKey, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesReply, DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS, envName, type HostSetupFixResult, type HostSetupReport, type RootInfo, type RootPostReply } from "@waterplane/shared";
 import { discoverTargets, findTarget, listTargets } from "../repos.js";
 import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
 import { dictateStatusLive, transcribe } from "../dictate.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
-import { changedCountsWithin, gitRunningIn } from "../git.js";
+import { changedCountsWithin, gitRunningIn, nothingToPush } from "../git.js";
 import { buildFailedFor, gitFailedFor } from "../attentionstore.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
 import { setupPrefsStore } from "../setupprefs.js";
@@ -211,6 +211,16 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       const g = gitFailedFor(ctx.attention, t.id); if (g) t.gitFailed = g;
       const b = buildFailedFor(ctx.attention, t.id); if (b) t.buildFailed = b;
     }
+    // A failed push whose commits reached the upstream anyway — pushed from a
+    // terminal or another machine, so no outcome of ours ever resolved it — is
+    // moot: nothing is left to push. Only repos carrying one pay the `rev-list`.
+    // A failed PULL is never cleared this way: a fetch that failed leaves the
+    // tracking ref old, and "nothing behind" would then be a lie.
+    await Promise.all(targets.map(async (t) => {
+      if (!ctx.resolveAttention || t.gitFailed?.verb !== "push" || t.gitRunning || !(await nothingToPush(t.worktreePath))) return;
+      ctx.resolveAttention(gitAttentionKey(t.id, "push"), "nothing left to push — it went up another way");
+      delete t.gitFailed;
+    }));
     // A build command in flight, off the intent rows that are its runs.
     for (const t of targets) { const b = ctx.builds?.runningIn(t.worktreePath); if (b) t.buildRunning = b; }
     json(res, { targets });

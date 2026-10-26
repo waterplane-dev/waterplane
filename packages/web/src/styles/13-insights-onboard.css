@@ -550,3 +550,18 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
   100% { box-shadow: 0 0 0 10px transparent; transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .cli-catch { animation: none; } }
+
+/* What's new (features/whatsnew): a stacked card, not a `.row-wrap`. That
+   wrapper is a NON-wrapping strip built to hold one `.row`; given the title,
+   the line, the state and the button as siblings it put all four side by side
+   and clipped every one of them — titles cut to "Bell = need…", buttons run
+   off the right edge. Here: icon + title (wrapping) with the state on the right,
+   the line under it, the verb under that. The launcher's one-time row is the
+   same card. */
+.wn-row { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-14); background: var(--panel); border-bottom: 1px solid var(--line); }
+.wn-head { display: flex; align-items: flex-start; gap: var(--sp-8); }
+.wn-head > svg { flex: none; margin-top: 3px; color: var(--accent); }
+.wn-head > .row-title { flex: 1; min-width: 0; white-space: normal; }
+.wn-state { flex: 0 1 auto; max-width: 45%; text-align: right; color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
+.wn-row > .row-sub { line-height: var(--lh-14); }
+.wn-acts { display: flex; flex-wrap: wrap; gap: var(--sp-8); }

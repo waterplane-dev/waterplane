@@ -7,7 +7,7 @@ import { buildScheduleEntry, buildScheduleToast, type BuildScheduleCue } from ".
 import type { SendWhen } from "../../sendIntent";
 import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
-import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, buildScheduleEdit, builds, type ParamOptions } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, buildRunFocus, buildScheduleEdit, builds, type ParamOptions } from "./store";
 
 export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
   buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
@@ -33,12 +33,13 @@ export function onBuildRun(run: BuildRun, c: CoreApi): void {
 }
 
 /** Open the build-buttons sheet for a repo and fetch its configs + runs. */
-export function openBuildFor(repo: RepoTarget, opts?: { schedule?: ScheduleEntry }): void {
+export function openBuildFor(repo: RepoTarget, opts?: { schedule?: ScheduleEntry; run?: string }): void {
   const c = core();
   buildRepo.set(repo);
   // A build rule's card *edit*: the sheet opens that rule's form once the
   // entry is in the list (`BuildButtonsSheet`).
   buildScheduleEdit.set(opts?.schedule ? { entry: opts.schedule, at: Date.now() } : null);
+  buildRunFocus.set(opts?.run ?? null);
   c.conn.send({ t: "build.list", repoDir: repo.worktreePath });
   // What becomes of what a build produces is read with the list, not on a
   // second tap: it is one small frame, and the answer has to be on screen

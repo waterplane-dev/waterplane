@@ -8,7 +8,7 @@ import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
 import { buildLogSeed } from "../../buildLogPrompt";
-import { artifactPolicies, buildCands, buildLocalIds, buildOpts, buildScheduleEdit, builds } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildOpts, buildRunFocus, buildScheduleEdit, builds } from "./store";
 import { buildScheduleCue } from "../../buildSchedule";
 import { askOptions, cancelBuild, openBuildScheduleCut, runBuild, saveBuildSchedule, saveBuilds, savePolicy, scanRepo, setupBuilds } from "./actions";
 
@@ -43,6 +43,10 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
       buildScheduleEdit.set(null);
     }
   }, [handOver, pendingEdit, scheduleEdit, listAt, core]);
+  // A rule card's *last run*: the sheet opens that run (its own effect runs
+  // first, child before parent), then the hand-over is spent.
+  const focusRun = useStore(buildRunFocus);
+  useEffect(() => { if (focusRun) buildRunFocus.set(null); }, [focusRun]);
   const schedules = core.world.schedules;
   return (
     <BuildSheet
@@ -77,6 +81,7 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
       onSaveSchedule={(b, entry, when, vals, preview) => saveBuildSchedule(dir, b, entry, when, vals, preview)}
       usage={core.world.usage}
       scheduleEdit={scheduleEdit}
+      focusRun={focusRun}
     />
   );
 }

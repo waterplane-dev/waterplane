@@ -1005,7 +1005,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiRepoOps.ts": 103, // +opt-ins (read, choice, and the row cleaner)
   "webapi/webapiRepos.ts": 50,
   "webapi/webapiRoot.ts": 20,
-  "webapi/webapiSessions.ts": 105,
+  "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
   "webapi/webapiStats.ts": 85,
   "webapi/webapiTree.ts": 116, // +bookmark set/remove and the archived reader's two reads; +another backend's conversations list/delete
   "webapi/webapiTypes.ts": 145,

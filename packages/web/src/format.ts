@@ -246,6 +246,9 @@ export function hhmm(ts: number): string {
   return t;
 }
 
+/** "1 build" / "3 builds"; `many` for irregular plurals. */
+export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
+
 /** Compact "how long until" — the countdown half of a reset readout. */
 export function until(ts: number): string {
   const s = Math.round((ts - Date.now()) / 1000);

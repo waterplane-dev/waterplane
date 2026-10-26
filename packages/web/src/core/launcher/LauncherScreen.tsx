@@ -38,6 +38,7 @@ import { pickImageFor } from "../../features/images";
 import { takeShot, useHostPush } from "../../features/hostTools";
 import { HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { FirstRunCard } from "../../features/onboard";
+import { WhatsNewLauncherRow } from "../../features/whatsnew";
 import { enterDemo, isDemo } from "../../demo/mode";
 import { isNativeShell } from "../../hostUrl";
 import type { LauncherProps } from "./types";
@@ -366,6 +367,8 @@ export function LauncherScreen(p: LauncherProps) {
               ))}
             </>
           )}
+          {/* Once per desktop version: what this release brought, and the way to each (features/whatsnew). */}
+          <WhatsNewLauncherRow />
           {/* A host that has never opened a session: three ways in (features/onboard). */}
           <FirstRunCard repos={repos.length} demo={isDemo()} onDemo={() => enterDemo("first-look")} />
           {repoGroups.length > 0 && (

@@ -31,3 +31,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: "/deploy/docker"
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7

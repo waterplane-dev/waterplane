@@ -28,10 +28,14 @@ test("triggers: a published release, or a hand re-run that names its tag", () =>
   assert.match(code, /\[ "\$GITHUB_REF" != "refs\/tags\/\$TAG" \]/, "a run not started ON the tag stops: provenance would attest another commit");
 });
 
-test("permissions: read the code, mint an OIDC token — nothing else", () => {
-  const block = /^permissions:\n((?: {2}.*\n)+)/m.exec(code)?.[1] ?? "";
-  assert.deepEqual(block.trim().split("\n").map((l) => l.replace(/\s+#.*$/, "").trim()).sort(), ["contents: read", "id-token: write"]);
-  assert.equal((code.match(/^\s*permissions:/gm) ?? []).length, 1, "no job widens it");
+test("permissions: read-only at the top, the write grants only on the publish job", () => {
+  const strip = (b) => b.trim().split("\n").map((l) => l.replace(/\s+#.*$/, "").trim()).sort();
+  const top = /^permissions:\n((?: {2}.*\n)+)/m.exec(code)?.[1] ?? "";
+  assert.deepEqual(strip(top), ["contents: read"], "the workflow-level token is read-only");
+  const job = /^ {4}permissions:\n((?: {6}.*\n)+)/m.exec(code)?.[1] ?? "";
+  assert.deepEqual(strip(job), ["attestations: write", "contents: read", "id-token: write"], "OIDC + attestation, nothing else");
+  assert.equal((code.match(/^\s*permissions:/gm) ?? []).length, 2, "one workflow block, one job block");
+  assert.match(code, /actions\/attest-build-provenance@[0-9a-f]{40}[\s\S]*?subject-path: dist-release\/\*\.tgz/, "the tarball is attested");
 });
 
 test("publish: the tag's own build, with --provenance, through trusted publishing — no token anywhere", () => {

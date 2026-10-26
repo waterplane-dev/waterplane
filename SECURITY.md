@@ -331,6 +331,14 @@ summary:
   named them) and the variables passed with `--env`, never the installing
   shell's environment, and refuses `WATERPLANE_ALLOW_PUBLIC` outright: a public bind
   stays an explicit, visible opt-in in `.env`.
+- **`node-pty` is pinned to a pre-release (`1.2.0-beta.15`) on purpose.** The
+  stable 1.1.0 leaks two file descriptors into the daemon on every macOS spawn
+  (a spare `/dev/ptmx` and the child's slave), which exhausted the machine's
+  pseudo-terminals; the 1.2.0 betas fix it. The pin is exact, the published
+  package's `npm-shrinkwrap.json` holds it, and `ptyleak.test.mjs` guards the fix.
+  Scanners that flag the pre-release or node-pty's install script (a native
+  build fallback; prebuilt binaries ship in the package) are seeing this choice.
+  It moves to `1.2.0` once that is released stable.
 
 ### In scope
 

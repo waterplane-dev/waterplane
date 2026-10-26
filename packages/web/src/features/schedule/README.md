@@ -6,7 +6,7 @@ the read-only directory of backlog rows that wear a clock. The sheet itself is t
 `web-work` skill: **recurrence decides the list**, `clockCuts()` is ONE call producing every
 list and every number on the subject, and **a count on a control is a filter**.
 
-The sheet is titled **Automation** (overlay id, routes and keys stay `schedule`). Its foot, **"Runs
+The sheet is titled **Automation** (overlay id, routes and keys stay `schedule`). Its block above the cards, **"Runs
 on its own, no clock"**, is `AutomationFoot.tsx` over the pure `automationLines.ts` (node-tested):
 backlog auto and the rows it starts next (`backlogFilter/nextFire.ts`, the backlog's own `▶ next`
 predicate), the repo's auto-download rule (through `automationSlot.ts`, which `features/pull` fills at

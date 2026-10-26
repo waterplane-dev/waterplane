@@ -28,7 +28,7 @@ const PTY_STORE = "pty";
 /** Bytes kept per session. A claude TUI repaint is tens of KB, so this is about
  *  one screen's worth of repaints — enough to render, small enough that a dozen
  *  sessions stay under a megabyte. */
-const PTY_SAVE_BYTES = 65536;
+export const PTY_SAVE_BYTES = 65536;
 /** Save cadence while a session is on screen. `pagehide`/`freeze` are the real
  *  save points (a phone is backgrounded, not closed); the interval is the
  *  backstop for the OS killing the tab without either firing. */

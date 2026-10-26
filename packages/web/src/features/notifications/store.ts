@@ -22,6 +22,10 @@ export function useUnread(): number {
  *  Written only by `openNotifs`/`openNotifCut`/`showAllNotifs`. */
 export const notifCut = createStore<string[] | null>(null);
 
+/** Which host answers have arrived since boot (`notification.list`, `notify.prefs`): an empty
+ *  feed before the list is "not read", never "nothing" (What's new reads it via `feedSlot.ts`). */
+export const heard = createStore<{ list: boolean; prefs: boolean }>({ list: false, prefs: false });
+
 /** Push information too (`notify.prefs.pushInfo`), as the host last said. */
 export const pushInfo = createStore<boolean>(false);
 

@@ -49,6 +49,7 @@
     "GET /api/host/setupprefs": "gap: host setup prefs (auto-compact default) are not modelled",
     "GET /api/host/stat": "gap: desktop CPU/memory telemetry is not modelled",
     "GET /api/lan/identity": "not reachable in demo: LAN route discovery needs a real host",
+    "GET /api/screen/tail": "background offline-cache sweep of each session's terminal; the demo's 404 reads as no tail and the sweep moves on",
     "GET /api/weekburn": "not reachable in demo: the week-end burn spends a real subscription week; the sheet says it could not be read",
     "POST /api/weekburn": "not reachable in demo: the week-end burn spends a real subscription week",
     "GET /api/localusage": "not reachable in demo: no local runner ledger",

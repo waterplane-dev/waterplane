@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { CalendarClock, CircleAlert, CircleCheck, CloudOff, History, ListTodo, Loader, Pause, Pencil, Play, Plus, Power, Repeat, SkipForward, Terminal, Trash2, X } from "lucide-react";
+import { CalendarClock, CircleAlert, CircleCheck, CloudOff, History, Loader, Pause, Pencil, Play, Plus, Power, Repeat, SkipForward, Trash2, X } from "lucide-react";
 import type { HorizonBucket, Intent, RepoTarget, ScheduleEntry, SessionInfo, WindowResets } from "@waterplane/shared";
 import { HORIZON_LABEL, SPENT_ONCE_TEXT, describeRule, hoursOpenFrom, inHours, isStandingSchedule, nextFireAt, ruleRecurs, scheduleActionText, typedName } from "@waterplane/shared";
 import { track } from "./usage";
@@ -7,7 +7,7 @@ import { ago } from "./format";
 import { clockCuts } from "./clockCuts";
 import { ClockDirectory, ClocksGone } from "./clockDirectory";
 import type { RenderRetime } from "./RetimeBar";
-import { scheduleItemsLabel } from "./backlogFilter";
+import { ScheduleCardDoor } from "./ScheduleCardDoor";
 import { fmtWhen } from "./sendIntent";
 import { SheetHead } from "./Sheet";
 import { ScheduleWeekBar } from "./ScheduleWeekBar";
@@ -76,6 +76,8 @@ interface Props {
    * repo's list, which is still the honest answer to "where does this go".
    */
   onOpenBacklog?: (repoDir: string, ids?: string[], label?: string) => void;
+  /** A build rule's last run, unfolded on its repo's Build sheet. */
+  onOpenBuildRun?: (repoDir: string, runId: string) => void;
   /** The When editor for the ticked directory lines — every repo's at once. */
   renderRetime?: RenderRetime;
   /** "Runs on its own, no clock" (`AutomationFoot`, built by the caller: its
@@ -209,7 +211,7 @@ function childState(i: Intent): string {
 
 export function ScheduleSheet({
   repos, entries, onRemove, onSetEnabled, onRunNow, onSkipNext, onEdit, onClose,
-  intents = [], sessions = [], onOpenSession, onOpenBacklog, renderRetime,
+  intents = [], sessions = [], onOpenSession, onOpenBacklog, onOpenBuildRun, renderRetime,
   online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, onOpenSpent, usage = null, foot,
 }: Props) {
   const repoName = (dir: string) => repos.find((r) => r.worktreePath === dir)?.repoName ?? dir.split("/").pop() ?? dir;
@@ -576,48 +578,8 @@ export function ScheduleSheet({
               </button>
             </div>
             <div className="sched-acts">
-              {/* **Where this rule's work goes, in one slot with three shapes.**
-                  In order of how much each knows:
-
-                   - the SESSION its last run was actually typed into, when one
-                     is still open — the most specific answer there is;
-                   - else the ITEM that run wrote, as a filter: "1 item" opens
-                     exactly that row in its repo's backlog, never the repo's
-                     fifty-two for the reader to find it in;
-                   - else the repo's BACKLOG, which is still the true answer to
-                     "where does this land" for a rule that has not fired yet.
-
-                  What used to be in this slot was *open a session* — the retired
-                  concept the backlog sheet dropped for the same reason: a
-                  control whose only job was to give another control a target.
-                  Nothing here needs one; every scheduled run opens a session of
-                  its own. A fan-out has neither a single session nor a single
-                  backlog (that is the fan-out view's job), so it still gets
-                  nothing. */}
-              {childSession && onOpenSession ? (
-                <button className="link-btn" data-hint="schedule.session"
-                  title="Open the session this item ran in"
-                  onClick={() => { track("action:schedule.session"); onOpenSession(childSession); }}>
-                  <Terminal size={13} /> session
-                </button>
-              ) : act.kind === "backlog" && onOpenBacklog ? (
-                child ? (
-                  <button className="link-btn" data-hint="schedule.backlogitems"
-                    title={`Show the item this rule wrote, in ${repoName(act.repoDir)}'s backlog`}
-                    onClick={() => {
-                      track("action:schedule.backlog");
-                      onOpenBacklog(act.repoDir, [child.id], scheduleItemsLabel(typed || act.text.slice(0, 40)));
-                    }}>
-                    <ListTodo size={13} /> backlog · 1 item
-                  </button>
-                ) : (
-                  <button className="link-btn" data-hint="schedule.backlogitems"
-                    title={`Show ${repoName(act.repoDir)}'s backlog — this is the list each run of this rule writes into`}
-                    onClick={() => { track("action:schedule.backlog"); onOpenBacklog(act.repoDir); }}>
-                    <ListTodo size={13} /> backlog
-                  </button>
-                )
-              ) : null}
+              <ScheduleCardDoor act={act} child={child} childSession={childSession} typed={typed} repoName={repoName}
+                onOpenSession={onOpenSession} onOpenBacklog={onOpenBacklog} onOpenBuildRun={onOpenBuildRun} />
               {/* Sit out exactly ONE run. Different from pausing, and the
                   difference is who has to remember: a pause waits for you to
                   come back, a skip does not. Only where there is an armed
@@ -795,6 +757,11 @@ export function ScheduleSheet({
         </Hint>
       )}
 
+      {/* What runs with no clock (backlog auto, auto-download, …) goes ABOVE the
+          cards, not after the last one: as the list's tail it was missed under a
+          long run of one-offs, and read as one more card. */}
+      {!focus && !searching && foot}
+
       {/* Two kinds of thing, and they are not read the same way. A REPEATING
           rule is standing policy — the question about it is "is it on, and when
           is the next one"; a ONE-OFF is a thing that happens and is then over,
@@ -886,7 +853,6 @@ export function ScheduleSheet({
         <ClocksGone goneByRepo={clocks.goneByRepo} repoName={repoName} onOpen={onOpenBacklog} />
       )}
 
-      {!focus && !searching && foot}
       </div>
 
       <div className="sheet-actions">

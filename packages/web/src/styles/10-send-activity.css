@@ -209,6 +209,10 @@
    of rows. It sits apart from the last card so it is not read as one. */
 .sched-spent { margin-top: var(--sp-10); }
 
+/* "Runs on its own, no clock": standing facts drawn above the cards. Its lines are
+   sentences, so it is not a `.section` (that uppercases); a gap keeps it off the first card. */
+.auto-foot { margin-bottom: var(--sp-10); }
+
 /* **The directory of clocks.** A one-off aimed at one place is a BACKLOG row —
    recurrence decides the list — so these are not cards and must not look like
    them: no border, no button row, one line each, and the whole line is the one

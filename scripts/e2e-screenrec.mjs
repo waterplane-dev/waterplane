@@ -107,6 +107,21 @@ bootWait(PORT, 1200, async () => {
     // The load-bearing one: a replay of the byte ring can only ever answer with
     // the last fourteen of these.
     check(missing.length === 0, `every line is there, including the ones that scrolled off (missing: ${missing.slice(0, 8).join(",") || "none"})`);
+
+    // The offline terminal of a session the phone never attached
+    // (`/api/screen/tail`, web `screenSweep.ts`): raw bytes + the seq they end
+    // at + this boot's id, and a 204 once the phone holds that seq.
+    const tailRes = await fetch(`${base}/api/screen/tail?id=${sid}`);
+    const tail = await tailRes.json();
+    check(tailRes.status === 200 && typeof tail.data === "string" && tail.data.includes("rec-line-60"),
+      "the screen tail carries the newest output as raw bytes");
+    check(typeof tail.seq === "number" && tail.seq > 0 && typeof tail.boot === "string" && tail.boot.length > 0,
+      `…with a resume point: seq ${tail.seq}, boot ${tail.boot}`);
+    check(tail.data.length <= 65536, `…capped at the phone's 64 KB (${tail.data.length})`);
+    const same = await fetch(`${base}/api/screen/tail?id=${sid}&since=${tail.seq}`);
+    check(same.status === 204, `held seq ⇒ 204, nothing re-sent (got ${same.status})`);
+    const none = await fetch(`${base}/api/screen/tail?id=nope`);
+    check(none.status === 404, `an unknown session is a 404 (got ${none.status})`);
     // …once each. Duplication is the other half of the report, and the daemon's
     // vantage point is what avoids it: it never has a gap large enough to make
     // a sample unanchorable, so no screen is ever archived whole twice.

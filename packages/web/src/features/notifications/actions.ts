@@ -7,7 +7,7 @@ import { core, type CoreApi } from "../../sdk";
 import { viewerHandles } from "../../docKind";
 import { LS, lsBool, lsSetBool } from "../../storage";
 import { backlogRepoFor, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipKeys, resolvedWords } from "./logic";
-import { mutes, notifCut, notifFocus, notifs, pushInfo } from "./store";
+import { heard, mutes, notifCut, notifFocus, notifs, pushInfo } from "./store";
 
 /** A live `notification`: into the feed, and said once as a toast. */
 export function onNotification(item: NotificationItem, c: CoreApi): void {
@@ -24,6 +24,7 @@ export function onNotificationList(items: NotificationItem[]): void {
   for (const n of newlyResolved(notifs.get(), items)) c.say.toast(resolvedWords(n));
   const chipsMoved = repoChipKeys(notifs.get()) !== repoChipKeys(items);
   notifs.set(items);
+  if (!heard.get().list) heard.set({ ...heard.get(), list: true });
   if (chipsMoved) c.world.refreshRepos();
 }
 
@@ -44,6 +45,7 @@ export function handleNotif(id: string): void {
 export function onNotifyPrefs(prefs: NotifyPrefs, info?: boolean): void {
   mutes.set(prefs);
   pushInfo.set(!!info);
+  if (!heard.get().prefs) heard.set({ ...heard.get(), prefs: true });
 }
 
 /** "Push information too": off by default, host-persisted. */

@@ -5,7 +5,10 @@
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
 import { NotificationsSheet } from "./NotificationsSheet";
-import { onNotification, onNotificationList, onNotifyPrefs } from "./actions";
+import { onNotification, onNotificationList, onNotifyPrefs, openBell, openNotifCut, openNotifs } from "./actions";
+import { setFeedSource } from "../../feedSlot";
+import { needsYouItems, repoChipItems } from "./logic";
+import { heard, notifs, pushInfo } from "./store";
 import { NotificationSettings } from "./NotificationSettings";
 
 export { BellButton } from "./BellButton";
@@ -21,6 +24,16 @@ export const manifest: FeatureManifest = {
     notification: (msg, core) => onNotification(msg.item, core),
     "notification.list": (msg) => onNotificationList(msg.items),
     "notify.prefs": (msg) => onNotifyPrefs(msg.prefs, msg.pushInfo),
+  },
+  // What's new reads the feed's facts and opens its cuts through this slot (features never import each other).
+  boot: () => {
+    setFeedSource({
+      items: notifs, pushInfo, heard,
+      needsYouIds: (items) => needsYouItems(items).map((n) => n.id),
+      failures: (items) => repoChipItems(items),
+      openBell, openCut: openNotifCut, openFeed: openNotifs,
+    });
+    return () => setFeedSource(null);
   },
   settings: [
     // The head of Notifications: the feed, and which kinds may fire.

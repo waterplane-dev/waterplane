@@ -41,7 +41,9 @@ const SKILLS = join(ROOT, ".claude", "skills");
  * host-architecture.md, "Result", says why it stops at 700).
  */
 const MAX_LINES = {
-  "sessions.ts":         700,
+  // 700 → 701 (2026-10-25, offline terminal of an unattached session): one public delegate,
+  // `screenTail`; the behaviour lives in `sessions/drive.ts`. Far under the 1,100 end state.
+  "sessions.ts":         701,
   // 314 → 316 (2026-10-08, store writes that fail are refusals): one core entry (`lastWriteError`,
   // which post/upsert/fire word their refusal from) and its public read for the routes; the
   // behaviour lives in `intents/disk.ts`, `write.ts` and `fire.ts`. Far under the 450 end state.

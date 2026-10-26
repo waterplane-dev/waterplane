@@ -228,6 +228,11 @@ export const HINTS: Record<string, HintDef> = {
     what: "Jumps to the session this occurrence used, so you can read what it actually did.",
     when: "Only where there IS one session to go to — a fan-out ran in N of them, and that is the fan-out view's job.",
   },
+  "schedule.buildrun": {
+    title: "Open the run this rule last started",
+    what: "Opens the repo's builds on the run this build rule started most recently, with its log and outcome.",
+    when: "The card says how that run ended and when, so a failed nightly build is one tap from its log. Only shown once the rule has started a run.",
+  },
   "schedule.backlogitems": {
     title: "The items this rule has written",
     what: "Opens the Backlog on exactly the rows this schedule created, however many runs ago.",

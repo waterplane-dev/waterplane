@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, Bot, CalendarClock, CircleAlert, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, GitBranch, HardDrive, HeartPulse, Info, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CalendarClock, Check, CircleAlert, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, GitBranch, HardDrive, HeartPulse, Info, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -142,10 +142,13 @@ export function NotificationsSheet() {
           };
           return (
             <>
-              {(secs.needs.length > 0 || secs.handled.length > 0) && (
+              {secs.needs.length > 0 && (
                 <div className="notif-sec"><span className="notif-sec-title"><CircleAlert size={13} /> Needs you · {secs.needs.length}</span></div>
               )}
               {secs.needs.map(row)}
+              {secs.handled.length > 0 && (
+                <div className="notif-sec"><span className="notif-sec-title"><Check size={13} /> Done · {secs.handled.length}</span></div>
+              )}
               {secs.handled.map(row)}
               {secs.info.length > 0 && (
                 <div className="notif-sec"><span className="notif-sec-title"><Info size={13} /> Information</span></div>

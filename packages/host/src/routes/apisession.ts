@@ -21,6 +21,9 @@ function backendOf(id: string | null): BackendDescriptor | string {
   try { return resolveBackend(id || undefined); } catch (e) { return e instanceof Error ? e.message : "unknown backend"; }
 }
 
+/** The most bytes `/api/screen/tail` answers — the phone's own per-session cap (`ptyTail.ts`). */
+const SCREEN_TAIL_MAX = 65536;
+
 export const SESSION_ROUTES: readonly ApiEntry[] = [
   // Structured conversation transcript for the reader view (the scrollable,
   // searchable alternative to the terminal). Parsed from the claude CLI's own
@@ -56,6 +59,23 @@ export const SESSION_ROUTES: readonly ApiEntry[] = [
     const doc = id ? await ctx.sessions.screenLines(id) : null;
     if (!doc) { json(res, { error: "no such session" }, 404); return true; }
     json(res, { sessionId: id, ...doc, at: Date.now() });
+    return true;
+  }),
+
+  // The newest output of one session as raw PTY bytes + the `seq` they end at
+  // (`sessions.screenTail`): the offline cache of a terminal this phone never
+  // attached. `since` = the seq the phone holds → 204 when nothing moved.
+  // `max` is clamped; the phone keeps 64 KB per session anyway. Read-only →
+  // HTTP, never the socket (attaching would stream every redraw at it).
+  route("GET", "/api/screen/tail", ({ res, url }, ctx) => {
+    const id = url.searchParams.get("id") || "";
+    const sinceRaw = url.searchParams.get("since");
+    const since = sinceRaw != null && /^\d+$/.test(sinceRaw) ? Number(sinceRaw) : undefined;
+    const max = Math.min(SCREEN_TAIL_MAX, Math.max(1024, Number(url.searchParams.get("max")) || SCREEN_TAIL_MAX));
+    const doc = id ? ctx.sessions.screenTail(id, max, since) : null;
+    if (!doc) { json(res, { error: "no such session" }, 404); return true; }
+    if (doc === "unchanged") { res.writeHead(204).end(); return true; }
+    json(res, { sessionId: id, data: doc.data, seq: doc.seq, boot: ctx.bootId, at: Date.now() });
     return true;
   }),
 

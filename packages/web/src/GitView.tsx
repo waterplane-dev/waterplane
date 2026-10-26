@@ -514,26 +514,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
         </div>
       )}
 
-      {/* Scrolls BOTH ways: a path is shown whole, never ellipsized — the
-          stage button stays pinned to the right edge (`.git-files`). */}
-      <div className="list git-files" style={zoomFont}>
-        <Empty res={statusRes} empty={!status || !!status.clean} thing="the working tree" noun="status"
-          offlineNote="Nothing here can be staged or committed until the link is back.">
-          Working tree clean.
-        </Empty>
-        {status?.files.map((f) => (
-          <Row key={f.path + f.code} kind="wrap">
-            <Row as="button" kind="grow" onClick={() => { track("action:git.diff"); setOpenFile(f); }}>
-              <span className={`gstat g-${label(f)}`}>{label(f)}</span>
-              <RowTitle className="mono">{f.from ? `${f.from} → ${f.path}` : f.path}</RowTitle>
-            </Row>
-            <button className={`row-act ${f.staged ? "on" : ""}`} title={f.staged ? "unstage" : "stage"} onClick={() => toggleStage(f)}>
-              {f.staged ? <Check size={16} /> : <Plus size={16} />}
-            </button>
-          </Row>
-        ))}
-      </div>
-
+      {/* ABOVE the files: a list's verbs never trail its last row (ux §5). */}
       {!status?.clean && (
         <div className="form">
           {/* The suggestion, when the box already held words. Shown in FULL —
@@ -561,6 +542,26 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
           </div>
         </div>
       )}
+
+      {/* Scrolls BOTH ways: a path is shown whole, never ellipsized — the
+          stage button stays pinned to the right edge (`.git-files`). */}
+      <div className="list git-files" style={zoomFont}>
+        <Empty res={statusRes} empty={!status || !!status.clean} thing="the working tree" noun="status"
+          offlineNote="Nothing here can be staged or committed until the link is back.">
+          Working tree clean.
+        </Empty>
+        {status?.files.map((f) => (
+          <Row key={f.path + f.code} kind="wrap">
+            <Row as="button" kind="grow" onClick={() => { track("action:git.diff"); setOpenFile(f); }}>
+              <span className={`gstat g-${label(f)}`}>{label(f)}</span>
+              <RowTitle className="mono">{f.from ? `${f.from} → ${f.path}` : f.path}</RowTitle>
+            </Row>
+            <button className={`row-act ${f.staged ? "on" : ""}`} title={f.staged ? "unstage" : "stage"} onClick={() => toggleStage(f)}>
+              {f.staged ? <Check size={16} /> : <Plus size={16} />}
+            </button>
+          </Row>
+        ))}
+      </div>
       {status && remoteRow}
       {/* ABOVE the note: the note is the log's tail, forty lines on a phone. */}
       {failure && failure.note === note && (

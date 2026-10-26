@@ -109,7 +109,8 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "limit-auto", group: "sessions", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
   { id: "budget", group: "sessions", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
   { id: "budget-session", group: "sessions", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
-  { id: "weekburn", group: "sessions", label: "this week's burn", keywords: "week-end burn spend leftover unused budget subscription repos improve" },
+  { id: "automation", group: "sessions", label: "automation", keywords: "schedule schedules clock cron runs on its own backlog auto peer" },
+  { id: "weekburn", group: "sessions", label: "week-end burn", keywords: "this week's burn spend leftover unused budget subscription repos improve" },
   { id: "budget-weekly", group: "sessions", label: "weekly ceiling", keywords: "week cap percent reserve" },
   { id: "budget-leftover", group: "sessions", label: "leftovers in a new week", keywords: "leftover reset week spare budget before reset waiver" },
   { id: "billing-profile", group: "sessions", label: "billing profile", keywords: "api key subscription bedrock vertex cloud account detect override console" },
@@ -119,6 +120,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
 
   // ── Notifications ──────────────────────────────────────────────────────
   { id: "notif-feed", group: "notifications", label: "open the feed", keywords: "alerts unread inbox in-app list bell notification" },
+  { id: "notif-info-push", group: "notifications", label: "push information too", keywords: "receipts buzz quiet information pushes push" },
   { id: "notif-kinds", group: "notifications", label: "what may fire", keywords: "mute kinds needs you limit cli backlog prompt not delivered per type" },
   { id: "phone-setup", group: "notifications", label: "phone setup", keywords: "permission allow android background notifications install unknown apps checklist" },
   { id: "notif-push", group: "notifications", label: "OS push", keywords: "web push system notification https secure context service worker" },
@@ -168,7 +170,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "queue-manage", group: "offline", label: "manage the queue", keywords: "queued messages waiting outbox" },
   { id: "bg-fresh", group: "offline", label: "in the background", keywords: "battery drain power hidden background stream offline dead zone fresh latest screen catch up" },
   { id: "data-saver", group: "offline", label: "data saver", keywords: "roaming hotel bandwidth smaller images polling mobile" },
-  { id: "downloads", group: "offline", label: "downloads", keywords: "pull files artifacts background fetch resume auto" },
+  { id: "downloads", group: "offline", label: "downloads", keywords: "pull files artifacts background fetch resume auto copy once duplicate space keep" },
   { id: "upload-scale", group: "offline", label: "upload size", keywords: "image width shrink annotator camera photo auto slow link" },
 
   // ── Connection ─────────────────────────────────────────────────────────
@@ -198,6 +200,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "tool-features", group: "tools", label: "feature usage", keywords: "which features used never analytics track" },
   { id: "tool-host-stat", group: "tools", label: "host stat", keywords: "cpu memory load desktop mac pressure temperature" },
   { id: "tool-screenshot", group: "tools", label: "screenshot the desktop", keywords: "capture screen mac image" },
+  { id: "whats-new", group: "tools", label: "what's new", keywords: "release version changelog new features overview 0.1.8 automation burn downloads notifications" },
   { id: "tool-updates", group: "tools", label: "updates", keywords: "update self plugin install available new version restart roll back" },
   { id: "tool-decisions", group: "tools", label: "decision log", keywords: "activity auto-continue usage limit what a plugin answered suggested history archive" },
   { id: "updates-auto", group: "tools", label: "check daily for updates", keywords: "update plugin automatic check github new version" },

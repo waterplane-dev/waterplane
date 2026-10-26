@@ -125,6 +125,7 @@ Each has caused a real failure here and is invisible in review unless you know i
   false-positives the detector.
 - **Never grey out a button to mean "not clickable".** Say why in text (`Unavailable.tsx`); a
   `title` is invisible on a phone.
+- **Filters, search and list-level buttons go ABOVE the list, never after its last row** (`ux` §5).
 - **A count on a control is a filter.** A tap on "2 within the hour" opens exactly those two, never
   the unfiltered list. The filtered view SAYS what it hides ("n of N", with a clear button); one
   bucketing function feeds both the number and the cut, never two copies of the edge.

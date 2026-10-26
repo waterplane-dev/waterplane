@@ -1,0 +1,26 @@
+name: Gradle wrapper
+
+# Two gradle-wrapper.jar files are tracked (packages/app, packages/host/templates/android-hello).
+# Scorecard's Binary-Artifacts check counts them against us unless the wrapper is validated by a
+# workflow; this checks each jar's checksum against Gradle's published list.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # Only ever on the public repo. The private repo carries this file too (the public snapshot is
+    # made from it) and must never run it.
+    if: github.repository == 'waterplane-dev/waterplane'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

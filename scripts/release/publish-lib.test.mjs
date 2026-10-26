@@ -6,8 +6,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  NPM_WAIT_SECONDS, NPM_WORKFLOW, extractChangelogSection, npmTarballName, npmWaitDecision, planSteps, preflight, readHasShrinkwrap, readNpmHasVersion,
-  readProvenance, readWorkflowRun, releaseAssets, sha256Hex, shellLine, tagOf, verifyReleaseBytes,
+  NPM_WAIT_SECONDS, NPM_WORKFLOW, exposureResult, extractChangelogSection, npmTarballName, npmWaitDecision, parseAcceptArg, planSteps, preflight, readHasShrinkwrap, readNpmHasVersion,
+  readProvenance, readWorkflowRun, releaseAssets, renderDepDiff, sha256Hex, shellLine, tagOf, verifyReleaseBytes,
 } from "./publish-lib.mjs";
 import { generateKeys, loadPrivateKey, loadPublicKey, signBytes } from "./sign-lib.mjs";
 
@@ -67,7 +67,7 @@ const good = {
   missingLocal: [], byteProblems: [], releaseCommit: "abc", npmHasShrinkwrap: true, ghAuth: true, npmUser: "me",
   changelog: "- a thing", publicClone: { ok: true },
   assets: releaseAssets({ slug: SLUG, version: V, apk: "waterplane-1.2.3.apk" }), noApk: false,
-  npmFromDesktop: false, actionsEnabled: true,
+  npmFromDesktop: false, actionsEnabled: true, exposure: { stops: [], prints: [] },
 };
 const refusals = (f) => preflight(f).checks.filter((c) => !c.ok).map((c) => c.name);
 
@@ -286,4 +286,63 @@ test("npm-verify tells a failed workflow run to check npm first: a run can fail 
   const src = readFileSync(new URL("./npm-verify.mjs", import.meta.url), "utf8");
   assert.match(src, /check \\`npm view \$\{SPEC\}\\` before re-running \(a re-run skips a version already on npm\)/);
   assert.doesNotMatch(src, /without publishing/);
+});
+
+test("preflight: the exposure watch refuses on a stop (naming its key), passes on none, and refuses when it did not answer", () => {
+  const stop = { key: "adv:GHSA-x:left-pad", text: "high advisory" };
+  const r = preflight({ ...good, exposure: { stops: [stop], prints: [] } });
+  const c = r.checks.find((x) => x.name === "exposure watch");
+  assert.equal(c.ok, false);
+  assert.match(c.why, /adv:GHSA-x:left-pad: high advisory — accept with --accept-finding <key>=<reason>/);
+  assert.equal(r.refused, true);
+  assert.equal(preflight(good).refused, false);
+  assert.match(preflight({ ...good, exposure: undefined }).checks.find((x) => x.name === "exposure watch").why, /did not answer: not checked/);
+  assert.match(preflight({ ...good, exposure: { error: "exit 1" } }).checks.find((x) => x.name === "exposure watch").why, /did not answer: exit 1/);
+});
+
+test("preflight: an --allow-dirty dry run waives the exposure watch, a real run does not", () => {
+  const f = { ...good, exposure: { stops: [{ key: "k", text: "t" }], prints: [] } };
+  const dry = preflight({ ...f, yes: false, allowDirty: true });
+  assert.equal(dry.refused, false);
+  assert.equal(dry.checks.find((x) => x.name === "exposure watch").waived, true);
+  assert.equal(preflight({ ...f, yes: false }).refused, true);
+});
+
+test("parseAcceptArg: key=reason, the reason required and kept whole", () => {
+  assert.deepEqual(parseAcceptArg("A4:x@1=seen it, fine = ok"), { key: "A4:x@1", reason: "seen it, fine = ok" });
+  for (const bad of ["", "nokey", "=reason", "key=", "key=  ", undefined]) assert.equal(parseAcceptArg(bad), null);
+});
+
+test("renderDepDiff: counts, each change on a line, and a quiet lockfile in one line", () => {
+  const lines = renderDepDiff("v1.0.0", [
+    { path: "package-lock.json", diff: { added: ["a@1.0.0"], removed: ["b@2.0.0"], gainedInstallScript: ["a@1.0.0"] } },
+    { path: "packages/app/package-lock.json", diff: { added: [], removed: [], gainedInstallScript: [] } },
+  ]);
+  assert.equal(lines[0], "  package-lock.json since v1.0.0: +1 added, -1 removed, 1 gained an install script");
+  assert.deepEqual(lines.slice(1, 4), ["    + a@1.0.0", "    - b@2.0.0", "    ! install script: a@1.0.0"]);
+  assert.equal(lines[4], "  packages/app/package-lock.json: no dependency change since v1.0.0");
+});
+
+test("preflight: an unreadable-source stop says it cannot be accepted; a real one offers the accept", () => {
+  const r = preflight({ ...good, exposure: { stops: [{ key: "A1:unreachable", text: "could not read A1: no network", synthetic: true }], prints: [] } });
+  const why = r.checks.find((x) => x.name === "exposure watch").why;
+  assert.match(why, /fix the source and re-run/);
+  assert.doesNotMatch(why, /--accept-finding/);
+});
+
+test("exposureResult: exit 0/10/2 with one JSON row answers; anything else refuses with an error", () => {
+  const verdict = (row) => ({ stops: row.stops ?? [], prints: [] });
+  const row = JSON.stringify({ stops: [{ key: "k" }] });
+  for (const status of [0, 10, 2]) assert.deepEqual(exposureResult({ status, stdout: row }, verdict).stops, [{ key: "k" }]);
+  assert.match(exposureResult({ status: 1, stdout: "", stderr: "boom\n" }, verdict).error, /^exit 1: boom$/);
+  assert.match(exposureResult({ status: 64, stdout: row, stderr: "usage" }, verdict).error, /exit 64/);
+  assert.match(exposureResult({ status: 0, stdout: "not json" }, verdict).error, /not one JSON row/);
+  assert.match(exposureResult({ status: 0, stdout: "" }, verdict).error, /not one JSON row/);
+  assert.equal(exposureResult({ error: new Error("ENOENT") }, verdict).error, "ENOENT");
+  assert.match(exposureResult({ status: null, stdout: "", stderr: "" }, verdict).error, /exit null/);
+});
+
+test("renderDepDiff: a lockfile new since the tag says so instead of listing everything as added", () => {
+  const out = renderDepDiff("v0.1.7", [{ path: "packages/x/package-lock.json", isNew: true, diff: { added: ["a@1.0.0", "b@2.0.0"], removed: [], gainedInstallScript: [] } }]);
+  assert.deepEqual(out, ["  packages/x/package-lock.json: new lockfile since v0.1.7 (2 packages)"]);
 });

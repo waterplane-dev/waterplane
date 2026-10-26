@@ -310,7 +310,7 @@ export interface CoreApi {
     openCapture(repo: RepoTarget): void;
     /** The build sheet of one repo (`features/build`'s `openBuildFor`); with
      *  `schedule`, a build rule's form opens on arrival (its card's *edit*). */
-    openBuild(repo: RepoTarget, opts?: { schedule?: ScheduleEntry }): void;
+    openBuild(repo: RepoTarget, opts?: { schedule?: ScheduleEntry; run?: string }): void;
   };
   /** Session launch options and the one way to open a session in a folder. */
   launch: {

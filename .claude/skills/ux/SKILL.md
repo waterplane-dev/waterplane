@@ -85,6 +85,11 @@ Where it already holds, as patterns to copy:
   name keeps a 7em floor. A worded button costs ~70 px, so put words on one
   control at a time and keep them short (`new`, not `new session`).
 - 44 px is the platform touch minimum; next to a destructive button it is a rule.
+- **A list's controls sit ABOVE it, never after its last row**: search, filter chips, a repo
+  picker, bulk verbs (`assess these N`, `archived · N`). Below the rows they are found only by
+  scrolling past everything they act on — and a long list hides them entirely (owner, 2026-10-25,
+  the backlog's ids cut). Per-row verbs stay on the row; a "show N older" pager may end a list; a
+  fixed footer outside the scroll is not "after the list".
 - A state that changes a control's width moves its neighbours. Do it when the
   person caused it, not mid-glance.
 
@@ -94,4 +99,5 @@ Where it already holds, as patterns to copy:
 - [ ] Does every new control have a `title`, and a hint or `Explain` if its glyph is a guess?
 - [ ] Does every tap end in a visible result, offline included?
 - [ ] Do the words name controls exactly as drawn?
+- [ ] Are a list's filters and bulk verbs above its rows, not after them?
 - [ ] Does it fit 390 px without wrapping the header onto a third line?

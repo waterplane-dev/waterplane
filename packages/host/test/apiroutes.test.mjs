@@ -51,6 +51,7 @@ const ROUTES = [
   "GET /api/search",
   "GET /api/transcript",
   "GET /api/scrollback",
+  "GET /api/screen/tail",
   "GET /api/shell",
   "GET /api/transcript/tools",
   "GET /api/context",

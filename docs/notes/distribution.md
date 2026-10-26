@@ -81,10 +81,12 @@ printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, o
   in words unless the run started ON the tag (`GITHUB_REF`) and `package.json`'s version is the tag,
   runs `npm ci` and `release:build -- --unsigned`, checks the `.tgz` is `<slug>@<version>` and
   carries `npm-shrinkwrap.json`, then `npm publish <tgz> --provenance --access public` through npm
-  **trusted publishing** (OIDC: no `NPM_TOKEN` exists anywhere; permissions are `contents: read`
-  and `id-token: write`, nothing else), and finally `npm-verify.mjs --check`: on npm,
+  **trusted publishing** (OIDC: no `NPM_TOKEN` exists anywhere; the workflow token is `contents: read`; only the
+  publish job adds `id-token: write` and `attestations: write`), and finally `npm-verify.mjs --check`: on npm,
   `_hasShrinkwrap` true, a SLSA provenance attestation in `dist.attestations`. A version already on
-  npm is a clean skip. A job-level `if: github.repository == '<org>/<slug>'` keeps it from ever
+  npm is a clean skip. The tarball also gets a GitHub build-provenance attestation
+  (`actions/attest-build-provenance`); verify with `gh attestation verify <tgz> -R <org>/<slug>`. The
+  desktop-built install tarball and APK are signed by the Ed25519 key instead, not attested. A job-level `if: github.repository == '<org>/<slug>'` keeps it from ever
   running in the private repo (a literal, because `if:` runs before any checkout;
   `npm-publish-workflow.test.mjs` holds it equal to the brand, and a step re-checks it against the
   checked-out brand). **Why built in CI and not uploaded from here:** provenance is CI's signed

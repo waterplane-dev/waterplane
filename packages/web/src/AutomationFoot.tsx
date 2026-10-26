@@ -21,7 +21,8 @@ const ICONS: Record<AutomationLine["icon"], LucideIcon> = {
 export function AutomationFoot({ lines, onDoor }: { lines: readonly AutomationLine[]; onDoor: (d: AutomationDoor) => void }) {
   if (!lines.length) return null;
   return (
-    <div className="section">
+    // Not a `.section`: it uppercases every child, and the lines here are sentences.
+    <div className="auto-foot">
       <div className="sched-head">Runs on its own, no clock</div>
       {lines.map((l) => {
         const Icon = ICONS[l.icon];

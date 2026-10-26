@@ -35,6 +35,10 @@ export const buildRepo = createStore<RepoTarget | null>(null);
  *  — a cached list from before the tap proves nothing. */
 export const buildScheduleEdit = createStore<{ entry: ScheduleEntry; at: number } | null>(null);
 
+/** A run to open on arrival — a build rule's card *last run* door. Taken
+ *  (cleared) by `BuildButtonsSheet` as it hands it to the sheet. */
+export const buildRunFocus = createStore<string | null>(null);
+
 /**
  * What each repo can already build, read off its own manifests (`build.scan`).
  *

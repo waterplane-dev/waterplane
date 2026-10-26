@@ -50,9 +50,10 @@ export function NotificationSettings() {
       </SetCustom>
 
       <SetSwitch
-        label="Push information too" icon={Info} on={infoPushed}
+        id="notif-info-push" label="Push information too" icon={Info} on={infoPushed}
         onChange={() => setPushInfo(!infoPushed)}
-        note="Off: only what needs you buzzes the phone. On: receipts (a push that went through, a new file) push as well. Either way they are listed in the feed and never count on the bell."
+        note="Off: only what needs you buzzes. Receipts stay in the feed either way."
+        more={<p>On: receipts (a push that went through, a new file) push as well. They never count on the bell.</p>}
       />
     </>
   );

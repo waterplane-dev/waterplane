@@ -8,7 +8,7 @@ import { Download, Loader2, RefreshCw, RotateCcw } from "lucide-react";
 import { BRAND, PLUGIN_MATURITIES, pluginMaturity } from "@waterplane/shared";
 import type { UpdatesStatus, UpdatesTarget } from "@waterplane/shared";
 import { copyText } from "../../api";
-import { useStore } from "../../sdk";
+import { core, useStore } from "../../sdk";
 import { Button, Explain, Hint, RowSub, Tag } from "../../kit";
 import { SetNote, SetWarn } from "../../SettingsKit";
 import { useNow } from "../../useNow";
@@ -138,6 +138,8 @@ export function SelfRow({ status }: { status: UpdatesStatus }) {
       <div className="plugin-head">
         <b>{BRAND.displayName}</b> <RowSub>{v.headline}</RowSub>
         {v.notes && <Button title="what changed" onClick={() => setNotes((x) => !x)}>{notes ? "hide notes" : "notes"}</Button>}
+        {/* Notes are the NEXT version's text; What's new is THIS version's new things, with their state here. */}
+        <Button title="this version's new things and a way to each" onClick={() => core().nav.open("whatsnew")}>what's new</Button>
         {v.showUpdate && s.latest && <Button variant="primary" onClick={() => updateSelf(s.current, s.latest!)}><Download size={14} /> update</Button>}
         {v.showRollback && s.rollbackTo && <Button title={`go back to ${s.rollbackTo}`} onClick={() => rollbackSelf(s.current, s.rollbackTo!)}><RotateCcw size={14} /> roll back</Button>}
       </div>

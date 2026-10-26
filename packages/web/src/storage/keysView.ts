@@ -191,6 +191,8 @@ export const LS_VIEW = {
   notifSeen: lsKey("notifSeen"),
   /** The one-time note that information no longer counts on the bell: set once dismissed. */
   notifInfoNote: lsKey("notifInfoNote"),
+  /** What's new: the desktop version this phone last announced (or was told about) — the launcher row shows once per version. */
+  whatsNewSeen: lsKey("whatsNewSeen"),
   /**
    * The sentences this phone has shown as toasts, newest first and bounded.
    *

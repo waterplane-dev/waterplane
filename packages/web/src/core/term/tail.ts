@@ -54,15 +54,16 @@ export function appendTail(prev: string | undefined, data: string, cap: number):
  * (session → savedAt) — the sessions now showing RESTORED bytes.
  *
  * A session that already has live bytes in this tab is never overwritten — the
- * restore is strictly a cold-start fallback. The BYTES are always worth
+ * restore is strictly a cold-start fallback — unless `replace`: the screen
+ * sweep (`screenSweep.ts`) hands a NEWER tail of a session not on screen. The BYTES are always worth
  * painting (dimmed); the resume POINT is only usable if the host is still the
  * boot that issued it — see the PtyTail doc block. A record from an older build
  * has no boot id and is therefore never trusted as a resume point.
  */
-export function seedFromTails(entries: readonly TailRecord[], m: FeedMaps): Map<string, number> {
+export function seedFromTails(entries: readonly TailRecord[], m: FeedMaps, replace = false): Map<string, number> {
   const stale = new Map<string, number>();
   for (const e of entries) {
-    if ((m.buffers.get(e.sessionId)?.length ?? 0) > 0) continue;
+    if (!replace && (m.buffers.get(e.sessionId)?.length ?? 0) > 0) continue;
     m.buffers.set(e.sessionId, [e.tail]);
     stale.set(e.sessionId, e.savedAt);
     if (!e.boot) continue;

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { describeRule } from "@waterplane/shared";
 import {
-  buildRunFromSchedule, buildScheduleBlocker, buildScheduleCue, buildScheduleEntry, buildScheduleValues, buildScheduleWhen,
+  buildRunFromSchedule, buildScheduleBlocker, lastRunWord, buildScheduleCue, buildScheduleEntry, buildScheduleValues, buildScheduleWhen,
 } from "./buildSchedule.ts";
 
 const NOW = Date.UTC(2026, 9, 25, 9, 0);
@@ -101,4 +101,15 @@ test("provenance: off the run's origin, joined to the rule's row — absent when
   assert.equal(buildRunFromSchedule(run, [run]), null);
   assert.equal(buildRunFromSchedule({ ...run, origin: undefined }, [ruleRow]), null);
   assert.equal(buildRunFromSchedule({ ...run, payload: { kind: "prompt", text: "x" } }, [ruleRow]), null);
+});
+
+test("a rule card's last run says what the RUN came to, never that it was posted", () => {
+  const run = (state, ok) => ({ state, ...(ok === undefined ? {} : { result: { ok } }) });
+  assert.equal(lastRunWord(run("done", true)), "ok");
+  assert.equal(lastRunWord(run("done", false)), "failed");
+  assert.equal(lastRunWord(run("failed")), "failed");
+  assert.equal(lastRunWord(run("running")), "running");
+  assert.equal(lastRunWord(run("starting")), "running");
+  assert.equal(lastRunWord(run("queued")), "waiting");
+  assert.equal(lastRunWord(run("canceled")), "cancelled");
 });

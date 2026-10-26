@@ -60,6 +60,7 @@
 /packages/web/src/features/onboard/ @johanneshoh
 /packages/web/src/features/newSession/ @johanneshoh
 /packages/web/src/features/repoSync/ @johanneshoh
+/packages/web/src/features/whatsnew/ @johanneshoh
 
 # In-repo extensions.
 /packages/extensions/token-stats/ @johanneshoh

@@ -5,7 +5,7 @@ it on: the host posts small, one-commit repo-improvement items there (serial, on
 from a planned start until the stop line. The mechanism, the stop rule and the start-time maths are
 the host's and `@waterplane/shared`'s `weekburn.ts`; this folder is the sheet that makes the pick.
 
-**Sheet**: `weekburn` (not persisted), "This week's burn". Reads `GET /api/weekburn`
+**Sheet**: `weekburn` (not persisted), "Week-end burn". Reads `GET /api/weekburn`
 (`api.getWeekBurn`) with `useRemoteResource`; saves with `POST /api/weekburn` (`api.postWeekBurn`),
 which answers the new status. No store: the host holds the pick, the sheet holds only a local draft
 (repos, "ask me each week", stop line) seeded from this week's pick, never from last week's.

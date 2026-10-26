@@ -846,26 +846,6 @@ not to add the headings and then argue for exemptions. (An earlier draft of this
 and 62k: it had counted only the two split skills, and counted them before the fold. Regenerate the
 number with `entries()`'s own filter before quoting it.)
 
-## The traffic archive (`scripts/traffic-archive.mjs`)
-
-GitHub keeps clones and views for 14 days and release downloads only as a running total, and
-plugins mean the fork count undersells adoption anyway. `node scripts/traffic-archive.mjs` appends
-`gh api repos/waterplane-dev/waterplane/traffic/{clones,views}` and every release asset's
-`download_count` to `<state dir>/traffic/github.jsonl` (default
-`~/.local/state/waterplane/traffic/github.jsonl`) — outside the repo, so it is never committed or
-mirrored. One row per repo, kind and UTC day (per asset for downloads); a traffic day is written
-only once it is over, and a day already in the file is never rewritten, so a re-run adds nothing.
-`--repo o/r` (repeatable) archives other repos, `--out` moves the file. Pinned by
-`tools/trafficarchive.test.mjs`.
-
-**Weekly, by launchd, never by GitHub Actions** (off repo-wide): `node scripts/traffic-archive.mjs
---install-launchd` writes `~/Library/LaunchAgents/dev.waterplane.traffic-archive.plist` (Mondays
-10:00, `StartCalendarInterval` so a sleeping Mac runs it after wake, with `gh`'s directory on an
-explicit `PATH`) and bootstraps it; logs go to `~/Library/Logs/waterplane/`. It runs this checkout's
-copy of the script, so moving the checkout means installing again. Weekly sits well inside the
-14 days, so a missed week or two loses nothing. Needs `gh` signed in with push access: the traffic
-API answers nobody else.
-
 ## Publishing the public repo
 
 **Decision.** This private repo stays the working repo and its `main` the daily trunk. The public

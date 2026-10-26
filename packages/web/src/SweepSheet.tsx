@@ -238,18 +238,7 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
 
       {cut && (
         <>
-          <div className="list sweep-list">
-            {cut.rows.map((r) => (
-              <div key={r.relPath} className="row sweep-row">
-                {/* The full worktree-relative path, never the bare name: two
-                    transport directories can hold the same filename, and the
-                    path is what is actually being deleted. */}
-                <span className="sweep-path mono">{r.relPath}</span>
-                <span className="sweep-meta">{fmtBytes(r.size)} · {ago(r.mtime)}</span>
-              </div>
-            ))}
-          </div>
-
+          {/* ABOVE the rows it deletes: a list's verbs never trail it (ux §5). */}
           <div className="form">
             {/* What STAYS — each ladder says it in its own terms, because "3
                 newer files stay" and "the newest 3 of each of 13 families" are
@@ -275,6 +264,18 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
                   : `every file here is among the newest ${keep} of its build family.`,
               }]} />
             )}
+          </div>
+
+          <div className="list sweep-list">
+            {cut.rows.map((r) => (
+              <div key={r.relPath} className="row sweep-row">
+                {/* The full worktree-relative path, never the bare name: two
+                    transport directories can hold the same filename, and the
+                    path is what is actually being deleted. */}
+                <span className="sweep-path mono">{r.relPath}</span>
+                <span className="sweep-meta">{fmtBytes(r.size)} · {ago(r.mtime)}</span>
+              </div>
+            ))}
           </div>
         </>
       )}

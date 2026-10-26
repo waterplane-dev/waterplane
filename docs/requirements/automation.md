@@ -326,7 +326,7 @@ A weekly pass over the week-end burn rows, and only those, lifts the weekly and 
 - asked: 2026-10-24
 
 ### R-automation-070 · shipped
-The schedules sheet is called Automation. Its foot, "Runs on its own, no clock", lists what else this desktop starts by itself — backlog auto with the rows it will start next, the repo's auto-download rule, the week-end burn, peer jobs waiting here — one sentence and one door each, to where that thing is managed; per repo when the sheet is cut to one repo. A count opens exactly those rows; a source the phone has not read draws no line.
+The schedules sheet is called Automation. Its "Runs on its own, no clock" block, drawn above the cards (never as the list's tail, where it was missed and read as one more card), lists what else this desktop starts by itself — backlog auto with the rows it will start next, the repo's auto-download rule, the week-end burn, peer jobs waiting here — one sentence and one door each, to where that thing is managed; per repo when the sheet is cut to one repo. A count opens exactly those rows; a source the phone has not read draws no line.
 - asked: 2026-10-25 (automation UI plan, section C)
 
 ### R-automation-071 · shipped

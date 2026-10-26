@@ -98,6 +98,7 @@ export function ScheduleRulesSheet() {
     // Where a rule's work lands: the door to the backlog rows it wrote,
     // filtered to the one it wrote when the phone knows which.
     onOpenBacklog={(repoDir, ids, label) => core.nav.openBacklogCut(repoDir, ids, label)}
+    onOpenBuildRun={(repoDir, run) => { const repo = core.world.repoForCwd(repoDir); if (repo) core.nav.openBuild(repo, { run }); else core.say.toast("that build's repo is not on this desktop's list"); }}
     renderRetime={core.send.renderRetime}
     // Writing one is the Send sheet: a schedule is a send whose WHEN is a
     // wall-clock rule, and `schedule.save` is what `dispatchIntent` posts

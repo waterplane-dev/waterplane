@@ -66,6 +66,7 @@ import { DemoHookCard, DemoHookHint } from "../../features/demoTour";
 import type { SessionChrome } from "./useSessionChrome";
 import { useTermPick } from "./useTermPick";
 import { useReaderPick } from "./useReaderPick";
+import { useCachedTranscriptAt } from "./useCachedTranscript";
 import { useCornerDrag } from "./useCornerDrag";
 import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
 import { Button } from "../../kit/Button";
@@ -333,6 +334,9 @@ export function TermArea(p: TermAreaProps): ReactNode {
         .map((e) => ({ label: e.answer!.label }))
     : [];
   const onAnswer = (data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => answerPrompt(active, data, label, submitBox, choice, text);
+  // Offline over an empty grid: is this session's conversation cached for the reader?
+  const cachedTranscriptAt = useCachedTranscriptAt(active.id, !readerShown && !pending && status !== "open" && connVisible
+    && !(buffers.current.get(active.id) ?? []).some((c) => c.length > 0));
   const readerRef = useRef<HTMLDivElement>(null);
   const readerPick = useReaderPick(readerRef, active.id, readerShown);
   // The CLI's first-launch setup holds the terminal up over the reader preference (App's
@@ -605,10 +609,21 @@ export function TermArea(p: TermAreaProps): ReactNode {
                       {/* Scrolling the TUI needs the socket; this doesn't. Only
                           offered once there is history to show — a button that
                           opens an empty view is worse than no button. */}
-                      {hasScrollback(active.id) && (
+                      {/* No screen saved, but the transcript sweep cached the conversation:
+                          say where it is rather than leaving the person at "nothing". */}
+                      {card && cachedTranscriptAt != null && (
+                        <span className="term-overlay-hint">The conversation was saved on this phone {ago(cachedTranscriptAt)} — the reader shows it.</span>
+                      )}
+                      {(hasScrollback(active.id) || (card && cachedTranscriptAt != null)) && (
                         <span className="term-overlay-acts">
-                          <Button title="earlier output, read from this device (pan up on the terminal does the same)"
-                            onClick={openScrollback}><ScrollText size={14} /> scrollback</Button>
+                          {card && cachedTranscriptAt != null && (
+                            <Button title="the conversation as saved on this phone"
+                              onClick={() => { track("action:read.offline"); setView(true); }}><BookOpen size={14} /> read it</Button>
+                          )}
+                          {hasScrollback(active.id) && (
+                            <Button title="earlier output, read from this device (pan up on the terminal does the same)"
+                              onClick={openScrollback}><ScrollText size={14} /> scrollback</Button>
+                          )}
                         </span>
                       )}
                     </>

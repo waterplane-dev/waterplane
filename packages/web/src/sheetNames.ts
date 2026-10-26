@@ -8,4 +8,6 @@
 export const SHEET = {
   activity: "Activity",
   automation: "Automation",
+  weekburn: "Week-end burn",
+  whatsnew: "What's new",
 } as const;

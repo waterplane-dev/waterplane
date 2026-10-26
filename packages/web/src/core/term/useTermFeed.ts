@@ -13,7 +13,10 @@ import { useEffect, useRef, useState } from "react";
 import { MIN_PTY_ROWS, type ClientMessage, type HostMessage, type SessionInfo } from "@waterplane/shared";
 import type { TerminalHandle } from "../../Terminal.tsx";
 import type { Overlay } from "../../routing.ts";
-import { PTY_SAVE_MS, PTY_TAIL, TRANSCRIPT_SWEEP_MS, loadPtyTails, savePtyTail } from "../../ptyTail.ts";
+import { PTY_SAVE_BYTES, PTY_SAVE_MS, PTY_TAIL, TRANSCRIPT_SWEEP_MS, escapeSafeTail, loadPtyTails, savePtyTail } from "../../ptyTail.ts";
+import { api } from "../../api.ts";
+import { dataSaver } from "../../media.ts";
+import { screenSweepIds, sweepScreens, type ScreenSweepDeps } from "./screenSweep.ts";
 import { prefetchTranscript, sweepTranscripts } from "../../offlineCache.ts";
 import { hydrateScreenLogs, saveScreenLog } from "../../screenlog.ts";
 import { b64ToStr } from "../../format.ts";
@@ -22,7 +25,8 @@ import { LS, lsBool, lsSetBool } from "../../storage.ts";
 import { useLatest } from "../../sdk/hooks.ts";
 import { appendTail, applyPtyBytes, seedFromTails, sweepOrder } from "./tail.ts";
 import { isPendingId } from "../queue/logic.ts";
-import { bgFresh, catchUpMs, parksWhenHidden } from "./bgFresh.ts";
+import { bgFresh, catchUpMs, parksWhenHidden, sweepsWhenHidden } from "./bgFresh.ts";
+import { isNativeShell } from "../../hostUrl.ts";
 
 export interface TermFeedDeps {
   /** The one socket (`useConnection`), whole: `send` for attach/detach/resize,
@@ -374,9 +378,10 @@ export function useTermFeed(deps: TermFeedDeps) {
   // tool inputs/results stay on the host — a whole list costs a fraction of
   // what one busy session's transcript used to.
   //
-  // Visible-only: a hidden tab's timers are throttled to minutes anyway, and
-  // the events that matter while backgrounded (a turn ending, the socket coming
-  // back) each run a prefetch of their own.
+  // Visible-only in a browser: a hidden tab's timers are throttled to minutes
+  // anyway. The APK keeps the page alive behind the screen (background link),
+  // and there the turn-end prefetch alone missed every session whose turn ended
+  // while the socket was down — so it sweeps hidden too (`sweepsWhenHidden`).
   const sweepStatusRef = useLatest(status);
   const sweepRef = useRef(() => {});
   sweepRef.current = () => {
@@ -384,10 +389,41 @@ export function useTermFeed(deps: TermFeedDeps) {
     // Attached first (most likely to be read), then newest — the same order the
     // cache's own eviction keeps, so the sweep never fights the prune.
     const ids = sweepOrder(sessionsRef.current, attachedRef.current);
-    if (ids.length) void sweepTranscripts(ids);
+    if (!ids.length) return;
+    // Transcripts first, then the terminal screens (`screenSweep.ts`) — strictly
+    // one after the other, for the same tunnel-is-the-bottleneck reason.
+    void sweepTranscripts(ids).then(() => {
+      const newest = [...sessionsRef.current].sort((a, b) => b.createdAt - a.createdAt);
+      const want = screenSweepIds(newest, attachedRef.current, screenAskedRef.current, Date.now(), dataSaver());
+      return want.length ? sweepScreens(want, screenDeps, screenAskedRef.current) : undefined;
+    });
+  };
+  const screenAskedRef = useRef(new Map<string, number>());
+  const screenDeps: ScreenSweepDeps = {
+    fetchTail: (id, since) => api.screenTail(id, since),
+    // A held seq counts in the boot that numbered it: a restored record from an
+    // earlier boot is no `since` for this one.
+    heldSeq: (id) => {
+      const boot = resumeBootRef.current.get(id);
+      return boot && boot !== bootIdRef.current ? undefined : lastSeqById.current.get(id);
+    },
+    attached: (id) => attachedRef.current === id,
+    apply: async (id, t) => {
+      const boot = t.boot ?? bootIdRef.current;
+      await savePtyTail(id, t.data, t.seq, boot);
+      // Into memory too: the APK's page lives for days, and the IndexedDB seed
+      // runs only at mount — a tail stored but not seeded still paints nothing.
+      seedFromTails([{ sessionId: id, tail: escapeSafeTail(t.data.slice(-PTY_SAVE_BYTES)), seq: t.seq, savedAt: Date.now(), boot }], {
+        buffers: buffers.current, lastSeqById: lastSeqById.current,
+        restore: restoreRef.current, resumeBoot: resumeBootRef.current,
+      }, true);
+      setStaleAt((prev) => new Map(prev).set(id, Date.now()));
+    },
   };
   useEffect(() => {
-    const run = () => { if (document.visibilityState === "visible") sweepRef.current(); };
+    const run = () => {
+      if (document.visibilityState === "visible" || sweepsWhenHidden(bgFresh(), isNativeShell())) sweepRef.current();
+    };
     const t = setInterval(run, TRANSCRIPT_SWEEP_MS);
     document.addEventListener("visibilitychange", run);
     run();

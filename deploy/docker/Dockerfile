@@ -14,7 +14,8 @@
 # From a release you built yourself (npm run release:build && npm run release:install-sh):
 #   docker build -f deploy/docker/Dockerfile --build-context release=dist-release -t waterplane deploy/docker
 
-ARG UBUNTU=24.04
+# Pinned by digest (multi-arch index); Dependabot bumps it. Override with --build-arg UBUNTU=<tag or tag@sha256:...>.
+ARG UBUNTU=24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 
 # Replaced by `--build-context release=<dir>`; empty by default, so the published
 # installer is used.
