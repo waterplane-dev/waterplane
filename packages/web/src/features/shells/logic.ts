@@ -70,3 +70,11 @@ export function notePendingClose(id: string): void {
 export function takePendingClose(id: string): boolean {
   return pendingClose.delete(id);
 }
+
+/** The receipt for `lineToShell`: where the line went and that it has NOT run. */
+export function toShellToast(o: { leftCli: boolean; already: boolean; joined: boolean }): string {
+  const cli = o.leftCli ? " CLI mode is off so you can see it." : "";
+  if (o.already) return `already in the shell's box — tap Send to run it.${cli}`;
+  if (o.joined) return `in the shell's box, under words that were already there — send only what you mean to run.${cli}`;
+  return `in the shell's box — tap Send to run it.${cli}`;
+}

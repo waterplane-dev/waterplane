@@ -206,6 +206,7 @@ function cleanConfig(v: any, i: number): BuildConfig | null {
     cmd: v.cmd,
     dir: typeof v.dir === "string" && v.dir.trim() ? v.dir.trim() : undefined,
     params: cleanBuildParams(v.params),
+    artifact: typeof v.artifact === "string" && v.artifact.trim() ? v.artifact.trim() : undefined,
   };
 }
 

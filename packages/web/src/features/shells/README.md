@@ -49,3 +49,9 @@ session — the row chip's door, `core/sessions/tags.tsx`'s `shellsTag`).
 
 **Tests**: `logic.test.mjs` (`shellsSubject`, `shellKilledToast`, `sessionClosedShellsToast`,
 `notePendingClose`/`takePendingClose`).
+
+**A command into the shell** (`lineToShell`): the reader draws a "shell" button after a `! cmd` code
+span and on a shell fence (`bangLine.ts`, via `FileRefCtx.toShell`). A tap goes to the session's
+companion shell — the live one, else a new one — and SEEDS the command (bang dropped) into its box
+on its own line. It never runs it; no shell on the desktop ⇒ copied instead.
+

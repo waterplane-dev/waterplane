@@ -144,7 +144,7 @@ function prepare(req: LaunchRequest): LaunchPlan {
   // Make the repo aware of the product: the core's repo-facing skill, as a plugin dir
   // (`reposkill.ts`). Absent when it could not be written — help, not a
   // precondition.
-  const pluginDir = ensureRepoClaudePlugin(hookPort);
+  const pluginDir = ensureRepoClaudePlugin();
   if (pluginDir) args.push("--plugin-dir", pluginDir);
   // Told through that plugin dir, and only when it was written — a launch without it was
   // told nothing, and says so. The ask rules are the CLI's own `permissions.ask`.

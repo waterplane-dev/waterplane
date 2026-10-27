@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
-  CloudOff, Download, Eye, FileText, Loader, Pencil, Play, Plus, ScanEye, ShieldCheck, Square, Trash2, X,
+  CloudOff, Download, Eye, FileText, Loader, Pencil, Play, Plus, ScanEye, ShieldCheck, Sparkles, Square, Trash2, X,
 } from "lucide-react";
 import type {
   BuildArtifact, CaptureBackendId, CaptureBackendInfo, CaptureRun, CaptureRunStatus, CaptureTarget,
@@ -56,6 +56,10 @@ interface Props {
   listAt?: number;
   onCancel: (runId: string) => void;
   onDownload: (a: BuildArtifact) => void;
+  /** "Set up with AI": opens the Send sheet seeded with a setup prompt for a new
+   *  session in this checkout. A seed, never a send — so it works offline too
+   *  (the send queues), and the control is drawn either way. */
+  onSetup?: () => void;
   onClose: () => void;
 }
 
@@ -162,7 +166,7 @@ const LEVEL: Record<CaptureVerification, { word: string; tag: string; title: str
  * `0`, a run with no `verification` shows no chip rather than "unverified", and
  * a backend this desktop cannot drive is a SENTENCE rather than a dimmed button.
  */
-export function CaptureSheet({ repo, targets, runs, backends, output, outTick, onSave, onRun, onCancel, onDownload, onClose, online = true, listAt = 0 }: Props) {
+export function CaptureSheet({ repo, targets, runs, backends, output, outTick, onSave, onRun, onCancel, onDownload, onSetup, onClose, online = true, listAt = 0 }: Props) {
   const [editing, setEditing] = useState<CaptureTarget | null>(null);
   const [cut, setCut] = useState<CaptureCut>("all");
   const shownRuns = captureCut(runs, cut);
@@ -225,6 +229,11 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
             control is ABSENT and the sentence below says why — a dimmed “new”
             with the explanation in a `title` is invisible on the device this app
             is for. */}
+        {onSetup && (
+          <Button title="have an agent find how this repo runs and write the targets" onClick={onSetup}>
+            <Sparkles size={16} /> set up with AI
+          </Button>
+        )}
         {online && (
           <Button title="add a capture target"
             onClick={() => setEditing({ id: seqId("t"), name: "", backend: "web" })}><Plus size={16} /> new</Button>
@@ -351,7 +360,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
               the first sentence for the second case makes it a false one. */}
           {targets.length === 0 && (online ? (
             <Empty>
-              No capture targets yet. Tap “new” — e.g. name “droplet · home”, backend <span className="mono">web</span>, url <span className="mono">http://localhost:5173/</span>, and an anchor word you expect to be on that screen. The anchor is what lets a capture claim it was <em>verified</em> rather than merely taken.
+              No capture targets yet. Tap “set up with AI” to have an agent find how this repo runs, write the targets and check each one — or “new” to write one yourself, e.g. name “droplet · home”, backend <span className="mono">web</span>, url <span className="mono">http://localhost:5173/</span>, and an anchor word you expect to be on that screen. The anchor is what lets a capture claim it was <em>verified</em> rather than merely taken.
             </Empty>
           ) : (
             <Empty>

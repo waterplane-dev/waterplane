@@ -9,7 +9,10 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { PLUGIN_ROUTE_BODY_MAX, PROTOCOL_VERSION } from "@waterplane/shared";
-import { findTarget } from "../repos.js";
+import { realpathSync } from "node:fs";
+import { discoverTargets, findTarget, targetId } from "../repos.js";
+import { checkRepoCompliance } from "../compliance.js";
+import { handleAgentExposure } from "../agentexposure.js";
 import { handleOnboardRoutes } from "../onboardroutes.js";
 import { claudeSignInState } from "../doctor.js";
 import { themeOverlayState, wireThemeOverlay } from "../themeoverlay.js";
@@ -255,6 +258,20 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
 
   // `POST /api/agent/followup` — an agent flags its OWN session for follow up; sets, never clears (`agentfollowup.ts`).
   mount("agentfollowup", ({ req, res, path }, ctx) => handleAgentFollowUp(req, res, path, { sessions: ctx.sessions, json, readJson: (r) => readJson(r) })),
+
+  // `GET /api/agent/exposure?dir=` lists the repo's crash / exposure findings; `POST /api/agent/exposure/triage` marks one
+  // seen / investigating / fixed. Marks only, never clears (`agentexposure.ts`).
+  mount("agentexposure", ({ req, res, path, url }, ctx) => handleAgentExposure(req, res, path, url, {
+    sessions: ctx.sessions,
+    refresh: async (dir) => {
+      // `dir` is the collector's recorded path for the matched series; match targets by realpath like the push sweep does.
+      const rp = (p: string): string => { try { return realpathSync(p); } catch { return p; } };
+      const t = (await discoverTargets(ctx.root)).find((x) => x.worktreePath === dir || rp(x.worktreePath) === rp(dir)) ?? await findTarget(ctx.root, targetId(dir));
+      if (t) ctx.setup.record(t.worktreePath, checkRepoCompliance(t).checks, t.repoName);
+    },
+    json,
+    readJson: (r) => readJson(r),
+  })),
 
   // ── First app: plan, start, resume, read back (`onboardroutes.ts`) ──
   mount("onboardroutes", ({ req, res, path, url }, ctx) => handleOnboardRoutes(req, res, path, url, { onboard: ctx.onboard, json, readJson: (r) => readJson(r, { optional: true }), signedIn: () => claudeSignInState(claudeBin()) })),

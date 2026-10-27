@@ -193,8 +193,8 @@ summary:
   for requests arriving through `tailscale serve`, and only when the Origin
   names the same host the request was sent to; the name is re-read
   until known.
-- `/api/agent/intents` and `/api/agent/backlog` (an agent in a driven repo
-  posting work for later, `agentintents.ts`) answers only a loopback caller that is neither a browser
+- `/api/agent/intents`, `/api/agent/backlog`, `/api/agent/followup` and `/api/agent/exposure[/triage]` (an agent in a driven repo
+  posting work for later, `agentintents.ts`; marking a crash / exposure finding, `agentexposure.ts`: a read, and a mark that needs a live session, never a clear) answers only a loopback caller that is neither a browser
   (any `Origin` or `Sec-Fetch-Site` header is refused, same-origin included)
   nor proxied (`tailscale serve` forwards to 127.0.0.1, so the same
   reverse-proxy headers as the hook sinks above are refused). It adds no new power:

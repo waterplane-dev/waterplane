@@ -61,6 +61,32 @@ def devKey = signingKey('Dev key', 'keystore-dev.properties', 'dev', 'DEV')
 // The Play upload key: keystore-play.properties, else playUploadStoreFile… / PLAY_UPLOAD_STORE_FILE….
 def playKey = signingKey('Play upload key', 'keystore-play.properties', 'playUpload', 'PLAY_UPLOAD')
 
+// Which build is this (`@waterplane/shared` buildstamp.ts): version + commit + build time, "+ edits"
+// when built dirty. Taken once per configuration, so the APK's BuildConfig (what `ShellUpdate.info()`
+// reports to the app-update screen), its `assets/buildstamp.json` (what `release:build` reads out of
+// an --apk file) and build/generated/buildstamp/buildstamp.json (what scripts/build-record.mjs
+// records) all carry the SAME identity. `dirty` covers every tree the APK is built from, the web
+// bundle inside it included; a git that cannot answer leaves the field out, never claims clean.
+def repoGit = { List<String> a ->
+    try {
+        def p = (['git', '-C', rootProject.projectDir.path] + a).execute()
+        def out = p.text.trim()
+        return p.waitFor() == 0 ? out : null
+    } catch (ignored) { return null }
+}
+def shellVersionCode = (project.findProperty('versionCode') ?: '2') as int
+def shellVersionName = (project.findProperty('versionName') ?: '1.0') as String
+def repoTop = repoGit(['rev-parse', '--show-toplevel'])
+def treeStatus = repoTop ? repoGit(['-C', repoTop, 'status', '--porcelain', '--',
+        'packages/app', 'packages/web', 'packages/shared/src', 'packages/extensions']) : null
+def shellStamp = [version: "${shellVersionName} (${shellVersionCode})".toString(),
+                  sha: repoGit(['rev-parse', '--short', 'HEAD']) ?: null,
+                  dirty: treeStatus ? true : null,
+                  at: System.currentTimeMillis()].findAll { k, v -> v != null }
+def stampDir = layout.buildDirectory.dir('generated/buildstamp').get().asFile
+stampDir.mkdirs()
+new File(stampDir, 'buildstamp.json').text = groovy.json.JsonOutput.toJson(shellStamp) + "\n"
+
 android {
     namespace = "dev.waterplane.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -70,14 +96,20 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // `npm run release:play` passes both: versionCode one past the highest Play has seen,
         // versionName the root package.json version. The defaults are for a plain gradle build.
-        versionCode((project.findProperty('versionCode') ?: '2') as int)
-        versionName((project.findProperty('versionName') ?: '1.0') as String)
+        versionCode(shellVersionCode)
+        versionName(shellVersionName)
+        buildConfigField "String", "GIT_SHA", "\"${shellStamp.sha ?: ''}\""
+        buildConfigField "boolean", "GIT_DIRTY", "${shellStamp.dirty == true}"
+        buildConfigField "long", "BUILT_AT", "${shellStamp.at}L"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+    }
+    sourceSets {
+        main { assets.srcDir(stampDir) }
     }
     buildFeatures {
         // The flavor's facts below reach Java as BuildConfig fields.

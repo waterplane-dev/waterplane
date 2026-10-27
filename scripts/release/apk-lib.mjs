@@ -31,6 +31,20 @@ export function zipEntry(buf, name) {
   return null;
 }
 
+/** The build stamp `build.gradle` packs into the shell (`assets/buildstamp.json`; an AAB keeps it
+ *  under `base/`), parsed; null when the file predates the stamp or it does not parse. */
+export function packagedStamp(buf) {
+  for (const name of ["assets/buildstamp.json", "base/assets/buildstamp.json"]) {
+    const raw = zipEntry(buf, name);
+    if (!raw) continue;
+    try {
+      const s = JSON.parse(raw.toString("utf8"));
+      return s && typeof s === "object" && typeof s.at === "number" ? s : null;
+    } catch { return null; }
+  }
+  return null;
+}
+
 /** The `package` attribute of the root <manifest> in a binary AndroidManifest.xml (AXML). */
 export function axmlPackage(buf) {
   if (buf.readUInt16LE(0) !== 0x0003) throw new Error("AndroidManifest.xml is not binary XML");

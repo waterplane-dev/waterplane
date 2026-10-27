@@ -60,6 +60,8 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "package.json" || p.endsWith("/package.json"),
   (p) => p === "package-lock.json" || p.endsWith("/package-lock.json"),
   // The Android shell's identity: written by scripts/brand-android.mjs, whose --check the test below runs.
+  // Dependency-free so another repo can copy it as it is (the versions.jsonl record writer).
+  (p) => p === "scripts/build-record.mjs",
   (p) => p === "packages/app/capacitor.config.ts",
   (p) => p === "packages/app/android/app/build.gradle",
   (p) => p.startsWith("packages/app/android/app/src/") && /\/(strings\.xml|AndroidManifest\.xml)$|\.java$/.test(p),

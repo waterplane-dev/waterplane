@@ -82,8 +82,9 @@ export type { SettingsGroupId };
 /** What the phone knows about how it reached the desktop — the welcome frame's
  *  facts, for the Connection settings and the host tools. */
 /** What `compose.seedDraft` did: `already` — the words were in the draft, nothing added;
- *  `leftCli` — CLI mode was on and is now off, so the box (and the words) show. */
-export interface SeedOutcome { leftCli: boolean; already: boolean }
+ *  `leftCli` — CLI mode was on and is now off, so the box (and the words) show;
+ *  `joined` — the draft already held words, which stay first. */
+export interface SeedOutcome { leftCli: boolean; already: boolean; joined: boolean }
 
 export interface ConnInfo {
   tailscaleIp: string | null;
@@ -346,6 +347,10 @@ export interface CoreApi {
     focusShell(key: string, opts?: { cwd?: string; title?: string; back?: ReturnTo }): string | null;
     /** Why this desktop cannot open a shell, as a sentence for `Unavailable` — or null. */
     shellCant(): string | null;
+    /** Open a companion shell for `s` (its folder, its own tab, closed with `s`) — the burger's
+     *  "companion shell". Returns its session id (`pending:<ack>` while queued) for
+     *  `compose.seedDraft`; null, with a toast, when this desktop has no shell. */
+    openCompanionShell(s: SessionInfo): string | null;
   };
   /** The terminal on screen. */
   term: {
@@ -367,7 +372,7 @@ export interface CoreApi {
      *  being left and the incoming draft would replace it. Appends; the same
      *  words already there are not added twice (`already`). Leaves CLI mode,
      *  whose pad hides the box (`leftCli` — say so where it matters). */
-    seedDraft(sid: string, text: string): SeedOutcome;
+    seedDraft(sid: string, text: string, opts?: { ownLine?: boolean }): SeedOutcome;
     /** Grow the box from exactly `from` to `to` — the demo's typing, one key at
      *  a time. Refuses (false, nothing changed) when the box no longer holds
      *  `from`: someone typed, and their words are the last copy. */

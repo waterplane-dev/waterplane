@@ -79,6 +79,7 @@ select {
 .btn-row, .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .prompt-actions { padding: 6px 0 4px; }
 .said { min-height: 18px; padding-top: 4px; color: var(--muted); font-size: calc(12.5px * var(--ui-font, 1)); }
+footer .build-stamp { color: var(--muted); margin-top: 4px; }
 footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line); font-size: calc(12px * var(--ui-font, 1)); }
 
 /* ── ported: empty, hint-more ── */

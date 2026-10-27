@@ -23,6 +23,8 @@
 .build-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
 .build-main > .row.grow { flex: 0 0 auto; }
 .linkish.build-cue { min-height: 44px; padding: 0 var(--sp-14) var(--sp-8); white-space: normal; text-align: left; }
+/* An earlier build under its entry, unfolded by the toggle above it. */
+.build-main > .build-version { padding: 0 var(--sp-14) var(--sp-6); }
 .linkish.build-clock { min-height: 44px; padding: 0 var(--sp-14); }
 /* A run row: its name on a line of its own (it was cut to "Public mirror
    (wat…" by the meta beside it), the fold chevron at the end, the meta under. */

@@ -302,6 +302,9 @@ export interface BuildConfig {
    * ends ask.
    */
   params?: BuildParam[];
+  /** The artifact this entry produces, as its build records name it in
+   *  `<repo>/.waterplane/versions.jsonl` (`buildstamp.ts`). Absent ⇒ the entry's own `id`. */
+  artifact?: string;
 }
 
 /**

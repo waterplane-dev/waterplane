@@ -158,3 +158,84 @@ test("every open D3 crash group offers era-seen, gated behind the confirm, and n
   const acc = exposureChecks(r, "connectiq", { "D3:ciq:a/prod/E/1.0/A.mc:1#1+": { reason: "known", at: NOW } }, NOW);
   assert.deepEqual(acc.filter((c) => c.fix).map((c) => c.exposure.key), ["D3:ciq:b/prod/E/2.0/B.mc:2#1+"]);
 });
+
+// Triage marks (seen / investigating / fixed) on a crash group.
+import { applyTriage, cleanTriageFile, semverCmp, exposureTriageId, triageWords } from "../dist/index.js";
+const crash = (v, o = {}) => f({ key: `D3:ciq:a/p/E/${v}/X.mc:1#10+`, measure: "D3", subject: `ciq:a/p/E/${v}/X.mc:1#10+`, version: undefined, group: "a/p/E/X.mc:1", appVersion: v, text: `a p v${v}: E`, ...o });
+const person = { kind: "person" };
+
+test("semverCmp as the fix compare: numeric parts numerically, pre-release below its release, never throws", () => {
+  assert.equal(semverCmp("1.0.10", "1.0.9"), 1);
+  assert.equal(semverCmp("1.0", "1.0.0"), 0);
+  assert.equal(semverCmp("v1.0.0", "1.0.1"), -1);
+  assert.equal(semverCmp("1.0.9-beta.2", "1.0.9"), -1);
+  assert.doesNotThrow(() => semverCmp(undefined, null));
+  // a beta of the version before the fix is an older install, not a regression
+  const t = { "a/p/E/X.mc:1": { state: "fixed", fixedIn: "1.0.9", at: NOW, by: person } };
+  assert.ok(applyTriage([crash("1.0.9-beta.2")], t)[0].accepted);
+});
+
+test("cleanTriageFile drops malformed entries and never throws; wording tolerates a missing by", () => {
+  const good = { state: "seen", at: NOW, by: { kind: "person" } };
+  const c = cleanTriageFile({
+    ok: good, noBy: { state: "seen", at: NOW }, noAt: { state: "seen", by: good.by }, badState: { ...good, state: "wat" },
+    fixedNoVer: { ...good, state: "fixed" }, fixedOk: { ...good, state: "fixed", fixedIn: "1.0.1", junk: 1 }, str: "x", nul: null,
+  });
+  assert.deepEqual(Object.keys(c).sort(), ["fixedOk", "ok"]);
+  assert.equal(c.fixedOk.junk, undefined);
+  for (const bad of [null, [], "x", 3, undefined]) assert.deepEqual(cleanTriageFile(bad), {});
+  assert.doesNotThrow(() => triageWords({ state: "seen", at: NOW }));
+  assert.doesNotThrow(() => applyTriage([crash("1.0.0")], { "a/p/E/X.mc:1": { state: "fixed", at: NOW } }));
+});
+
+test("a seen mark survives a growth-bucket key change; a fixed mark's accepted entry says byMark; stale marks are listed", () => {
+  const t = { "a/p/E/X.mc:1": { state: "seen", at: NOW, by: person }, "gone/g": { state: "seen", at: NOW, by: person } };
+  const grown = crash("1.0.0", { key: "D3:ciq:a/p/E/1.0.0/X.mc:1#100+", subject: "ciq:a/p/E/1.0.0/X.mc:1#100+" });
+  const cs = exposureChecks(row([grown]), "r", null, NOW, undefined, t);
+  assert.equal(cs[1].exposure.triage.state, "seen");
+  assert.deepEqual(cs[0].staleMarks.map((m) => m.triageId), ["gone/g"]);
+  const fx = { "a/p/E/X.mc:1": { state: "fixed", fixedIn: "1.0.9", at: NOW, by: person } };
+  assert.equal(exposureChecks(row([crash("1.0.0")]), "r", null, NOW, undefined, fx)[1].accepted.byMark, true);
+  assert.equal(exposureChecks(row([crash("1.0.0")]), "r", null, NOW, undefined, null)[0].staleMarks, undefined);
+});
+
+test("triage id is the group when there is one", () => {
+  assert.equal(exposureTriageId(crash("1.0.0")), "a/p/E/X.mc:1");
+  assert.equal(exposureTriageId(f({})), "A1:x@1.0.0");
+});
+
+test("seen / investigating stay open, counted, and say who", () => {
+  const t = { "a/p/E/X.mc:1": { state: "investigating", at: "2026-10-27T08:00:00Z", by: { kind: "agent", repo: "garmin-monorepo" } } };
+  const cs = exposureChecks(row([crash("1.0.0")]), "r", null, NOW, undefined, t);
+  assert.equal(counts(cs).finding, 1);
+  assert.equal(cs[1].accepted, undefined);
+  assert.match(cs[1].detail, /investigating .* agent session in garmin-monorepo, 2026-10-27/);
+  assert.equal(cs[1].exposure.triage.state, "investigating");
+  assert.equal(cs[1].exposure.group, "a/p/E/X.mc:1");
+  const seen = applyTriage([crash("1.0.0")], { "a/p/E/X.mc:1": { state: "seen", at: NOW, by: person } });
+  assert.equal(seen[0].accepted, undefined);
+});
+
+test("fixed: older installs are listed, not counted; same-or-newer is a regression", () => {
+  const t = { "a/p/E/X.mc:1": { state: "fixed", fixedIn: "1.0.9", commit: "abc1234", at: "2026-10-27T08:00:00Z", by: person } };
+  const old = exposureChecks(row([crash("1.0.0"), crash("1.0.10")]), "r", null, NOW, undefined, t);
+  assert.equal(counts(old).finding, 1, "1.0.10 is newer than 1.0.9: regression counts");
+  assert.match(old[1].accepted.reason, /fixed in 1\.0\.9 \(commit abc1234\).*installs on 1\.0\.0 still report it/);
+  assert.match(old[2].detail, /^crashes again in 1\.0\.10 after the fix in 1\.0\.9: /);
+  assert.equal(old[2].accepted, undefined);
+  assert.notEqual(old[1].id, old[2].id);
+  assert.equal(applyTriage([crash("1.0.9")], t)[0].accepted, undefined);
+  assert.match(triageWords(t["a/p/E/X.mc:1"]), /^fixed in 1\.0\.9 \(commit abc1234\)/);
+});
+
+test("fixed without appVersion: not counted; an existing accept is kept", () => {
+  const plain = f({});
+  const t = { [plain.key]: { state: "fixed", fixedIn: "2.0.0", at: NOW, by: person } };
+  const r = applyTriage([plain], t)[0];
+  assert.ok(r.accepted);
+  assert.match(r.accepted.reason, /until the reading changes/);
+  const kept = applyTriage([{ ...plain, accepted: { reason: "mine", at: "a" } }], t)[0];
+  assert.equal(kept.accepted.reason, "mine");
+  assert.equal(applyTriage([plain], null)[0], plain);
+  assert.equal(applyTriage([crash("1.0.0")], { "other": { state: "fixed", at: NOW, by: person } })[0].accepted, undefined);
+});

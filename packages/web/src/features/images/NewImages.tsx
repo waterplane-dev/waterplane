@@ -15,6 +15,12 @@ import {
 import { isMarkdownPath, isVideoPath, isViewable } from "./logic";
 import { Button, Tag } from "../../kit";
 
+/** The folder a document sits in, for its tile: the last path segment before the name. */
+function docFolder(relPath: string): string {
+  const parts = relPath.split("/");
+  return parts.length > 1 ? parts[parts.length - 2] : "";
+}
+
 /** The session screen's strip, or its folded pill; nothing with no new files.
  *  Pictures open the swipeable viewer; a markdown tile opens the reader. */
 export function NewImagesStrip({ sessionId }: { sessionId: string }) {
@@ -42,9 +48,12 @@ export function NewImagesStrip({ sessionId }: { sessionId: string }) {
           <div key={im.relPath} className="newimg">
             <button className="newimg-thumb newimg-doc" onClick={() => openFileRef(im.repoId, im.relPath)}
               title={`${im.relPath} — ${im.changed ? "edited" : "new"} this session · tap to read`}>
-              <FileText size={18} />
+              <FileText size={14} />
               <span className="newimg-doc-name">{im.name}</span>
-              <span className="newimg-type">{im.changed ? `${ext} · edited` : ext}</span>
+              {/* Several SKILL.md / README.md in one turn are told apart only
+                  by the folder they live in. */}
+              {docFolder(im.relPath) && <span className="newimg-doc-dir">{docFolder(im.relPath)}</span>}
+              <span className="newimg-doc-type">{im.changed ? `${ext} · edited` : ext}</span>
             </button>
             <button className="newimg-ref" onClick={() => referenceNewImage(im)} title={`insert path: ${im.relPath}`}>ref</button>
           </div>

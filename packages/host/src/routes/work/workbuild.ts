@@ -3,6 +3,7 @@
  */
 import { scanRepoBuilds } from "../../buildscan.js";
 import { artifactPolicy, saveArtifactPolicy } from "../../artifacts.js";
+import { buildVersions } from "../../buildversions.js";
 import { probeCaptureBackends } from "../../capture.js";
 import type { BuildCandidate, BuildParamAnswer } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
@@ -13,7 +14,7 @@ const onBuildList: Route<"build.list"> = (a) => {
     // `<any absolute path>/.waterplane{,-shared}/builds.json`. The gate is the gate.
     void a.c.containRepoDir(a.msg.repoDir).then((repoDir) => {
       if (!repoDir) return;
-      a.c.send(a.ws, { t: "build.list", repoDir, builds: a.c.builds.list(repoDir), runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir) });
+      a.c.send(a.ws, { t: "build.list", repoDir, builds: a.c.builds.list(repoDir), runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir), versions: buildVersions(repoDir) });
       // Seed the retained output tail for each run so a reconnect / fresh open
       // sees the in-progress log, not just future deltas.
       for (const r of a.c.builds.runsFor(repoDir)) {
@@ -28,7 +29,7 @@ const onBuildSave: Route<"build.save"> = (a) => {
       if (!repoDir) { a.c.send(a.ws, { t: "toast", text: "that folder is outside the configured root" }); return; }
       const local = Array.isArray(a.msg.local) ? a.msg.local.filter((x): x is string => typeof x === "string") : undefined;
       const saved = a.c.builds.save(repoDir, a.msg.builds, local);
-      a.c.broadcast({ t: "build.list", repoDir, builds: saved, runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir) });
+      a.c.broadcast({ t: "build.list", repoDir, builds: saved, runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir), versions: buildVersions(repoDir) });
     });
 };
 

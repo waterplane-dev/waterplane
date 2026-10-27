@@ -14,7 +14,7 @@
  *  - **Up to {@link EXPOSURE_PUSH_CAP} pushes per repo per sweep**, one per finding; more than that
  *    is ONE push naming the count, and every key is remembered.
  */
-import { applyAccepts, type ExposureAccept, type ExposureFinding, type ExposureRow, type Severity } from "./exposure.js";
+import { applyAccepts, applyTriage, type ExposureTriageFile, type ExposureAccept, type ExposureFinding, type ExposureRow, type Severity } from "./exposure.js";
 
 export const EXPOSURE_PUSH_CAP = 3;
 
@@ -47,7 +47,7 @@ export interface ExposurePushPlan {
 export interface ExposurePushed { keys: ReadonlySet<string>; repos: ReadonlySet<string> }
 
 /** `unreadable`: the accepts file exists but cannot be read, so nothing is known about this row. */
-export interface ExposureSeries { row: ExposureRow; accepts: Record<string, ExposureAccept> | null; unreadable?: boolean }
+export interface ExposureSeries { row: ExposureRow; accepts: Record<string, ExposureAccept> | null; triage?: ExposureTriageFile | null; unreadable?: boolean }
 
 /** The dedupe key: (repo, finding.key, version), `\u0000`-joined so no field can fake another.
  *  `finding.key` already carries the advisory id and the subject. */
@@ -71,55 +71,62 @@ export function exposurePushes(
   const remember = new Set<string>();
   const seenRepos = new Set<string>();
   const resolve = new Set<string>();
-  for (const { row, accepts, unreadable } of series) {
-    if (!row || typeof row.dir !== "string" || typeof row.repo !== "string" || !watched(row.dir)) continue;
-    if (unreadable) continue; // nothing is known: push nothing, remember nothing
-    const alerts = (Array.isArray(row.findings) ? row.findings : []).filter((f) => f?.level === "alert");
-    if (row.firstRun || !pushed.repos.has(row.repo)) {
-      for (const f of alerts) {
-        const k = exposurePushKey(row.repo, f);
-        if (!pushed.keys.has(k)) remember.add(k);
+  for (const { row, accepts, triage, unreadable } of series) {
+    // One repo's bad data must not abort every other repo's pass: it is skipped, nothing remembered for it.
+    try {
+      if (!row || typeof row.dir !== "string" || typeof row.repo !== "string" || !watched(row.dir)) continue;
+      if (unreadable) continue; // nothing is known: push nothing, remember nothing
+      const alerts = (Array.isArray(row.findings) ? row.findings : []).filter((f) => f?.level === "alert");
+      if (row.firstRun || !pushed.repos.has(row.repo)) {
+        for (const f of alerts) {
+          const k = exposurePushKey(row.repo, f);
+          if (!pushed.keys.has(k)) remember.add(k);
+        }
+        if (!pushed.repos.has(row.repo)) seenRepos.add(row.repo);
+        continue;
       }
-      if (!pushed.repos.has(row.repo)) seenRepos.add(row.repo);
-      continue;
-    }
-    const open = applyAccepts(alerts, accepts, now).filter((f) => !f.accepted);
-    // Resolve what is no longer open: every remembered key of this repo whose finding is gone.
-    const openKeys = new Set(open.map((f) => f.key));
-    const prefix = `${row.repo}\u0000`;
-    for (const k of pushed.keys) {
-      if (!k.startsWith(prefix)) continue;
-      const fk = k.slice(prefix.length).split("\u0000")[0];
-      if (!openKeys.has(fk)) resolve.add(exposureAttentionKey(row.repo, fk));
-    }
-    if (!open.length) resolve.add(exposureSummaryKey(row.repo));
-    const seen = new Set<string>();
-    const fresh = open.filter((f) => {
-      const k = exposurePushKey(row.repo, f);
-      if (pushed.keys.has(k) || remember.has(k) || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    if (!fresh.length) continue;
-    for (const f of fresh) remember.add(exposurePushKey(row.repo, f));
-    const keys = fresh.map((f) => exposurePushKey(row.repo, f));
-    if (fresh.length > EXPOSURE_PUSH_CAP) {
-      push.push({
-        repo: row.repo, dir: row.dir, keys, attention: fresh.some(isLoud),
-        title: `${fresh.length} new exposure findings in ${row.repo}`,
-        body: fresh.slice(0, EXPOSURE_PUSH_CAP).map((f) => f.text).join("\n") + `\nand ${fresh.length - EXPOSURE_PUSH_CAP} more, in the exposure watch.`,
-        tag: exposureSummaryKey(row.repo), key: exposureSummaryKey(row.repo),
+      const open = applyTriage(applyAccepts(alerts, accepts, now), triage).filter((f) => !f.accepted);
+      // Resolve what is no longer open: every remembered key of this repo whose finding is gone.
+      const openKeys = new Set(open.map((f) => f.key));
+      const prefix = `${row.repo}\u0000`;
+      for (const k of pushed.keys) {
+        if (!k.startsWith(prefix)) continue;
+        const fk = k.slice(prefix.length).split("\u0000")[0];
+        if (!openKeys.has(fk)) resolve.add(exposureAttentionKey(row.repo, fk));
+      }
+      if (!open.length) resolve.add(exposureSummaryKey(row.repo));
+      const seen = new Set<string>();
+      const fresh = open.filter((f) => {
+        // seen / investigating hold back growth in the SAME app version; a different one reporting the group pushes.
+        // A mark with no recorded version holds by key, as before.
+        if (f.triage && (f.triage.state === "seen" || f.triage.state === "investigating")
+          && !(f.triage.markedVersion && f.appVersion && f.triage.markedVersion !== f.appVersion)) return false;
+        const k = exposurePushKey(row.repo, f);
+        if (pushed.keys.has(k) || remember.has(k) || seen.has(k)) return false;
+        seen.add(k);
+        return true;
       });
-      continue;
-    }
-    for (const f of fresh) {
-      push.push({
-        repo: row.repo, dir: row.dir, keys: [exposurePushKey(row.repo, f)], attention: isLoud(f),
-        title: `${row.repo}: ${f.measure} ${f.subject}${f.version ? "@" + f.version : ""}`,
-        body: f.text,
-        tag: exposureAttentionKey(row.repo, f.key), key: exposureAttentionKey(row.repo, f.key),
-      });
-    }
+      if (!fresh.length) continue;
+      for (const f of fresh) remember.add(exposurePushKey(row.repo, f));
+      const keys = fresh.map((f) => exposurePushKey(row.repo, f));
+      if (fresh.length > EXPOSURE_PUSH_CAP) {
+        push.push({
+          repo: row.repo, dir: row.dir, keys, attention: fresh.some(isLoud),
+          title: `${fresh.length} new exposure findings in ${row.repo}`,
+          body: fresh.slice(0, EXPOSURE_PUSH_CAP).map((f) => f.text).join("\n") + `\nand ${fresh.length - EXPOSURE_PUSH_CAP} more, in the exposure watch.`,
+          tag: exposureSummaryKey(row.repo), key: exposureSummaryKey(row.repo),
+        });
+        continue;
+      }
+      for (const f of fresh) {
+        push.push({
+          repo: row.repo, dir: row.dir, keys: [exposurePushKey(row.repo, f)], attention: isLoud(f),
+          title: `${row.repo}: ${f.measure} ${f.subject}${f.version ? "@" + f.version : ""}`,
+          body: f.text,
+          tag: exposureAttentionKey(row.repo, f.key), key: exposureAttentionKey(row.repo, f.key),
+        });
+      }
+    } catch { /* skip this series */ }
   }
   return { push, remember: [...remember], seenRepos: [...seenRepos], resolve: [...resolve] };
 }

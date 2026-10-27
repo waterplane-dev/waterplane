@@ -21,7 +21,7 @@ import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
+import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceTriageRequest, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
 import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
@@ -30,7 +30,7 @@ import { claudeConfigDir } from "./claudeconfig.js";
 import { repoInstructionsDocOrWhy, worktreeFs } from "./alwayson.js";
 import { contextLimitsStore, repoContextLimits } from "./contextlimits.js";
 import { exposureChecksFor } from "./exposure.js";
-import { acceptCheck, autoCompactDefault, ignoredChecks, setupPrefsStore } from "./setupprefs.js";
+import { acceptCheck, autoCompactDefault, ignoredChecks, setupPrefsStore, triageCheck } from "./setupprefs.js";
 import { contained, inRoot } from "./paths.js";
 import { INBOX_SUBDIR, OUTBOX_SUBDIR, OUTBOX_SUBDIRS } from "./files.js";
 import { apkInstallCheck, appModulesAsync } from "./apkcheck.js";
@@ -634,6 +634,13 @@ export function setCheckIgnored(target: RepoTarget, id: string, ignore: boolean)
 /** Accept (or stop accepting) one exposure finding; hands back the re-run report like `setCheckIgnored`. */
 export function setCheckAccepted(target: RepoTarget, req: ComplianceAcceptRequest): ComplianceAcceptResult {
   const r = acceptCheck(target.worktreePath, req);
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, report: checkRepoCompliance(target) };
+}
+
+/** Mark (or clear) one exposure finding as seen / investigating / fixed; hands back the re-run report. */
+export function setCheckTriaged(target: RepoTarget, req: ComplianceTriageRequest): ComplianceAcceptResult {
+  const r = triageCheck(target.worktreePath, req);
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, report: checkRepoCompliance(target) };
 }

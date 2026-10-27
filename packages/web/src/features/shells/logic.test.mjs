@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { notePendingClose, sessionClosedShellsToast, shellKilledToast, shellsSubject, takePendingClose } from "./logic.ts";
+import { notePendingClose, sessionClosedShellsToast, shellKilledToast, shellsSubject, takePendingClose, toShellToast } from "./logic.ts";
 
 test("shellsSubject: sid names a row", () => {
   const sessions = [{ id: "a" }, { id: "b" }];
@@ -67,4 +67,10 @@ test("notePendingClose: marks are independent per id", () => {
   notePendingClose("b");
   assert.equal(takePendingClose("b"), true);
   assert.equal(takePendingClose("a"), true);
+});
+
+test("toShellToast: says the line has not run, and warns when it joined other words", () => {
+  assert.match(toShellToast({ leftCli: false, already: false, joined: false }), /tap Send to run it/);
+  assert.match(toShellToast({ leftCli: false, already: false, joined: true }), /send only what you mean to run/);
+  assert.match(toShellToast({ leftCli: true, already: true, joined: true }), /^already .*CLI mode is off/);
 });

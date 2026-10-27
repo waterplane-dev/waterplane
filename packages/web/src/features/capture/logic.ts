@@ -2,7 +2,7 @@
  * The capture feature's sentences, pure so they can be pinned without a DOM or
  * a socket (`logic.test.mjs`). Every one was an inline literal in `App.tsx`.
  */
-import type { CaptureRun, CaptureTarget } from "@waterplane/shared";
+import { BRAND, type CaptureBackendInfo, type CaptureRun, type CaptureTarget } from "@waterplane/shared";
 
 /** A capture's queue lane: the repo's, because the lease a capture takes (a
  *  browser, a simulator, the desktop's screen) is one per repo, whether it is
@@ -39,4 +39,33 @@ export function captureRunToast(run: Pick<CaptureRun, "status" | "name" | "verdi
 /** A target's display name by id in a repo's cached list; the id when absent. */
 export function captureNameIn(lists: ReadonlyMap<string, readonly CaptureTarget[]>, dir: string, id: string): string {
   return (lists.get(dir) ?? []).find((t) => t.id === id)?.name ?? id;
+}
+
+/**
+ * "Set up with AI": the words a new session in the repo is seeded with. It
+ * carries the file's shape in full, because the driven repo cannot read this
+ * repo's types, and what THIS desktop said it can drive, so the agent does not
+ * pick a backend the host has already refused. An empty `backends` is "nobody
+ * has said" and the prompt says nothing either way rather than guessing.
+ */
+export function captureSetupPrompt(repoName: string, backends: readonly CaptureBackendInfo[], existing: number): string {
+  const file = `${BRAND.stateDirName}/capture.json`;
+  const can = backends.map((b) => `- ${b.id}: ${b.available ? "available" : "NOT available"}${b.reason ? ` — ${b.reason}` : ""}`);
+  return [
+    `Set up ${BRAND.displayName}'s verified capture for ${repoName}, so the phone can screenshot the running app with one tap.`,
+    "",
+    existing > 0
+      ? `There are already ${existing} target(s) in ${file} — keep them, add what is missing.`
+      : `Write ${file} (or the capture.json in an older ${BRAND.displayName} state dir, if this repo already has one).`,
+    "",
+    "Shape: { \"version\": 1, \"targets\": [ … ] }. Each target:",
+    "- id (stable, short, unique), name (the button label, e.g. \"app · home\"), backend: web | android | garmin | window",
+    "- dir: working dir relative to the repo root (optional; one target per app in a monorepo)",
+    "- anchor: [\"text that must be on that screen\"] — this is what makes a capture *verified* rather than merely taken; pick words really rendered there",
+    "- web: url (required, loopback only, e.g. http://localhost:5173/), viewports [{\"w\":390,\"h\":844}, …], theme light | dark | both",
+    "- android: serial (only when more than one device is attached) · garmin: screen, device · window: windowTitle",
+    "",
+    ...(can.length ? ["What this desktop says it can drive:", ...can, ""] : []),
+    "Steps: find how this repo's app(s) run and on which port; choose one or two screens that matter, each with an anchor; if web needs Playwright and it is missing, add it as a dev dependency. Then start the app, trigger one capture per target with the capture/run endpoint (wait: true), and fix the target until the verdict says verified. Report each target's verdict in one line — read the sidecar, not the image.",
+  ].join("\n");
 }

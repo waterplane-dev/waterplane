@@ -334,7 +334,7 @@ export function App() {
       sendSeeded: () => sendSeedRef.current != null,
       openActivity, openGit: openGitFor, openReader: term.openReader, openCapture: openCaptureFor, openBuild: openBuildFor,
     },
-    launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch, focusShell: launchCore.focusShell, shellCant: launchCore.shellCant },
+    launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch, focusShell: launchCore.focusShell, shellCant: launchCore.shellCant, openCompanionShell: launchCore.openCompanionShell },
     term: { snapshot: term.snapshot, geom: () => geomRef.current },
     compose: {
       draft: compose, insert: insertCompose, seedDraft: composeCore.seedDraft, typeOn: composeCore.typeOn, send: composeCore.sendNow, pushHistory, removePadNotes,

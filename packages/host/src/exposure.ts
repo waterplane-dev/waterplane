@@ -26,8 +26,9 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync, fstatSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PRE_ACCEPTED, cleanAcceptRequest, exposureKeyOf, exposureVersionStem, exposureChecks, readLastRow, semverCmp, EXPOSURE_SUMMARY_ID,
-  type ComplianceAcceptRequest, type ComplianceCheck, type ExposureAccept, type ExposureRow,
+  PRE_ACCEPTED, applyAccepts, applyTriage, cleanAcceptRequest, cleanTriageFile, exposureKeyOf, exposureVersionStem, exposureChecks, readLastRow, semverCmp, EXPOSURE_SUMMARY_ID,
+  exposureTriageId, type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest, type ExposureAccept, type ExposureRow,
+  type ExposureFinding, type ExposureTriage, type ExposureTriageFile, type ExposureTriageState,
 } from "@waterplane/shared";
 import { resolveStateDir } from "./branddirs.js";
 import { writeJsonAtomic } from "./jsonstore.js";
@@ -91,7 +92,7 @@ function newestRow(file: string): ExposureRow | null {
   } catch { return null; }
 }
 
-interface Series { name: string; row: ExposureRow; acceptsFile: string }
+interface Series { name: string; row: ExposureRow; acceptsFile: string; triageFile: string }
 function seriesFor(worktree: string): Series | null {
   const dir = seriesDir();
   let names: string[];
@@ -102,7 +103,7 @@ function seriesFor(worktree: string): Series | null {
     if (!row || typeof row.dir !== "string") continue;
     if (real(row.dir) === want || row.dir === worktree) {
       const name = f.slice(0, -".jsonl".length);
-      return { name, row, acceptsFile: join(dir, `${name}.accepted.json`) };
+      return { name, row, acceptsFile: join(dir, `${name}.accepted.json`), triageFile: join(dir, `${name}.triage.json`) };
     }
   }
   return null;
@@ -110,15 +111,17 @@ function seriesFor(worktree: string): Series | null {
 
 /** Every stored series' newest row with its accepts, for the push sweep. Reuses `newestRow`'s mtime+size cache,
  *  so a quiet day costs one stat per file. A series with no readable row is skipped. Never throws. */
-export function exposureSeriesAll(): Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; unreadable?: boolean }> {
-  const out: Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; unreadable?: boolean }> = [];
+export function exposureSeriesAll(): Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; triage: ExposureTriageFile | null; unreadable?: boolean }> {
+  const out: Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; triage: ExposureTriageFile | null; unreadable?: boolean }> = [];
   try {
     const dir = seriesDir();
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl")).sort()) {
       const row = newestRow(join(dir, f));
       if (!row || typeof row.dir !== "string") continue;
-      const acc = readAccepts(join(dir, `${f.slice(0, -".jsonl".length)}.accepted.json`));
-      out.push({ row, accepts: acc.ok ? acc.data : null, ...(acc.ok ? {} : { unreadable: true }) });
+      const stem = f.slice(0, -".jsonl".length);
+      const acc = readAccepts(join(dir, `${stem}.accepted.json`));
+      const tri = readTriage(join(dir, `${stem}.triage.json`));
+      out.push({ row, accepts: acc.ok ? acc.data : null, triage: tri.ok ? tri.data : null, ...(acc.ok && tri.ok ? {} : { unreadable: true }) });
     }
   } catch { /* no dir yet: nothing stored */ }
   return out;
@@ -151,13 +154,31 @@ function readAccepts(file: string): Accepts {
   } catch (e) { return { ok: false, why: e instanceof Error ? e.message : String(e) }; }
 }
 
+type Triage = { ok: true; data: ExposureTriageFile | null } | { ok: false; why: string };
+function readTriage(file: string): Triage {
+  if (!existsSync(file)) return { ok: true, data: null };
+  try {
+    const v = JSON.parse(readFileSync(file, "utf8"));
+    if (!v || typeof v !== "object" || Array.isArray(v)) return { ok: false, why: "not an object" };
+    return { ok: true, data: cleanTriageFile(v) }; // a malformed entry reads as no mark
+  } catch (e) { return { ok: false, why: e instanceof Error ? e.message : String(e) }; }
+}
+
 /** The exposure rows for this worktree: none when no series names it. Never throws. */
 export function exposureChecksFor(worktree: string): ComplianceCheck[] {
   try {
     const s = seriesFor(worktree);
     if (!s) return unreadableRow(worktree);
     const acc = readAccepts(s.acceptsFile);
-    const rows = exposureChecks(s.row, s.name, acc.ok ? acc.data : null, new Date());
+    const tri = readTriage(s.triageFile);
+    const rows = exposureChecks(s.row, s.name, acc.ok ? acc.data : null, new Date(), undefined, tri.ok ? tri.data : null);
+    if (!tri.ok) {
+      const sum = rows.find((c) => c.id === EXPOSURE_SUMMARY_ID);
+      if (sum) {
+        sum.status = "warn";
+        sum.detail += ` The triage file could not be read (${tri.why}), so no seen / investigating / fixed mark is applied here.`;
+      }
+    }
     if (!acc.ok) {
       const sum = rows.find((c) => c.id === EXPOSURE_SUMMARY_ID);
       if (sum) {
@@ -219,4 +240,88 @@ export function setExposureAccept(worktree: string, req: ComplianceAcceptRequest
   } catch (e) {
     return no(`Could not save the accept: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+const TRIAGE_STATES: readonly ExposureTriageState[] = ["seen", "investigating", "fixed"];
+
+/**
+ * Mark (or, with `clear`, unmark) one finding or crash group in `<name>.triage.json`, beside the accepts file.
+ * `id` is a check id (`exposure:<key>`) or a triage id (`exposureTriageId`); it must name a finding in the newest
+ * row. Never writes over an unreadable file. `by` is who is asking (a person from the phone, an agent from a route).
+ */
+export function setExposureTriage(worktree: string, req: ComplianceTriageRequest, by: ExposureTriage["by"] = { kind: "person" }): ExposureAcceptOutcome {
+  const no = (error: string): ExposureAcceptOutcome => ({ ok: false, error });
+  try {
+    const id0 = typeof req?.id === "string" ? req.id.trim() : "";
+    if (!id0) return no("Say which finding to mark.");
+    const s = seriesFor(worktree);
+    if (!s) return no("No exposure watch reading is stored for this repo, so there is nothing to mark.");
+    const key = exposureKeyOf(id0);
+    const f = (s.row.findings ?? []).find((x) => (key !== null ? x.key === key : exposureTriageId(x) === id0 || x.key === id0));
+    const cur = readTriage(s.triageFile);
+    if (!cur.ok) return no(`${s.triageFile} is unreadable (${cur.why}); not overwriting it.`);
+    const next: ExposureTriageFile = { ...(cur.data ?? {}) };
+    // A mark whose group is not in today's reading is kept (it may return); it can still be cleared by its id.
+    if (!f && !(req.clear && Object.hasOwn(next, id0))) return no("That finding is not in the newest reading any more.");
+    const tid = f ? exposureTriageId(f) : id0;
+    if (req.clear) {
+      if (!Object.hasOwn(next, tid)) return no("That finding has no mark to clear.");
+      delete next[tid];
+    } else {
+      if (!TRIAGE_STATES.includes(req.state as ExposureTriageState)) return no('State must be "seen", "investigating" or "fixed".');
+      const e: ExposureTriage = { state: req.state as ExposureTriageState, at: new Date().toISOString(), by, ...(f!.appVersion ? { markedVersion: f!.appVersion } : {}) };
+      if (req.state === "fixed") {
+        if (!f!.appVersion) return no("fixed needs a crash group with an app version; accept it instead (a fix is compared against the version that reports the crash).");
+        const v = typeof req.fixedIn === "string" ? req.fixedIn.trim() : "";
+        if (!v) return no('"fixed" needs the version that carries the fix (fixedIn), so installs still on an older one are not called regressions.');
+        if (v.length > 32 || !/^[0-9A-Za-z.+-]+$/.test(v)) return no("fixedIn must be a version of at most 32 characters (letters, digits, . + -).");
+        e.fixedIn = v;
+      } else if (req.fixedIn !== undefined && req.fixedIn !== "") return no("fixedIn only goes with the fixed state.");
+      if (req.commit !== undefined && req.commit !== "") {
+        if (typeof req.commit !== "string" || !/^[0-9a-fA-F]{7,40}$/.test(req.commit.trim())) return no("commit must be a hex commit id of 7 to 40 characters.");
+        e.commit = req.commit.trim();
+      }
+      if (req.note !== undefined && req.note !== "") {
+        if (typeof req.note !== "string" || req.note.trim().length > 280) return no("note must be text of at most 280 characters.");
+        e.note = req.note.trim();
+      }
+      next[tid] = e;
+    }
+    mkdirSync(seriesDir(), { recursive: true });
+    writeJsonAtomic(s.triageFile, next, { space: 2, newline: true });
+    return { ok: true };
+  } catch (e) {
+    return no(`Could not save the mark: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export type AgentExposureStatus = "open" | "accepted" | "fixed";
+export interface AgentExposureFinding {
+  triageId: string; measure: string; subject: string; appVersion?: string; text: string; level: ExposureFinding["level"];
+  status: AgentExposureStatus; triage?: ExposureTriage;
+}
+
+/**
+ * What the agent route lists (`GET /api/agent/exposure`): the newest row for this dir after accepts and marks.
+ * Default = OPEN findings only (a regression is open; accepted and fixed-and-hidden are not). `all` adds those with a
+ * `status`, plus `staleMarks` (marks whose group is not in this reading). `dir` is the collector's recorded path.
+ */
+export function exposureFindingsFor(worktree: string, opts?: { all?: boolean }): { repo: string; dir: string; findings: AgentExposureFinding[]; staleMarks?: Array<{ triageId: string; triage: ExposureTriage }> } | null {
+  const s = seriesFor(worktree);
+  if (!s) return null;
+  const tri = readTriage(s.triageFile);
+  const acc = readAccepts(s.acceptsFile);
+  const t = tri.ok ? tri.data : null;
+  const eff = applyTriage(applyAccepts(s.row.findings ?? [], acc.ok ? acc.data : null, new Date()), t);
+  const all = eff.map((f): AgentExposureFinding => ({
+    triageId: exposureTriageId(f), measure: f.measure, subject: f.subject, ...(f.appVersion ? { appVersion: f.appVersion } : {}),
+    text: f.text, level: f.level,
+    status: f.accepted ? (f.accepted.byMark ? "fixed" : "accepted") : "open",
+    ...(f.triage ? { triage: f.triage } : {}),
+  }));
+  const out = { repo: s.row.repo, dir: s.row.dir, findings: opts?.all ? all : all.filter((f) => f.status === "open") };
+  if (!opts?.all) return out;
+  const here = new Set((s.row.findings ?? []).map(exposureTriageId));
+  const staleMarks = Object.entries(t ?? {}).filter(([id]) => !here.has(id)).map(([triageId, triage]) => ({ triageId, triage }));
+  return { ...out, staleMarks };
 }

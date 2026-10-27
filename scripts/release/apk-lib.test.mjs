@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { deflateRawSync } from "node:zlib";
 import { BRAND, devApplicationId, releaseApkName } from "../../packages/shared/dist/brand.js";
 import { releaseApkName as viaIndex } from "../../packages/shared/dist/index.js";
-import { assertDevApplicationId, axmlPackage, readApplicationId, verifyDevApk, zipEntry } from "./apk-lib.mjs";
+import { assertDevApplicationId, axmlPackage, packagedStamp, readApplicationId, verifyDevApk, zipEntry } from "./apk-lib.mjs";
 
 // A minimal binary AndroidManifest: strings ["manifest","package",<id>], one <manifest package=id>.
 function axml(id, { utf8 = false } = {}) {
@@ -67,4 +67,14 @@ test("appId check: tools win when present; an unreadable APK fails loudly, never
   const ana = (cmd) => { if (cmd === "apkanalyzer") return `${DEV}\n`; throw new Error("missing"); };
   assert.equal(readApplicationId("x.apk", { run: ana }).via, "apkanalyzer");
   assert.throws(() => verifyDevApk("x.apk", DEV, BRAND.appId, { run: noTools, readFile: () => Buffer.from("garbage") }), /Refusing to attach an unverified APK/);
+});
+
+test("the shell's build stamp is read out of the APK, or the AAB's base/", () => {
+  const stamp = { version: "1.0 (2)", sha: "fb531d26", at: 1793090347410 };
+  const body = Buffer.from(JSON.stringify(stamp));
+  assert.deepEqual(packagedStamp(zip("assets/buildstamp.json", body, true)), stamp);
+  assert.deepEqual(packagedStamp(zip("base/assets/buildstamp.json", body, false)), stamp);
+  assert.equal(packagedStamp(zip("AndroidManifest.xml", body, false)), null, "an APK from before the stamp");
+  assert.equal(packagedStamp(zip("assets/buildstamp.json", Buffer.from("{"), false)), null);
+  assert.equal(packagedStamp(zip("assets/buildstamp.json", Buffer.from("{}"), false)), null, "no time, no stamp");
 });

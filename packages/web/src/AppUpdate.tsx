@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowDownToLine, CheckCircle2, Loader2, RotateCcw, ShieldAlert, Smartphone, XCircle } from "lucide-react";
-import { autoApply, autoUpdate, nativeInfo, setAutoApply, setAutoUpdate, updates, type NativeUpdateInfo, type UpdateStatus } from "./webUpdate";
+import { buildStampText, type BuildStamp } from "@waterplane/shared";
+import { autoApply, autoUpdate, nativeInfo, runningBuildStamp, setAutoApply, setAutoUpdate, updates, type NativeUpdateInfo, type UpdateStatus } from "./webUpdate";
 import { ago } from "./format";
 import { track } from "./usage";
 import { Button } from "./kit/Button";
@@ -41,6 +42,10 @@ export function AppUpdateSection({ onToast, bare }: {
   // confirm it actually did rather than assuming from `stagedId` bookkeeping.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on the derived boolean (a restart landing), not the whole status
   useEffect(() => { void nativeInfo().then(setNative); }, [s.phase === "staged"]);
+  // The running bundle's own stamp; re-read when the running id changes (a restart into a new build).
+  const [web, setWeb] = useState<BuildStamp | null>(null);
+  const running = s.current;
+  useEffect(() => { void runningBuildStamp().then(setWeb); }, [running]);
 
   const fresh = !!s.current && !!s.available && s.current === s.available;
 
@@ -74,10 +79,14 @@ export function AppUpdateSection({ onToast, bare }: {
         <SetLine>
           <SetNote as="span" style={{ flexBasis: "auto" }}>
             {native.builtIn ? "serving the APK's own built-in bundle" : "serving a downloaded bundle"}
-            {native.versionName && <> · shell version <code>{native.versionName}{native.versionCode ? ` (${native.versionCode})` : ""}</code></>}
+            {!native.shell && native.versionName && <> · shell version <code>{native.versionName}{native.versionCode ? ` (${native.versionCode})` : ""}</code></>}
           </SetNote>
         </SetLine>
       )}
+      {/* Which build each half is, in the words its build record says (`buildstamp.ts`): the
+          shell from the APK, the web bundle from its own buildstamp.json. */}
+      {native?.shell && <SetLine><SetNote as="span" style={{ flexBasis: "auto" }}>shell <code>{buildStampText(native.shell)}</code></SetNote></SetLine>}
+      {web && <SetLine><SetNote as="span" style={{ flexBasis: "auto" }}>web bundle <code>{buildStampText(web)}</code></SetNote></SetLine>}
       {s.phase === "unsupported" && (
         <SetNote>
           no update mechanism on this build — either this is not the Android

@@ -2,6 +2,7 @@
 import type { ContextLimitsView } from "../contextweight.js";
 import type { RepoHealthIndex } from "../healthindex.js";
 import type { RepoInstructionsDoc } from "./alwayson.js";
+import type { ExposureTriage } from "../exposure.js";
 
 /**
  * How this desktop's `claude` got onto the PATH, which is the ONLY thing that
@@ -326,6 +327,11 @@ export interface ComplianceCheck {
   detail: string;
   /** Fix action id (POST .../compliance/fix) when auto-remediable, else null. */
   fix: string | null;
+  /**
+   * Exposure SUMMARY row only: triage marks whose crash group / finding is not in the newest reading. Kept (the
+   * group may return), never auto-pruned; the phone lists them as "marked, not in today's reading" with Clear.
+   */
+  staleMarks?: Array<{ triageId: string; triage: ExposureTriage }>;
   /** `"host"` when the check is about the HOST, not this repo (the Gemini
    *  credential is one key for the whole daemon). Repo rollups skip these:
    *  otherwise one unset env var reads as "every repo is misconfigured".
@@ -386,6 +392,11 @@ export interface ComplianceCheck {
     level: "alert" | "digest";
     sources: string[];
     since?: string;
+    /** D3: crash group id (what a triage mark sticks to), and the app version reporting it. */
+    group?: string;
+    appVersion?: string;
+    /** A seen / investigating / fixed mark on this finding, with who and when. */
+    triage?: ExposureTriage;
     /** The line this measure crosses, in words. Absent for a measure with no wording: never invented. */
     threshold?: string;
   };
@@ -400,6 +411,8 @@ export interface ComplianceCheck {
     at: string;
     until?: { version?: string } | { date?: string } | { change?: string };
     builtIn?: true;
+    /** Set by a `fixed` triage mark (`applyTriage`), not by an accept: the phone offers "Clear mark", not "stop accepting". */
+    byMark?: true;
   };
 }
 
@@ -490,6 +503,17 @@ export interface ComplianceAcceptRequest {
   accept: boolean;
   reason?: string;
   until?: { version: string } | { date: string } | { change: true };
+}
+
+/** Mark (or, with `clear`, unmark) one exposure finding or crash group as seen / investigating / fixed. `id` is a
+ *  check id (`exposure:<key>`) or a triage id. `fixedIn` is required for "fixed". */
+export interface ComplianceTriageRequest {
+  id: string;
+  state?: "seen" | "investigating" | "fixed";
+  fixedIn?: string;
+  commit?: string;
+  note?: string;
+  clear?: boolean;
 }
 
 /** Result of an accept request; same shape as the ignore result. */

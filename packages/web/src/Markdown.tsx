@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Copy, FileText } from "lucide-react";
+import { Copy, FileText, SquareTerminal } from "lucide-react";
 import { FILE_REF_SRC, bareFileRef, docImageRef, docLinkTarget, headingSlug, linkedImages, parseFileRef, stripHtmlComments, wholeFileRef, type FileRef } from "./fileRefs";
 import { pickThumbWidth, viewerWidth } from "./media";
 import { useFileMtime } from "./fileMtime";
 import { cacheThumb } from "./thumbCache";
 import { useThumbSrc } from "./thumbSrc";
 import { Button } from "./kit/Button";
+import { bangLine, shellBlock } from "./bangLine";
 
 /**
  * Markdown-lite renderer, shared by the reader view (TranscriptView) and the
@@ -64,6 +65,10 @@ export interface FileRefCtx {
    *  itself when `docPath` is: a `[x](#slug)` becomes a jump only when its
    *  heading exists, never a tap that does nothing. */
   slugs?: ReadonlySet<string>;
+  /** Put a command in the session's shell box (`features/shells` `lineToShell`).
+   *  Supplied, a `! cmd` code span and a shell fence carry a "shell" button
+   *  (`bangLine.ts`); omitted — a document, a shell session — they are plain code. */
+  toShell?(line: string): void;
 }
 
 /** CSS width of an inline thumbnail. Small enough to sit in a paragraph,
@@ -214,7 +219,14 @@ function inline(text: string, q: string, key: string, files?: FileRefCtx): (stri
       const asFile = wholeFileRef(m[1]) ? fileNode(m[1].trim(), `${key}f${n++}`)
         : bare && files ? { node: <FileRefNode key={`${key}f${n++}`} fref={bare} ctx={files} q={q} />, rest: "" }
         : null;
+      const cmd = !asFile && files?.toShell ? bangLine(m[1]) : null;
       out.push(asFile ? asFile.node : <code key={`${key}c${n++}`}>{hl(m[1], q)}</code>);
+      // `! cmd` — a line the agent asks the person to run: one tap puts it in
+      // the session's shell box, never runs it.
+      if (cmd && files?.toShell) {
+        const run = files.toShell;
+        out.push(<Button key={`${key}s${n++}`} className="md-toshell" title={`put "${cmd}" in the shell`} onClick={() => run(cmd)}><SquareTerminal size={12} /> shell</Button>);
+      }
     }
     // Emphasis holds inline forms of its own: **[a link](…)**, **`code` in bold**.
     else if (m[2] !== undefined) out.push(<b key={`${key}b${n++}`}>{inline(m[2], q, `${key}b${n}`, files)}</b>);
@@ -386,11 +398,16 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         nodes.push(lineTag ? <div key={`m${pi}`} {...tag(start, base, "tr-mdsnip-wrap")}>{snip}</div> : snip);
         return;
       }
+      const toShell = files?.toShell;
+      const block = toShell ? shellBlock(lang, code) : null;
       nodes.push(
         <div {...tag(start, base, "tr-code")} key={`c${pi}`}>
           <div className="tr-code-head">
             <span>{lang || "code"}</span>
-            <Button title="copy code" onClick={() => onCopy(code)}><Copy size={12} /></Button>
+            <span className="tr-code-acts">
+              {block && toShell && <Button title="put these lines in the shell" onClick={() => toShell(block)}><SquareTerminal size={12} /> shell</Button>}
+              <Button title="copy code" onClick={() => onCopy(code)}><Copy size={12} /></Button>
+            </span>
           </div>
           <pre>{hl(code, q)}</pre>
         </div>,

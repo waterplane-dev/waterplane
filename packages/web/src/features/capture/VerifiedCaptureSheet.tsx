@@ -7,7 +7,7 @@ import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { CaptureSheet } from "../../CaptureSheet";
 import { captureBackends, captures } from "./store";
-import { cancelCapture, runCapture, saveTargets } from "./actions";
+import { cancelCapture, runCapture, saveTargets, setupCaptureWithAgent } from "./actions";
 
 export function VerifiedCaptureSheet({ repo }: { repo: RepoTarget }) {
   const core = useCore();
@@ -34,6 +34,7 @@ export function VerifiedCaptureSheet({ repo }: { repo: RepoTarget }) {
       onSave={(t) => saveTargets(dir, t)}
       onRun={(id, watch) => runCapture(dir, id, watch)}
       onCancel={cancelCapture}
+      onSetup={() => setupCaptureWithAgent(repo)}
       onDownload={(a: BuildArtifact) => core.files.downloadArtifact(a)}
       onClose={() => core.nav.close("capture")}
     />

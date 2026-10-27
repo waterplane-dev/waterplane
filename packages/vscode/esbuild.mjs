@@ -1,7 +1,8 @@
 // Five bundles: the extension, the scan worker, the webview, the data layer for the tests, and the
 // repo-health worker (the bundled engine, the one file that may start a process — only `git`). `node esbuild.mjs [--watch] [--release]`.
 import { build, context } from "esbuild";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -116,6 +117,18 @@ const sharedDist = {
     b.onResolve({ filter: /packages\/shared\/dist\/index\.js$/ }, () => ({ path: shared }));
   },
 };
+// Which build is this (`@waterplane/shared` buildstamp.ts): version + commit + time, baked into the
+// extension and the webview as `__WP_BUILD__` and written to dist/buildstamp.json so the package
+// script records the SAME identity in the repo's versions.jsonl. `dirty` covers every tree this
+// bundles from, because a build of uncommitted edits is not the commit its sha names.
+const git = (...a) => { try { return execFileSync("git", a, { cwd: here, encoding: "utf8" }).trim(); } catch { return ""; } };
+const buildStamp = {
+  version: JSON.parse(readFileSync(at("package.json"), "utf8")).version,
+  sha: git("rev-parse", "--short", "HEAD") || undefined,
+  dirty: git("status", "--porcelain", "--", ".", "../shared/src", "../host/src", "../web/src", "../extensions", "../../tools") !== "" || undefined,
+  at: Date.now(),
+};
+mkdirSync(at("dist"), { recursive: true });
 const common = {
   bundle: true,
   logLevel: "info",
@@ -126,6 +139,7 @@ const common = {
   nodePaths: [at("node_modules")],
   // shared's internal `./x.js` specifiers are really `.ts` (esbuild retries .js -> .ts itself).
   resolveExtensions: [".ts", ".tsx", ".js", ".mjs", ".json"],
+  define: { __WP_BUILD__: JSON.stringify(buildStamp) },
 };
 
 const configs = [
@@ -162,7 +176,7 @@ const configs = [
     jsx: "automatic",
     // The webview's own kit barrel (chart pieces + `until` + `Explain`), never the full kit.
     alias: { ...alias, "@waterplane/kit": at("webview/shims/kit.ts"), "@waterplane/sdk": at("webview/shims/sdk.ts") },
-    define: { "process.env.NODE_ENV": JSON.stringify(release ? "production" : "development") },
+    define: { ...common.define, "process.env.NODE_ENV": JSON.stringify(release ? "production" : "development") },
     loader: { ".css": "css" },
     plugins: [hintChip, oneReact, phoneReads],
   },
@@ -199,6 +213,7 @@ if (release && existsSync(at("dist"))) {
     if (f.isFile() && f.name.endsWith(".map")) rmSync(at("dist", f.name));
   }
 }
+writeFileSync(at("dist/buildstamp.json"), JSON.stringify(buildStamp) + "\n");
 
 if (watch) {
   for (const c of configs) await (await context(c)).watch();

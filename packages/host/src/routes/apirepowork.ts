@@ -14,10 +14,10 @@ import { explainChanges } from "../changebrief.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
-import { checkRepoCompliance, fixRepoCompliance, setCheckAccepted, setCheckIgnored, setRepoContextLimits } from "../compliance.js";
+import { checkRepoCompliance, fixRepoCompliance, setCheckAccepted, setCheckIgnored, setCheckTriaged, setRepoContextLimits } from "../compliance.js";
 import { inspectOptIns, optInSightings, standingPromptsOf } from "../optins.js";
 import { setOptInChoice } from "../setupprefs.js";
-import type { OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
+import type { ComplianceReport, OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
 import { REPOHEALTH_TIMEOUT_MS, readRepoHealth, refreshRepoHealth } from "../repohealth.js";
 import { approveWithConsent, withApproveToken } from "../repohealthapproval.js";
 import { cleanScope, writeScopes } from "../repohealthscopes.js";
@@ -52,6 +52,16 @@ function leftoverInput(wt: string, branch: string, sessions: SessionInfo[]): Lef
  *  branch for a linked worktree. */
 function gitRef(t: RepoTarget): GitRepoRef {
   return { id: t.id, name: t.isPrimary ? t.repoName : `${t.repoName} (${t.branch})`, branch: t.branch };
+}
+
+/** A POST that changes one setup check; answers with `{ ok, report?, error? }`, the report re-run and recorded. */
+function checkWrite<R extends { ok: boolean; report?: ComplianceReport }>(path: string, set: (t: RepoTarget, body: any) => R): ApiEntry<RepoReq> {
+  return route<RepoReq>("POST", path, async ({ req, res, target }, ctx) => {
+    const r = set(target, await readJson(req));
+    if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
+    json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
+    return true;
+  });
 }
 
 export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
@@ -162,31 +172,17 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // answers with the re-run report so the row restates itself against the
   // line just set. `reset` clears the override — going back to the host's
   // line has to be one tap, or nobody will risk the first edit.
-  route<RepoReq>("POST", "compliance/limits/*", async ({ req, res, target }, ctx) => {
-    const body = await readJson(req);
-    const r = setRepoContextLimits(target, body, { reset: body?.reset === true });
-    if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
-    json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
-    return true;
-  }),
+  checkWrite("compliance/limits/*", (t, b) => setRepoContextLimits(t, b, { reset: b?.reset === true })),
   // Ignore one advisory row in this repo (`{ id, ignore: false }` undoes
   // it). A POST because it writes; answers with the re-run report.
-  route<RepoReq>("POST", "compliance/ignore/*", async ({ req, res, target }, ctx) => {
-    const body = await readJson(req);
-    const r = setCheckIgnored(target, String(body?.id ?? ""), body?.ignore !== false);
-    if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
-    json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
-    return true;
-  }),
+  checkWrite("compliance/ignore/*", (t, b) => setCheckIgnored(t, String(b?.id ?? ""), b?.ignore !== false)),
   // Accept (or stop accepting) one exposure finding (`exposure.ts`): body is a
   // ComplianceAcceptRequest; answers with the re-run report like the ignore above.
-  route<RepoReq>("POST", "compliance/accept/*", async ({ req, res, target }, ctx) => {
-    const body = await readJson(req);
-    const r = setCheckAccepted(target, body);
-    if (r.report) ctx.setup.record(target.worktreePath, r.report.checks, target.repoName);
-    json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
-    return true;
-  }),
+  checkWrite("compliance/accept/*", setCheckAccepted),
+
+  // Mark one exposure finding / crash group seen, investigating or fixed (`{ id, state, fixedIn?, commit?, note?, clear? }`);
+  // by = the person. Answers with the re-run report like accept.
+  checkWrite("compliance/triage/*", setCheckTriaged),
 
   // ── Opt-ins: offers, never findings (`optins.ts`) ──────────────────
   // Nothing here touches the setup checklist, its badge or the sweep's store.

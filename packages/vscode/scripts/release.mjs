@@ -88,6 +88,9 @@ const npm = spawnSync("npm", ["run", "package"], { cwd: ROOT, stdio: "inherit" }
 if (npm.status !== 0) { console.error("\nnpm run package failed: nothing was published."); process.exit(1); }
 if (plan.targets.includes("marketplace")) run("vsce", ["publish", "-i", plan.vsix]);
 if (plan.targets.includes("openvsx")) run("ovsx", ["publish", plan.vsix]);
+// The repo's build list says which build went out (scripts/build-record.mjs; same stamp the vsix carries).
+spawnSync("node", ["../../scripts/build-record.mjs", "--name", "vscode-extension", "--stamp", "dist/buildstamp.json",
+  "--channel", plan.targets.map((t) => REGISTRIES[t].label).join(" + "), "--file", `packages/vscode/${plan.vsix}`], { cwd: ROOT, stdio: "inherit" });
 
 // Ask each registry until it lists the version (the Marketplace lists it while it still verifies).
 const deadline = Date.now() + 5 * 60_000;

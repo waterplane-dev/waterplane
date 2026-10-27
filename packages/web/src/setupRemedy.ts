@@ -208,7 +208,7 @@ export function fixVerb(fix: string, size: string = AUTO_COMPACT_SUGGESTED, rows
   if (fix === "android-toolchain") return "install the Android build tools (JDK and SDK) on this desktop";
   if (fix === "signing-key") return "create or link the desktop signing key";
   if (fix === "protect-main") return "protect main on GitHub (direct pushes still work)";
-  if (fix === "era-seen") return "mark all crash groups seen";
+  if (fix === "era-seen") return "mark all seen in ERA";
   return rows.byFix(fix)?.fixVerb ?? "fix";
 }
 

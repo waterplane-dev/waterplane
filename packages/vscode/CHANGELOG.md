@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 - 2026-10-27
+
+- **Which build is running.** The status-bar tooltip and the panel's footer name this build: version, commit and build time (`0.7.0 · a1b2c3d · 27 Oct 08:42`, with `+ edits` when it was built from uncommitted changes). The repo's build list shows the same line for the build it last installed or published.
+
 ## 0.7.0 - 2026-10-26
 
 - **What every turn carries, measured.** The Session view shows what the conversation's first request actually carried, as Claude Code logged it: instruction files (with `~` paths and their type), the skill listing, MCP instructions, deferred tool names, subagent listing, hook context, and the system prompt and tool schemas (marked undocumented), with the unattributed rest as its own segment. One strip, a meter per row; hover reads a part, a click keeps it.

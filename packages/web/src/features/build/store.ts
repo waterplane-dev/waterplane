@@ -12,7 +12,7 @@
  * confirmed each repo's list — a cached list that cannot say how old it is
  * reads as current. (`scripts/e2e-offlinelists.mjs` holds both.)
  */
-import type { ArtifactPolicy, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget, ScheduleEntry } from "@waterplane/shared";
+import type { ArtifactPolicy, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRecord, BuildRun, RepoTarget, ScheduleEntry } from "@waterplane/shared";
 import { useCallback } from "react";
 import { createStore, repoRunStore, useStore } from "../../sdk";
 import { loadBuildsSnap, saveBuildsSnap } from "../../localState";
@@ -22,6 +22,8 @@ import { buildBusyIn, buildNameIn } from "./logic";
  *  A repo with no entry, or an entry of `undefined`, is an older host: nothing
  *  is attributed and `build.save` sends no `local`. Not cached to disk. */
 export const buildLocalIds = createStore<ReadonlyMap<string, string[] | undefined>>(new Map());
+/** `build.list`'s `versions` per repo: each artifact's recent builds; `undefined` = an older host. */
+export const buildVersions = createStore<ReadonlyMap<string, Record<string, BuildRecord[]> | undefined>>(new Map());
 
 export const builds = repoRunStore<BuildConfig, BuildRun>({ load: loadBuildsSnap, save: saveBuildsSnap });
 

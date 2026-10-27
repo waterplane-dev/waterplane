@@ -81,7 +81,7 @@ export class ExposurePush {
       for (const s of series) {
         if (s.unreadable && watchedDirs.has(real(s.row.dir)) && !this.warned.has(s.row.repo)) {
           this.warned.add(s.row.repo);
-          console.log(`${logTag} exposure push · ${s.row.repo}: accepts file unreadable; skipping this repo until it is`);
+          console.log(`${logTag} exposure push · ${s.row.repo}: accepts or triage file unreadable; skipping this repo until it is`);
         }
       }
       const plan = exposurePushes(series, (d) => watchedDirs.has(real(d)), store, (this.deps.now ?? (() => new Date()))());

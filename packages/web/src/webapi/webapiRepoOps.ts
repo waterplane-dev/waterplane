@@ -1,6 +1,6 @@
 import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
 import type { OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
-import type { ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
+import type { ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
 
@@ -47,9 +47,9 @@ export const repoOpsApi = {
   // Ignore (or stop ignoring) one advisory row in one repo.
   complianceIgnore: (repoId: string, id: string, ignore: boolean) =>
     jpost<ComplianceIgnoreResult>(`/api/repos/${repoId}/compliance/ignore`, { id, ignore }),
-  // Accept (or stop accepting) one exposure-watch finding, with a reason and how long it holds.
-  complianceAccept: (repoId: string, req: ComplianceAcceptRequest) =>
-    jpost<ComplianceAcceptResult>(`/api/repos/${repoId}/compliance/accept`, req),
+  // One exposure-watch finding: accept it (a reason, how long it holds) or mark it seen / investigating / fixed-in.
+  complianceAccept: (repoId: string, req: ComplianceAcceptRequest) => jpost<ComplianceAcceptResult>(`/api/repos/${repoId}/compliance/accept`, req),
+  complianceTriage: (repoId: string, req: ComplianceTriageRequest) => jpost<ComplianceAcceptResult>(`/api/repos/${repoId}/compliance/triage`, req),
   // Opt-ins (`shared/optins.ts`): optional things a repo can turn on, counted
   // in nothing. `choice: null` clears what the person said.
   optIns: (repoId: string) =>

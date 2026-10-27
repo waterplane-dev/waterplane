@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
@@ -128,6 +129,7 @@ function buildStamp(): Plugin {
   // Read BEFORE `closeBundle` — Vite empties `outDir` at the start of the
   // build, so the previous id has to be captured while it still exists.
   let previousId: string | null = null;
+  let previousStamp: string | null = null;
   // The build's real outDir: a scratch `--outDir` check is stamped (and read) there, never in dist/.
   let outDir = join(import.meta.dirname, "dist");
   return {
@@ -141,6 +143,11 @@ function buildStamp(): Plugin {
         previousId = readFileSync(join(outDir, "build-id.txt"), "utf8").trim() || null;
       } catch {
         previousId = null;
+      }
+      try {
+        previousStamp = readFileSync(join(outDir, "buildstamp.json"), "utf8");
+      } catch {
+        previousStamp = null;
       }
     },
     closeBundle() {
@@ -169,6 +176,9 @@ function buildStamp(): Plugin {
           // No SW emitted (e.g. a non-default build) — nothing to stamp.
         }
         writeFileSync(join(dist, "build-id.txt"), build);
+        // Written AFTER the hash, like build-id.txt, so it never moves the OTA id. Byte-identical
+        // output keeps the stamp it was first built with: the phone running it is that build.
+        writeFileSync(join(dist, "buildstamp.json"), build === previousId && previousStamp ? previousStamp : JSON.stringify(webStamp()) + "\n");
         // The one line this build's console output can answer "will a phone
         // update?" with, without anyone reading a hex string by hand — the
         // Build sheet's run report is otherwise silent about the id entirely.
@@ -255,6 +265,35 @@ function sourceHash(): string {
 }
 
 const BUILD_ID = sourceHash();
+
+/**
+ * Which build is this, in words a person reads (`@waterplane/shared` buildstamp.ts): the root
+ * version, the commit, `dirty` over the same trees `sourceHash` reads, and the build time.
+ *
+ * Deliberately NOT a `define` beside `__BUILD_ID__`: a commit or a clock baked into the JS changes
+ * the bundle's bytes on every build, so `build-id.txt` would change and every phone would
+ * re-download a bundle that is byte-identical. It ships as `dist/buildstamp.json` instead, written
+ * after the hash — read at runtime the way `build-id.txt` is (`webUpdate.ts runningBuildStamp`) and
+ * recorded by scripts/build-record.mjs --stamp, so the record and the phone say the same thing.
+ */
+function webStamp(): { version?: string; sha?: string; dirty?: true; at: number } {
+  const repo = join(import.meta.dirname, "..", "..");
+  const git = (...a: string[]): string | null => {
+    try { return execFileSync("git", a, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return null; }
+  };
+  let version: string | undefined;
+  try { version = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).version; } catch { /* not said */ }
+  const status = git("status", "--porcelain", "--", "packages/web/src", "packages/web/public", "packages/web/index.html",
+    "packages/web/package.json", "packages/shared/src", "packages/extensions");
+  const sha = git("rev-parse", "--short", "HEAD");
+  return {
+    ...(version ? { version } : {}),
+    ...(sha ? { sha } : {}),
+    // A git that cannot answer leaves `dirty` out — never claims a clean tree.
+    ...(status ? { dirty: true as const } : {}),
+    at: Date.now(),
+  };
+}
 
 /**
  * Split the bundle along its UPDATE boundaries, not just for load time.

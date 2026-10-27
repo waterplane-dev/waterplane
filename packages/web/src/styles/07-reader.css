@@ -220,6 +220,12 @@
 .tr-code-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); background: var(--panel); }
 .tr-code-head .key { min-width: 0; padding: var(--sp-2) var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
 .tr-code-acts { display: flex; gap: var(--sp-4); }
+/* "shell" after a `! cmd` span (bangLine.ts): sits in the line, sized like the code beside it. */
+.key.md-toshell {
+  display: inline-flex; align-items: center; gap: var(--sp-2); vertical-align: middle;
+  min-width: 0; margin: 0 var(--sp-2); padding: 1px var(--sp-6);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
 /* A ```md fence rendered as formatted markdown (toggle back to source). */
 .tr-mdsnip { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .tr-mdsnip-body { padding: var(--sp-4) var(--sp-10) var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-15); }

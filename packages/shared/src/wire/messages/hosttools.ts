@@ -13,6 +13,7 @@ import type { InstallLogDoc } from "../install.js";
 import type { NotificationItem, NotifyPrefs } from "../notify.js";
 import type { BuildParamAnswer } from "../../buildparams.js";
 import type { BuildCandidate } from "../../buildscan.js";
+import type { BuildRecord } from "../../buildstamp.js";
 import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.js";
 import type { OnboardJob } from "../onboard.js";
 import type { LimitResumeMode } from "../session.js";
@@ -116,8 +117,10 @@ export type HostToolsMsg =
    *  MERGED list (committed `.waterplane-shared/builds.json`, then this desktop's own
    *  `.waterplane/builds.json`, local winning by id). `localIds`: the ids that live in
    *  the local file — every other entry came with the checkout. Absent from an older
-   *  host: nobody said, so the phone draws no attribution. */
-  | { t: "build.list"; repoDir: string; builds: BuildConfig[]; runs: BuildRun[]; localIds?: string[] }
+   *  host: nobody said, so the phone draws no attribution. `versions`: each artifact's
+   *  recent builds (`versions.jsonl`, `buildstamp.ts`), newest first, keyed by
+   *  `BuildRecord.name` — absent from an older host. */
+  | { t: "build.list"; repoDir: string; builds: BuildConfig[]; runs: BuildRun[]; localIds?: string[]; versions?: Record<string, BuildRecord[]> }
   /** Streamed build output. `full` (on a fresh list/reconnect) = the retained
    *  tail, replacing the client's buffer; absent/false = a live delta to append. */
   | { t: "build.output"; runId: string; dataB64: string; full?: boolean }

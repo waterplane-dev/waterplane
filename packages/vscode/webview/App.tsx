@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BRAND } from "@waterplane/shared";
 import type { TabId } from "../src/protocol";
+import { buildText } from "../src/buildstamp";
 import { loadTab, post, TAB_IDS, saveTab, useExtension } from "./host";
 import { SessionView } from "./SessionView";
 import { OverviewView } from "./OverviewView";
@@ -70,6 +71,7 @@ export function App() {
         <button type="button" className="link-btn" onClick={() => post({ t: "open", url: `https://${BRAND.domain}` })}>
           drive these sessions from your phone → {BRAND.domain}
         </button>
+        {buildText && <div className="build-stamp">this build: {buildText}</div>}
       </footer>
     </div>
   );

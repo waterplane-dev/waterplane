@@ -197,3 +197,9 @@ test("unlock: rate-limited per device — five tries, then one a minute", () => 
   assert.equal(g.unlock(kid, "4711").ok, true);
   g.lock(kid.id); g.lock("kid-0002");
 });
+
+test("passiveAllows: a passive token never reaches compliance, the triage mark or the agent exposure routes", () => {
+  for (const p of ["/api/repos/r1/compliance", "/api/repos/r1/compliance/triage", "/api/repos/r1/compliance/accept", "/api/agent/exposure", "/api/agent/exposure/triage"]) {
+    for (const m of ["GET", "POST"]) assert.equal(passiveAllows(m, p, q(), none), false, `${m} ${p}`);
+  }
+});

@@ -37,7 +37,7 @@ import * as turn from "./sessions/turn.js"; import * as idle from "./sessions/id
 import * as boxes from "./sessions/boxes.js";
 import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
-import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions } from "./reposkill.js";
+import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions, withHostApi } from "./reposkill.js";
 import { env } from "./env.js"; import { answerTermQueries, lateQueryLog } from "./termqueries.js"; import { hostTermColors } from "./themeoverlay.js";
 /** Matches DECSET/DECRST private-mode sequences, e.g. `\x1b[?1049h`, `\x1b[?1000;1006h`. */
 const PRIVATE_MODE_RE = /\x1b\[\?([0-9;]+)([hl])/g;
@@ -235,10 +235,10 @@ export class SessionManager extends EventEmitter {
     // Two ids, never one field: `sessionId` is claude's uuid (a log path), `backendSessionId` the other backend's own; at most one, only when KNOWN (`backends/types.ts`).
     // Order (prepare → files → spawn → persist → register): a refused plan writes nothing, spawns nothing.
     const askRules = askRulesForCwd(cwd); // read per launch; the plan says how they hold
-    const asked = backend.prepare({ resumeMode, resumeSessionId: opts.resumeSessionId, launch, hookPort: this.port, cwd, hostSessionId: id, ...(opts.forkAtTurn ? { forkAtTurn: opts.forkAtTurn } : {}), askRules, instructions: repoInstructions(this.port) });
+    const asked = backend.prepare({ resumeMode, resumeSessionId: opts.resumeSessionId, launch, hookPort: this.port, cwd, hostSessionId: id, ...(opts.forkAtTurn ? { forkAtTurn: opts.forkAtTurn } : {}), askRules, instructions: repoInstructions() });
     const { args, sessionId: claudeSessionId, backendSessionId, createsRecord, env: launchEnv, exec, dropEnv, instructionsVia: told0, askRulesVia } = finishLaunch(backend, asked instanceof Promise ? await asked : asked, this.root, id); const told = backend.caps.turns === false ? undefined : told0; // a shell has no agent to tell
     // The gate holds them (`answergate.ts`) — released again if the spawn throws (no session to forget them).
-    const proc = holdAskRulesFor(id, askRulesVia, askRules, () => this.spawnBackend(id, cwd, cols, rows, args, exec ? { ...backend, bin: () => exec } : backend, launchEnv, dropEnv)); // `exec`: opencode's waiter (`LaunchPlan.exec`)
+    const proc = holdAskRulesFor(id, askRulesVia, askRules, () => this.spawnBackend(id, cwd, cols, rows, args, exec ? { ...backend, bin: () => exec } : backend, withHostApi(this.port, launchEnv), dropEnv)); // `exec`: opencode's waiter (`LaunchPlan.exec`)
 
     const info: SessionInfo = {
       id,

@@ -2,15 +2,19 @@
  * Every writer of the build feature's stores, and every frame it sends. The
  * wire handlers in `index.ts` and the sheet call these; nothing else writes.
  */
-import { buildRunTitle, repoBranchLabel, type ArtifactPolicy, type BuildCandidate, type BuildConfig, type BuildRun, type RepoTarget, type ScheduleEntry } from "@waterplane/shared";
+import { buildRunTitle, repoBranchLabel, type ArtifactPolicy, type BuildRecord, type BuildCandidate, type BuildConfig, type BuildRun, type RepoTarget, type ScheduleEntry } from "@waterplane/shared";
 import { buildScheduleEntry, buildScheduleToast, type BuildScheduleCue } from "../../buildSchedule";
 import type { SendWhen } from "../../sendIntent";
 import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
-import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, buildRunFocus, buildScheduleEdit, builds, type ParamOptions } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildVersions, buildOpts, buildRepo, buildRunFocus, buildScheduleEdit, builds, type ParamOptions } from "./store";
 
 export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
   buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
+}
+
+export function onBuildVersions(repoDir: string, versions: Record<string, BuildRecord[]> | undefined): void {
+  buildVersions.set((prev) => mapWith(prev, repoDir, versions));
 }
 
 export function onArtifactsConfig(repoDir: string, policy: ArtifactPolicy): void {
@@ -30,6 +34,9 @@ export function onBuildRun(run: BuildRun, c: CoreApi): void {
   builds.onRun(run);
   const said = buildRunToast(run);
   if (said) c.say.toast(said);
+  // A settled run may have appended a build record: re-read the list so the
+  // open sheet's "last build" line is this run's, not the one before it.
+  if (said && buildRepo.get()?.worktreePath === run.repoDir) c.conn.send({ t: "build.list", repoDir: run.repoDir });
 }
 
 /** Open the build-buttons sheet for a repo and fetch its configs + runs. */

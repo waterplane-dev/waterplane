@@ -82,6 +82,7 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   `scripts/e2e-buildparams.mjs`.
   A benchmark a backend extension ships (its own `scripts/`, run as a build) is a build command in
   exactly this sense: measured, no session, nothing applies itself — the rules live with it.
+- `buildversions.ts` — **which build each artifact last was**, read off `<repo state dir>/versions.jsonl` (appended by the build itself — `scripts/build-record.mjs` — or an agent, never by the host: only the build knows what it baked in), tail-bounded, sent as `build.list`'s `versions`; rules and wording are shared `buildstamp`. An entry's `artifact` names its records, else its `id`.
 - `appready.ts` + `apkcheck.ts`' `apkRepoFacts` — **the repo half of every app's quiet install, as
   DATA** (`GET /api/apps/readiness`): package (+ suffix variants), key kind, targetSdk, outbox APKs,
   APK-ish build commands (a LABEL, never a filter), and whether the auto-download rule takes the

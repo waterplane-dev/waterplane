@@ -9,7 +9,7 @@ import { shellsSubject } from "./logic";
 import { shellsSid } from "./store";
 import { onSessionClosed, onShellKilled } from "./actions";
 
-export { noteSessionClosing, openShells, openShellsFor } from "./actions";
+export { lineToShell, noteSessionClosing, openShells, openShellsFor } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "shells",

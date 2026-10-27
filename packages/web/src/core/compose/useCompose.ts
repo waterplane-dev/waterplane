@@ -371,7 +371,10 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * load effect then replaced the box with the new session's saved draft and
    * the words were gone (`continueImageInSession`'s *new session · <path>*).
    */
-  function seedDraft(sid: string, text: string): SeedOutcome {
+  // `ownLine`: joined to words already there by a newline, not a space — a
+  // command for a shell (`lineToShell`) glued onto a half-typed one is a
+  // different command.
+  function seedDraft(sid: string, text: string, opts: { ownLine?: boolean } = {}): SeedOutcome {
     // Seeded words are for the person to read and send: CLI mode hides the box
     // behind the raw-keys pad, so the mode is left (the caller says so).
     const leftCli = cliModeOn;
@@ -381,10 +384,14 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     const cur = onScreen ? draft.composeNow.current : (loadDraft(sid) ?? "");
     // The same words twice (a second tap on the same button) are one copy, not two.
     const already = text.trim() !== "" && cur.includes(text.trim());
-    if (already) return { leftCli, already };
-    if (onScreen) draft.insertCompose(text);
+    const joined = cur.trim() !== "";
+    if (already) return { leftCli, already, joined };
+    if (opts.ownLine) {
+      const next = joined ? `${cur.replace(/\s+$/, "")}\n${text}` : text;
+      if (onScreen) draft.setCompose(next); else saveDraft(sid, next);
+    } else if (onScreen) draft.insertCompose(text);
     else saveDraft(sid, cur ? `${cur}${cur.endsWith(" ") ? "" : " "}${text}` : text);
-    return { leftCli, already };
+    return { leftCli, already, joined };
   }
 
   /** `core.compose.typeOn`: one key of the demo's typing — only onto exactly

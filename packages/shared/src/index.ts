@@ -298,6 +298,9 @@ export * from "./installlog.js";
  *  policy, the versioned name, `familyKey` ("which artifact IS this"), the fold
  *  that stops one APK arriving twice, and what a prune may remove. */
 export * from "./artifacts.js";
+/** Which build is this: the version + commit + time stamped into an artifact, and the
+ *  per-repo `versions.jsonl` record the build list reads — one wording for both. */
+export * from "./buildstamp.js";
 
 /** What a build button ASKS before it runs — one command against one member of
  *  a monorepo, instead of forty near-identical buttons. Substitution, the env

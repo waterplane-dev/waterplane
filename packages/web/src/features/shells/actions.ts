@@ -1,9 +1,10 @@
 /**
  * Every writer of the shells feature's store, and the two things it sends.
  */
-import type { SessionInfo, SessionShell } from "@waterplane/shared";
+import { companionToggle, type SessionInfo, type SessionShell } from "@waterplane/shared";
+import { copyText } from "../../api";
 import { core } from "../../sdk";
-import { notePendingClose, sessionClosedShellsToast, shellKilledToast, takePendingClose } from "./logic";
+import { notePendingClose, sessionClosedShellsToast, shellKilledToast, takePendingClose, toShellToast } from "./logic";
 import { shellsSid } from "./store";
 
 /** Open the shells sheet for ONE session — a row's own chip, or the launcher's
@@ -21,6 +22,26 @@ export function openShellsFor(s: SessionInfo): void {
 export function openShells(): void {
   shellsSid.set(null);
   core().nav.open("shells");
+}
+
+/**
+ * A command the agent asked the person to run (`! gh pr close 11 …`, `bangLine.ts`) into `s`'s
+ * companion shell — the header's `Shell` tab: the live one when there is one, else a new one
+ * opened the burger's way (`openCompanionShell`). SEEDED into that shell's box on its own line
+ * (`seedDraft` `ownLine`), never sent: the person reads it and taps Send. No shell on this
+ * desktop ⇒ the line is copied instead. Every outcome is a toast.
+ */
+export function lineToShell(s: SessionInfo, line: string): void {
+  const c = core();
+  c.say.track("action:shell.fromReader");
+  const cant = c.launch.shellCant();
+  if (cant) { void copyText(line); c.say.toast(`${cant} — the line is copied instead`); return; }
+  const pair = companionToggle(s, c.world.sessions);
+  let sid: string | null;
+  if (pair?.to === "shell" && pair.target.running) { c.nav.attach(pair.target); sid = pair.target.id; }
+  else sid = c.launch.openCompanionShell(s);
+  if (!sid) return; // openCompanionShell toasted why
+  c.say.toast(toShellToast(c.compose.seedDraft(sid, line, { ownLine: true })));
 }
 
 export function closeShells(): void {

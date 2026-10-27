@@ -1,7 +1,7 @@
 // The exposure watch's sentences on the phone — pure, so a test pins them and the card, the
 // accept form and the counts say the same thing. The rows themselves are the host's
 // (`ComplianceCheck` with `exposure` / `accepted`); nothing here measures anything.
-import { EXPOSURE_SUMMARY_ID, type ComplianceAcceptRequest, type ComplianceCheck } from "@waterplane/shared";
+import { EXPOSURE_SUMMARY_ID, triageWords, type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest } from "@waterplane/shared";
 
 type Exposure = NonNullable<ComplianceCheck["exposure"]>;
 type Accepted = NonNullable<ComplianceCheck["accepted"]>;
@@ -121,6 +121,62 @@ export function acceptRequest(id: string, reason: string, choice: UntilChoice, v
     : { change: true as const };
   return { id, accept: true, reason: reason.trim(), until };
 }
+
+export type TriageState = "seen" | "investigating" | "fixed";
+export const TRIAGE_STATES: { key: TriageState; label: string; hint: string }[] = [
+  { key: "seen", label: "seen", hint: "Still counted. Quiet for this app version; a newer version alerts again." },
+  { key: "investigating", label: "investigating", hint: "Still counted. Quiet for this app version; a newer version alerts again." },
+  { key: "fixed", label: "fixed", hint: "Older versions stop counting; the same crash in this version or newer alerts as a regression. Needs an app version on the finding." },
+];
+export const TRIAGE_NO_VERSION = "Type the version that carries the fix, like 1.4.2.";
+export const TRIAGE_BAD_VERSION = "A version is letters, digits and . + - only, up to 32 characters.";
+export const TRIAGE_BAD_COMMIT = "A commit is 7 to 40 hex characters.";
+export const TRIAGE_LONG_NOTE = "The note is up to 280 characters.";
+
+/** The sentence that replaces the submit verb while the mark form is not ready; null = ready. Mirrors the host. */
+export function triageRefusal(state: TriageState, fixedIn: string, commit: string, note: string): string | null {
+  if (note.trim().length > 280) return TRIAGE_LONG_NOTE;
+  if (state !== "fixed") return null;
+  const v = fixedIn.trim();
+  if (!v) return TRIAGE_NO_VERSION;
+  if (v.length > 32 || !/^[0-9A-Za-z.+-]+$/.test(v)) return TRIAGE_BAD_VERSION;
+  const c = commit.trim();
+  if (c && !/^[0-9a-fA-F]{7,40}$/.test(c)) return TRIAGE_BAD_COMMIT;
+  return null;
+}
+
+/** The request the mark form sends (the host re-checks all of it). */
+export function triageRequest(id: string, state: TriageState, fixedIn: string, commit: string, note: string): ComplianceTriageRequest {
+  return {
+    id, state,
+    ...(state === "fixed" ? { fixedIn: fixedIn.trim() } : {}),
+    ...(state === "fixed" && commit.trim() ? { commit: commit.trim() } : {}),
+    ...(note.trim() ? { note: note.trim() } : {}),
+  };
+}
+
+export const clearTriageRequest = (id: string): ComplianceTriageRequest => ({ id, clear: true });
+
+/** What a card's mark control offers: the opener's verb, whether Clear mark shows, and the one line the
+ *  control adds. seen / investigating are already in the card's detail (the host appends the words), so
+ *  only a fixed mark adds its line here — a fact is said once. */
+export function triageControl(c: ComplianceCheck): { open: string; canClear: boolean; line: string | null; offerFixed: boolean; noFixedWhy: string | null } {
+  const t = c.exposure?.triage;
+  const offerFixed = !!c.exposure?.appVersion;
+  const noFixedWhy = offerFixed ? null : TRIAGE_NO_FIXED_WHY;
+  if (!t) return { open: "Mark…", canClear: false, line: null, offerFixed, noFixedWhy };
+  // A regression card's text already says "crashes again in <version>"; the mark line would say it twice.
+  const regression = c.detail.includes("crashes again in");
+  return { open: "Change mark…", canClear: true, line: t.state === "fixed" && !regression ? triageWords(t) : null, offerFixed, noFixedWhy };
+}
+export const TRIAGE_NO_FIXED_WHY = "Fixed needs an app version; Accept it instead.";
+
+/** "Marked, not in today's reading (n)": marks whose group is absent from the newest reading. */
+export const staleMarksHead = (n: number): string => `Marked, not in today's reading (${n})`;
+
+/** An accepted row the host made from a fixed mark (`accepted.byMark`), as opposed to a person's accept
+ *  that a mark sits beside. Only the first reads "Clear mark" in the Accepted list. */
+export const acceptedByMark = (c: ComplianceCheck): boolean => !!c.accepted && !c.accepted.builtIn && c.accepted.byMark === true;
 
 /** The `watch` region named by its comparator, as the other three are. */
 export const WATCH_REGION_WORDS =

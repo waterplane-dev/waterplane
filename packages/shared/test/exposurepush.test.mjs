@@ -97,3 +97,41 @@ test("three findings are three pushes; four are ONE, and all four are remembered
   assert.equal(four.push[0].title, "4 new exposure findings in r");
   assert.equal(four.remember.length, 4);
 });
+
+const crash = (v, n = 10) => f({ key: `D3:ciq:a/p/E/${v}/X.mc:1#${n}+`, measure: "D3", version: undefined, group: "a/p/E/X.mc:1", appVersion: v, text: `a p v${v}: E` });
+const tser = (findings, triage) => [{ row: row(findings), accepts: null, triage }];
+const mark = (o) => ({ "a/p/E/X.mc:1": { at: NOW, by: { kind: "person" }, ...o } });
+
+test("triage: seen / investigating never push, even when the growth bucket changes the key", () => {
+  const known = exposurePushKey("r", crash("1.0.0", 10));
+  for (const state of ["seen", "investigating"]) {
+    assert.equal(exposurePushes(tser([crash("1.0.0", 100)], mark({ state })), all, St([known]), NOW).push.length, 0);
+  }
+  assert.equal(exposurePushes(tser([crash("1.0.0", 100)], null), all, St([known]), NOW).push.length, 1);
+});
+
+test("triage: fixed older installs never push; a regression pushes with its prefix and a new key", () => {
+  const t = mark({ state: "fixed", fixedIn: "1.0.9" });
+  const known = exposurePushKey("r", crash("1.0.0", 10));
+  assert.equal(exposurePushes(tser([crash("1.0.0", 100)], t), all, St([known]), NOW).push.length, 0);
+  const reg = exposurePushes(tser([crash("1.0.9", 1)], t), all, St([known]), NOW);
+  assert.equal(reg.push.length, 1);
+  assert.match(reg.push[0].body, /^crashes again in 1\.0\.9 after the fix in 1\.0\.9: /);
+  assert.notEqual(reg.remember[0], known);
+});
+
+test("triage: seen holds only for the app version it was set on; a newer version pushes; no recorded version holds by key", () => {
+  const known = exposurePushKey("r", crash("1.0.0", 10));
+  assert.equal(exposurePushes(tser([crash("1.0.0", 100)], mark({ state: "seen", markedVersion: "1.0.0" })), all, St([known]), NOW).push.length, 0);
+  assert.equal(exposurePushes(tser([crash("2.0.0", 10)], mark({ state: "seen", markedVersion: "1.0.0" })), all, St([known]), NOW).push.length, 1);
+  assert.equal(exposurePushes(tser([crash("2.0.0", 10)], mark({ state: "seen" })), all, St([known]), NOW).push.length, 0);
+});
+
+test("a malformed series in the sweep is skipped; the other repos still push", () => {
+  const bad = { row: { ...row([crash("1.0.0", 10)]), repo: "bad", findings: [{ level: "alert", key: "k", get text() { throw new Error("boom"); } }] }, accepts: null, triage: null };
+  const goodRow = { ...row([f({ key: "A1:x@1.0.0", measure: "A1", subject: "x", version: "1.0.0" })]), repo: "ok" };
+  const st = St([], ["r", "bad", "ok"]);
+  const plan = exposurePushes([bad, { row: goodRow, accepts: null }], all, st, NOW);
+  assert.equal(plan.push.length, 1);
+  assert.equal(plan.push[0].repo, "ok");
+});

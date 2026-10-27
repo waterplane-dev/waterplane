@@ -33,6 +33,7 @@ import {
   AAB_PATH, API, PLAY_DIR, UPLOAD_API, defaultServiceAccountPath, explainApiError, latestRelease, nextVersionCode,
   parseArgs, parseServiceAccount, readListings, readReleaseNotes, releaseFor, serviceAccountAssertion,
 } from "./play-lib.mjs";
+import { packagedStamp } from "./apk-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const APP = join(ROOT, "packages/app");
@@ -142,6 +143,15 @@ function run(cmd, args, cwd) {
   if (r.status !== 0) die(`${cmd} ${args[0]} failed (exit ${r.status})`);
 }
 
+/** The repo's build list says which shell build went where (scripts/build-record.mjs), by the stamp
+ *  packed inside the AAB itself — so a pre-built --aab is recorded as what it is. */
+function recordAab(aab, channel) {
+  let stamp = null;
+  try { stamp = packagedStamp(readFileSync(aab)); } catch { /* not readable as a zip: commit and time now */ }
+  spawnSync("node", [join(ROOT, "scripts/build-record.mjs"), "--name", "aab-play", ...(stamp ? ["--stamp-json", JSON.stringify(stamp)] : []),
+    "--channel", channel, "--file", relative(ROOT, aab)], { cwd: ROOT, stdio: "inherit" });
+}
+
 function buildAab(versionCode) {
   run("npm", ["run", "sync"], APP);
   run("./gradlew", ["bundlePlayRelease", `-PversionCode=${versionCode}`, `-PversionName=${VERSION}`], join(APP, "android"));
@@ -173,6 +183,7 @@ const commands = {
     const code = opts.versionCode ?? gradleDefaultCode();
     const aab = buildAab(code);
     log(`\n${relative(ROOT, aab)} — versionCode ${code}, versionName ${VERSION}, signed with the Play upload key.`);
+    recordAab(aab, "built for Play");
     log("First upload only: Play Console → your app → Test and release → Internal testing → Create release → drop this file in.");
   },
 
@@ -212,6 +223,7 @@ const commands = {
       log(`uploading ${relative(ROOT, aab)} …`);
       const up = await play.uploadBundle(edit, aab);
       log(`uploaded versionCode ${up.versionCode} (sha256 ${up.sha256})`);
+      recordAab(aab, `Play ${opts.track}${opts.draft ? " (draft)" : ""}`);
       const release = releaseFor({ versionCodes: [up.versionCode], name: `${VERSION} (${up.versionCode})`, notes, fraction: opts.fraction, draft: opts.draft });
       await play.setTrack(edit, opts.track, [release]);
       log(`${opts.track}: ${describe(release)}`);

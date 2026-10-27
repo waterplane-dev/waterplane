@@ -59,7 +59,7 @@ import {
 } from "lucide-react";
 import { isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
 import type {
-  ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
+  ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, ComplianceTriageRequest, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
 } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
@@ -89,10 +89,10 @@ import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { AlwaysOnRows, type SessionDoor } from "./AlwaysOnRows";
-import { AcceptControl, AcceptedSection, DigestGroup } from "./ExposureAccept";
+import { AcceptControl, AcceptedSection, StaleMarksSection, DigestGroup, TriageControl } from "./ExposureAccept";
 import {
   WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, inExposureMainList,
-  WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
+  clearTriageRequest, WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
 } from "./exposureWords";
 
 const STATUS_ICON = {
@@ -247,6 +247,23 @@ export function SetupSheet({
     setFixError(null);
     try {
       const r = await api.complianceAccept(repoId, req);
+      if (r.ok && r.report) { checkRes.set(r.report); return null; }
+      return r.error || "the desktop did not store it";
+    } catch (e) {
+      return String((e as Error).message || e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Mark (or clear the mark of) one exposure finding; same shape as setAccepted. */
+  async function setMark(req: ComplianceTriageRequest): Promise<string | null> {
+    if (!repoId) return "No repo is open, so there is nothing to mark.";
+    track(req.clear ? "action:setup.unmark" : "action:setup.mark");
+    setBusy(true);
+    setFixError(null);
+    try {
+      const r = await api.complianceTriage(repoId, req);
       if (r.ok && r.report) { checkRes.set(r.report); return null; }
       return r.error || "the desktop did not store it";
     } catch (e) {
@@ -415,6 +432,7 @@ export function SetupSheet({
               onFix={applyFixes}
               onIgnore={setIgnored}
               onAccept={setAccepted}
+              onMark={setMark}
               onFixAll={() => void fixEverything()}
               onRemedy={onRemedy}
               claudeMdSeries={claudeMdSeries}
@@ -452,7 +470,7 @@ export function SetupSheet({
 
 function SetupRegion({
   kind, elsewhere, onElsewhere, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
-  bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onFixAll, onRemedy, claudeMdSeries, descSeries,
+  bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onMark, onFixAll, onRemedy, claudeMdSeries, descSeries,
   onOpenFile, sessionDoors, onAllSessions,
 }: {
   /** Which cut of the checklist this is: the conventions, or the daily watch (`isWatchCheck`). */
@@ -483,6 +501,8 @@ function SetupRegion({
   onIgnore: (id: string, ignore: boolean) => void;
   /** Accept / stop accepting an exposure finding; resolves to a refusal sentence or null. */
   onAccept: (req: ComplianceAcceptRequest) => Promise<string | null>;
+  /** Mark / clear the mark of an exposure finding; resolves to a refusal sentence or null. */
+  onMark: (req: ComplianceTriageRequest) => Promise<string | null>;
   onFixAll: () => void;
   onRemedy?: (prompt: string, repo: RepoTarget, label: string) => void;
   /** The series' own reading of the two halves of the always-on weight, when
@@ -534,6 +554,7 @@ function SetupRegion({
       ? <>
           <div className="check-detail check-detail-quiet">{exposureMeta(c.exposure)}</div>
           <AcceptControl check={c} onAccept={onAccept} />
+          <TriageControl check={c} onMark={onMark} />
         </>
       : null;
     return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
@@ -637,7 +658,10 @@ function SetupRegion({
           {/* Accepted exposure findings stay visible with their reason, never hidden; like Ignored,
               not under the findings cut (an accepted row is not a finding). */}
           {!cut && <AcceptedSection rows={xcut.accepted} now={Date.now()}
-            onStop={(id) => void onAccept({ id, accept: false }).then((err) => { if (err) showToast(err); })} />}
+            onStop={(id) => void onAccept({ id, accept: false }).then((err) => { if (err) showToast(err); })}
+            onClearMark={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
+          {!cut && <StaleMarksSection marks={xcut.summary?.staleMarks ?? []}
+            onClear={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
 
           {/* A repo with no CLAUDE.md has nothing to weigh and therefore no
               row — but it will be measured against this line the moment it

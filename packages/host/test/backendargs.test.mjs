@@ -36,6 +36,7 @@ import assert from "node:assert/strict";
 import { claudeBackend, hookSettingsArg } from "../dist/backends/claude.js";
 import { resolveBackend, DEFAULT_BACKEND } from "../dist/backends/index.js";
 import { composerSpans } from "../dist/composer.js";
+import { withHostApi } from "../dist/reposkill.js";
 import { BRAND, envName } from "@waterplane/shared";
 
 const PORT = 8770;
@@ -186,5 +187,11 @@ test("every launch carries the repo-facing skill as a plugin dir, written where 
   const skill = join(dir, "skills", BRAND.skillName, "SKILL.md");
   assert.ok(existsSync(join(dir, ".claude-plugin", "plugin.json")) && existsSync(skill));
   assert.match(readFileSync(skill, "utf8"), new RegExp(`^---\\nname: ${BRAND.skillName}\\n`));
-  assert.match(readFileSync(skill, "utf8"), new RegExp(`127\\.0\\.0\\.1:${PORT}`), "the port is the launch's");
+  // One file per desktop, rewritten by EVERY host that launches (an e2e host on a random port
+  // too), so it names the variable the session is spawned with, never a port: a live session
+  // once read an e2e host's 60736 here and its curl went nowhere.
+  const text = readFileSync(skill, "utf8");
+  assert.ok(text.includes(`$${envName("API")}/api/agent/intents`), "the routes are reached through the variable");
+  assert.doesNotMatch(text, /127\.0\.0\.1:\d/, "no port is written into the shared file");
+  assert.deepEqual(withHostApi(PORT, { X: "1" }), { [envName("API")]: `http://127.0.0.1:${PORT}`, X: "1" }, "each pane gets its own host");
 });

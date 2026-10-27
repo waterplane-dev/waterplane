@@ -23,9 +23,9 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { ContextLimitsStore, setContextLimitsStore } from "./contextlimits.js";
-import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, OPT_INS, cleanAutoCompactDefault, type ComplianceAcceptRequest, type OptInChoice } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, OPT_INS, cleanAutoCompactDefault, type ComplianceAcceptRequest, type ComplianceTriageRequest, type OptInChoice } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
-import { setExposureAccept } from "./exposure.js";
+import { setExposureAccept, setExposureTriage } from "./exposure.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 interface Doc {
@@ -201,6 +201,11 @@ export function ignoredChecks(worktree: string): string[] {
  */
 export function acceptCheck(worktree: string, req: ComplianceAcceptRequest): { ok: true } | { ok: false; error: string } {
   return setExposureAccept(worktree, req);
+}
+
+/** Mark (or clear) an exposure finding's triage state; the person's tap. */
+export function triageCheck(worktree: string, req: ComplianceTriageRequest): { ok: true } | { ok: false; error: string } {
+  return setExposureTriage(worktree, req);
 }
 
 /** What the person said about each opt-in offer in this repo — empty without a store. */

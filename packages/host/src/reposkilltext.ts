@@ -1,4 +1,4 @@
-import { BRAND, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
+import { BRAND, envName, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
 
 /**
  * The BODY of the repo-facing skill — what the agent in a driven repo learns
@@ -15,14 +15,22 @@ import { BRAND, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
  * Written for a reader who has never heard of the product and is mid-task: rules
  * first, each with its reason in one clause, no history.
  */
-export function repoSkillBody(port: number): string {
+/** The variable every session is spawned with naming the host that started it
+ *  (`http://127.0.0.1:<port>`, set in `sessions.ts`). The text names the VARIABLE, never
+ *  a port: the plugin file is one file per desktop, and every host that launches a
+ *  session — an e2e host on a random port included — writes it, so a port in it was
+ *  whichever host launched last (measured 2026-10-27: a live session read an e2e
+ *  host's 60736 and its curl went nowhere). */
+export const HOST_API_ENV = envName("API");
+
+export function repoSkillBody(): string {
   const D = BRAND.stateDirName;
   const S = BRAND.sharedDirName;
   const N = BRAND.displayName;
   const [wpU, wpL] = BRAND.promptAliases;
   const param = paramEnvName("<ID>");
   const olderParam = legacyParamEnvNames("<ID>")[0];
-  const base = `http://127.0.0.1:${port}`;
+  const base = `$${HOST_API_ENV}`;
   return `
 # Working in a repo driven by ${N}
 
@@ -42,6 +50,9 @@ repo's own meaning and say so in one line rather than guess.
 
 ## The frame you work in
 
+- **\`${base}\` is the ${N} host that started this session** (set in its
+  environment; every \`curl\` below uses it). Empty means no ${N} host started
+  this shell: the routes below are not reachable from here.
 - **The reader is on a phone.** Long terminal output is unreadable there. Say
   the conclusion in a few lines; put anything bigger (a report, a table, a diff,
   a screenshot) in a FILE in the outbox and name it.
@@ -128,6 +139,29 @@ artifact are removed. **So never copy a build artifact into the outbox by
 hand** — a hand copy is a second copy nothing prunes. The rule is
 \`${D}/artifacts.json\`: \`{ "collect": true, "prune": true, "keep": 3 }\`
 (those are the defaults when the file is absent).
+
+**Say which build you made.** Each build entry's row on the phone shows the
+last build it produced — version, commit and build time — and the person
+holds that line beside the app to check it is the one they are running. So
+whenever a build produces something a person will install, publish or open
+(a button run, or you running a release because you were asked), append ONE
+JSON line to \`${D}/versions.jsonl\`:
+
+\`\`\`json
+{"name":"apk-dev","version":"1.4.0","sha":"a1b2c3d","dirty":false,"at":1793089186109,"channel":"beta","file":"app/build/app.apk"}
+\`\`\`
+
+- \`name\` is the artifact, stable across builds; the entry in \`${S}/builds.json\`
+  names it with \`"artifact": "<name>"\` (absent, the entry's own \`id\`).
+- \`at\` (epoch ms) is required; \`sha\` is \`git rev-parse --short HEAD\`, \`dirty\`
+  true when uncommitted edits went into it; \`channel\` says where it went
+  (\`dev\`, \`beta\`, \`store\`, \`installed on this desktop\`).
+- **The same identity goes INTO the artifact**, somewhere the person can find it
+  (an About line, a settings footer, a tooltip): bake version, sha and build time
+  in at build time and record exactly those, so the two match. Put the line in
+  the build script, not in your head — an agent's release and a button's run
+  must both leave it. If this repo has no such line yet, add it when you next
+  touch its build.
 
 ## A reading of this repo's own, on its health charts
 
@@ -264,6 +298,27 @@ curl -s -X POST ${base}/api/agent/followup -H 'content-type: application/json' \
 \`\`\`
 
 If two sessions share the folder the answer lists them; retry with \`"session":"<id>"\`.
+
+## Crash and exposure findings
+
+List this repo's OPEN crash groups and exposure findings (each has a \`triageId\`; add \`all=1\` for accepted and
+fixed ones and for marks whose group is not in today's reading):
+
+\`\`\`sh
+curl -s -G ${base}/api/agent/exposure --data-urlencode "dir=$PWD"
+\`\`\`
+
+When you start on one, mark it \`investigating\`; once the fix is built and the version that carries it exists (the
+manifest or package version you bumped), mark it \`fixed\` with that version. \`fixed\` needs a crash group that has an
+app version; for anything else say \`seen\` or \`investigating\`. A mark needs a live session in this folder (as the
+follow-up above); if two share it, retry with \`"session":"<id>"\`.
+
+\`\`\`sh
+curl -s -X POST ${base}/api/agent/exposure/triage -H 'content-type: application/json' \\
+  -d "{\\"dir\\":\\"$PWD\\",\\"triageId\\":\\"<triageId>\\",\\"state\\":\\"fixed\\",\\"fixedIn\\":\\"1.2.3\\",\\"commit\\":\\"<sha, 7-40 hex>\\"}"
+\`\`\`
+
+You cannot clear a mark: that stays the person's.
 
 ## Delegating to a paired desktop (a peer), and what comes back
 

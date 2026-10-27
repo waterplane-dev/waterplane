@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarClock, CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, ChevronDown, ChevronUp } from "lucide-react";
-import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget, ScheduleEntry, WindowResets } from "@waterplane/shared";
+import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRecord, BuildRun, RepoTarget, ScheduleEntry, WindowResets } from "@waterplane/shared";
 import { branchLabel } from "@waterplane/shared";
 import { SETUP_PROMPT, oneBuildPrompt, paramsRowNote, type BuildDraftSeed } from "./buildPrompt";
 import { track } from "./usage";
@@ -11,6 +11,7 @@ import { useBackStep } from "./backStep";
 import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { BUILD_LOCAL_ROW, localAfterSave } from "./buildScope";
+import { buildRecordWords, earlierBuildsLabel, entryVersions, lastBuildWords } from "./buildVersionWords";
 import { BuildEditor } from "./BuildEditor";
 import { BuildRunAsk } from "./BuildRunAsk";
 import { BuildScheduleForm } from "./BuildScheduleForm";
@@ -36,6 +37,8 @@ interface Props {
   onSave: (next: BuildConfig[], local?: string[]) => void;
   /** `build.list`'s `localIds`; `undefined` = older host: no scope control, no attribution. */
   localIds?: string[];
+  /** `build.list`'s `versions`: each artifact's recent builds (`undefined` = older host: no line). */
+  versions?: Record<string, BuildRecord[]>;
   /** Start a build, with whatever its parameters were answered with. App routes
    *  it through the durable send queue, so a tap on a dead tunnel is kept and
    *  started on reconnect (and never run twice). */
@@ -120,8 +123,10 @@ interface Props {
  * claude session (works when you're rate-limited), watch live output, and
  * download the produced artifact (APK/zip/…).
  */
-export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit, focusRun }: Props) {
+export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, versions, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit, focusRun }: Props) {
   const [editing, setEditing] = useState<BuildConfig | null>(null);
+  // The one entry whose earlier builds are unfolded, if any.
+  const [history, setHistory] = useState<string | null>(null);
   /* The build whose questions are being answered. A tap on a parameterised
      button opens this instead of running — the values ARE part of the command,
      so there is no honest way to start without them. */
@@ -272,6 +277,8 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
           {builds.map((b) => {
             const running = runs.find((r) => r.buildId === b.id && r.status === "running");
             const cue = scheduleCue?.(b) ?? null;
+            const built = entryVersions(b, versions);
+            const earlier = earlierBuildsLabel(built.length - 1, history === b.id);
             return (
               <Row key={b.id} kind="wrap">
                 <div className="build-main">
@@ -287,7 +294,18 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
                       this is. */}
                   {b.params?.length ? <RowSub>{paramsRowNote(b)}</RowSub> : null}
                   {localIds?.includes(b.id) ? <RowSub>{BUILD_LOCAL_ROW}</RowSub> : null}
+                  {/* Which build this entry last produced, in the words the
+                      artifact itself shows — the line to hold beside the app. */}
+                  {built[0] ? <RowSub className="build-version">{lastBuildWords(built[0])}</RowSub> : null}
                 </Row>
+                {earlier && (
+                  <button className="linkish build-cue" onClick={() => setHistory(history === b.id ? null : b.id)}>
+                    {earlier}
+                  </button>
+                )}
+                {history === b.id && built.slice(1).map((r) => (
+                  <RowSub key={`${r.at}-${r.sha ?? ""}`} className="build-version">{buildRecordWords(r)}</RowSub>
+                ))}
                 {/* The rules that run this entry, in the cards' own words. A
                     sibling of the run button, never inside it (a button in a
                     button), and its tap is the cut it counts: exactly these ids. */}

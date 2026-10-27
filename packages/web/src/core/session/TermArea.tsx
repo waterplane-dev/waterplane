@@ -60,7 +60,7 @@ import { pasteLoginCode } from "../../features/hostTools";
 import { openScrollback } from "../../features/scrollback";
 import { openContext } from "../../features/context";
 import { useWeekIncl, useWeekUsdPerPct } from "../../features/tokens";
-import { openShellsFor } from "../../features/shells";
+import { lineToShell, openShellsFor } from "../../features/shells";
 import { openLogins } from "../../features/shellLogins";
 import { DemoHookCard, DemoHookHint } from "../../features/demoTour";
 import type { SessionChrome } from "./useSessionChrome";
@@ -515,6 +515,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
               url: (rel, w, mtime) => { const u = api.artifactUrl(activeRepoId, rel); return w ? sized(u, w, mtime) : u; },
               open: (rel) => openFileRef(activeRepoId, rel),
               known: transportKnown,
+              // `! cmd` lines the agent hands back → the companion shell's box (`bangLine.ts`).
+              toShell: (line) => lineToShell(active, line),
             } : undefined}
             onToast={showToast}
           />

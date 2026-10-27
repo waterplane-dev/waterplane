@@ -26,8 +26,28 @@ export interface ExposureFinding {
   sources: string[];
   advisory?: string;
   since?: string;
-  accepted?: ExposureAccept;
+  accepted?: ExposureAccept & { byMark?: true };
+  /** D3: the crash group without version or growth bucket (`app/channel/type/location`): what a triage mark sticks to. */
+  group?: string;
+  /** D3: the app version the crashes were reported from. */
+  appVersion?: string;
+  /** Set by `applyTriage` when a mark applies to this finding. */
+  triage?: ExposureTriage;
 }
+export type ExposureTriageState = "seen" | "investigating" | "fixed";
+/** A mark on a finding (or crash group): who set it and when. Nothing is hidden by it; see `applyTriage`. */
+export interface ExposureTriage {
+  state: ExposureTriageState;
+  fixedIn?: string;
+  commit?: string;
+  note?: string;
+  at: string;
+  by: { kind: "person" } | { kind: "agent"; session?: string; repo?: string };
+  /** The finding's `appVersion` when the mark was set: a seen / investigating mark stops holding back the push once a different app version reports the group. */
+  markedVersion?: string;
+}
+/** The triage file: triage id (`exposureTriageId`) to its mark. */
+export type ExposureTriageFile = Record<string, ExposureTriage>;
 /** A measure the run could not read: never a pass, never a zero. */
 export interface ExposureAbsent { measure: string; why: string; unreachable: boolean }
 export interface ExposureRow {
@@ -75,6 +95,9 @@ export function semverCmp(a: string, b: string): number {
   return 0;
 }
 
+/** What a triage mark sticks to: the crash group when there is one, else the finding key. */
+export const exposureTriageId = (f: Pick<ExposureFinding, "key" | "group">): string => f.group ?? f.key;
+
 const toMs = (d: Date | string): number => (d instanceof Date ? d.getTime() : Date.parse(d));
 
 /** Is this accept still live for this finding? Every condition it names must hold; none => forever. */
@@ -109,6 +132,78 @@ export function applyAccepts(
     }
     if (!a || !acceptLive(f, a, now)) { const { accepted: _x, ...rest } = f; return rest; }
     return { ...f, accepted: { reason: a.reason, at: a.at, ...(a.until ? { until: a.until } : {}) } };
+  });
+}
+
+const dayOf = (at: string): string => (/^\d{4}-\d{2}-\d{2}/.exec(String(at)) ?? [String(at)])[0]!;
+const whoWords = (t: ExposureTriage): string =>
+  t.by?.kind === "agent" ? `agent session${t.by.repo ? ` in ${t.by.repo}` : ""}` : "you";
+
+const str = (v: unknown, max = 200): v is string => typeof v === "string" && v.length > 0 && v.length <= max;
+
+/**
+ * Clean a parsed triage file: keep the entries that are well-formed marks, drop the rest (a hand edit, a shape from
+ * another version). Never throws; a dropped entry reads as "no mark", never as a thrown checklist or sweep.
+ */
+export function cleanTriageFile(v: unknown): ExposureTriageFile {
+  const out: ExposureTriageFile = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const t = raw as Record<string, unknown>;
+    if (t.state !== "seen" && t.state !== "investigating" && t.state !== "fixed") continue;
+    if (!str(t.at, 64)) continue;
+    const by = t.by as Record<string, unknown> | null | undefined;
+    let who: ExposureTriage["by"];
+    if (by && typeof by === "object" && by.kind === "person") who = { kind: "person" };
+    else if (by && typeof by === "object" && by.kind === "agent") {
+      who = { kind: "agent", ...(str(by.session) ? { session: by.session } : {}), ...(str(by.repo) ? { repo: by.repo } : {}) };
+    } else continue;
+    if (t.state === "fixed" && !str(t.fixedIn, 32)) continue;
+    out[id] = {
+      state: t.state, at: t.at, by: who,
+      ...(t.state === "fixed" ? { fixedIn: t.fixedIn as string } : {}),
+      ...(str(t.commit, 40) ? { commit: t.commit } : {}),
+      ...(str(t.note, 280) ? { note: t.note } : {}),
+      ...(str(t.markedVersion, 64) ? { markedVersion: t.markedVersion } : {}),
+    };
+  }
+  return out;
+}
+
+/** The sentence a seen / investigating / fixed mark adds to a finding's row. */
+export function triageWords(t: ExposureTriage): string {
+  if (t.state === "fixed") {
+    return `fixed${t.fixedIn ? ` in ${t.fixedIn}` : ""}${t.commit ? ` (commit ${t.commit})` : ""}, ${whoWords(t)}, ${dayOf(t.at)}${t.note ? `: ${t.note}` : ""}`;
+  }
+  return `${t.state} \u2014 ${whoWords(t)}, ${dayOf(t.at)}${t.note ? `: ${t.note}` : ""}`;
+}
+
+/**
+ * Apply triage marks (pure). seen / investigating: still open, carries `triage`. fixed + `appVersion` older than
+ * `fixedIn`: listed as `accepted` (not counted, never pushed) with words saying installs still report it. fixed with
+ * no `appVersion` or no `fixedIn`: not counted while the triage id matches (a finding whose key changes is a new one).
+ * fixed + `appVersion` >= `fixedIn`: a REGRESSION, stays an alert with its text prefixed. An existing accept is kept.
+ */
+export function applyTriage(
+  findings: ExposureFinding[],
+  triage: ExposureTriageFile | null | undefined,
+): ExposureFinding[] {
+  if (!triage) return findings;
+  return findings.map((f) => {
+    const id = exposureTriageId(f);
+    const t = Object.hasOwn(triage, id) ? triage[id] : undefined;
+    if (!t || (t.state !== "seen" && t.state !== "investigating" && t.state !== "fixed")) return f;
+    if (t.state !== "fixed") return { ...f, triage: t };
+    const older = !!f.appVersion && !!t.fixedIn && semverCmp(f.appVersion, t.fixedIn) < 0;
+    if (f.appVersion && t.fixedIn && !older) {
+      return { ...f, triage: t, text: `crashes again in ${f.appVersion} after the fix in ${t.fixedIn}: ${f.text}` };
+    }
+    if (f.accepted) return { ...f, triage: t };
+    const reason = older
+      ? `${triageWords(t)}; installs on ${f.appVersion} still report it`
+      : `${triageWords(t)}; not counted until the reading changes`;
+    return { ...f, triage: t, accepted: { reason, at: t.at, byMark: true as const } };
   });
 }
 
@@ -211,14 +306,18 @@ export function exposureChecks(
   accepts: Record<string, ExposureAccept> | null,
   now: Date | string,
   opts?: { staleMs?: number },
+  triage?: ExposureTriageFile | null,
 ): ComplianceCheck[] {
   const staleMs = opts?.staleMs ?? 2 * DAY_MS;
-  const findings = applyAccepts(row.findings ?? [], accepts, now);
+  const findings = applyTriage(applyAccepts(row.findings ?? [], accepts, now), triage);
   const open = findings.filter((f) => !f.accepted);
   const alerts = open.filter((f) => f.level === "alert").length;
   const digest = open.length - alerts;
   const accepted = findings.length - open.length;
   const absent = row.absent ?? [];
+  // Marks whose group is not in this reading: kept (the group may return), listed so a person can clear them.
+  const here = new Set((row.findings ?? []).map(exposureTriageId));
+  const staleMarks = Object.entries(triage ?? {}).filter(([id]) => !here.has(id)).map(([triageId, t]) => ({ triageId, triage: t }));
 
   const age = toMs(now) - Date.parse(row.at);
   const known = Number.isFinite(age);
@@ -231,6 +330,7 @@ export function exposureChecks(
   const out: ComplianceCheck[] = [{
     id: EXPOSURE_SUMMARY_ID, label: "Exposure watch", status: fresh && !absent.length ? "pass" : "warn",
     detail: parts.join(" "), fix: null, advisory: true,
+    ...(staleMarks.length ? { staleMarks } : {}),
   }];
 
   for (const f of findings) {
@@ -238,7 +338,7 @@ export function exposureChecks(
       id: exposureCheckId(f.key),
       label: `${f.measure} ${f.subject}${f.version ? "@" + f.version : ""}`,
       status: f.level === "alert" ? (f.severity === "critical" || f.severity === "high" ? "fail" : "warn") : "warn",
-      detail: f.text,
+      detail: f.triage && f.triage.state !== "fixed" ? `${f.text} (${triageWords(f.triage)})` : f.text,
       fix: f.accepted ? null : f.key === PROTECT_MAIN_KEY ? PROTECT_MAIN_FIX : f.measure === "D3" ? ERA_SEEN_FIX : null,
       ...(f.level === "digest" ? { advisory: true as const } : {}),
     };
@@ -253,6 +353,9 @@ export function exposureChecks(
       ...(f.severity ? { severity: f.severity } : {}),
       level: f.level, sources: f.sources,
       ...(f.since ? { since: f.since } : {}),
+      ...(f.group ? { group: f.group } : {}),
+      ...(f.appVersion ? { appVersion: f.appVersion } : {}),
+      ...(f.triage ? { triage: f.triage } : {}),
       ...(threshold ? { threshold } : {}),
     };
     out.push(check);

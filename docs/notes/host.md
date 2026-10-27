@@ -4450,6 +4450,35 @@ same minutes. `packages/host/test/queuedturns.test.mjs`.
   `secrets.ts` (**write-only**, gitignore gate) · `update.ts` · `host.ts` · `auth.ts` ·
   `webbundle.ts` (content-derived build id, per-file sha256; owns `WEB_DIST`).
 
+### Which build is this: `shared/buildstamp.ts` and `buildversions.ts`
+
+Measured failure, 2026-10-27: the VS Code entry's *install latest* had `waterplane-0.2.0.vsix`
+written into its command since 2026-10-16, so every tap from 0.3.0 to 0.7.0 packaged the new build
+and installed the old one; the owner could only say it "does not feel like" the latest. A version
+alone would not have caught it either — a rebuild of 0.7.0 is still 0.7.0 — so the identifier is
+**version · commit · build time** (`+ edits` when uncommitted changes went in), worded by ONE
+function (`buildStampText`) both inside the artifact and on the build row, so a person compares
+by eye.
+
+The record is a line in `<repo state dir>/versions.jsonl`, written by the BUILD (or the agent
+running a release), never by the host: only the build knows what it baked in, and an agent's
+release never passes through a build button. The host (`buildversions.ts`) only reads the tail and
+ships it on `build.list`; an entry names its records with `artifact`, else its `id`. Other repos
+learn the convention from `reposkilltext.ts`; `scripts/build-record.mjs` is dependency-free so a
+repo can copy it.
+
+Waterplane's own phone app has two halves, stamped separately and shown one line each on the
+app-update screen (`AppUpdate.tsx`): **the web bundle** writes `dist/buildstamp.json` beside
+`build-id.txt` (`vite.config.ts webStamp`), and **the shell** gets it from `build.gradle` as
+BuildConfig fields (`ShellUpdate.info()`), plus `assets/buildstamp.json` inside the APK/AAB (what
+`release:build --apk` and `release:play` record from, so a pre-built file is recorded as what it
+is) and `android/app/build/generated/buildstamp/buildstamp.json` (what the build entries record).
+**The web stamp is never a `define`**: a commit or a clock in the JS changes the bundle's bytes,
+so `build-id.txt` — the OTA identity, a hash of the output — would move on every build and every
+phone would re-download an identical bundle. It is written after the hash, and an unchanged
+build-id keeps the stamp it was first built with. Artifact names: `web-bundle`, `apk-dev`,
+`apk-dev-release`, `aab-play`.
+
 ### A build that ASKS: `shared/buildparams.ts`
 
 - **The case that forced it**: a Garmin monorepo where one screenshot pipeline serves forty apps
@@ -8309,6 +8338,10 @@ Two-to-six-line summaries of modules the groomed skills now name, taken from eac
 ### `agentfollowup.ts`
 
 `POST /api/agent/followup` — an agent flags ITS OWN session for follow up with a one-line reason (R-sessions-044). It can set the flag and never clear it: there is no DELETE, and an empty reason is refused, so the only way a flag goes away stays a person's tap. Same caller gate as `agentintents.ts` (`agentCallerRefusal`): loopback, not proxied, not a browser. The session is named by `session`, or found from the agent's `$PWD` (`resolveFollowUpSession`, pure, pinned without a daemon): the longest session cwd that is the dir or a parent of it.
+
+### `agentexposure.ts`
+
+`GET /api/agent/exposure?dir=` and `POST /api/agent/exposure/triage` (R-monitoring-004) — an agent marks a crash group or exposure finding seen, investigating or fixed, and never clears a mark. Same loopback-only, not-a-browser gate as `agentfollowup.ts`. The POST needs a resolving live session in `dir` (refused with the follow-up route's status and sentence), and `by.repo` is that session's. The GET lists OPEN findings (accepts and marks applied); `?all=1` adds accepted / fixed ones with a `status` and the `staleMarks` whose group is not in the newest reading. `fixed` is refused for a finding with no `appVersion`, because a fix is compared against the version that reports the crash.
 
 ### `ocrlocal.ts`
 

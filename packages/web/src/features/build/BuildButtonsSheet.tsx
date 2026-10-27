@@ -8,7 +8,7 @@ import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
 import { buildLogSeed } from "../../buildLogPrompt";
-import { artifactPolicies, buildCands, buildLocalIds, buildOpts, buildRunFocus, buildScheduleEdit, builds } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildVersions, buildOpts, buildRunFocus, buildScheduleEdit, builds } from "./store";
 import { buildScheduleCue } from "../../buildSchedule";
 import { askOptions, cancelBuild, openBuildScheduleCut, runBuild, saveBuildSchedule, saveBuilds, savePolicy, scanRepo, setupBuilds } from "./actions";
 
@@ -23,6 +23,7 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
   const cands = useStore(buildCands).get(dir);
   const opts = useStore(buildOpts).get(dir);
   const localIds = useStore(buildLocalIds).get(dir);
+  const versions = useStore(buildVersions).get(dir);
   const policy = useStore(artifactPolicies).get(dir);
   const runs = useMemo(() => allRuns.filter((r) => r.repoDir === dir), [allRuns, dir]);
   const list = cfgs.lists.get(dir) ?? [];
@@ -61,6 +62,7 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
       outTick={outTick}
       online={core.conn.status === "open"}
       localIds={localIds}
+      versions={versions}
       onSave={(b, local) => saveBuilds(dir, b, local)}
       onRun={(id, params) => runBuild(dir, id, params)}
       onCancel={cancelBuild}

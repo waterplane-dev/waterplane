@@ -321,6 +321,12 @@ public class ShellUpdatePlugin extends Plugin {
             // rather than a zero that would read as "version 0, please update".
             com.getcapacitor.Logger.warn("shell-update", "own package not found: " + e);
         }
+        // Which build of the shell this is (`@waterplane/shared` buildstamp.ts): the commit and the
+        // time `build.gradle` baked in. The version name alone says nothing for a dev build, which
+        // is "1.0" every time.
+        ret.put("gitSha", BuildConfig.GIT_SHA);
+        ret.put("gitDirty", BuildConfig.GIT_DIRTY);
+        ret.put("builtAt", BuildConfig.BUILT_AT);
         call.resolve(ret);
     }
 

@@ -7,6 +7,7 @@
  * A click opens the panel.
  */
 import * as vscode from "vscode";
+import { buildText } from "./buildstamp.js";
 import { BRAND, contextPct, fmtCount, fmtUsd, PRICES_AS_OF } from "@waterplane/shared";
 import type { SessionDoc } from "./protocol.js";
 import { sessionTotal } from "./data/sessiontotal.js";
@@ -50,7 +51,7 @@ export class StatusBar implements vscode.Disposable {
     if (!this.enabled) { this.item.hide(); return; }
     if (this.scan) {
       this.item.text = `$(sync~spin) reading logs ${fmtCount(this.scan.done)}/${fmtCount(this.scan.total)}`;
-      this.item.tooltip = `${BRAND.name} is reading Claude Code's logs on this machine. Nothing leaves it.`;
+      this.item.tooltip = `${BRAND.name} is reading Claude Code's logs on this machine. Nothing leaves it.${buildText ? `\n\n${BRAND.name} ${buildText}` : ""}`;
       this.item.show();
       return;
     }
@@ -91,6 +92,7 @@ export class StatusBar implements vscode.Disposable {
     }
     if (total.unpricedTok > 0) md.appendMarkdown(`${fmtCount(total.unpricedTok)} tokens ran on a model with no published rate and are not priced.\n\n`);
     md.appendMarkdown(`List price at ${PRICES_AS_OF}, not your bill. Click to open.`);
+    if (buildText) md.appendMarkdown(`\n\n${BRAND.name} ${buildText}`);
     return md;
   }
 
@@ -106,6 +108,7 @@ export class StatusBar implements vscode.Disposable {
     if (this.repo) md.appendMarkdown(` · this repo ${fmtUsd(this.repo.usd)}`);
     md.appendMarkdown(` · all ${all}\n\n${weekSplit(s)}\n\n`);
     md.appendMarkdown(s.week.cost ? `List price at ${PRICES_AS_OF}, not your bill. Click to open.` : "Nothing in these days was priced. Click to open.");
+    if (buildText) md.appendMarkdown(`\n\n${BRAND.name} ${buildText}`);
     this.item.tooltip = md;
     this.item.show();
     this.ticking(true);

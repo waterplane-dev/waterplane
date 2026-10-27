@@ -43,6 +43,8 @@ import { LS, lsDel, lsGet, lsJson, lsSet, lsSetJson } from "./storage";
 import { api, bgFetch } from "./api";
 import { armRouteResume } from "./resumeRoute";
 import { showToast } from "./toast";
+import { cleanBuildStamp, type BuildStamp } from "@waterplane/shared";
+import { shellStampOf } from "./buildVersionWords";
 
 /** One file in the daemon's bundle manifest (host/webbundle.ts). */
 interface BundleFile {
@@ -103,6 +105,9 @@ export interface NativeUpdateInfo {
   badReason: string;
   /** When the shell last fell back to its built-in bundle by itself; 0 never. */
   lastRecoveryAt: number;
+  /** Which build of the SHELL this is — version, commit, build time (`shellStampOf`); null from an
+   *  APK that predates the stamp. */
+  shell: BuildStamp | null;
 }
 
 type Listener = (s: UpdateStatus) => void;
@@ -491,6 +496,7 @@ export async function nativeInfo(): Promise<NativeUpdateInfo | null> {
       badBuild: typeof r.badBuild === "string" ? r.badBuild : "",
       badReason: typeof r.badReason === "string" ? r.badReason : "",
       lastRecoveryAt: typeof r.lastRecoveryAt === "number" ? r.lastRecoveryAt : 0,
+      shell: shellStampOf(r),
     };
   } catch {
     return null;
@@ -512,6 +518,19 @@ export async function runningBuildId(): Promise<string | null> {
     if (!r.ok) return null;
     const id = (await r.text()).trim();
     return /^[a-f0-9]{8,64}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Which build of the web bundle is running, in words (`dist/buildstamp.json`, written beside
+ *  `build-id.txt` by the web build and read the same way, out of the bundle itself). Null from a
+ *  bundle built before the stamp. */
+export async function runningBuildStamp(): Promise<BuildStamp | null> {
+  try {
+    const r = await bgFetch("/buildstamp.json", { cache: "no-store" });
+    if (!r.ok) return null;
+    return cleanBuildStamp(await r.json());
   } catch {
     return null;
   }

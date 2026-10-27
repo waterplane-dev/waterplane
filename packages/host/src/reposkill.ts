@@ -9,8 +9,8 @@
  * the repo. It was a repo file for one afternoon, and that needed a hash stamp,
  * a stale-copy finding, a one-tap update and a guarded replace for edited
  * copies — all to keep N copies of one text true. This way there is one copy,
- * written from `reposkilltext.ts` into the host's config dir whenever the text or
- * the port changes, and every session reads what the host says TODAY. It reaches
+ * written from `reposkilltext.ts` into the host's config dir whenever the text
+ * changes (it names no port — `HOST_API_ENV`), and every session reads what the host says TODAY. It reaches
  * exactly the sessions it describes: a `claude` started at the desk without
  * the host does not get it.
  *
@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { join } from "node:path";
 import { hostSecretDir } from "./secrets.js";
 import { BRAND } from "@waterplane/shared";
-import { repoSkillBody } from "./reposkilltext.js";
+import { HOST_API_ENV, repoSkillBody } from "./reposkilltext.js";
 
 const DESCRIPTION =
   `${BRAND.displayName} (dictated "water plane"; "${BRAND.promptAliases.join('"/"')}" outside a WordPress repo), the phone remote this repo is driven from: ` +
@@ -35,8 +35,8 @@ const DESCRIPTION =
   "person reading on a phone, often away. Load BEFORE producing anything a person should look at or download, " +
   "adding or changing a build, scheduling work the person asked for later, or asking the person something.";
 
-/** The plugin's files, relative to its dir, for one port. */
-export function repoClaudePluginFiles(port: number): Record<string, string> {
+/** The plugin's files, relative to its dir. No port in them: one file per desktop, written by every host. */
+export function repoClaudePluginFiles(): Record<string, string> {
   return {
     ".claude-plugin/plugin.json": JSON.stringify({
       name: BRAND.skillName,
@@ -47,8 +47,14 @@ export function repoClaudePluginFiles(port: number): Record<string, string> {
 name: ${BRAND.skillName}
 description: ${DESCRIPTION}
 ---
-${repoSkillBody(port)}`,
+${repoSkillBody()}`,
   };
+}
+
+/** A launch's pane env with the host that started it, under the name the skill
+ *  text uses (`HOST_API_ENV`). The launch's own values win. */
+export function withHostApi(port: number, launchEnv?: Readonly<Record<string, string>>): Record<string, string> {
+  return { [HOST_API_ENV]: `http://127.0.0.1:${port}`, ...launchEnv };
 }
 
 /**
@@ -56,8 +62,8 @@ ${repoSkillBody(port)}`,
  * (`LaunchRequest.instructions` → a plugin's `prepare()`: Copilot's `AGENTS.md` in a
  * per-session dir, `instructionsVia: "env-file"`). One text, whichever route it takes.
  */
-export function repoInstructions(port: number): string {
-  return repoSkillBody(port);
+export function repoInstructions(): string {
+  return repoSkillBody();
 }
 
 /** `<config dir>/claude-plugin` — beside the host's own `.env`, never in a repo. */
@@ -69,12 +75,12 @@ export function repoClaudePluginDir(): string {
  * Write the plugin where it differs and return its dir, or null when it could
  * not be written (a launch then simply goes without it — the skill is help, not
  * a precondition). Called per launch: a read and a compare, a write only when
- * the text or the port moved.
+ * the text moved.
  */
-export function ensureRepoClaudePlugin(port: number): string | null {
+export function ensureRepoClaudePlugin(): string | null {
   const dir = repoClaudePluginDir();
   try {
-    for (const [rel, text] of Object.entries(repoClaudePluginFiles(port))) {
+    for (const [rel, text] of Object.entries(repoClaudePluginFiles())) {
       const path = join(dir, rel);
       if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
       mkdirSync(join(path, ".."), { recursive: true });

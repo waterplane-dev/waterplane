@@ -3,6 +3,24 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.10
+
+The first public release since 0.1.6: it also carries everything listed under 0.1.8 and 0.1.9 below.
+
+### New
+
+- **A `! cmd` line in the reader opens the session's shell.** A code span or shell fence starting with `!` gets a shell button: it opens the session's companion shell and puts the command there, on its own line, without running it. With no shell on the desktop it copies the command instead.
+- **Mark a crash or finding.** Exposure findings carry a mark — seen, investigating, or fixed in a version — set from the phone or by an agent; a crash fixed in a version that comes back there or later alerts as a regression.
+- **Which build is running.** The app-update screen names the shell and the web bundle builds, and each build entry's row says which build it last produced. The VS Code extension (0.8.0) shows the same line.
+- **Capture: set up with AI.** The capture sheet can seed a new session that writes and verifies the capture targets.
+
+### Fixes
+
+- **Security:** the installer pins Node 24.22.1, the 2026-10-20 security release.
+- A session's agent reaches its own desktop's API (`$WATERPLANE_API`), not whichever host wrote the shared plugin file last.
+- The VS Code build entry's *install latest* installs the vsix it just packaged.
+- A document tile in the new-files strip shows its name and folder.
+
 ## 0.1.9
 
 ### Breaking
@@ -12,7 +30,7 @@ version — so entries are grouped by the release they shipped in.
 ### New
 
 - **What's new.** One place that opens every new thing, with its state.
-- **What every turn carries.** The context sheet, Repo readings and token stats show the always-on part of each request — CLAUDE.md, skills, subagents, MCP servers and this desktop's files — measured on a session's first request, with doors between the three views. The VS Code extension shows the same list.
+- **What every turn carries.** The context sheet, Repo readings and token stats show the always-on part of each request — CLAUDE.md, skills, subagents, MCP servers and this desktop's files — measured on a session's first request and drawn as a strip, with doors between the three views. The VS Code extension (0.7.0) draws the same views.
 - **Exposure watch.** A daily, model-free reading of a repo's dependencies, runtimes, settings and store listings. Findings show as Repo readings rows you can accept with a reason, a new finding pushes once, and an unprotected default branch can be fixed with one tap. An optional OpenSSF Scorecard reading sits beside it, scored locally for private repos.
 - **Offline terminals.** Every session's terminal screen is cached for offline, not only the one you had open, and the offline card points at the cached transcript.
 - **Git Explain.** The desktop explains what a push sends and what a pull brings. It says it is an AI call, and what it cost.
@@ -23,6 +41,7 @@ version — so entries are grouped by the release they shipped in.
 ### Fixes
 
 - **Security:** the iOS shell pins Capacitor 8.5.2 (GHSA-rvm3-566m-v7fv). The Android APK already shipped with the fix in 0.1.8.
+- **Security:** the VS Code extension's publish tooling resolves `@azure/msal-node` 7.1.0 (GHSA-xcx6-jx8p-x3h5). It was never part of the shipped extension.
 - Filters and bulk actions sit above their lists: backlog, commit form, sweep, Week-end burn.
 - Week-end burn (was *This week's burn*): the sheet scrolls, has one start line, hides agent worktrees unless picked and tells twin clone names apart by path.
 - New settings are findable: *Push information too*, Automation and the Downloads switches.

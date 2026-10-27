@@ -777,8 +777,14 @@ export function eraFindings(status, stdout, stderr) {
   const findings = arr.filter((e) => e && typeof e === "object" && e.key).map((e) => {
     const b = bucket(e.count);
     stores[`D3.${e.key}.count`] = String(e.count ?? "");
-    return finding({ measure: "D3", subject: `ciq:${e.key}#${b}+`, level: "alert", severity: "high", sources: ["era"],
+    const f = finding({ measure: "D3", subject: `ciq:${e.key}#${b}+`, level: "alert", severity: "high", sources: ["era"],
       text: `${e.app} ${e.channel} v${e.version}: ${e.error}, ${b}+ times (top ${e.top}); the count is in the row` });
+    // key = app/channel/type/version/location (location may hold "/"): the group is the key without its version.
+    const kp = String(e.key).split("/");
+    // Fewer than 5 parts: no group, so a mark falls back to the full key (version + bucket) and ends at the next growth bucket (a degrade, not an error).
+    if (kp.length >= 5) f.group = [...kp.slice(0, 3), kp.slice(4).join("/")].join("/");
+    if (e.version !== undefined && e.version !== null) f.appVersion = String(e.version);
+    return f;
   });
   return findings.length ? { findings, absent: [], stores } : bad("ERA checker exited 10 but listed no crash group");
 }

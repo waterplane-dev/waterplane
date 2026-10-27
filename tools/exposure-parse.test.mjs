@@ -571,6 +571,10 @@ test("eraFindings: exit 0 nothing, 10 one alert per group, 2 unreachable, garbag
   assert.equal(r.findings[0].severity, "high");
   assert.equal(r.findings[0].key, "D3:ciq:appA/prod/Boom/1.2.3/Foo.mc:42#1+");
   assert.equal(r.findings[0].text, "appA prod v1.2.3: Boom, 1+ times (top Foo.mc:42); the count is in the row");
+  assert.equal(r.findings[0].group, "appA/prod/Boom/Foo.mc:42");
+  assert.equal(r.findings[0].appVersion, "1.2.3");
+  const slashed = eraFindings(10, JSON.stringify([{ key: "a/p/E/2.0/src/x.mc:3", app: "a", channel: "p", error: "E", version: "2.0", count: 1, last: "d", top: "t" }]), "").findings[0];
+  assert.equal(slashed.group, "a/p/E/src/x.mc:3");
   assert.deepEqual(r.stores, { "D3.appA/prod/Boom/1.2.3/Foo.mc:42.count": "7", "D3.appA/prod/Bang/1.2.3/Bar.mc:1.count": "1" });
   const at = (n) => eraFindings(10, JSON.stringify([{ key: "k", app: "a", channel: "c", error: "E", version: "1", count: n, last: "d", top: "t" }]), "").findings[0];
   assert.deepEqual([9, 10, 99, 100, 1234, 99999, 5e6].map((n) => /#(\d+)\+$/.exec(at(n).subject)[1]), ["1", "10", "10", "100", "1000", "10000", "10000"]);

@@ -4,7 +4,7 @@
  */
 import type { CaptureBackendInfo, CaptureRun, CaptureTarget, RepoTarget } from "@waterplane/shared";
 import { core, mapWith, type CoreApi } from "../../sdk";
-import { captureLane, captureNameIn, captureQueueTitle, captureQueuedToast, captureRunToast } from "./logic";
+import { captureLane, captureNameIn, captureSetupPrompt, captureQueueTitle, captureQueuedToast, captureRunToast } from "./logic";
 import { captureBackends, captureRepo, captures } from "./store";
 
 /** `capture.list`: the targets and runs, and what this desktop can drive. */
@@ -69,4 +69,22 @@ export function runCapture(repoDir: string, id: string, watch?: boolean): void {
 export function cancelCapture(runId: string): void {
   core().conn.liveSend({ t: "capture.cancel", runId }, "stopping the capture…",
     "no connection — the capture is running on the desktop and can't be stopped from here");
+}
+
+/**
+ * "Set up with AI": the Send sheet, seeded with the setup prompt and aimed at a
+ * NEW session in this checkout. A seed, never a send — the person reads the
+ * words, can retarget, and taps send themselves.
+ */
+export function setupCaptureWithAgent(repo: RepoTarget): void {
+  const c = core();
+  const dir = repo.worktreePath;
+  c.say.track("action:capture.setup");
+  c.nav.openSend({
+    prompts: [captureSetupPrompt(repo.repoName, captureBackends.get().get(dir) ?? [], captures.cfgs.get().lists.get(dir)?.length ?? 0)],
+    target: { kind: "repo", cwd: dir },
+    when: { kind: "now" },
+    cwdHint: dir,
+    origin: "From Capture",
+  });
 }

@@ -24,7 +24,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // that needs it, or a clean clone dies with ERR_MODULE_NOT_FOUND before saying anything.
 if (!existsSync(join(ROOT, "packages/shared/dist/brand.js"))) execFileSync("npm", ["run", "build:shared"], { cwd: ROOT, stdio: "inherit" });
 const { E, GITHUB_ORG, SLUG } = await import("../lib-brand.mjs");
-const { verifyDevApk } = await import("./apk-lib.mjs");
+const { packagedStamp, verifyDevApk } = await import("./apk-lib.mjs");
 const { buildShrinkwrap } = await import("./shrinkwrap-lib.mjs");
 const { privateExtensions } = await import("./public-lib.mjs");
 const { PUBKEY_PATH, assertKeyMatches, defaultKeyPath, loadPrivateKey, signFile } = await import("./sign-lib.mjs");
@@ -331,3 +331,12 @@ const mb = (f) => `${(statSync(join(OUT, f)).size / 1048576).toFixed(1)} MB`;
 console.log(`release ${SLUG} ${version} @ ${commit.slice(0, 10)} (node ${nodeVersion}) -> ${relative(ROOT, OUT)}/`);
 if (unsigned) console.log(`  UNSIGNED (--unsigned): the installer refuses this release unless run with ${E.INSECURE_SKIP_SIG}=1`);
 for (const f of [`${dirName}.tar.gz`, `${dirName}.tar.gz.sha256`, ...signed.map((p) => relative(OUT, p)), "release.json", npmFile, ...(apkArg ? [releaseJson.apk] : [])]) console.log(`  ${f}  ${mb(f)}`);
+
+// The repo's build list says which builds this release carries (scripts/build-record.mjs): the web
+// bundle by the stamp its build wrote beside build-id.txt, the APK by the stamp packed inside it.
+const record = (...a) => { try { execFileSync("node", [join(ROOT, "scripts/build-record.mjs"), ...a], { cwd: ROOT, stdio: "inherit" }); } catch { /* a warning, never a failed release */ } };
+record("--name", "web-bundle", "--stamp", "packages/web/dist/buildstamp.json", "--channel", `release ${version}`, "--file", relative(ROOT, tarball));
+if (apkArg) {
+  const stamp = packagedStamp(readFileSync(apkArg));
+  record("--name", "apk-dev-release", ...(stamp ? ["--stamp-json", JSON.stringify(stamp)] : []), "--channel", `release ${version} asset`, "--file", relative(ROOT, join(OUT, releaseJson.apk)));
+}
