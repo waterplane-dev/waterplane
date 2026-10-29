@@ -11,7 +11,7 @@
  * second copy of the rule.
  */
 import type { Intent, RepoSetupState, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow } from "@waterplane/shared";
+import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow, repoLabel } from "@waterplane/shared";
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
@@ -50,10 +50,11 @@ export const repoOfCwd = (repos: readonly RepoTarget[], cwd: string): RepoTarget
   }
   return best;
 };
-/** The repo NAME a session belongs to — the group it is listed under. */
-export const sessionRepoNameIn = (repos: readonly RepoTarget[], s: { cwd: string }) => repoOfCwd(repos, s.cwd)?.repoName ?? baseName(s.cwd);
+/** The repo NAME a session belongs to — the group it is listed under. `repoLabel`, so two clones
+ *  with one folder name are two groups (`ciqkit · garmin/`), never one that opens in either. */
+export const sessionRepoNameIn = (repos: readonly RepoTarget[], s: { cwd: string }) => { const r = repoOfCwd(repos, s.cwd); return r ? repoLabel(r) : baseName(s.cwd); };
 /** `repo · branch`, for a row's own gist fallback. */
-export const sessionRepoLabelIn = (repos: readonly RepoTarget[], s: SessionInfo) => { const r = repoOfCwd(repos, s.cwd); return r ? `${r.repoName} · ${r.branch}` : baseName(s.cwd); };
+export const sessionRepoLabelIn = (repos: readonly RepoTarget[], s: SessionInfo) => { const r = repoOfCwd(repos, s.cwd); return r ? `${repoLabel(r)} · ${r.branch}` : baseName(s.cwd); };
 // Within the live list rows are grouped under a repo header, so repeating the
 // repo name in each row title is redundant and (with the status/count badges)
 // crushes it to "usm…". Show the branch instead — that's what the header lacks
@@ -247,7 +248,7 @@ export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readon
     if (!arr) { arr = []; byName.set(n, arr); order.push(n); }
     arr.push(s);
   }
-  for (const r of visibleRepos) if ((!filtered || keep.includes(r.repoName)) && !byName.has(r.repoName)) { byName.set(r.repoName, []); order.push(r.repoName); }
+  for (const r of visibleRepos) { const n = repoLabel(r); if ((!filtered || keep.includes(n)) && !byName.has(n)) { byName.set(n, []); order.push(n); } }
   order.sort((a, b) => (openByRepo ? (openByRepo.get(b) ?? 0) - (openByRepo.get(a) ?? 0) : 0)
     || a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
   return order.map((name) => ({ repoName: name, sessions: byName.get(name) ?? [] }));

@@ -707,6 +707,12 @@ const onSessionNetRetryCancel: Route<"session.netRetryCancel"> = (a) => {
     a.c.sessions.netRetryCancel(a.msg.id);
 };
 
+// "Retry now" on a stalled row or the retry line (`sessions/apiretry.ts`'s
+// `retryNow`): the same typing path the ladder uses, never a send of its own.
+const onSessionNetRetryNow: Route<"session.netRetryNow"> = (a) => {
+    a.c.sessions.netRetryNow(a.msg.id);
+};
+
 const onSessionPin: Route<"session.pin"> = (a) => {
     a.c.sessions.pin(a.msg.id, a.msg.entryId);
 };
@@ -772,6 +778,7 @@ export const sessionRoutes: RouteTable = {
   "session.followup": onSessionFollowUp,
   "session.ackAsking": onSessionAckAsking,
   "session.netRetryCancel": onSessionNetRetryCancel,
+  "session.netRetryNow": onSessionNetRetryNow,
   "session.pin": onSessionPin,
   "session.record": onSessionRecord,
   "session.history": onSessionHistory,

@@ -4,7 +4,7 @@
  * `drive.ts` is held to no new blocking spawn (`tools/hostshape.test.mjs`).
  * Reached from the facade only; `drive.kill` is handed in (a slice imports no slice).
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { haltRefusal, killTrees } from "../halt.js";
 import { shellOpenRefusal, type BackendDescriptor } from "../backends/index.js";
 import type { SessionCore } from "./core.js";
@@ -32,6 +32,41 @@ export function ourPanePids(): Map<string, number> {
     if (Number.isInteger(n) && n > 1) out.set(name.slice(prefix.length), n);
   }
   return out;
+}
+
+/** One pane on OUR tmux server: its `%id`, the waterplane session id, the pane's pid. */
+export interface OurPane { paneId: string; sessionId: string; panePid: number }
+
+/** `#{pane_id}\t#{session_name}\t#{pane_pid}` lines → our panes; a line that is not ours or not whole is dropped. */
+export function parseOurPanes(text: string, prefix = tmuxName("")): OurPane[] {
+  const out: OurPane[] = [];
+  for (const line of text.split("\n")) {
+    const [paneId, name, pid] = line.split("\t");
+    if (!paneId?.startsWith("%") || !name?.startsWith(prefix) || !pid) continue;
+    const n = Number(pid);
+    if (Number.isInteger(n) && n > 1) out.push({ paneId, sessionId: name.slice(prefix.length), panePid: n });
+  }
+  return out;
+}
+
+let panesMemo: { at: number; rows: OurPane[] | null } | null = null;
+const PANES_MEMO_MS = 2000;
+
+/**
+ * Every pane on OUR tmux server (`ourPanePids` with the pane id), memoised 2 s and
+ * never blocking — for `api.sessionOf`, asked once per plugin request. Null when tmux
+ * fails or no server runs: a failed listing is never an empty one.
+ */
+export function ourPanes(): Promise<OurPane[] | null> {
+  if (panesMemo && Date.now() - panesMemo.at < PANES_MEMO_MS) return Promise.resolve(panesMemo.rows);
+  return new Promise((resolve) => {
+    execFile("tmux", ["-u", "-L", TMUX_SERVER, "list-panes", "-a", "-F", "#{pane_id}\t#{session_name}\t#{pane_pid}"],
+      { encoding: "utf8", timeout: 3000 }, (err, stdout) => {
+        const rows = err ? null : parseOurPanes(String(stdout));
+        panesMemo = { at: Date.now(), rows };
+        resolve(rows);
+      });
+  });
 }
 
 /**

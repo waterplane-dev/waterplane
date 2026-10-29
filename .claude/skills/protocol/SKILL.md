@@ -66,7 +66,9 @@ Wire:
 - `op.ack`'s `ok` means *accepted and started*, not finished. Ops: `session.create` (optional
   `prompt`, optional `replaceSessionId` so relaunch is ONE atomic op), `fanout.run`,
   `fanout.followup`, `build.run`, `schedule.save` (upsert on a client-minted id, so a replay
-  overwrites instead of adding a second weekly sweep) and `schedule.run`. `session.reopen` is not a
+  overwrites instead of adding a second weekly sweep), `schedule.run` and more (`capture.run`,
+  `assess.*`, `backlog.name`, `updates.apply`, durable `intent.*`) — the source of truth is the route
+  table's `durable: true` entries (`routes/types.ts`) and `durableOp` callers (`server/wsops.ts`). `session.reopen` is not a
   thing — reopen via `session.create` with `resumeSessionId`. **Forking is not a new message
   either**: `session.create` gains `forkAtTurn?` and `"fork"` joins `resumeMode`, so the file write
   (`convfork.ts`) inherits `durable: true`, `contain: "cwd"` and at-most-once by ackId — a retried
@@ -83,7 +85,11 @@ Wire:
   already run.
 - `session.input` carries `submit?` — **the submitting Return lives on the HOST** (`deliverPrompt`),
   and `input.ack.state` is `ok` / `notready` (the only auto-retryable one, deliberately not
-  remembered) / `unconfirmed` / `unsubmitted`. A `submit` send must not also `session.record`.
+  remembered) / `unconfirmed` / `unsubmitted` / `stale` (an answer whose question is gone; never
+  retryable) / `rescued` (the session was gone and the host KEPT the words as a work item — the client
+  drops the row and never retries, or the prose is posted twice) / `forked` (a bare `/fork`, see below).
+  **A retried input joins the running one through `inputsInFlight`, keyed by ackId** — a new input path
+  registers there too, or a retry types twice (`routes/session.ts`). A `submit` send must not also `session.record`.
   **A bare `/fork [title]` to a claude session is never typed** (CLI ≥ 2.1.291 hands it to its own
   background daemon, invisible here): `routes/session.ts`'s `forkFromInput` opens it as a tab via
   `sessions.fork()`, focuses the asker, and acks `ok` + `state: "forked"` with the sentence;
@@ -115,9 +121,9 @@ Wire:
   queue record now (`web/download.ts`) and the client sends nothing; the route stays for an APK
   pinned to an old bundle, and `e2e-autopull.mjs` still pins it.
 
-Substrate: tmux is REQUIRED and the ONE substrate (no direct-PTY mode; the old `WATERPLANE_TMUX` knob is ignored and doctor says so; a missing binary refuses the spawn in words, `tmuxreq.ts`) — it runs each `claude` inside a **private** tmux server (`-L waterplane`), so it
-survives a host restart and `rediscover()` re-attaches on boot. The server is keyed by socket name,
-not `WATERPLANE_ROOT` — which is why e2e roots derive their own, and tests also get a private socket DIRECTORY (`scripts/lib-tmuxiso.mjs`). **Every tmux client is spawned `-u`
+Substrate: tmux is REQUIRED and the ONE substrate (no direct-PTY mode; the old `WATERPLANE_TMUX` knob is ignored and doctor says so; a missing binary refuses the spawn in words, `tmuxreq.ts`) — it runs each `claude` inside a **private** tmux server (`-L waterplane` by default — `TMUX_SERVER` in `sessions/knobs.ts`; a temp root derives its own), so it
+survives a host restart and `rediscover()` re-attaches on boot. **Panes run under `env -u TMUX`** (`PANE_UNSET_ENV`): with `$TMUX` set, a bare `tmux kill-server` in a pane once killed this host's server and every session on it. The server is keyed by socket name,
+not `WATERPLANE_ROOT` — which is why e2e roots derive their own, and tests also get a private socket DIRECTORY (`scripts/lib-tmuxiso.mjs`). **Every tmux client (`new-session`, `attach`) is spawned `-u`
 (`sessions/tmux.ts`), with `ptyenv.ts`'s `ptyEnv()` supplying a UTF-8 `LANG` when the environment has none**: launchd sets no
 locale, and a tmux client that cannot conclude its terminal is UTF-8 does not forward UTF-8, which
 costs prompt detection its `❯` (a live choice box published nothing). `e2e-tmux.mjs` boots the

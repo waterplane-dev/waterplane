@@ -97,6 +97,18 @@ test("the one list: repos alphabetically, live or idle — and a filter drops th
   assert.deepEqual(repoGroupsOf(shown, repos, true, repoOf).map((g) => g.repoName), ["b"]);
 });
 
+test("two clones with one folder name are two groups, each session under its own clone (2026-10-28)", () => {
+  const repos = [
+    repo("ciqkit", "/d/garmin/ciqkit", { where: "garmin/" }),
+    repo("ciqkit", "/d/rw/out-ciqkit/ciqkit", { where: "out-ciqkit/" }),
+  ];
+  const shown = [ses("s1", "/d/rw/out-ciqkit/ciqkit", 1)];
+  const key = (s) => sessionRepoNameIn(repos, s);
+  assert.equal(key(shown[0]), "ciqkit · out-ciqkit/");
+  assert.deepEqual(repoGroupsOf(shown, repos, false, key).map((g) => `${g.repoName}:${g.sessions.length}`),
+    ["ciqkit · garmin/:0", "ciqkit · out-ciqkit/:1"]);
+});
+
 test("most open sessions first, ties alphabetically, counted off live sessions only", () => {
   const shown = [ses("b1", "/r/b", 1), ses("c1", "/r/c", 2), ses("c2", "/r/c", 3), ses("a1", "/r/a", 4, { running: false })];
   const repos = [repo("d", "/r/d"), repo("c", "/r/c"), repo("b", "/r/b"), repo("a", "/r/a")];

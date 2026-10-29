@@ -31,24 +31,24 @@ export class WatchSlice {
    * CLI gave up on a transient API error. `retrying`/`checking` ⇒ the turn did
    * not do the work — the row keeps waiting, baseline untouched, for the turn
    * the host's `continue` runs (or a person's, once they type over it).
-   * `gaveup` ⇒ FAILED with the sentence, never `done`: nothing will run it.
-   * Every settle drops the baseline, so whichever of a late verdict and a later
-   * Stop arrives second finds nothing to apply to.
+   * `gaveup` ⇒ STALLED: the row stays `running`, baseline untouched — never
+   * failed, never `done`, never requeued (the prompt WAS delivered, the
+   * conversation is intact, and at-most-once means it is never typed again).
+   * A recurring rule's occurrence stays running the same way: putting the rule
+   * back in the queue would let its next occurrence fire into, or beside, a
+   * conversation whose turn has not ended, and a reply that lands later would
+   * have no row to complete. The stall is DERIVED (`netStalledOf`) from the
+   * session's `netRetry`, and the row completes the ordinary way on the next
+   * real turn end — "Retry now"'s reply, the person typing, a later reply.
+   * `sweepRunning` does not fail it for its silence meanwhile.
    */
   onTurnEnded(sessionId: string, stopCount: number, net?: TurnEndNet): void {
-    if (net?.net === "retrying" || net?.net === "checking") return;
+    if (net) return;
     for (const row of [...this.core.rows()]) {
       if (row.sessionId !== sessionId) continue;
       if (row.state !== "running" && row.state !== "starting") continue;
       const base = this.core.stopBase.get(row.id);
       if (base == null || stopCount <= base) continue;
-      if (net?.net === "gaveup") {
-        // A row still `starting` cannot be failed under its executor; it is
-        // left to its own outcome and then waits — the silence backstop below
-        // fails it if no turn ever comes.
-        if (row.state === "running") this.giveUp(row, net.detail);
-        continue;
-      }
       if (row.state === "starting") {
         // Its turn ended before the delivery finished proving itself. Remember
         // it; `fire()` reads this the moment the executor returns.
@@ -101,6 +101,11 @@ export class WatchSlice {
       // the session saying a person is being waited on, with no box to show for
       // it. Silence under one is a question, not an ending.
       if (this.sessionAwaitingInput(sid)) continue;
+      // STALLED on the API (`onTurnEnded`'s `gaveup`): the session is silent
+      // because the CLI gave up and the host stopped retrying — waiting on a
+      // person's Retry now or typing, not a lost Stop and not an idle ending.
+      // Neither the ceiling below nor the idle guess may settle it.
+      if (this.core.deps.sessionNetStalled?.(sid)) continue;
       const hooked = this.core.deps.isHooked(sid);
       // ── The backstop: a Stop that was lost ─────────────────────────────────
       //

@@ -1,6 +1,7 @@
 /**
  * The week-end burn's two routes (`weekburn.ts`): the status the sheet draws,
- * and the sheet's one write — the weekly pick, `recurring`, the stop line.
+ * and the sheet's one write — the weekly pick, `recurring`, the stop line, and the
+ * person's own task and per-repo notes for the prompt.
  *
  * Not on the passive allowlist (`passive.ts` default-denies): a kids' device
  * picks nothing. The write is POST (side effects never on GET); a refusal is
@@ -13,12 +14,12 @@ import { route, type ApiEntry } from "./apitable.js";
 const unwired = { error: "the week-end burn is not running on this host" };
 
 export const WEEKBURN_ROUTES: readonly ApiEntry[] = [
-  route("GET", "/api/weekburn", ({ res }, ctx) => {
+  route("GET", "/api/weekburn", async ({ res }, ctx) => {
     if (!ctx.weekBurn) { json(res, unwired, 503); return true; }
-    json(res, ctx.weekBurn.status() satisfies WeekBurnStatus);
+    json(res, (await ctx.weekBurn.full()) satisfies WeekBurnStatus);
     return true;
   }),
-  // Body `{repos?: string[], recurring?: boolean, stopPct?: number, sameAsLast?: true}` → WeekBurnStatus.
+  // Body `{repos?: string[], recurring?: boolean, stopPct?: number, sameAsLast?: true, task?: string, notes?: {[dir]: string}}` → WeekBurnStatus.
   // Repos are checked against the discovered list (unknown dropped); a non-empty list binds the pick to
   // this week's reset, an empty one cancels this week (live rows finish).
   route("POST", "/api/weekburn", async ({ req, res }, ctx) => {

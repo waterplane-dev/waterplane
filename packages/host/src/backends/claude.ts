@@ -47,6 +47,7 @@ export const claudeBin = (): string => env("CLAUDE_BIN") || claudeBinResolution(
 //   • SessionStart  → hands us the conversation id at boot (no dir polling)
 //   • UserPromptSubmit → a turn started (readyForAutoFire goes false)
 //   • Stop          → the turn finished and the session is at its prompt = READY
+//   • StopFailure   → fired INSTEAD of Stop when an API error ended the turn
 //   • PreToolUse, AskUserQuestion only → the question's own words BEFORE its box
 //     is drawn: 2.1.304 writes the call to its log only once it is answered
 //     (two smoke runs in three), so the log alone left the box unexplained.
@@ -58,7 +59,7 @@ export function hookSettingsArg(port: number, askRules: readonly string[] = []):
   const url = `http://127.0.0.1:${port}/api/hook`;
   const cmd = `curl -sS -m 2 -X POST ${url} -H 'content-type: application/json' --data-binary @- >/dev/null 2>&1 || true`;
   const h = [{ hooks: [{ type: "command", command: cmd, timeout: 5 }] }];
-  const hooks = { SessionStart: h, UserPromptSubmit: h, Stop: h, Notification: h, SessionEnd: h,
+  const hooks = { SessionStart: h, UserPromptSubmit: h, Stop: h, StopFailure: h, Notification: h, SessionEnd: h,
     PreToolUse: [{ matcher: "AskUserQuestion", hooks: h[0].hooks }] };
   // Ask rules (agent-authority §2): a flag-passed `permissions.ask` stops the matching
   // command under every permission mode, `bypassPermissions` included, and outranks the

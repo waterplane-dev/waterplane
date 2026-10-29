@@ -73,4 +73,6 @@ export function fileNote(d: PadDraft, repo: RepoTarget): void {
   if (offline === null) return; // refused — the words stay where they are
   c.compose.removePadNotes([d.id]);
   c.say.toast(padFiledToast(repo.repoName, offline));
+  // Show where it went, newest on top; Back returns to the pad.
+  c.nav.openBacklogCut(d.cwd);
 }

@@ -8,9 +8,17 @@ the host's and `@waterplane/shared`'s `weekburn.ts`; this folder is the sheet th
 **Sheet**: `weekburn` (not persisted), "Week-end burn". Reads `GET /api/weekburn`
 (`api.getWeekBurn`) with `useRemoteResource`; saves with `POST /api/weekburn` (`api.postWeekBurn`),
 which answers the new status. No store: the host holds the pick, the sheet holds only a local draft
-(repos, "ask me each week", stop line) seeded from this week's pick, never from last week's.
+(repos, "ask me each week", stop line, the person's task and per-repo notes) seeded from this week's
+pick, never from last week's, and never re-seeded over typed words except by a save.
 
-**Owns**: `logic.ts` (the save verb, "same as last week" eligibility, running-row words, receipts;
+**The prompt is the person's to see and change.** `howItWorks` (logic.ts) prints the steps at the top;
+the task ("My own instructions" replaces the weakest-health-reading default) and a ticked repo's own
+line go into `prefs.task`/`prefs.notes`. The "Show the prompt" preview is the shared
+`weekBurnItemPrompt` over the DRAFT plus `status.readings` (each discovered repo's health summary,
+sent by `GET /api/weekburn`), so what is shown is what the host will send. `WEEKBURN_RULES` (one
+change, tests, commit, never push) is always appended — not editable.
+
+**Owns**: `logic.ts` (the steps, the save verb, "same as last week" eligibility, running-row words, receipts;
 `logic.test.mjs`), `actions.ts` (the one save call, a toast either way), `WeekBurnSettings.tsx` (the
 Settings › Sessions door to the sheet). Repo list: `core.world.visibleRepos`, keyed by
 `worktreePath` like the fan-out sheet.

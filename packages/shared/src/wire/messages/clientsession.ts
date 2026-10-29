@@ -298,6 +298,17 @@ export type ClientSessionMsg =
    * a cancel delivered an hour late speaks for a retry that has since run.
    */
   | { t: "session.netRetryCancel"; id: string }
+  /**
+   * "Retry now" on a turn the CLI gave up on a transient API error — the
+   * stalled backlog/Activity row and the session's own retry line. Resumes the
+   * host's net retry (`sessions/apiretry.ts`): a `gaveup` episode starts again
+   * at try 1 and its `continue` is typed NOW through the SAME path the ladder
+   * types it (two writes, history + `sent.json` rows), parked like any rung
+   * while the session is busy; a `waiting` rung fires early. Anything else is a
+   * no-op. Not durable and never queued offline, `netRetryCancel`'s reason: a
+   * retry delivered an hour late types into a session that has moved on.
+   */
+  | { t: "session.netRetryNow"; id: string }
   /** Record a prompt the client just submitted, so it lands in the session history. */
   | { t: "session.record"; id: string; text: string; kind: "prompt" | "command" }
   /** Request the full history for a session. */

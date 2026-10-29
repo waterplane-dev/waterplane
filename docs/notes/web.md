@@ -9284,3 +9284,63 @@ days, because a negative offset lands the fire on the previous evening) and `isS
 `schedhorizon.ts`: `horizonBucket` / `horizonLead` / `HORIZON_LABEL`, the schedules chip's count bucketed by how far out it
 is ("7 scheduled" means opposite things whether all seven fire tonight or the next is a fortnight away); the chip and the
 sheet's list call the same function so the tap opens what the number counted.
+
+
+## Modules described for the skill grooming (2026-10-29)
+
+The 2026-10-29 fact-check of the `web-*` skills named these modules for the first time. Each
+skill line points here; the module's own header holds the rest.
+
+- `annAutoRead.ts` (annotator) — reading a finished mark's words ON THE PHONE, the DOM half
+  (the plan is `annReadPlan.ts`). Only when an enabled text-in-marks extension offers a reader:
+  the area is cut from the CLEAN picture with every blur already applied (a redacted word is never
+  read back), and the answer lands only while the mark's words are not yet the person's — typed
+  words always win (R-images-015). No host or cloud call reads a band.
+- `annOcr.ts` (annotator) — "Text only": the whole picture read on the DESKTOP
+  (`POST /api/host/ocr`, host `ocrlocal.ts`), shown for editing, and only the words sent — for a
+  photo where the error message must travel and the face must not.
+- `useAutoPlace.ts` (annotator) — where an `auto` toolbar goes for a picture: it measures the
+  body (bar + picture, the same box on either side, so the choice cannot feed its own input)
+  against the canvas's own size.
+- `collageName.ts` — the combined image's file name carries the column count
+  (`combined-N-screens-Kacross.jpg`), because the upload width cap is per SCREEN and must scale
+  with the columns: four screenshots across at 1080 px left each panel ~260 px (2026-10-25). The
+  name is the one fact that survives the annotator into the upload path, so renaming the file
+  silently re-caps the collage. `collageName.test.mjs`.
+- `screenSweep.ts` (`core/term/`) — the offline terminal of every session, not only the attached
+  one: `ptyTail.ts` saves the on-screen session live and this sweep the rest, so a session started
+  at the desk is not "nothing cached" in a dead zone.
+- `bgFresh.ts` (`core/term/`) — what the open terminal does while the app is HIDDEN: a per-device,
+  never-synced dial (`live`, every N ms re-attach-and-save, `off`). Streaming every redraw to a
+  hidden page was most of a phone's battery; the dial trades that against R-offline-002 (the last
+  screen readable offline is the last one saved). Pure half; wiring in `useTermFeed.ts`/`ws.ts`.
+- `useCachedTranscript.ts` (`core/session/`) — when this phone last saved a session's transcript:
+  the terminal's offline card offers the reader instead of "nothing cached" for a session this
+  phone never attached. Asked only while offline with an empty grid.
+- `nextFire.ts` (`backlogFilter/`) — what backlog auto starts next: ONE predicate behind the
+  backlog's `▶ next` mark and the Automation sheet's "N rows will start when free", so the two
+  screens never hold two copies of the edge. `useBacklogCuts.ts` computes `nextFireIds` from it.
+- `calledOff.ts` (`backlogFilter/`) — a row CALLED OFF is not a row that FAILED. The wire keeps a
+  cancelled intent at `failed` for older phones with `BacklogItem.calledOff`; read raw, every
+  call-off drew as a red failure, counted as work needing you, and offered run-again. `isFailedRow`,
+  `statusBucket` (call-offs count with `done`) and `refireOffered` are the one edge.
+- `CliHealthSettings.tsx` (`features/cliHealth/`) — the Tools rack's first door: the CLI health
+  board, toned by the rollup so a broken heuristic is visible from Settings too.
+- `PrCard.tsx` — the PR card in `GitView` for a repo in PR mode: above history, push reads
+  *Push & open PR*, and Merge is never greyed — the host's `blockedBy` sentence shows on tap.
+  Every forge call is the host's (`prs.ts`, `forge/`).
+- `alwaysOnPlot.ts` — the always-on strip's geometry and words under the setup sheet's
+  `context-weight` row: where the characters carried on every turn go, coloured by what the
+  threshold does with them (counted, listed beside, or this desktop's own). It takes the SAME
+  scopes the chip filter shows. `AlwaysOnRows.tsx` paints it; `alwaysOnPlot.test.mjs`.
+- `firstBars.ts` (extension `token-stats/web/`) — the first-request strip on the
+  costliest-conversations rows: every bar on ONE scale (the largest measured first request is
+  full width) so rows compare by eye; never against a conversation's own total (millions with
+  cache reads would make it a hairline); absent or zero draws nothing.
+- `repoHealthWeeks.ts` — the region's "weeks" x axis: one point per ISO week, that week's LAST
+  day, the same rule as the health index's `healthWeeks`, so a week reads the same on the score
+  and every tile.
+- `repoHealthTileGeom.ts` — the tiles grid's two pure decisions: which tile is open, and the area
+  wash under a tile's curve (kept out of the import-free `repoHealthPlot.ts`).
+- `repoHealthTileWords.ts` — the tiles grid's own words (fold verb, toggle name, per-area
+  absences), under the same verdict-word ban as `repoHealthWords.ts`.

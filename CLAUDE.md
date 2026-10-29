@@ -19,7 +19,7 @@ by one WebSocket per tab.
 Central design choice: **drive the actual binary in a PTY, never re-implement it** — so every slash
 command, the context meter and plan/trust prompts work natively.
 
-Three workspaces, one deliberate non-workspace:
+Three workspaces; `app` is deliberately not one:
 
 - **`packages/shared`** — wire types + the pure logic both ends must agree on. `shared/dist` is
   node-runnable so e2e can pin it. **Build before host/web.** ⇒ skill `shared`
@@ -34,7 +34,7 @@ Three workspaces, one deliberate non-workspace:
 
 Also: **`packages/vscode`** (bundles host ledger + web chart modules from source; `npm run
 test:vscode` after touching those) and **`packages/extensions/*`** (in-repo extensions: copilot-usage
-desktop diskspace links opencode permissions requirements token-stats vault; `local/extension-boundary`).
+desktop diskspace links ocr opencode permissions requirements scorecard token-stats vault; `local/extension-boundary`).
 
 Demo mode + fake host: `docs/notes/testing-and-ops.md`.
 
@@ -51,7 +51,7 @@ Demo mode + fake host: `docs/notes/testing-and-ops.md`.
 ## Plugins, and what a repo is told — two things, kept apart
 
 - **A waterplane plugin extends waterplane from outside this repo** (`~/.config/waterplane/plugins/`, or paths in
-  `plugin-paths.json`): `waterplane-plugin.json` + `host.mjs`. Contract `shared/plugin.ts`, why
+  `plugin-paths.json`): `waterplane-plugin.json` + `host.mjs`. Contract `shared/plugin/`, why
   [plugins.md](docs/notes/plugins.md). Plugin UI runs on the phone only as in-repo extensions in the
   bundle — never lazy, never outside the SDK. **Anything answering a box without a tap goes through
   `answergate.ts`.**
@@ -153,7 +153,7 @@ Each has caused a real failure here and is invisible in review unless you know i
   measures `CLAUDE.md` + skill descriptions (bodies never count) against a per-repo threshold
   (`WATERPLANE_CONTEXT_WARN_CHARS`); the *groom CLAUDE.md* preset is the fix.
 - **The automatic spenders are cheap on purpose and must stay so.** `nameTab` (`sessions/record.ts`,
-  once per session, persisted) runs on `SUMMARY_MODEL` with `--setting-sources user --tools ""` and its
+  once per session, persisted) runs on `SUMMARY_MODEL` via `runSummaryTask` (`--setting-sources user --tools ""`) and its
   own system prompt. Any new unattended `claude -p` starts from those flags and
   justifies every one it drops.
 
@@ -165,8 +165,8 @@ Each has caused a real failure here and is invisible in review unless you know i
 - **Network identity does not cover browsers** (`origin.ts`): a WebSocket ignores the same-origin
   policy. Every `/api/*` request and WS upgrade is checked on `Origin` *and* `Host` (DNS rebinding),
   with `Sec-Fetch-Site` as the backstop for `Origin`-less cross-origin GETs. Missing `Origin` is
-  allowed (curl, e2e, hook sink). **Never reintroduce `access-control-allow-origin: *`**, never widen
-  `*.ts.net` past the MagicDNS fallback, never reinstate `*.local`. Side-effecting endpoints must not be
+  allowed (curl, e2e, hook sink). Never widen
+  `*.ts.net` past the MagicDNS fallback, never trust `*.local` as a wildcard (own mDNS name only). Side-effecting endpoints must not be
   GET (`/api/host/screenshot` is POST for this). Exactly two read-only routes are exempt
   (`OPAQUE_READ_ROUTES`: artifact + inbox file, GET/HEAD only) because the APK loads them as `<img src>`/`<a download>`;
   widen only for a route `api.ts` builds with `abs()`.
@@ -174,7 +174,7 @@ Each has caused a real failure here and is invisible in review unless you know i
   compares **realpath-resolved** paths (`/var` → `/private/var`).
 - `passive.ts` is a default-deny allowlist for a passive (kids') device token: a new route is refused
   to it until added there on purpose.
-- `POST /api/hook` is **loopback-only** and no-ops on unknown sessions.
+- `POST /api/hook` (and the plugin sinks) is **local-process-only** (`localProcessRefusal`: loopback and not proxied — behind `tailscale serve` every request is 127.0.0.1) and no-ops on unknown sessions.
 - LAN password gate (`auth.ts`) when `WATERPLANE_ALLOW_PUBLIC=1`: loopback always trusted, tailscale
   trusted unless gated, lan/other always need a token. **Deny-until-set**, and **LAN can never set
   the password**. Changing it rotates all tokens.

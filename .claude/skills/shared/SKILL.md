@@ -11,9 +11,9 @@ never a refusal or a mutation.
 
 `index.ts` is an INDEX, not the protocol: DTOs live in `wire/` (`backend` `backendtokens` `capture`
 `costwindow` `install` `intent` `localrt` `localusage` `notify` `notifylink` `onboard` `repo` `sent`
-`session` `sysstat` `telemetry` `transcript` `work`; `oracle` is retired), all re-exported, so no
+`session` `sysstat` `telemetry` `transcript` `work` `alwayson` `pullrequest` `slash` `updates`; `oracle` is retired), all re-exported, so no
 import site names a file. `wire/messages.ts` is a BARREL — the unions live in
-`wire/messages/{clientsession,clientbacklog,clienthost,clientwork,hostcore,hosttools}.ts` and
+`wire/messages/{clientsession,clientbacklog,clienthost,clientwork,hostcore,hosttools}.ts` (+ `clientupdates`/`hostupdates`, nested under `clienthost`/`hostcore`) and
 `wire/session.ts` is a barrel over `wire/session/*`. **Add a message ⇒ the slice whose subject it is;
 the barrel never changes for it. Add a field ⇒ the domain file.**
 [Layout](../../../docs/notes/shared-architecture.md#the-wire-modules-wiresessionts-and-wiremessagests-as-barrels).
@@ -25,7 +25,7 @@ booleans say whether a backend HAS a thing at all, never whether it is currently
 `intent/`, no importer names a slice; `assess/` is not yet pinned). Where the logic lives:
 `queue.ts` → `queue/queue*`; `sessioncost.ts` → `sessioncost/cost*`; `schedule.ts` →
 `schedule/sched*`; `clihealth.ts` → `clihealth/health*`; `assess.ts` → `assess/sass*`; `intent.ts` →
-`intent/*`. Grep the slice, not the
+`intent/*`; `healthindex.ts` → `healthindex/*`; `plugin.ts` → `plugin/*`. Grep the slice, not the
 barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hoursOpenFrom`
 (`schedzone`), `nextFireAt` (`schedfire`).
 [Tables](../../../docs/notes/shared-architecture.md#the-logic-modules-sessioncost-schedule-queue-clihealth-as-barrels).
@@ -41,7 +41,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   `tools/brand.test.mjs` lists what cannot import it); `brandmigrate` COPIES localStorage legacy keys
   once, never moves; `statedir` is the state-dir/root precedence; `envresolve`: current name wins,
   then legacy names newest first, a legacy hit is reported once, never refused; `nodemin`'s `NODE_MIN` (22.12.0, Node 20 is end of life) is the ONE Node floor (package.json
-  `engines`, doctor, `env.ts`) and `nodepin.test.mjs` pins root `engines` to it — change both together.
+  `engines`, doctor, `env.ts`) and `packages/host/test/nodepin.test.mjs` pins root `engines` (plus the npm placeholder, the lockfile and `.nvmrc`, against `deploy/node-version`) to it — change both together.
 - `queue.ts` — send-queue **transport**: lanes, `holdUntilIdle`+`release`, `retargetEntry`,
   `pendingCreate` (bound on the create's own `createAck`, never on the lane — `create:<cwd>` is per
   REPO), `answerInsertAt`, `adoptReferencedUploads`, `serial`+`busySerialGroups` (a lane frees at
@@ -228,7 +228,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   the test asserts every key path the real engine emits survives the parse. Reasoning:
   [host.md](../../../docs/notes/host.md#repohealthts-and-repohealthreadts-in-shared--one-subject-two-failure-modes).
 - `wire/alwayson.ts` + `desktopfiles.ts` + `alwaysonwords.ts` — **what every turn carries**, three readers one vocabulary: the repo's rows (`agentfiles.ts` `instructionInventory`, widened to `.claude/agents/*.md`, `CLAUDE.local.md`, `.mcp.json` server names), this desktop's rows (`desktopInventory`, `scope: "desktop"`), and the session's measured `SessionCarried`. **The threshold (`alwaysOnChars`) is unchanged and counts only `countedByThreshold` rows; the rest are LISTED (D1).** **An unsized row (MCP server, plugin pack, declined server, unreadable source) has no `chars` and is never 0** — it carries a sentence saying why. Carried = the INITIAL set plus the KINDS that changed later (`laterKinds`); `prompt_snapshot` parts are optional and labelled undocumented; the unattributed remainder is a named row beside `firstRequestTok`; chars are fact, tokens `~` estimates. `alwaysOnRows` / `carriedRows` are the one wording for phone and VS Code. Reasoning: [host.md](../../../docs/notes/host.md#what-every-turn-carries--measured-per-session).
-- `healthindex.ts` + `contextweight.ts` — the health SCORE: absolute 0–100 vs fixed `HEALTH_GOOD`
+- `healthindex.ts` (a barrel over `healthindex/`) + `contextweight.ts` — the health SCORE: absolute 0–100 vs fixed `HEALTH_GOOD`
   values, headline `min(geomean of five entry scores, worst + 30)` with `cappedBy` and `alerts`. The one layer that takes a side. **Context's good line is
   `HEALTH_CONTEXT_GOOD_SHARE` × the repo's warn line** (`contextweight.ts`
   `DEFAULT_CONTEXT_LIMITS.maxChars`, or `WATERPLANE_CONTEXT_WARN_CHARS`) — not a hardcoded number.
@@ -246,3 +246,14 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
 - `devices.ts` — the paired-device row (`DeviceRow`) without the token hash: the one place the host's
   ledger and the phone's list agree what a row is.
   Reasoning for all four: [host.md](../../../docs/notes/host.md#modules-claudemd-links-here-for-and-this-file-never-covered).
+- `netretry.ts` + `netretrycfg.ts` — the one wording of the host's net retry (`netRetryLine`) and its
+  switch. **A stalled row is DERIVED (`netStalledOf`/`netStalledText`), never a state or an intent
+  field**: out of retries the work is stalled, never failed and never re-fired. `WATERPLANE_NET_RETRY=0`
+  is a hard override the host reports as `envOff`, so the phone prints a sentence, not a dead switch.
+- `ledgerspan.ts` — a second backend's own ledger cut to a claude card's span: **cut on the ledger's
+  HOURS, never its days**, ABSENT with the sentence why wherever it cannot be exact, shown BESIDE
+  claude's figure and never summed into it or converted.
+- `branchmode.ts` — direct vs PR mode is read from the remote's own rules, never chosen here;
+  absent or unparseable is ABSENT, never a guess.
+- `buildstamp.ts` — one build identifier (version + commit + time), worded the same in the artifact
+  and on the phone; every field but `at` optional, and absent means nobody said.

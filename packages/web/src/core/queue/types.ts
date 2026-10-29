@@ -164,7 +164,8 @@ export interface VerbFns {
   restoreOutbox(): void;
   dismissOutbox(): void;
   editQueued(ackId: string, text: string): void;
-  retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): void;
+  /** true = moved (false: gone, or refused in a toast). */
+  retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): boolean;
   handToDesktop(ackId: string): void;
   toggleHoldQueued(ackId: string): void;
   toggleSerialQueued(ackId: string): void;

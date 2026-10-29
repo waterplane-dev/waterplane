@@ -21,7 +21,7 @@ export const statsApi = {
    *  older host answers 404, which the view treats as "no such ledger here". */
   /** The week-end burn (`weekburn.ts`): this week's pick and plan; the POST answers the new status. */
   getWeekBurn: () => jget<WeekBurnStatus>("/api/weekburn"),
-  postWeekBurn: (b: { repos?: string[]; recurring?: boolean; stopPct?: number; sameAsLast?: true }) => jpostOk<WeekBurnStatus>("/api/weekburn", b),
+  postWeekBurn: (b: { repos?: string[]; recurring?: boolean; stopPct?: number; sameAsLast?: true; task?: string; notes?: Record<string, string> }) => jpostOk<WeekBurnStatus>("/api/weekburn", b),
   localUsage: () => jget<LocalUsageDoc>("/api/localusage"),
   /** What THIS desktop has handed to peer desktops (`host/peers/routes.ts`, trusted path, read-only). */
   peerJobs: () => jget<{ ok: boolean; jobs: PeerJobLedgerRow[] }>("/api/peerjobs").then((d) => (Array.isArray(d?.jobs) ? d.jobs : [])),

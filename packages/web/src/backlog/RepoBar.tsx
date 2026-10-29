@@ -7,6 +7,7 @@
  * Shape: docs/notes/backlog-architecture.md.
  */
 import { Circle, CircleDot, ClipboardCheck, SendHorizontal } from "lucide-react";
+import { WeekBurnLink } from "./WeekBurnLink";
 import { ASSESS_NONE_IN_CUT, assessScopeLabel, assessScopeNote } from "../backlogFilter";
 import { track } from "../usage";
 import { RepoSelect } from "../RepoPicker";
@@ -101,6 +102,7 @@ export function RepoBar({ m }: { m: BacklogModel }) {
           <Hint as="span">{assessScopeNote(assessIds.length, cut.length)}</Hint>
         )}
       </div>
+      {repoDir && p.nav.onOpenWeekBurn && <WeekBurnLink m={m} repoDir={repoDir} />}
     </>
   );
 }

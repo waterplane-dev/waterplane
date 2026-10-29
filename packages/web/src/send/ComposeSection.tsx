@@ -1,5 +1,6 @@
 /** The form hint, the prompt composer and the file strip. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { CloudOff, Files } from "lucide-react";
+import { repoLabel } from "@waterplane/shared";
 import { AttachStrip } from "../AttachStrip";
 import { dropFileRef } from "../fileRefs";
 import { PromptComposer } from "../PromptComposer";
@@ -32,7 +33,7 @@ export function ComposeSection({ m }: { m: SendSheetModel }) {
       >
         {shots.length > 0 && (
           <Hint>
-            <Files size={12} /> {shots.length} file{shots.length > 1 ? "s" : ""} queued for {attachRepo?.repoName ?? "that repo"}&apos;s inbox — the paths are in the prompt above.
+            <Files size={12} /> {shots.length} file{shots.length > 1 ? "s" : ""} queued for {attachRepo ? repoLabel(attachRepo) : "that repo"}&apos;s inbox — the paths are in the prompt above.
           </Hint>
         )}
         {/* The files as files. A prompt written here names paths minted before

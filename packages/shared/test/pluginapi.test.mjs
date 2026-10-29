@@ -41,16 +41,17 @@ test("pluginApiProblem: a newer minor, another major or no version is refused in
 });
 
 test("2.0: a 1.x plugin is refused, and the sentence names where the 2.0 contract is written", () => {
-  assert.equal(PLUGIN_API_VERSION, "2.3.0");
+  assert.equal(PLUGIN_API_VERSION, "2.4.0");
   const why = pluginApiProblem("1.8");
-  assert.match(why, /^apiVersion is "1\.8"; this daemon speaks 2\.3\.0, and loads plugins written for 2\.0 up to 2\.3; this plugin was written for an older API and must be updated/);
+  assert.match(why, /^apiVersion is "1\.8"; this daemon speaks 2\.4\.0, and loads plugins written for 2\.0 up to 2\.4; this plugin was written for an older API and must be updated/);
   assert.ok(why.endsWith(" — the 2.0 contract is docs/plans/backend-contract-v2.md"), why);
   assert.match(pluginApiProblem(1), /docs\/plans\/backend-contract-v2\.md$/);
   assert.equal(pluginApiProblem("2.0"), null);
   assert.equal(pluginApiProblem("2.1"), null); // 2.1: `supports` (dialogKeysThenTyped) — still loads on 2.2
   assert.equal(pluginApiProblem("2.2"), null); // 2.2: mode / commands facts, Tab keys, window, compactions, session spend
   assert.equal(pluginApiProblem("2.3"), null); // 2.3: caps.spendUnit, ledger hourly (c2)
-  assert.match(pluginApiProblem("2.4"), /this daemon speaks 2\.3\.0, and loads plugins written for 2\.0 up to 2\.3; this plugin needs a newer daemon$/);
+  assert.equal(pluginApiProblem("2.4"), null); // 2.4: api.sessionOf
+  assert.match(pluginApiProblem("2.5"), /this daemon speaks 2\.4\.0, and loads plugins written for 2\.0 up to 2\.4; this plugin needs a newer daemon$/);
   assert.doesNotMatch(pluginApiProblem("3.0"), /backend-contract-v2/); // a newer plugin needs a newer daemon, not this doc
 });
 

@@ -5,6 +5,18 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.12
+
+### New
+
+- **Two repos with the same folder name are told apart.** When the desktop finds two clones that share a folder name, everywhere you pick or read a repo (the launcher, the repo picker, the send and schedule sheets, Activity, the week-end burn) names each with the shortest part of its path that differs, e.g. *ciqkit · garmin/* and *ciqkit · out-ciqkit/*. The launcher lists them as two groups instead of merging them into one.
+- **The week-end burn and a repo's backlog link both ways.** A row the burn wrote says *from the week-end burn* and opens the burn. The repo's backlog says what the burn is doing there, counts its rows (the count opens exactly those) and opens the burn sheet. Each repo in the burn sheet opens its backlog on the burn's rows.
+- **The week-end burn says how it works, and you write its prompt.** Numbered steps say when sessions start, what each is told, and when it stops. You can replace the default task, add a line per repo, and see the exact prompt each repo's sessions get before anything runs. The safety rules (one change, tests, commit, never push) are always added.
+- **A turn out of network retries is stalled, not failed.** It stays running with *retry now* and the retry switch on its row, the desktop probes every 30 minutes, and work queued behind it says why it waits. The desktop now listens for the CLI's `StopFailure`, since an API error never sends `Stop`.
+- **The git view's *explain* runs on the desktop.** Leaving the screen no longer loses the brief: a notification says when it is ready, and reopening shows the running job or the last answer.
+- **A button that files a backlog row opens the backlog on that row.**
+- **Plugin API 2.4:** `api.sessionOf` says which live session a requesting process belongs to.
+
 ## 0.1.11
 
 The first public release since 0.1.6. 0.1.10 was tagged but never released; its changes, and those of 0.1.7 to 0.1.9, ship here.

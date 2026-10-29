@@ -5,7 +5,7 @@
  * imports carry `.ts` because `node --test` loads it straight off the source.
  */
 import type { BacklogItem, SessionInfo } from "@waterplane/shared";
-import { sessionPickLabel, typedName, waitedSessionName } from "@waterplane/shared";
+import { netStalledOf, sessionPickLabel, typedName, waitedSessionName } from "@waterplane/shared";
 
 /**
  * A SPAN of time ("took 4m"), as opposed to `format.ts`'s `dur`, which takes an
@@ -98,16 +98,20 @@ export function editTargetOptions(
 
 /**
  * The way to the session a `serial` row waits behind (`holderSessionId`), or
- * null — not waiting, an older host, or the session gone. A question open in
- * it reads *answer in 'x'* (the one thing that lets this row start), else
+ * null — not waiting, an older host, or the session gone. Its work STALLED on
+ * the API in `items` ⇒ that row (`itemId`). A question open in it reads *answer in 'x'* (the one thing that lets this row start), else
  * *open 'x'*; the name is `waitedSessionName`, the host sentence's own.
  */
 export function holderOffer(
   it: Pick<BacklogItem, "status" | "holderSessionId">,
-  sessions: readonly Pick<SessionInfo, "id" | "running" | "title" | "tabTitle" | "firstPrompt" | "prompt" | "awaitingInput" | "asking">[],
-): { sessionId: string; label: string; title: string } | null {
+  sessions: readonly Pick<SessionInfo, "id" | "running" | "title" | "tabTitle" | "firstPrompt" | "prompt" | "awaitingInput" | "asking" | "netRetry">[],
+  items: readonly Pick<BacklogItem, "id" | "status" | "sessionId">[] = [],
+): { sessionId: string; label: string; title: string; itemId?: string; cut?: string } | null {
   const s = it.status === "queued" && it.holderSessionId ? sessions.find((x) => x.id === it.holderSessionId && x.running) : undefined;
   if (!s) return null;
+  // A holder STALLED on the API (R-connection-024): the way on is THAT ROW (`netStalledOf`), an ids cut.
+  const stalled = items.find((x) => x.sessionId === s.id && netStalledOf({ state: x.status, sessionId: x.sessionId }, [s]));
+  if (stalled) return { sessionId: s.id, itemId: stalled.id, cut: "the stalled item this row waits behind", label: "show the stalled item", title: "this row waits behind an item stalled on the API — it starts once that one gets a reply or you settle it" };
   const raw = waitedSessionName(s) ?? "the session";
   const name = raw.length > 32 ? `${raw.slice(0, 31)}…` : raw;
   return s.awaitingInput || s.asking || (s.prompt && s.prompt.kind !== "trust")

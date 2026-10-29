@@ -273,6 +273,9 @@ export const LIMIT_SWEEP_MS = Number(env("LIMIT_SWEEP_MS") || 60_000);
 export const NET_RETRY_LADDER_MS: number[] = (env("NET_RETRY_LADDER_MS") || "")
   .split(",").map((n) => Number(n.trim())).filter((n) => Number.isFinite(n) && n > 0);
 export const NET_RETRY_MAX = Number(env("NET_RETRY_MAX") || 8);
+/** Past the cap, while work is STALLED on the session and the switch is on: one
+ *  `continue` this often, no cap (default 30 min); `0` = no stall probe. */
+export const NET_RETRY_STALL_MS = ((v) => (v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : 1_800_000))(env("NET_RETRY_STALL_MS") ?? "");
 /** How often the running-agent list is re-read while any agent is running. A
  *  readdir plus a stat per agent, and armed only while there is something to
  *  re-read — see `checkAgents`. */

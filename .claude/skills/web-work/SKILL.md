@@ -1,6 +1,6 @@
 ---
 name: web-work
-description: waterplane phone client — a repo's waiting work and the sheets acting on it (packages/web/src): Backlog.tsx + backlogFilter.ts (code in backlog/), BuildSheet.tsx + buildPrompt.ts, ScheduleSheet.tsx + clockDirectory.tsx, ActivitySheet.tsx, SetupSheet.tsx + RepoHealthRegion.tsx (Repo readings: three regions), AssessSheet.tsx + assessRows.ts, FanoutSheet.tsx, GitView.tsx. Load BEFORE touching a backlog row or its filters, a schedule or its clock, a build form, the repo-readings sheet, an assessment a person approves, a fan-out, or the commit screen — and before putting a count on any control here: a count is a filter and nothing applies itself.
+description: waterplane phone client — a repo's waiting work and the sheets acting on it (packages/web/src): Backlog.tsx + backlogFilter.ts (code in backlog/), BuildSheet.tsx + buildPrompt.ts, ScheduleSheet.tsx + clockDirectory.tsx, ActivitySheet.tsx, SetupSheet.tsx + RepoHealthRegion.tsx (Repo readings: four regions), AssessSheet.tsx + assessRows.ts, FanoutSheet.tsx, GitView.tsx. Load BEFORE touching a backlog row or its filters, a schedule or its clock, a build form, the repo-readings sheet, an assessment a person approves, a fan-out, or the commit screen — and before putting a count on any control here: a count is a filter and nothing applies itself.
 ---
 
 # web — a repo's waiting work
@@ -25,7 +25,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   carry `ARTIFACT_RULES`. `BuildScopeChoice.tsx` + `buildScope.ts` pick where an entry LIVES (the
   committed file or this desktop's own; drawn only for a host that sent `localIds`).
 - `Backlog.tsx` + `backlogFilter.ts` — **a repo's waiting work: the LIST, never a place words are
-  "sent to".** Code: `backlog/` (`useBacklogCuts.ts` has the local `nextFireIds` Set) +
+  "sent to".** Code: `backlog/` (`useBacklogCuts.ts` computes `nextFireIds` by `nextFireIdsOf`, predicate in `backlogFilter/nextFire.ts`) +
   `backlogFilter/`. Every item opens its own session when it fires — the shared `backlog · <repo>`
   conversation is retired — so group heads read *Each in a new session* / *In <session title>* /
   *Aimed at a session that closed*. **That third group is not a queue**: a `{kind:"session"}` row
@@ -101,10 +101,10 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   instant is still ahead. **Its sibling for the row with NO clock is `run it again`** (the
   `runAgain*` family in `backlogFilter/runAgain.ts`, plus `requeuedWords`): a `failed` row is
   terminal, so `intent.requeue` puts it back with its words, place and failure, and it is **the one
-  backlog mutation that is DURABLE** (`queueOp` on an `intent:<id>` lane). **`failed` is a STATE**,
-  so the tap carries the row's `finishedAt` as `failedAt` and the host refuses a row that settled
+  backlog mutation that is DURABLE** (`queueOp` on an `intent:<id>` lane). **`failed` is a STATE** — and a CALL-OFF is not one: `BacklogItem.calledOff` counts and cuts with `done` and gets no run-again, drop-the-clock, re-time, assess or naming verb; `isFailedRow`/`refireOffered` (`backlogFilter/calledOff.ts`) are the one edge (re-fire stays for a person's or an assessment's call-off). A **net-stalled** row (the host's retry ran out) stays `running`, DERIVED by `netStalledOf`, never failed: `NetStalled.tsx` on backlog and Activity rows offers *retry now* plus the one `NetRetrySwitch`, never run-again or re-fire. Because `failed` is a state,
+  the tap carries the row's `finishedAt` as `failedAt` and the host refuses a row that settled
   AGAIN — and **that refusal is TOASTED** (`op.ack`'s `ok:false`). **ONE eligibility edge**
-  (`runAgainState` → `offered`/`held-closed`/`none`): failed, no clock, not archived, and **not aimed
+  (`runAgainState` → `offered`/`held-closed`/`none`): failed, not called off, no clock, not archived, and **not aimed
   at a session that CLOSED** — then the verb is ABSENT and `runAgainClosedNote()` says why in TEXT.
   **The promise is worded OFF THE ROW** (`targetSessionId`, never the optional `fresh`): *a new
   session of its own* only for a fresh row; the bulk note takes `aimed` so a mixed cut is two
@@ -122,8 +122,8 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   the Backlog form names the row on the Backlog, while Activity, the chain picker and `clockDirectory`
   show the headline (the picker SNAPSHOTS it into `after.title`). One exception, pinned by name; also
   stated in `web-send`.
-- `SetupSheet.tsx` (+ `AlwaysOnRows.tsx`, the always-on list under the `context-weight` row: repo rows, this desktop's rows, unsized rows say so, doors to sessions that carried them) + `setupRemedy.ts` — **`Repo readings`: ONE sheet, THREE regions** (`ReadingsRegion`
-  = `setup` · `series` · `optins`), **and the seam is the COMPARATOR, never time.** Against the
+- `SetupSheet.tsx` (+ `AlwaysOnRows.tsx`, the always-on list under the `context-weight` row: repo rows, this desktop's rows, unsized rows say so, doors to sessions that carried them) + `setupRemedy.ts` — **`Repo readings`: ONE sheet, FOUR regions** (`ReadingsRegion`
+  = `setup` · `series` · `optins` · `watch` — the exposure watch and Scorecard checks), **and the seam is the COMPARATOR, never time.** Against the
   conventions (`ComplianceCheck`) = a fact against a line somebody chose: stripe, pass/warn/fail,
   counted in the badge, sometimes a `fix`. Against its own past (the series, drawn in
   `RepoHealthRegion.tsx`) = no side to be on. **Separate `useRemoteResource`s, `Empty`s, age lines and
@@ -140,7 +140,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   preset wins where one exists. **`isSetupFinding` (`@waterplane/shared`) is the ONE spelling of the
   predicate.** `focus: "findings"` cuts region 1 with a `.filter-bar` saying `n of N` against the
   UNFILTERED list and a *clear*; **the other regions are untouched and say nothing about it.**
-- `RepoHealthRegion.tsx` — region 2 (`series`), split out of `SetupSheet.tsx` past the 900-line cap;
+- `RepoHealthRegion.tsx` — region 2 (`series`), split out of `SetupSheet.tsx`;
   holds `SeriesRegion` and `RepoHealthMenuItem`. **Cards under a sticky jump bar** (`RepoHealthCards.tsx`):
   a chip per DRAWN card (navigation — no count, no lit state, an absent card has no chip) and the
   refresh verb at its end; one x-axis row (`weeks`/`commits`, the latter ABSENT with its sentence
@@ -223,7 +223,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   (never a modal, never a toast), and *don't ask in this repo* names its way back. *check* never runs
   over a running or undecided proposal (`slotCheckStart`). A conflict is words: its verbs are the
   rows' own and it has NO choice; a split is approved behind a confirm into `AssessChoices.splits`.
-- `GitView.tsx` — review, stage, commit, push. **`message` asks the DESKTOP for a draft** (host
+- `GitView.tsx` — review, stage, commit, push. **PR mode**: `PrCard.tsx` above history, push reads *Push & open PR*, and Merge is never greyed — the host's `blockedBy` sentence shows on tap; a running pull/push hides the stored failure. **`message` asks the DESKTOP for a draft** (host
   `commitmsg.ts`): an EMPTY box takes it, a box with words gets it offered ABOVE with *Use this one* /
   *Keep mine*. `writing…` is a LABEL, not a disabled attribute; a refusal is the host's sentence in the
   note, never an empty box. **`fix in a new session…`** on a failed push/pull (`gitFailPrompt.ts`)

@@ -377,6 +377,13 @@ export interface BacklogNav {
   scheduleFor?: (it: BacklogItem) => { id: string; name: string } | null;
   /** Open the Schedules sheet on one rule — the other half of the seam. */
   onOpenSchedule?: (id: string, name: string) => void;
+  /** Open the week-end burn sheet — the row chip's and the repo bar's door. */
+  onOpenWeekBurn?: () => void;
+  /** Cut this repo's list to exactly these ids (the repo bar's "N from the week-end burn"). */
+  onOpenCut?: (repoDir: string, ids: string[], label: string) => void;
+  /** The burn's one sentence about THIS repo (`automationLines.ts` `weekBurnLine`), or null:
+   *  unread, unavailable, or the repo is neither picked nor running. */
+  weekBurnText?: (repoDir: string) => string | null;
   /** The When editor for the ticked rows (`RetimeBar.RenderRetime`) — the Send
    *  sheet in re-time mode, drawn over this list by App. */
   renderRetime: RenderRetime;

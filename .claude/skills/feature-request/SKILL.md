@@ -57,7 +57,7 @@ these, explain the rule in one sentence and either reshape the request or stop:
 | binding a LAN/public interface by default, `access-control-allow-origin: *`, wider `*.ts.net`/`*.local`, a side-effecting GET | the daemon spawns `claude` = arbitrary code execution; Tailscale identity + Origin/Host checks are the only boundary |
 | a second WebSocket / a side channel | one socket per tab carries everything; a second one breaks ordering and acks |
 | a send path outside the queue, a retry without an ack id | prompts have run twice or never; delivery is at-most-once |
-| anything that answers a box, applies a review, or mutates on its own | *nothing applies itself* — it produces sentences a person acts on |
+| anything that answers a box (other than through `answergate.ts`), applies a review, or mutates on its own | *nothing applies itself* — it produces sentences a person acts on |
 | loosening path guards (`paths.ts`, repo containment, scaffold root) | they are the file-access boundary, asserted by e2e |
 | a greyed-out "disabled" control, a tooltip as the only explanation | say why in text; a `title` is invisible on a phone |
 | emoji as icons | `lucide-react` only |
@@ -66,12 +66,14 @@ these, explain the rule in one sentence and either reshape the request or stop:
 | a guessed number when a reading fails | heuristics degrade to absent, never to a wrong number |
 | a count on a control that does not filter | a count is a filter: tapping "2" opens exactly those two |
 | a second implementation of delivery, download, prompt box or VT replay | one of each, by rule |
+| filters, search or list-level buttons after a list's last row | they go ABOVE the list |
+| a usage-limit banner phrase in a string or comment | the screen detector false-positives on it |
 
 This table mirrors CLAUDE.md's *Never do these*; when that list changes, change this table in the same
 commit (no test ties them).
 
 Also flag, without refusing: anything new reaching the network, a new Android
-permission, a new unattended model call (costs the user tokens), anything that reads
+permission, a new unattended model call (costs the user tokens; it must start from the cheap flags `--setting-sources user --tools ""` with its own system prompt and justify every flag it drops), anything that reads
 the CLI's screen with a regex (breaks on CLI updates).
 
 **Requirements.** Read `docs/requirements/README.md`, then grep the one or two area

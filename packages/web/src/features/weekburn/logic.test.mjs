@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PICK_NOTE, lastWeekHere, runningWords, sameAsLastOffered, saveVerb, savedToast, stopChoices, toggleDir } from "./logic.ts";
+import { howItWorks, lastWeekHere, runningWords, sameAsLastOffered, saveVerb, savedToast, stopChoices, toggleDir } from "./logic.ts";
 
 const status = (over = {}) => ({
   prefs: { repos: [], weekOf: null, recurring: false, lastRepos: ["/a", "/b"], stopPct: 95 },
@@ -18,7 +18,7 @@ test("same as last week: only with no pick this week and repos that still exist"
 
 test("save verb: empty pick is Cancel only when there is something to cancel", () => {
   assert.equal(saveVerb(2, false).kind, "save");
-  assert.equal(saveVerb(2, true).label, "Change this week's pick");
+  assert.equal(saveVerb(2, true).label, "Save this week's pick");
   assert.equal(saveVerb(2, false).label, "Pick these for this week");
   assert.deepEqual(saveVerb(0, true), { kind: "cancel", label: "Cancel this week" });
   const none = saveVerb(0, false);
@@ -57,11 +57,14 @@ test("burn rows: worktrees only when picked, twin names told apart by path", asy
   const { rows, hidden } = burnRows(repos, ["/u/dev/gm/.claude/worktrees/agent-b8"]);
   assert.equal(hidden, 1);
   assert.deepEqual(rows.map((r) => [r.title, r.where]), [
-    ["ciqkit", "garmin/ciqkit"],
-    ["ciqkit", "out-ciqkit/ciqkit"],
+    ["ciqkit · garmin/", "/u/dev/garmin/ciqkit"],
+    ["ciqkit · out-ciqkit/", "/u/dev/rewrite/out-ciqkit/ciqkit"],
     ["gm · worktree-agent-b8", undefined],
     ["door-bell", undefined],
   ]);
+  // The host's `where` wins over the phone's own comparison.
+  const told = burnRows([{ ...repos[0], where: "dev/garmin/" }, repos[1]], []).rows;
+  assert.equal(told[0].title, "ciqkit · dev/garmin/");
 });
 
 test("hidden worktrees note: singular, plural, absent", async () => {
@@ -81,8 +84,27 @@ test("start line: English weekday, relative days", async () => {
   assert.equal(inWords(0), "now");
 });
 
-test("the sheet says what a tick does: sessions, one commit each, nothing pushed", () => {
-  assert.match(PICK_NOTE, /ticked repo gets unattended sessions/);
-  assert.match(PICK_NOTE, /commits/);
-  assert.match(PICK_NOTE, /Nothing is pushed/);
+test("the sheet says how it works: when, what each session is told, commits, nothing pushed, the stop", () => {
+  const steps = howItWorks({ start: "Starts Thu 09:17 · now", maxPerRepo: 6, stopPct: 90 });
+  assert.equal(steps.length, 4);
+  assert.match(steps[0], /^From Thu 09:17 · now, the desktop opens a fresh Claude session/);
+  assert.match(steps[0], /up to 6 a week/);
+  assert.match(steps[1], /prompt below/);
+  assert.match(steps[2], /Nothing is pushed/);
+  assert.match(steps[3], /90%/);
+  const bare = howItWorks({ start: null, maxPerRepo: null, stopPct: 95 });
+  assert.match(bare[0], /^From the start time/);
+  assert.match(bare[0], /a few a week/);
+});
+
+test("burn row ids: only the burn's rows in that repo, any state", async () => {
+  const { burnRowIds } = await import("./logic.ts");
+  const items = [
+    { id: "a", repoDir: "/r/x", origin: "weekburn:2026-10-26" },
+    { id: "b", repoDir: "/r/x", origin: "agent" },
+    { id: "c", repoDir: "/r/x" },
+    { id: "d", repoDir: "/r/y", origin: "weekburn:2026-10-26" },
+  ];
+  assert.deepEqual(burnRowIds(items, "/r/x"), ["a"]);
+  assert.deepEqual(burnRowIds(items, "/r/z"), []);
 });

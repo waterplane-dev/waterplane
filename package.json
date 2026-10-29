@@ -1,6 +1,6 @@
 {
   "name": "waterplane",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "waterplane — phone-native remote control for Claude Code on your PC",
   "license": "MIT",

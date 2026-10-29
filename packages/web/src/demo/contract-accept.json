@@ -128,6 +128,7 @@
     "POST /api/repos/:param/git/fetch": "not reachable in demo: no git on the demo desktop",
     "POST /api/repos/:param/git/message": "not reachable in demo: commit messages are a model call on a real desktop",
     "POST /api/repos/:param/git/explain": "not reachable in demo: the change brief is a model call on a real desktop",
+    "GET /api/repos/:param/git/explain": "not reachable in demo: the change brief it reads back is a model call on a real desktop",
     "POST /api/repos/:param/git/pull": "not reachable in demo: no git on the demo desktop",
     "POST /api/repos/:param/git/push": "not reachable in demo: no git on the demo desktop",
     "POST /api/repos/:param/git/prs/automerge": "not reachable in demo: no git, and no PR-mode repo on the demo desktop",

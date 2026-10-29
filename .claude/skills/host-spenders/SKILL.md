@@ -1,6 +1,6 @@
 ---
 name: host-spenders
-description: waterplane host — every place this daemon buys a model call of its own, unattended (packages/host/src): `sidecar.ts` (the one engine seam; code in `sidecar/`), `review.ts`, `assess.ts` (code in `assess/`), `commitmsg.ts`, `naming.ts`, `prompts.ts` (a fork's own wording) and the halt gate every spender honours. Load BEFORE adding or changing any headless `claude -p` or sidecar call — its flags, prompt, timeout, engine route or apply path: this is the seam CLAUDE.md's rule about justifying every dropped flag guards, and where *nothing applies itself* is argued out.
+description: waterplane host — every place this daemon buys a model call of its own, unattended (packages/host/src): `sidecar.ts` (the one engine seam; code in `sidecar/`), `review.ts`, `assess.ts` (code in `assess/`), `commitmsg.ts`, `changebrief.ts`, `naming.ts`, `prompts.ts` (a fork's own wording) and the halt gate every spender honours. Load BEFORE adding or changing any headless `claude -p` or sidecar call — its flags, prompt, timeout, engine route or apply path: this is the seam CLAUDE.md's rule about justifying every dropped flag guards, and where *nothing applies itself* is argued out.
 ---
 
 # waterplane host — the unattended spenders
@@ -12,10 +12,10 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
 - `sidecar.ts` + `sidecarroute.ts` + `sidecarclaude.ts` + `sidecartrust.ts` + `sidecaropenai.ts` + `sidecartasks.ts` + `sidecarname.ts` — (`sidecar.ts` is the facade over `sidecar/`: routing, the claude engine and its flags, the folder-trust refusal, the local engine, summary, naming+commit) the ONE place an UNATTENDED completion is bought: engines `claude-p` (today's
   headless call, moved verbatim — envelope, timeouts and `detectHeadlessLimit` unchanged) and
   `openai-compat` (one toolless POST to a local `{baseURL}/chat/completions`). Per-task routing via
-  `WATERPLANE_SIDECAR_SUMMARY`/`_ASSESS`/`_REVIEW`/`_NAME`/`_COMMIT` (+ `_TIMEOUT_MS` 120000,
+  `WATERPLANE_SIDECAR_SUMMARY`/`_ASSESS`/`_REVIEW`/`_NAME`/`_COMMIT`/`_EXPLAIN` (+ `_TIMEOUT_MS` 120000,
   `_MAX_TOKENS` 2048, `_API_KEY`), **every route defaulting to claude**. Only a task whose contract
   ALREADY forbids tools may take the local engine (`NEEDS_TOOLS` in `sidecarroute.ts`) — summary,
-  `naming.ts` and commit by construction (their input is all IN the prompt); assess and review READ a
+  `naming.ts`, commit and explain by construction (their input is all IN the prompt); assess and review READ a
   repo, so they refuse it **in words naming the variable**, and a malformed spec refuses too, never
   falls back to claude (spending the token is the thing the knob exists to stop).
   **Every failure is the empty result the callers already treat as "no summary / no verdict"** —
@@ -25,7 +25,7 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
   timeout because **ollama cold-loads an idle model**. **No limit phrase matching for the local
   engine** — it has no account. **Every spender gates on `halt.ts`'s `isHalted()`**
   (`sidecarclaude.ts`, `sidecaropenai.ts`, `usage.ts`), **and every spawned child registers with `trackRun`** (`sidecarclaude.ts`, `usage.ts`), so an emergency halt refuses a new call and kills a mid-review `claude -p`; a NEW spender copies the gate, and the `trackRun` too if it spawns. Base flags = `runSummaryTask`
-  (the tab-name call is `sessions/record.ts`'s `nameTab`/`nameNow`, `host-core`); `runNameTask`/`runCommitTask` share
+  (the tab-name call is `sessions/record.ts`'s `nameTab`/`nameNow`, `host-core`); `runNameTask`/`runCommitTask`/`runExplainTask` share
   `runTextTask`, which carries the measured argv (`--thinking disabled` included; the measurement
   table is a comment in `sidecarname.ts`) and drops none of `runSummaryTask`'s.
   **`runToolTask` refuses a folder Claude Code does not trust** (`workspaceTrust`): a tool task keeps
@@ -40,7 +40,7 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
   spender's instruction wording goes through it; only the wording is overridable, the JSON contracts
   the parsers read stay in code. A new unattended prompt is a new `promptText` name, documented in
   [host.md](../../../docs/notes/host.md#promptsts--customising-the-unattended-prompts-without-editing-core).
-- `assess.ts` + `assess/hassrun.ts` + `assess/hassapply.ts` + `assess/hassexec.ts` + `assess/hassinput.ts` — "of the work still standing, what is still worth doing?" `assess.ts` is a facade; the code is `assess/`: `hassrun.ts` (the streamed run, `acceptEdits`, the buffer cap), `hassapply.ts` (the apply: `requeueFailed`, ONE kick, `fromNote`, `filed`, splits, `reorder`), `hassexec.ts` (the executor: live progress via the store's `setLive` — `hassstore.ts` — and the slot check via shared `findSlot`), `hassinput.ts` (`MAX_NEW`, the naming caps).
+- `assess.ts` + `assess/hassrun.ts` + `assess/hassapply.ts` + `assess/hassexec.ts` + `assess/hassinput.ts` — "of the work still standing, what is still worth doing?" `assess.ts` is a facade; the code is `assess/`: `hassrun.ts` (the streamed run, `acceptEdits`, the buffer cap), `hassapply.ts` (the apply: `requeueFailed`, ONE kick, `fromNote`, `filed`, splits, `reorder`), `hassexec.ts` (the executor: live progress via the store's `setLive` — `hassstore.ts` — and the slot check via shared `findSlot`), `hassinput.ts` (builds the prompt input, interpolating shared's `MAX_NEW`/`MAX_HEADLINE_CHARS`).
   **The contract is a FILE both
   ways.** `claude -p` is the completion signal and error channel, **never the content**.
   `assess-out.json` is **deleted before the run**; **fresh session**; `--permission-mode acceptEdits`.
@@ -66,6 +66,7 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
   refused, nothing bought); a split posts both halves on the original's trigger, THEN ARCHIVES it,
   never cancels, and is refused if a row chains `after` it; a conflict has no apply branch. A stop sets every unstarted half aside; a merge takes the members' lowest seat and carries their `latestClock` or is refused in words; count a post only if `intents.post` accepted it — never `ok:true` for an apply that posted nothing. The assess argv has NO
   `--thinking disabled` — unmeasured for a tool run.
+- `changebrief.ts` — **the Review sheet's "Explain"** (`explainChanges`): what a push would send and a pull would bring, in words. `commitmsg.ts`'s shape — one toolless call, input all in the prompt, `runExplainTask` → `runTextTask` (drops none of `nameTab`'s flags), its own `_EXPLAIN` knob, model sonnet on purpose (the first question is "is anything security-relevant"). TAPPED, never unattended; it never pushes, pulls or commits. Its one write is a refs-only `git fetch`; a failed fetch is SAID, not a failed brief. **It runs as a JOB** (`explainjob.ts`, the push's shape): a second start JOINS the running one, the last finished brief per worktree persists (`explains.json`) so the reopened sheet shows it, and the end is told once (`reportExplainOutcome`, `open.verb: "explain"`).
 - `commitmsg.ts` — **the commit message the Review sheet's button asks for**: the tab-name call
   wearing a different prompt, and literally the same function (`sidecar.ts`'s `runCommitTask` and
   `runNameTask` both just call `runTextTask`, second routing knob), so the measured flags cannot drift into a second copy. TAPPED,

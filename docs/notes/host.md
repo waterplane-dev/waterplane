@@ -177,7 +177,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   - **Limit-EXIT resurrection:** the current CLI often *quits* on a plan limit (prints the `/usage-credits` banner and exits) instead of parking at a wait-menu — so there is no live PTY to type `continue` into. `sessions.ts` (`maybeScheduleResurrect`/`resurrect`) detects a limit banner in an exited session's tail and reopens the conversation with `--continue` at the reset time (else `WATERPLANE_LIMIT_RETRY_MS`), carrying the attempts count forward so it stays bounded by `WATERPLANE_LIMIT_MAX_ATTEMPTS`. A user **kill/remove** sets a `killed` flag that suppresses resurrection; a clean (non-limit) exit is never resurrected. The backlog re-adopts the revived session for its repo (`resolveRepoSession` → `diedAtLimit`) so queued work follows its own session across the bounce. Verified by `e2e-resurrect.mjs`.
 - `push.ts` — Web Push (VAPID); fires on prompt-detected and turn-finished (idle). Notifications can carry an `image` (opens the annotator) or a `file` (outbox artifact — tapping posts `download-file` to an open window — or encodes `dlRepo`/`dlPath`/`dlMtime` in the cold-start hash — and the app queues it through `web/download.ts`; the browser is never navigated at `download=1`, which sets Content-Disposition attachment). New non-image outbox files (APK/zip/pdf…) are detected per turn like images and notify with a download tap; limit events append to `<STATE_DIR>/limit-events.jsonl`.
 - `notifyprefs.ts` — **which notification KINDS may fire at all** (`<STATE_DIR>/notify.json`). Every alert the daemon raises went two places unconditionally: the in-app feed and, when subscribed, an OS push. That is right for the kinds that need a human — a session parked on a question, a usage limit — and wrong for `idle`, the "Turn finished" ping, which fires once per turn per session: a handful of agents working a backlog produces a notification a minute, and the observed result is a feed that is ~40 identical "Turn finished" rows with the two urgent kinds buried somewhere inside it. The switch had to exist, and the default had to change. **The gate is on the host, not in the client.** A client-side filter can only hide a row it has already been sent — the phone still buzzed, which is the half that actually interrupts someone — and the synced-settings store cannot hold it either, because `settings.ts` keeps opaque strings the daemon deliberately never parses (that opacity is what lets the web bundle update without the daemon). So it is its own small store, checked inside `server/clients.ts`'s `notify()` before the feed entry, the broadcast and the push alike: a muted kind leaves no trace anywhere, rather than being recorded and hidden. **Sparse by construction** — only the kinds the user has explicitly touched are stored, so a kind added in a later version arrives with its own default instead of being silently muted by a file written before it existed (`notifyEnabled`/`cleanNotifyPrefs` in `@waterplane/shared`, where the client checks the same rule to draw the switches). The one bypass is `pull`: a payload carrying a pull id is not an alert but the TRANSPORT for auto-download — the service worker starts a Background Fetch from the push handler with the app closed — so gating it would silently turn auto-pull off for anyone who muted "artifact". Wire: `notify.prefs.set` → a `notify.prefs` BROADCAST (the mute follows the account, so a second device must not keep showing a switch the desktop just flipped), plus `notify.prefs` unprompted on hello. Verified by `e2e-notifyprefs.mjs`.
-- `netretrycfg.ts` — the person's switch for the network-error retry (`sessions/apiretry.ts`, R-connection-025): Settings › Sessions › *retry on network errors* sends `netretry.set`; the host persists `<STATE_DIR>/netretry.json` (absent ⇒ on, a torn file ⇒ on and moved aside) and broadcasts `netretry.config`, also sent on hello. Host-persisted for the auto-continue switch's reason: whether this desktop types `continue` by itself is a fact about the desktop, not the phone that set it — so it is not in settings sync. `WATERPLANE_NET_RETRY=0` stays a HARD override: the config carries `envOff` and the phone prints shared `netRetryEnvOffText` under a switch that still shows and saves the saved value, rather than a greyed control. Off cancels every pending retry through the slice's own `netRetryCancel`, so each bar clears. `netretrycfg.test.mjs`, `e2e-netretryswitch.mjs`.
+- `netretrycfg.ts` — the person's switch for the network-error retry (`sessions/apiretry.ts`, R-connection-025): Settings › Sessions › *retry on network errors* sends `netretry.set`; the host persists `<STATE_DIR>/netretry.json` (absent ⇒ on, a torn file ⇒ on and moved aside) and broadcasts `netretry.config`, also sent on hello. Host-persisted for the auto-continue switch's reason: whether this desktop types `continue` by itself is a fact about the desktop, not the phone that set it — so it is not in settings sync. `WATERPLANE_NET_RETRY=0` stays a HARD override: the config carries `envOff` and the phone prints shared `netRetryEnvOffText` under a switch that still shows and saves the saved value, rather than a greyed control. Off cancels every PENDING retry and stops every stall probe through `NetRetrySlice.switched` — a stall stays (a stalled row stands on it); on re-arms its probe. `netretrycfg.test.mjs`, `e2e-netretryswitch.mjs`.
 - `decisionlog.ts` — the **decision log** (`<STATE_DIR>/decision-log.json`, `DecisionLogEntry`, a 500-entry ring): every automatic thing done or proposed on a session's behalf — usage-limit auto-continue lifecycle rows (`source: "limit"`: blocked → attempt → resumed/gave up) and plugin suggestions/answers (`source: "plugin"`, `plugin` set). It was the oracle's log; on first boot `.waterplane/oracle-log.json` is migrated in (oracle rows → `plugin: "oracle"`) and renamed `.migrated`, never deleted. Every change broadcasts `decisions.log`; routes `decisions.get/archive/delete/archiveAll`.
 - `sentlog.ts` — the **sent-command audit log** (`<STATE_DIR>/sent.json`), the answer to "what did this thing type into my agent, and when?". Automation drives a session through the same PTY a person does, so a backlog item firing, a fan-out target, a plugin's gated answer and a usage-limit `continue` all land in the scrollback looking exactly like typed text — and the moment that question gets asked, the scrollback is the evidence under suspicion. Two rules make it worth reading. **One entry per semantic command, not per PTY write**: `deliver.ts` writes the text and the Return separately and re-presses Return up to five times, so a per-write log would show six rows for one prompt; the entry is recorded when delivery SETTLES, which is also what lets it carry the verdict. And **the verdict is kept, not flattened** — `unsubmitted` (text sitting in the composer, un-run) and `ok` are opposite facts about the session, so a log that called both "sent" would state the one thing that is untrue. Recording is not per-caller: `deliverPrompt()` records on every exit path (including `"retry"` = provably nothing typed, because "the backlog never managed to feed this session" is as much of an answer as the opposite), and the raw automation writes that bypass it — the oracle's auto-fired digit, the usage-limit menu answer, the auto-`continue` — call `recordSent()` at their own site. The store is reached through a module-level singleton (`setSentLog` in `main.ts`) rather than threaded through every caller, so a new send path is recorded by default instead of by remembering. Persisted for the same reason `acks.ts` is (`npm run restart` is routine, and an in-memory trail is empty exactly when something surprising happened before the last restart): tmp+rename, debounced, flushed on SIGTERM, every I/O failure degrading to in-memory. Wire: `sent.get`/`sent.clear` → `sent.log`, plus a `sent.new` broadcast per entry so an open sheet stays current without refetching. UI: `SentLogSheet.tsx`. Verified by `e2e-sent.mjs`.
 - `settings.ts` — **the settings that follow the USER, not the browser** (`<STATE_DIR>/settings.json`). Everything the app remembered lived in localStorage, which is right for a send queue or a measured uplink rate and wrong for the things the user AUTHORED: prompt templates (snippets), fan-out presets, header commands, the prompt pad, the toolbar layout, the default launch flags. Those were per-browser, so a template written on the phone did not exist on the desktop and a reinstalled PWA lost the lot — while a host that already persists the backlog, the ack ledger and the audit log sat right there. Deliberately dumb, because the alternative is a sync engine. **Opaque values**: a record is `{ value, ts }` where `value` is the client's RAW localStorage string, never parsed — shapes change with the UI, and `webbundle.ts` exists precisely so the phone can update its web bundle without the daemon moving. **Last write wins on the CLIENT's timestamp**, with equal timestamps losing (a reconnect re-push must not re-broadcast to every device), and the loser of a race is answered with the winning value instead of being ignored, so it stops holding a version nobody else has. **An allow-list, not a mirror** (`SYNCED_SETTING_KEYS` in `@waterplane/shared`, where both ends read it): syncing `waterplane.outbox` would let a second device replay another device's queue — a prompt typed twice — and syncing `waterplane.dataSaver`/`uploadScale` would copy a phone's DERP-relayed link settings onto a desktop on the LAN. An over-cap value is refused rather than truncated (a value silently cut in half is a corrupt prompt list on every other device). Persisted tmp+rename, debounced, flushed on SIGTERM, degrading to in-memory on any I/O failure. Wire: `settings.get`/`settings.set` → `settings.all` (sent unprompted on hello) + a `settings.update` broadcast. Verified by `e2e-settings.mjs`.
@@ -6447,6 +6447,32 @@ is no listing and no undo behind it — and seeding over a draft is a delete
 sentence under the form: a tap that spends a call and says nothing is what the
 whole path is written around.
 
+## `explainjob.ts` + `routes/apigitspend.ts` — Explain as a job, not a held request
+
+The Review sheet's Explain (`changebrief.ts`) fetches and then runs a sonnet pass
+over two diffs: a minute or two. As a held POST it was tied to the screen —
+leaving lost the answer, and coming back offered a blank form whose only verb
+was to pay again (R-git-029). It now has the push's shape (`git.ts` `startPush`):
+
+- **Start or JOIN, per worktree.** A second tap, another tab or another device
+  joins the run in flight; nothing ever buys a second call for the same ask.
+- **The last finished brief persists** (`<STATE_DIR>/explains.json`, newest 50
+  worktrees). The reopened sheet shows it with its age — after a restart too. A
+  run a restart cut is gone, and the phone says so rather than spinning: its
+  poll sees no run, or one with another `startedAt`.
+- **The end is told once**, to the sink `main.ts` installs: `gitnotify.ts`
+  `reportExplainOutcome` posts an information notification (`git` kind, tag
+  `git-<repo>-explain`, so a newer one replaces it in the tray) whose
+  `open.verb: "explain"` lands on the Explain view, not the Review sheet above it
+  (`web/gitLanding.ts`, a one-shot so the nav API keeps one argument). A brief
+  that could not be written is information too — its reason, not a failure
+  anyone must handle.
+- **Wire.** `POST git/explain` with `{ background: true }` answers the
+  `GitExplainState` at once; `GET git/explain` reads it. Without the flag (a
+  bundle from before the job) the request is still held and answers the brief.
+  Both spending routes — this and the commit-message draft — live in
+  `routes/apigitspend.ts`, cut from `apirepowork.ts` for its 500-line cap.
+
 ## `sessions.nameNow()` — naming a conversation because somebody asked
 
 `nameTab` fires once per session ever, off the first prompt, and
@@ -8442,18 +8468,83 @@ sentence). Carried on the event rather than suppressing it because the two liste
 things:
 - **`intents/watch.ts`'s `onTurnEnded`** — `retrying`/`checking` complete nothing and keep the
   baseline, so the served retry's Stop (or `netTurnSettled` with no give-up) completes the row the
-  ordinary way. `gaveup` FAILS a running row (`giveUp`: `ok:false`, "the API could not be reached
-  (…) and the host stopped retrying after N tries — the work did not run"; a recurring rule goes back
-  to `queued` with that result) — failed, not left `running` until the silence ceiling and never
-  `done`: nothing will run it, and `failed` is what `requeueFailed` can put back. The halt stopping a
-  pending rung says `gaveup` the same way (`netTurnSettled`), since no turn end follows it.
+  ordinary way. `gaveup` leaves the row **STALLED** (2026-10-29, owner decision, superseding the
+  first cut that FAILED it): it stays `running`, baseline kept — never failed, never `done`, never
+  requeued. The prompt WAS delivered, the conversation is intact, and at-most-once means its prompt is
+  never typed again, so `failed` (which invites *run it again* — a second copy of words that already
+  ran into a live conversation) was the wrong verdict. No Lifecycle state and no BlockReason was added
+  (the seven states are deliberate; `blocked` is pre-fire and recomputed every tick): the stall is
+  DERIVED — shared `netStalledOf(row, sessions)` is `running` + the session's `netRetry` `gaveup`, and
+  `netStalledText` words it ("Stalled — API unreachable, 8 retries used"). A **recurring** rule's
+  occurrence stays running the same way: requeueing let the rule's next occurrence fire into (or
+  beside) a conversation whose turn never ended, and a reply landing later had no row to complete; the
+  rule simply resumes on that real turn end. The halt stopping a pending rung says `gaveup` the same
+  way (`netTurnSettled`), since no turn end follows it.
+- **The silence ceiling does not fail a stalled row** (`sweepRunning`, before the ceiling and the
+  idle guess): `IntentDeps.sessionNetStalled(sid)` — shared `netRetryStalls(netRetry)`: `gaveup`, or a
+  stall probe under way (`probe: true`) — ⇒ skip. The stall survives a host restart for exactly this —
+  `LiveMeta.netGaveUp`, taken off the live session by `persistLive` (the `budget`/`askDismissed`
+  pattern; a probe mid-flight is saved as the `gaveup` it came from, due now) and restored by
+  `reattach` when well-formed, with `nextAt` and `dismissed`; `NetRetrySlice.restored` re-arms the
+  probe (at least `PARK_MS` out). The slice rewrites the record on every move while stalled. Ladder
+  states stay memory only (a restart types nothing).
+- **Dismiss only HIDES** (2026-10-29, owner): `session.netRetryCancel` on a `gaveup` sets
+  `dismissed: true` and nothing else — the bar (`NetRetryBar`) draws nothing for it, `netStalledOf` and
+  `netRetryStalls` ignore the flag, so the row keeps its note and the ceiling still skips it. It used
+  to clear `netRetry`, which ended the stall and let the ceiling FAIL the row an hour later. A stall
+  ends only on a real turn end (`turnEnded` clears the episode), a person typing (`typed`/`turnStarted`),
+  a wall, or the person settling or cancelling the row. Cancel on a stall PROBE stops the probing and
+  keeps the stall (`stopProbing`). A probe and its give-up carry `dismissed` forward.
+- **The stall probe** (2026-10-29, owner): a stalled row holds its repo's `serial` slot, so past the
+  cap the host keeps trying on a slow cadence — `WATERPLANE_NET_RETRY_STALL_MS` (`sessions/knobs.ts`,
+  default 30 min, `0` = never), NO cap while stalled. The `gaveup` carries the next probe's due time
+  as `nextAt` (`armProbe`, only with the switch on, the knob > 0 and no halt); the probe flips it to
+  `waiting` + `probe: true` and types through `fire()` — the ladder's one typing path, its halt/wall/
+  busy checks and parks. Its turn's give-up goes back to `gaveup` (`schedule` never climbs the ladder
+  from a probe: `attempt` keeps counting, 9, 10, …) and arms the next; a real reply clears the episode
+  and the row completes as ever, freeing the slot. Stopped the way the ladder is: the switch off
+  (`NetRetrySlice.switched(false)`, from `netretry.set`: ladder rungs cancelled, probes stopped, the
+  stall kept; on re-arms a probe for a stall that has none), the halt, a wall, typing. Each probe logs
+  `net retry stall probe (try N)`; the give-up line says `next try in 30m`. The phone's stalled note
+  says it too (`netStalledText(n, now)`: "… · next try in 23m", "… · trying again now"), on a 30 s
+  `useNow` clock, and the bar's gave-up line ends "; one more try in 23m".
+- **Retry now** (`session.netRetryNow`, live-only like `netRetryCancel`; `NetRetrySlice.retryNow`):
+  a `gaveup` episode restarts at try 1 (the cap bounds what the host types BY ITSELF; a person's tap
+  is a new start), a `waiting` rung fires early, `sent`/none are no-ops. It types through `fire()` —
+  the ladder's own two writes, history and `sent.json` rows, its halt/wall/busy checks and parks —
+  never a send of its own. The row completes the ordinary way on the next real turn end (Retry now's
+  reply, the person typing, a later reply). With the switch OFF, `turnEnded` still reads the log for a
+  live episode (else Retry now's failed turn would complete the row), and `schedule` gives up after
+  that one try ("… — automatic retry is off") instead of climbing the ladder.
+- **The switch on the row**: the stalled backlog row and Activity row (`web/src/NetStalled.tsx`, off
+  `netStalledOf`) draw the note, the CLI's error, `retry now` (`PlugZap`) and the host's own
+  auto-retry switch — `web/src/NetRetrySwitch.tsx`, the ONE implementation Settings › Sessions'
+  `net-retry` row also renders (store + senders in top-level `netRetryCfg.ts`, since rows outside
+  `features/limits` cannot import it), with the env-forced-off sentence. `netretry.set` off now
+  cancels only PENDING ladder rungs and stops probes: a stall is the record the row's note and Retry
+  now stand on. Retry now clears `probe` and `dismissed`: a person's tap is a new episode.
+  NetRetryBar's gaveup state offers the same `retry now`.
+- **What a stall holds**: a `running` row keeps its session from being reaped and counts as the
+  repo's `serial` holder and an automatic slot (`slotBusy`), so the repo's queued work waits behind a
+  stalled row until the probe gets a reply or a person acts on it. **The queued row SAYS so**: the
+  serial rung is unchanged (same `serial` BlockReason, same hold — no new reason, because the row
+  waits for exactly what every serial row waits for; only the HOLDER's state differs, which is what
+  the holder's `wall` already words, as `awaitingAnswer` does). `IntentDeps.sessions()` stamps
+  `SerialSessionState.netStalled` (`netRetryStalls`), `serialHolders` relabels that session's
+  `starting`/`sessionBusy` claim `netStalled` (ranked with `awaitingAnswer`: a person can clear it),
+  and `serialWaitText` says "one at a time in this repo — waiting behind a stalled item: API
+  unreachable ('x')"; `holderSessionId` still rides. On the phone `holderOffer(it, sessions, items)`
+  turns the row's way-on into *show the stalled item* when a row in the list running in that
+  session is `netStalledOf`: the tap is an ids cut to that row (`STALLED_HOLDER_CUT`), where its note,
+  retry now and the switch are.
 - **The budget (`budgetTurnEnded`)** still counts every Stop: the retry's `continue` is a turn that
   spends, so a HARD budget over owes it its Esc like any other.
 - The turn-finished ping is held only for `retrying` (as before); plugins' `question` rides that ping.
 
 A PERSON taking over (a keystroke, a prompt, a turn of theirs) cancels the retry and nothing more:
-the row completes on that next real turn end. The phone's Cancel with no typing after it leaves the
-row waiting for a turn — the silence ceiling (`sweepRunning`) still fails it if none ever comes.
+the row completes on that next real turn end. The phone's Cancel of a PENDING retry with no typing
+after it leaves the row waiting for a turn — the silence ceiling (`sweepRunning`) still fails it if
+none ever comes.
 At most once holds because every settle drops the baseline: whichever of a late verdict and a later
 Stop arrives second finds nothing to apply to. A row still `starting` when a `gaveup` lands is left
 to its executor and then waits (rare: the CLI's own retries take minutes). The re-read no longer
@@ -8463,9 +8554,17 @@ row landed late, so the cap could be missed.
 **Not done**: a give-up on a FIRST turn whose log row lands after the Stop (no episode yet) still
 completes the row before the re-read schedules the retry.
 Pinned by `packages/host/test/netlog.test.mjs` (reader, ladder), `packages/shared/test/netretry.test.mjs`
-(the wording), `packages/host/test/intentsched.test.mjs` (the watch: retrying/checking/gaveup, at most
-once), `scripts/e2e-netretry.mjs` (stub `STUB_NETFAIL`: retry, cap, cancel) and
-`scripts/e2e-netretry-backlog.mjs` (a backlog item through a retry, past the cap, and a person typing over it).
+(the wording, `netStalledOf`/`netStalledText`), `packages/host/test/intentsched.test.mjs` (the
+watch: retrying/checking, gaveup ⇒ still running with the stall derivable, the next Stop completes it
+once; a stalled row is not failed by the silence ceiling), `scripts/e2e-netretry.mjs` (stub
+`STUB_NETFAIL`: retry, cap, cancel) and `scripts/e2e-netretry-backlog.mjs` (a backlog item through a
+retry; past the cap STALLED, the switch flipped off and on leaving the gaveup, Retry now typing one
+`continue` and the item done on its reply; a person typing over it; D: dismiss keeps the stall, the
+queued row behind it says "waiting behind a stalled item", two probes past the cap — the second
+served — complete the row and the queued one runs), `packages/host/test/netstall.test.mjs` (the
+slice on a fake core: probe cadence uncapped, dismiss hides only, switch off / cancel stop probing
+and keep the stall) and `intentsched.test.mjs` (a dismissed gave-up and a probe under way both keep
+the row out of the ceiling; the serial sentence and `holderSessionId` for a stalled holder).
 
 
 ## `localcistatus.ts` — the `local-ci` status after a phone push in PR mode
@@ -8473,3 +8572,27 @@ once), `scripts/e2e-netretry.mjs` (stub `STUB_NETFAIL`: retry, cap, cancel) and
 Where a repo's rules require a `local-ci` status check (`branchrules.ts`, mode `pr-checks`), the only thing that can satisfy it is a commit status, and GitHub Actions is off. With the opt-in "Report local checks to GitHub" on (`git config --local waterplane.localCiStatus true`; the card is offered only when the rules require `local-ci`, do not pin it to a GitHub App — `BranchRules.pinnedChecks` — and a runnable pre-push hook exists), `prpush.ts` calls `reportLocalCi` right after a successful PR-mode push, before `gh pr create`, and posts `success` / context `local-ci` for the sha the push REPORTED (porcelain `newAbbrev` checked against `refs/remotes/origin/<branch>`; `fromDefault` passes the tip it pushed). The post is `gh api -X POST repos/<slug>/statuses/<sha>`, 8 s, one retry after 2 s; the description names no host, user or path. `gitPush`'s plain path never reads the switch.
 
 What it proves: the pre-push hook ran on this desktop and did not fail the push. It is the honor system — nobody verifies the tests ran. What it does not cover: a push an agent or a terminal makes. For those, an optional hook snippet can post the same status: a detached `post-push.sh` started by the pre-push hook that polls `git ls-remote origin <branch>` for the sha (up to 10 min, because the sha is not on GitHub until the push lands) and then runs the same `gh api` call. Nothing is posted for `=` refs, tags, other refs, or a failed hook (`failure`/`pending` are never posted). A post failure is a sentence on the receipt, never `ok: false`. Pinned by `packages/host/test/prpush.test.mjs`, `optins.test.mjs`, `shared/test/branchmode.test.mjs`. The fix id `local-ci-status` is confirm-gated and a core fix id.
+
+
+## Modules described for the skill grooming (2026-10-29)
+
+The 2026-10-29 fact-check of the host and shared skills named these modules for the first time.
+
+- `plugins/pluginassets.ts` — a plugin's static assets (`manifest.assets`, plugin API 2.0
+  additive): flat files served read-only at `GET|HEAD /api/plugin/<id>/asset/<file>` by
+  `routes/apisystem.ts`, behind the core's origin + token gates — deliberately NOT an
+  `OPAQUE_READ_ROUTE` and not in `passive.ts`. The pure half: a flat name (`ASSET_NAME`), the dir
+  and the file both realpath-resolved, the file under the dir, so a symlink out is a 404, never a read.
+- `prs.ts` — the person's open pull requests and the actions on them (the phone's PR card). Every
+  forge call goes through `forge/` (`forgeOrGh`), never `gh` directly; only `forge/github.ts` may
+  spawn `gh` (`tools/forgeseam.test.mjs`). See [forge.md](forge.md) and `prpush.ts` above for the
+  push half.
+- `branchmode.ts` (shared) — what a remote's own rules demand of a push to the default branch,
+  read from GitHub's rules and never chosen by waterplane. `direct` is no rules or only
+  force-push/deletion blocked; only a `pull_request`, `required_status_checks` or required-review
+  rule makes it `pr`/`pr-checks`. Unparseable input is ABSENT, never a guess.
+- `ledgerspan.ts` (shared) — a second backend's OWN ledger (Copilot, Codex, Gemini, opencode) cut to
+  the span a claude card shows, BESIDE claude's figure and never summed into it, converted or read
+  by a verdict. Cut on the ledger's HOURS, never its days: a ledger day is the host's local calendar
+  day while a claude period is `[start, reset)` in its own zone, so a day summed in puts up to 23
+  hours into the wrong span. ABSENT, with the sentence why, wherever the cut cannot be exact.

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { RepoTarget } from "@waterplane/shared";
+import { twinWheres, type RepoTarget } from "@waterplane/shared";
 import { RUNNING_IN_WSL, wslMountPath } from "./branddirs.js";
 import { env } from "./env.js";
 import { execFileP as pexec } from "./proc.js";
@@ -128,6 +128,7 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
   const roots = root.split(",").map((s) => s.trim()).filter(Boolean);
   const seen = new Set<string>();
   const targets: RepoTarget[] = [];
+  const cloneOf = new Map<RepoTarget, string>(); // target → the clone dir it was found under
 
   const visit = async (dir: string, depth: number): Promise<void> => {
     if (depth > maxDepth) return;
@@ -145,7 +146,7 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
         const wt = worktrees[i];
         if (seen.has(wt.path)) continue;
         seen.add(wt.path);
-        targets.push({
+        const t: RepoTarget = {
           id: targetId(wt.path),
           repoName: name,
           branch: wt.branch,
@@ -153,7 +154,9 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
           worktreePath: wt.path,
           outboxCount: 0,
           changedCount: 0,
-        });
+        };
+        targets.push(t);
+        cloneOf.set(t, dir);
       }
       return;
     }
@@ -178,6 +181,10 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
   for (const r of roots) {
     await visit(r, 0);
   }
+  // Two clones with one folder name read alike on the phone (2026-10-28: a burn went to a
+  // rewrite leftover). Every worktree of a clone carries its clone's `where`.
+  const wheres = twinWheres([...cloneOf].map(([t, dir]) => ({ name: t.repoName, dir })));
+  for (const [t, dir] of cloneOf) { const w = wheres.get(dir); if (w) t.where = w; }
   return targets;
 }
 

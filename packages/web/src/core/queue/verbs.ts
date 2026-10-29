@@ -113,14 +113,15 @@ export function verbFns(c: QueueCtx): VerbFns {
    * may already be on a live PTY) and any op (its payload names its own
    * subject — "send this build somewhere else" is meaningless).
    */
-  function retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }) {
+  function retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): boolean {
     const cur = outboxRef.current;
     const e = cur.find((x) => x.ackId === ackId);
-    if (!e) return;
-    if (!canRetarget(e)) { showToast(e.mode === "op" ? "an action can't be re-aimed" : "already on its way"); return; }
+    if (!e) return false;
+    if (!canRetarget(e)) { showToast(e.mode === "op" ? "an action can't be re-aimed" : "already on its way"); return false; }
     track("action:queue.retarget");
     writeOutbox(retargetEntry(cur, ackId, { ...to, ackId: newAckId() }));
     showToast(to.mode === "backlog" ? "moved to that repo's backlog" : "moved to that session");
+    return true;
   }
   /**
    * **"when it's free", on a message already in the queue — handed to the

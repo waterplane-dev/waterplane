@@ -1308,6 +1308,13 @@ test("holderOffer: open the session a serial row waits behind, 'answer in' when 
   // Nothing to open ⇒ no verb at all, never a dimmed one.
   assert.equal(holderOffer({ status: "queued" }, [s()]), null, "an older host sends no id");
   assert.equal(holderOffer(row, [s({ running: false })]), null, "the session is gone");
+  // The holder's work is a row STALLED on the API: the offer is THAT ROW (an ids cut).
+  const stalled = s({ tabTitle: "x", netRetry: { state: "gaveup", attempt: 8, max: 8, nextAt: null, error: "e", at: 1, dismissed: true } });
+  const items = [{ id: "r1", status: "running", sessionId: "s1" }];
+  const o = holderOffer(row, [stalled], items);
+  assert.equal(o.label, "show the stalled item");
+  assert.equal(o.itemId, "r1");
+  assert.equal(holderOffer(row, [s({ tabTitle: "x" })], items).label, "open 'x'", "not stalled ⇒ the session, as before");
   assert.equal(holderOffer(row, []), null);
   assert.equal(holderOffer({ ...row, status: "running" }, [s()]), null, "only a waiting row waits behind anything");
 });

@@ -325,6 +325,10 @@ export interface IntentDeps {
    *  the row is given up on — the backlog's `REAP_CEILING_MS`, handed over so
    *  there is one definition. Optional; absent ⇒ no backstop. */
   reapCeilingMs?(): number;
+  /** Is this session's net retry `gaveup` (`SessionInfo.netRetry`, `sessions/apiretry.ts`)?
+   *  A row running in it is STALLED, not silent: the sweep neither fails nor
+   *  completes it. Optional; absent ⇒ never stalled. */
+  sessionNetStalled?(sessionId: string): boolean;
   /** How many rows of ONE `groupId` may be delivering at once — a fan-out's
    *  concurrency pool, which is a bound on real `claude` processes. */
   groupConcurrency(): number;

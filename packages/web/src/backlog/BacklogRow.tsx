@@ -18,6 +18,7 @@ import { RowActions } from "./RowActions";
 import { RowChips } from "./RowChips";
 import { RowEditor } from "./RowEditor";
 import { RowNotes } from "./RowNotes";
+import { NetStalled } from "../NetStalled";
 import type { BLGroup } from "./useBacklogCuts";
 import { Button } from "../kit/Button";
 
@@ -144,6 +145,8 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
             })()}
             <RowChips m={m} row={row} />
             <RowNotes m={m} row={row} />
+            {/* Stalled on the API (R-connection-024): derived off the session, on the item. */}
+            <NetStalled state={it.status} sessionId={it.sessionId} sessions={p.sessions} />
           </div>
           <div className="bl-order">
             {canDrag && (

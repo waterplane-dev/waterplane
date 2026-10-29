@@ -40,8 +40,10 @@
  * **2.3** (additive, `docs/analysis/backend-parity-v3/c2.md`): `caps.spendUnit` (a native session-budget
  * unit) and `BackendTokensDoc.hourly` (a ledger cut to a period or week window, beside claude's
  * figure). 2.2 plugins load as-is; an older host ignores both.
+ * **2.4** (additive, `docs/notes/plugins.md`, "Which session asked"): `HostPluginApi.sessionOf` — the
+ * live session a requesting process belongs to (pane + ppid walk, scratchpad, cwd). 2.3 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "2.3.0";
+export const PLUGIN_API_VERSION = "2.4.0";
 
 /** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
 export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";

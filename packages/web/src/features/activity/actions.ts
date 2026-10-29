@@ -6,7 +6,7 @@
  * `act` on purpose: a re-aim needs an ANSWER, which the sheet asks inline
  * with the shared `RepoPicker`.
  */
-import { intentKind, isTimedWorkRow } from "@waterplane/shared";
+import { intentKind, isTimedWorkRow, repoLabel } from "@waterplane/shared";
 import { bulkLines, entryProse, queueRowKey, type ActivityActionId, type ActivityRow } from "../../activityRows";
 import { scheduleRemovedToast } from "../../clockCuts";
 import { scheduleRuleLabel } from "../../backlogFilter";
@@ -21,7 +21,7 @@ import { BL_OFFLINE, HELD_OFFLINE, refireSummary, runLane, runNowToast } from ".
 import { confirmedDone, filed, focus, pullList, type ActivityFocus } from "./store";
 import { SHEET } from "../../sheetNames";
 
-const repoNameOf = (c: CoreApi, cwd: string) => c.world.repoForCwd(cwd)?.repoName ?? baseName(cwd);
+const repoNameOf = (c: CoreApi, cwd: string) => { const r = c.world.repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); };
 
 // ── Doors ────────────────────────────────────────────────────────────
 
@@ -59,7 +59,11 @@ export function bootActivity(): () => void {
 export function retarget(row: ActivityRow, to: { sessionId: string; cwd: string; mode?: "input" | "backlog" }): void {
   const c = core();
   c.say.track("action:activity.retarget");
-  if (row.subject.source === "queue") { c.queue.verbs.retargetQueued(row.id, to); return; }
+  if (row.subject.source === "queue") {
+    // Moved onto a backlog: show it there, newest on top.
+    if (c.queue.verbs.retargetQueued(row.id, to) && to.mode === "backlog") c.nav.openBacklogCut(to.cwd);
+    return;
+  }
   // One message for every host-held row, where there used to be one per
   // ledger. `intent.retarget` is the store's own recovery verb.
   if (row.subject.source === "intent") {
@@ -68,6 +72,7 @@ export function retarget(row: ActivityRow, to: { sessionId: string; cwd: string;
         target: to.mode === "input" ? { kind: "session", sessionId: to.sessionId } : { kind: "repo" } },
       `aimed at ${repoNameOf(c, to.cwd)}`, BL_OFFLINE,
     );
+    if (to.mode !== "input") c.nav.openBacklogCut(to.cwd);
     return;
   }
   c.say.toast("that row cannot be re-aimed");
@@ -264,7 +269,7 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
  * path, and then the dead row leaves the queue so nothing can send it twice.
  * Everything else is refused upstream by `refireBlocker`.
  */
-function refire(c: CoreApi, row: ActivityRow): "sent" | "queued" | "norepo" | "nothing" {
+function refire(c: CoreApi, row: ActivityRow, landed: Set<string>): "sent" | "queued" | "norepo" | "nothing" {
   if (row.subject.source !== "queue") return "nothing";
   const e = row.subject.entry;
   const repo = e.cwd ? c.world.repoForCwd(e.cwd) : null;
@@ -274,6 +279,7 @@ function refire(c: CoreApi, row: ActivityRow): "sent" | "queued" | "norepo" | "n
   const q = c.queue.queueBacklog({ text, repoDir: repo.worktreePath, label: text.slice(0, 40) });
   if (q === null) return "nothing"; // refused — it names an image that never arrived
   c.queue.drop(e.ackId);
+  landed.add(repo.worktreePath);
   return q ? "queued" : "sent";
 }
 
@@ -326,13 +332,17 @@ export function bulk(kind: "refire" | "dismiss" | "restore", rows: ActivityRow[]
     let sent = 0;
     let offline = false;
     const done: string[] = [];
+    const landed = new Set<string>();
     for (const r of rows) {
-      const v = refire(c, r);
+      const v = refire(c, r, landed);
       if (v === "sent" || v === "queued") { sent++; done.push(r.key); if (v === "queued") offline = true; }
     }
     if (!sent) { c.say.toast("nothing left to send from those rows"); return; }
     filed.set(dismissRows(done));
     dismissOnHost(rows.filter((r) => done.includes(r.key)));
     c.say.toast(refireSummary(sent, rows.length, offline));
+    // One repo's backlog holds them all: open it, the new rows on top. Several
+    // repos have no one backlog to show, so the toast stands alone.
+    if (landed.size === 1) c.nav.openBacklogCut([...landed][0]);
   })();
 }

@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo } from "react";
 import type { ScheduleEntry, WeekBurnStatus } from "@waterplane/shared";
-import { fmtWhen } from "@waterplane/shared";
+import { fmtWhen, repoLabel } from "@waterplane/shared";
 import { onceIn } from "../../sendIntent";
 import { intentRowKey } from "../../activityRows";
 import { useCore, useQueueEntries, useStore } from "../../sdk";
@@ -54,7 +54,7 @@ export function ScheduleRulesSheet() {
   // Same key as the week-end burn sheet's read, so the two share one cache. Only
   // a FRESH answer draws a line: a cached copy may describe last week's pick.
   const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
-  const repoName = (dir: string) => core.world.repoForCwd(dir)?.repoName ?? (dir.split(/[/\\]/).filter(Boolean).pop() || dir);
+  const repoName = (dir: string) => { const r = core.world.repoForCwd(dir); return r ? repoLabel(r) : (dir.split(/[/\\]/).filter(Boolean).pop() || dir); };
   const lines = showFoot ? automationLines({
     repoDir: footRepo, items: core.world.backlog, auto: core.world.backlogAuto, sessions, now: Date.now(), repoName,
     pull: footRepo ? pull?.configs.get(footRepo) : undefined,

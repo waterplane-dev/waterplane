@@ -37,6 +37,7 @@
  * module that judges it, so it lives one level below it.
  */
 
+import { repoLabel } from "./repotwins.js";
 import { typedName } from "./schedule.js";
 
 // ── The vocabulary ───────────────────────────────────────────────────────────
@@ -442,10 +443,11 @@ export function branchLabel(r: { branch?: string; isPrimary?: boolean }): string
   return b;
 }
 
-/** "<repo> · <branch>", with the branch dropped when it says nothing. */
-export function repoBranchLabel(r: { repoName: string; branch?: string; isPrimary?: boolean }): string {
+/** "<repo> · <branch>", with the branch dropped when it says nothing; a twin clone's
+ *  repo is `repoLabel`'s (`ciqkit · garmin/`). */
+export function repoBranchLabel(r: { repoName: string; where?: string; branch?: string; isPrimary?: boolean }): string {
   const b = branchLabel(r);
-  return b ? `${r.repoName} · ${b}` : r.repoName;
+  return b ? `${repoLabel(r)} · ${b}` : repoLabel(r);
 }
 
 /**

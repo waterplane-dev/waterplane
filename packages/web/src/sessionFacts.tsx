@@ -18,7 +18,7 @@ import type { ReactNode } from "react";
 import { Bot, Brain, CircleDot, Clock, Hourglass, Link2, Loader, Terminal, TrendingUp } from "lucide-react";
 import type { RepoTarget, SessionCostReading, SessionInfo } from "@waterplane/shared";
 import { PromptPair } from "./PromptPair";
-import { peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf, shellsSummary } from "@waterplane/shared";
+import { repoLabel, peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf, shellsSummary } from "@waterplane/shared";
 import { ago, dur, hhmm } from "./format";
 import { isShellBackend, type BackendList } from "./backendCaps";
 import { isFlagged } from "./core/sessions/followUpFacts.ts";
@@ -448,6 +448,6 @@ export function resumeHint(exact: boolean): string {
 /** Group repos by name (alpha), primary repo first, worktrees beneath it by branch. */
 export function groupByRepo(list: RepoTarget[]): RepoTarget[] {
   return [...list].sort((a, b) =>
-    a.repoName.localeCompare(b.repoName) ||
+    repoLabel(a).localeCompare(repoLabel(b)) ||
     (a.isPrimary === b.isPrimary ? a.branch.localeCompare(b.branch) : a.isPrimary ? -1 : 1));
 }

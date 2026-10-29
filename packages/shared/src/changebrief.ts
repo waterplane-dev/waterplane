@@ -113,3 +113,20 @@ export interface ChangeBriefSpend {
   readonly outTok?: number;
   readonly durationMs: number;
 }
+
+/**
+ * The Explain run in one worktree, as the host holds it (`explainjob.ts`): the
+ * one running now, or the last one that finished — kept across a restart, so
+ * reopening the sheet shows the last answer instead of asking for a new one.
+ */
+export interface GitExplainState {
+  readonly running: boolean;
+  /** Epoch ms the run started. */
+  readonly startedAt: number;
+  /** The foci and own-focus line it was asked under. */
+  readonly foci: readonly string[];
+  readonly note: string;
+  /** Present once it ended. */
+  readonly result?: ChangeBrief;
+  readonly finishedAt?: number;
+}

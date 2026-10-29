@@ -204,8 +204,8 @@ Two places already hold that number:
 
 - ${BRAND.name}'s token-stats document (\`packages/host/src/tokenstats.ts\`, served over the
   API) — every conversation on this desktop, with subagents counted.
-- \`packages/shared/src/sessioncost.ts\` — the per-session baseline, the same
-  arithmetic the UI says out loud.
+- \`packages/shared/src/sessioncost.ts\` — the per-session cost arithmetic, the
+  same numbers the UI says out loud.
 
 Then **edit the measured figure into this file**, and say that it was measured
 and when. A number nobody checked is how the estimate above becomes folklore.

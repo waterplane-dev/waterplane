@@ -246,7 +246,8 @@ export interface CoreApi {
       toggleSerialQueued(ackId: string): void;
       removeQueued(ackId: string): void;
       editQueued(ackId: string, text: string): void;
-      retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): void;
+      /** true = moved (false: gone, or refused in a toast). */
+      retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): boolean;
       restoreQueued(ackId: string): void;
       retryFailedQueued(): void;
       moveQueued(ackId: string, dir: -1 | 1): void;

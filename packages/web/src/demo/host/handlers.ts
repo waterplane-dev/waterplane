@@ -415,6 +415,7 @@ export const HANDLERS = {
   "session.remoteControl": B,
   "session.ackAsking": B,
   "session.netRetryCancel": B,
+  "session.netRetryNow": B,
   "input.settle": B,
   "shell.kill": because("The demo runs no background shells to stop."),
   "backlog.archive": STORE,

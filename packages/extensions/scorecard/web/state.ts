@@ -52,12 +52,14 @@ export const accept = (repo: string, check: string, reason: string) => act(() =>
 export const unaccept = (repo: string, check: string) => act(() => client.call("unaccept", { repo, check }), repo);
 export const scoredAs = (repo: string, slug: string | null) => act(() => client.call("scoredAs", { repo, slug }), repo);
 
-/** Ask Claude: the host files the remedy prompt in the backlog, waiting for a tap. */
+/** Ask Claude: the host files the remedy prompt in the backlog, waiting for a tap — and the backlog opens on that row. */
 export async function remedy(repo: string, check: string): Promise<void> {
   sheet.set((s) => ({ ...s, err: null }));
   const res = await client.call("remedy", { repo, check });
   if (!res.ok) { fail(res); return; }
   core().say.toast(remedyWords(check, res.result));
+  const open = sheet.get().repo;
+  if (open?.id === repo) core().nav.openBacklogCut(open.worktreePath, [res.result.intentId], `Scorecard: ${check}`);
 }
 
 export function openScorecard(repo: RepoTarget, cut: ScoreCut | null = null): void {

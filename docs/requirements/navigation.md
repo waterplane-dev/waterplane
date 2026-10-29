@@ -75,3 +75,8 @@ A hidden menu entry shows an activity marker when something inside it needs atte
 The session context view, the repo readings (set-up) sheet and the all-sessions view each link to the other two for what every turn carries; following a link from all-sessions closes it first.
 - asked: 2026-10-26
 - shipped: 3e2685b7, b1e06e5d, 5addc8e8, bcc7de90, eafed83a
+
+### R-navigation-017 · shipped
+Two discovered repos with the same folder name never read alike: every place a repo is picked or named (launcher groups, repo picker, send and schedule sheets, activity, the week-end burn pick) adds the shortest parent path that tells them apart ("ciqkit · garmin/" vs "ciqkit · out-ciqkit/"), worded by one shared function on host and phone.
+- asked: 2026-10-29 (after the 2026-10-28 week-end burn went to a rewrite leftover)
+- shipped: 3b67271c

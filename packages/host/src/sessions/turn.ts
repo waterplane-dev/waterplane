@@ -215,7 +215,7 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   if (!claudeHookWatched(s.info.id)) return;
   // A fact about the SINK rather than an edge: a turn-shaped hook arrived since
   // this process attached (`Session.turnHookSeen`). `SessionEnd` never counted.
-  if (ev === "SessionStart" || ev === "UserPromptSubmit" || ev === "Stop") s.turnHookSeen = true;
+  if (ev === "SessionStart" || ev === "UserPromptSubmit" || ev === "Stop" || ev === "StopFailure") s.turnHookSeen = true;
   // Before the source hears it: the first hook is what flips the pipe live,
   // and that edge's fixture capture reads this payload's shape.
   s.lastHook = payload;
@@ -223,7 +223,7 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   // writes the call only once it is answered). A turn boundary retires it.
   if (ev === "PreToolUse" && payload.tool_name === "AskUserQuestion" && typeof payload.tool_use_id === "string") {
     s.askHook = { id: payload.tool_use_id, input: payload.tool_input };
-  } else if (ev === "UserPromptSubmit" || ev === "Stop" || ev === "SessionStart") {
+  } else if (ev === "UserPromptSubmit" || ev === "Stop" || ev === "StopFailure" || ev === "SessionStart") {
     s.askHook = null;
   }
   // What the hook MEANS is the source's: the pipe going live (once), then the

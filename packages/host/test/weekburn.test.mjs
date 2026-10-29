@@ -205,3 +205,16 @@ test("the health summary rides into the prompt when the host has one", async () 
   assert.match(added[0].text, /Tests dropped\./);
   assert.equal(healthSummaryText(undefined), null);
 });
+
+test("the person's task and a repo's note ride into the prompt; the status carries each repo's reading for the preview", async () => {
+  const { wb, added } = rig({ health: (dir) => (dir === "/r/b" ? { value: 50, week: "2026-10-19" } : undefined) });
+  const r = await wb.update({ repos: ["/r/a"], task: "  Raise parser coverage ", notes: { "/r/a": "no new deps", "/r/b": "" } });
+  assert.equal(r.status.prefs.task, "Raise parser coverage");
+  assert.deepEqual(r.status.prefs.notes, { "/r/a": "no new deps" });
+  assert.deepEqual(r.status.readings, { "/r/b": "Health index 50/100 (week of 2026-10-19)." });
+  assert.equal(r.status.maxPerRepo, 6);
+  assert.match(added[0].text, /Raise parser coverage/);
+  assert.match(added[0].text, /For this repo:\nno new deps/);
+  assert.match(added[0].text, /never push/);
+  assert.match((await wb.full()).readings["/r/b"], /50\/100/);
+});

@@ -15,7 +15,10 @@ every receipt the taps toast.
 
 Also `netRetryCfg` (`NetRetryConfig | null`, one writer `onNetRetryConfig`, from `netretry.config`):
 the desktop's other self-typed recovery, the network-error retry switch. Null until the host says,
-so an older host shows no row. Host-persisted like auto-continue, never in settings sync.
+so an older host shows no row. Host-persisted like auto-continue, never in settings sync. The store,
+the `netretry.set` sender and the switch component live TOP-LEVEL (`netRetryCfg.ts`, `NetRetrySwitch.tsx`)
+because a stalled backlog/Activity row (`NetStalled.tsx`) draws the same switch beside *retry now*;
+this feature re-exports them and keeps the one writer.
 
 **Sheet**: `limits` (not persisted). **Messages**: `limit.config`, `netretry.config`. **Toolbar item**: `limit` (the id,
 label and icon stay in `toolbar.ts`; `null` when the session has no limit state).

@@ -140,6 +140,12 @@ export interface RepoTarget {
   branch: string;
   isPrimary: boolean;
   worktreePath: string;
+  /** Set only when another discovered clone has the same `repoName`: the
+   *  shortest trailing part of THIS clone's parent path that tells the two apart
+   *  (`garmin/`), the same on every worktree of the clone. Read it through
+   *  `repoLabel`, never print `repoName` alone where a person picks a repo.
+   *  ABSENT = no twin (or an older host). */
+  where?: string;
   /** Outbox artifacts dropped since this repo's outbox was last opened — the
    *  "something to look at" badge. The inbox is deliberately NOT counted: it
    *  holds what the phone itself uploaded. */

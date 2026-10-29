@@ -97,7 +97,7 @@ test("P3: each callback the sheet is handed is called from the same number of si
     assessBlocked: 1, imageSrc: 1,
     onArchive: 2, onArchiveMany: 1, onAssess: 1, onCheck: 1, onCloseSession: 1, onContinue: 3, onDone: 1,
     onDropClock: 1, onDropClocks: 1, onEditImage: 1, onEditWhen: 1, onFire: 2, onHoldForBudget: 1, onName: 1,
-    onNextStep: 1, onOpenSchedule: 1, onOpenSend: 2, onOpenSession: 4, onQueueHere: 2, onRemove: 1,
+    onNextStep: 1, onOpenCut: 1, onOpenSchedule: 1, onOpenSend: 2, onOpenWeekBurn: 2, onOpenSession: 4, onQueueHere: 2, onRemove: 1,
     onReorder: 1, onRunAgain: 1, onRunAgainMany: 1, onSetAuto: 2, onSetBudget: 1, onSetCloseWhenDone: 1, onSetFlagWhenDone: 1, onSlotCheck: 1,
     onSwap: 4, onUpdate: 1, onValidate: 1,
     renderRetime: 1, scheduleFor: 1,
@@ -110,11 +110,12 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
     "backlog.archive.done": 1, "backlog.assess": 1, "backlog.auto.focus": 1, "backlog.clock.down": 1,
     "backlog.clock.up": 1, "backlog.done": 1, "backlog.dropclock": 1, "backlog.dropclock.all": 1,
     "backlog.editwhen": 1, "backlog.filter.age": 1, "backlog.filter.category": 1, "backlog.filter.clear": 1,
-    "backlog.filter.clock": 1, "backlog.filter.status": 1, "backlog.fire": 1, "backlog.fromschedule": 1,
+    "backlog.filter.clock": 1, "backlog.filter.status": 1, "backlog.fire": 1, "backlog.fromschedule": 1, "backlog.fromweekburn": 1,
     "backlog.holdforbudget": 1, "backlog.name": 1, "backlog.openholder": 1,
     "backlog.queuehere": 1, "backlog.refire": 1, "backlog.remove": 1, "backlog.retime.clock": 1, "backlog.retime.pick": 1,
     "backlog.runagain": 1, "backlog.runagain.all": 1, "backlog.send": 1, "backlog.slotClose": 1, "backlog.slotask.on": 1, "backlog.slotcheck": 1,
     "backlog.sort.newest": 1, "backlog.sort.run": 1, "backlog.unqueuehere": 1,
+    "backlog.weekburn": 1, "backlog.weekburnrows": 1,
   });
   assert.deepEqual(tally(/data-hint="(backlog\.[^"]+)"/g), {
     "backlog.done": 1, "backlog.fire": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.queuehere": 2,

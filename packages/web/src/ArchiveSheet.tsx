@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CantInline } from "./Unavailable";
 import { Archive, ArrowRight, BookOpen, GitBranch, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
 import type { ArchivedConversation, ArchiveListing, Bookmark, RepoTarget } from "@waterplane/shared";
+import { repoLabel } from "@waterplane/shared";
 import { api } from "./api";
 import { ago, baseName, fmtSize, repoAccentStyle } from "./format";
 import { PromptPair } from "./PromptPair";
@@ -276,7 +277,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
         </Hint>
       ) : (
         <Hint>
-          Every conversation the CLI ever wrote for {repo?.repoName ?? "this repo"} — closing a session
+          Every conversation the CLI ever wrote for {repo ? repoLabel(repo) : "this repo"} — closing a session
           never deleted one. Tap to resume it exactly (<code>claude --resume</code>); <em>read</em> opens
           it read-only, without starting anything.
           {listing && (q
@@ -319,7 +320,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
             // it is where the live card's status pill sits, the first prompt as
             // the gist when a name took the title, the verbs pinned right, the
             // bookmark (toggle and note) at the foot where a live card's chips go.
-            <div key={row.id} className="row-wrap closed-card archive-card" style={repoAccentStyle(repo?.repoName ?? baseName(row.cwd))}>
+            <div key={row.id} className="row-wrap closed-card archive-card" style={repoAccentStyle(repo ? repoLabel(repo) : baseName(row.cwd))}>
               {/* The whole card resumes on tap: the row button is `display:
                   contents`, its children the grid's items; every control lives
                   OUTSIDE it, in `.row-acts` (nested buttons are invalid). */}

@@ -9,23 +9,24 @@ Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
 
 1. **`npm run test:unit`** — `node --test` over `packages/shared/test/*.test.mjs` (on `shared/dist`),
    `packages/web/src/**/*.test.mjs` (the TypeScript itself via node's type stripping — a test imports
-   siblings WITH `.ts`), `packages/extensions/*/web/**/*.test.mjs`, `scripts/release/*.test.mjs` and
-   **`tools/*.test.mjs`**. No host, no DOM, no browser: a rule can be pinned before there is anything to
+   siblings WITH `.ts`), `packages/extensions/*/web/**/*.test.mjs`, `scripts/release/*.test.mjs`,
+   `packages/plugin-testkit/test/*.test.mjs` and **`tools/*.test.mjs`**. No host, no DOM, no browser: a rule can be pinned before there is anything to
    boot. Web examples: `sdk/sdk.test.mjs`, `core/core.test.mjs`, `core/queue/queue.test.mjs` (where an
    ackId may be minted — counted per file — and `writeOutbox` as the store's one writer),
    `core/compose/compose.test.mjs`, `core/prefs.test.mjs`, `core/launcher/model.test.mjs`, and each
    feature's `features/<x>/logic.test.mjs`. `tools/*.test.mjs` is the REPO rather than the code:
-   `claudemd` (this file's budget and write-the-note-first rule), `webshape`/`hostshape` (ratchets and
+   `claudemd` (CLAUDE.md's budget, the skill and router rules, reasoning-in-docs), `webshape`/`hostshape` (ratchets and
    layout), `featureboundary`/`nosilentsend` (the two lint rules, both ways), `guards`.
 2. **`npm run test:host`** — `packages/host/test/*.test.mjs` (+ `packages/extensions/*/test/*.test.mjs`)
-   over `host/dist`: the daemon's **regex heuristics** and pure decision cores, no daemon. **Fixture in,
+   over `host/dist`, through `scripts/run-node-tests.mjs` (re-runs up to 5 failing files alone; a
+   pass-alone is logged as a load flake; `TEST_RETRY_ALONE=0` turns that off): the daemon's **regex heuristics** and pure decision cores, no daemon. **Fixture in,
    verdict out**: when upstream changes its wording, "this line no longer matches" is the sentence
    worth having, where e2e can only report "the session never published a prompt". Examples: `prompt`
    (choice-box detector), `limit`, `usage`, `context`, `login`, `origin` (the browser half of the
    security boundary), `answergate`, `convfork`, `ptyleak`, `deliversubmit`/`deliverecho`. The full
    file-by-file list: [testing-and-ops.md](../../../docs/notes/testing-and-ops.md#moved-out-of-skill-testing-2026-10-17).
 3. **`node scripts/run-e2e.mjs [filter]`** — `scripts/e2e-*.mjs`, the only layer that boots a real
-   **host** (opencode's live in `packages/extensions/opencode/e2e/`). It DISCOVERS scripts, so a new one
+   **host** (in-repo extensions' live in `packages/extensions/<id>/e2e/`). It DISCOVERS scripts, so a new one
    needs no registration (a hand-kept list once drifted until two thirds never ran) and
    `scripts/e2e-*.mjs` plus `packages/extensions/*/e2e/e2e-*.mjs` is the list; what each pins is the [rough map](../../../docs/notes/testing-and-ops.md#the-rough-map).
 4. Beside them: **`npm run test:contract`** (`scripts/run-contract.mjs`, checks in `scripts/contract/`:
@@ -37,7 +38,13 @@ Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
    `run-e2e.mjs`. `scripts/with-tmp.mjs` + `lib-testtmp.mjs` wrap every unit/host run in a private tmp dir.
 
 `run-e2e.mjs` runs scripts in a POOL (`--jobs N` / `E2E_JOBS`, default 60% of cores capped at 10;
-`--jobs 1` streams live): **a new script must survive running beside others**. Its fixed 8xxx ports are
+`--jobs 1` streams live): **a new script must survive running beside others**. A failed script is
+re-run alone (up to 10 per run, `E2E_RETRY_ALONE=0` off); a pass-alone is reported as LOAD FLAKE,
+logged to `e2e-flakes.jsonl`, and does not fail the run — **but a load flake is a bug to fix, not a
+pass** (`npm run flakes` lists the open ones; the pre-push gate prints them). A full unfiltered run
+waits for any other on the machine, and `LANG`/`LC_ALL`/`LC_CTYPE` are stripped from each script's
+env. **Every whole-script watchdog goes through `watchdog()` in `scripts/lib-watchdog.mjs`** (45 s
+floor; `tools/e2ewatchdog.test.mjs` refuses an inline one). Its fixed 8xxx ports are
 read from its source and two scripts sharing one never overlap, but anything it writes must be under its
 own `mkdtemp`, and a host it boots must be WAITED for (`waitForHost`/`bootWait`), never slept for: a fixed
 `sleep(900)` before the first request was the one failure the parallel runs found. A script that truly

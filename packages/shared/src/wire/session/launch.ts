@@ -142,7 +142,10 @@ export interface SessionNetRetry {
   attempt: number;
   /** The most retries the host will type. */
   max: number;
-  /** Epoch ms the next retry is due; null unless `waiting`. */
+  /** Epoch ms the next retry is due (`waiting`), or — on a `gaveup` — when
+   *  the next STALL PROBE runs (one `continue` every `WATERPLANE_NET_RETRY_STALL_MS`
+   *  while work is stalled and the switch is on). Null = nothing will be typed
+   *  by itself. */
   nextAt: number | null;
   /** The CLI's own short line for the newest give-up, `API Error:` dropped. */
   error: string;
@@ -150,6 +153,14 @@ export interface SessionNetRetry {
   at: number;
   /** For `gaveup` (or a `waiting` that is parked): the host's sentence why. */
   why?: string;
+  /** This `waiting`/`sent` is a STALL PROBE: the ladder ran out and the host
+   *  is trying once more on the slow cadence. The work waiting on the session
+   *  is still stalled meanwhile (`netRetryStalls`). Absent = the ladder. */
+  probe?: boolean;
+  /** The person dismissed the session's retry line. It only HIDES the line:
+   *  the stall stands (`netStalledOf` ignores this), so the work keeps its
+   *  note and the silence ceiling still leaves it alone. */
+  dismissed?: boolean;
 }
 
 /**

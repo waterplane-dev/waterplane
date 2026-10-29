@@ -5,8 +5,8 @@ description: How big files are split in this repo without changing behaviour —
 
 # Refactoring a big file
 
-The why and the incidents behind every step: [refactoring.md](../../../docs/notes/refactoring.md). The two
-finished splits are the worked examples: the web client's
+The why and the incidents behind every step: [refactoring.md](../../../docs/notes/refactoring.md). The
+finished splits are the worked examples (all seven are listed in [docs/notes/README.md](../../../docs/notes/README.md), incl. the per-file `send`, `transcript`, `assess`, `app`, `charts` and `backlog` `-architecture.md`): the web client's
 [web-architecture.md](../../../docs/notes/web-architecture.md) and the host's
 [host-architecture.md](../../../docs/notes/host-architecture.md) (its "Result" is the map; the "as landed"
 sections are what each package decided).
@@ -36,7 +36,7 @@ sections are what each package decided).
    split get their own commits, named as pre-existing.
 7. **Prove nothing changed**: lint, `test:unit`, `test:host`, full `node scripts/run-e2e.mjs`, and a
    headless 412×915 run against the build comparing with the pre-split commit. Host/shared changes:
-   `npm run restart`, then `/api/health` → `ptys.masters` should equal `sessions`.
+   `npm run restart`, then `/api/health` → `ptys.masters` should match live PTYs (sessions plus running builds) and not climb.
 
 ## Rules that bit
 

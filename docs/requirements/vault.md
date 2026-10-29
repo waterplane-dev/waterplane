@@ -417,3 +417,53 @@ A program's release card (`exec`/`fetch`) outlives the program's 90 s wait: the 
 Exposure watch reads Play vitals through a narrow Play service account key kept in the vault, usable only by the collector and not unlocked at boot; when its standing grant is dormant the row shows as absent with re-arm instructions instead of waiting. Every secret the watch uses is accessed through the vault.
 - asked: 2026-10-26
 
+
+### R-vault-083 · shipped
+An approval card says which coding session on this desktop asked (its tab, repo and the person's own last prompt, matched by the desktop rather than reported), the agent's reason, and how often this scope was approved before; a request from a matched session that gives no reason is refused before any card, in words that tell the agent how to give one.
+- asked: 2026-10-28 (owner decision 2026-10-29, vault-card-transparency P1–P3)
+- shipped: b1639096 20b5938c 44b76f47
+
+### R-vault-084 · shipped
+An approval made from a matched coding session holds for that command in that session across its folders and worktrees until the session ends or the chosen time; a linked worktree counts as its main repo for grants and offers only when git's own back-link confirms it, and a temporary folder or worktree is never offered "until I revoke", with the reason on the card.
+- asked: 2026-10-29 (owner decision, vault-card-transparency P5)
+- shipped: 6fb0e9df 33e50899 44b76f47
+
+### R-vault-085 · shipped
+A program that is not a coding session (a launchd job, a cron line, a server, a script) can be registered with what it does, when it runs, its command, its folder, the secrets it takes and why; registering and removing from the command line each take one fingerprint on the phone, a tap on the phone removes one, and a registration allows nothing by itself.
+- asked: 2026-10-29 (owner decision "build all", vault-card-transparency P8)
+- plan: packages/extensions/vault/docs/CONSUMERS-PLAN.md
+- shipped: 07b52bcc
+
+### R-vault-086 · shipped
+A release card no coding session asked for names the registered program it matches (by command and folder, worktrees included) with its stated reason, or says loudly that the program is unregistered; an unregistered program is never offered "until I revoke", and the card says how to register it.
+- asked: 2026-10-29 (vault-card-transparency P8)
+- plan: packages/extensions/vault/docs/CONSUMERS-PLAN.md
+- shipped: 07b52bcc
+
+### R-vault-087 · shipped
+A card no coding session asked for shows what the desktop itself knows about the request: what launched it (launchd with its reported label, cron, a terminal shell, a tmux pane, another program), that it came minutes after the computer or the waterplane host restarted, that it is outside the scope's usual hour, and how many days since it last asked; each fact is left out when it cannot be told.
+- asked: 2026-10-29 (vault-card-transparency P8)
+- plan: packages/extensions/vault/docs/CONSUMERS-PLAN.md
+- shipped: 07b52bcc
+
+### R-vault-088 · shipped
+A repeated ask for the same secrets and command from the same matched coding session, made from another folder or worktree while its card is still open, waits on that card instead of raising a second one.
+- asked: 2026-10-28 (vault-card-transparency P5, review 1 L2)
+- shipped: 07b52bcc
+
+### R-vault-089 · shipped
+The vault has one "who uses my secrets" screen listing every coding session holding values, every registered program, every standing and timed grant, and every unregistered program that asked in the last 14 days, grouped by kind; each row says who, the reason given, which secrets, the last recorded use and how many times it asked this week, and carries its own revoke or remove (confirmed once); an unregistered program says in words why it has nothing to revoke.
+- asked: 2026-10-29 ("better and more ui … a review of all current users", vault-card-transparency P9)
+- plan: packages/extensions/vault/docs/CONSUMERS-PLAN.md
+- shipped: 7a89c2a0
+
+### R-vault-090 · shipped
+That screen marks, as offers it never acts on, a user unused for 14 days (said only when the desktop's use record reaches back that far), a registered program whose reason is older than 30 days ("confirm or remove"), and a user with no reason; each mark is a filter chip above the list whose count is exactly the rows it shows, with "n of N" and a clear. A program's "confirm reason" is one tap that records the confirmation.
+- asked: 2026-10-29 (vault-card-transparency P9)
+- plan: packages/extensions/vault/docs/CONSUMERS-PLAN.md
+- shipped: 7a89c2a0
+
+### R-vault-091 · shipped
+The screen is reached from the vault home ("who uses my secrets" with its count) and from every release card's fold ("see everyone using this secret"), which opens it cut to that secret.
+- asked: 2026-10-29 (vault-card-transparency P9)
+- shipped: 7a89c2a0

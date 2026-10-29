@@ -11,7 +11,7 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -116,6 +116,9 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
         // A turn that ended on a question in prose: an automatic predecessor
         // that asked one holds the row behind it, like a box does.
         asking: s.asking ? true : undefined,
+        // Work here is STALLED on the API: the serial sentence says so ("waiting
+        // behind a stalled item") instead of naming a job that never moves.
+        netStalled: netRetryStalls(s.netRetry) || undefined,
         // What the serial sentence calls it ("waiting for 'fix webkit sync'"):
         // the derived tab name, else the item it was opened for, else its first
         // prompt — the bare repo title only when nothing else exists.
@@ -170,6 +173,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     sessionHasPrompt: (id) => !!ctx.sessions.get(id)?.prompt,
     idleWindowMs: () => ctx.backlog.idleMs,
     reapCeilingMs: () => REAP_CEILING_MS,
+    sessionNetStalled: (id) => netRetryStalls(ctx.sessions.get(id)?.netRetry),
     groupConcurrency: () => FANOUT_CONCURRENCY,
     knownDirs: knownRepoDirs,
     // The reset instants and percentages a `window` rule is measured against.

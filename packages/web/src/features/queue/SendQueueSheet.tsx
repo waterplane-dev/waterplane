@@ -26,7 +26,8 @@ export function SendQueueSheet() {
     onCancelLaunch={(id) => liveSend({ t: "launch.cancel", id }, "called off — that session will not open", LAUNCH_HELD_OFFLINE)}
     onRunLaunch={(id) => liveSend({ t: "launch.run", id }, "opening it now, without the files it was waiting for", LAUNCH_HELD_OFFLINE)}
     onEdit={v.editQueued} onRemove={v.removeQueued} onMove={v.moveQueued}
-    onRetarget={v.retargetQueued} onToggleHold={v.toggleHoldQueued}
+    // Moved onto a backlog: show it there, newest on top.
+    onRetarget={(ackId, to) => { if (v.retargetQueued(ackId, to) && to.mode === "backlog") core.nav.openBacklogCut(to.cwd); }} onToggleHold={v.toggleHoldQueued}
     onToggleSerial={v.toggleSerialQueued}
     serialSessions={core.queue.serial.on}
     onToggleSerialAll={toggleSerialAll}

@@ -17,7 +17,9 @@ import {
 import { sendModeToast } from "../../composeSend";
 import { ensureMtime, knownMtime } from "../../fileMtime";
 import { pickThumbWidth, sized } from "../../media";
-import { budgetReasonText, scheduleIdFromOrigin } from "@waterplane/shared";
+import { budgetReasonText, fmtWhen, repoLabel, scheduleIdFromOrigin, type WeekBurnStatus } from "@waterplane/shared";
+import { useRemoteResource } from "../../useRemoteResource";
+import { weekBurnLine } from "../../automationLines";
 import { useCore, usePref, useStore } from "../../sdk";
 import { closeChoicePatch, closeChoiceToast } from "../../autoSessions";
 import { BL_OFFLINE, clockParentsOf, scheduleMaps } from "./logic";
@@ -48,6 +50,9 @@ export function BacklogSheet() {
   // Which schedule wrote which row — the entry maps, then the same join over
   // the durable rows for the legacy parents the entry list no longer holds.
   const sched = useMemo(() => scheduleMaps(schedules), [schedules]);
+  // Same key as the week-end burn sheet's read, one cache. Only a FRESH answer
+  // draws the sentence: a cached copy may describe last week's pick.
+  const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
   const clockParents = useMemo(() => clockParentsOf(intents, intentTitle), [intents]);
   const repoIdForDir = (dir: string) => core.world.repos.find((r) => r.worktreePath === dir)?.id;
   return (
@@ -204,6 +209,12 @@ export function BacklogSheet() {
           if (parent) { openBacklogCut(parent.cwd, [id], scheduleParentLabel(name)); return; }
           core.say.toast("that schedule is no longer on the desktop");
         },
+        onOpenWeekBurn: () => core.nav.open("weekburn"),
+        onOpenCut: (repoDir, ids, label) => openBacklogCut(repoDir, ids, label),
+        weekBurnText: (repoDir) => weekBurnLine({
+          repoDir, weekburn: burn.state === "fresh" ? burn.data : null, when: fmtWhen,
+          repoName: (d) => { const r = visibleRepos.find((x) => x.worktreePath === d); return r ? repoLabel(r) : d.split(/[/\\]/).filter(Boolean).pop() || d; },
+        })?.text ?? null,
         renderRetime: core.send.renderRetime,
         onClose: () => core.nav.close("backlog"),
         // The sheet's own add form is gone — a second prompt textarea. This is

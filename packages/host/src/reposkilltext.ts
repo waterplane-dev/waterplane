@@ -89,8 +89,8 @@ repo's own meaning and say so in one line rather than guess.
   documents here. (\`.outbox/\` at the repo root is read too; prefer
   \`.claude/outbox/\`.)
 - The gallery lists images (png, jpg, gif, webp, svg, …), video (mp4, webm,
-  mov), and documents (pdf, md, txt, csv, json, log, html) plus build
-  deliverables. Markdown and HTML open in place on the phone.
+  mov), documents (pdf, md, txt, csv, json, log, html, office files), audio,
+  archives, source/config text and build deliverables. Markdown and HTML open in place on the phone.
 - **Name a file by its FULL path every time you mention it** —
   \`.claude/outbox/flow.gif\`, never \`flow.gif\` or "the file above". The phone
   turns that exact path into the picture or a download button; a bare name
@@ -126,7 +126,10 @@ replaces it on this desktop only. Shape:
   \`${param}\` (older: \`${olderParam}\`). \`dir\` is relative to the repo root.
 - A \`choice\` gets \`options\`, or \`optionsCmd\` — a one-liner run in the repo root
   when the form OPENS (one option per stdout line, 6 s limit), so a monorepo's
-  members are read, not copied into the file.
+  members are read, not copied into the file. One from a COMMITTED file runs only
+  after the person taps approve once on the phone; an edit asks again.
+- A parameter value is substituted verbatim and must be one line; a value with a
+  shell metacharacter refuses the run.
 - No \`default\` means an unattended run (a schedule) is refused rather than
   guessed.
 - Builds run with \`CI=1\`; make the command non-interactive.
@@ -167,7 +170,8 @@ JSON line to \`${D}/versions.jsonl\`:
 
 The phone's repo-health charts are ${N}'s readings, the same in every repo. A
 repo may add numbers only it knows about itself in \`${S}/health.json\`
-(COMMITTED; only the committed version runs):
+(COMMITTED; only the committed version runs, and a \`run\` waits for the
+person's one approval on the phone before it ever runs):
 
 \`\`\`json
 { "readings": [{ "key": "screenFixtures", "name": "Signals tested on today's screens",
@@ -229,8 +233,8 @@ curl -s -X POST ${base}/api/repos/<repoId>/capture/run \\
 \`<repoId>\` comes from \`curl -s ${base}/api/repos\`. The answer is a sentence and
 a verdict, not a picture — read that first, and look at the image only when
 the words cannot settle it (each image you look at is re-sent on every
-remaining turn). Where capture is configured, the \`visual-check\` skill in this
-repo has the full ladder.
+remaining turn). Where capture is configured and the setup fix installed it, the
+\`visual-check\` skill in this repo has the full ladder.
 
 ## Work for later: a timed, chained or new-session prompt, or a backlog item
 
@@ -257,7 +261,7 @@ curl -s -X POST ${base}/api/agent/intents -H 'content-type: application/json' \\
   when done unless the person set otherwise; \`"closeWhenDone":true\` (or \`false\`)
   decides it for this one — only when they said so.
 - \`when\`: \`{"kind":"now"}\` · \`{"kind":"at","at":"2026-10-02T09:00:00+02:00"}\` ·
-  \`{"kind":"window","window":"session"|"weekly","leadMin":N}\` (N minutes before
+  \`{"kind":"window","window":"session"|"weekly"|"<budget period id>","leadMin":N}\` (N minutes before
   that usage window resets, once) · \`{"kind":"after","id":"<intent id>"}\` (add
   \`"onlyIfOk":true\` to skip it if that one failed).
 - The answer has \`id\`, \`state\` and \`fires\` — one line saying when. Tell the
@@ -335,8 +339,8 @@ opens ONE session on the peer, in a fresh detached checkout of a commit you push
    person the answer's \`fires\` line.
 3. **What comes back:** ONE prompt in this session, marked as from the peer, holding the peer
    session's final answer (cut at a size cap, saying how much and which peer session holds the
-   rest) and any \`${D}/outbox/\` files that answer names, fetched into this repo's outbox as
-   \`${D}/outbox/peer-<peer>-<name>-<timestamp>.<ext>\`. It
+   rest) and any \`.claude/outbox/\` files that answer names, fetched into this repo's outbox as
+   \`.claude/outbox/peer-<peer>-<name>-<timestamp>.<ext>\`. It
    arrives when the peer's session finishes, which can be much later: the job waits for the peer
    owner's auto-fire switch and budget, and for a usage-limit reset. Do not poll; end your turn
    and say it is pending.

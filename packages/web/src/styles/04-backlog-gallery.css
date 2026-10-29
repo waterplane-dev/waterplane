@@ -119,6 +119,16 @@
 .radio-row.on .radio-dot::after { content: ""; width: 50%; height: 50%; border-radius: var(--r-round); background: var(--ok); }
 .radio-label { flex: 1; min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .radio-note { display: block; margin-top: var(--sp-2); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+/* Week-end burn (`features/weekburn`): its numbered steps, a ticked repo's own line and the
+   exact prompt its sessions get, shown as the text that is sent. */
+.wb-steps { margin: var(--sp-4) 0 var(--sp-8); padding-left: 1.4em; line-height: var(--lh-14); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.wb-steps li { margin-bottom: var(--sp-6); }
+.wb-repo { display: flex; flex-direction: column; gap: var(--sp-6); padding: 0 var(--sp-14) var(--sp-10) calc(var(--sp-14) + 28px); }
+.wb-repo > .key { align-self: flex-start; }
+.wb-prompt {
+  margin: 0; padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8); background: var(--raise);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .fchips-gap { flex: none; width: 1px; height: 20px; margin: 0 var(--sp-6); background: var(--line); }
 .gallery-head-btn { min-width: 44px; padding: var(--sp-8); color: var(--muted); background: none; border-color: transparent; }
 /* Words for a screen reader that the picture already says (the unread dot). */

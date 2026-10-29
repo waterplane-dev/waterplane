@@ -25,7 +25,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
   const { it } = row;
   // fire/re-fire = the MANUAL OVERRIDE: one tap, always. A busy checkout is SAID (title, `RowNotes`), never asked.
   const fireTitle = fireIntoBusy(it) ? `${skipQueueNote(!it.targetSessionId)} — ${SKIP_QUEUE_BUSY_NOTE}` : skipQueueNote(!it.targetSessionId);
-  const holder = holderOffer(it, p.sessions);
+  const holder = holderOffer(it, p.sessions, p.items);
   return (
               <div className="bl-actions">
                 {p.online && <Button title="edit" onClick={() => beginEdit(it)}><Pencil size={14} /></Button>}
@@ -89,7 +89,12 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                 )}
                 {/* The session a `serial` hold waits behind — usually a question open in it (`holderOffer`). */}
                 {holder && <Button data-hint="backlog.openholder" title={holder.title}
-                  onClick={() => { track("action:backlog.openholder"); p.nav.onOpenSession(holder.sessionId); }}><ArrowRight size={14} /> {holder.label}</Button>}
+                  onClick={() => {
+                    track("action:backlog.openholder");
+                    // A stalled holder is a row of this list: cut to it (the ids cut says so).
+                    if (holder.itemId) { m.clearFilter(); m.showIds([holder.itemId], holder.cut ?? ""); }
+                    else p.nav.onOpenSession(holder.sessionId);
+                  }}><ArrowRight size={14} /> {holder.label}</Button>}
                 {/* Absent offline rather than dimmed — the banner at the top says why once. */}
                 {it.status === "queued" && p.online && <Button className={it.manual ? "primary" : undefined} data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>fire</Button>}
                 {/* On a TIMED row this is the other half of the pair above, and

@@ -13,6 +13,7 @@ import { GitMediaDiff, isMediaDiff } from "./GitMediaDiff";
 import { GitTextDiff } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GitExplain } from "./GitExplain";
+import { takeExplainLanding } from "./gitLanding";
 import { GIT_COPIED, GIT_COPY_FAILED, GIT_COPY_LABEL, GIT_FIX_LABEL, gitFailPrompt, type GitFailure } from "./gitFailPrompt";
 import { showToast } from "./toast";
 import { ago } from "./format";
@@ -161,8 +162,17 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   const [showBranches, setShowBranches] = useState(false);
   /** The history view, cut to the side whose count was tapped (`null` = closed). */
   const [logFocus, setLogFocus] = useState<GitLogFocus | null>(null);
-  /** The Explain view over what a push sends and a pull brings (`GitExplain.tsx`). */
-  const [explaining, setExplaining] = useState(false);
+  /** The Explain view over what a push sends and a pull brings (`GitExplain.tsx`) —
+   *  opened at once when the "Explained" notification opened this screen. */
+  const [explaining, setExplaining] = useState(() => takeExplainLanding(repoId));
+  /** A brief running on the desktop, read whenever the Review sheet shows: its button says so. */
+  const [explainRunning, setExplainRunning] = useState(false);
+  useEffect(() => {
+    if (explaining) return;
+    let gone = false;
+    api.gitExplainState(repoId).then((s) => { if (!gone) setExplainRunning(!!s?.running); }).catch(() => { /* an older desktop */ });
+    return () => { gone = true; };
+  }, [explaining, repoId]);
   /**
    * A drafted message that is NOT in the box, because the box already had
    * words in it.
@@ -461,7 +471,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
       {/* Last: the one control in this row that spends, and it only reads. */}
       <Button onClick={() => { track("action:git.explainOpen"); setExplaining(true); }}
         title="have the desktop explain what a push would send and a pull would bring — security, user-facing changes, what needs deploying">
-        <Sparkles size={14} /> Explain
+        {explainRunning ? <><Loader size={14} className="spin" /> explaining…</> : <><Sparkles size={14} /> Explain</>}
       </Button>
     </div>
   );

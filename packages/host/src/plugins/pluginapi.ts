@@ -19,7 +19,7 @@ import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { BRAND, bindConversation, pluginValues, PLUGIN_API_V2_DOC, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
-import type { BackendFacts, HandToAgentResult, HostPluginApi, PluginBackendDef, PluginLaunchRequest, PluginRepoScope, PluginSession, Provider, RepoTarget } from "@waterplane/shared";
+import type { BackendFacts, HandToAgentResult, HostPluginApi, PluginBackendDef, PluginLaunchRequest, PluginRepoScope, PluginSession, PluginSessionMatch, Provider, RepoTarget } from "@waterplane/shared";
 import { forgetRules, gateAnswer, gateRule, rulesFor } from "../answergate.js";
 import { registerBackend, registerScreenReader, registerStoreReader, unregisterBackend, type BackendDescriptor, type BackendModels, type LaunchRequest } from "../backends/index.js";
 import { readInlineImages } from "../files.js";
@@ -32,6 +32,7 @@ import type { PluginEntry, PluginRegistry } from "./pluginregistry.js";
 import { hostStateDir } from "../branddirs.js";
 import { makePluginRoute, pluginRouteProblem } from "./pluginroutes.js";
 import { screenOf } from "./plugintoolkit/screen.js";
+import { capPrompt, liveSessionOfProbes, matchSessionOf } from "./plugintoolkit/sessionof.js";
 import { sessionFilesDir } from "./plugintoolkit/sessionfiles.js";
 import { tailJsonl } from "./plugintoolkit/tail.js";
 
@@ -314,6 +315,16 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     e.handlers[kind].add(fn);
     return () => { e.handlers[kind].delete(fn); };
   };
+  const pluginSession = (sid: string): PluginSession | null => {
+    const s = sessions.get(sid);
+    if (!s) return null;
+    const toggles: Record<string, boolean> = {};
+    for (const t of e.manifest.toggles ?? []) toggles[t.id] = s.pluginToggles?.[id]?.[t.id] ?? t.default;
+    return {
+      id: s.id, title: s.title, repoDir: s.cwd, cwd: s.cwd, watched: sessions.isWatched(sid), toggles,
+      mayAnswer: !!e.manifest.answers && !!s.pluginAnswer?.[id],
+    };
+  };
   const api: HostPluginApi = {
     id,
     dataDir: join(hostStateDir(root), "plugins", id),
@@ -333,15 +344,25 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
 
     on: on as HostPluginApi["on"],
 
-    session: (sid): PluginSession | null => {
-      const s = sessions.get(sid);
-      if (!s) return null;
-      const toggles: Record<string, boolean> = {};
-      for (const t of e.manifest.toggles ?? []) toggles[t.id] = s.pluginToggles?.[id]?.[t.id] ?? t.default;
-      return {
-        id: s.id, title: s.title, repoDir: s.cwd, cwd: s.cwd, watched: sessions.isWatched(sid), toggles,
-        mayAnswer: !!e.manifest.answers && !!s.pluginAnswer?.[id],
-      };
+    session: (sid) => pluginSession(sid),
+    // 2.4: the live session a requesting process belongs to — the ladder is `plugintoolkit/sessionof.ts`.
+    sessionOf: async (q): Promise<PluginSessionMatch | null> => {
+      if (!live() || !q || typeof q !== "object") return null;
+      const all = sessions.list();
+      const probes = await liveSessionOfProbes(q.pid, () => sessions.ourPanes());
+      const hit = matchSessionOf(q, all, probes);
+      const base = hit ? pluginSession(hit.id) : null;
+      const s = hit ? sessions.get(hit.id) : null;
+      if (!hit || !base || !s) return null;
+      const last = sessions.getHistory(hit.id).at(-1);
+      const m: PluginSessionMatch = { ...base, how: hit.how };
+      if (s.tabTitle) m.tabTitle = s.tabTitle;
+      const lp = capPrompt(s.lastPrompt), pp = capPrompt(s.pinnedPrompt);
+      if (lp) m.lastPrompt = lp;
+      if (pp) m.pinnedPrompt = pp;
+      if (typeof last?.sentAt === "number") m.lastPromptAt = last.sentAt;
+      if (s.claudeSessionId) m.claudeSessionId = s.claudeSessionId;
+      return m;
     },
     scrollback: (sid, lines = 200) => {
       if (!sessions.get(sid)) return "";

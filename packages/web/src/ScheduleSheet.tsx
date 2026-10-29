@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { CalendarClock, CircleAlert, CircleCheck, CloudOff, History, Loader, Pause, Pencil, Play, Plus, Power, Repeat, SkipForward, Trash2, X } from "lucide-react";
 import type { HorizonBucket, Intent, RepoTarget, ScheduleEntry, SessionInfo, WindowResets } from "@waterplane/shared";
-import { HORIZON_LABEL, SPENT_ONCE_TEXT, describeRule, hoursOpenFrom, inHours, isStandingSchedule, nextFireAt, ruleRecurs, scheduleActionText, typedName } from "@waterplane/shared";
+import { repoLabel, HORIZON_LABEL, SPENT_ONCE_TEXT, describeRule, hoursOpenFrom, inHours, isStandingSchedule, nextFireAt, ruleRecurs, scheduleActionText, typedName } from "@waterplane/shared";
 import { track } from "./usage";
 import { ago } from "./format";
 import { clockCuts } from "./clockCuts";
@@ -214,7 +214,7 @@ export function ScheduleSheet({
   intents = [], sessions = [], onOpenSession, onOpenBacklog, onOpenBuildRun, renderRetime,
   online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, onOpenSpent, usage = null, foot,
 }: Props) {
-  const repoName = (dir: string) => repos.find((r) => r.worktreePath === dir)?.repoName ?? dir.split("/").pop() ?? dir;
+  const repoName = (dir: string) => { const r = repos.find((x) => x.worktreePath === dir); return r ? repoLabel(r) : dir.split("/").pop() ?? dir; };
 
   /**
    * Which card has its prompt open, at most one. The words are clamped to three

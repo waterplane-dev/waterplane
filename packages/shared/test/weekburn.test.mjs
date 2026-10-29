@@ -10,7 +10,7 @@ const DAY = 24 * HOUR;
 const NOW = Date.parse("2026-10-24T12:00:00Z");
 const RESET = NOW + 3 * DAY;
 const row = (t, s, w, sr, wr = RESET) => ({ t, s, w, sr, wr });
-const prefs = (o = {}) => ({ repos: [], weekOf: null, recurring: false, lastRepos: [], stopPct: 95, ...o });
+const prefs = (o = {}) => ({ repos: [], weekOf: null, recurring: false, lastRepos: [], stopPct: 95, task: "", notes: {}, ...o });
 
 /** One full session window ending `endAgo` before NOW: session 0 to 90, week w0 to w1. */
 function windowRows(endAgo, w0, w1) {
@@ -126,7 +126,10 @@ test("cleanWeekBurnPrefs: garbage becomes defaults", () => {
     assert.deepEqual(cleanWeekBurnPrefs(bad), d);
   }
   const c = cleanWeekBurnPrefs({ repos: ["/a", "/a", 4, "", "/b"], weekOf: RESET, recurring: true, lastRepos: ["/c"], stopPct: 10 });
-  assert.deepEqual(c, { repos: ["/a", "/b"], weekOf: RESET, recurring: true, lastRepos: ["/c"], stopPct: 50 });
+  assert.deepEqual(c, { repos: ["/a", "/b"], weekOf: RESET, recurring: true, lastRepos: ["/c"], stopPct: 50, task: "", notes: {} });
+  const t = cleanWeekBurnPrefs({ task: `  ${"x".repeat(3000)} `, notes: { "/a": " keep ", "/b": "", "/c": 4, "": "x" } });
+  assert.equal(t.task.length, 2000);
+  assert.deepEqual(t.notes, { "/a": "keep" });
   assert.equal(cleanWeekBurnPrefs({ stopPct: NaN }).stopPct, 95);
 });
 
@@ -137,4 +140,23 @@ test("item prompt names the repo and the rules; kind is registered", () => {
   assert.match(t, /never push/);
   assert.match(weekBurnItemPrompt({ repoName: "demo" }), /own checks, tests and lint/);
   assert.ok(NOTIFICATION_KINDS.includes("weekburn"));
+});
+
+test("item prompt: the person's task replaces the weakest-reading ask, a note is added, the rules always stay", () => {
+  const t = weekBurnItemPrompt({ repoName: "demo", healthSummary: "tests: 80", task: "Raise parser coverage", note: "no new deps" });
+  assert.match(t, /What to work on \(from the person who picked this repo\):\nRaise parser coverage/);
+  assert.match(t, /tests: 80/);
+  assert.doesNotMatch(t, /Pick the weakest reading/);
+  assert.match(t, /For this repo:\nno new deps/);
+  assert.match(t, /never push/);
+  assert.equal(weekBurnItemPrompt({ repoName: "demo", healthSummary: "tests: 80", task: "  ", note: "" }),
+    weekBurnItemPrompt({ repoName: "demo", healthSummary: "tests: 80" }));
+});
+
+test("isWeekBurnOrigin: the burn's rows and nothing else; the count label", async () => {
+  const { isWeekBurnOrigin, weekBurnRowsLabel, WEEKBURN_ORIGIN } = await import("../dist/index.js");
+  assert.equal(isWeekBurnOrigin(`${WEEKBURN_ORIGIN}2026-10-26`), true);
+  assert.equal(isWeekBurnOrigin("agent"), false);
+  assert.equal(isWeekBurnOrigin(undefined), false);
+  assert.equal(weekBurnRowsLabel(3), "3 from the week-end burn");
 });

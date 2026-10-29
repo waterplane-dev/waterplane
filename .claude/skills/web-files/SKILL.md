@@ -10,13 +10,13 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
 - `persist.ts` — `navigator.storage.persist()` at boot: IndexedDB is best-effort and the browser may
   drop queued uploads, partial downloads and the screenlog unasked.
 - `annNote.ts` + the **highlighter** (`ImageAnnotator`'s `marker`) + `annClip.ts` + `annMove.ts` + `annKnobs.ts` —
-  **what a marked image SAYS.** Code: `annotator/` (`useAnnotator.ts`, `annPointer`/`annEdit`/`annDraw`/`annOcr`);
+  **what a marked image SAYS.** Code: `annotator/` (`useAnnotator.ts`, `annPointer`/`annEdit`/`annDraw`/`annOcr`/`annRead`/`annAutoRead`/`annSend`, `useAutoPlace.ts`);
   Marks are NUMBERED from ONE list in the words and in the pixels (`visibleMarks` feeds both
   `markNote` and the canvas badges), exact twins collapse, a colour is said only when it
   distinguishes, typed and read-back words are never clipped. `withUploadSize` appends the grid the
   agent ACTUALLY receives, and only where that is a fact; `collagePanelNote` says what a combined
   image IS. The highlighter swipes translucent ink (multiplied, so the words stay readable) and only POINTS:
-  **nothing reads a band** — no host or cloud call (removed 2026-10-18; the agent reads the picture).
+  **no host or cloud call reads a band** (removed 2026-10-18; the agent reads the picture) — an enabled text-in-marks extension may read a finished mark ON THE PHONE (`annotator/annAutoRead.ts`, R-images-015), and typed words always win. "Text only" (`annOcr.ts`, `POST /api/host/ocr`) is a deliberate desktop read of the whole picture, not a band.
   Words a person TYPES onto a band are shown before anything is sent and quoted in the note. The note
   is settled in `queueUpload` after the bytes are parked.
   **A mark may be STARTED OFF THE PICTURE** — the gesture is the WRAPPER's, not the canvas's.
@@ -35,6 +35,8 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   of size + turn. Relative drag stays the default.
 - `collage.ts` + `CollageSheet.tsx` — more than one image picked: one picture, or several? Declining
   is one tap. Combining produces ONE picked file, so everything downstream is the single-image path.
+  The width cap scales with the column count, CARRIED IN THE FILE NAME (`combined-N-screens-Kacross.jpg`;
+  writer and reader in `collageName.ts`, `collageName.test.mjs`) — renaming the file silently re-caps it.
   **Falling back is REPORTED, never silent.**
 - `installLog.ts` + the Apps sheet's `installed` pane (started by `startInstallLog` at boot, not by an App branch) —
   **which version of what is on which phone.** One host, MANY clients: the install happens on a phone with the app closed, so the log lives on the desktop (`host/installlog.ts`). **The report is a RE-STATEMENT** — the whole history on every `welcome`, merged on a reproducible key, never queued and no ackId. **The phone's own clock or nothing** (`installedAt` off the shell; absent ⇒ the row says *reported*); merge rules are `shared`'s `installlog.ts`. **The device NAME must never sync** — its job is to differ per phone.
@@ -86,7 +88,11 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   privileges, each earned by a failure: created with **no `pull.add`**, never withdrawn by `sync()`,
   and pumped **with the auto-download switch off**. **One tap, one file** (`autoSave`; `installDownloads()` is called
   from `main.tsx`). **The folder is ASKED, not remembered**; **`savedPresent`
-  undefined is not `false`**. `downloadState.ts` is the pure half. One button: `local/no-anchor-download`.
+  undefined is not `false`**. With the per-phone switch on (default), the app's own copy of a finished
+  download is deleted once Downloads holds the same name and size — a row is never evicted while
+  `savedPresent !== false`, APK install stages the Downloads copy into the cache when the app copy is gone,
+  and a row whose only copy left Downloads turns `evicted` and offers a fresh fetch (`pull/pullNative.ts`).
+  `downloadState.ts` is the pure half. One button: `local/no-anchor-download`.
 - `storagePlan.ts` + `storageAudit.ts` + `StorageSheet.tsx` — **what this phone is HOLDING, and
   getting some of it back.** `SweepSheet` for the desktop's transport dirs; this is the same question
   about the device. **Two kinds, kept apart, and never one button**: a `cache` costs a re-fetch, a
@@ -104,7 +110,7 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   **ids, never a rule**, sharing `dropOne` with the seven-day eviction. `storagePlan.test.mjs`.
 - `idb.ts` / `offlineCache.ts` — read-side caches (transcripts, tool details, gallery listings and
   documents, file-browser listings). `prefetchTranscript()` and the term feed's 5-min
-  `sweepTranscripts()` (`core/term/useTermFeed.ts`, over `offlineCache.ts`) are
+  `sweepTranscripts()` (`core/term/useTermFeed.ts`, over `offlineCache.ts`; it continues with terminal screens) are
   what make the reader work offline for a session you have not opened yet.
 - `shellLink.ts` — the background link, the half that isn't Java. `ShellLinkService` fixes backgrounding
   by EXISTING; everything the page tells it is a PARAMETER, because none of it is a fact about the APK.
@@ -146,7 +152,7 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   `showFile` the one writer of `open`), honouring `returnTo` — × on a browse-then-open still means
   back to the grid. **Combine** is a pick MODE with its own bar (`useGalleryPick`, `GalleryPickBar`),
   never a hidden long-press: pictures in TAP order (the panel numbers), one repo only, then the same
-  collage sheet every multi-image pick gets and the annotator (`GalleryEntry.tsx` fetches the bytes
+  collage sheet every multi-image pick gets and the annotator (`features/images/GalleryEntry.tsx` fetches the bytes
   through `api.fileBlob`; a failed fetch is said, nothing half-combined goes on).
 - `FileReview.tsx` + `fileRemarks.ts` — **remarks on a text file**, the annotator's round trip for a
   file being READ: mark lines (source) or blocks (rendered markdown, via `Markdown`'s opt-in

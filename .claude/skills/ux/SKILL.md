@@ -36,8 +36,8 @@ Where it already holds, as patterns to copy:
 | aid | when it changes | what it says | way back |
 |---|---|---|---|
 | header `?` (`HintToggle`, `HintLayer.tsx`) | first exit from explain mode | one-time ask: *keep it / remove it* | Settings › Writing & reading, toast names it |
-| first-use hint card (`hints.ts` `confirm` set) | after it explained once | card foot: *"Explained once. The next tap on this button just does it."* | long press; explain mode |
-| reader → terminal hold (`core/session/TermArea.tsx`, `SessionInfo.cliSetup`) | claude not signed in, CLI in its first-launch setup | toast `CLI_SETUP_HOLD`, then `CLI_SETUP_DONE` when it lets go | automatic: the first hook clears it |
+| first-use hint card (`confirm: true` entries in `shared/hints.ts`, run by `web/hints.ts`) | after it explained once | card foot: *"Explained once. The next tap on this button just does it."* | long press; explain mode |
+| reader → terminal hold (`core/session/TermArea.tsx`, `SessionInfo.cliSetup`) | claude not signed in, CLI in its first-launch setup | toast from `cliSetupHold()`, then `cliSetupDone()` (`backendCaps.ts`, worded per backend) when it lets go | automatic: the first hook clears it |
 | first-run card (`features/onboard`) | first session; *not now* | *not now*'s `title` says "until the app reloads" | reload |
 
 ## 2. Explaining a control: pick one route, never write the words twice

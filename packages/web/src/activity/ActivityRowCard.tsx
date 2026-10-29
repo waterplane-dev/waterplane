@@ -12,6 +12,7 @@ import { ago } from "../format";
 import { useInView } from "../useInView";
 import type { OutboxEntry } from "../outbox";
 import { SessionName } from "../SessionName";
+import { NetStalled } from "../NetStalled";
 import { CantInline, Unavailable } from "../Unavailable";
 import { track } from "../usage";
 import { fromScheduleWords } from "../backlogFilter";
@@ -199,6 +200,9 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
           <CalendarClock size={11} /> {fromScheduleWords(row.fromSchedule.name)}
         </button>
       ) : null}
+
+      {/* Stalled on the API (R-connection-024), outside `act-body`: it holds buttons. */}
+      <NetStalled state={row.state} sessionId={row.sessionId} sessions={sessions} />
 
       {/* The files this row names, as the files they are — and each of them
           opens full-screen on a tap.

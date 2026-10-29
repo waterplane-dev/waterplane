@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.3.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.4.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -78,6 +78,8 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginPromptEvent`](#pluginpromptevent) — interface
 - [`PluginQuestionEvent`](#pluginquestionevent) — interface
 - [`PluginSession`](#pluginsession) — interface
+- [`PluginSessionQuery`](#pluginsessionquery) — interface
+- [`PluginSessionMatch`](#pluginsessionmatch) — type
 - [`HostPluginApi`](#hostpluginapi) — interface
 - [`PluginHttpMethod`](#pluginhttpmethod) — type
 - [`PLUGIN_ROUTE_BODY_MAX`](#plugin_route_body_max) — const
@@ -162,9 +164,11 @@ Shift+Tab in `SourceKeys`, context `window` + `compactions`, `tokens.session`. 2
 **2.3** (additive, `docs/analysis/backend-parity-v3/c2.md`): `caps.spendUnit` (a native session-budget
 unit) and `BackendTokensDoc.hourly` (a ledger cut to a period or week window, beside claude's
 figure). 2.2 plugins load as-is; an older host ignores both.
+**2.4** (additive, `docs/notes/plugins.md`, "Which session asked"): `HostPluginApi.sessionOf` — the
+live session a requesting process belongs to (pane + ppid walk, scratchpad, cwd). 2.3 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.3.0";
+export const PLUGIN_API_VERSION = "2.4.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -671,6 +675,43 @@ export interface PluginSession { … }
 | `toggles` | `toggles: Record<string, boolean>` | The plugin's own per-session switches, defaults applied. |
 | `mayAnswer` | `mayAnswer: boolean` | The core's "let <plugin> answer" switch (always false without `answers`). |
 
+## PluginSessionQuery
+
+*interface*
+
+What `sessionOf` is asked: claims a requesting process makes about itself (same uid, so claims).
+
+```ts
+export interface PluginSessionQuery { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `tmuxPane` | `tmuxPane?: string \| null` | The requester's `TMUX_PANE` ("%209"). Believed only when a ppid walk from `pid` agrees. |
+| `pid` | `pid?: number \| null` | The requesting process; its ppid walk (≤12 hops) must reach one of our panes' pids. |
+| `cwd` | `cwd?: string \| null` | Its working directory: a scratchpad naming a conversation id, else a repo dir. |
+
+## PluginSessionMatch
+
+*type*
+
+`sessionOf`'s answer (2.4): the live waterplane session a process belongs to, and HOW the host
+knew — `pane` (the reported pane is ours and the pid's ancestry reaches it), `pid` (the ancestry
+alone reached one of our panes), `scratchpad` (the cwd names a live session's conversation id),
+`cwd` (the cwd is under exactly one live session's directory). Prompts are capped at 200 chars;
+every field past `how` is absent when the session has none.
+
+```ts
+export type PluginSessionMatch = PluginSession & {
+    how: "pane" | "pid" | "scratchpad" | "cwd";
+    tabTitle?: string;
+    lastPrompt?: string;
+    pinnedPrompt?: string;
+    lastPromptAt?: number;
+    claudeSessionId?: string;
+};
+```
+
 ## HostPluginApi
 
 *interface*
@@ -695,6 +736,7 @@ export interface HostPluginApi { … }
 | `on` | `on(event: "question", fn: (e: PluginQuestionEvent) => void \| Promise<void>): () => void` |  |
 | `on` | `on(event: "action", fn: (e: { action: string; sessionId?: string; }) => { ok: boolean; message: string; } \| Promise<{ ok: boolean; message: string; }>): () => void` | A declared action was tapped. The returned message is shown on the phone. |
 | `session` | `session(id: string): PluginSession \| null` |  |
+| `sessionOf` | `sessionOf(q: PluginSessionQuery): Promise<PluginSessionMatch \| null>` | Which live session spawned a process (2.4) — the ladder in `plugintoolkit/sessionof.ts`. Null when no rung answers exactly one session; a probe that fails drops to the next rung, never to a guess. Hands the plugin a ≤200-char copy of the person's last prompt. |
 | `scrollback` | `scrollback(id: string, lines?: number): string` | The last `lines` lines of the rendered screen/scrollback, plain text. |
 | `bindConversation` | `bindConversation(look: BindLook): BindVerdict` | Toolkit (2.0). Which backend conversation is this session's: the host's pure ladder (`bindconv.ts`) over the candidates YOUR queries found. Exactly one survivor or nothing. |
 | `tail` | `tail(path: string, onLine: (obj: unknown) => void, opts?: { filter?: (line: string) => boolean; }): { advance(): boolean \| null; offset(): number; close(): void; }` | Follow a JSONL file the CLI appends to: each complete line once, rotation-safe (inode or shrink re-reads from 0), 1 MiB per `advance()`. `advance()` is true when it read, false when nothing is new, null when the file is absent or the tail closed. |

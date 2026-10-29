@@ -14,7 +14,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   its source (default / set on this host / set for this repo); **nothing is greyed out** — a refusal
   is a sentence, and the host refuses too (this validates for speed, never as the gate). The host
   answers with the RE-RUN report, so the row restates itself.
-- `ContextSheet.tsx` (+ `CarriedSection.tsx`, "What every turn carries", AFTER the skills section, measured on this log's first request, remainder a named row, absent on an older host with its sentence; two doors in `.ctx-doors`) + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a SHAPE, geometry
+- `ContextSheet.tsx` (+ `CarriedSection.tsx`, "What every turn carries", AFTER the skills section, measured on this log's first request, remainder a named row, absent on an older host with its sentence; a truncated log keeps the carried kinds and reads "later" as changed kinds; the section and its two doors in `.ctx-doors` stay reachable without samples and when unmeasured) + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a SHAPE, geometry
   and sentences pure and node-tested (code: `contextPlot/cplot*.ts`; [charts-architecture.md](../../../docs/notes/charts-architecture.md)).
   **One y axis for every graph: 0 to 100% of the model's window**, never re-fitted to the data,
   falling back to tokens **while saying so**. Row spark: top = `autoCompactSetTok`. The TIME axis is
@@ -76,7 +76,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   multiple.
 - `PerRequestSection.tsx` + `perRequest.ts` — $/request: a RATIO OF SUMS (extension `token-stats/web/`).
 - `RepoHealthTiles.tsx` + `RepoHealthChartKit.tsx` + `RepoHealthStack.tsx` + `RepoHealthWeight.tsx` + `repoHealthPlot.ts` + `repoHealthWords.ts` —
-  (also `RepoHealthLongest.tsx`, `RepoHealthMags.tsx` — reuses `repoHealthPlot.ts` geometry and `RepoHealthStack.tsx`'s `StackChart`, never a second top-edge-is-total stack — `RepoHealthOwn.tsx`, `RepoHealthTable.tsx`) **the repo-health series as charts**, in region 2 of the repo-readings sheet (the sheet ⇒ `web-work`).
+  (also `RepoHealthLongest.tsx`, `RepoHealthMags.tsx` — reuses `repoHealthPlot.ts` geometry and `RepoHealthStack.tsx`'s `StackChart`, never a second top-edge-is-total stack — `RepoHealthOwn.tsx`, `RepoHealthTable.tsx`, `RepoHealthCards.tsx`, `RepoHealthNotes.tsx`, `repoHealthFoldPlot.ts` (`foldPlot`), `repoHealthWeeks.ts`, `repoHealthTileGeom.ts`, `repoHealthTileWords.ts`, `repoHealthStackWords.ts`) **the repo-health series as charts**, in region 2 of the repo-readings sheet (the sheet ⇒ `web-work`).
   Hand-rolled SVG on the `ContextGraph`/`contextPlot` pattern, **no charting library**: geometry
   pure in the `.ts`, paint in the `.tsx`, every sentence in the words module. **The TOOL states, you
   draw** — `repoHealthPlot.ts` has NO imports and `repoHealthPlot.test.mjs` asserts BY TEXT that it
@@ -123,10 +123,11 @@ Context, tokens, money and repo health as things a person reads: the context win
   caption says so. `repoHealthWords.ts` is under a test banning verdict words AND status tokens:
   **`rankSentence` is the ONE fraction→percentile conversion** and **a null rank returns the tool's
   own reason, never a `0th`**; absences are a sentence each (`repoHealthPlotAvailability`, three
-  states), and a mixed `PREREG_VERSION` still DRAWS the rows on disk while saying so. **Every reading
+  states), and a mixed `preregVersion` (the wire field; `PREREG_VERSION` is the tool's constant) still DRAWS the rows on disk while saying so. **Every reading
   says WHOSE it is, once per group as a heading, never a badge per tile**: the engine's
-  (`source: "central"`) and the repo's own (`plot.own`, `RepoHealthOwn.tsx`, `ownShow`'s three
+  (`plot.series`) and the repo's own (`plot.own`, `RepoHealthOwn.tsx`, `ownShow`'s three
   states; attributed to the repo, never the sheet's verdict; absent ≠ declares none).
+- The always-on list's rules (`AlwaysOnRows`, owned by `web-work`'s setup bullet; `alwaysOnPlot.ts`) — the repo's always-on list under the setup sheet's `context-weight` row. **Every word is shared's** (`alwaysOnRows`, `alwaysOnTotalsWords`, `instructionFileWeightWords`); the total never stands without its split; rows only LISTED (CLAUDE.local.md, subagent descriptions, MCP servers, desktop files) never fold into the threshold; an unsized row (an MCP server) prints a sentence, never 0; one `bucket` call feeds both the `repo · N`/`desktop · N` count and its cut.
 - `HealthIndexChart.tsx` + `healthIndexWords.ts` — **the health SCORE on
   the phone** (`HealthIndexSection.tsx` fetches it), the top of the repo-readings series region: a fixed 0–100 axis labelled on every rule;
   the good line is the repo's context warn line (16,000 by default), shared's `healthindex.ts` is the
@@ -163,6 +164,8 @@ Context, tokens, money and repo health as things a person reads: the context win
 - `TokenStatsSheet.tsx` + `TokenInsights.tsx` + `statsInsights.ts` + `statsPlot.ts` + `usageCut.ts` + `guests.ts` — **now
   `packages/extensions/token-stats/web/`** (plot + strip in `kit/chart/`, `statsPlot.ts` a barrel over
   `kit/chart/stats/splot*`; [token-stats-architecture.md](../../../docs/notes/token-stats-architecture.md)).
+  `firstBars.ts`: each costliest row's first request is drawn on ONE shared scale across all ranked
+  rows, never against the conversation total; absent or zero draws nothing.
   **SEVERAL ledgers, never one number.** A SOURCE PICKER (not a filter ⇒ **no counts on the chips**):
   Claude's, plus one chip per CONTRIBUTED ledger view (an extension's `ledgerViews`, `guests.ts`),
   drawn only when `hasData`, never greyed, resets each open. **The docs never meet in one reducer** —

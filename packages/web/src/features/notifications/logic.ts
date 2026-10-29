@@ -169,7 +169,7 @@ export type NotifTarget =
   | { to: "backlogByName" }
   | { to: "repohealth"; repoId: string }
   | { to: "tokens" }
-  | { to: "git"; repoId: string }
+  | { to: "git"; repoId: string; explain?: boolean }
   | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
   | { to: "setup"; repoId: string }
@@ -177,7 +177,7 @@ export type NotifTarget =
 
 export function notifTarget(n: {
   kind: string; file?: unknown; image?: unknown; sessionId?: string; plugin?: string;
-  backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string; buildId?: string };
+  backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string; buildId?: string; verb?: string };
 }): NotifTarget {
   if (n.file) return { to: "file" };
   if (n.plugin && !n.sessionId && !n.image) return { to: "plugin", id: n.plugin };
@@ -187,7 +187,7 @@ export function notifTarget(n: {
   const o = n.open;
   if (o?.to === "repohealth" && o.repoId) return { to: "repohealth", repoId: o.repoId };
   if (o?.to === "tokens") return { to: "tokens" };
-  if (o?.to === "git" && o.repoId) return { to: "git", repoId: o.repoId };
+  if (o?.to === "git" && o.repoId) return o.verb === "explain" ? { to: "git", repoId: o.repoId, explain: true } : { to: "git", repoId: o.repoId };
   if (o?.to === "build" && o.repoId) return { to: "build", repoId: o.repoId, buildId: o.buildId };
   if (o?.to === "setup" && o.repoId) return { to: "setup", repoId: o.repoId };
   if (n.kind === "weekburn") return { to: "weekburn" };

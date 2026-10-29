@@ -16,8 +16,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync,
 import { basename, delimiter, join } from "node:path";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
-import type { SessionInfo } from "@waterplane/shared";
-import { cleanSessionBudget, logTag, sessionBudgetVerdict } from "@waterplane/shared";
+import type { SessionInfo, SessionNetRetry } from "@waterplane/shared";
+import { cleanSessionBudget, logTag, netRetryStalls, sessionBudgetVerdict } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { spawnFailure } from "../ptycap.js";
 import { ptyEnv } from "../ptyenv.js";
@@ -400,6 +400,14 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
   // …and so does "handled": the tail still ends on that question. The stop
   // count is this process's, so only the words can match after a restart.
   if (re && typeof m.askDismissed === "string" && m.askDismissed) re.askDismissed = { text: m.askDismissed, stop: -1 };
+  // …and a net retry that gave up (`sessions/apiretry.ts`): work stalled on it
+  // must still read stalled, not silent. Only a well-formed `gaveup` comes back.
+  const ng = m.netGaveUp;
+  if (re && ng && ng.state === "gaveup" && typeof ng.attempt === "number" && typeof ng.max === "number" && typeof ng.error === "string" && typeof ng.at === "number") {
+    // The stall probe's due time and a dismissed line come back too; the probe
+    // is re-armed by the slice (`NetRetrySlice.restored`, after this returns).
+    re.info.netRetry = { state: "gaveup", attempt: ng.attempt, max: ng.max, nextAt: typeof ng.nextAt === "number" ? ng.nextAt : null, error: ng.error, at: ng.at, ...(typeof ng.why === "string" ? { why: ng.why } : {}), ...(ng.dismissed === true ? { dismissed: true } : {}) };
+  }
   // The record carries the LAUNCH model — often an alias ("opus") — and the
   // hooks that read the running one back only fire on the next turn. Every
   // idle session came back from a restart wearing the alias beside siblings
@@ -451,7 +459,7 @@ export function persistLive(core: SessionCore, m: LiveMeta): void {
   // stamp is a fact about the pane — what the boot reclaim (`staleLiveIds`)
   // checks before it believes a listing that lacks the name.
   const rec: LiveMeta = live
-    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, tmuxSocket: TMUX_SOCKET_ID,
+    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, netGaveUp: netGaveUpOf(live.info.netRetry), tmuxSocket: TMUX_SOCKET_ID,
       // …and the launch's own answers, which those writers do not name either.
       told: live.info.told, askRulesVia: live.info.askRulesVia, askRules: live.info.askRulesVia === "gate" ? (m.askRules ?? heldAskRules(m.id)) : undefined }
     : { ...m, tmuxSocket: TMUX_SOCKET_ID };
@@ -462,6 +470,16 @@ export function persistLive(core: SessionCore, m: LiveMeta): void {
     if (now - lastLiveWarnAt > 60_000) { lastLiveWarnAt = now; console.error(`[tmux] could not persist live record ${m.id}: ${(e as Error).message}`); }
   }
 }
+/** The stall a `live/` record keeps (`LiveMeta.netGaveUp`): a `gaveup` as is,
+ *  a stall probe under way as the `gaveup` it came from, due again now (the
+ *  restart forgot its turn; `restored` waits at least a park before typing). */
+function netGaveUpOf(n: SessionNetRetry | null | undefined): SessionNetRetry | undefined {
+  if (!n || !netRetryStalls(n)) return undefined;
+  if (n.state === "gaveup") return n;
+  const { probe: _p, ...rest } = n;
+  return { ...rest, state: "gaveup", nextAt: Date.now() };
+}
+
 export function loadLive(core: SessionCore, id: string): LiveMeta | null {
   // Guarded: a corrupt record is kept as `.corrupt-*` and logged, not silently dropped.
   return readJsonGuarded<LiveMeta | null>(livePath(core, id), null, (v) => typeof v === "object" && v !== null && !Array.isArray(v));

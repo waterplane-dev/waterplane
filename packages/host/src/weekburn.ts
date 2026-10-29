@@ -27,15 +27,15 @@
 import { join } from "node:path";
 import {
   cleanWeekBurnPrefs, envName, healthCapWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
-  RESET_MATCH_MS, WEEKBURN_MEASURE_MS,
+  isWeekBurnOrigin, RESET_MATCH_MS, WEEKBURN_MEASURE_MS, WEEKBURN_ORIGIN,
   type BudgetPass, type Intent, type RepoHealthIndex, type UsageHistoryDoc, type UsageInfo,
   type WeekBurnPrefs, type WeekBurnStatus,
 } from "@waterplane/shared";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 import type { Notify } from "./notifytypes.js";
 
-/** Origin prefix every row this module posts carries: `weekburn:<weekOf>`. */
-export const WEEKBURN_ORIGIN = "weekburn:";
+/** Origin prefix every row this module posts carries: `weekburn:<weekOf>` (shared, so the phone tells them apart). */
+export { WEEKBURN_ORIGIN };
 export const WEEKBURN_DEFAULT_MAX_PER_REPO = 6;
 const LIVE: ReadonlySet<Intent["state"]> = new Set(["queued", "blocked", "starting", "running"]);
 /** The plan's measurement looks back 14 days; a day of slack for the week's pace. */
@@ -76,12 +76,14 @@ export interface WeekBurnDeps {
   maxPerRepo?: number;
 }
 
-export interface WeekBurnPostBody { repos?: unknown; recurring?: unknown; stopPct?: unknown; sameAsLast?: unknown }
+export interface WeekBurnPostBody { repos?: unknown; recurring?: unknown; stopPct?: unknown; sameAsLast?: unknown; task?: unknown; notes?: unknown }
 
 export interface WeekBurn {
   observe(u: UsageInfo): Promise<string[]>;
   armed(): boolean;
   status(): WeekBurnStatus;
+  /** `status()` plus every discovered repo's health summary, so the sheet can preview each prompt. */
+  full(): Promise<WeekBurnStatus>;
   /** The sheet's one write. `error` = refused in words, nothing changed. */
   update(body: WeekBurnPostBody): Promise<{ status: WeekBurnStatus } | { error: string }>;
 }
@@ -139,7 +141,7 @@ export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
   function liveByRepo(): Map<string, string> {
     const out = new Map<string, string>();
     for (const r of deps.rows()) {
-      if (r.origin?.startsWith(WEEKBURN_ORIGIN) && LIVE.has(r.state) && !out.has(r.cwd)) out.set(r.cwd, r.id);
+      if (isWeekBurnOrigin(r.origin) && LIVE.has(r.state) && !out.has(r.cwd)) out.set(r.cwd, r.id);
     }
     return out;
   }
@@ -190,7 +192,8 @@ export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
       if (!target) continue; // gone from the discovered list: never a cwd
       store.posted[repo] = { weekOf, count: count + 1 };
       save(); // before the post: at-most-once matters more than the count
-      const text = weekBurnItemPrompt({ repoName: target.repoName, healthSummary: healthSummaryText(deps.health?.(repo)) });
+      const text = weekBurnItemPrompt({ repoName: target.repoName, healthSummary: healthSummaryText(deps.health?.(repo)),
+        task: prefs.task, note: prefs.notes[repo] });
       const item = deps.add(text, repo, "week-end burn", {
         origin: `${WEEKBURN_ORIGIN}${weekOf}`, closeWhenDone: true,
         budgetPass: { window: "weekly", from: t, until: u.weeklyResetAt },
@@ -226,15 +229,30 @@ export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
     const stop = picked ? weekBurnStopText({ weeklyPct: u.weeklyPct, weeklyResetAt: u.weeklyResetAt, stopPct: prefs.stopPct, now: t, readingAt: readingAt(u) }) : null;
     return {
       prefs, available, ...(unavailableText ? { unavailableText } : {}),
-      weeklyPct: u.weeklyPct, weeklyResetAt: u.weeklyResetAt, plan, pickedThisWeek: picked, running,
+      weeklyPct: u.weeklyPct, weeklyResetAt: u.weeklyResetAt, plan, pickedThisWeek: picked, running, maxPerRepo,
       ...(stop ? { stoppedText: stop } : {}),
     };
+  }
+
+  async function full(): Promise<WeekBurnStatus> {
+    const s = status();
+    if (!deps.health) return s;
+    let known: readonly { worktreePath: string }[] = [];
+    try { known = await deps.repos(); } catch { return s; }
+    const readings: Record<string, string> = {};
+    for (const k of known) {
+      const t = healthSummaryText(deps.health(k.worktreePath));
+      if (t) readings[k.worktreePath] = t;
+    }
+    return { ...s, readings };
   }
 
   async function update(body: WeekBurnPostBody): Promise<{ status: WeekBurnStatus } | { error: string }> {
     const next: WeekBurnPrefs = { ...store.prefs };
     if (typeof body.recurring === "boolean") next.recurring = body.recurring;
     if (typeof body.stopPct === "number") next.stopPct = body.stopPct;
+    if (typeof body.task === "string") next.task = body.task; // cleanWeekBurnPrefs trims and caps
+    if (body.notes && typeof body.notes === "object" && !Array.isArray(body.notes)) next.notes = body.notes as Record<string, string>;
     const wanted: unknown = body.sameAsLast === true ? store.prefs.lastRepos : body.repos;
     if (wanted !== undefined) {
       if (!Array.isArray(wanted)) return { error: "repos must be a list of repo folders." };
@@ -257,7 +275,7 @@ export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
     save();
     deps.changed?.();
     await api.observe(deps.usage()); // a pick at or after the start acts now, not on the next poll
-    return { status: status() };
+    return { status: await full() };
   }
 
   const api: WeekBurn = {
@@ -276,6 +294,7 @@ export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
       return deps.notifyOn() && !sameWeek(store.nudgedWeekOf, resetAt);
     },
     status,
+    full,
     update,
   };
   return api;

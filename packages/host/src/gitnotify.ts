@@ -15,12 +15,13 @@
  */
 import { gitAttentionKey } from "@waterplane/shared";
 import type { GitOutcome } from "./git.js";
+import type { ExplainOutcome } from "./explainjob.js";
 
 /** What it needs of the host: `notify` and `resolveAttention`, as on `HostCtx`
  *  (spelled here — a flat module never imports `routes/`). */
 export interface GitNotifyDeps {
   notify(kind: "git", p: {
-    title: string; body: string; tag: string; open: { to: "git"; repoId: string; verb: "pull" | "push" };
+    title: string; body: string; tag: string; open: { to: "git"; repoId: string; verb: "pull" | "push" | "explain" };
     outcome: "ok" | "failed"; key?: string; detail?: string;
   }): void;
   resolveAttention(key: string, note: string): number;
@@ -67,5 +68,23 @@ export function reportGitOutcome(o: GitOutcome, ctx: GitNotifyDeps): void {
     title: `Pushed · ${o.repo.name}`,
     body: `${o.repo.branch ? `${o.repo.branch} · ` : ""}took ${took(o.finishedAt - o.startedAt)}`,
     outcome: "ok", tag, open,
+  });
+}
+
+/**
+ * A finished Explain, told: the brief takes a minute or two and the person
+ * has usually left the screen. Information either way — a brief that could
+ * not be written is its reason, not a failure anyone must deal with. The tap
+ * opens the Explain view on the stored answer (`explainjob.ts`).
+ */
+export function reportExplainOutcome(o: ExplainOutcome, ctx: Pick<GitNotifyDeps, "notify">): void {
+  const b = o.brief;
+  ctx.notify("git", {
+    title: `${b.text ? "Explained" : "No explanation"} · ${o.repo.name}`,
+    body: b.text
+      ? `${[b.push ? `${b.push} to push` : "", b.pull ? `${b.pull} to pull` : ""].filter(Boolean).join(" · ") || "ready"} · took ${took(o.finishedAt - o.startedAt)}`
+      : gitFailureHeadline(b.reason),
+    outcome: "ok", tag: `git-${o.repo.id}-explain`,
+    open: { to: "git", repoId: o.repo.id, verb: "explain" },
   });
 }

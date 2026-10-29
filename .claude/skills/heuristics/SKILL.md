@@ -1,6 +1,6 @@
 ---
 name: heuristics
-description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, keyhints.ts, turn boundaries (Stop hook, /compact), claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number.
+description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, keyhints.ts, turn boundaries (Stop/StopFailure hooks, /compact), netlog.ts, claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number.
 ---
 
 # waterplane heuristics over the TUI
@@ -26,6 +26,10 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   cannot strand the session busy, and `settleStop` is the one idempotent end-of-turn path (flag,
   `stopCount`, capture seal, ping, `turnEnded`). **Records no health observation** — the hook was
   answered, not broken. `e2e-stophook.mjs`.
+- **An API error ends the turn with `StopFailure`, never `Stop`.** For `server_error`/`overloaded`
+  `backends/claude-sources.ts` routes it into the same `settleStop` path and `turn.ts` counts it as a
+  turn hook (436ef33c). Drop it and a give-up turn never settles, so `sessions/apiretry.ts` never
+  retries; a stub simulating a give-up turn must send `StopFailure`, not `Stop`.
 - **`/compact` announces NOTHING** (no `UserPromptSubmit`, no `Stop`) while grinding for minutes, and
   the same watch covers any work that announces nothing: armed on OUTPUT for a hooked session with no
   turn believed, a working line publishes one (`setTurn(…, {fromScreen:true})`), retired when the
@@ -87,7 +91,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
 - `question.ts` — **a box is not the only question**: `prompt.ts` answers "is the CLI blocked on a
   dialog", this answers "did the TURN END ON A QUESTION TO YOU" — the question with NO BOX, the
   commonest way work stops here. Nothing is blocked in the CLI, so `prompt`/`awaitingInput` are
-  empty and the session reads `done`. `sessions/turn.ts`'s `checkAsking()` runs it on the turn-end
+  empty and the session reads `done`. `sessions/askwatch.ts`'s `checkAsking()` (called from `turn.ts`) runs it on the turn-end
   transition and publishes `SessionInfo.asking`. A parsed `prompt` outranks it, a limit block is a
   clock not a question, and any keystroke or a turn STARTING retires it. The `at` stamp survives
   re-idles (idle re-enters per repaint; a restarted clock reads "asked 0s ago" for ever). **It is a
@@ -142,7 +146,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   tick with the mode (`livemode.ts`); the phone hides a tapped one-shot chip until the list changes.
 - `context.ts` — the context meter off the rendered screen: `PCT_RES` (percent phrasings: "Context
   left until auto-compact: N%", "N% context left", "Context remaining: N%"), `RATIO_RE` ("123k/200k
-  tokens"). **`leftPct` is percent FREE**, never used; `usedTok`/`totalTok`
+  tokens"). **`leftPct` is percent FREE**, never percent used; `usedTok`/`totalTok`
   only when an absolute figure is printed; null when no shape matches. Its health gate
   (`METER_GATE_RE`) is deliberately NOT built from the matchers it checks, so it can disagree with
   them, and requires a figure on a non-conversation row. Pinned by e2e.
@@ -184,7 +188,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
 - `limitretry.ts` — the retry cadence is pure (`nextLimitAttempt`, `LADDER_MS`): a DATED reset is
   trusted, weekly or not; with no dated reset the delay WIDENS instead of a flat cadence.
 - **Spend walls** (`limit.ts`'s `spend`, `limitlog.ts`'s API-error rows, `spendwall.ts`): an API-key/cloud account out of credit or over a spend limit is a wall with NO ladder - one attempt at the printed instant or a configured usd calendar period's reset (`periodBounds`), else `noteGaveUp` (`sessions/wall.ts`; needs the person). Never a guessed clock. Messages are built from halves in tests too. `spendlimit.test.mjs`.
-- `netlog.ts` — the CLI GAVE UP on a transient API error: the NEWEST assistant row is `<synthetic>`, `isApiErrorMessage`, `error: "server_error"` AND its text a known transient shape (errno, can't reach, connection lost/dropped/refused, no response, 5xx/529). A spend wall (`detectSpendText`) or a `quotaLimits` row is never one; an unknown shape is no retry. Feeds `sessions/apiretry.ts`'s ladder (`netRetryDelay`). `netlog.test.mjs`.
+- `netlog.ts` — the CLI GAVE UP on a transient API error: the NEWEST assistant row is `<synthetic>`, `isApiErrorMessage`, `error: "server_error"` AND its text a known transient shape (errno, can't reach, connection lost/dropped/refused, no response, 5xx/529). A spend wall (`detectSpendText`) or a `quotaLimits` row is never one; an unknown shape is no retry. Feeds `sessions/apiretry.ts`'s ladder (`netRetryDelay`); out of retries the work is STALLED, never failed (e337d014). `netlog.test.mjs`.
 - `limitlog.ts` — the same question asked of the CLI's own log, which is DATED. **The log OUTRANKS
   the screen in both directions**; **`unknown` when there is nothing to read** — an absent log is
   never a verdict.
@@ -206,4 +210,4 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
      verdict).
   5. `e2e-limitbusy.mjs` pins rule 4 with the banner deliberately left ON SCREEN: scrolling it off
      passes for the easy reason.
-  The one at-limit colour is `--limit` (web-chrome's `styles.css`).
+  The one at-limit colour is `--limit` (`packages/web/src/styles/00-tokens.css`).

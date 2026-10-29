@@ -53,7 +53,18 @@ export interface ClaudeHookPayload {
   tool_name?: string;
   tool_input?: unknown;
   tool_use_id?: string;
+  /** `StopFailure` only: the kind of API error that ended the turn. */
+  error?: string;
 }
+
+/**
+ * `StopFailure` kinds that end a turn like a `Stop`: the transient give-ups the
+ * host retries (`sessions/apiretry.ts`, which still reads the LOG for the
+ * verdict). The CLI fires `StopFailure` INSTEAD of `Stop` on an API error, so
+ * without this a give-up turn never ended and nothing retried it. Limits,
+ * billing and auth stay with `wall.ts`'s screen + log readers, as before.
+ */
+const TRANSIENT_STOP_FAILURE = new Set(["server_error", "overloaded"]);
 
 export const claudeSources: BackendSources = {
   inBand: true,
@@ -109,6 +120,9 @@ export function postClaudeHook(hostSessionId: string, payload: ClaudeHookPayload
       // The CLI ASKING to end the turn (`verifyEnds`); the model switch is
       // read either way — a fact about the session, not the turn.
       on.ended(at, { reread: { logPath: payload.transcript_path } });
+      break;
+    case "StopFailure":
+      if (TRANSIENT_STOP_FAILURE.has(String(payload.error || ""))) on.ended(at, { reread: { logPath: payload.transcript_path } });
       break;
     case "SessionEnd":
       on.ready();

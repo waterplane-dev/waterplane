@@ -517,6 +517,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlog/RowActions.tsx": 185,
   "backlog/RowChips.tsx": 300, // +a set cap is a tap to edit (R-automation-044)
   "backlog/RowEditor.tsx": 95,
+  "backlog/WeekBurnLink.tsx": 45, // the week-end burn from the repo bar: its sentence, its rows as a cut, its sheet
   "backlog/RowBudgetEdit.tsx": 40,
   "backlog/RowFlagChoice.tsx": 25,
   "backlog/RowNotes.tsx": 310, // +the flag-when-done tick under the close choice, +the budget… chip and its editor
@@ -693,7 +694,9 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/ActivityHead.tsx": 65,
   "activity/ActivityList.tsx": 35,
   "activity/ActivityNotices.tsx": 46,
-  "activity/ActivityRowCard.tsx": 330,
+  // 330 → 334 (2026-10-29, R-connection-024 stalled rows): the `NetStalled` import, its one
+  // element and its comment line; the note, retry now and the switch live in `NetStalled.tsx`.
+  "activity/ActivityRowCard.tsx": 334,
   "activity/activityBucket.ts": 35,
   "activity/activityBulk.ts": 125,
   "activity/activityChips.ts": 60,
@@ -1003,7 +1006,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
-  "webapi/webapiGit.ts": 88, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log)
+  "webapi/webapiGit.ts": 90, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 107, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run

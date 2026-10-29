@@ -19,23 +19,43 @@
  * cap it stops and says so (`state: "gaveup"`); there is no loop.
  *
  * State is memory only: a host restart forgets a pending retry, which is the
- * safe direction (it types nothing).
+ * safe direction (it types nothing) — except a `gaveup`, which `persistLive`
+ * keeps in the `live/` record (`LiveMeta.netGaveUp`): it types nothing either,
+ * and it is what keeps work STALLED on the session from reading as silence.
  *
  * What the turn end MEANT travels on `turnEnded` (`TurnEndNet`): deferred work
  * waiting on the turn (`intents/watch.ts`) must not complete off a turn that
- * did not happen. `retrying` holds it, `gaveup` fails it, and `checking` (our
- * `continue`'s turn ended before its log row landed) is answered once by
- * `netTurnSettled` after the re-read. A person's keystroke cancels the retry
- * and the next real turn end completes the work as ever.
+ * did not happen. `retrying` holds it, `gaveup` leaves it STALLED (`running`,
+ * never failed: the prompt was delivered and the conversation is intact), and
+ * `checking` (our `continue`'s turn ended before its log row landed) is
+ * answered once by `netTurnSettled` after the re-read. A person's keystroke
+ * cancels the retry and the next real turn end completes the work as ever —
+ * and so does "Retry now" (`retryNow`, `session.netRetryNow`), which resumes
+ * the ladder at try 1 and types its `continue` through `fire()`, the one
+ * typing path here.
+ *
+ * Past the cap the work is STALLED, and a stalled row holds its repo's serial
+ * slot — so the host keeps PROBING on a slow cadence (`NET_RETRY_STALL_MS`,
+ * 30 min; `0` = never): the `gaveup` carries the next probe as `nextAt`, and
+ * the probe is one `continue` through `fire()` (`probe: true`, so the work
+ * still reads stalled while it runs). A real reply ends the episode and the
+ * work completes as ever; another give-up waits for the next probe. No cap
+ * while stalled; the switch off, the halt, a wall or a person typing stops it
+ * the way they stop the ladder.
+ *
+ * Dismissing the session's line (`session.netRetryCancel` on a `gaveup`) only
+ * HIDES it (`dismissed`): the stall stands, so the silence ceiling still
+ * leaves the work alone. Cancelling a probe stops the probing; the stall
+ * stands too. Only a real turn end, typing, or a wall ends a stall.
  */
-import { logTag, netGaveUpDetail, netRetryLine, type SessionNetRetry, type TurnEndNet } from "@waterplane/shared";
+import { logTag, netGaveUpDetail, netRetryLine, netRetryStalls, netStallWait, type SessionNetRetry, type TurnEndNet } from "@waterplane/shared";
 import { freshGiveUp, netRetryDelay, readNetLog } from "../netlog.js";
 import { transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
 import { derive } from "../backends/derive.js";
 import { haltRefusal as hostHalt } from "../halt.js";
 import type { Session, SessionCore } from "./core.js";
-import { NET_RETRY_LADDER_MS, NET_RETRY_MAX } from "./knobs.js";
+import { NET_RETRY_LADDER_MS, NET_RETRY_MAX, NET_RETRY_STALL_MS } from "./knobs.js";
 import { netRetryOn } from "../netretrycfg.js";
 
 /** How long a busy session is parked before the retry looks again. */
@@ -56,7 +76,10 @@ export class NetRetrySlice {
    * again. Null ⇒ an ordinary turn end.
    */
   turnEnded(s: Session): TurnEndNet | null {
-    if (!netRetryOn() || !s.info.running || !s.hooksActive || !derive(s.backend).keepsClaudeLog || !s.info.claudeSessionId) return null;
+    // Off ⇒ nothing is read — unless an episode is live (a person's Retry now
+    // while the switch is off): its turn end must still be told apart from a
+    // served reply, or the work waiting on it completes off a failed turn.
+    if (!(netRetryOn() || s.info.netRetry) || !s.info.running || !s.hooksActive || !derive(s.backend).keepsClaudeLog || !s.info.claudeSessionId) return null;
     const v = readNetLog(transcriptPath(s.info.cwd, s.info.claudeSessionId));
     if (!freshGiveUp(v, s.info.turnStartedAt)) {
       // A served reply ends the outage. The row may also land just after the
@@ -86,10 +109,72 @@ export class NetRetrySlice {
     this.cancel(s, "typed into the session");
   }
 
-  /** The phone's Cancel (`session.netRetryCancel`). */
+  /**
+   * The phone's Cancel / dismiss (`session.netRetryCancel`). A `gaveup` is only
+   * HIDDEN (`dismissed`) — the work stalled on it stays stalled; a probe is
+   * stopped back into a `gaveup` with no next probe; a ladder rung is cancelled.
+   */
   cancelById(id: string): void {
     const s = this.core.sessions.get(id);
-    if (s?.info.netRetry) this.cancel(s, "cancelled from the phone");
+    const n = s?.info.netRetry;
+    if (!s || !n) return;
+    if (n.state === "gaveup") {
+      if (n.dismissed) return;
+      console.log(`${logTag} net retry line dismissed · ${s.info.title} (${s.info.id}) · the stall stands`);
+      this.set(s, { ...n, dismissed: true });
+      return;
+    }
+    if (n.probe) { this.stopProbing(s, "cancelled from the phone"); return; }
+    this.cancel(s, "cancelled from the phone");
+  }
+
+  /**
+   * The switch moved (`netretry.set`). Off: a pending ladder rung is cancelled
+   * and the probing stops — a stall stays a stall (its note and Retry now
+   * stand on it). On: a stall with no probe armed gets one. A probe whose turn
+   * is running is left to its turn end (`schedule` reads the switch then).
+   */
+  switched(on: boolean): void {
+    for (const s of this.core.sessions.values()) {
+      const n = s.info.netRetry;
+      if (!n || !s.info.running) continue;
+      if (!on) {
+        if (n.state === "sent") continue;
+        if (n.probe || (n.state === "gaveup" && n.nextAt != null)) this.stopProbing(s, "automatic retry is off");
+        else if (n.state !== "gaveup") this.cancel(s, "automatic retry is off");
+      } else if (n.state === "gaveup" && n.nextAt == null && !hostHalt()) {
+        this.armProbe(s, n);
+      }
+    }
+  }
+
+  /** After a restart (`reattach`): a restored stall's probe is armed again. */
+  restored(id: string): void {
+    const s = this.core.sessions.get(id);
+    const n = s?.info.netRetry;
+    if (!s || !n || n.state !== "gaveup" || n.nextAt == null) return;
+    if (!netRetryOn() || NET_RETRY_STALL_MS <= 0) { this.set(s, { ...n, nextAt: null }); return; }
+    const at = Math.max(n.nextAt, Date.now() + PARK_MS);
+    this.arm(s, at - Date.now(), () => this.probe(s));
+    if (at !== n.nextAt) this.set(s, { ...n, nextAt: at });
+  }
+
+  /**
+   * "Retry now" (`session.netRetryNow`): a `gaveup` episode resumes at try 1
+   * (the cap is a ceiling on what the host types BY ITSELF — a person's tap is
+   * a new start), a `waiting` rung fires early; `sent` (a retry's turn is
+   * running) and no episode are no-ops. Typed by `fire()` — the ladder's own
+   * path, with its busy/halt/wall checks — never a write of its own.
+   */
+  retryNow(id: string): void {
+    const s = this.core.sessions.get(id);
+    const n = s?.info.netRetry;
+    if (!s || !n || n.state === "sent" || !s.info.running) return;
+    this.clear(s);
+    const attempt = n.state === "gaveup" ? 0 : n.attempt;
+    this.set(s, { ...n, state: "waiting", attempt, nextAt: Date.now(), why: undefined, probe: undefined, dismissed: undefined });
+    console.log(`${logTag} net retry now (from the phone) · ${s.info.title} (${s.info.id})`);
+    void this.fire(s);
   }
 
   /** The session is going (exit, detach, kill, remove): drop the timer. */
@@ -105,21 +190,60 @@ export class NetRetrySlice {
   }
 
   private set(s: Session, n: SessionNetRetry | null): void {
+    const wasStall = netRetryStalls(s.info.netRetry);
+    // Absent, never `undefined`-valued, on the wire.
+    if (n) for (const k of ["why", "probe", "dismissed"] as const) if (n[k] === undefined) delete n[k];
     s.info.netRetry = n;
+    // A stall survives a restart (`LiveMeta.netGaveUp`, taken off the live
+    // session by `persistLive`): rewrite the record on every move while stalled.
+    if (wasStall || netRetryStalls(n)) { const m = this.core.loadLive(s.info.id); if (m) this.core.persistLive(m); }
     this.core.emit("updated", s.info);
+  }
+
+  /** Probing stops; the stall stands (a `gaveup` with no next probe). */
+  private stopProbing(s: Session, why: string): void {
+    const n = s.info.netRetry!;
+    this.clear(s);
+    console.log(`${logTag} net retry stall probe off · ${s.info.title} (${s.info.id}) · ${why}`);
+    this.set(s, { ...n, state: "gaveup", nextAt: null, probe: undefined });
+  }
+
+  /** Arm the next stall probe on a `gaveup` (switch on, knob > 0, no halt); else none. */
+  private armProbe(s: Session, n: SessionNetRetry): SessionNetRetry {
+    if (!netRetryOn() || NET_RETRY_STALL_MS <= 0 || hostHalt()) return { ...n, nextAt: null };
+    this.arm(s, NET_RETRY_STALL_MS, () => this.probe(s));
+    const next = { ...n, nextAt: Date.now() + NET_RETRY_STALL_MS };
+    if (s.info.netRetry?.state === "gaveup") this.set(s, next);
+    return next;
+  }
+
+  /** The stall probe is due: one `continue` through `fire()`, flagged `probe`. */
+  private probe(s: Session): void {
+    const n = s.info.netRetry;
+    if (!n || n.state !== "gaveup" || n.nextAt == null) return;
+    if (this.core.sessions.get(s.info.id) !== s || !s.info.running) return;
+    if (!netRetryOn() || NET_RETRY_STALL_MS <= 0) { this.stopProbing(s, "automatic retry is off"); return; }
+    console.log(`${logTag} net retry stall probe (try ${n.attempt + 1}) · ${s.info.title} (${s.info.id}) · ${n.error}`);
+    this.set(s, { ...n, state: "waiting", probe: true, nextAt: Date.now(), why: undefined });
+    void this.fire(s);
   }
 
   /** Arm the next rung (`retrying`), or stop at the cap (`gaveup`); null ⇒ a wall outranks. */
   private schedule(s: Session, at: number, error: string): TurnEndNet | null {
     const prev = s.info.netRetry;
     const attempt = prev && prev.state === "sent" ? prev.attempt : 0;
-    const delay = netRetryDelay(attempt, NET_RETRY_MAX, NET_RETRY_LADDER_MS);
+    // A stall probe's own give-up is never a ladder rung: back to the stall.
+    const delay = prev?.probe ? null : netRetryDelay(attempt, NET_RETRY_MAX, NET_RETRY_LADDER_MS);
     this.clear(s);
     if (s.info.limit?.blocked) { if (prev) this.set(s, null); return null; } // a wall outranks
-    if (delay == null) {
-      const why = `after ${attempt} ${attempt === 1 ? "try" : "tries"}`;
-      this.set(s, { state: "gaveup", attempt, max: NET_RETRY_MAX, nextAt: null, error, at, why });
-      console.log(`${logTag} net retry gave up · ${s.info.title} (${s.info.id}) · ${error}`);
+    // The switch off (only reached with a live episode: a Retry now while off)
+    // ⇒ one try, never a ladder.
+    if (delay == null || !netRetryOn()) {
+      const why = `after ${attempt} ${attempt === 1 ? "try" : "tries"}${delay != null ? " — automatic retry is off" : ""}`;
+      // The stall's next probe rides as `nextAt`; a dismissed line stays hidden.
+      const g = this.armProbe(s, { state: "gaveup", attempt, max: NET_RETRY_MAX, nextAt: null, error, at, why, ...(prev?.dismissed ? { dismissed: true } : {}) });
+      this.set(s, g);
+      console.log(`${logTag} net retry gave up · ${s.info.title} (${s.info.id}) · ${error}${g.nextAt != null ? ` · next try in ${netStallWait(g.nextAt - Date.now())}` : ""}`);
       return { net: "gaveup", detail: netGaveUpDetail(error, why) };
     }
     const n: SessionNetRetry = { state: "waiting", attempt, max: NET_RETRY_MAX, nextAt: Date.now() + delay, error, at };
@@ -129,9 +253,9 @@ export class NetRetrySlice {
     return { net: "retrying" };
   }
 
-  private arm(s: Session, ms: number): void {
+  private arm(s: Session, ms: number, run: () => void = () => void this.fire(s)): void {
     if (s.netTimer) clearTimeout(s.netTimer);
-    s.netTimer = setTimeout(() => { s.netTimer = null; void this.fire(s); }, ms);
+    s.netTimer = setTimeout(() => { s.netTimer = null; run(); }, ms);
     s.netTimer.unref?.();
   }
 
@@ -168,7 +292,7 @@ export class NetRetrySlice {
     if (this.core.sessions.get(id) !== s || !s.info.running) { s.info.netRetry = null; return; }
     const halted = hostHalt();
     if (halted) {
-      this.set(s, { ...n, state: "gaveup", nextAt: null, why: "the emergency halt is on" });
+      this.set(s, { ...n, state: "gaveup", nextAt: null, why: "the emergency halt is on", probe: undefined });
       // No turn end follows this one: tell the work waiting on the session now.
       this.core.emit("netTurnSettled", id, s.stopCount, { net: "gaveup", detail: netGaveUpDetail(n.error, "because the emergency halt is on") });
       return;

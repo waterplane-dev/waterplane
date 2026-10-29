@@ -15,7 +15,7 @@ import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
-import { blockedReasonText, netRetryToggleText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
+import { NET_RETRY_NOW_SENT, blockedReasonText, netRetryToggleText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
 import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine } from "../../backendCaps";
@@ -745,14 +745,16 @@ export function TermArea(p: TermAreaProps): ReactNode {
       )}
 
       {/* The desktop retrying a turn the CLI gave up on a network error
-          (R-connection-024): the line and its Cancel, above the prompt bar. */}
+          (R-connection-024): the line and its Cancel, above the prompt bar;
+          once it gave up, Retry now — the stalled row's own message. */}
       {active.netRetry && active.running && (
         <NetRetryBar
           retry={active.netRetry}
           onCancel={() => conn.liveSend({ t: "session.netRetryCancel", id: active.id },
-            active.netRetry!.state === "gaveup" ? "hidden" : "retry cancelled — nothing more is typed")}
+            active.netRetry!.state === "gaveup" ? "hidden — stalled work keeps its note" : "retry cancelled — nothing more is typed")}
           onTurnOff={() => conn.liveSend({ t: "netretry.set", enabled: false },
             `${netRetryToggleText(false)} — Settings › Sessions turns it back on`)}
+          onRetryNow={() => conn.liveSend({ t: "session.netRetryNow", id: active.id }, NET_RETRY_NOW_SENT)}
         />
       )}
 

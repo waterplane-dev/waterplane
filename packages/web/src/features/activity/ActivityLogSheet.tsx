@@ -5,6 +5,7 @@
  * state it reads and the things it can do.
  */
 import { useMemo } from "react";
+import { repoLabel } from "@waterplane/shared";
 import { ActivitySheet } from "../../ActivitySheet";
 import { baseName } from "../../format";
 import { syncSnapshot } from "../../link";
@@ -36,7 +37,7 @@ export function ActivityLogSheet() {
     online={core.conn.status === "open"}
     hostSeenAt={syncSnapshot().lastSeenAt}
     laneLabel={core.queue.laneLabel}
-    repoName={(cwd) => core.world.repoForCwd(cwd)?.repoName ?? baseName(cwd)}
+    repoName={(cwd) => { const r = core.world.repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); }}
     // What lets a row's `AttachStrip` ask the host about the files its words
     // name. The same one mapping `PadSheet` is handed, not a second one.
     repoIdForCwd={(cwd) => core.world.repoForCwd(cwd)?.id ?? null}

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { RepoTarget } from "@waterplane/shared";
+import { repoLabel } from "@waterplane/shared";
 import { isCreateOp, type OutboxStatus } from "../../outbox";
 import { loadHiddenRepos } from "../../localState";
 import { baseName } from "../../format";
@@ -24,8 +25,8 @@ export interface LauncherViewCtx {
 export function useLauncherView(ctx: LauncherViewCtx) {
   const { repos, focusRepo, outbox, bl } = ctx;
   const [hiddenRepoIds, setHiddenRepoIds] = useState<Set<string>>(loadHiddenRepos);
-  const visibleRepos = useMemo(() => groupByRepo(repos.filter((r) => !hiddenRepoIds.has(r.id) && (!focusRepo || r.repoName === focusRepo))), [repos, hiddenRepoIds, focusRepo]);
-  const hiddenRepos = useMemo(() => groupByRepo(repos.filter((r) => hiddenRepoIds.has(r.id) && (!focusRepo || r.repoName === focusRepo))), [repos, hiddenRepoIds, focusRepo]);
+  const visibleRepos = useMemo(() => groupByRepo(repos.filter((r) => !hiddenRepoIds.has(r.id) && (!focusRepo || repoLabel(r) === focusRepo))), [repos, hiddenRepoIds, focusRepo]);
+  const hiddenRepos = useMemo(() => groupByRepo(repos.filter((r) => hiddenRepoIds.has(r.id) && (!focusRepo || repoLabel(r) === focusRepo))), [repos, hiddenRepoIds, focusRepo]);
   const hiddenRepoPaths = useMemo(() => new Set(hiddenRepos.map((r) => r.worktreePath)), [hiddenRepos]);
   /**
    * Which directories have an OPEN already in flight, from the send queue's own
@@ -57,7 +58,7 @@ export function useLauncherView(ctx: LauncherViewCtx) {
   // Worktree paths belonging to the focused repo (null = no focus). The baseName
   // fallback in cwdInFocus keeps sessions in a not-yet-discovered worktree visible.
   const focusPaths = useMemo(
-    () => (focusRepo ? new Set(repos.filter((r) => r.repoName === focusRepo).map((r) => r.worktreePath)) : null),
+    () => (focusRepo ? new Set(repos.filter((r) => repoLabel(r) === focusRepo).map((r) => r.worktreePath)) : null),
     [repos, focusRepo],
   );
   const cwdInFocus = (cwd: string) => !focusPaths || focusPaths.has(cwd) || baseName(cwd) === focusRepo;

@@ -98,7 +98,7 @@ export class SessionManager extends EventEmitter {
       backendField: (b) => backendField(b),
       // tmux.ts
       spawnBackend: (id, cwd, cols, rows, args, backend, launchEnv, dropEnv) => spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv),
-      reattach: (m) => reattach(this.core, m), persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
+      reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
       deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
       detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid) => adoptClaudeId(this.core, s, cid),
@@ -564,7 +564,7 @@ export class SessionManager extends EventEmitter {
   private newLimitState(): SessionLimit { return this.wall.newLimitState(); }
   private checkLimit(s: Session): void { this.wall.checkLimit(s); }
   private clearLimitTimer(s: Session): void { this.wall.clearLimitTimer(s); this.net.clear(s); } // …and a pending network retry (sessions/apiretry.ts) goes with the session
-  netRetryCancel(id: string): void { this.net.cancelById(id); } // the phone's Cancel on `SessionInfo.netRetry`
+  netRetryCancel(id: string): void { this.net.cancelById(id); } netRetryNow(id: string): void { this.net.retryNow(id); } netRetrySwitched(on: boolean): void { this.net.switched(on); } // the phone's Cancel / Retry now on `SessionInfo.netRetry`; the switch
 
   // ── The resume queue: `sessions/resume.ts` ───────────────────────────
 
@@ -621,7 +621,7 @@ export class SessionManager extends EventEmitter {
   anyPluginAnswer(plugin: string): boolean { return this.roster.anyPluginAnswer(plugin); }
 
   // ── drive (sessions/drive.ts): ending or letting go of a session, and reading its screen back.
-  kill(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): void { drive.kill(this.core, id, onShellsStopped, by); } haltAll(): ReturnType<typeof halt.haltSessions> { return halt.haltSessions(this.core, (id) => drive.kill(this.core, id, undefined, "you")); } // the emergency halt's kill (`sessions/haltall.ts`)
+  kill(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): void { drive.kill(this.core, id, onShellsStopped, by); } haltAll(): ReturnType<typeof halt.haltSessions> { return halt.haltSessions(this.core, (id) => drive.kill(this.core, id, undefined, "you")); } ourPanes(): ReturnType<typeof halt.ourPanes> { return halt.ourPanes(); } // the emergency halt's kill; our tmux panes for `api.sessionOf` (`sessions/haltall.ts`)
   /** A resume of a conversation whose session is already closed carries the
    *  reopen stack's prompts and tab name (`record.carryOfClosed`). A fork is a
    *  different conversation and carries nothing. */

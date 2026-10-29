@@ -266,8 +266,9 @@ export type NotifyOpen =
   | { to: "repohealth"; repoId: string }
   | { to: "tokens" }
   | { to: "plugin"; id: string }
-  /** That repo's (or worktree's) git view, showing the stored failure. */
-  | { to: "git"; repoId: string; verb?: "pull" | "push" }
+  /** That repo's (or worktree's) git view, showing the stored failure — or, for
+   *  `explain`, its Explain view on the answer that just came back. */
+  | { to: "git"; repoId: string; verb?: "pull" | "push" | "explain" }
   /** That repo's (or worktree's) build sheet, on the failed entry. */
   | { to: "build"; repoId: string; buildId?: string }
   /** That repo's readings sheet, on the exposure watch region. */

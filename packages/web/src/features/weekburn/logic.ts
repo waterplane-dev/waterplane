@@ -6,6 +6,7 @@
  * week" is offered, and what a running repo's row says.
  */
 import type { WeekBurnStatus } from "@waterplane/shared";
+import { isWeekBurnOrigin, repoLabel, twinWheres, type BacklogItem } from "@waterplane/shared";
 
 /** The chips for the stop line; the saved value is added when it is none of these. */
 export const STOP_CHOICES: readonly number[] = [80, 90, 95, 100];
@@ -36,7 +37,7 @@ export type SaveVerb =
   | { kind: "none"; why: string };
 
 export function saveVerb(picked: number, pickedThisWeek: boolean): SaveVerb {
-  if (picked > 0) return { kind: "save", label: pickedThisWeek ? "Change this week's pick" : "Pick these for this week" };
+  if (picked > 0) return { kind: "save", label: pickedThisWeek ? "Save this week's pick" : "Pick these for this week" };
   if (pickedThisWeek) return { kind: "cancel", label: "Cancel this week" };
   return { kind: "none", why: "Tick a repo to spend this week's budget on it." };
 }
@@ -81,41 +82,50 @@ export function runningWords(r: { posted: number; live: string | null; stoppedTe
 }
 
 /**
- * What ticking a repo DOES, said above the list: a checkbox with no consequence
- * named reads as a mystery (owner, 2026-10-26).
+ * What the burn DOES, as numbered steps at the top of the sheet: a checkbox
+ * with no consequence named reads as a mystery (owner, 2026-10-26), and one
+ * paragraph of it still did (owner, 2026-10-29: "I don't understand at all how
+ * it works and what will be executed"). `start` is `startLine`'s words or null
+ * while there is no plan.
  */
-export const PICK_NOTE =
-  "A ticked repo gets unattended sessions from the start time until the stop line, one at a time. " +
-  "Each makes one small fix to the repo's weakest reading and commits it on the current branch, only if the tests pass. Nothing is pushed.";
+export function howItWorks(a: { start: string | null; maxPerRepo: number | null; stopPct: number }): string[] {
+  const cap = a.maxPerRepo != null ? `up to ${a.maxPerRepo} a week` : "a few a week";
+  return [
+    `${a.start ? `${a.start.replace(/^Starts/, "From")}, the` : "From the start time, the"} desktop opens a fresh Claude session in each ticked repo — one per repo at a time, the next only after the last one ends, ${cap}. Nobody watches them.`,
+    "Each session gets the prompt below: what to work on (yours, or the repo's weakest health reading), then fixed safety rules.",
+    "It makes one small change, runs the repo's tests and commits on the current branch only if they pass. Nothing is pushed — the commits wait in Git for you.",
+    `No new session starts once the week is at ${a.stopPct}% or resets within 20 min. One already running finishes.`,
+  ];
+}
 
-export interface BurnRepo { worktreePath: string; repoName: string; branch: string; isPrimary: boolean }
+export type TaskMode = "health" | "own";
+
+export interface BurnRepo { worktreePath: string; repoName: string; branch: string; isPrimary: boolean; where?: string }
 export interface BurnRow { dir: string; title: string; where?: string }
 
 /**
  * The repos the sheet offers. A burn commits on a repo's current branch, so a
  * linked worktree (an agent's leftover `worktree-agent-…`) is not a place to
  * pick — it is listed only when it is already picked, so a pick is never hidden.
- * Two clones with one name (`ciqkit` twice) get `where`: the shortest trailing
- * part of their paths that tells them apart (`garmin/ciqkit`, `out-ciqkit/ciqkit`).
+ * Two clones with one name (`ciqkit` twice — on 2026-10-28 a burn went to the
+ * rewrite leftover) are titled by shared `repoLabel` (`ciqkit · garmin/`) and
+ * carry their whole path as `where`. The host's `where` is used; an older host
+ * sends none, so the primaries are compared here with the same `twinWheres`.
  */
 export function burnRows(repos: readonly BurnRepo[], picked: readonly string[]): { rows: BurnRow[]; hidden: number } {
   const shown = repos.filter((r) => r.isPrimary || picked.includes(r.worktreePath));
-  const rows: BurnRow[] = shown.map((r) => ({
-    dir: r.worktreePath,
-    title: r.isPrimary ? r.repoName : `${r.repoName} · ${r.branch}`,
-  }));
-  const parts = (dir: string) => dir.split("/").filter(Boolean);
-  for (const row of rows) {
-    const twins = rows.filter((o) => o.title === row.title);
-    if (twins.length < 2) continue;
-    const mine = parts(row.dir);
-    for (let n = 2; n <= mine.length; n++) {
-      const tail = mine.slice(-n).join("/");
-      if (twins.every((o) => o === row || parts(o.dir).slice(-n).join("/") !== tail)) { row.where = tail; break; }
-    }
-    row.where ??= row.dir;
-  }
+  const local = twinWheres(repos.filter((r) => r.isPrimary).map((r) => ({ name: r.repoName, dir: r.worktreePath })));
+  const rows: BurnRow[] = shown.map((r) => {
+    const where = r.where ?? (r.isPrimary ? local.get(r.worktreePath) : undefined);
+    const name = repoLabel({ repoName: r.repoName, where });
+    return { dir: r.worktreePath, title: r.isPrimary ? name : `${name} · ${r.branch}`, ...(where ? { where: r.worktreePath } : {}) };
+  });
   return { rows, hidden: repos.length - shown.length };
+}
+
+/** The rows the burn wrote in one repo, any state — the ids the backlog cut opens, so the count is the cut. */
+export function burnRowIds(items: readonly Pick<BacklogItem, "id" | "repoDir" | "origin">[], dir: string): string[] {
+  return items.filter((it) => it.repoDir === dir && isWeekBurnOrigin(it.origin)).map((it) => it.id);
 }
 
 /** The line under the list for worktrees left out; absent for none. */

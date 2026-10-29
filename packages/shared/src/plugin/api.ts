@@ -107,6 +107,32 @@ export interface PluginSession {
   mayAnswer: boolean;
 }
 
+/** What `sessionOf` is asked: claims a requesting process makes about itself (same uid, so claims). */
+export interface PluginSessionQuery {
+  /** The requester's `TMUX_PANE` ("%209"). Believed only when a ppid walk from `pid` agrees. */
+  tmuxPane?: string | null;
+  /** The requesting process; its ppid walk (≤12 hops) must reach one of our panes' pids. */
+  pid?: number | null;
+  /** Its working directory: a scratchpad naming a conversation id, else a repo dir. */
+  cwd?: string | null;
+}
+
+/**
+ * `sessionOf`'s answer (2.4): the live waterplane session a process belongs to, and HOW the host
+ * knew — `pane` (the reported pane is ours and the pid's ancestry reaches it), `pid` (the ancestry
+ * alone reached one of our panes), `scratchpad` (the cwd names a live session's conversation id),
+ * `cwd` (the cwd is under exactly one live session's directory). Prompts are capped at 200 chars;
+ * every field past `how` is absent when the session has none.
+ */
+export type PluginSessionMatch = PluginSession & {
+  how: "pane" | "pid" | "scratchpad" | "cwd";
+  tabTitle?: string;
+  lastPrompt?: string;
+  pinnedPrompt?: string;
+  lastPromptAt?: number;
+  claudeSessionId?: string;
+};
+
 export interface HostPluginApi {
   readonly id: string;
   /** `<state dir>/plugins/<id>/` — the plugin's own files. Created on activate. */
@@ -135,6 +161,12 @@ export interface HostPluginApi {
     { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }>): () => void;
 
   session(id: string): PluginSession | null;
+  /**
+   * Which live session spawned a process (2.4) — the ladder in `plugintoolkit/sessionof.ts`.
+   * Null when no rung answers exactly one session; a probe that fails drops to the next rung,
+   * never to a guess. Hands the plugin a ≤200-char copy of the person's last prompt.
+   */
+  sessionOf(q: PluginSessionQuery): Promise<PluginSessionMatch | null>;
   /** The last `lines` lines of the rendered screen/scrollback, plain text. */
   scrollback(id: string, lines?: number): string;
   /**

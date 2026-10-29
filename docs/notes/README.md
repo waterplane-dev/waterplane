@@ -1,6 +1,6 @@
 # Design notes
 
-CLAUDE.md is capped at **12k chars** by `tools/claudemd.test.mjs` and is the *rules* file: short,
+CLAUDE.md is capped at **12.8k chars** by `tools/claudemd.test.mjs` and is the *rules* file: short,
 load-bearing, always in context. (It was ~150k when these notes were split out of it, which is the
 size this sentence used to quote — the cap has been tightened by more than ten times since, and
 raising it is a decision about cost rather than a way to make the check pass.)

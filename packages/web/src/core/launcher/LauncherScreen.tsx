@@ -11,7 +11,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { useBackStep } from "../../backStep";
 import { Archive, ArrowDownUp, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
-import { BRAND, branchLabel } from "@waterplane/shared";
+import { BRAND, branchLabel, repoLabel } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
@@ -592,7 +592,7 @@ export function LauncherScreen(p: LauncherProps) {
             <div className="list">
               {visibleRepos.map((t) => (
                 <Row key={t.id} as="button" onClick={() => { setShotPick(false); void takeShot(t.id); }}>
-                  <RowTitle>{t.repoName}</RowTitle>
+                  <RowTitle>{repoLabel(t)}</RowTitle>
                   {branchLabel(t) && <RowSub>{branchLabel(t)}</RowSub>}
                 </Row>
               ))}

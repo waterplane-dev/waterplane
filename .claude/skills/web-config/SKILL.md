@@ -7,12 +7,12 @@ description: waterplane phone client — settings, hosts, models and sign-in (pa
 
 How this app is configured and what it is allowed to launch: the Settings screen and its sync, sign-in, the local runner, model and backend choice, and the health readout. Router: `web`. Reasoning: [web.md](../../../docs/notes/web.md).
 
-- `features/cliHealth/CliHealthChip.tsx` + `CliHealthSheet.tsx` (src root) — the health board's readout: one row per signal, and **nothing is
+- `features/cliHealth/CliHealthChip.tsx` + `features/cliHealth/CliHealthSettings.tsx` + `src/CliHealthSheet.tsx` — the health board's readout: one row per signal, and **nothing is
   re-derived** — verdict, sentence, order and prose all come from `@waterplane/shared`. **The unprompted
   mark is the feature**: an amber/red chip in the launcher TOPBAR (not beside "N at limit", whose
   section is absent exactly when a broken heuristic matters), plus one toast when an arriving rollup
   is WORSE than the last seen. `healthy` and `unknown` render nothing.
-- `PluginsSettings.tsx` (`features/plugins`, with its session-menu group and the decision log) —
+- `PluginsSettings.tsx` (`features/plugins`, with its session-menu group and the decision log; manager and updates: `features/plugins/README.md` — the `updates` overlay opens on exactly the due rows, "n of N") —
   plugin UI per CLAUDE.md (`local/extension-boundary`); a plugin without it DECLARES fields, actions, toggles, a badge and a status
   line (`shared/plugin.ts`) and these draw them with the app's own controls. A plugin's fields NEST (no `id`) inside the one catalogued row `plugins`. `plugin.set` carries ONLY
   the changed key; a typed number out of range is refused in words (`parseFieldInput`), never
@@ -46,7 +46,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
 - `settings.ts` / `hostUrl.ts` / `hints.ts` + `settingsPush.ts` — three places where a rule is enforced by **patching a
   global** rather than a helper call sites must remember. All three fail silently otherwise, weeks
   later, on the device you aren't holding. Keep it that way. **`AdoptGuard` may RETURN the string to
-  write** — the pad is the one key that does, merging on adopt; a merge that produced something the
+  write** — the pad (and the shared tab-open history, `LS.tabOpensShared`) are the keys that do; the pad merges on adopt; a merge that produced something the
   host lacks is re-stamped STRICTLY newer (`ts + 1` at least: equal loses, and a skewed clock must
   not park it) and pushed, which is what makes the exchange converge in two round trips.
   **Both pushes are `settingsPush.ts`'s rules, node-tested** (this file patches a global and cannot
@@ -80,7 +80,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
   starts no turn, so the verified path would press Return into whatever came next).
   **Non-`http(s)` is refused** — screen-scraped text is not a link.
 - `ShellLinksBar.tsx` + `shellLinks.ts` + `features/shellLogins/` — **a shell session's `LoginBar`**
-  (`LoginBar` stays claude's). Links the host read off the screen or a `$BROWSER` call
+  (`LoginBar` stays claude's). **A link with a `user@` part is never offered to open** — it can disguise the real site — only copy, with the sentence why (`shellLinks.ts` `SUSPICIOUS_LINK`). Links the host read off the screen or a `$BROWSER` call
   (`SessionInfo.links`): *open*, *copy*, a *copy code* button, *paste code* only while `awaitingCode`
   (RAW path, as `LoginBar`). A `local` link is a SENTENCE, never an Open button. `shellLinks.ts` is
   the pure wording. NOT `shellLink.ts` (the Android background link, `web-files`). The logins sheet
@@ -139,7 +139,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
   the OPERATOR's terms. **Never restate a third party's data policy**; the test forbids naming a vendor. **"Free"
   is MEASURED** (`models.zeroCost`, 0/0 from the binary), never inferred from a `-free` name, and an
   unknown price is never drawn as free.
-- `backendCaps.ts` — the pure capability slice for a multi-backend host. The wire also states the effort ladder (`caps.efforts`; absent with `effort` true is an older host = claude's), and `questions`/`plan`/`usage`/`agents`/`conversations`, absent where nothing answers — advertised, but only `efforts` is read here so far. `showBackendPicker`
+- `backendCaps.ts` — the pure capability slice for a multi-backend host. The wire also states the effort ladder (`caps.efforts`; absent with `effort` true is an older host = claude's), and `questions`/`plan`/`usage`/`agents`/`conversations`, absent where nothing answers — read here: `efforts`, `modes` and `commands` (opt-in, never inherited), `usage`, `launchModes` (absent inherits `permissionModes`); `conversations` in the tools feature's logic; only `questions`/`plan`/`agents` are advertised but unread. `showBackendPicker`
   renders NOTHING when the `backends` hello frame never arrived (old host ⇒ UI pixel-identical),
   and `launchFor()` strips a backend/effort/permissionMode the target cannot satisfy off EVERY
   `session.create`. An absent capability becomes a SENTENCE (`capReason`/`reasonText`,

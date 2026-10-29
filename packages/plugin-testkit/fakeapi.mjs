@@ -88,11 +88,12 @@ export function fakeApi(opts = {}) {
   const calls = {
     backend: [], onHook: [], setStatus: [], onSettings: [], on: [], setBadge: [], decision: [], ruleAllows: [], bind: [], log: [],
     seedSettings: [], suggest: [], answer: [], meter: [], notify: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
-    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFix: [],
+    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFix: [], sessionOf: [],
   };
   const screens = new Map();
   const sessions = new Map();
   const scrollbacks = new Map();
+  let sessionOfAnswer = null;
   let rules = [];
   let values = { ...(opts.settings ?? {}) };
   const declared = new Set([...(manifest?.env ?? []), ...(opts.declare ?? [])]);
@@ -114,6 +115,7 @@ export function fakeApi(opts = {}) {
     on: (event, fn) => reg(calls.on, { event, fn }),
     session: (sid) => sessions.get(sid) ?? null,
     scrollback: (sid) => scrollbacks.get(sid) ?? "",
+    sessionOf: async (q) => { calls.sessionOf.push(q); return sessionOfAnswer; }, // 2.4: whatever `_setSessionOf` set, else null
     // ── toolkit (2.0) ──
     bindConversation: (look) => { calls.bind.push(look); return bindConversation(look); },
     tail: fakeTail,
@@ -176,6 +178,7 @@ export function fakeApi(opts = {}) {
     _setScreen(sid, rows) { screens.set(sid, rows); },
     _setSession(sid, s) { sessions.set(sid, s); },
     _setScrollback(sid, text) { scrollbacks.set(sid, text); },
+    _setSessionOf(match) { sessionOfAnswer = match ?? null; },
     _setSettings(v) { values = { ...values, ...v }; for (const fn of calls.onSettings) fn({ ...values }); },
   };
   // HostPluginApi still carries the deprecated `<legacy slug>Dir` alias of stateDir; the name comes

@@ -23,7 +23,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   budgetReasonText, describeRule, ruleRecurs, scheduleActionText, typedName, DEFAULT_GRACE_MIN, DRAFT_KEPT_TOAST, DRAFT_REFUSED_TOAST,
-  repoBranchLabel,
+  repoBranchLabel, repoLabel,
 } from "@waterplane/shared";
 import type {
   ClientMessage, Intent, IntentDraft, IntentPatch, IntentTarget, LaunchOpts, RepoTarget, ScheduleEntry, SessionBudget, SessionInfo, UsageInfo,
@@ -154,7 +154,8 @@ export function useSend(deps: SendDeps) {
     // and the receipt says so — four rows re-timed to "now" read as gone.
     const repoNames = [...new Set(ids.flatMap((id) => {
       const cwd = intents.find((x) => x.id === id)?.cwd;
-      const name = cwd ? (repoForCwd(cwd)?.repoName ?? baseName(cwd)) : "";
+      const repo = cwd ? repoForCwd(cwd) : null;
+      const name = repo ? repoLabel(repo) : cwd ? baseName(cwd) : "";
       return name ? [name] : [];
     }))];
     // The *held until* clause only when the budget holds one of THESE rows — a
@@ -487,7 +488,8 @@ export function useSend(deps: SendDeps) {
        * keep the sentence they always had.
        */
       const timed = i.target.kind === "repo" && !ruleRecurs(i.when.rule);
-      const where = timed ? ` in ${repoForCwd(i.target.kind === "repo" ? i.target.cwd : "")?.repoName ?? "that repo"}` : "";
+      const at = repoForCwd(i.target.kind === "repo" ? i.target.cwd : "");
+      const where = timed ? ` in ${at ? repoLabel(at) : "that repo"}` : "";
       // A timed one-off is a backlog row under the entry's own id: once the list
       // holds it, the slot check may ask about the rows it runs beside.
       if (timed && i.target.kind === "repo") expectSlotAsk(entry.id, i.target.cwd);

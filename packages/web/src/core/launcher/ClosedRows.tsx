@@ -7,10 +7,10 @@ import { PromptPair } from "../../PromptPair";
 import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
 import { useState } from "react";
 import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Trash2, X, XCircle } from "lucide-react";
-import { branchLabel, trimDefaultBranch } from "@waterplane/shared";
+import { branchLabel, repoLabel, trimDefaultBranch } from "@waterplane/shared";
 import { ConfirmButton } from "../../Confirm";
 import { SessionName } from "../../SessionName";
-import { ago, baseName, repoAccentStyle } from "../../format";
+import { ago, repoAccentStyle } from "../../format";
 import { launchLabel, resumeHint, resumeIdOf } from "../../sessionFacts";
 import { backendMark, hasCap, isShellBackend } from "../../backendCaps";
 import { showToast } from "../../toast";
@@ -153,7 +153,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           // readings under them, the repo's counts as chips at the foot.
           // `.closed-card`, never `data-sid`: that attribute is the drag and
           // scroll lookup for LIVE rows.
-          <div key={c.id} className={`row-wrap closed-card${isAutoClosed(c) ? " closed-auto-row" : ""}`} style={repoAccentStyle(repoForCwd(c.cwd)?.repoName ?? baseName(c.cwd))}>
+          <div key={c.id} className={`row-wrap closed-card${isAutoClosed(c) ? " closed-auto-row" : ""}`} style={repoAccentStyle(m.sessionRepoName(c))}>
             {/* The whole card still reopens on tap: the row button is
                 `display: contents` (its children are the grid's items), and
                 every part that is not itself a control lives inside it. */}
@@ -281,7 +281,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         conversations in one repo both fell back to `r.cwd` and React was
         handed the same key twice. */}
     {foldOpen && recentRows.map((r) => (
-      <Row key={resumeIdOf(r) ?? r.cwd} kind="wrap" style={repoAccentStyle(repoForCwd(r.cwd)?.repoName ?? baseName(r.cwd))}>
+      <Row key={resumeIdOf(r) ?? r.cwd} kind="wrap" style={repoAccentStyle(m.sessionRepoName(r))}>
         <Row as="button" kind="grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
           <RowTitle>{r.title}</RowTitle>
           <RowSub><RotateCw size={12} /> {isShell(r) ? "new shell here" : "resume"}</RowSub>
@@ -324,7 +324,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           {hiddenRepos.map((t) => (
             <div key={t.id} className={`row-wrap ${t.isPrimary ? "" : "row-wt"}`}>
               <Row as="button" kind="grow" onClick={() => openRepo(t)}>
-                <RowTitle>{t.isPrimary ? t.repoName : <span className="wt-branch">{t.branch}</span>}</RowTitle>
+                <RowTitle>{t.isPrimary ? repoLabel(t) : <span className="wt-branch">{t.branch}</span>}</RowTitle>
                 {(t.isPrimary ? branchLabel(t) : "worktree") && <RowSub>{t.isPrimary ? branchLabel(t) : "worktree"}</RowSub>}
               </Row>
               <button className="row-act" title="show repo" onClick={() => toggleHideRepo(t.id)}><Eye size={ICON} /></button>

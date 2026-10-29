@@ -7,9 +7,9 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { ArrowDown, ArrowUp, CalendarClock, DoorClosed, DoorOpen, Flag, Gauge, Hand, History, Hourglass, Play, Sparkles, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, DoorClosed, DoorOpen, Flag, Flame, Gauge, Hand, History, Hourglass, Play, Sparkles, Wallet } from "lucide-react";
 import type { RowFacts } from "./BacklogRow";
-import { budgetWaived } from "@waterplane/shared";
+import { budgetWaived, FROM_WEEKBURN_WORDS, isWeekBurnOrigin } from "@waterplane/shared";
 import { budgetChipWords } from "../budgetInput";
 import { launchClause, launchWords } from "../sendIntent";
 import {
@@ -254,6 +254,17 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         </span>
                       );
                     })()}
+                    {/* The week-end burn wrote this row (`origin: weekburn:<week>`):
+                        said on the row, and a tap opens the burn where it is
+                        picked. Unattended work must be recognisable as such. */}
+                    {isWeekBurnOrigin(it.origin) && (p.nav.onOpenWeekBurn ? (
+                      <button className="bl-chip bl-merged" title="open the week-end burn — what picked this repo and wrote this row"
+                        onClick={() => { track("action:backlog.fromweekburn"); p.nav.onOpenWeekBurn!(); }}>
+                        <Flame size={11} style={{ verticalAlign: "-1px" }} /> {FROM_WEEKBURN_WORDS}
+                      </button>
+                    ) : (
+                      <span className="bl-chip bl-merged"><Flame size={11} style={{ verticalAlign: "-1px" }} /> {FROM_WEEKBURN_WORDS}</span>
+                    ))}
                     {/* **Two things set this now, so the words are true of
                         both.** It was `placed by you` / "you dragged this one
                         here", which was the whole story while a drag was the

@@ -49,6 +49,11 @@ export interface SerialSessionState extends LaneSessionState {
    *  a wall for a lane — the answer IS the next prompt — but an automatic
    *  predecessor that asked one holds the serial row behind it. */
   asking?: boolean;
+  /** Work in this session is STALLED on the API (shared `netRetryStalls`: the
+   *  host's net retry gave up, or a stall probe is under way). Only the serial
+   *  SENTENCE reads it: a row held behind such a session is told why the repo
+   *  is taken, never held any longer or shorter for it. Absent = not stalled. */
+  netStalled?: boolean;
 }
 
 /**
@@ -138,7 +143,9 @@ export function sendEligible(
 export interface SerialHolder {
   sessionId?: string;
   name?: string;
-  wall: SessionWall | "starting";
+  /** `netStalled`: the holder is work STALLED on the API (a relabel of the
+   *  `starting`/`sessionBusy` claim it makes — never a hold of its own). */
+  wall: SessionWall | "starting" | "netStalled";
 }
 
 /**
@@ -174,12 +181,12 @@ export function serialHolders(
     if (s.running === false) continue;
     if (opts.automaticOnly && !s.automatic) continue;
     const wall = sessionWall(s) ?? (opts.automaticOnly && s.asking ? "awaitingAnswer" : null);
-    if (wall) add(serialGroup(s.cwd), { sessionId: s.id, wall, ...(s.name ? { name: s.name } : {}) });
+    if (wall) add(serialGroup(s.cwd), { sessionId: s.id, wall: wall === "sessionBusy" && s.netStalled ? "netStalled" : wall, ...(s.name ? { name: s.name } : {}) });
   }
   for (const o of occupied) {
     const s = o.sessionId ? sessions.find((x) => x.id === o.sessionId) : undefined;
     const name = s?.name || o.name;
-    add(serialGroup(o.cwd), { ...(o.sessionId ? { sessionId: o.sessionId } : {}), wall: "starting", ...(name ? { name } : {}) });
+    add(serialGroup(o.cwd), { ...(o.sessionId ? { sessionId: o.sessionId } : {}), wall: s?.netStalled ? "netStalled" : "starting", ...(name ? { name } : {}) });
   }
   return out;
 }
@@ -187,7 +194,7 @@ export function serialHolders(
 /** The serial sentence when nobody said who holds the group. */
 export const SERIAL_WAIT_TEXT = "one at a time in this repo — waiting for the session before it";
 
-const SERIAL_WALL_WORDS: Record<Exclude<SerialHolder["wall"], "awaitingAnswer">, string> = {
+const SERIAL_WALL_WORDS: Record<Exclude<SerialHolder["wall"], "awaitingAnswer" | "netStalled">, string> = {
   sessionBusy: "working",
   limit: "on a usage limit",
   starting: "starting a queued job",
@@ -199,7 +206,7 @@ const SERIAL_NAME_MAX = 48;
 /** Lead order: an open question first (it is the one a PERSON can clear, and
  *  the reason the owner asked for this hold), then any other session wall,
  *  then a `starting` claim. Stable within a rank. */
-const SERIAL_RANK: Record<SerialHolder["wall"], number> = { awaitingAnswer: 0, limit: 1, sessionBusy: 1, starting: 2 };
+const SERIAL_RANK: Record<SerialHolder["wall"], number> = { awaitingAnswer: 0, netStalled: 0, limit: 1, sessionBusy: 1, starting: 2 };
 
 /**
  * The holder a serial sentence NAMES, and the one a row offers to open — one
@@ -215,7 +222,9 @@ export function serialLead(holders: readonly SerialHolder[] | undefined): Serial
  * "one at a time in this repo — waiting for 'fix webkit sync' (working)", or
  * "one at a time in this repo — waiting for your answer in 'fix webkit sync'"
  * when the predecessor is parked on a question (a box, an unparsable dialog,
- * or — for an automatic session — a turn that ended asking in prose).
+ * or — for an automatic session — a turn that ended asking in prose), or
+ * "one at a time in this repo — waiting behind a stalled item: API unreachable ('x')" when the work holding
+ * the repo is stalled on the API (`netStalled`).
  *
  * `serialLead` picks the one named; the rest are "+N more". A claim with
  * no session and no name is "an automatic job is starting here". No holders
@@ -230,6 +239,12 @@ export function serialWaitText(holders: readonly SerialHolder[] | undefined): st
   }
   const raw = (first.name ?? "").trim();
   const name = raw.length > SERIAL_NAME_MAX ? `${raw.slice(0, SERIAL_NAME_MAX - 1)}…` : raw;
+  if (first.wall === "netStalled") {
+    // The predecessor is not working and not coming back by itself soon: its
+    // turn could not reach the API. Say so, or the row reads as a queue that
+    // never moves (R-connection-024).
+    return `one at a time in this repo — waiting behind a stalled item: API unreachable${name ? ` ('${name}')` : ""}${more}`;
+  }
   if (first.wall === "awaitingAnswer") {
     return `one at a time in this repo — waiting for your answer in ${name ? `'${name}'` : "the session before it"}${more}`;
   }

@@ -135,7 +135,7 @@ test("the hook blob carries every lifecycle event the host listens for", () => {
   const settings = JSON.parse(HOOKS);
   assert.deepEqual(
     Object.keys(settings.hooks).sort(),
-    ["Notification", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "UserPromptSubmit"],
+    ["Notification", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "StopFailure", "UserPromptSubmit"],
     "dropping one of these degrades that signal to silence-guessing, invisibly",
   );
   const cmd = settings.hooks.Stop[0].hooks[0].command;

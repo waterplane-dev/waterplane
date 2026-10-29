@@ -1,6 +1,6 @@
 ---
 name: web-send
-description: waterplane phone client — typed words to a confirmed delivery (packages/web/src): ws.ts, the send queue (core/queue: send.ts the ONE flusher, outbox.ts the persistence and the pad), sendConfirm.ts, attachments.ts, PadSheet.tsx, RepoPicker.tsx, PromptComposer.tsx + useCompose.ts, dictation (useVoice.ts, dictateHold.ts, dictateQueue.ts), composeSend.ts + NextPrompt.tsx, SendSheet.tsx + sendIntent.ts, QueueSheet.tsx. Load BEFORE changing how a prompt is composed, queued, retried, targeted, scheduled, dictated or confirmed — most rules here exist because words ran twice or were silently deleted.
+description: waterplane phone client — typed words to a confirmed delivery (packages/web/src): ws.ts, the send queue (core/queue: send.ts the ONE flusher; outbox.ts beside it in src/, the persistence and the pad), sendConfirm.ts, attachments.ts, PadSheet.tsx, RepoPicker.tsx, PromptComposer.tsx + useCompose.ts, dictation (useVoice.ts, dictateHold.ts, dictateQueue.ts), composeSend.ts + NextPrompt.tsx, SendSheet.tsx + sendIntent.ts, QueueSheet.tsx. Load BEFORE changing how a prompt is composed, queued, retried, targeted, scheduled, dictated or confirmed — most rules here exist because words ran twice or were silently deleted.
 ---
 
 # waterplane web — typed words to a confirmed send
@@ -11,13 +11,13 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   on `freeze`/`pagehide`, last-resort reload gated on `/api/health` actually answering. **A dial
   stuck in CONNECTING is cut by its fuse** (`dialFuse.ts`, 10 s doubling to 40 s) — it fires no close.
 - `core/queue/send.ts` + `core/queue/useQueue.ts` —
-  **the ONE send path and flusher** (among others: `logic.ts`, `verbs.ts`, `migrate.ts`, `pending.ts`, `store.ts`, `wire.ts`, `uploads.ts`) (`input`/`backlog`/`upload`/`op`). One delivery in flight per lane; retries only with the same ackId; an attempt rolled back when the socket wasn't open; cap enforced on the way IN (`useQueue.ts`); every attached file parked to IndexedDB before it can be lost. Timing constants are `logic.ts`'s; the verbs (`handToDesktop`, `toggleHoldQueued`) are `verbs.ts`'s. `newAckId` is defined in `outbox.ts`; `core/queue` holds the 10 queue mint sites (`QUEUE_SITES`) and `queue.test.mjs`'s `ELSEWHERE` pins every mint outside it (App.tsx 1, core/launch/useLaunch.ts 3, core/pluginCalls.ts 1, core/send/useSend.tsx 1, features/backlog/actions.ts 2, outbox.ts 2) — a new mint site is a new line in that test. `migrate.ts`: `migratePadRescue` and `migrateGiveUps` — the deleted give-ups ledger comes back as `failed` rows with a FRESH ackId (the `LS.giveups` key is kept, its source never deleted; `activityDismiss.ts` files a row without deleting it).
+  **the ONE send path and flusher** (among others: `logic.ts`, `verbs.ts`, `migrate.ts`, `pending.ts`, `store.ts`, `wire.ts`, `uploads.ts`) (`input`/`backlog`/`upload`/`op`). One delivery in flight per lane; retries only with the same ackId; an attempt rolled back when the socket wasn't open; cap enforced on the way IN (`useQueue.ts`); every attached file parked to IndexedDB before it can be lost. Timing constants are `logic.ts`'s; the verbs (`handToDesktop`, `toggleHoldQueued`) are `verbs.ts`'s. `newAckId` is defined in `outbox.ts`; `core/queue` holds the 10 queue mint sites (`QUEUE_SITES`) and `queue.test.mjs`'s `ELSEWHERE` pins every mint outside it (App.tsx 1, core/launch/useLaunch.ts 3, core/pluginCalls.ts 1, core/send/useSend.tsx 1, features/backlog/actions.ts 2, outbox.ts 2 — those two are not ack ids: an inbox filename suffix and `padNoteId()`) — a new mint site is a new line in that test. `migrate.ts`: `migratePadRescue` and `migrateGiveUps` — the deleted give-ups ledger comes back as `failed` rows with a FRESH ackId (the `LS.giveups` key is kept, its source never deleted; `activityDismiss.ts` files a row without deleting it).
 - `outbox.ts` —
   drafts, the pad and the entry types the queue moves. Queued opens carrying a prompt are **serialized per repo by default**.
   **Seeding a sheet draft rescues first** (`seedSheetDraft` + `shared/pad.ts`'s `draftToRescue`;
   enforced, with its reason, by lint `local/no-draft-clobber`). The old draft becomes a PAD NOTE and is SAID; `seeded`/`kept`/**`refused`**, and on a refusal the
   draft is left exactly where it is —
-  **and the SEED then drops its `padId`/`ackId`** (`seedAfterRescue`): the sheet is composing the
+  **and the SEED then drops its `padId`/`ackId`** (`seedAfterRescue`, `sendIntent/sendTypes.ts`, called from `core/send/useSend.tsx`): the sheet is composing the
   rescued draft, so Send must not retire the note or the row those OTHER words came from.
   **`removePadNotes` (with `addPadNote`) is the one pad delete** — every removal path uses it, because a dispatch with
   no tombstone is a note the other device sends a second time.
@@ -38,7 +38,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   delete everywhere. **It REFUSES rather than sheds** — the editor stays open with the buffer and
   the reason, checked BEFORE the buffer is cleared. **`file it`** (only where the note's `cwd`
   resolves; nothing drawn where it does not) is `queueBacklog`'s existing `mode: "backlog"`, **no
-  `label`** so the row arrives untitled by anybody, and the note goes only after the row is queued.
+  `label`** so the row arrives untitled by anybody, and the note goes only after the row is queued; it then opens that repo's backlog on the new row (`features/pad/actions.ts`).
   `BootGuard`'s reset keeps `waterplane.syncTs`, and `waterplane.padRescue` + its migrated mark until
   `migratePadRescue` has read it RAW (never through the old TTL-applying reader) exactly once —
   **every rule about those ten notes is `padMigrate.ts`'s `migrateRescueRows`**, node-tested, `core/queue/migrate.ts`'s
@@ -71,7 +71,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
 - `QueueSheet.tsx` —
   the flat sheet (+ `features/queue/`) over the queue (queued, in flight, failed, by lane) and the launches the desktop holds until their files land. Every queue-row action is a `queue.verbs.*`; the two held-launch taps are `liveSend` frames (`launch.cancel`, `launch.run`), and the `launch.run` one is pinned by `bulkverbs.test.mjs`.
 - `composeSend.ts` + `NextPrompt.tsx` / `nextPromptState.ts` + `sendMemory.ts` — **the compose bar's split button and
-  the strip above it.** `.send-more` restates `flex: 0 0 auto` (`.row-more`'s `flex: 0 0 100%` is a HEIGHT inside the compose column). Two modes, `Send` and `When free`, **one row that runs NOTHING**
+  the strip above it.** `.send-more` restates `flex: 0 0 auto` (`.row-more`'s `flex: 0 0 100%` is a HEIGHT inside the compose column). Two modes, `now` and `when it's free` (`composeSend.ts`), **one row that runs NOTHING**
   (*keep it on the pad* → `addPadNote` with the session's `cwd`: no target, no trigger, out of
   reach of `auto`, filed onto a backlog later only by a person — it may never
   be worded as *queued*/*scheduled*, and a refusal leaves the words in the box), plus ONE errand

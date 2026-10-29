@@ -28,6 +28,18 @@ test("repolist: a single-worktree repo is read off HEAD, branch and detached ali
   assert.equal(by.b.branch, "(detached)");
 });
 
+test("repolist: two clones with one folder name carry `where`, the shortest parent tail that tells them apart", async () => {
+  const root = mkdtempSync(join(tmpdir(), "repolist-"));
+  fakeRepo(join(root, "garmin", "ciqkit"), "ref: refs/heads/main\n");
+  fakeRepo(join(root, "rewrite", "out-ciqkit", "ciqkit"), "ref: refs/heads/main\n");
+  fakeRepo(join(root, "alone"), "ref: refs/heads/main\n");
+  const ts = await discoverTargets(root);
+  const where = (dir) => ts.find((t) => t.worktreePath === realpathSync(dir))?.where;
+  assert.equal(where(join(root, "garmin", "ciqkit")), "garmin/");
+  assert.equal(where(join(root, "rewrite", "out-ciqkit", "ciqkit")), "out-ciqkit/");
+  assert.equal(where(join(root, "alone")), undefined);
+});
+
 test("repolist: concurrent scans share one, and each caller gets its own copies", async () => {
   const root = mkdtempSync(join(tmpdir(), "repolist-"));
   fakeRepo(join(root, "a"), "ref: refs/heads/main\n");

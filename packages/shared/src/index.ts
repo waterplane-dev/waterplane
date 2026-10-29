@@ -285,6 +285,10 @@ export * from "./changebrief.js";
  *  into one must keep every one). */
 export * from "./itempaths.js";
 
+/** Two discovered repos with one name, told apart: the host's `RepoTarget.where`
+ *  and the one label every surface names a repo by. */
+export * from "./repotwins.js";
+
 // A URL the terminal GRID broke across rows, put back together — what makes a
 // `/login` link on a phone something you can tap instead of transcribe.
 export * from "./urls.js";

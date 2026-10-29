@@ -11,7 +11,7 @@
  * - `hold` — after a resume came back still blocked, how long nothing else may
  *   spend an attempt. A fact about the ACCOUNT, belonging to no one session.
  */
-import type { LimitResumeMode, NetRetryConfig } from "@waterplane/shared";
+import type { LimitResumeMode } from "@waterplane/shared";
 import { createStore, useStore } from "../../sdk";
 
 export interface LimitCfg { auto: boolean; mode: LimitResumeMode; hold: number | null }
@@ -29,13 +29,9 @@ export function useLimitCfg(): LimitCfg {
 }
 
 /**
- * The network-error retry switch (`netretry.config`, host `netretrycfg.ts`).
- * Null until the host has said: an older host never sends it, and its Settings
- * row is then ABSENT rather than a switch that reaches nothing. ONE writer:
- * `onNetRetryConfig` in `actions.ts`.
+ * The network-error retry switch (`netretry.config`, host `netretrycfg.ts`):
+ * the store lives in the top-level `netRetryCfg.ts`, because a stalled backlog
+ * or Activity row draws the same switch and may not import a feature. ONE
+ * writer still: `onNetRetryConfig` in `actions.ts`.
  */
-export const netRetryCfg = createStore<NetRetryConfig | null>(null);
-
-export function useNetRetryCfg(): NetRetryConfig | null {
-  return useStore(netRetryCfg);
-}
+export { netRetryCfg, useNetRetryCfg } from "../../netRetryCfg";

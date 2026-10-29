@@ -490,12 +490,16 @@ const onBudgetSet: Route<"budget.set"> = (a) => {
 
 /**
  * The network-error retry switch (`netretrycfg.ts`, R-connection-025). Off
- * cancels every pending retry through the slice's own cancel path, which also
- * clears each session's bar; broadcast, as the auto-continue switch is.
+ * cancels every pending retry and stall probe through the slice
+ * (`NetRetrySlice.switched`); broadcast, as the auto-continue switch is.
  */
 const onNetRetrySet: Route<"netretry.set"> = (a) => {
     const cfg = setNetRetry(a.msg.enabled === true);
-    if (!cfg.enabled) for (const s of a.c.sessions.list()) if (s.netRetry) a.c.sessions.netRetryCancel(s.id);
+    // Off cancels every PENDING ladder rung and stops every stall probe. A
+    // stall itself stays — it is the record a stalled row's note and its Retry
+    // now stand on (the switch is on that row too) — until a reply or typing.
+    // On arms a probe for each stall that has none (`NetRetrySlice.switched`).
+    a.c.sessions.netRetrySwitched(cfg.enabled);
     a.c.broadcast({ t: "netretry.config", ...cfg });
 };
 

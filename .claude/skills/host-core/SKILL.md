@@ -46,17 +46,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `wall.ts` + `resume.ts`: the auto-continue config, reading a block off screen + log (`checkLimit`), the continue ladder, resurrection of a limit-exited session and `revivedSessionFor`.
   `boxes.ts`: answering; `boxread.ts`: reading, publishing, earliest-wins `armPromptCheck`. `turn.ts`: the hook lifecycle and turn flag. `idlewatch.ts`: output ends idle only when the working line is on the grid (a redraw is not work).
   `record.ts`: the prompt history, the reader's transcript, search, the tab name, `lastTurnOf`. **There is NO per-turn AI
-  summary**. **`nameTab()` is the ≤4-word
-  name a phone TAB wears** (`SessionInfo.tabTitle`): its ONLY
-  input is the session's FIRST PROMPT (`firstPromptOf`, ≤1000 chars) — never the
-  screen, a summary or a later prompt. Gated on the field being ABSENT so it fires
-  once per session ever (the first `idle` after a prompt exists; `s.nameAsked` stops a refusal being
-  re-bought), persisted as `{tab}` in
-  `<state dir>/summaries/<id>.json` (a restart must never rename every
-  tab), refusing through `shared/naming.ts`'s `cleanTabTitle` rather than guessing; its flags and wording are `host-spenders`'.
-  **`nameNow()` is `nameTab` asked BY HAND** (`session.name`): the first prompt PLUS the last 4 non-command prompts,
-  holding `s.naming` so the automatic pass cannot land behind it; no prompt yet ⇒ a sentence, and
-  every failure is a SENTENCE and the existing name STAYS.
+  summary**. **`nameTab()` is the ≤4-word name a phone TAB wears** (`SessionInfo.tabTitle`): its ONLY input is the FIRST PROMPT (`firstPromptOf`) — never the screen, a summary or a later prompt; it fires once per session ever (gated on the field being ABSENT, `s.nameAsked`), persisted in `<state dir>/summaries/<id>.json` (a restart must never rename every tab), refusing through `cleanTabTitle` rather than guessing; flags and wording are `host-spenders`'. **`nameNow()` is `nameTab` asked BY HAND** (`session.name`, first prompt + the last 4): every failure is a SENTENCE and the existing name STAYS. [nameTab](../../../docs/notes/host.md#nametab--the-four-words-a-session-tab-wears), [nameNow](../../../docs/notes/host.md#sessionsnamenow--naming-a-conversation-because-somebody-asked).
   `lastTurnAt` (`lastTurnOf`) is read from the CLI's own OUTPUT, never the log's mtime and never
   `idleSince`. Both per-session stores (`history/`, `summaries/`) are unwritten by `remove()` and
   otherwise ONLY by `tmux.ts`'s `sweepSessionStores`: orphans **older than 7 days**, armed once off
@@ -81,7 +71,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `unsubmitted` (Return swallowed — say so, never retype). Echo is checked by POLLING the RENDERED
   screen and by PLACING the match **structurally** — inside the `❯` box (`composer.ts`'s
   `composerEcho`, shared with `settle.ts`), never by distance from the bottom of the render: the
-  replay TEARS mid-turn and strands the live composer above stale rows. No box found ⇒ the old distance rule, never a brick — at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100). After our write, a no-box proof is HELD `FALLBACK_HOLD_MS` (1 s) for a framed one — 2.1.304 draws the text bare between frames ([why](../../../docs/notes/host.md#deliverts)). Two frames that DISAGREE — a live empty
+  replay TEARS mid-turn and strands the live composer above stale rows. (Alternate-screen sessions read the screenlog VT; the rule holds for both.) No box found ⇒ the old distance rule, never a brick — at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100). After our write, a no-box proof is HELD `FALLBACK_HOLD_MS` (1 s) for a framed one — 2.1.304 draws the text bare between frames ([why](../../../docs/notes/host.md#deliverts)). Two frames that DISAGREE — a live empty
   box under a stale one holding submitted words — are not a composer either
   (`composerFramesAmbiguous` ⇒ `retry`, never a Return at nothing). **The miss sweep sends no Esc
   and no ctrl-U while a turn is active**. **ONE health observation per delivery**: a rescue records the
@@ -118,21 +108,9 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   always rescans the whole directory (a cached record cannot re-prove "exactly one live process
   claims this conversation id").
   The footer's `← N agents` is machine-wide busy sessions, NOT subagents.
-- `shells.ts` — what each background shell is actually DOING, off `ps -axo
-  pid=,ppid=,pgid=,etime=,time=,command=` (memoised 2s). **The discriminator**
-  (`isShellWrapper`): a direct child of the CLI's pid, in its OWN process
-  group, running the CLI's own shell-snapshot wrapper — `pgid !== cliPid`
-  alone keeps MCP servers and `caffeinate` out. `workers` is the wrapper's group minus the
-  sleep/pipeline utilities — zero means the shell is, right now, only waiting; `workers === 0` wins
-  over the CPU-moved check in `shared`'s `shellBucket`. The transcript join matches a wrapper's command against a Bash tool call's own to recover
-  `description`/`taskId`/`launch` — no match ⇒ those stay absent, never guessed. `cpuMovedAt` is absent on a shell's first reading ("can't tell yet").
-  **A `ps` failure or an uncaught throw in `readShellList` ⇒ the whole list absent**, never a partial one; a transcript-read failure only drops the join facts. Set `outputAt`/`outputBytes` only past 0 bytes — an empty output file is silence by design.
-  **The wrapper's shape also matches a LIVE FOREGROUND Bash call**, so `SessionShell.foreground` is set whenever the join could not
-  PROVE a background launch and the CLI's own record still says `"busy"`.
-  `killShellGroup` (the `shell.kill` route and `drive.ts`'s close path) **re-checks ppid, own pgid and start time** (still a direct child of this cli, still its own group leader, start
-  time within 2s of the one the caller saw) before signalling: SIGTERM, then SIGKILL after 3s, re-checking `ppid` before it; **a survivor
-  is `ok: false, reason: "that shell did not stop"`**, never a false `ok: true`. `KillShellDeps` is injectable.
-- `screenlog.ts` — **the desktop's scrollback, RECORDED, because it cannot be read back.** The CLI draws in
+- `shells.ts` — what each background shell is actually DOING, off `ps` (memoised 2s). **The discriminator** (`isShellWrapper`): a direct child of the CLI's pid, in its OWN process group, running the CLI's shell-snapshot wrapper — `pgid !== cliPid` alone keeps MCP servers out. `workers === 0` (only waiting) wins over the CPU-moved check in `shared`'s `shellBucket`. The transcript join recovers `description`/`taskId`/`launch` — no match ⇒ absent, never guessed; `cpuMovedAt` absent on the first reading. **A `ps` failure or a throw in `readShellList` ⇒ the whole list absent**, never partial. **The wrapper also matches a LIVE FOREGROUND Bash call**, so `SessionShell.foreground` is set whenever the join could not PROVE a background launch and the CLI still says `"busy"`. `killShellGroup` **re-checks ppid, own pgid and start time** before SIGTERM, then SIGKILL after 3s; **a survivor is `ok: false`**, never a false `ok: true`. [Walk-through](../../../docs/notes/host.md#shellsts--the-full-discriminator-and-kill-walk-through).
+- **Net retry, the host half** (`sessions/apiretry.ts`; netlog's reading is skill `heuristics`) — it types `continue` through the facade's `write`, **never `deliver.ts` or a queue bypass**, parks while busy, and any keystroke, foreign turn, wall or halt calls it off. Out of retries the work stays STALLED, never failed or re-fired. [Why](../../../docs/notes/host.md#apiretryts--retrying-a-turn-the-cli-gave-up-on-a-network-error).
+- `screenlog.ts` — **the desktop's scrollback, RECORDED, because it cannot be read back.** In the alternate screen `screenText`/`screenCells` read its VT, so `drive.resize` must keep its size right. The CLI draws in
   the ALTERNATE screen, which keeps no scrollback. One live headless
   VT per session, fed as the bytes arrive, its grid diffed on a settle with `@waterplane/shared`'s
   `absorbScreen` — the SAME rule the phone uses; what differs is the vantage point, and that IS the
@@ -183,13 +161,8 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `SourceHandle.backendSessionId`, `suspend()`s rather than closes on a tmux detach, and answers
   `sendHold` (`delivery.requiresChannel` + channel not up ⇒ `deliver.ts` returns `retry` with the
   sentence, waiting ≤30 s only while still connecting). `packages/host/test/sidechannel.test.mjs`.
-  `sources.questions` (2.0) publishes the same way as `kind:"question"` (`freeText`, options may be
-  empty), oldest first ACROSS dialogs and questions (`posedAt`); `answerBox` takes `{text}` (phone
-  `promptText` only — the gate never carries words). **`sourceanswer.ts` is the ONE place words reach
-  a session outside `deliver.ts`**: a source's `SourceTyped` (≤1000 chars, no control char, Return
-  only as a second write) typed only while the source holds that question open, a `sent.json` row
-  each (`phone`/`plugin`), no `closed` in 5 s ⇒ `prompt.answerNote`. A `takesText` row answers keys, 500 ms, words, Return apart (2.1, `supports.dialogKeysThenTyped`). A source turn's `ended(at)` waits ≤`CONTEXT_FRESH_MS` for a context sample stamped ≥`at`. `packages/host/test/questions.test.mjs`.
-- `plugins/pluginregistry.ts` + `plugins/pluginloader.ts` + `plugins/pluginapi.ts` + `plugins/pluginfiles.ts` + `plugins/pluginroutes.ts` + `plugins/pluginrpc.ts` + `plugins/pluginstreams.ts` + `plugins/builtin.ts` + `plugins/setupcontrib.ts` — the plugin host.
+  `sources.questions` (2.0) publish as `kind:"question"`, oldest first across dialogs and questions; `answerBox` takes `{text}` (phone `promptText` only — the gate never carries words). **`sourceanswer.ts` is the ONE place words reach a session outside `deliver.ts`**: typed only while the source holds that question open (≤1000 chars, no control char, Return a second write), a `sent.json` row each; a `takesText` row answers keys, then words. [Detail](../../../docs/notes/host.md#the-side-channel-and-the-one-answer-dispatcher-wp1b). `packages/host/test/questions.test.mjs`.
+- `plugins/pluginregistry.ts` + `plugins/pluginloader.ts` + `plugins/pluginapi.ts` + `plugins/pluginfiles.ts` + `plugins/pluginroutes.ts` + `plugins/pluginrpc.ts` + `plugins/pluginstreams.ts` + `plugins/builtin.ts` + `plugins/setupcontrib.ts` + `plugins/pluginassets.ts` — the plugin host. `pluginassets.ts`: realpath-contained static assets, NOT an `OPAQUE_READ_ROUTE`, not in `passive.ts`.
   Loader: `<config dir>/plugins/*/` + `plugin-paths.json`, `manifestProblems`, host module CONTAINED in its dir. Registry: **a broken plugin is LISTED
   (`state: "error"`, reason verbatim), never skipped, never fatal** — bad manifest, duplicate id,
   import failure, `activate()` throwing or over 10 s; a throwing handler becomes its status line.

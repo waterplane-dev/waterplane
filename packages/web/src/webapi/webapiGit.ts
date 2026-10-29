@@ -1,4 +1,4 @@
-import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitLog, type GitPushState, type GitStatus, type PrActionResult, type PrListDoc } from "@waterplane/shared";
+import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitExplainState, type GitLog, type GitPushState, type GitStatus, type PrActionResult, type PrListDoc } from "@waterplane/shared";
 import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
 import { readBodyFused } from "./webapiBody";
 
@@ -59,11 +59,14 @@ export const gitApi = {
     jpost<{ message?: string; reason?: string; limited?: boolean }>(`/api/repos/${repoId}/git/message`, {}, SLOW_OP_TIMEOUT_MS),
   /**
    * Explain what a push would send and a pull would bring, under the ticked
-   * foci (host `changebrief.ts`). POST: it spends, and fetches first. Its own
-   * fuse: a fetch (up to 2 min) and then a sonnet pass over two diffs.
+   * foci (host `changebrief.ts`). POST: it spends. A host with the job (`explainjob.ts`)
+   * answers at once with its STATE; an older one holds it and answers the brief (its fuse).
    */
   gitExplain: (repoId: string, foci: readonly string[], note: string) =>
-    jpost<ChangeBrief>(`/api/repos/${repoId}/git/explain`, { foci, note }, 330_000),
+    jpost<ChangeBrief | GitExplainState>(`/api/repos/${repoId}/git/explain`, { foci, note, background: true }, 330_000),
+  /** The brief running or last finished in this repo (host `explainjob.ts`); null = none yet. */
+  gitExplainState: (repoId: string) =>
+    jget<{ explain: GitExplainState | null }>(`/api/repos/${repoId}/git/explain`).then((r) => r.explain),
   /** The branch against its upstream — incoming, outgoing, the shared history (host `gitlog.ts`). */
   gitLog: (repoId: string) => jget<GitLog>(`/api/repos/${repoId}/git/log`),
   /** One commit's message and file stat. */

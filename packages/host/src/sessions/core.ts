@@ -22,7 +22,7 @@ import type { FixtureSource } from "../clifixtures.js";
 import type { PendingPlan } from "../planbox.js";
 import type { PlanEntry } from "../sourceanswer.js";
 import type { BackendDescriptor } from "../backends/index.js";
-import type { PluginStoreReader, TurnEndNet } from "@waterplane/shared";
+import type { PluginStoreReader, SessionNetRetry, TurnEndNet } from "@waterplane/shared";
 import type { AgentUsage, SeriesCursor } from "../ctxlog.js";
 import type { LimitLogVerdict } from "../limitlog.js";
 import type { LimitRetry } from "../limitretry.js";
@@ -79,6 +79,10 @@ export interface LiveMeta {
    *  text). The screen tail still ends on it after a restart, so without this
    *  every restart re-raised every acknowledged question with a fresh clock. */
   askDismissed?: string;
+  /** A net retry that GAVE UP (`sessions/apiretry.ts`), kept so work stalled on
+   *  the session still reads stalled after a restart — and is not failed for
+   *  its silence by the intents' watchdog. Only `state: "gaveup"` is restored. */
+  netGaveUp?: SessionNetRetry;
   /** The tmux server the pane lives on (`knobs.ts`'s `TMUX_SOCKET_ID`), stamped
    *  by `persistLive` on every write. The boot reclaim (`staleLiveIds`) judges a
    *  record only against a listing of THIS server; absent on records written

@@ -54,10 +54,10 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `Terminal.tsx` — **a resize repaints the whole screen, so layout churn IS flicker**:
   report geometry only when cols/rows changed; the transient strips beside it (`core/queue`'s) linger by `useLinger.ts` (also used by `core/queue/useQueue.ts` and uploads) and keep stable height.
   **A fit measured on a COLLAPSED container is not reported at all** (`drawableViewport`,
-  `shared/ptysize.ts`, whose bullet in `shared` has the `54x3` reason): `FitAddon` answers for a
+  `packages/shared/src/ptysize.ts`, whose header has the `54x3` reason): `FitAddon` answers for a
   no-height box too. The last-reported geometry is deliberately NOT updated when a report is withheld, or the real one that
   follows is skipped as a no-change.
-  The feed behind it is `core/term/useTermFeed.ts`: **PTY bytes are REFS, never state** (a frame mutates the buffer and bumps `writeSeq`, the one re-render). `ptyTail.ts` persists the attached session's tail in IndexedDB (never localStorage: its quota belongs to the send outbox) **with its `seq`**, handed back as `resumeSeq` on attach so a live host stitches only the delta.
+  The feed behind it is `core/term/useTermFeed.ts`: **PTY bytes are REFS, never state** (a frame mutates the buffer and bumps `writeSeq`, the one re-render). `ptyTail.ts` persists session tails in IndexedDB — the attached one live, the rest by `core/term/screenSweep.ts`; offline, an empty grid's card offers the cached transcript instead of "nothing cached" (`core/session/useCachedTranscript.ts`), and `core/term/bgFresh.ts` is the per-device, never-synced dial (live / every N / off) for how fresh the saved screen is while the app is hidden — (never localStorage: its quota belongs to the send outbox) **with its `seq`**, handed back as `resumeSeq` on attach so a live host stitches only the delta.
 - `screenlog.ts` + `ScrollbackSheet.tsx` — **scrolling the TUI is a REMOTE operation**, so a dead link
   means the gesture does nothing. Lines that scrolled off are archived per session in IndexedDB and an
   upward pan opens that archive. **Two sources and they are not equal**: this device's copy is a
@@ -77,7 +77,7 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `cliKeys.ts` — **CLI mode**: the compose box becomes a raw key pipe, per device, NOT synced. Android
   soft keyboards report no `keydown` for letters, so the box holds a pad of spaces and every `input`
   is diffed. **Don't advance the baseline mid-composition, and don't reset the value through state.**
-- `KeyRow.tsx` + `useChord.ts` + `chordState.ts` + `KeysPop.tsx` + `cliShortcuts.ts` — **any key combination**:
+- `KeyRow.tsx` + `useChord.ts` + `chordState.ts` + `KeysPop.tsx` + `cliShortcuts.ts` (the first three and `cliShortcuts` in `core/session/`, the chord pair in `core/compose/`) — **any key combination**:
   hint chips (host `keyHints`), sticky `Ctrl`/`Alt`/`Shift` (tap = next key, twice = lock, worded on
   the button), the fixed keys, and the `Keys` list of claude's own shortcuts. **One encoding**,
   `shared/chord.ts`; a combination with no terminal bytes is REFUSED in words, never sent as another

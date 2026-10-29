@@ -137,7 +137,7 @@ call, not yours.
 \`\`\`
 ### R-<area>-<nnn> · <status>
 One or two sentences: observable behaviour, from the user's side, as an end state.
-- asked: 2026-08-25 (session 1a2b3c4d)
+- asked: cafec539, 2026-08-25 (session 1a2b3c4d)
 - shipped: 3f9e2a1
 - superseded-by: R-<area>-<nnn>
 \`\`\`
@@ -145,6 +145,9 @@ One or two sentences: observable behaviour, from the user's side, as an end stat
 - **status** — \`requested\` (asked, no evidence it shipped), \`shipped\` (a commit
   or the code shows it), \`superseded\` (a later item replaced it —
   \`superseded-by\` says which), \`dropped\` (the person withdrew it).
+  Any other status word hides the item from the phone's list and the counts.
+- Only \`asked\` (sha and/or date, session), \`shipped\` and \`superseded-by\` are parsed;
+  any other bullet (\`plan\`, \`progress\`, \`note\`, …) is read as part of the item text.
 - **IDs are stable.** Never renumber, never reuse, never delete an item: change
   its status. A later request that contradicts an item supersedes it.
 - Behaviour, not implementation: "Child mode has one canvas and no save", not

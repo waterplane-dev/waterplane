@@ -201,6 +201,7 @@ const CLIENT_T = [
   "session.mode",
   "session.name",
   "session.netRetryCancel",
+  "session.netRetryNow",
   "session.pin",
   "session.record",
   "session.remoteControl",
@@ -341,7 +342,7 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 148, "a member was added or merged");
+  assert.equal(members, 149, "a member was added or merged"); // 148 → 149: session.netRetryNow (Retry now, R-connection-024)
 });
 
 test("HostMessage carries exactly the pinned message types", () => {

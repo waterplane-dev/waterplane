@@ -345,3 +345,12 @@ The week-end burn sheet scrolls so every repo is reachable, and two clones with 
 - asked: 2026-10-25
 - shipped: b5dbb527
 
+
+### R-automation-075 · requested
+The week-end burn sheet says how it works in numbered steps (when sessions start, what each is told, that it commits only on passing tests and pushes nothing, when it stops), and the person controls what goes into the prompt: their own instructions in place of the weakest-health-reading default, an extra line per repo, and the exact prompt each ticked repo's sessions get, shown before anything runs. The safety rules (one change, tests, commit, never push) are always added. The stop line is a dot choice, not a filled button.
+- asked: 2026-10-29
+
+### R-automation-076 · shipped
+The week-end burn and a repo's backlog link both ways: a row the burn wrote says "from the week-end burn" and opens the burn; the repo's backlog says what the burn is doing there, counts the burn's rows (the count opens exactly those) and opens the burn sheet; each repo row in the burn sheet opens that repo's backlog cut to the burn's rows.
+- asked: 2026-10-29
+- shipped: 1bded5d7

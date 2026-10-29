@@ -33,6 +33,9 @@ export const WEEKBURN_NUDGE_LEAD_MS = 24 * HOUR;
 /** On pace to leave at least this many points under the stop line ⇒ offer the burn. */
 export const WEEKBURN_NUDGE_GAP_PCT = 20;
 const MAX_REPOS = 50;
+/** The person's own words for what a burn session works on, and per repo; longer is cut. */
+export const WEEKBURN_TASK_MAX = 2000;
+export const WEEKBURN_NOTE_MAX = 1000;
 const MIN_RATE_SPAN_MS = 6 * HOUR;
 
 export interface WeekBurnPrefs {
@@ -45,6 +48,10 @@ export interface WeekBurnPrefs {
   /** Last week's pick, for the one-tap "same as last week". */
   lastRepos: string[];
   stopPct: number;
+  /** What every session works on, in the person's words; "" = the weakest health reading. */
+  task: string;
+  /** One extra line per repo folder, added to that repo's prompt only. */
+  notes: Record<string, string>;
 }
 
 export interface WeekBurnPlan {
@@ -67,6 +74,25 @@ export interface WeekBurnStatus {
   pickedThisWeek: boolean;
   running: { repoDir: string; posted: number; live: string | null; stoppedText?: string }[];
   stoppedText?: string;
+  /** Most packages one repo gets in a week. */
+  maxPerRepo?: number;
+  /** The latest health summary per repo folder, as the prompt quotes it; absent = none on file. */
+  readings?: Record<string, string>;
+}
+
+function cleanText(x: unknown, max: number): string {
+  return typeof x === "string" ? x.trim().slice(0, max) : "";
+}
+
+function cleanNotes(x: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!x || typeof x !== "object" || Array.isArray(x)) return out;
+  for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+    const t = cleanText(v, WEEKBURN_NOTE_MAX);
+    if (k.trim() && t) out[k] = t;
+    if (Object.keys(out).length >= MAX_REPOS) break;
+  }
+  return out;
 }
 
 function cleanRepos(x: unknown): string[] {
@@ -84,7 +110,8 @@ export function cleanWeekBurnPrefs(x: unknown): WeekBurnPrefs {
   const o = x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : {};
   const stop = typeof o.stopPct === "number" && Number.isFinite(o.stopPct) ? Math.min(100, Math.max(50, Math.round(o.stopPct))) : WEEKBURN_DEFAULT_STOP_PCT;
   const weekOf = typeof o.weekOf === "number" && Number.isFinite(o.weekOf) && o.weekOf > 0 ? o.weekOf : null;
-  return { repos: cleanRepos(o.repos), weekOf, recurring: o.recurring === true, lastRepos: cleanRepos(o.lastRepos), stopPct: stop };
+  return { repos: cleanRepos(o.repos), weekOf, recurring: o.recurring === true, lastRepos: cleanRepos(o.lastRepos), stopPct: stop,
+    task: cleanText(o.task, WEEKBURN_TASK_MAX), notes: cleanNotes(o.notes) };
 }
 
 /**
@@ -222,15 +249,46 @@ export function weekBurnNudge(a: {
   };
 }
 
-/** What an unattended burn package is told. One improvement, one commit, nothing pushed. */
-export function weekBurnItemPrompt(a: { repoName: string; healthSummary?: string | null }): string {
-  const health = a.healthSummary && a.healthSummary.trim()
-    ? `Latest repo readings:\n${a.healthSummary.trim()}\n\nPick the weakest reading.`
-    : "Look for the repo's own checks, tests and lint, and pick the weakest area.";
+/** The task line when the person wrote none. */
+export const WEEKBURN_DEFAULT_TASK = "Fix the repo's weakest health reading";
+
+/** The lines every package is told whatever the person wrote: the safety rails, never editable. */
+export const WEEKBURN_RULES: readonly string[] = [
+  "Make ONE focused improvement. Run the repo's tests. Commit on the current branch only if they pass: stage explicit paths, never `git add -A`, never push, never stash or reset.",
+  "If nothing worth doing is left, change nothing and say so in one line.",
+];
+
+/**
+ * What an unattended burn package is told. One improvement, one commit,
+ * nothing pushed. `task` (the person's words) replaces the default "weakest
+ * reading" ask; `note` is added for this repo only. The phone builds its
+ * preview with this same function, so what the sheet shows is what is sent.
+ */
+export function weekBurnItemPrompt(a: { repoName: string; healthSummary?: string | null; task?: string | null; note?: string | null }): string {
+  const readings = a.healthSummary && a.healthSummary.trim() ? `Latest repo readings:\n${a.healthSummary.trim()}` : null;
+  const task = a.task && a.task.trim();
+  const ask = task
+    ? [`What to work on (from the person who picked this repo):\n${task}`, ...(readings ? [readings] : [])]
+    : readings
+      ? [readings, "Pick the weakest reading."]
+      : ["Look for the repo's own checks, tests and lint, and pick the weakest area."];
+  const note = a.note && a.note.trim();
   return [
     `This is an unattended week-end burn package for ${a.repoName}. Nobody is watching, so keep it small.`,
-    health,
-    "Make ONE focused improvement. Run the repo's tests. Commit on the current branch only if they pass: stage explicit paths, never `git add -A`, never push, never stash or reset.",
-    "If nothing worth doing is left, change nothing and say so in one line.",
+    ...ask,
+    ...(note ? [`For this repo:\n${note}`] : []),
+    ...WEEKBURN_RULES,
   ].join("\n\n");
 }
+
+/** Origin prefix every row the week-end burn posts carries: `weekburn:<weekOf>`. */
+export const WEEKBURN_ORIGIN = "weekburn:";
+
+/** Did the week-end burn post this row? The ONE test, for the host's live-row map and the phone's chip and cut. */
+export const isWeekBurnOrigin = (origin: string | undefined | null): boolean => !!origin?.startsWith(WEEKBURN_ORIGIN);
+
+/** The backlog row's chip: what wrote it. */
+export const FROM_WEEKBURN_WORDS = "from the week-end burn";
+
+/** The repo bar's count, which opens exactly those rows (a count is a filter). */
+export const weekBurnRowsLabel = (n: number): string => `${n} from the week-end burn`;

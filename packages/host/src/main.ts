@@ -32,7 +32,7 @@ import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
 import { AttentionStore } from "./attentionstore.js";
-import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportGitOutcome } from "./gitnotify.js";
+import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportExplainOutcome, reportGitOutcome } from "./gitnotify.js"; import { setExplainSink } from "./explainjob.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
@@ -145,7 +145,7 @@ Object.assign(ctx, {
   resolveAttention, resolveAttentionPrefix, attention,
 });
 // A host-run pull or push that ended is told once (`gitnotify.ts`): failed ⇒ attention, pushed ⇒ a receipt.
-setGitOutcomeSink((o) => reportGitOutcome(o, ctx)); setPrNotify(ctx); // PR changes seen by the leased poll (prs.ts) ride the git notify path
+setGitOutcomeSink((o) => reportGitOutcome(o, ctx)); setExplainSink((o) => reportExplainOutcome(o, ctx)); setPrNotify(ctx); // PR changes seen by the leased poll (prs.ts) ride the git notify path
 
 const deliveries = createDeliveries(ctx);
 ctx.startPrompt = deliveries.startPrompt; ctx.deliverChain = deliveries.deliverChain;

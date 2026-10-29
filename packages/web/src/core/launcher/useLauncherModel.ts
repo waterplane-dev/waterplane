@@ -12,7 +12,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExternalSession, Intent, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { HORIZON_LABEL, horizonLead, horizonWords } from "@waterplane/shared";
+import { HORIZON_LABEL, horizonLead, horizonWords, repoLabel } from "@waterplane/shared";
 import { createStore, useStore, type Store } from "../../sdk";
 import { COLLAPSED_REPOS_KEY, SESSION_DRAG_MS, SESSION_ORDER_KEY, loadCollapsedRepos, loadSessionOrder } from "../../localState";
 import { matchesFilterKind, resumeIdOf, sessionStatus, type SessionFilter } from "../../sessionFacts";
@@ -245,7 +245,7 @@ export function useLauncherModel(p: LauncherProps) {
   const activityFiled = useActivityFiled();
   const activityConfirmedDone = useActivityConfirmedDone();
   const queuedByRepo = useMemo(
-    () => queuedKeysByRepo(outbox, intents, activityFiled, (cwd) => repoForCwd(cwd)?.repoName ?? baseName(cwd)),
+    () => queuedKeysByRepo(outbox, intents, activityFiled, (cwd) => { const r = repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); }),
     [outbox, intents, repos, activityFiled], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` is a per-render closure over `repos`
   );
   /** The store by id — what `isBudgetHeld` reads a chain's predecessor off. */
@@ -262,9 +262,9 @@ export function useLauncherModel(p: LauncherProps) {
     persistCollapsedRepos(next);
   }
   /** The repo's primary checkout (main worktree) — target of the header's "new session". */
-  const primaryRepo = (name: string): RepoTarget | null => repos.find((r) => r.repoName === name && r.isPrimary) ?? null;
+  const primaryRepo = (name: string): RepoTarget | null => repos.find((r) => repoLabel(r) === name && r.isPrimary) ?? null;
   /** The repo's other checkouts, listed under its header. */
-  const worktreesOf = (name: string) => visibleRepos.filter((r) => r.repoName === name && !r.isPrimary);
+  const worktreesOf = (name: string) => visibleRepos.filter((r) => repoLabel(r) === name && !r.isPrimary);
   /**
    * The launcher's ONE list of places work happens: every repo, with whatever
    * live sessions it currently has underneath it.
@@ -300,7 +300,7 @@ export function useLauncherModel(p: LauncherProps) {
     // when its own NAME matches — "garmin" finds the repo, not only its rows.
     () => repoGroupsOf(shownSessions, visibleRepos, !!statusFilter || textOn, sessionRepoName,
       statusFilter?.status === "worktrees" && statusFilter.repo ? [statusFilter.repo]
-        : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [r.repoName, r.branch])).map((r) => r.repoName) : [],
+        : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [repoLabel(r), r.branch])).map((r) => repoLabel(r)) : [],
       openByRepo),
     [shownSessions, visibleRepos, statusFilter, repos, textQuery, openByRepo], // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` closes over `repos`, `textOn` derives from `textQuery`
   );
@@ -445,7 +445,7 @@ export function useLauncherModel(p: LauncherProps) {
    * carries exactly the ids it counted into the sheet's `focusIds`.
    */
   const clocksPerRepo = useMemo(
-    () => clocksByRepo({ cuts: clocks, repoOf: (d) => repoForCwd(d)?.repoName ?? (baseName(d) || null), now: Date.now() }),
+    () => clocksByRepo({ cuts: clocks, repoOf: (d) => { const r = repoForCwd(d); return r ? repoLabel(r) : (baseName(d) || null); }, now: Date.now() }),
     [clocks, repos, nowTick], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` closes over `repos`; `nowTick` stands in for the `Date.now()` read
   );
   /**

@@ -2893,20 +2893,73 @@ test("a turn end the host is RETRYING (or still checking) completes nothing; the
   } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("…and when the retries RAN OUT the row is FAILED with the sentence, never done", async () => {
-  const { store, root } = netRow("nr2", "N2");
+test("…and when the retries RAN OUT the row is STALLED — still running, the stall derivable, completed by the next real turn end", async () => {
+  const { netStalledOf, netStalledText } = await import("@waterplane/shared");
+  const { store, root, state } = netRow("nr2", "N2");
   try {
     await store.reconcile();
     netPost(store, "nr2"); store.kick(); await settle();
     assert.equal(store.get("nr2").state, "running");
     store.onTurnEnded("N2", 1, { net: "retrying" });
     assert.equal(store.get("nr2").state, "running");
-    store.onTurnEnded("N2", 2, { net: "gaveup", detail: "the API could not be reached (ENOTFOUND) and the host stopped retrying after 2 tries" });
+    store.onTurnEnded("N2", 2, { net: "gaveup", detail: "the API could not be reached (ENOTFOUND) and the host stopped retrying after 8 tries" });
     const row = store.get("nr2");
-    assert.equal(row.state, "failed");
-    assert.equal(row.result.ok, false);
-    assert.match(row.result.detail, /could not be reached/);
-    store.onTurnEnded("N2", 3); // the person's next turn there: the row stays failed
-    assert.equal(store.get("nr2").state, "failed");
+    assert.equal(row.state, "running", "never failed: the prompt was delivered and is never re-fired");
+    assert.notEqual(row.result?.ok, false, "no failure recorded");
+    // The stall is DERIVED from the session's `netRetry`, never stored on the row.
+    const s = state.sessions.find((x) => x.id === "N2");
+    s.netRetry = { state: "gaveup", attempt: 8, max: 8, nextAt: null, error: "Can't reach the API server (ENOTFOUND)", at: 1, why: "after 8 tries" };
+    const n = netStalledOf(row, state.sessions);
+    assert.ok(n);
+    assert.equal(netStalledText(n), "Stalled — API unreachable, 8 retries used");
+    // Retry now's reply (or the person typing): an ordinary Stop completes it, once.
+    store.onTurnEnded("N2", 3);
+    assert.equal(store.get("nr2").state, "done");
+    assert.equal(netStalledOf(store.get("nr2"), state.sessions), null, "a settled row is never stalled");
   } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a STALLED row is not failed by the silence ceiling, nor completed by the idle guess — dismissed or mid-probe alike", async () => {
+  // The host's dep asks shared `netRetryStalls` of the session's `netRetry`
+  // (`server/intentDeps.ts`); the same predicate here, over each shape.
+  const { netRetryStalls } = await import("@waterplane/shared");
+  const hooked = { isHooked: () => true, turnHookSeen: () => true, reapCeilingMs: () => HOUR };
+  const g = { state: "gaveup", attempt: 8, max: 8, nextAt: null, error: "x", at: 1, why: "after 8 tries" };
+  const net = new Map([["s-live", g]]);
+  const { store, root } = restartOver([midTurn("rs1")], { ...hooked, sessionIdleMs: () => HOUR * 5, sessionNetStalled: (id) => netRetryStalls(net.get(id)) });
+  try {
+    await store.reconcile();
+    store.kick(); await settle();
+    assert.equal(store.get("rs1").state, "running", "stalled on the API, not a lost Stop");
+    // The person DISMISSED the session's gave-up line: it only hides the line.
+    net.set("s-live", { ...g, dismissed: true });
+    store.kick(); await settle();
+    assert.equal(store.get("rs1").state, "running", "a dismissed gave-up line is still a stall");
+    // A stall probe under way (parked on a box, or its turn running).
+    net.set("s-live", { ...g, state: "waiting", probe: true, nextAt: Date.now() });
+    store.kick(); await settle();
+    assert.equal(store.get("rs1").state, "running", "a probe under way is still a stall");
+    net.delete("s-live"); // typed over / a wall: an ordinary silent row again
+    store.kick(); await settle();
+    assert.equal(store.get("rs1").state, "failed");
+  } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a queued row held only by a STALLED row's serial claim SAYS so, and points at that session", async () => {
+  const { intentVerdict, intentSerialHolders, busyIntentGroups } = await import("@waterplane/shared");
+  const cwd = "/r/app";
+  const sessions = [{ id: "S1", cwd, running: true, automatic: true, netStalled: true, name: "fix the sync" }];
+  const occupied = [{ cwd, sessionId: "S1" }];
+  const holders = intentSerialHolders(sessions, occupied);
+  assert.equal(holders.get(`repo:${cwd}`)?.[0].wall, "netStalled");
+  const row = { id: "q1", state: "queued", cwd, serial: true, origin: { kind: "auto" }, trigger: { kind: "idle" }, target: { kind: "repo", cwd, fresh: true }, steps: ["x"], createdAt: 1 };
+  const facts = { now: 2, busyCwds: busyIntentGroups(sessions, [cwd]), serialHolders: holders, sessions };
+  const v = intentVerdict(row, facts);
+  assert.equal(v.kind, "wait");
+  assert.equal(v.reason, "serial", "the same rung: the reason is the holder's state, never a new hold");
+  assert.equal(v.detail, "one at a time in this repo — waiting behind a stalled item: API unreachable ('fix the sync')");
+  assert.equal(v.holderSessionId, "S1");
+  // Not stalled ⇒ the old sentence, word for word.
+  const plain = intentSerialHolders([{ ...sessions[0], netStalled: undefined }], occupied);
+  assert.match(intentVerdict(row, { ...facts, serialHolders: plain }).detail, /\(starting a queued job\)$/);
 });

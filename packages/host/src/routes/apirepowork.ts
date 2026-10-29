@@ -10,8 +10,6 @@ import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { repoOfWorktree } from "../tokenstats.js";
-import { suggestCommitMessage } from "../commitmsg.js";
-import { explainChanges } from "../changebrief.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
@@ -51,7 +49,7 @@ function leftoverInput(wt: string, branch: string, sessions: SessionInfo[]): Lef
 /** The repo a git run is filed under: the worktree's own id (a worktree is
  *  its own chip), named the way a person tells it apart — the repo, plus the
  *  branch for a linked worktree. */
-function gitRef(t: RepoTarget): GitRepoRef {
+export function gitRef(t: RepoTarget): GitRepoRef {
   return { id: t.id, name: t.isPrimary ? t.repoName : `${t.repoName} (${t.branch})`, branch: t.branch };
 }
 
@@ -387,19 +385,6 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     const { message, all } = await readJson(req);
     const r = await gitCommit(wt, String(message || ""), all !== false);
     json(res, r, r.ok ? 200 : 400);
-    return true;
-  }),
-  // POST, and not because it writes anything — it writes nothing at all.
-  // It SPENDS (one headless model call), and `origin.ts`'s rule is that no
-  // /api GET may have an effect; a cross-origin `<img src>` must not be
-  // able to run up a bill either.
-  route<RepoReq>("POST", "git/message/*", async ({ res, wt }) => {
-    json(res, await suggestCommitMessage(wt));
-    return true;
-  }),
-  // POST for the same reason: it spends, and it fetches (refs only).
-  route<RepoReq>("POST", "git/explain/*", async ({ req, res, wt }) => {
-    json(res, await explainChanges(wt, await readJson(req)));
     return true;
   }),
   // A pull is seconds (a fetch and a fast-forward or rebase, no hook), so it

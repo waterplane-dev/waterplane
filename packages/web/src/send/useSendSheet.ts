@@ -1,7 +1,7 @@
 /** All of the sheet's state, refs, effects, derivations and handlers, in the order they always ran. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RuleAnchor } from "@waterplane/shared";
-import { attachBlockers, attachmentsReady, composeRule, describeRule, ruleAnchor, type AttachStatus } from "@waterplane/shared";
+import { repoLabel, attachBlockers, attachmentsReady, composeRule, describeRule, ruleAnchor, type AttachStatus } from "@waterplane/shared";
 import { intentTitle } from "../activityRows";
 import { loadSheetDraft, saveSheetDraft } from "../outbox";
 import { track } from "../usage";
@@ -47,7 +47,7 @@ export function useSendSheet(props: SendSheetProps) {
   useEffect(() => { if (!retime) saveSheetDraft(draftKey, prompts.join("\f")); }, [draftKey, prompts, retime]);
 
   const names: SendNames = {
-    repoName: (cwd) => repos.find((r) => r.worktreePath === cwd)?.repoName ?? cwd.split("/").filter(Boolean).pop() ?? cwd,
+    repoName: (cwd) => { const r = repos.find((x) => x.worktreePath === cwd); return r ? repoLabel(r) : cwd.split("/").filter(Boolean).pop() ?? cwd; },
     sessionTitle: (id) => sessions.find((s) => s.id === id)?.title ?? "that session",
     buildName,
   };

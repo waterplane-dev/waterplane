@@ -6,6 +6,7 @@ import type { NotificationItem, NotificationKind, NotifyPrefs } from "@waterplan
 import { core, type CoreApi } from "../../sdk";
 import { viewerHandles } from "../../docKind";
 import { LS, lsBool, lsSetBool } from "../../storage";
+import { landOnExplain } from "../../gitLanding";
 import { backlogRepoFor, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipKeys, resolvedWords } from "./logic";
 import { heard, mutes, notifCut, notifFocus, notifs, pushInfo } from "./store";
 
@@ -155,7 +156,7 @@ export function openNotif(n: NotificationItem): void {
       c.nav.open("tokens");
       return;
     case "git": {
-      if (c.world.repos.some((r) => r.id === t.repoId)) c.nav.openGit(t.repoId);
+      if (c.world.repos.some((r) => r.id === t.repoId)) { if (t.explain) landOnExplain(t.repoId); c.nav.openGit(t.repoId); }
       else showRow(n, "that repo is not in the list on this desktop any more");
       return;
     }

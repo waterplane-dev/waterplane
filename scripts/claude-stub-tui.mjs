@@ -289,9 +289,10 @@ function hook(hook_event_name, extra = {}) {
  * that posted the event without the words would pass every test while the one
  * rule they exist to cover was never exercised.
  */
-function hookTurn(prompt) {
+function hookTurn(prompt, failed = false) {
   hook("UserPromptSubmit", typeof prompt === "string" && prompt ? { prompt } : {});
-  hook("Stop");
+  // The real CLI fires `StopFailure` INSTEAD of `Stop` when an API error ends the turn.
+  if (failed) hook("StopFailure", { error: "server_error" }); else hook("Stop");
   if (typeof prompt === "string" && prompt) EXT?.submit?.(prompt);
 }
 
@@ -334,7 +335,7 @@ function answerTurn(prompt) {
         JSON.stringify(reply) + "\n");
     } catch { /* no log: the answer is simply unreadable */ }
   }
-  hookTurn(prompt);
+  hookTurn(prompt, giveUp);
 }
 
 /** goal mode's quiet screen: transcript, composer, nothing moving. */

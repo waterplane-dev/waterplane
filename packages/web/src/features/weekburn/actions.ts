@@ -7,7 +7,7 @@ import { core } from "../../sdk";
 import { api } from "../../api";
 import { SAME_AS_LAST_TOAST, savedToast } from "./logic";
 
-export type WeekBurnPost = { repos?: string[]; recurring?: boolean; stopPct?: number; sameAsLast?: true };
+export type WeekBurnPost = { repos?: string[]; recurring?: boolean; stopPct?: number; sameAsLast?: true; task?: string; notes?: Record<string, string> };
 
 /** Post the pick; resolves with the host's new status, or null after saying why it did not land. */
 export async function saveWeekBurn(body: WeekBurnPost, pickedCount: number): Promise<WeekBurnStatus | null> {

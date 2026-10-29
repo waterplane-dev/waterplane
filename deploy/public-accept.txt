@@ -66,7 +66,7 @@ tools/demo-scenario.test.mjs:13:a737d35612  # tailscale-ip fixture
 - `docs/prompts` (2): `docs/prompts/prompt-log-raw.md`, `docs/prompts/prompt-log-summary.md`
 - `packages/extensions` (86)
 - `scripts` (1): `scripts/sync-gemini-key.sh`
-scripts/claude-stub-tui.mjs:579:f51ec33f39  # openai-key fixture
+scripts/claude-stub-tui.mjs:592:f51ec33f39  # openai-key fixture
 scripts/e2e-clihealth.mjs:162:dc0a0b6b4b  # openai-key fixture
 packages/host/test/passive.test.mjs:62:5813271df0  # tailscale-ip fixture
 packages/host/test/pluginstreams.test.mjs:493:c362911efb  # tailscale-ip fixture
@@ -78,7 +78,7 @@ scripts/release/public-lib.test.mjs:215:422e825151  # session-url fixture
 # channel). Nowhere else; SECURITY.md stays address-free.
 site/game-privacy.html:43:2bf2ef5834  # personal-email, privacy contact (owner decision)
 site/privacy.html:115:2bf2ef5834  # personal-email, privacy contact (owner decision)
-tools/screenfixtures.test.mjs:190:8cd7a354b3
+tools/screenfixtures.test.mjs:217:8cd7a354b3
 # 0.1.5: made-up ts.net names and 100.64/100.80 test addresses (origin, net, passive, securityfixes, reach dashboard), and a session id in a requirement's source line
 docs/requirements/images.md:74:4edd0f63ff
 packages/host/src/origin.ts:247:586fd92a28
@@ -94,3 +94,4 @@ packages/host/test/securityfixes.test.mjs:92:21a8975db4
 packages/host/test/securityfixes.test.mjs:93:21744bef01
 packages/host/test/securityfixes.test.mjs:96:e744027cd7
 tools/reachdashboard.test.mjs:15:a6d61ba3db
+docs/requirements/connection.md:131:e25b65e0a3

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import type { RepoTarget } from "@waterplane/shared";
-import { branchLabel, repoBranchLabel } from "@waterplane/shared";
+import { branchLabel, repoBranchLabel, repoLabel } from "@waterplane/shared";
 import { Empty } from "./Empty";
 import { RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
@@ -56,10 +56,10 @@ export function orderRepos(repos: RepoTarget[], home?: string | null): RepoTarge
 }
 
 /** The title a repo row carries: its name, or its branch when it is a worktree. */
-export const repoTitle = (r: RepoTarget) => (r.isPrimary ? r.repoName : r.branch);
+export const repoTitle = (r: RepoTarget) => (r.isPrimary ? repoLabel(r) : r.branch);
 /** The line under it — the other half of the same two facts, or nothing when
  *  the branch is the ordinary one (`shared/naming.ts`'s `branchLabel`). */
-export const repoBranchLine = (r: RepoTarget) => (r.isPrimary ? (branchLabel(r) ?? "") : `worktree · ${r.repoName}`);
+export const repoBranchLine = (r: RepoTarget) => (r.isPrimary ? (branchLabel(r) ?? "") : `worktree · ${repoLabel(r)}`);
 /** The `<option>` label: both facts on one line, since a select has one. */
 export const repoOptionLabel = (r: RepoTarget) => repoBranchLabel(r);
 
