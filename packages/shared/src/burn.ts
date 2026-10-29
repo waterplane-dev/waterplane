@@ -13,7 +13,7 @@
  * climb is NULL — never a rate somebody would plan around that was made up.
  * And the push is words only. Nothing here pauses, holds or refuses anything.
  */
-import type { UsageSample } from "./wire/telemetry.js";
+import type { UsageSample, UsageSourceSample } from "./wire/telemetry.js";
 import { fmtUsd } from "./pricing.js";
 
 const HOUR = 3_600_000;
@@ -243,4 +243,37 @@ export function burnPushText(
   }
   parts.push("Nothing was paused.");
   return { title, body: parts.join(" ") };
+}
+
+// ── the same push for another backend's own window (c2 §3) ───────────────
+
+/** The source windows worth a burn push: the LONG ones (claude's push is the week's, never the
+ *  5-hour's — a short window refilling fast is the normal case). Matched on `UsageWindow.unit`. */
+export const SOURCE_BURN_UNITS: readonly string[] = ["wk", "mo"];
+
+/**
+ * One window of a non-claude source's kept readings as the `UsageSample` series the burn rule
+ * reads (`w` = that window's pct, `wr` = its reset; the 5-hour pair null). A reading where the
+ * window had no percentage keeps `w: null`, which the segment rule DROPS — never a zero.
+ */
+export function sourceBurnSamples(samples: readonly UsageSourceSample[], windowId: string): UsageSample[] {
+  const out: UsageSample[] = [];
+  for (const r of samples) {
+    const w = r.w.find((x) => x.id === windowId);
+    if (!w) continue;
+    out.push({ t: r.t, s: null, w: w.pct, sr: null, wr: w.resetAt });
+  }
+  return out;
+}
+
+/** The push for a source's window. No "dearest in it": the cost window is claude's conversations,
+ *  and another backend has no per-conversation dollars to name. Words only. */
+export function sourceBurnPushText(label: string, unit: string, s: BurnStretch): { title: string; body: string } {
+  const pts1 = fmtPts(s.dPts);
+  const pts = s.dPts === 1 ? "point" : "points";
+  const what = unit === "mo" ? "monthly" : unit === "wk" ? "weekly" : `${unit}`;
+  return {
+    title: `${label} ${what} limit climbing fast: +${pts1} ${pts} in ${fmtSpan(s.to - s.from)}`,
+    body: `${label}'s ${what} figure rose ${pts1} ${pts} in ${fmtSpan(s.to - s.from)}, about ${fmtPts(s.ptsPerHour)} an hour. That is ${label}'s own account, not claude's. Nothing was paused.`,
+  };
 }

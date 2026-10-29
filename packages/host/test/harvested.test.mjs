@@ -101,3 +101,19 @@ test("no harvested fixture carries a home path, an address or an opaque run", ()
     assert.equal(opaqueRun(t), null, e.path);
   }
 });
+
+// The first REAL block notice (2.1.308, a weekly wall, harvested 10-28): the
+// four older limit.reset entries are hand-captured NON-limit screens kept as
+// guards, so before this the detector had never been held to the CLI's own
+// drawing. The whole answer, not just "blocked": the instant it would resume at
+// is the thing the signal measures, and the bare clock time is read in the
+// zone the notice names (19:00 Berlin summer time = 17:00 UTC).
+test("the real 2.1.308 block notice reads as a weekly wall with its printed reset", async () => {
+  const { detectLimitText } = await import("../dist/limit.js");
+  const text = decodeFixture("limit.reset", read("screens/harvest-limit.reset-2.1.308.txt"));
+  const d = detectLimitText(text, Date.UTC(2026, 9, 20, 12));
+  assert.equal(d.blocked, true);
+  assert.equal(d.weekly, true);
+  assert.equal(d.spend, false);
+  assert.equal(d.resetAt, Date.UTC(2026, 9, 20, 17));
+});

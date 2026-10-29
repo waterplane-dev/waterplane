@@ -41,7 +41,7 @@ function tally(re) {
 }
 
 // ── P1: the barrel exports exactly what the one file did ───────────────────
-test("P1: backlogFilter.ts exports the same 95 runtime names and 9 types", async () => {
+test("P1: backlogFilter.ts exports the same 106 runtime names and 10 types", async () => {
   const m = await import(join(SRC, "backlogFilter.ts"));
   assert.deepEqual(Object.keys(m).sort(), [
     "AGE_LABEL", "ASSESS_NONE_IN_CUT", "BACKLOG_AGES", "BACKLOG_STATUSES", "BL_OFFLINE", "CATEGORY_BUCKETS",
@@ -49,25 +49,25 @@ test("P1: backlogFilter.ts exports the same 95 runtime names and 9 types", async
     "FOCUS_AUTO_ON_TITLE", "HEADLINE_BY_WORDS", "HELD_OFFLINE", "HOLD_FOR_HOST_TEXT", "HOLD_FOR_HOST_TITLE",
     "NAME_COST_NOTE", "NAME_RUNNING_NOTE", "NEW_SESSION_OPTION", "NO_BACKLOG_FILTER", "PAST_BUDGET_CHIP",
     "PAST_BUDGET_TITLE", "PAST_BUDGET_UNDONE_TOAST", "RETIME_NONE_PICKED",
-    "RETIME_PICK_LABEL", "RUN_AGAIN_LABEL", "RUN_AGAIN_TOAST", "ageBucket", "archiveDoneLabel", "archiveDoneNote",
+    "RETIME_PICK_LABEL", "RUN_AGAIN_LABEL", "RUN_AGAIN_TOAST", "SORT_CLOCK_NOTE", "SORT_LABEL", "SORT_NEWEST_NOTE", "ageBucket", "archiveDoneLabel", "archiveDoneNote",
     "archiveDoneToast", "assessScopeLabel", "assessScopeNote", "assessableInCut", "backlogBadgeCut", "backlogCountWords",
     "backlogCounts", "backlogFilterSentence", "badgeCutLabel", "badgeCutWords", "categoryBucket", "categoryChipTitle", "clockGroupWords",
     "clockGroups", "clockPickLabel", "clockPicks", "clockSeat", "clockSeatWords", "clockWords", "drawnChips", "dropClockNote", "dropClockTitle",
-    "dropClocksLabel", "dropClocksNote", "dropClocksToast", "editTargetOptions", "fmtSpan", "focusRunWords",
+    "dropClocksLabel", "dropClocksNote", "dropClocksToast", "editTargetOptions", "effectiveSort", "fmtSpan", "focusRunWords",
     "fromScheduleWords", "goneOnClockLabel", "hasBacklogFilter", "headlineEditHint", "hiddenByArchive",
-    "holdChipWords", "holderOffer", "itemClockKey", "matchesBacklogFilter", "nameLabel", "nameNote", "nameableInCut",
-    "namingToast", "onClockIds", "onClockLabel", "pastBudgetChipWords", "queuedChipHeld", "realLabel",
-    "requeuedWords", "retimeEligible", "retimeNote", "retimeOffClockNote", "retimeQueuedToast", "retimeToast",
+    "holdChipWords", "holderOffer", "isFailedRow", "itemClockKey", "matchesBacklogFilter", "nameLabel", "nameNote", "nameableInCut",
+    "namingToast", "onClockIds", "onClockLabel", "pastBudgetChipWords", "queuedChipHeld", "realLabel", "refireOffered",
+    "requeuedWords", "retimeEligible", "retimeNote", "retimeOffClockNote", "retimeQueuedToast", "retimeToast", "rowStatusKey", "rowStatusWord",
     "runAgainAimedCount", "runAgainClosedNote", "runAgainEligible", "runAgainIds", "runAgainLabel",
-    "runAgainNote", "runAgainRowNote", "runAgainState", "runAgainToast", "scheduleItemsLabel",
-    "scheduleParentLabel", "scheduleRuleLabel", "withinAge",
+    "runAgainNote", "runAgainRowNote", "runAgainState", "runAgainToast", "runSeats", "scheduleItemsLabel",
+    "scheduleParentLabel", "scheduleRuleLabel", "sortRows", "statusBucket", "withinAge",
   ]);
   // Types are erased, so read them as text: each declared exported exactly once
   // across the barrel and its folder.
   const dir = join(SRC, "backlogFilter");
   const texts = [readFileSync(join(SRC, "backlogFilter.ts"), "utf8"),
     ...(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".ts")).map((f) => readFileSync(join(dir, f), "utf8")) : [])].join("\n");
-  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption", "BadgeCut"]) {
+  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption", "BadgeCut", "BacklogSort"]) {
     assert.equal([...texts.matchAll(new RegExp(`^export (?:type|interface) ${t}\\b`, "gm"))].length, 1, t);
   }
 });
@@ -114,7 +114,7 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
     "backlog.holdforbudget": 1, "backlog.name": 1, "backlog.openholder": 1,
     "backlog.queuehere": 1, "backlog.refire": 1, "backlog.remove": 1, "backlog.retime.clock": 1, "backlog.retime.pick": 1,
     "backlog.runagain": 1, "backlog.runagain.all": 1, "backlog.send": 1, "backlog.slotClose": 1, "backlog.slotask.on": 1, "backlog.slotcheck": 1,
-    "backlog.unqueuehere": 1,
+    "backlog.sort.newest": 1, "backlog.sort.run": 1, "backlog.unqueuehere": 1,
   });
   assert.deepEqual(tally(/data-hint="(backlog\.[^"]+)"/g), {
     "backlog.done": 1, "backlog.fire": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.queuehere": 2,
@@ -122,14 +122,15 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
   });
 });
 
-// ── P5: the three keys the sheet keeps, and their spelling ──────────────────
+// ── P5: the four keys the sheet keeps, and their spelling ──────────────────
 test("P5: the sheet's localStorage keys are the registry's, spelled as they always were", () => {
   const storage = ["storage.ts", "storage/keysPrefs.ts", "storage/keysWork.ts", "storage/keysView.ts"].map((f) => readFileSync(join(SRC, f), "utf8")).join("\n");
   assert.match(storage, /backlogRepo: lsKey\("backlogRepo"\)/);
   assert.match(storage, /backlogDraft: lsKey\("backlogDraft"\)/);
   assert.match(storage, /backlogShowArchived: lsKey\("backlogShowArchived"\)/);
+  assert.match(storage, /backlogSortRun: lsKey\("backlogSortRun"\)/);
   const s = sheet();
-  for (const k of ["backlogRepo", "backlogDraft", "backlogShowArchived"]) assert.ok(s.includes(`LS.${k}`), `LS.${k} is read through the registry`);
+  for (const k of ["backlogRepo", "backlogDraft", "backlogShowArchived", "backlogSortRun"]) assert.ok(s.includes(`LS.${k}`), `LS.${k} is read through the registry`);
   // The effects the sheet registers: one cut-from-outside, one drag binding,
   // one ticking clock, plus the re-scope to a changed `defaultRepoDir`. A second copy of any of them runs twice per change.
   assert.equal(s.split("useEffect(").length - 1, 3, "three effects");

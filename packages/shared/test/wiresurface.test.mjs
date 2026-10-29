@@ -48,6 +48,7 @@ const SESSION_SURFACE = [
   "SessionAsk:type",
   "SessionInfo:type",
   "SessionLimit:type",
+  "SessionNetRetry:type",
   "SessionLogin:type",
   "SessionOrigin:type",
   "SessionOriginKind:type",
@@ -150,6 +151,7 @@ const CLIENT_T = [
   "localrt.watch",
   "meter.get",
   "net.stalls",
+  "netretry.set",
   "notification.clear",
   "notification.get",
   "notification.handle",
@@ -198,6 +200,7 @@ const CLIENT_T = [
   "session.list",
   "session.mode",
   "session.name",
+  "session.netRetryCancel",
   "session.pin",
   "session.record",
   "session.remoteControl",
@@ -258,6 +261,7 @@ const HOST_T = [
   "localrt.evict",
   "localrt.sample",
   "meter.status",
+  "netretry.config",
   "notification",
   "notification.list",
   "notify.prefs",
@@ -337,11 +341,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 146, "a member was added or merged");
+  assert.equal(members, 148, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 82, "a member was added or merged");
+  assert.equal(members, 83, "a member was added or merged");
 });

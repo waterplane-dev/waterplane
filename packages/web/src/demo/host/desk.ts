@@ -293,6 +293,7 @@ export function keepFrame(m: DemoModel, msg: HostMessage): void {
     case "decisions.log": m.decisions = msg.entries; return;
     case "notification.list": m.notifications = msg.items; return;
     case "limit.config": m.limitConfig = { enabled: msg.enabled, ...(msg.mode ? { mode: msg.mode } : {}) }; return;
+    case "netretry.config": m.netRetry = { enabled: msg.enabled, ...(msg.envOff ? { envOff: true } : {}) }; return;
     case "intent.list": m.intents = msg.intents; return;
     default: return;
   }

@@ -4,10 +4,10 @@
  * an applied assessment cuts the backlog. README.md says what this owns.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
+import { keepStores, type FeatureManifest } from "../../sdk";
 import { BacklogSheet } from "./BacklogSheet";
 import { AssessmentSheet } from "./AssessmentSheet";
-import { assessRepo } from "./store";
+import { assessRepo, backlogFocus, backlogScope } from "./store";
 import { setSlotCheckOpener } from "../../slotAskStore";
 import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList, openSlotCheck } from "./actions";
 
@@ -23,7 +23,7 @@ export const manifest: FeatureManifest = {
   boot: () => { setSlotCheckOpener(openSlotCheck); return () => setSlotCheckOpener(null); },
   sheets: [
     // The cut is the tap, not a setting: leaving the sheet drops it.
-    { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus },
+    { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus, keep: keepStores(backlogScope, backlogFocus) },
     // Repo-scoped: with no repo in memory this returns null and falls through
     // to the screen underneath, rather than painting an empty sheet.
     { id: "assess", persisted: false, render: () => {

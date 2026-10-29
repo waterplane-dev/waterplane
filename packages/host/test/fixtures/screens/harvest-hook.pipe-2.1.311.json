@@ -1,0 +1,16 @@
+{
+  "session_id": "<string>",
+  "transcript_path": "<string>",
+  "cwd": "<string>",
+  "scratchpad_dir": "<string>",
+  "prompt_id": "<string>",
+  "permission_mode": "auto",
+  "effort": {
+    "level": "<string>"
+  },
+  "hook_event_name": "Stop",
+  "stop_hook_active": "<boolean>",
+  "last_assistant_message": "<string>",
+  "background_tasks": [],
+  "session_crons": []
+}

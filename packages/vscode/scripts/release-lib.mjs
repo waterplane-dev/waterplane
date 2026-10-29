@@ -49,7 +49,7 @@ export function readmeImages(readme) {
 export function planRelease(f) {
   const problems = [];
   const vsix = `${f.name}-${f.version}.vsix`;
-  if (!new RegExp(`^## ${f.version.replace(/\./g, "\\.")}( |$)`, "m").test(f.changelog))
+  if (!new RegExp(`^## ${f.version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`, "m").test(f.changelog))
     problems.push(`CHANGELOG.md has no "## ${f.version} - <date>" section.`);
   if (/^## Unreleased/m.test(f.changelog))
     problems.push(`CHANGELOG.md still has an "## Unreleased" section: give it the version or fold it in.`);

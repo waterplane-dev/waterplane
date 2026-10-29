@@ -18,7 +18,7 @@
  *    CLI's own id and `nav: true` (the phone then sends `promptChoice`, never a
  *    digit), options verbatim; `resolved` retires it; the `up` edge reconciles
  *    against `pending()`. The screen reader stands down while the channel owns
- *    the dialogs (`boxes.ts`'s `screenReaderOff`), because two readers on one
+ *    the dialogs (`boxread.ts`'s `screenReaderOff`), because two readers on one
  *    box re-key its fingerprint.
  *  - **questions** (contract 2.0): a question the CLI posed with NO choice box
  *    (`sources.questions` — an agent's ask-the-user tool) publishes the same way,
@@ -523,7 +523,7 @@ export class ChannelSlice {
   }
 
   /** The count of dialogs the source can see but not pose changed. Above 0 the screen reader
-   *  is back on duty (`boxes.ts`'s `screenReaderOff`) and looks NOW; back at 0 a box it read
+   *  is back on duty (`boxread.ts`'s `screenReaderOff`) and looks NOW; back at 0 a box it read
    *  is retired the way any box is once the channel owns the dialogs. */
   private unposed(s: Session, ch: SessionChannel, raw: number): void {
     const n = Number.isInteger(raw) && raw > 0 ? raw : 0;

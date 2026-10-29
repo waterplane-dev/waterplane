@@ -23,6 +23,7 @@ export const AGE_LABEL: Record<BacklogAge, string> = {
 
 /** The statuses, in the order a person scans them: what is live, then what is left. */
 export const BACKLOG_STATUSES: BacklogStatus[] = ["running", "queued", "failed", "done"];
+export * from "./calledOff.ts"; // the status axis's other edge: a call-off is not a failure
 
 /**
  * The age of an entry. Buckets NEST (an item from ten minutes ago is in "past

@@ -508,6 +508,7 @@ class Ext implements vscode.Disposable {
       folder,
       rows: mine ? this.rows.rows : [],
       selected: mine ? this.rows.selected : null,
+      view: this.panel.current,
       following: !folder || !this.pinned.has(folder),
       older: mine ? this.rows.older : 0, capped: mine ? this.rows.capped : 0, automated: mine ? this.rows.automated : 0,
       why: this.session.folder === folder && !this.session.doc ? this.session.why ?? null : folder ? null : "Open a folder to see its Claude Code sessions.",

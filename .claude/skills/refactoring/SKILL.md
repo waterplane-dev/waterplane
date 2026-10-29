@@ -43,6 +43,10 @@ sections are what each package decided).
 - **A file at the cap is cut by subject; its notes are never trimmed to make room.** The comments are
   where this repo records why a rule exists — deleting them to get back under `max-lines` loses the
   reason and still owes the split. `capSqueeze` (`tools/healthreadings.mjs`) counts the commits that did.
+- **Review lands with the work, not after it.** A feature built in several work packages is reviewed
+  while it is still in the agent's worktree or branch; main gets each package with its review fixes
+  already in. Other sessions in the shared tree build on main within the hour, so a "review fixes"
+  commit a day later is rework they have already built on. Direct push to main stays.
 - **Behaviour-neutral.** A refactor commit changes structure only. An intended change is named in
   the commit and in the report — never discovered by the user.
 - **Effect/hook ORDER and what a callback reads (ref vs render value) are behaviour.** A moved mount

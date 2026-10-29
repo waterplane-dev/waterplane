@@ -25,7 +25,7 @@ import { tmpdir } from "node:os";
 process.env.WATERPLANE_STOP_VERIFY_MS = "30";
 
 const turn = await import("../dist/sessions/turn.js");
-const boxes = await import("../dist/sessions/boxes.js");
+const boxread = await import("../dist/sessions/boxread.js");
 const { ChannelSlice } = await import("../dist/sessions/sidechannel.js");
 const { claudeBackend } = await import("../dist/backends/claude.js");
 
@@ -164,7 +164,7 @@ test("/compact announces nothing: published off the screen, retired quietly; a l
     h.hook("SessionStart", { session_id: "c2" });
     assert.equal(h.s.info.hooked, true);
     // Output on a hooked session with no turn believed arms the screen turn watch.
-    boxes.scheduleChecks(h.core, h.s);
+    boxread.scheduleChecks(h.core, h.s);
     assert.ok(h.s.stopVerifyTimer, "the screen turn watch is armed for a hooked claude session");
     const quiet = h.keepPainting(COMPACT);
     await pastWindow();

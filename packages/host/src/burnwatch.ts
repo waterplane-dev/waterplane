@@ -20,8 +20,8 @@
 import { join } from "node:path";
 import {
   BURN_DEFAULT_COOLDOWN_MS, BURN_DEFAULT_PTS_PER_HOUR,
-  burnPushText, burnStretch, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText,
-  type BurnState, type CostWindowDoc, type UsageHistoryDoc, type UsageInfo,
+  SOURCE_BURN_UNITS, burnPushText, burnStretch, sourceBurnPushText, sourceBurnSamples, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText,
+  type BurnState, type CostWindowDoc, type UsageHistoryDoc, type UsageInfo, type UsageReading, type UsageSourceSample,
 } from "@waterplane/shared";
 import { writeJsonAtomic, readJsonGuarded } from "./jsonstore.js";
 import type { Notify } from "./notifytypes.js";
@@ -108,6 +108,64 @@ export function createBurnWatch(deps: BurnWatchDeps): { observe(u: UsageInfo): P
     observe(u: UsageInfo): Promise<boolean> {
       if (inFlight) return Promise.resolve(false);
       inFlight = run(u).catch(() => false).finally(() => { inFlight = null; });
+      return inFlight;
+    },
+  };
+}
+
+// ── the same rule per non-claude source (c2 §3) ──────────────────────────────
+
+export interface SourceBurnWatchDeps {
+  /** A source's kept readings (`UsageSourceRegistry.history`); null = none kept. */
+  history(source: string): UsageSourceSample[] | null;
+  notify: Notify;
+  /** `burnwatch-sources.json` lives here; claude's `burnwatch.json` is never touched. */
+  stateDir: string;
+  now?: () => number;
+  thresholdPtsPerHour?: number;
+  cooldownMs?: number;
+}
+
+/**
+ * The burn push for each LONG window (`wk`, `mo`) of a non-claude source. One rule, one threshold,
+ * one cooldown (`shared/burn.ts`); the latch is `{ "<source>:<window>": BurnState }`, written
+ * BEFORE the push. Driven by a fresh, non-remembered reading — no timer. Claude is never asked here.
+ */
+export function createSourceBurnWatch(deps: SourceBurnWatchDeps): { observe(r: UsageReading): Promise<boolean>; armed(): boolean } {
+  const now = deps.now ?? Date.now;
+  const threshold = deps.thresholdPtsPerHour ?? envNum(envName("BURN_PTS_PER_HOUR"), BURN_DEFAULT_PTS_PER_HOUR);
+  const cooldown = deps.cooldownMs ?? envNum(envName("BURN_COOLDOWN_MS"), BURN_DEFAULT_COOLDOWN_MS);
+  const file = join(deps.stateDir, "burnwatch-sources.json");
+  const state: Record<string, BurnState> = readJsonGuarded<Record<string, BurnState>>(
+    file, {}, (v) => !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v as object).every(isState),
+  );
+  let inFlight: Promise<boolean> | null = null;
+
+  async function run(r: UsageReading): Promise<boolean> {
+    if (threshold <= 0 || r.source === "claude" || r.remembered) return false;
+    let fired = false;
+    for (const w of r.windows) {
+      if (!SOURCE_BURN_UNITS.includes(w.unit)) continue;
+      const samples = deps.history(r.source);
+      if (!samples) continue;
+      const t = now();
+      const s = burnStretch(sourceBurnSamples(samples, w.id), t);
+      const key = `${r.source}:${w.id}`;
+      const v = burnVerdict(s, threshold, state[key] ?? {}, t, cooldown);
+      if (!v.fire || !s) continue;
+      state[key] = { lastAt: t, lastFrom: s.from };
+      try { writeJsonAtomic(file, state); } catch { /* an unwritable state dir leaves the in-memory cooldown */ }
+      deps.notify("burn", { ...sourceBurnPushText(r.label, w.unit, s), tag: `burn:${key}`, open: { to: "tokens" } });
+      fired = true;
+    }
+    return fired;
+  }
+
+  return {
+    armed: () => threshold > 0,
+    observe(r: UsageReading): Promise<boolean> {
+      if (inFlight) return Promise.resolve(false);
+      inFlight = run(r).catch(() => false).finally(() => { inFlight = null; });
       return inFlight;
     },
   };

@@ -477,7 +477,11 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 */
 
 /* Sheets / overlays */
-.sheet { display: flex; flex-direction: column; height: 100%; padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px)); background: var(--bg); }
+/* `overflow-y: auto` is the FALLBACK scroll: a sheet's own region (`.list`, `.build-body`, …) is
+   `min-height: 0` and scrolls first, so this only engages when the fixed children above it outgrow
+   the screen — a long error, a wrapped head. Without it that content was clipped with nothing to
+   scroll, recurringly (sheetscroll.test.mjs). */
+.sheet { overflow-y: auto; display: flex; flex-direction: column; height: 100%; padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px)); background: var(--bg); }
 /* WRAPS, and the title SHRINKS. `.brand` is `flex: 0 0 auto` globally, so the
    `min-width: 0` below it bought nothing: a long repo name kept its full width
    and pushed the head's action buttons off the right edge with nothing to

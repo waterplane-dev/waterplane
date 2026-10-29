@@ -39,7 +39,7 @@ A cell reads `n/a` when the descriptor does not declare the fact (yet).
 | mode | n/a | n/a | n/a | n/a |
 | commands | n/a | n/a | n/a | n/a |
 | **Delivery** |||||
-| submitKey | "\r" | "\r" | "\r" | "\r" |
+| submitKey | "\\r" | "\\r" | "\\r" | "\\r" |
 | requiresChannel | n/a | n/a | n/a | n/a |
 | textThenSubmitDelayMs | 150 | 150 | 150 | 150 |
 | pastePlaceholder | yes | yes | yes | no |

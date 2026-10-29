@@ -133,5 +133,7 @@ export type SentSource =
   /** Legacy: the in-core Gemini oracle, before it became a plugin. Kept so old
    *  rows on disk still type-check and render. */
   | "oracle"
-  | "limit";
+  | "limit"
+  /** The host's retry of a turn the CLI gave up on a transient API error (`sessions/netretry.ts`). */
+  | "netretry";
 

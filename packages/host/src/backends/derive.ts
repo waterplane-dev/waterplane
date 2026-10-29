@@ -128,6 +128,7 @@ function build(caps: DeriveIn["caps"], facts: BackendFacts, sources: BackendSour
       permissionModes: [...caps.permissionModes],
       // 2.2: only where the descriptor declares a narrower launch set — claude's frame does not move.
       ...(caps.launchModes ? { launchModes: [...caps.launchModes] } : {}),
+      ...(caps.spendUnit ? { spendUnit: caps.spendUnit } : {}),
       // v2 additions: ABSENT where no provider answers (absent = not offered on the phone; an
       // older host sends none of these). Never `false`. `efforts` is sent whenever `effort` is
       // true; absent-with-`effort` is how the phone reads an older host (claude's ladder).

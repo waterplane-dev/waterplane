@@ -4,7 +4,8 @@
  * what this owns and which rules apply.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
+import { keepStores, type FeatureManifest } from "../../sdk";
+import { scheduleFocus, scheduleFocusIds } from "./store";
 import { ScheduleRulesSheet } from "./ScheduleRulesSheet";
 import { clearScheduleFocus, onScheduleList } from "./actions";
 
@@ -16,7 +17,7 @@ export const manifest: FeatureManifest = {
   sheets: [
     // A filter is the tap, not a setting: leaving the sheet drops both cuts,
     // so opening Schedules any other way lands on the whole list.
-    { id: "schedule", persisted: false, render: () => createElement(ScheduleRulesSheet), onLeave: clearScheduleFocus },
+    { id: "schedule", persisted: false, render: () => createElement(ScheduleRulesSheet), onLeave: clearScheduleFocus, keep: keepStores(scheduleFocus, scheduleFocusIds) },
   ],
   messages: {
     "schedule.list": (msg) => onScheduleList(msg.entries),

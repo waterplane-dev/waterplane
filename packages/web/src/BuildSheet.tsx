@@ -237,12 +237,6 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
         {online && <Button title="add a build command"
           onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</Button>}
       </SheetHead>
-      {failed && (
-        <div className="build-failed">
-          <Hint>Build “{failed.name}” failed {ago(failed.at)}.{failed.error ? `\n${failed.error}` : ""}</Hint>
-          {onDone && <Button onClick={() => onDone(failed.id)} title="mark this failure as dealt with; the red chip on the repo goes away">done</Button>}
-        </div>
-      )}
       {/* One line, and the rest behind a `?`: three always-on paragraphs
           stood between the head and the first build. */}
       <Hint>
@@ -273,6 +267,15 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
           the row that starts it — was gone. Scrolling the body cannot do that,
           and the log keeps its own inner scroll below. */}
       <div className="build-body">
+        {/* Inside the scroll region: `error` is the failed run's output tail,
+            and as a sibling of the sheet's column a long one pushed everything
+            below it — the body included — off a screen that could not scroll. */}
+        {failed && (
+          <div className="build-failed">
+            <Hint>Build “{failed.name}” failed {ago(failed.at)}.{failed.error ? `\n${stripAnsi(failed.error)}` : ""}</Hint>
+            {onDone && <Button onClick={() => onDone(failed.id)} title="mark this failure as dealt with; the red chip on the repo goes away">done</Button>}
+          </div>
+        )}
         <div className="list build-cmds">
           {builds.map((b) => {
             const running = runs.find((r) => r.buildId === b.id && r.status === "running");

@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { remedyWords, reasonKey, slugKey, cutChecks, openChecks, reasonProblem, scoreChip, sections, slugProblem } from "./logic.ts";
+import { refreshWords, remedyWords, reasonKey, slugKey, cutChecks, openChecks, reasonProblem, scoreChip, sections, slugProblem } from "./logic.ts";
 
 const c = (name, score, o = {}) => ({ name, score, reason: "", details: [], docUrl: null, short: "", failing: score >= 0 && score < 10, ...o });
 const view = (o = {}) => ({
@@ -62,4 +62,15 @@ test("draft keys are per repo and check", () => {
   assert.notEqual(reasonKey("r1", "A"), reasonKey("r2", "A"));
   assert.notEqual(reasonKey("r1", "A"), reasonKey("r1", "B"));
   assert.notEqual(reasonKey("r1", "A"), slugKey("r1"));
+});
+
+test("refreshWords: unchanged, new, local", () => {
+  const u = refreshWords("2026-10-01T00:00:00Z", { date: "2026-10-01T00:00:00Z", slug: "a/b" });
+  assert.match(u, /still from 2026-10-01/);
+  assert.match(u, /a\/b/);
+  assert.match(u, /push to main/);
+  assert.equal(refreshWords("2026-10-01T00:00:00Z", { date: "2026-10-08T00:00:00Z" }), "New scan from 2026-10-08.");
+  assert.match(refreshWords("x", { date: "x", local: true }), /exposure watch/);
+  assert.match(refreshWords("a", { date: "b", local: true }), /^New local reading from b/);
+  assert.equal(refreshWords(undefined, {}), null);
 });

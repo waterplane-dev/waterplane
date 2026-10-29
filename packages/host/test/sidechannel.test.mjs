@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 const { ChannelSlice, dialogToPrompt } = await import("../dist/sessions/sidechannel.js");
 const turn = await import("../dist/sessions/turn.js");
 const boxes = await import("../dist/sessions/boxes.js");
+const boxread = await import("../dist/sessions/boxread.js");
 
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
 
@@ -29,7 +30,7 @@ function harness({ sources, promptBoxes = "fakeplug-highlight", plugin = "fakepl
     sessions,
     emit: (ev, ...args) => { events.push([ev, ...args]); return true; },
     sourceTurn: (s, e) => turn.sourceTurn(core, s, e),
-    applyPrompt: (s, p) => boxes.applyPrompt(core, s, p),
+    applyPrompt: (s, p) => boxread.applyPrompt(core, s, p),
     armPromptCheck: (s, ms) => { armed.push(ms); },
     input: (id, data) => { typed.push([id, data]); return true; },
   };
@@ -132,14 +133,14 @@ test("the up edge reconciles against pending(); null leaves the screen reader on
   h.slice.attach(h.s);
   await flush();
   assert.equal(h.s.info.prompt.askId, "per_9");
-  assert.equal(boxes.screenReaderOff(h.s), true);
+  assert.equal(boxread.screenReaderOff(h.s), true);
 
   const g = fakeSources({ pending: null });
   const k = harness({ sources: g.sources });
   k.slice.attach(k.s);
   await flush();
   assert.equal(k.s.channel.dialogsLive, false, "cannot say ⇒ the channel does not claim the dialogs");
-  assert.equal(boxes.screenReaderOff(k.s), false);
+  assert.equal(boxread.screenReaderOff(k.s), false);
 });
 
 test("channel down ⇒ hooked off, the box retired, the screen reader re-armed", async () => {
@@ -148,13 +149,13 @@ test("channel down ⇒ hooked off, the box retired, the screen reader re-armed",
   h.slice.attach(h.s);
   await flush();
   f.st.dialogOn.asked(f.dialog("per_1"));
-  assert.equal(boxes.screenReaderOff(h.s), true);
+  assert.equal(boxread.screenReaderOff(h.s), true);
   f.st.onHealth({ state: "down", since: 2, note: "the backend's server exited" });
   assert.deepEqual(h.s.info.sideChannel, { state: "down", since: 2, note: "the backend's server exited" });
   assert.equal(h.s.info.hooked, false);
   assert.equal(h.s.hooksActive, false, "silence heuristics again");
   assert.equal(h.s.info.prompt, null, "the channel's box goes with the channel");
-  assert.equal(boxes.screenReaderOff(h.s), false);
+  assert.equal(boxread.screenReaderOff(h.s), false);
   assert.deepEqual(h.armed, [0], "a prompt check armed NOW, not at the next output");
   // …and back up: the turns and the dialogs are the channel's again.
   f.st.pending = [f.dialog("per_4")];
@@ -345,7 +346,7 @@ test("a session the source says has NO channel is screen-only: said in words, no
   assert.deepEqual([h.s.info.sideChannel.state, h.s.info.sideChannel.note], ["down", "screen-only (started before the side channel): read off the screen"]);
   assert.equal(h.slice.sendHold(h.s), null, "a pane started before the channel stays sendable — today's screen-only path");
   assert.equal(watched, 0);
-  assert.equal(boxes.screenReaderOff(h.s), false, "the screen reader keeps every box");
+  assert.equal(boxread.screenReaderOff(h.s), false, "the screen reader keeps every box");
   assert.equal(h.s.info.hooked, undefined, "turn ends stay silence's");
   assert.ok(h.events.some((e) => e[0] === "updated"), "the header line is published");
 });
@@ -378,23 +379,23 @@ test("a dialog the channel can SEE but not pose keeps the screen reader on duty,
   const h = harness({ sources: f.sources });
   h.slice.attach(h.s);
   await flush();
-  assert.equal(boxes.screenReaderOff(h.s), true, "reconciled: the channel owns the dialogs");
+  assert.equal(boxread.screenReaderOff(h.s), true, "reconciled: the channel owns the dialogs");
   f.st.dialogOn.unposed(1);
-  assert.equal(boxes.screenReaderOff(h.s), false, "a question tool dialog reaches the phone through the screen");
+  assert.equal(boxread.screenReaderOff(h.s), false, "a question tool dialog reaches the phone through the screen");
   assert.deepEqual(h.armed, [0], "…which looks now");
   // The screen reads it (no askId); a channel resolve elsewhere does not retire it.
-  boxes.applyPrompt(h.core, h.s, { kind: "select", question: "Which color?", options: [{ index: 1, label: "Red" }, { index: 2, label: "Blue" }], nav: true });
+  boxread.applyPrompt(h.core, h.s, { kind: "select", question: "Which color?", options: [{ index: 1, label: "Red" }, { index: 2, label: "Blue" }], nav: true });
   f.st.dialogOn.asked(f.dialog("per_1"));
   assert.equal(h.s.info.prompt.askId, "per_1", "a permission the channel CAN pose still wins");
   f.st.dialogOn.resolved("per_1");
   assert.equal(h.s.info.prompt, null);
   assert.deepEqual(h.armed, [0, 0], "…and the screen is asked again for the question still open");
-  boxes.applyPrompt(h.core, h.s, { kind: "select", question: "Which color?", options: [{ index: 1, label: "Red" }, { index: 2, label: "Blue" }], nav: true });
+  boxread.applyPrompt(h.core, h.s, { kind: "select", question: "Which color?", options: [{ index: 1, label: "Red" }, { index: 2, label: "Blue" }], nav: true });
   f.st.dialogOn.resolved("nothing-open");
   assert.equal(h.s.info.prompt?.question, "Which color?", "the screen's box is the screen's to retire while one is unposed");
   f.st.dialogOn.unposed(0);
   assert.equal(h.s.info.prompt, null, "none open ⇒ the reader stands down and its box goes");
-  assert.equal(boxes.screenReaderOff(h.s), true);
+  assert.equal(boxread.screenReaderOff(h.s), true);
 });
 
 test("with no screen reader, a dialog the channel sees but cannot pose marks the session waiting on you", async () => {

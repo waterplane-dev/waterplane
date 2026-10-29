@@ -144,3 +144,24 @@ test("burnPushText: the rate, the delta, the dearest launch, and 'Nothing was pa
   assert.match(bare.body, /rose 1\.5 points in 1 h 15 min, about 1\.2 an hour\. Nothing was paused\.$/);
   assert.ok(!/Dearest/.test(bare.body), "no launch, no clause");
 });
+
+import { SOURCE_BURN_UNITS, sourceBurnPushText, sourceBurnSamples } from "../dist/index.js";
+
+test("sourceBurnSamples: one window of a source onto the weekly series, a missing pct kept null (dropped by the cut)", () => {
+  const rows = [
+    { t: 1, w: [{ id: "premium", pct: 10, resetAt: 99 }, { id: "chat", pct: 50, resetAt: 5 }] },
+    { t: 2, w: [{ id: "chat", pct: 60, resetAt: 5 }] },
+    { t: 3, w: [{ id: "premium", pct: null, resetAt: 99 }] },
+  ];
+  assert.deepEqual(sourceBurnSamples(rows, "premium"), [
+    { t: 1, s: null, w: 10, sr: null, wr: 99 },
+    { t: 3, s: null, w: null, sr: null, wr: 99 },
+  ]);
+  assert.deepEqual(SOURCE_BURN_UNITS, ["wk", "mo"]);
+});
+
+test("sourceBurnPushText names the source, says it is its own account, pauses nothing", () => {
+  const t = sourceBurnPushText("Copilot", "mo", { from: 0, to: 3_600_000, dPts: 6, ptsPerHour: 6, samples: 4 });
+  assert.match(t.title, /^Copilot monthly limit climbing fast: \+6 points/);
+  assert.match(t.body, /Copilot's own account, not claude's\. Nothing was paused\.$/);
+});

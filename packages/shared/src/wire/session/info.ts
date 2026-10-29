@@ -3,7 +3,7 @@ import type { AnswerSuggestion, PluginBadge } from "../../plugin.js";
 import type { SessionBudgetInfo } from "../../sessionbudget.js";
 import type { ChannelHealth, SourceSessionSpend } from "../../backendsources.js";
 import type { StandingRule, DetectedPrompt } from "./promptbox.js";
-import type { Effort, PermissionMode, SessionLimit, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
+import type { Effort, PermissionMode, SessionLimit, SessionNetRetry, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
 import type { ContextSpark } from "./contextspark.js";
 import type { KeyHint } from "../../keyhint.js";
 import type { Bookmark } from "./archive.js";
@@ -152,6 +152,9 @@ export interface SessionInfo {
   pluginRules?: Record<string, StandingRule[]>;
   /** Usage-limit state + auto-continue setting for this session. */
   limit?: SessionLimit;
+  /** The host retrying a turn the CLI gave up on a transient API error
+   *  (`SessionNetRetry`). Absent/null = nothing being retried; an older host never sends it. */
+  netRetry?: SessionNetRetry | null;
   /** True when the session has been quiet (likely finished its turn). */
   idle?: boolean;
   /** Epoch ms when the session last went idle (turn finished). */

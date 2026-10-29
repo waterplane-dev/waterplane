@@ -4,7 +4,8 @@
  * README.md says what it owns and why.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
+import { keepStores, type FeatureManifest } from "../../sdk";
+import { rulesFor } from "./store";
 import { pulls } from "../../pull";
 import { AppsListSheet } from "./AppsListSheet";
 import { DownloadsSheet } from "./DownloadsSheet";
@@ -18,7 +19,7 @@ export { pullSummary, type PullSummary } from "./logic";
 export const manifest: FeatureManifest = {
   id: "pull",
   sheets: [
-    { id: "pull", persisted: true, render: () => createElement(DownloadsSheet), onLeave: clearRules },
+    { id: "pull", persisted: true, render: () => createElement(DownloadsSheet), onLeave: clearRules, keep: keepStores(rulesFor) },
     { id: "apps", persisted: true, render: () => createElement(AppsListSheet) },
   ],
   messages: {

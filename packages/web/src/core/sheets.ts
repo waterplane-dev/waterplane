@@ -8,7 +8,8 @@
  * through to the screen underneath, the same as any other entry.
  */
 import { createElement, type ReactNode } from "react";
-import type { Overlay } from "../routing.ts";
+import { overlayFromKey, type Overlay } from "../routing.ts";
+import { setSheetKeeper } from "../backStep.ts";
 import { FEATURES } from "../features/registry.ts";
 import type { SheetId } from "../sdk/types.ts";
 import { core } from "./api.ts";
@@ -16,6 +17,7 @@ import { ExtBoundary } from "./ExtBoundary.tsx";
 import { createSheetTable } from "./featureRun.ts";
 
 const TABLE = createSheetTable(FEATURES);
+setSheetKeeper((key) => TABLE.sheets.get(overlayFromKey(key) as SheetId)?.keep?.() ?? null);
 
 // An extension's sheet is drawn inside its own boundary — and `render` must run INSIDE it, as a
 // component (a throw during the parent's `s.render(core())` would never reach the boundary). The inner

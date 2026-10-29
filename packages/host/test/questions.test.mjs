@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 const { ChannelSlice } = await import("../dist/sessions/sidechannel.js");
 const turn = await import("../dist/sessions/turn.js");
 const boxes = await import("../dist/sessions/boxes.js");
+const boxread = await import("../dist/sessions/boxread.js");
 const { sourceTypedProblem, applySourceReply, TYPED_AFTER_KEYS_MS } = await import("../dist/sourceanswer.js");
 const { SOURCE_TYPED_MAX, promptFingerprint } = await import("@waterplane/shared");
 
@@ -32,7 +33,7 @@ function harness(sources) {
     sessions,
     emit: (ev, ...args) => { events.push([ev, ...args]); return true; },
     sourceTurn: (s, e) => turn.sourceTurn(core, s, e),
-    applyPrompt: (s, p) => boxes.applyPrompt(core, s, p),
+    applyPrompt: (s, p) => boxread.applyPrompt(core, s, p),
     armPromptCheck: () => {},
     input: (id, data) => { typed.push([id, data]); return true; },
   };
@@ -80,7 +81,7 @@ test("a free-text question publishes as kind question, its id as askId, freeText
   await flush();
   f.st.qOn.asked(f.question("q_1"));
   assert.deepEqual(h.s.info.prompt, { kind: "question", question: "which colour? (q_1)", options: [], nav: true, askId: "q_1", freeText: true });
-  assert.equal(boxes.screenReaderOff(h.s), true, "the channel's own box: the screen has nothing to add");
+  assert.equal(boxread.screenReaderOff(h.s), true, "the channel's own box: the screen has nothing to add");
   assert.equal(h.events.filter((e) => e[0] === "prompt").length, 1);
   f.st.qOn.closed("q_1");
   assert.equal(h.s.info.prompt, null, "closed retires it");

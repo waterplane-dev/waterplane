@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stagedSqueezes } from "../../tools/capsqueeze.mjs";
 import { formatFailure, guardsFor, runGuards } from "./guards.mjs";
 
 function git(args, opts = {}) {
@@ -42,6 +43,11 @@ function main() {
   if (process.env.SKIP_LOCAL_CI === "1") return 0;
   const root = git(["rev-parse", "--show-toplevel"]).trim();
   const staged = git(["diff", "--cached", "--name-only", "-z"], { cwd: root }).split("\0").filter(Boolean);
+  const squeezed = stagedSqueezes(root);
+  if (squeezed.length) {
+    process.stderr.write(`pre-commit: a capped file was fitted under the cap by deleting only its notes. Commit refused.\n\n${squeezed.join("\n")}\n\nBypass once: git commit --no-verify\n`);
+    return 1;
+  }
   const tests = guardsFor(staged, "commit", root);
   if (!tests.length) return 0;
 

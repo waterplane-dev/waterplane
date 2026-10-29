@@ -14,6 +14,7 @@ import type { useBacklogDraft } from "./useBacklogDraft";
 import type { useBacklogDrag } from "./useBacklogDrag";
 import type { useBacklogEdit } from "./useBacklogEdit";
 import type { useBacklogFilters } from "./useBacklogFilters";
+import type { useBacklogSort } from "./useBacklogSort";
 import type { useBacklogUi } from "./useBacklogUi";
 
 export interface BacklogProps {
@@ -390,6 +391,7 @@ export interface BacklogNav {
 export type BacklogModel = { p: BacklogProps; now: number }
   & ReturnType<typeof useBacklogDraft>
   & ReturnType<typeof useBacklogFilters>
+  & ReturnType<typeof useBacklogSort>
   & ReturnType<typeof useBacklogUi>
   & ReturnType<typeof useBacklogEdit>
   & ReturnType<typeof useBacklogCuts>

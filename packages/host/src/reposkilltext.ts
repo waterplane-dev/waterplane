@@ -346,6 +346,16 @@ opens ONE session on the peer, in a fresh detached checkout of a commit you push
 5. **Never restart the peer's ${N}.** A job's worktree (\`<clone>/.claude/worktrees/peer-<from>-<key>\`) is marked, and
    \`scripts/restart.sh\` and \`deploy/install-service.sh\` refuse there. Tests that start a host use their own port, never the live one.
 
+## When the default branch takes changes only through a pull request
+
+A push to the default branch can be refused as a protected branch or a repository rule
+violation (GH013, GH006). That is the repo's rule, not an error to get around: never force,
+never retry through another remote or token, never edit the rule. Commit on a branch named
+\`wp/<short-slug>\`, push it with \`git push -u origin wp/<short-slug>\`, open the PR with
+\`gh pr create --fill\`, and tell the person the PR URL. They merge it from the git screen on
+their phone, where it already appears. Opening a PR is not a push to the default branch; merging
+one, or switching auto-merge on, is the person's tap, so do neither unless they asked in words.
+
 ## A button of their own: a ${N} plugin
 
 When the person asks for something on the PHONE that ${N} does not ship (a

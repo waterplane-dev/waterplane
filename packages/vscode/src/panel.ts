@@ -48,6 +48,8 @@ export class Panel implements vscode.Disposable {
 
   private view: TabId = "all";
 
+  /** The view it shows (or will open on): the tree highlights a session only while this is one. */
+  get current(): TabId { return this.view; }
   get open(): boolean { return this.panel !== null; }
   get visible(): boolean { return this.panel?.visible ?? false; }
 

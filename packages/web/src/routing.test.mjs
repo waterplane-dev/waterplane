@@ -155,6 +155,25 @@ test("a close whose entry below is another session is not a Back into it", () =>
   assert.deepEqual(routeStep(lone, 2, K("s2", null)), { kind: "push" });
 });
 
+test("leaving a session started from a launcher sheet returns to that sheet", () => {
+  // The reported bug: launcher → backlog → fire → the new session; the header
+  // arrow (setActiveId(null)) unwound to the bare launcher while the gesture
+  // popped one entry into the backlog. Both must land on the backlog.
+  const stack = [K(null, null), K(null, "backlog"), K("s1", null)];
+  assert.deepEqual(routeStep(stack, 2, K(null, null)), { kind: "go", delta: -1 });
+  // …under a focused repo too, and past a dead step slot over the session
+  const focused = [K(null, null, "app"), K(null, "backlog", "app"), K("s1", null, "app"), VACANT];
+  assert.deepEqual(routeStep(focused, 3, K(null, null, "app")), { kind: "go", delta: -2 });
+});
+
+test("leaving a session opened from another session still goes to the launcher", () => {
+  const stack = [K(null, null), K("s1", null), K("s2", null)];
+  assert.deepEqual(routeStep(stack, 2, K(null, null)), { kind: "go", delta: -2 });
+  // a launcher sheet on a DIFFERENT focus is not where this arrow goes
+  const other = [K(null, null), K(null, "backlog", "app"), K("s1", null)];
+  assert.deepEqual(routeStep(other, 2, K(null, null)), { kind: "go", delta: -2 });
+});
+
 test("opening a new screen pushes; reaching one already in the stack unwinds to it", () => {
   const stack = [K(null, null), K("s1", null), K("s1", "backlog")];
   assert.deepEqual(routeStep(stack, 2, K("s1", "git")), { kind: "push" });

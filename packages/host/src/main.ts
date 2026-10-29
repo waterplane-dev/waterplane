@@ -32,7 +32,7 @@ import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
 import { AttentionStore } from "./attentionstore.js";
-import { setGitOutcomeSink } from "./git.js"; import { reportGitOutcome } from "./gitnotify.js";
+import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportGitOutcome } from "./gitnotify.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
@@ -43,7 +43,7 @@ import { Meter } from "./meter.js";
 import { UiStats } from "./uistats.js";
 import { UsageChecker } from "./usage.js"; import { createUsageSources } from "./usagesources.js";
 import { UsageLog } from "./usagelog.js";
-import { createBurnWatch } from "./burnwatch.js"; import { createWeekBurn } from "./weekburn.js"; import { discoverTargets } from "./repos.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
+import { createBurnWatch, createSourceBurnWatch } from "./burnwatch.js"; import { createWeekBurn } from "./weekburn.js"; import { discoverTargets } from "./repos.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
 import { BudgetStore } from "./budget.js";
 import { setSpendPeriodSource } from "./spendwall.js";
 import { createBillingWire } from "./server/billingwire.js";
@@ -145,7 +145,7 @@ Object.assign(ctx, {
   resolveAttention, resolveAttentionPrefix, attention,
 });
 // A host-run pull or push that ended is told once (`gitnotify.ts`): failed ⇒ attention, pushed ⇒ a receipt.
-setGitOutcomeSink((o) => reportGitOutcome(o, ctx));
+setGitOutcomeSink((o) => reportGitOutcome(o, ctx)); setPrNotify(ctx); // PR changes seen by the leased poll (prs.ts) ride the git notify path
 
 const deliveries = createDeliveries(ctx);
 ctx.startPrompt = deliveries.startPrompt; ctx.deliverChain = deliveries.deliverChain;
@@ -415,7 +415,7 @@ const usage = new UsageChecker(ROOT, (u) => {
   // reset): publishing it HERE makes the phone's queue rows explain themselves unasked.
   ctx.publishBudget();
 });
-const usageSources = createUsageSources(ROOT, () => usage.get(), broadcast); ctx.usageLog = usageLog; ctx.usage = usage; ctx.usageSources = usageSources;
+const sourceBurn = createSourceBurnWatch({ history: (s) => usageSources.history(s)?.samples ?? null, notify, stateDir: hostStateDir(ROOT) }); /* the burn push per non-claude source, on each fresh reading */ const usageSources = createUsageSources(ROOT, () => usage.get(), broadcast, (r) => { if (notifyEnabled(notifyPrefs.get(), "burn")) void sourceBurn.observe(r); }); ctx.usageLog = usageLog; ctx.usage = usage; ctx.usageSources = usageSources;
 /**
  * The usage budget's gate. Reads the checker's cache — never triggers a scrape
  * itself, because it is asked several times a second by the backlog tick and by
@@ -450,7 +450,7 @@ function syncUsagePolling() {
   const cfg = budget.get();
   const forBudget = cfg.enabled && (cfg.sessionMax < 100 || (cfg.weeklyMax != null && cfg.weeklyMax < 100) || (cfg.leftoverMax != null && cfg.leftoverMax < 100));
   billingWire.syncSpendFold();
-  const forBurn = burnWatch.armed() && notifyEnabled(notifyPrefs.get(), "burn"); // the burn push only sees polled readings
+  const forBurn = (burnWatch.armed() || sourceBurn.armed()) && notifyEnabled(notifyPrefs.get(), "burn"); // the burn push only sees polled readings
   // A known non-subscription account has no /usage screen worth a `claude` spawn; `unknown` polls as before.
   const forWeekBurn = weekBurn.armed(); // a pick for this week, `recurring`, or this week's nudge still possible
   const gated = forPlugins || forBudget || forBurn || forWeekBurn || sessions.wantsBudgetUsage(); usageSources.setPolling(gated); // other sources: same predicate, not claude's billing gate

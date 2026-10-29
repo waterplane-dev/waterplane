@@ -30,6 +30,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   AGENT_POSTED_WORDS,
+  AGENT_WITHDREW_DETAIL,
   DEFAULT_GRACE_MIN,
   INTENT_MAX_STEPS,
   MANUAL_HOLD_TEXT,
@@ -539,7 +540,7 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
     // Not durable, `intent.cancel`'s reason: a cancel is about the row as it is
     // NOW, and one that has started is refused rather than interrupted.
     if (isTerminal(row)) { d.json(res, { ok: true, already: true, ...agentRowView(row) }); return true; }
-    const done = d.intents.cancel(id, "called off by the agent that posted it");
+    const done = d.intents.cancel(id, AGENT_WITHDREW_DETAIL);
     const after = d.intents.get(id) ?? row;
     d.json(res, done ? { ok: true, ...agentRowView(after) }
       : { ok: false, error: "it has already started — only the person can stop it now", ...agentRowView(after) }, done ? 200 : 409);

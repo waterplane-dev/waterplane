@@ -169,7 +169,7 @@ its readers with it. **The reader answers only questions about its own binary; t
 rule that is not about pixels or rows**:
 
 - **`PluginScreenReader`** — a dialog with NO numbers, answered by walking a selection. Core
-  (`sessions/boxes.ts`'s `checkNavBox`, `choosePromptBox`) keeps the cheap gate on the stripped tail,
+  (`sessions/boxread.ts`'s `checkNavBox`, `choosePromptBox`) keeps the cheap gate on the stripped tail,
   the render, the miss budget and the resize grace, and the walk that sends ONE arrow per pass,
   RE-READS, and refuses rather than pressing Return on the wrong row. The reader answers
   `candidate(tail)`, `read(rows)`, `prompt(box)`, `stillUp(rows)`, `navTo(box, choice)`. A throw is "no box".
@@ -255,7 +255,10 @@ A plugin may add a CLI to the launcher. It is the same
   `wall(s)`, the backend's own verdict on whether THIS session is blocked, which `sessions/wall.ts` walks as the
   `limits` fact; `resetAt` only when the CLI stated it — a wall WITHOUT one schedules nothing: no
   probe, no ladder, no unattended `continue`; its `why` rides as `SessionLimit.needsYou` and the
-  phone says it needs the person), `agents` (a
+  phone says it needs the person; a session that EXITS at a dated source wall is reopened at the
+  reset like claude's limit exit — `sessions/resume.ts`'s `sourceWallExit`, on the last verdict
+  the source gave, by the conversation's exact `backendSessionId` through the plugin's own
+  continue + id argv; no id known, or undated ⇒ nothing scheduled), `agents` (a
   backend's own running subagents, polled on `agents.ts`'s cadence; rows with `endedAt` are not
   running), `conversations` (`list(cwd)` feeds the archive and the resume picker; `remove` is optional and is
   what the delete uses; `fork` is optional, consumed by `session.create` for a backend without

@@ -112,6 +112,9 @@ export type ClientHostMsg =
   | { t: "limit.resume"; id?: string }
   /** How the resume queue releases sessions once the limit lifts (host-wide). */
   | { t: "limit.setMode"; mode: LimitResumeMode }
+  /** Global switch: retry a turn the CLI gave up on a transient API error
+   *  (`netretrycfg.ts`). Off also cancels every pending retry. Live-only. */
+  | { t: "netretry.set"; enabled: boolean }
   /** The emergency halt: `on` stops every AI process this host started and
    *  latches until a later `on: false` (`shared/halt.ts`). Idempotent — a
    *  repeat of the same value is a no-op, so no ackId is needed. */

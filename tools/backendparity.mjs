@@ -84,13 +84,13 @@ export async function loadExternal() {
   return { descriptors: out, notes };
 }
 
-const cell = (v) => {
+export const cell = (v) => {
   if (v === undefined || v === null) return "n/a";
   if (v === true) return "yes";
   if (v === false) return "no";
   if (Array.isArray(v)) return v.length ? v.join(", ") : "none";
   if (typeof v === "object") return Object.entries(v).map(([k, x]) => `${k}=${cell(x)}`).join(", ");
-  return String(v).replace(/\|/g, "\\|");
+  return String(v).replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 };
 const has = (v) => (v ? "yes" : "no");
 /** One provider list as the table reads it: `source`, `screen:<reader>`, `store:<reader>`, first wins. */

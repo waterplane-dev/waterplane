@@ -11,6 +11,7 @@ is a bug someone already paid for.
 | File | Covers |
 | --- | --- |
 | [architecture.md](architecture.md) | **start here** — three pictures: the system (phone, tailnet, host, CLIs), the components (the four packages and their import rules) and the plugin mechanism (found, loaded, what a plugin may do, a plugin backend's dialog end to end) |
+| [forge.md](forge.md) | the forge seam: the `Forge` interface behind every `gh` call (rules, PRs, merge, checks log, `local-ci` status), `github.ts` as its only implementation, the guard that keeps it so, and how a GitLab (`glab`) plugin would contribute one (not built) |
 | [testing-and-ops.md](testing-and-ops.md) | every `scripts/e2e-*.mjs` and what it pins, the e2e runner, stub TUI modes, env pins, restart mechanics, full env-knob list, and why the repo-specific rules are lint rules |
 | [host.md](host.md) | workspaces, `packages/app` (Android shell), and one entry per `packages/host/src/*.ts` |
 | [web.md](web.md) | one entry per `packages/web/src/*` — send queue, pull queue, offline caches, gallery, reader view, hints, settings sync |

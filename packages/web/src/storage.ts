@@ -136,7 +136,7 @@ export const KEY_SCOPE = {
   deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
   // the language spoken into THIS phone (the vocabulary, `dictateTerms`, is the person's and synced)
   dictateLang: "device", dictateLangs: "device",
-  fanoutText: "host", fanoutSel: "host", fanoutModel: "host", backlogRepo: "host", backlogShowArchived: "host",
+  fanoutText: "host", fanoutSel: "host", fanoutModel: "host", backlogRepo: "host", backlogShowArchived: "host", backlogSortRun: "host",
   // retired stores, read once by a migration: never moved, so the migration finds them
   giveups: "device", giveupsMigrated: "device", padRescue: "device", padRescueMigrated: "device",
   activityDismissed: "host", activityConfirmedDone: "host",

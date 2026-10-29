@@ -23,7 +23,7 @@ const check = process.argv.includes("--check");
 /** A source file to document. plugin.ts's `export * from "./x.js"` siblings are documented in place. */
 function load(rel) {
   const t = fs.readFileSync(path.join(ROOT, rel), "utf8");
-  return { text: t, sf: ts.createSourceFile(rel, t, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS) };
+  return { rel, text: t, sf: ts.createSourceFile(rel, t, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS) };
 }
 let text, sf;
 const use = (c) => { ({ text, sf } = c); };
@@ -98,25 +98,27 @@ out.push("");
 let intro = "";
 let version = null;
 const sections = [];
-for (const st of main.sf.statements) {
-  if (ts.isImportDeclaration(st)) {
-    if (!intro) intro = docOf(st);
-    continue;
-  }
-  // `export * from "./x.js"`: the sibling's exports are part of the contract, listed here.
-  if (ts.isExportDeclaration(st) && !st.exportClause && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) {
-    const sib = load(path.join(path.dirname(SRC), st.moduleSpecifier.text.replace(/\.js$/, ".ts")));
-    for (const s of sib.sf.statements) if (isExported(s)) sections.push({ st: s, c: sib });
-    continue;
-  }
-  if (!isExported(st)) continue;
-  if (ts.isVariableStatement(st)) {
-    for (const d of st.declarationList.declarations) {
-      if (d.name.getText(sf) === "PLUGIN_API_VERSION" && d.initializer && ts.isStringLiteral(d.initializer)) version = d.initializer.text;
+/** Walk a module's statements in order; `export * from "./x.js"` siblings (which may themselves re-export) are part of the contract, listed in place. */
+function walk(c, top) {
+  for (const st of c.sf.statements) {
+    if (top && !intro && (ts.isImportDeclaration(st) || ts.isExportDeclaration(st))) intro = docOf(st);
+    if (ts.isImportDeclaration(st)) continue;
+    if (ts.isExportDeclaration(st) && !st.exportClause && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) {
+      const base = path.join(path.dirname(c.rel), st.moduleSpecifier.text.replace(/\.js$/, ".ts"));
+      walk(load(base), false);
+      continue;
     }
+    if (!isExported(st)) continue;
+    if (ts.isVariableStatement(st)) {
+      for (const d of st.declarationList.declarations) {
+        if (d.name.getText(c.sf) === "PLUGIN_API_VERSION" && d.initializer && ts.isStringLiteral(d.initializer)) version = d.initializer.text;
+      }
+    }
+    sections.push({ st, c });
   }
-  sections.push({ st, c: main });
 }
+use(main);
+walk(main, true);
 if (!version) { console.error(`gen-plugin-docs: no string PLUGIN_API_VERSION in ${SRC}`); process.exit(2); }
 
 out.push(`**API version: \`${version}\`** (\`PLUGIN_API_VERSION\`). A manifest's \`apiVersion\` loads when it has the`);
@@ -156,7 +158,7 @@ for (const { st, c } of sections) {
       out.push("|---|---|---|");
       for (const m of st.members) {
         const sig = oneLine(print(m)).replace(/\|/g, "\\|");
-        const d = docOf(m).replace(/\n{2,}/g, "<br><br>").replace(/\n/g, " ").replace(/ {2,}/g, " ").replace(/\|/g, "\\|");
+        const d = docOf(m).replace(/\n{2,}/g, "<br><br>").replace(/\n/g, " ").replace(/ {2,}/g, " ").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
         out.push(`| \`${memberName(m)}\` | \`${sig}\` | ${d} |`);
       }
       out.push("");

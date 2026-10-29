@@ -49,7 +49,9 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   inherits. The three sentences are `backlogFilter.ts`'s (`fromScheduleWords` / `scheduleRuleLabel` /
   `scheduleItemsLabel`); `focusIds` is how any cut opens this sheet from outside.
   **A `running` row is never hidden by the archived cut** (`hiddenByArchive`, one predicate for the
-  base, the repo counts and the composer's badge). Nothing re-sorts rows on its own; a row a drag (or
+  base, the repo counts and the composer's badge). The sheet DRAWS newest first by default
+  (`rowSort.ts`, remembered): a view, never a move — the number stays the RUN seat, drag and the
+  move arrows exist only in run order, the clock cut is always run order. A row a drag (or
   a pinned assessment rank) placed is marked `handOrdered` and says so. `auto off` carries a sentence
   (it pauses every deferred send in the app) and check/validate verdicts wear `CHECK_ICON`.
   **A row's TITLE and KIND are shared `naming.ts`'s, and `label` (the person's) is never replaced by

@@ -37,6 +37,7 @@ import {
   requeuedWords, runAgainAimedCount, runAgainClosedNote, runAgainEligible, runAgainIds,
   runAgainLabel, runAgainNote, runAgainRowNote, runAgainState, runAgainToast,
   CATEGORY_CHIP_LABEL, HEADLINE_BY_WORDS, NAME_COST_NOTE,
+  isFailedRow, refireOffered, retimeEligible, rowStatusKey, rowStatusWord, statusBucket,
   categoryBucket, categoryChipTitle, headlineEditHint, nameLabel, nameNote, nameableInCut, namingToast,
 } from "./backlogFilter.ts";
 
@@ -1309,4 +1310,57 @@ test("holderOffer: open the session a serial row waits behind, 'answer in' when 
   assert.equal(holderOffer(row, [s({ running: false })]), null, "the session is gone");
   assert.equal(holderOffer(row, []), null);
   assert.equal(holderOffer({ ...row, status: "running" }, [s()]), null, "only a waiting row waits behind anything");
+});
+
+// ── The draw order: a view, never a move ───────────────────────────────────
+test("newest first draws by createdAt descending; the run seat stays the run order's", async () => {
+  const { sortRows, runSeats, effectiveSort } = await import("./backlogFilter.ts");
+  const runOrder = [{ id: "a", createdAt: 1 }, { id: "b", createdAt: 3 }, { id: "c", createdAt: 2 }];
+  assert.deepEqual(sortRows(runOrder, "newest").map((x) => x.id), ["b", "c", "a"]);
+  assert.deepEqual(sortRows(runOrder, "run").map((x) => x.id), ["a", "b", "c"]);
+  assert.deepEqual(runOrder.map((x) => x.id), ["a", "b", "c"], "the run order is not mutated");
+  assert.deepEqual([...runSeats(runOrder)], [["a", 1], ["b", 2], ["c", 3]]);
+  assert.equal(effectiveSort("newest", true), "run", "the clock cut is always run order");
+  assert.equal(effectiveSort("newest", false), "newest");
+});
+
+// A cancelled row (`BacklogItem.calledOff`) stays `failed` on the wire for
+// older phones, and this phone must not read it as a failure anywhere: not in a
+// count, not on a clock, and not in a verb the host refuses on a cancelled row
+// (run it again, drop the clock, re-time). The case: an agent reposted a
+// corrected draft and called the first off, and the phone showed a red *failed*
+// with *re-fire* beside the run that actually happened; rows called off from
+// the phone or dismissed by an assessment read the same way.
+test("a call-off is settled, never failed — no count, no refused verb, no clock seat", () => {
+  const at = { rule: { kind: "window", window: "weekly", edge: "before", offsetMin: -600, oneShot: true }, nextAt: null };
+  const gone = item({ id: "w", status: "failed", calledOff: "agent", error: "called off by the agent that posted it", at, finishedAt: NOW });
+  const off = item({ id: "o", status: "failed", calledOff: "other", error: "called off from the phone", finishedAt: NOW });
+  const failed = item({ id: "f", status: "failed", error: "boom", finishedAt: NOW });
+  const mates = [item({ id: "q1", at }), gone, item({ id: "q2", at })];
+
+  assert.equal(rowStatusWord(gone), "withdrawn");
+  assert.equal(rowStatusWord(off), "called off");
+  assert.equal(rowStatusWord(failed), "failed");
+  assert.equal(rowStatusKey(off), "calledoff", "one class token, no space");
+  for (const it of [gone, off]) {
+    assert.equal(statusBucket(it), "done", "it sits with the settled rows, where *archive these N* is");
+    assert.equal(isFailedRow(it), false);
+    assert.equal(runAgainState({ ...it, at: undefined }, new Set()), "none", "the host refuses a re-queue of a call-off");
+  }
+  assert.equal(retimeEligible(gone), false);
+  assert.equal(isFailedRow(failed), true);
+  assert.equal(refireOffered(off), true, "the host revives it on re-fire, and the person may mean it");
+  assert.equal(refireOffered(gone), false, "the agent posted the version meant to run");
+  assert.equal(refireOffered(failed), true);
+
+  const counts = backlogCounts([gone, off, failed], NO_BACKLOG_FILTER, NOW);
+  assert.equal(counts.status.failed, 1);
+  assert.equal(counts.status.done, 2);
+  assert.deepEqual([gone, off, failed].filter((it) => matchesBacklogFilter(it, { ...NO_BACKLOG_FILTER, status: "failed" }, NOW)).map((it) => it.id), ["f"]);
+  assert.deepEqual(backlogBadgeCut([gone, off, failed]).failed, ["f"]);
+  assert.deepEqual(assessableInCut([gone, off, failed]), ["f"], "the host's ASSESSABLE_STATES leaves `canceled` out");
+  assert.deepEqual(nameableInCut([gone, off, failed]), ["f"]);
+
+  assert.deepEqual(clockSeat(clockGroups(mates), "q2"), { idx: 1, of: 2 }, "a call-off takes no seat on the clock");
+  assert.equal(clockSeat(clockGroups(mates), "w"), null);
 });

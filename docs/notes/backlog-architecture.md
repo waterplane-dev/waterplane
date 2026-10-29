@@ -66,10 +66,18 @@ backlogFilter/*.ts                  pure rules, `.ts` specifiers (node --test lo
 | `backlog/RowChips.tsx` | the meta line of chips |
 | `backlog/RowNotes.tsx` | the sentences under the chips, waiting line, slots, close choice, check/validate details |
 | `backlog/RowActions.tsx` | the verb row |
+| `backlog/BacklogSortBar.tsx` + `useBacklogSort.ts` | the *newest first* / *run order* switch and its remembered answer |
 | `backlogFilter.ts` | barrel |
 | `backlogFilter/{rowBuckets,rowFilter,cutCounts,clockGroups,dropClock,runAgain,mergeWords,scheduleWords,titleWords,rowWords,retimeMany}.ts` | the rules by subject (the barrel's header says which is which) |
 
-There is no `sort` file: the order is the host's, and nothing on the phone re-sorts.
+**`rowSort.ts` draws; it never orders.** The RUN order is the host's (`order ?? createdAt`) and nothing
+on the phone writes it. Owner asked 2026-10-27 for the newest rows on top by default — the row just
+added sat at the bottom of a long list. So the sheet draws each group newest first unless *run order* is
+picked (remembered per host, `backlogSortRun`), and three things keep that honest: the number on a row
+is its RUN seat in either view (`runSeats`), drag and the up/down arrows exist only in run order (they
+trade on-screen neighbours, which newest first are not), and the *on a clock* cut is always run order
+(`effectiveSort`) because its heads say *in this order*. The clock-seat arrows in a row's chips read the
+clock's own run order, so they stay in both views.
 
 ## Caps and pins
 

@@ -9,6 +9,7 @@ import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
 import {
   BACKLOG_AGES, BACKLOG_STATUSES, CATEGORY_BUCKETS, categoryBucket, type BacklogAge, type CategoryBucket, withinAge,
 } from "./rowBuckets.ts";
+import { isFailedRow, statusBucket } from "./calledOff.ts";
 import { type BacklogFilter } from "./rowFilter.ts";
 
 /**
@@ -42,11 +43,12 @@ export function backlogCounts(items: BacklogItem[], f: BacklogFilter, now: numbe
     // always been counted against each other: with "failed" and "past 24h"
     // already on, `bug 3` has to mean three failed bugs from the past 24 hours,
     // because that is the list its tap opens.
-    const okStatus = !f.status || it.status === f.status;
+    const st = statusBucket(it);
+    const okStatus = !f.status || st === f.status;
     const okAge = !f.age || withinAge(it.createdAt, f.age, now);
     const okCat = !f.category || categoryBucket(it) === f.category;
     const okClock = !f.clock || !!it.at;
-    if (okAge && okCat && okClock) { status[it.status] = (status[it.status] ?? 0) + 1; pool.status++; }
+    if (okAge && okCat && okClock) { status[st] = (status[st] ?? 0) + 1; pool.status++; }
     if (okStatus && okCat && okClock) {
       pool.age++;
       for (const a of BACKLOG_AGES) if (withinAge(it.createdAt, a, now)) age[a]++;
@@ -315,6 +317,6 @@ export const ASSESS_NONE_IN_CUT =
  *  The host decides for real (`ASSESSABLE_STATES`, over intent states); this is
  *  the same question asked of the two backlog statuses that reach it, so the
  *  count on the button is the count the run will judge. */
-export function assessableInCut(items: readonly Pick<BacklogItem, "id" | "status" | "archived">[]): string[] {
-  return items.filter((it) => !it.archived && (it.status === "queued" || it.status === "failed")).map((it) => it.id);
+export function assessableInCut(items: readonly Pick<BacklogItem, "id" | "status" | "archived" | "calledOff">[]): string[] {
+  return items.filter((it) => !it.archived && (it.status === "queued" || isFailedRow(it))).map((it) => it.id);
 }

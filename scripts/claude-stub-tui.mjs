@@ -170,7 +170,9 @@
 //     `--session-id`/`--resume`) before the hooks fire. Directives, one per line, in the
 //     submitted prompt: `STUB_WRITE <relpath>` writes a file under the cwd, `STUB_RUN <cmd>`
 //     runs a shell command in the cwd (its exit code and output go into the answer),
-//     `STUB_SAY <text>` is the answer's text. No directive => the answer is "ok". Needs
+//     `STUB_SAY <text>` is the answer's text, `STUB_NETFAIL <n>` makes this turn and the
+//     next n-1 end on the CLI's transient give-up row (`isApiErrorMessage`, `server_error`,
+//     ENOTFOUND — e2e-netretry.mjs) instead. No directive => the answer is "ok". Needs
 //     `STUB_HOOKS=1` for the turn to end. A multi-line write is ONE prompt (only \r submits).
 //
 // STUB_HOOKS=1 makes the stub POST a SessionStart hook to the host, so the
@@ -294,10 +296,17 @@ function hookTurn(prompt) {
 }
 
 
+/** answer mode: turns still owed a transient give-up row (`STUB_NETFAIL`). */
+let netFails = 0;
+
 /** answer mode: write the conversation log with this prompt and its answer, then the turn hooks. */
 function answerTurn(prompt) {
   const lines = String(prompt).split("\n");
   const arg = (k) => lines.map((l) => l.trim()).find((l) => l.startsWith(k + " "))?.slice(k.length + 1).trim();
+  const nf = Number(arg("STUB_NETFAIL"));
+  if (nf > 0) netFails = nf;
+  const giveUp = netFails > 0;
+  if (giveUp) netFails--;
   let say = arg("STUB_SAY") ?? "ok";
   const wr = arg("STUB_WRITE");
   if (wr) { try { mkdirSync(dirname(join(process.cwd(), wr)), { recursive: true }); writeFileSync(join(process.cwd(), wr), `written by the stub for ${wr}\n`); } catch { /* the answer says nothing */ } }
@@ -316,9 +325,13 @@ function answerTurn(prompt) {
       const dir = join(home, ".claude", "projects", process.cwd().replace(/[^a-zA-Z0-9]/g, "-"));
       mkdirSync(dir, { recursive: true });
       const at = new Date().toISOString();
+      const reply = giveUp
+        ? { type: "assistant", timestamp: at, isApiErrorMessage: true, error: "server_error", apiErrorStatus: null,
+            message: { model: "<synthetic>", role: "assistant", content: [{ type: "text", text: "API " + "Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)" }] } }
+        : { type: "assistant", timestamp: at, message: { role: "assistant", content: [{ type: "text", text: say }] } };
       appendFileSync(join(dir, sid + ".jsonl"),
         JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content: prompt } }) + "\n" +
-        JSON.stringify({ type: "assistant", timestamp: at, message: { role: "assistant", content: [{ type: "text", text: say }] } }) + "\n");
+        JSON.stringify(reply) + "\n");
     } catch { /* no log: the answer is simply unreadable */ }
   }
   hookTurn(prompt);

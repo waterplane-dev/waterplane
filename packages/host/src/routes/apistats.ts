@@ -6,6 +6,7 @@
  * `api.ts` (host-architecture.md, "api.ts — the HTTP routes as tables").
  */
 import { PRICES_AS_OF, zeroCost, zeroTotals, type BackendTokensDoc, type CostWindowDoc } from "@waterplane/shared";
+import { BACKEND_LEDGER_MAX_AGE_MS, besideSpend } from "../besidespend.js";
 import { costMeta } from "../costwindow.js";
 import { hostStoreDir } from "../hoststore.js";
 import { BACKENDS, DEFAULT_BACKEND, backendInfos, derive, storeReaderFor } from "../backends/index.js";
@@ -13,13 +14,6 @@ import { localUsageDoc } from "../localusage.js";
 import { localSliceLedger, modelOwner, readUserPrices, rememberCatalogues } from "../localledger.js";
 import { json } from "./apiio.js";
 import { route, type ApiEntry } from "./apitable.js";
-
-/**
- * How stale a backend's own ledger may be before `/api/tokenstats/<id>` asks
- * it again — opencode's store ledger's TTL, so the two answer a re-opened
- * screen on the same clock. `?fresh=1` passes 0.
- */
-const BACKEND_LEDGER_MAX_AGE_MS = 15_000;
 
 /** The widest span `/api/costwindow` folds: a weekly window plus slack. */
 const COST_WINDOW_MAX_MS = 35 * 24 * 3_600_000;
@@ -211,7 +205,12 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
       return true;
     }
     const maxAge = url.searchParams.get("fresh") === "1" ? 0 : undefined;
-    json(res, await ctx.tokenStats.costWindow(from, to, costMeta(ctx.sessions, ctx.intents), maxAge));
+    const doc = await ctx.tokenStats.costWindow(from, to, costMeta(ctx.sessions, ctx.intents), maxAge);
+    // `beside` is attached HERE only: `tokenStats.costWindow` stays claude's fold for the verdicts.
+    // Other backends' own ledgers over the asked span; a failure leaves the field absent.
+    let beside: CostWindowDoc["beside"];
+    try { beside = await besideSpend(doc.from, doc.to); } catch { beside = undefined; }
+    json(res, beside ? { ...doc, beside } : doc);
     return true;
   }),
 ];

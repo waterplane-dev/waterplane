@@ -29,11 +29,13 @@ import { SetNote } from "../../SettingsKit";
 
 const CAL_LATER = "A percent is converted from dollars at the window's measured rate; the desktop sends that rate with a budget, so once one is set this line says what 1% is worth — until then nothing is held.";
 
-export function SessionBudgetSheet({ subject, title, windowsOff }: {
+export function SessionBudgetSheet({ subject, title, windowsOff, spendUnit }: {
   subject: SessionInfo;
   title: string;
   /** `budgetWindowsOff`'s sentence: this session's backend spends from no claude window. */
   windowsOff?: string | null;
+  /** The backend's own spend unit (`caps.spendUnit`), offered as a unit. */
+  spendUnit?: string;
 }) {
   const now = useNow(30_000);
   const cur = subject.budget;
@@ -93,7 +95,7 @@ export function SessionBudgetSheet({ subject, title, windowsOff }: {
         <div className="set-group">
           {/* Keyed by session: switching subject restarts the field on ITS cap. */}
           <BudgetField key={subject.id} initial={cur?.cfg ?? null} cal={cur ? cur.cal ?? null : undefined} onChange={setDraft}
-            spark={budgetSparkOf(subject)} calFor={cur ? undefined : CAL_LATER} windowsOff={windowsOff} />
+            spark={budgetSparkOf(subject)} calFor={cur ? undefined : CAL_LATER} windowsOff={windowsOff} spendUnit={spendUnit} />
         </div>
       </div>
     </Sheet>

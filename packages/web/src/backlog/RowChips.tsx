@@ -14,7 +14,7 @@ import { budgetChipWords } from "../budgetInput";
 import { launchClause, launchWords } from "../sendIntent";
 import {
   AGE_LABEL, HOLD_FOR_HOST_TITLE, ageBucket, clockSeat, clockSeatWords, CLOCK_MOVE_NOTE, clockWords, fmtSpan,
-  fromScheduleWords, holdChipWords, pastBudgetChipWords, PAST_BUDGET_TITLE,
+  fromScheduleWords, holdChipWords, pastBudgetChipWords, PAST_BUDGET_TITLE, rowStatusKey, rowStatusWord,
 } from "../backlogFilter";
 import { ago } from "../format";
 import { budgetEditable, closeChipWords, opensOwnSession } from "../autoSessions";
@@ -27,7 +27,7 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
   const { it } = row;
   return (
                   <span className="bl-meta">
-                    <span className={`tag-${it.status}`}>{it.status}</span>
+                    <span className={`tag-${rowStatusKey(it)}`}>{rowStatusWord(it)}</span>
                     {/* **What kind of thing this row is** — icon and word, and
                         NOTHING AT ALL when nobody has said. Absent means nobody
                         said (`naming.ts`), which is a real answer: a default
@@ -67,7 +67,7 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     )}
                     {it.status !== "running" && it.finishedAt != null && (
                       <span className="bl-age" title={`finished ${new Date(it.finishedAt).toLocaleString()}`}>
-                        {it.status === "failed" ? "failed" : "finished"} {ago(it.finishedAt)}
+                        {it.status === "failed" ? rowStatusWord(it) : "finished"} {ago(it.finishedAt)}
                         {it.startedAt != null && it.finishedAt >= it.startedAt ? ` · took ${fmtSpan(it.finishedAt - it.startedAt)}` : ""}
                       </span>
                     )}

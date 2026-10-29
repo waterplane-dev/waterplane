@@ -22,7 +22,7 @@ import type { FixtureSource } from "../clifixtures.js";
 import type { PendingPlan } from "../planbox.js";
 import type { PlanEntry } from "../sourceanswer.js";
 import type { BackendDescriptor } from "../backends/index.js";
-import type { PluginStoreReader } from "@waterplane/shared";
+import type { PluginStoreReader, TurnEndNet } from "@waterplane/shared";
 import type { AgentUsage, SeriesCursor } from "../ctxlog.js";
 import type { LimitLogVerdict } from "../limitlog.js";
 import type { LimitRetry } from "../limitretry.js";
@@ -313,6 +313,13 @@ export interface Session {
   spawnedAt: number;
   /** Pending auto-continue attempt for a usage-limit block, if scheduled. */
   limitTimer: NodeJS.Timeout | null;
+  /** The pending retry rung after a transient API give-up (`apiretry.ts`), and its one
+   *  log re-read after a Stop; `netWriting` marks our OWN `continue` so it does not cancel
+   *  itself; `netSentAt` is when it was typed. Absent = never armed. */
+  netTimer?: NodeJS.Timeout | null;
+  netRecheck?: NodeJS.Timeout | null;
+  netWriting?: boolean;
+  netSentAt?: number;
   /**
    * The `gaveup` notification has been sent for the block this session is in.
    *
@@ -651,6 +658,13 @@ export interface SessionCore {
   limitRetry(s: Session, now: number, resetAt?: number | null): LimitRetry;
   limitLog(s: Session): LimitLogVerdict;
   checkLimit(s: Session): void;
+  // ── apiretry.ts ──
+  /** The turn just ended: arm a retry after a fresh transient API give-up. `retrying` ⇒ armed (hold the ping); the value rides `turnEnded`. */
+  netTurnEnded(s: Session): TurnEndNet | null;
+  /** A turn started — anyone's but our own `continue` calls the retry off. */
+  netTurnStarted(s: Session): void;
+  /** Something was typed into the session — anything but our own `continue` calls the retry off. */
+  netTyped(s: Session): void;
   markLimitBlocked(s: Session, resetAt: number | null, weekly?: boolean, sample?: string, dated?: boolean): void;
   scheduleLimitAttempt(s: Session, atOverride?: number): void;
   doLimitContinue(s: Session): Promise<void>;
@@ -688,6 +702,8 @@ export interface SessionCore {
   setAsking(s: Session, ask: SessionAsk | null): void;
   setCliSuggestion(s: Session, text: string | null): void;
   checkAgents(s: Session): void;
+  checkAsking(s: Session): void;
+  checkCliSuggestion(s: Session): void;
   clearStopVerify(s: Session): void;
   /** A turn edge a backend's `sources.turns` reported (`sidechannel.ts`). */
   sourceTurn(s: Session, edge: "started" | "ended" | "ready", facts?: TurnFacts): void;

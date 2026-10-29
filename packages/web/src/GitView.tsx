@@ -20,6 +20,8 @@ import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./u
 import { Button } from "./kit/Button";
 import { Row, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { PrCard } from "./PrCard";
+import { cardVisible, pushLabel as pushLabelText } from "./prCardLogic";
 
 interface Props {
   repoId: string;
@@ -441,7 +443,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   // the working tree alone. The count says how much that is.
   const pushLabel = pushStart != null
     ? <><Loader size={14} className="spin" /> pushing… {elapsed(Date.now() - pushStart)}</>
-    : <><ArrowUpFromLine size={14} /> {status && status.ahead > 0 ? `Push ${status.ahead}` : "Push"}</>;
+    : <><ArrowUpFromLine size={14} /> {pushLabelText(status?.branchRules, status?.ahead ?? 0)}</>;
   // The count is as of the desktop's last fetch; the pull fetches first.
   const pullLabel = pulling
     ? <><Loader size={14} className="spin" /> pulling…</>
@@ -575,6 +577,8 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
         ))}
       </div>
       {status && remoteRow}
+      {/* PR mode only: above the history (the log sheet) and the note. Direct/absent mounts nothing. */}
+      {status?.branchRules && cardVisible(status?.branchRules) && <PrCard repoId={repoId} rules={status.branchRules} />}
       {/* ABOVE the note: the note is the log's tail, forty lines on a phone. */}
       {failure && failure.note === note && (
         <div className="sheet-actions">
@@ -594,9 +598,12 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
           </Button>
         </div>
       )}
-      {stored && !note && (
+      {/* A pull or push running here supersedes the stored failure: the pull
+          clears `note` as it starts, so without the run check the old log
+          stayed up under "pulling…". */}
+      {stored && !note && !pulling && pushStart == null && (
         <>
-          <Hint className="git-note">The last {stored.verb} failed {ago(stored.at)}.{"\n"}{stored.error}</Hint>
+          <Hint className="git-note">The last {stored.verb} failed {ago(stored.at)}. A {stored.verb} that goes through clears it; dismiss clears it now.{"\n"}{stored.error}</Hint>
           <div className="sheet-actions">
             {onAskAgent && (
               <Button onClick={() => { track("action:git.askAgent"); onAskAgent(fullFailure({ verb: stored.verb === "pull" ? "pull" : "push", error: stored.error })); }}
@@ -608,7 +615,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
               title="copy the same words to the clipboard: the log, with the branch, upstream and how long it ran">
               <Copy size={16} /> {GIT_COPY_LABEL}
             </Button>
-            {onDone && <Button onClick={() => onDone(stored.id)} title="mark this failure as dealt with; the red chip on the repo goes away"><Check size={16} /> done</Button>}
+            {onDone && <Button onClick={() => onDone(stored.id)} title="mark this failure as dealt with; the red chip on the repo goes away"><Check size={16} /> dismiss</Button>}
           </div>
         </>
       )}

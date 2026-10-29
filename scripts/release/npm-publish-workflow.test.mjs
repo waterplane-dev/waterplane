@@ -28,13 +28,13 @@ test("triggers: a published release, or a hand re-run that names its tag", () =>
   assert.match(code, /\[ "\$GITHUB_REF" != "refs\/tags\/\$TAG" \]/, "a run not started ON the tag stops: provenance would attest another commit");
 });
 
-test("permissions: read-only at the top, the write grants only on the publish job", () => {
+test("permissions: read-only at the top, the write grants only on the jobs that need them", () => {
   const strip = (b) => b.trim().split("\n").map((l) => l.replace(/\s+#.*$/, "").trim()).sort();
   const top = /^permissions:\n((?: {2}.*\n)+)/m.exec(code)?.[1] ?? "";
   assert.deepEqual(strip(top), ["contents: read"], "the workflow-level token is read-only");
   const job = /^ {4}permissions:\n((?: {6}.*\n)+)/m.exec(code)?.[1] ?? "";
   assert.deepEqual(strip(job), ["attestations: write", "contents: read", "id-token: write"], "OIDC + attestation, nothing else");
-  assert.equal((code.match(/^\s*permissions:/gm) ?? []).length, 2, "one workflow block, one job block");
+  assert.equal((code.match(/^\s*permissions:/gm) ?? []).length, 3, "one workflow block, one per job");
   assert.match(code, /actions\/attest-build-provenance@[0-9a-f]{40}[\s\S]*?subject-path: dist-release\/\*\.tgz/, "the tarball is attested");
 });
 
@@ -46,7 +46,8 @@ test("publish: the tag's own build, with --provenance, through trusted publishin
   assert.doesNotMatch(code, /secrets\.|NODE_AUTH_TOKEN|NPM_TOKEN/, "OIDC only: no long-lived npm token");
   assert.match(code, /\[ "v\$VERSION" != "\$TAG" \]/, "package.json's version must be the tag");
   assert.match(code, /\[ "\$GOT" != "\$PKG@\$VERSION" \]/, "and the built tarball's too");
-  assert.match(code, /npm install -g npm@\d+\.\d+\.\d+\n/, "the npm CLI is pinned exactly");
+  assert.doesNotMatch(code, /^\s*npm (install|i) -g/m, "the npm CLI is the pinned Node's own: a global install is an unpinned download to Scorecard");
+  assert.match(code, /is older than 11\.5\.1, which trusted publishing needs/, "and its floor is checked");
   assert.match(code, /node scripts\/release\/npm-verify\.mjs "\$PKG" "\$VERSION" --wait \d+ --check/, "checked on npm afterwards: shrinkwrap and provenance");
   assert.match(code, /published=true[\s\S]*already on npm: nothing to publish, skipped/, "an existing version is a clean skip");
 });
@@ -57,4 +58,15 @@ test("every action is pinned by full commit SHA, and the checkout keeps no crede
   for (const u of uses) assert.match(u, /^[\w-]+\/[\w-]+@[0-9a-f]{40}$/, u);
   assert.match(code, /persist-credentials: false/);
   assert.doesNotMatch(code, /cache: npm/, "a publishing job restores no cache another run could have written");
+});
+
+test("provenance to the release: its own job, contents: write and nothing else, after a successful publish", () => {
+  const job = (/^  provenance-to-release:\n((?: {4}.*\n|\n)+)/m.exec(code + "\n")?.[1] ?? "").replace(/\s+#.*$/gm, "");
+  assert.ok(job, "the job exists");
+  assert.match(job, /^ {4}needs: publish$/m, "runs only after the publish job succeeded (and so only in the public repo)");
+  assert.match(job, /^ {4}if: needs\.publish\.outputs\.attested == 'true'$/m, "and only when this run made an attestation");
+  assert.match(job, /^ {4}permissions:\n {6}contents: write\n(?! {6})/m, "contents: write only, never beside id-token");
+  assert.doesNotMatch(job, /actions\/checkout|npm |id-token/, "checks out and runs nothing from the repo");
+  assert.match(job, /gh release upload "\$TAG" provenance\/\*\.intoto\.jsonl --clobber/, "attaches only the attestation, under the name Scorecard reads");
+  assert.match(code, /id: attest\n[\s\S]*?cp "\$\{\{ steps\.attest\.outputs\.bundle-path \}\}" "provenance\/\$\(basename "\$TGZ"\)\.intoto\.jsonl"/, "the bundle is the publish job's own attestation of the tarball");
 });

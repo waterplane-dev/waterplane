@@ -177,6 +177,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   - **Limit-EXIT resurrection:** the current CLI often *quits* on a plan limit (prints the `/usage-credits` banner and exits) instead of parking at a wait-menu — so there is no live PTY to type `continue` into. `sessions.ts` (`maybeScheduleResurrect`/`resurrect`) detects a limit banner in an exited session's tail and reopens the conversation with `--continue` at the reset time (else `WATERPLANE_LIMIT_RETRY_MS`), carrying the attempts count forward so it stays bounded by `WATERPLANE_LIMIT_MAX_ATTEMPTS`. A user **kill/remove** sets a `killed` flag that suppresses resurrection; a clean (non-limit) exit is never resurrected. The backlog re-adopts the revived session for its repo (`resolveRepoSession` → `diedAtLimit`) so queued work follows its own session across the bounce. Verified by `e2e-resurrect.mjs`.
 - `push.ts` — Web Push (VAPID); fires on prompt-detected and turn-finished (idle). Notifications can carry an `image` (opens the annotator) or a `file` (outbox artifact — tapping posts `download-file` to an open window — or encodes `dlRepo`/`dlPath`/`dlMtime` in the cold-start hash — and the app queues it through `web/download.ts`; the browser is never navigated at `download=1`, which sets Content-Disposition attachment). New non-image outbox files (APK/zip/pdf…) are detected per turn like images and notify with a download tap; limit events append to `<STATE_DIR>/limit-events.jsonl`.
 - `notifyprefs.ts` — **which notification KINDS may fire at all** (`<STATE_DIR>/notify.json`). Every alert the daemon raises went two places unconditionally: the in-app feed and, when subscribed, an OS push. That is right for the kinds that need a human — a session parked on a question, a usage limit — and wrong for `idle`, the "Turn finished" ping, which fires once per turn per session: a handful of agents working a backlog produces a notification a minute, and the observed result is a feed that is ~40 identical "Turn finished" rows with the two urgent kinds buried somewhere inside it. The switch had to exist, and the default had to change. **The gate is on the host, not in the client.** A client-side filter can only hide a row it has already been sent — the phone still buzzed, which is the half that actually interrupts someone — and the synced-settings store cannot hold it either, because `settings.ts` keeps opaque strings the daemon deliberately never parses (that opacity is what lets the web bundle update without the daemon). So it is its own small store, checked inside `server/clients.ts`'s `notify()` before the feed entry, the broadcast and the push alike: a muted kind leaves no trace anywhere, rather than being recorded and hidden. **Sparse by construction** — only the kinds the user has explicitly touched are stored, so a kind added in a later version arrives with its own default instead of being silently muted by a file written before it existed (`notifyEnabled`/`cleanNotifyPrefs` in `@waterplane/shared`, where the client checks the same rule to draw the switches). The one bypass is `pull`: a payload carrying a pull id is not an alert but the TRANSPORT for auto-download — the service worker starts a Background Fetch from the push handler with the app closed — so gating it would silently turn auto-pull off for anyone who muted "artifact". Wire: `notify.prefs.set` → a `notify.prefs` BROADCAST (the mute follows the account, so a second device must not keep showing a switch the desktop just flipped), plus `notify.prefs` unprompted on hello. Verified by `e2e-notifyprefs.mjs`.
+- `netretrycfg.ts` — the person's switch for the network-error retry (`sessions/apiretry.ts`, R-connection-025): Settings › Sessions › *retry on network errors* sends `netretry.set`; the host persists `<STATE_DIR>/netretry.json` (absent ⇒ on, a torn file ⇒ on and moved aside) and broadcasts `netretry.config`, also sent on hello. Host-persisted for the auto-continue switch's reason: whether this desktop types `continue` by itself is a fact about the desktop, not the phone that set it — so it is not in settings sync. `WATERPLANE_NET_RETRY=0` stays a HARD override: the config carries `envOff` and the phone prints shared `netRetryEnvOffText` under a switch that still shows and saves the saved value, rather than a greyed control. Off cancels every pending retry through the slice's own `netRetryCancel`, so each bar clears. `netretrycfg.test.mjs`, `e2e-netretryswitch.mjs`.
 - `decisionlog.ts` — the **decision log** (`<STATE_DIR>/decision-log.json`, `DecisionLogEntry`, a 500-entry ring): every automatic thing done or proposed on a session's behalf — usage-limit auto-continue lifecycle rows (`source: "limit"`: blocked → attempt → resumed/gave up) and plugin suggestions/answers (`source: "plugin"`, `plugin` set). It was the oracle's log; on first boot `.waterplane/oracle-log.json` is migrated in (oracle rows → `plugin: "oracle"`) and renamed `.migrated`, never deleted. Every change broadcasts `decisions.log`; routes `decisions.get/archive/delete/archiveAll`.
 - `sentlog.ts` — the **sent-command audit log** (`<STATE_DIR>/sent.json`), the answer to "what did this thing type into my agent, and when?". Automation drives a session through the same PTY a person does, so a backlog item firing, a fan-out target, a plugin's gated answer and a usage-limit `continue` all land in the scrollback looking exactly like typed text — and the moment that question gets asked, the scrollback is the evidence under suspicion. Two rules make it worth reading. **One entry per semantic command, not per PTY write**: `deliver.ts` writes the text and the Return separately and re-presses Return up to five times, so a per-write log would show six rows for one prompt; the entry is recorded when delivery SETTLES, which is also what lets it carry the verdict. And **the verdict is kept, not flattened** — `unsubmitted` (text sitting in the composer, un-run) and `ok` are opposite facts about the session, so a log that called both "sent" would state the one thing that is untrue. Recording is not per-caller: `deliverPrompt()` records on every exit path (including `"retry"` = provably nothing typed, because "the backlog never managed to feed this session" is as much of an answer as the opposite), and the raw automation writes that bypass it — the oracle's auto-fired digit, the usage-limit menu answer, the auto-`continue` — call `recordSent()` at their own site. The store is reached through a module-level singleton (`setSentLog` in `main.ts`) rather than threaded through every caller, so a new send path is recorded by default instead of by remembering. Persisted for the same reason `acks.ts` is (`npm run restart` is routine, and an in-memory trail is empty exactly when something surprising happened before the last restart): tmp+rename, debounced, flushed on SIGTERM, every I/O failure degrading to in-memory. Wire: `sent.get`/`sent.clear` → `sent.log`, plus a `sent.new` broadcast per entry so an open sheet stays current without refetching. UI: `SentLogSheet.tsx`. Verified by `e2e-sent.mjs`.
 - `settings.ts` — **the settings that follow the USER, not the browser** (`<STATE_DIR>/settings.json`). Everything the app remembered lived in localStorage, which is right for a send queue or a measured uplink rate and wrong for the things the user AUTHORED: prompt templates (snippets), fan-out presets, header commands, the prompt pad, the toolbar layout, the default launch flags. Those were per-browser, so a template written on the phone did not exist on the desktop and a reinstalled PWA lost the lot — while a host that already persists the backlog, the ack ledger and the audit log sat right there. Deliberately dumb, because the alternative is a sync engine. **Opaque values**: a record is `{ value, ts }` where `value` is the client's RAW localStorage string, never parsed — shapes change with the UI, and `webbundle.ts` exists precisely so the phone can update its web bundle without the daemon moving. **Last write wins on the CLIENT's timestamp**, with equal timestamps losing (a reconnect re-push must not re-broadcast to every device), and the loser of a race is answered with the winning value instead of being ignored, so it stops holding a version nobody else has. **An allow-list, not a mirror** (`SYNCED_SETTING_KEYS` in `@waterplane/shared`, where both ends read it): syncing `waterplane.outbox` would let a second device replay another device's queue — a prompt typed twice — and syncing `waterplane.dataSaver`/`uploadScale` would copy a phone's DERP-relayed link settings onto a desktop on the LAN. An over-cap value is refused rather than truncated (a value silently cut in half is a corrupt prompt list on every other device). Persisted tmp+rename, debounced, flushed on SIGTERM, degrading to in-memory on any I/O failure. Wire: `settings.get`/`settings.set` → `settings.all` (sent unprompted on hello) + a `settings.update` broadcast. Verified by `e2e-settings.mjs`.
@@ -3925,6 +3926,33 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
   cost window, not the stretch (a calibration needs 6 h+ stretches with cost in them) and is
   simply absent when `ptsCalibration` refuses.
 
+  **Per source (c2).** `createSourceBurnWatch` asks the same rule of every non-claude source's
+  LONG windows (`UsageWindow.unit` `wk`/`mo`; a short window refilling fast is the normal case),
+  via `shared/burn.ts`'s `sourceBurnSamples` (one window as the weekly series). Its latch is
+  `burnwatch-sources.json` keyed `<source>:<window>`, so claude's file needed no migration; it is
+  driven by the usage registry's one publisher (`createUsageSources`' `onReading`), never a timer.
+  The push names the source and says it is that account, not claude's; there is no "dearest in it"
+  — the cost window is claude's conversations.
+
+### `besidespend.ts` — another backend's spend beside a period or week figure
+
+- **Why beside, never in** ([c2.md](../analysis/backend-parity-v3/c2.md)): a `usd` period is
+  claude's account cap, and Copilot's AI credits or Codex's tokens are other accounts in other
+  units — folded in, Copilot's spend would trip claude's cap. So only the `/api/costwindow`
+  ROUTE attaches `CostWindowDoc.beside`; `tokenStats.costWindow`, which `periodspend.ts` and the
+  burn push call, stays claude's fold, and no verdict reads a plugin figure.
+- **Why hours, never days.** A plugin ledger's `days` are the host's local calendar day; a period
+  is `[start, reset)` in its OWN zone and a week window starts at the minute it reset. A day summed
+  into either moves up to 23 hours of spend into the wrong span. So shared `ledgerOverSpan` cuts
+  the ledger's (2.3) `hourly` rows — the start of the host's local hour, claude's own bucket — and
+  answers ABSENT, in words, for a day-only ledger, an edge off the hour, a span reaching past the
+  45 days of hours kept, later spend inside `to`'s hour, or a stalled scan. No days fallback even
+  where both edges are local midnights: one rule.
+- **What is skipped and bounded.** claude, claude-local and claude-endpoint keep claude's log —
+  their tokens are already in the figure above, so counting them again would double it. Every
+  other ledger is read in parallel with a 3 s bound; a throw or a timeout is an `absent` row, never
+  a missing line that would read as "ran nothing". A backend that ran nothing in the span has no row.
+
 ### `weekburn.ts` — the week-end burn
 
 - `weekburn.ts` — **spend what is left of a subscription week on small repo improvements, in
@@ -7218,7 +7246,7 @@ pathological fan-out must not turn a status poll into a wall of rows.
 `readShellList` returns `undefined` — not `[]` — on `WATERPLANE_SHELLS=0` or any
 throw while reading, and a caller must keep the two apart: `undefined` means
 "this host could not tell you", `[]` means "it looked, and there are none".
-`checkAgents` (`sessions/turn.ts`) only asks while the CLI's own record says
+`checkAgents` (`sessions/agentpoll.ts`) only asks while the CLI's own record says
 `shell` or `busy` (the same edge `SessionInfo.shells` is already asked
 through — the Stop hook can land before the record catches up), and
 broadcasts on a fingerprint of `pid:bucket:workers:fg` per row rather than on
@@ -7719,8 +7747,12 @@ The `host-core` bullet as it stood, including the `(S2)…(S11)` plan labels:
   gap timers, and the revived pairings): the resume queue, resurrection of a limit-exited session and
   `revivedSessionFor`. It reads `revived.json` after the roster's files and before `limit.json`.
   `turn.ts` (S5) is stateless functions over the `Session` record: the turn flag (`setTurn`/`markIdle`),
-  the hook lifecycle (`onHookEvent`, `routeHook`, the turn watch and Stop verify), the prose
-  question and the agents underneath, the submits ring and the turn queries.
+  the hook lifecycle (`onHookEvent`, `routeHook`, the turn watch and Stop verify), the submits
+  ring and the turn queries. Two subjects were cut out of it when it reached the 900-line cap
+  (2026-10-28): `askwatch.ts` (the prose question — `checkAsking`/`setAsking`/`ackAsking` —, the
+  CLI's own proposal `checkCliSuggestion`, a plugin's `setSuggestion`) and `agentpoll.ts` (the
+  agents and background shells under a session, `checkAgents`, polled async). `turn.ts` reaches
+  both through `core` (`checkAsking`, `checkCliSuggestion`, `checkAgents`); the facade wires them.
   `boxes.ts` (S4) is stateless functions: the choice box — when to look (`scheduleChecks`, the
   earliest-wins `armPromptCheck`), reading it (claude's and opencode's), publishing it, the
   sign-in link, `awaitingInput`, and the two answer walks (`choosePromptBox`, `submitPromptBox`).
@@ -8362,3 +8394,82 @@ What the git sheet's up-N down-M shows: the commits this worktree has that its u
 ### `tailnetpeers.ts`
 
 Read-only discovery of other waterplane hosts on the tailnet for peer pairing: asks at most `DISCOVER_MAX_PEERS` (40) devices, never writes or pairs anything; a device that answers 401 with `authRequired` is listed as `gated` (a waterplane host, just not one this device may read).
+
+## `apiretry.ts` — retrying a turn the CLI gave up on a network error
+
+R-connection-024, asked 2026-10-27 ("Can we detect those network errors and retry more often?").
+During a DNS or Wi-Fi outage the CLI's own retry ("attempt 1/10") runs out in seconds to minutes,
+the TURN ENDS on `API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)`,
+and the owner had to type "try again" from the phone. Real counts across `~/.claude/projects` on
+the day: 37× ENOTFOUND, 4× `529 Overloaded`, 3× `Connection lost mid-response`, one each of
+ECONNREFUSED, ECONNRESET and `No response from API (waited 3m)`.
+
+**The signal is the LOG (`netlog.ts`), never the screen.** The CLI writes each give-up as a DATED
+synthetic assistant row: `model: "<synthetic>"`, `isApiErrorMessage: true`, `error: "server_error"`,
+the text in `message.content[].text`. Both the classification AND a known transient text shape are
+required: a stub's `API Error: 400 …` carries `error: "unknown"`, a spend wall is an API-error row
+too (`detectSpendText` claims it first — walls are `limitlog.ts`/`spendwall.ts`'s), a `quotaLimits`
+rejection is a usage limit. An unknown shape is no retry — absent, never a guess. Only the NEWEST
+assistant row counts (a served reply after it ends the outage), and it must be FRESH: stamped at or
+after the turn that just ended started (2 s slack, `freshGiveUp`) — else a turn ending for another
+reason (an Esc, a hook) over an hours-old error would get a `continue` nobody asked for.
+
+**The retry is the limit wall's**, deliberately: `continue` and Return as two `write`s, a history row
+and a `sent.json` row (`source: "netretry"`, `result: "written"` — blind, as the wall's). Not
+`deliver.ts` and not the phone's queue: the queue is the PHONE's send path, and this is the host
+answering its own session the way `doLimitContinue` always has. The facade's `write` would cancel the
+retry itself (any write is "the person took over"), so the slice marks its own bytes (`netWriting`).
+
+**Ladder** (`netRetryDelay`, pure): 20 s, 1 m, 2 m, 5 m, 10 m, 15 m, the last rung repeating, at most
+8 retries (`WATERPLANE_NET_RETRY_LADDER_MS`, `WATERPLANE_NET_RETRY_MAX`; `WATERPLANE_NET_RETRY=0` is
+off). A new fresh give-up after OUR `continue` advances it; anything else at a turn end resets it.
+Past the cap: `state: "gaveup"`, said on the phone, nothing more typed — and the turn-finished ping
+fires then, not before (`settleStop` holds the ping while a retry is armed: the turn is not done).
+
+**Called off by**: any other write or keystroke (`drive.ts`'s `input`/`write`), a turn starting that
+is not ours (`setTurn`'s active edge; ours = within 60 s of our `continue`), a usage or spend wall,
+the halt latch (said as `gaveup`), the session going (`clearLimitTimer` clears it too), and the
+phone's `session.netRetryCancel`. A box up or a dialog PARKS the rung 30 s; output still arriving
+parks it 5 s — never typed into. One log re-read 1.5 s after a Stop covers a row landing just after
+the hook. Memory only: a restart forgets a pending retry, the direction that types nothing.
+
+**Deferred work waiting on the turn** (2026-10-28, the gap 6358bcc1 left: a backlog item fired into
+a session that then hit an outage read `done` though nothing ran). `settleStop` still emits
+`turnEnded` for every Stop, but carries what the retry slice made of it (`TurnEndNet`, shared
+`netretry.ts`): `retrying` (a `continue` is armed), `checking` (OUR `continue`'s turn ended before its
+log row landed — the 1.5 s re-read answers it as `netTurnSettled`), `gaveup` (the cap, with the
+sentence). Carried on the event rather than suppressing it because the two listeners want different
+things:
+- **`intents/watch.ts`'s `onTurnEnded`** — `retrying`/`checking` complete nothing and keep the
+  baseline, so the served retry's Stop (or `netTurnSettled` with no give-up) completes the row the
+  ordinary way. `gaveup` FAILS a running row (`giveUp`: `ok:false`, "the API could not be reached
+  (…) and the host stopped retrying after N tries — the work did not run"; a recurring rule goes back
+  to `queued` with that result) — failed, not left `running` until the silence ceiling and never
+  `done`: nothing will run it, and `failed` is what `requeueFailed` can put back. The halt stopping a
+  pending rung says `gaveup` the same way (`netTurnSettled`), since no turn end follows it.
+- **The budget (`budgetTurnEnded`)** still counts every Stop: the retry's `continue` is a turn that
+  spends, so a HARD budget over owes it its Esc like any other.
+- The turn-finished ping is held only for `retrying` (as before); plugins' `question` rides that ping.
+
+A PERSON taking over (a keystroke, a prompt, a turn of theirs) cancels the retry and nothing more:
+the row completes on that next real turn end. The phone's Cancel with no typing after it leaves the
+row waiting for a turn — the silence ceiling (`sweepRunning`) still fails it if none ever comes.
+At most once holds because every settle drops the baseline: whichever of a late verdict and a later
+Stop arrives second finds nothing to apply to. A row still `starting` when a `gaveup` lands is left
+to its executor and then waits (rare: the CLI's own retries take minutes). The re-read no longer
+clears a live episode before it looks — clearing it restarted the ladder at attempt 0 whenever the
+row landed late, so the cap could be missed.
+
+**Not done**: a give-up on a FIRST turn whose log row lands after the Stop (no episode yet) still
+completes the row before the re-read schedules the retry.
+Pinned by `packages/host/test/netlog.test.mjs` (reader, ladder), `packages/shared/test/netretry.test.mjs`
+(the wording), `packages/host/test/intentsched.test.mjs` (the watch: retrying/checking/gaveup, at most
+once), `scripts/e2e-netretry.mjs` (stub `STUB_NETFAIL`: retry, cap, cancel) and
+`scripts/e2e-netretry-backlog.mjs` (a backlog item through a retry, past the cap, and a person typing over it).
+
+
+## `localcistatus.ts` — the `local-ci` status after a phone push in PR mode
+
+Where a repo's rules require a `local-ci` status check (`branchrules.ts`, mode `pr-checks`), the only thing that can satisfy it is a commit status, and GitHub Actions is off. With the opt-in "Report local checks to GitHub" on (`git config --local waterplane.localCiStatus true`; the card is offered only when the rules require `local-ci`, do not pin it to a GitHub App — `BranchRules.pinnedChecks` — and a runnable pre-push hook exists), `prpush.ts` calls `reportLocalCi` right after a successful PR-mode push, before `gh pr create`, and posts `success` / context `local-ci` for the sha the push REPORTED (porcelain `newAbbrev` checked against `refs/remotes/origin/<branch>`; `fromDefault` passes the tip it pushed). The post is `gh api -X POST repos/<slug>/statuses/<sha>`, 8 s, one retry after 2 s; the description names no host, user or path. `gitPush`'s plain path never reads the switch.
+
+What it proves: the pre-push hook ran on this desktop and did not fail the push. It is the honor system — nobody verifies the tests ran. What it does not cover: a push an agent or a terminal makes. For those, an optional hook snippet can post the same status: a detached `post-push.sh` started by the pre-push hook that polls `git ls-remote origin <branch>` for the sha (up to 10 min, because the sha is not on GitHub until the push lands) and then runs the same `gh api` call. Nothing is posted for `=` refs, tags, other refs, or a failed hook (`failure`/`pending` are never posted). A post failure is a sentence on the receipt, never `ok: false`. Pinned by `packages/host/test/prpush.test.mjs`, `optins.test.mjs`, `shared/test/branchmode.test.mjs`. The fix id `local-ci-status` is confirm-gated and a core fix id.

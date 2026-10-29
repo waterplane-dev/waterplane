@@ -127,6 +127,32 @@ export interface SessionLimit {
 }
 
 /**
+ * The host retrying a turn the CLI GAVE UP on a transient API error — a DNS or
+ * Wi-Fi outage outlasting the CLI's own retries ("Can't reach the API server
+ * (ENOTFOUND)", "529 Overloaded", "Connection dropped"). Read off the CLI's log
+ * (host `netlog.ts`), never the screen; the host types `continue` on a widening
+ * ladder (`sessions/netretry.ts`). Absent/null = nothing being retried.
+ */
+export interface SessionNetRetry {
+  /** `waiting`: a `continue` is due at `nextAt`. `sent`: one was typed and its
+   *  turn is running. `gaveup`: the cap was reached, or the retry could not be
+   *  typed — `why` says which, and nothing more happens by itself. */
+  state: "waiting" | "sent" | "gaveup";
+  /** Retries already typed for this outage. */
+  attempt: number;
+  /** The most retries the host will type. */
+  max: number;
+  /** Epoch ms the next retry is due; null unless `waiting`. */
+  nextAt: number | null;
+  /** The CLI's own short line for the newest give-up, `API Error:` dropped. */
+  error: string;
+  /** When the CLI wrote that give-up (epoch ms). */
+  at: number;
+  /** For `gaveup` (or a `waiting` that is parked): the host's sentence why. */
+  why?: string;
+}
+
+/**
  * The `/login` flow, as far as the phone can act on it.
  *
  * The CLI prints a 300-character OAuth URL and then waits for the code that

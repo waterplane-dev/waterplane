@@ -1,7 +1,7 @@
 // node --test: the exposure watch's targets.json (tools/exposure/targets.mjs). Pure; no files, no network.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseTargets, targetRunArgv } from "./exposure/targets.mjs";
+import { parseTargets, targetRunArgv, unsetTargetVars, unsetVarsSentence } from "./exposure/targets.mjs";
 
 test("parseTargets keeps valid entries in order and names every skipped one", () => {
   const { targets, problems } = parseTargets({ version: 1, targets: [
@@ -35,4 +35,12 @@ test("targetRunArgv: flags verbatim, {HOME}/{SITE} expanded, 2FA date only for a
   assert.deepEqual(targetRunArgv(t, vars, ["--json"]), ["/d", "--name", "w", "--gh", "O/w", "--npm", "w", "--privacy-url", "https://s/p q.html", "--era-check", "/h/e.py", "--npm-2fa-confirmed", "2026-10-01", "--json"]);
   assert.deepEqual(targetRunArgv({ name: "n", dir: "/d", play: false, args: [] }, vars), ["/d", "--name", "n"]);
   assert.ok(!targetRunArgv(t, { ...vars, NPM_2FA_CONFIRMED: "" }).includes("--npm-2fa-confirmed"));
+});
+
+test("unsetTargetVars: a {SITE} target with EXPOSURE_SITE empty is refused, never run against a half address", () => {
+  const t = { name: "w", dir: "/d", play: false, args: ["--privacy-url", "{SITE}/privacy.html", "--era-check", "{HOME}/e.py"] };
+  assert.deepEqual(unsetTargetVars(t, { HOME: "/h", SITE: "" }), ["SITE"]);
+  assert.deepEqual(unsetTargetVars(t, { HOME: "/h", SITE: "https://s" }), []);
+  assert.deepEqual(unsetTargetVars({ name: "n", dir: "/d", play: false, args: ["--npm", "n"] }, { HOME: "/h", SITE: "" }), []);
+  assert.match(unsetVarsSentence(t, ["SITE"]), /\{SITE\}.*EXPOSURE_SITE is empty.*not run/);
 });

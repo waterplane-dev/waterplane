@@ -3,7 +3,7 @@
  * README.md.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
+import { keepStores, type FeatureManifest } from "../../sdk";
 import { onCliHealth } from "./actions";
 import { filter } from "./store";
 import { HealthBoardSheet } from "./HealthBoardSheet";
@@ -20,6 +20,7 @@ export const manifest: FeatureManifest = {
     render: () => createElement(HealthBoardSheet),
     // The chip's filter is a focus, not a route: cleared when the sheet closes.
     onLeave: () => filter.set(null),
+    keep: keepStores(filter),
   }],
   messages: {
     clihealth: (msg) => onCliHealth(msg),

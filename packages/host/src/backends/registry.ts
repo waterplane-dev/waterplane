@@ -21,7 +21,7 @@
  */
 import type { BackendDescriptor } from "./types.js";
 import { contributedReaders } from "./readers.js";
-import { launchModesProblems } from "@waterplane/shared";
+import { launchModesProblems, spendUnitProblems } from "@waterplane/shared";
 import { factProblems } from "./derive.js";
 
 const LIST: BackendDescriptor[] = [];
@@ -52,6 +52,8 @@ function refusal(d: BackendDescriptor): string | null {
   }
   const capsBad = launchModesProblems(d.caps?.permissionModes ?? [], (d.caps as { launchModes?: unknown } | undefined)?.launchModes);
   if (capsBad.length) return `backend "${id}": ${capsBad.join("; ")}`;
+  const unitBad = spendUnitProblems((d.caps as { spendUnit?: unknown } | undefined)?.spendUnit);
+  if (unitBad.length) return `backend "${id}": ${unitBad.join("; ")}`;
   const bad = factProblems((d as { facts?: unknown }).facts, contributedReaders());
   if (bad.length) return `backend "${id}": ${bad.join("; ")}`;
   return null;

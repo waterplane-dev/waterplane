@@ -10,7 +10,7 @@ import { BookOpen, ExternalLink, ShieldCheck } from "lucide-react";
 import { useConnStatus, useStore } from "@waterplane/sdk";
 import { Button, FilterBar, Hint, RowSub, StaleHead, Tag, ago, askConfirm, useNow } from "@waterplane/kit";
 import { REASON_MAX, type CheckView, type ScoreView } from "../shared/wire.mts";
-import { cutChecks, openChecks, reasonKey, reasonProblem, sections, SLUG_RULE, slugKey, slugProblem } from "./logic.ts";
+import { cutChecks, openChecks, refreshWords, reasonKey, reasonProblem, sections, SLUG_RULE, slugKey, slugProblem } from "./logic.ts";
 import { accept, clearCut, closeScorecard, dropDraft, drafts, openLink, refresh, remedy, scoredAs, setDraft, sheet, unaccept, views } from "./state.ts";
 import "./scorecard.css";
 
@@ -110,9 +110,16 @@ export function ScorecardSheet() {
   const repo = s.repo;
   const read = repo ? m.get(repo.id) : undefined;
   const v = read?.view ?? null;
+  // What the person's own refresh found: set only after a tap that answered, cleared when the repo changes.
+  const [asked, setAsked] = useState<{ repo: string; words: string | null } | null>(null);
+  const askAgain = async (id: string) => {
+    const before = views.get().get(id)?.view.date;
+    setAsked(null);
+    if (await refresh(id)) { const nv = views.get().get(id)?.view; setAsked({ repo: id, words: nv ? refreshWords(before, nv) : null }); }
+  };
   const head = (
     <StaleHead title={<><ShieldCheck size={16} /> {repo ? `${repo.repoName} · scorecard` : "scorecard"}</>} onClose={closeScorecard}
-      onRefresh={() => repo && void refresh(repo.id)} refreshTitle="read the Scorecard API again" at={v?.readAt ?? null} />
+      onRefresh={() => repo && void askAgain(repo.id)} refreshTitle="read the Scorecard API again" at={v?.readAt ?? null} />
   );
   if (!repo) return <div className="sheet">{head}<div className="empty">No repo chosen.</div></div>;
   if (!v) return <div className="sheet">{head}{s.err ? <div className="empty">The desktop did not answer: {s.err}</div> : <div className="empty">{status === "open" ? "Asking the desktop…" : "No connection — the desktop can't be asked from here."}</div>}</div>;
@@ -123,6 +130,7 @@ export function ScorecardSheet() {
       {head}
       <div className="sheet-scroll">
         {s.err && <Hint tone="warn" style={{ padding: "0 14px" }}>{s.err}</Hint>}
+        {asked && repo && asked.repo === repo.id && asked.words && !s.err && <Hint style={{ padding: "0 14px" }}>{asked.words}</Hint>}
         {v.problem && <Hint tone="warn" style={{ padding: "0 14px" }}>{v.problem}</Hint>}
         {cut && <FilterBar onClear={clearCut} clearLabel="clear">{cut.length} of {v.checks.length} checks — failing, not accepted</FilterBar>}
         {v.score != null ? (
@@ -130,7 +138,7 @@ export function ScorecardSheet() {
             <span className="sc-score">{v.score}/10</span>
             <div>
               <RowSub as="div">
-                {v.local ? `scored locally${v.date ? ` ${v.date.slice(0, 10)}` : ""} — private repo, not the public score` : v.date ? `read ${v.date.slice(0, 10)}` : ""}{v.slug ? ` · ${v.slugFrom === "set" ? `scored as ${v.slug}` : v.slug}` : ""}
+                {v.local ? `scored locally${v.date ? ` ${v.date.slice(0, 10)}` : ""} — private repo, not the public score` : v.date ? `Scorecard scanned ${v.date.slice(0, 10)}` : ""}{v.slug ? ` · ${v.slugFrom === "set" ? `scored as ${v.slug}` : v.slug}` : ""}
               </RowSub>
               {v.viewerUrl && <Button onClick={() => openLink(v.viewerUrl!)}><ExternalLink size={14} /> public report</Button>}
             </div>

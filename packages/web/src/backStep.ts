@@ -26,7 +26,7 @@
  * told that depth (`pushBackDepth`) so it knows the gesture is ours.
  */
 import { useEffect, useRef, useState } from "react";
-import { shellInterface } from "./shellBridge";
+import { shellInterface } from "./shellBridge.ts";
 import { screenOfKey, stepKey, VACANT } from "./routing.ts";
 
 /** The keys this document pushed, by depth, and where we are in them. */
@@ -124,4 +124,44 @@ export function useBackStep(open: boolean, close: () => void): void {
       queueRetire();
     };
   }, [open, armed]);
+}
+
+/**
+ * **Back returns to a sheet as it was left** — its cut included.
+ *
+ * A sheet's focus (the backlog's "the 10 waiting in this repo", a schedule's
+ * selection) is a tap, not a setting, so `onLeave` drops it. That is right for
+ * a close and wrong for a sheet another screen was pushed OVER: fire a backlog
+ * row, go Back, and the backlog came back with all 37 rows instead of the ten
+ * on screen a moment ago. So the routing effect asks the covered sheet what
+ * puts it back (`keepCovered`) before `onLeave` runs, and a pop landing on that
+ * entry again restores it (`restoreKept`) before the sheet renders. A tap that
+ * opens the same screen afresh forgets it (`forgetKept`) — the tap set its own.
+ *
+ * The keeper is registered by the sheet table (`core/sheets.ts`), so this
+ * module stays free of the feature registry.
+ */
+type Keeper = (screenKey: string) => (() => void) | null;
+let keeper: Keeper = () => null;
+const kept = new Map<number, { key: string; restore: () => void }>();
+
+export function setSheetKeeper(fn: Keeper): void { keeper = fn; }
+
+/** A screen is about to be pushed over the entry at `depth`: keep what it showed. */
+export function keepCovered(depth: number): void {
+  for (const d of [...kept.keys()]) if (d >= depth) kept.delete(d);
+  const key = routeStack.keys[depth];
+  if (!key || key === VACANT) return;
+  const restore = keeper(screenOfKey(key));
+  if (restore) kept.set(depth, { key, restore });
+}
+
+/** A tap re-opened the entry at `depth` itself: what it carries now wins. */
+export function forgetKept(depth: number): void { kept.delete(depth); }
+
+/** A pop landed on `key` at `depth`: put back what that sheet showed when it was covered. */
+export function restoreKept(depth: number, key: string | null): void {
+  const k = kept.get(depth);
+  for (const d of [...kept.keys()]) if (d >= depth) kept.delete(d);
+  if (k && k.key === key) k.restore();
 }

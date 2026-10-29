@@ -31,10 +31,10 @@ import { healthScope, noteContextHealth, noteFor, noteLogHealth } from "./sessio
 import { CtxSlice } from "./sessions/ctxseries.js";
 import { BudgetSlice } from "./sessions/budgetwatch.js"; import { ChannelSlice, type SendHold } from "./sessions/sidechannel.js";
 import { RosterSlice } from "./sessions/roster.js";
-import { WallSlice } from "./sessions/wall.js"; import { hasAccountLimit } from "./usagesources.js";
+import { WallSlice } from "./sessions/wall.js"; import { NetRetrySlice } from "./sessions/apiretry.js"; import { hasAccountLimit } from "./usagesources.js";
 import { ResumeSlice } from "./sessions/resume.js";
-import * as turn from "./sessions/turn.js"; import * as idle from "./sessions/idlewatch.js";
-import * as boxes from "./sessions/boxes.js";
+import * as turn from "./sessions/turn.js"; import * as askwatch from "./sessions/askwatch.js"; import * as agentpoll from "./sessions/agentpoll.js"; import * as idle from "./sessions/idlewatch.js";
+import * as boxes from "./sessions/boxes.js"; import * as boxread from "./sessions/boxread.js";
 import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
 import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions, withHostApi } from "./reposkill.js";
@@ -49,7 +49,7 @@ const PRIVATE_MODE_RE = /\x1b\[\?([0-9;]+)([hl])/g;
  *  - 'updated'(info)               whenever info (prompt/idle/title/rc) changes
  *  - 'prompt' (id, DetectedPrompt) when a choice prompt is detected
  *  - 'idle'   (id, info)           when a session goes quiet after working
- *  - 'turnEnded'(id, stopCount)    when a Stop hook reports a finished turn (exact)
+ *  - 'turnEnded'(id, stopCount, net?) a finished turn (Stop, exact); `net` = an API give-up, settled late by 'netTurnSettled' (`apiretry.ts`)
  *  - 'history'(id, HistoryEntry[]) when the prompt/output history changes
  *  - 'limit'  (id, info, phase)    usage-limit lifecycle: "blocked" | "scheduled" | "attempt" | "resumed" | "gaveup"
  *  - 'limitQueue'()                the resume queue's host-wide state changed (who is resuming, hold-off)
@@ -69,6 +69,7 @@ export class SessionManager extends EventEmitter {
   /** The resume queue and resurrection: the resume* state and the revived pairings (`sessions/resume.ts`). */
   private resume: ResumeSlice;
   private budget: BudgetSlice; private channel: ChannelSlice; // own budget (sessions/budgetwatch.ts); the backend side channel (sessions/sidechannel.ts)
+  private net: NetRetrySlice; // the retry after a transient API give-up (sessions/apiretry.ts)
 
   /** The one `SessionCore` the slices under `sessions/` are handed. Private —
    *  the class's public surface does not change — and built in the constructor,
@@ -121,9 +122,10 @@ export class SessionManager extends EventEmitter {
       newLimitState: () => this.wall.newLimitState(), limitAuto: (s) => this.wall.limitAuto(s),
       limitRetry: (s, now, resetAt) => this.wall.limitRetry(s, now, resetAt), limitLog: (s) => this.wall.limitLog(s),
       checkLimit: (s) => this.wall.checkLimit(s),
+      netTurnEnded: (s) => this.net.turnEnded(s), netTurnStarted: (s) => this.net.turnStarted(s), netTyped: (s) => this.net.typed(s), // apiretry.ts
       markLimitBlocked: (s, resetAt, weekly, sample, dated) => this.wall.markLimitBlocked(s, resetAt, weekly, sample, dated),
       scheduleLimitAttempt: (s, atOverride) => this.wall.scheduleLimitAttempt(s, atOverride),
-      doLimitContinue: (s) => this.wall.doLimitContinue(s), clearLimitTimer: (s) => this.wall.clearLimitTimer(s),
+      doLimitContinue: (s) => this.wall.doLimitContinue(s), clearLimitTimer: (s) => this.clearLimitTimer(s),
       noteGaveUp: (s, why) => this.wall.noteGaveUp(s, why), writeLimitCfg: () => this.wall.writeLimitCfg(),
       resumeMode: () => this.wall.resumeMode, assignResumeMode: (mode) => { this.wall.resumeMode = mode; },
       // resume.ts
@@ -136,11 +138,11 @@ export class SessionManager extends EventEmitter {
       clearResurrectTimer: (s) => this.resume.clearResurrectTimer(s), maybeScheduleResurrect: (s) => this.resume.maybeScheduleResurrect(s),
       // turn.ts
       setTurn: (s, active, opts) => turn.setTurn(this.core, s, active, opts), checkIdle: (s) => turn.checkIdle(this.core, s),
-      armTurnWatch: (s, seqAt) => turn.armTurnWatch(this.core, s, seqAt), setAsking: (s, ask) => turn.setAsking(this.core, s, ask), setCliSuggestion: (s, text) => turn.setCliSuggestion(this.core, s, text),
-      checkAgents: (s) => turn.checkAgents(this.core, s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
+      armTurnWatch: (s, seqAt) => turn.armTurnWatch(this.core, s, seqAt), setAsking: (s, ask) => askwatch.setAsking(this.core, s, ask), setCliSuggestion: (s, text) => askwatch.setCliSuggestion(this.core, s, text), checkAsking: (s) => askwatch.checkAsking(this.core, s), checkCliSuggestion: (s) => askwatch.checkCliSuggestion(this.core, s),
+      checkAgents: (s) => agentpoll.checkAgents(this.core, s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
       // boxes.ts
-      scheduleChecks: (s) => boxes.scheduleChecks(this.core, s), armPromptCheck: (s, delayMs) => boxes.armPromptCheck(this.core, s, delayMs), setAwaiting: (s, on) => boxes.setAwaiting(this.core, s, on),
-      applyPrompt: (s, prompt) => boxes.applyPrompt(this.core, s, prompt), armLinksCheck: (s) => links.armLinksCheck(this.core, s), // + links.ts
+      scheduleChecks: (s) => boxread.scheduleChecks(this.core, s), armPromptCheck: (s, delayMs) => boxread.armPromptCheck(this.core, s, delayMs), setAwaiting: (s, on) => boxread.setAwaiting(this.core, s, on),
+      applyPrompt: (s, prompt) => boxread.applyPrompt(this.core, s, prompt), armLinksCheck: (s) => links.armLinksCheck(this.core, s), // + links.ts
       // drive.ts
       input: (id, data) => drive.input(this.core, id, data), write: (id, data) => drive.write(this.core, id, data),
       screenText: (id, lines) => drive.screenText(this.core, id, lines), screenCells: (id, lines) => drive.screenCells(this.core, id, lines),
@@ -157,7 +159,7 @@ export class SessionManager extends EventEmitter {
     // Reads the revived pairings — after pins, before the limit config, as before the split.
     this.resume = new ResumeSlice(this.core);
     // Reads the limit config — LAST among the file reads, as before the split.
-    this.wall = new WallSlice(this.core);
+    this.wall = new WallSlice(this.core); this.net = new NetRetrySlice(this.core);
     // Limit detection is otherwise data-driven (checks run on PTY output), but
     // a blocked session is SILENT — a block that predates a host restart, or a
     // missed event, would never be noticed until a client attaches (the resize
@@ -528,7 +530,7 @@ export class SessionManager extends EventEmitter {
 
   // ── boxes (sessions/boxes.ts): the choice box — when to look, reading and publishing it, the
   // answer walks. The private delegation is for `register`.
-  private scheduleChecks(s: Session): void { boxes.scheduleChecks(this.core, s); }
+  private scheduleChecks(s: Session): void { boxread.scheduleChecks(this.core, s); }
   answerBox(id: string, choice: number, opts?: { walk?: boolean; byPerson?: boolean; text?: string }): Promise<{ ok: boolean; reason?: string }> { return boxes.answerBox(this.core, id, choice, opts); }
 
   // ── turn (sessions/turn.ts): the turn flag and the hook lifecycle (the turn watch and the
@@ -561,7 +563,8 @@ export class SessionManager extends EventEmitter {
   setSessionLimitOverride(id: string, override: boolean | null): void { this.wall.setSessionLimitOverride(id, override); }
   private newLimitState(): SessionLimit { return this.wall.newLimitState(); }
   private checkLimit(s: Session): void { this.wall.checkLimit(s); }
-  private clearLimitTimer(s: Session): void { this.wall.clearLimitTimer(s); }
+  private clearLimitTimer(s: Session): void { this.wall.clearLimitTimer(s); this.net.clear(s); } // …and a pending network retry (sessions/apiretry.ts) goes with the session
+  netRetryCancel(id: string): void { this.net.cancelById(id); } // the phone's Cancel on `SessionInfo.netRetry`
 
   // ── The resume queue: `sessions/resume.ts` ───────────────────────────
 
@@ -604,8 +607,8 @@ export class SessionManager extends EventEmitter {
   setStar(id: string, starred: boolean): void { this.roster.setStar(id, starred); } setFollowUp(id: string, f: FollowUp | null): boolean { return this.roster.setFollowUp(id, f); }
 
   // ── turn (sessions/turn.ts): the person's answer to a prose question, and a plugin's.
-  ackAsking(id: string, text?: string): void { turn.ackAsking(this.core, id, text); }
-  setSuggestion(id: string, s: import("@waterplane/shared").AnswerSuggestion | null): void { turn.setSuggestion(this.core, id, s); }
+  ackAsking(id: string, text?: string): void { askwatch.ackAsking(this.core, id, text); }
+  setSuggestion(id: string, s: import("@waterplane/shared").AnswerSuggestion | null): void { askwatch.setSuggestion(this.core, id, s); }
 
   // ── Per-session plugin state: `sessions/roster.ts` ────────
 

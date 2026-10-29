@@ -61,3 +61,17 @@ export function remedyWords(check: string, r: { existing: boolean; state?: strin
 /** Draft keys: one per repo + check (the accept reason) and one per repo (scored as). */
 export const reasonKey = (repo: string, check: string): string => `${repo}\u0000reason\u0000${check}`;
 export const slugKey = (repo: string): string => `${repo}\u0000slug`;
+
+/** After a refresh the person asked for: did the scan behind the numbers change? Null = nothing to say. */
+export function refreshWords(before: string | undefined, v: Pick<ScoreView, "date" | "local" | "slug">): string | null {
+  const day = (d?: string) => (d ? d.slice(0, 10) : "");
+  const same = before === v.date;
+  if (v.local) {
+    return same
+      ? `Asked again just now — the local reading${v.date ? ` is still from ${day(v.date)}` : " has not changed"}. It updates when the exposure watch runs.`
+      : `New local reading${v.date ? ` from ${day(v.date)}` : ""}.`;
+  }
+  if (!v.date) return null;
+  if (!same) return `New scan from ${day(v.date)}.`;
+  return `Asked again just now — Scorecard's newest scan${v.slug ? ` of ${v.slug}` : ""} is still from ${day(v.date)}. The score changes only after a new scan: when the repo's Scorecard workflow runs (a push to main, its weekly run, or by hand).`;
+}

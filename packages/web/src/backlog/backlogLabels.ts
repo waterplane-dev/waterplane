@@ -8,6 +8,7 @@
  */
 import { Bug, Check, CircleDashed, CircleHelp, Hourglass, Lightbulb, Loader, TrendingUp, TriangleAlert, Wrench, X, type LucideIcon } from "lucide-react";
 import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCategory } from "@waterplane/shared";
+import { isFailedRow } from "../backlogFilter";
 
 /**
  * **Which rows offer *drop the clock*, in one place.**
@@ -20,7 +21,7 @@ import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCatego
  * work already in flight, and a settled one because there is nothing left to
  * re-time.
  */
-export const dropOffered = (it: BacklogItem): boolean => it.status === "queued" || it.status === "failed";
+export const dropOffered = (it: BacklogItem): boolean => it.status === "queued" || isFailedRow(it); // the host refuses an update to a call-off
 
 /**
  * The check verdicts, in words. Exported because `ActivitySheet` renders the

@@ -181,10 +181,11 @@ export const LS_VIEW = {
    * finished shortlist gets cleared — so it is a toggle, not a guard.
    */
   closeKeepStar: lsKey("closeKeepStar"),
-  /** Backlog sheet: last repo, its draft, and whether archived rows show. */
+  /** Backlog sheet: last repo, its draft, whether archived rows show, and run order over newest first. */
   backlogRepo: lsKey("backlogRepo"),
   backlogDraft: lsKey("backlogDraft"),
   backlogShowArchived: lsKey("backlogShowArchived"),
+  backlogSortRun: lsKey("backlogSortRun"),
   /** Fan-out sheet: the composed sweep, kept across a close. */
   fanoutText: lsKey("fanout.text"),
   fanoutSel: lsKey("fanout.sel"),

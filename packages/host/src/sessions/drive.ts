@@ -157,6 +157,7 @@ export function input(core: SessionCore, id: string, data: string): boolean {
     core.setAsking(s, null); // the prose question just got its answer typed
     s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
     s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
+    core.netTyped(s); // a person typing calls off a network retry (`apiretry.ts`)
     markSubmitted(core, s, data);
     // The box may have just been answered away. Nothing else clears it now, so
     // re-verify sooner than the ordinary cadence — a stale box is a tap that
@@ -239,6 +240,7 @@ export function write(core: SessionCore, id: string, data: string): boolean {
   core.setAsking(s, null); // the prose question just got its answer typed
     s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
   s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
+  core.netTyped(s); // …and calls off a network retry, unless it IS the retry (`apiretry.ts`)
   markSubmitted(core, s, data);
   core.armPromptCheck(s, 250); // same as input(): the write may have answered a box
   s.proc.write(tmuxLiteral(data));

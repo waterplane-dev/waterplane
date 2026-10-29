@@ -10,7 +10,7 @@
 // The cut is by what a field is ABOUT, one file each under `./session/`; this module is the one
 // door, so no importer names a slice (docs/notes/shared-architecture.md).
 export type { PromptOption, StandingRule, DetectedPrompt } from "./session/promptbox.js";
-export type { SendView, Effort, PermissionMode, LaunchOpts, ExternalSession, LimitResumeMode, SessionLimit, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell, SessionShellDetail } from "./session/launch.js";
+export type { SendView, Effort, PermissionMode, LaunchOpts, ExternalSession, LimitResumeMode, SessionLimit, SessionNetRetry, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell, SessionShellDetail } from "./session/launch.js";
 export type { SessionInfo, FollowUp, FollowUpBy } from "./session/info.js";
 export type { NewImage, RecentSession, ArchivedConversation, ArchiveListing, Bookmark, ClosedSession, ClosedBy, SessionOriginKind, SessionOrigin, HistoryEntry, SessionSearchScope, SessionSearchMatch, SessionSearchResult } from "./session/archive.js";
 export type { OpenDelivery } from "./session/delivery.js";

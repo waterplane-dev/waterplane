@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import type { SessionInfo, WorktreeLeftover } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
@@ -85,7 +85,21 @@ export interface LeftoverInput {
   ownerLive: boolean;
 }
 
+/**
+ * The worktree's folder no longer exists. Discovery drops such a worktree, but a
+ * scan can be a moment old: without this the first git call fails with
+ * `spawn git ENOENT` (Node's words for a missing cwd), which reads like git
+ * itself is missing. Nothing to measure in a folder that is gone, so no reading.
+ */
+export class WorktreeGone extends Error {
+  constructor(wt: string) {
+    super(`The worktree folder ${wt} is gone. git still lists it until \`git worktree prune\` runs in the main checkout.`);
+    this.name = "WorktreeGone";
+  }
+}
+
 export async function worktreeLeftover({ wt, branch, sessions, ownerLive }: LeftoverInput): Promise<WorktreeLeftover> {
+  if (!existsSync(wt)) throw new WorktreeGone(wt);
   const blockers: string[] = [];
   const primary = await primaryOf(wt);
   const base = primary.branch ?? "";
@@ -131,6 +145,7 @@ export async function removeLeftover(input: LeftoverInput): Promise<RemoveResult
   const { wt, branch } = input;
   let leftover: WorktreeLeftover;
   try { leftover = await worktreeLeftover(input); } catch (err) {
+    if (err instanceof WorktreeGone) return { ok: false, error: err.message };
     return { ok: false, error: `Could not check the worktree: ${(err as Error).message}` };
   }
   if (leftover.blockers.length) return { ok: false, leftover, error: leftover.blockers.join(" ") };

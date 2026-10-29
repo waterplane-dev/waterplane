@@ -1,0 +1,34 @@
+Xxxx xxxxx xxxxx xxxxxx .xxxxxx/xxxxx/0000000000-xxxxxx-xxx0x0xx0000xx.xxx (xxxxxx: xxxxxxxxx xx xxxxxx (x 0%-00%, x 00%-00%); xxxxx 0000x0000) xx xxx xxxx x xxx xxxxx xxxxxxxxx 
+⁂ screen ⁂
+▐▛███▛█   Claude Code v2.1.310
+▝▜██████▀  Xxxx 0.0 xxxx xxxxxx xxxxxx · Xxxxxx Xxx
+ ▝▝   ▝▝   ~/xxx/xxxx
+
+  /xxxxxx-xxxxxxx xx xxxxxx · Xxxxxxxx xxxx, xx xxxx
+  xxxxx, xx xx
+  xxxxx://xxxxxx.xx/xxxx/xxxxxxx_00XxxXxxxX0XXxxxxXXxXxXX
+
+──────────────────────────────────────────────────────────
+❯ .xxxxxx/xxxxx/0000000000-xxxxxx-xxx0x0xx0000xx.xxx
+  (xxxxxx: xxxxxxxxx xx xxxxxx (x 0%-00%, x 00%-00%);
+  xxxxx 0000x0000) xx xxx xxxx x xxx xxxxx xxxxxxxxx
+──────────────────────────────────────────────────────────
+  [XXXXXXX]
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx)
+  [XXXXXXX]
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx) · ← 0 xxxxxx
+
+──────────────────────────────────────────────────────────
+❯ Xxx "xxxx xxxxxxxx.xxxx.xxx xx..."
+──────────────────────────────────────────────────────────
+  [XXXXXXX]
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx) · ← 0 xxxxxx
+
+──────────────────────────────────────────────────────────
+❯ Xxx "xxxx xxxxxxxx.xxxx.xxx xx..."
+──────────────────────────────────────────────────────────
+  [XXXXXXX]
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx) · ← 0 xxxxxx
+
+❯ Xxx "xxxx xxxxxxxx.xxxx.xxx xx..."──────────────────────
+──⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx) · ← 0 xxxxxx───────

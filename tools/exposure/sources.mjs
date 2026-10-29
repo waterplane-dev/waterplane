@@ -105,7 +105,7 @@ export const rdapDomain = (name) =>
 /** Abbreviated packument of an npm package; a package the registry does not know is `ok` with data null. */
 export const registryDoc = (name) =>
   // 45 s, not 15: the big packuments (typescript-eslint: ~10 MB) need ~6 s alone and far more at 16 in flight
-  http(`https://registry.npmjs.org/${name.replace("/", "%2f")}`, { headers: { accept: "application/vnd.npm.install-v1+json" }, ms: 45_000 });
+  http(`https://registry.npmjs.org/${name.replaceAll("/", "%2f")}`, { headers: { accept: "application/vnd.npm.install-v1+json" }, ms: 45_000 });
 
 /** OSV querybatch (POST) and one vulnerability record. */
 export const osvBatch = (body) =>

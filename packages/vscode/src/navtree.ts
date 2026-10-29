@@ -26,6 +26,8 @@ export interface NavState {
   /** The folder's listed sessions (newest write first) and what the list left out. */
   rows: SessionSummary[];
   selected: string | null;
+  /** The panel's view: the selected session is highlighted only while the panel shows one. */
+  view: TabId;
   following: boolean;
   older: number; capped: number; automated: number;
   /** The tree's own sentence when there are no rows (no folder, no logs). */
@@ -131,9 +133,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     this.timer = on ? setInterval(() => this.changed.fire(undefined), 30_000) : null;
   }
 
+  /**
+   * Highlight the session the panel shows. Only while it shows one: a click on All sessions or
+   * Always-on posts a refresh, and re-selecting the session then snapped the highlight off the
+   * row just clicked.
+   */
   private revealSelected(): void {
     const s = this.state();
-    if (!this.view.visible || !s.selected || this.collapsed(s.live)) return;
+    if (!this.view.visible || s.view !== "session" || !s.selected || this.collapsed(s.live)) return;
     const n = this.nodes.get(s.selected);
     if (n) void this.view.reveal(n, { select: true, focus: false }).then(undefined, () => {});
   }
@@ -176,7 +183,8 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     if (s.capped > 0) left.push(`${s.capped} more from the last day`);
     if (s.automated > 0) left.push(`${s.automated} claude -p ${s.automated === 1 ? "run" : "runs"} not listed`);
     if (s.older > 0) left.push("older ones under All sessions");
-    if (left.length) out.push({ kind: "note", text: left.join(" · "), tab: s.older > 0 ? "all" : undefined });
+    // Everything left out here is listed under All sessions, so the note opens it.
+    if (left.length) out.push({ kind: "note", text: left.join(" · "), tab: "all" });
     return out;
   }
 

@@ -139,7 +139,7 @@ export function runAgainToast(n: number): string {
 /** The row this sheet asks about, as this verb reads it. A `Pick`, so the call
  *  sites are free to hand over the whole `BacklogItem` and the function still
  *  states exactly which four fields the answer is made of. */
-type RunAgainRow = Pick<BacklogItem, "status" | "at" | "archived" | "targetSessionId">;
+type RunAgainRow = Pick<BacklogItem, "status" | "at" | "archived" | "targetSessionId" | "calledOff">;
 
 /**
  * **Which rows the verb covers — ONE function, for the row AND the cut.**
@@ -185,7 +185,7 @@ type RunAgainRow = Pick<BacklogItem, "status" | "at" | "archived" | "targetSessi
  * has always been computed in the sheet against `p.sessions`.
  */
 export function runAgainState(it: RunAgainRow, liveSessionIds: ReadonlySet<string>): "offered" | "held-closed" | "none" {
-  if (it.status !== "failed" || it.at || it.archived) return "none";
+  if (it.status !== "failed" || it.calledOff || it.at || it.archived) return "none";
   if (it.targetSessionId && !liveSessionIds.has(it.targetSessionId)) return "held-closed";
   return "offered";
 }

@@ -261,6 +261,14 @@ Apply with \`--no-dry-run\` only after I agree. The size metric lags about 24h a
     verb: "watch this repo",
     action: { kind: "fix", fix: "exposure-watch" },
   },
+  {
+    id: "local-ci-status",
+    title: "Report local checks to GitHub",
+    pitch: "This repo's rules require a local-ci status before a pull request can merge. After a push from this phone's push button, the desktop tells GitHub the checks passed. It is the honor system: the status says the pre-push hook did not fail the push, not that anyone verified the tests. It covers pushes from this phone's push button, not pushes an agent or a terminal makes.",
+    cost: "One GitHub API call after each push from the phone; no tokens.",
+    verb: "report it",
+    action: { kind: "fix", fix: "local-ci-status" },
+  },
 ];
 
 const BY_ID = new Map(OPT_INS.map((d) => [d.id, d]));

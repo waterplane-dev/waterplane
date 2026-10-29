@@ -1,4 +1,4 @@
-import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitLog, type GitPushState, type GitStatus } from "@waterplane/shared";
+import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitLog, type GitPushState, type GitStatus, type PrActionResult, type PrListDoc } from "@waterplane/shared";
 import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
 import { readBodyFused } from "./webapiBody";
 
@@ -78,4 +78,10 @@ export const gitApi = {
   /** Start (or join) the desktop's push JOB — its pre-push hook runs for minutes, never one held request — then ask after it (`null` = none since the desktop started). */
   gitPush: (repoId: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/push`, { background: true }),
   gitPushState: (repoId: string) => jget<{ push: GitPushState | null }>(`/api/repos/${repoId}/git/push`).then((r) => r.push),
+  /** The PR card (PR mode only): the lease keeps the host polling `gh`; the rest are one tap each. A refusal comes back as `{ok:false,error}`. */
+  prLease: (repoId: string, holder: string) => jpost<PrListDoc>(`/api/repos/${repoId}/git/prs/lease`, { holder }),
+  prMerge: (repoId: string, number: number, method?: string) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/merge`, { number, method }, SLOW_OP_TIMEOUT_MS),
+  prAutoMerge: (repoId: string, number: number, on: boolean) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/automerge`, { number, on }),
+  prClose: (repoId: string, number: number) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/close`, { number }),
+  prLog: (repoId: string, number: number, check?: string) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/log`, { number, check }, SLOW_OP_TIMEOUT_MS),
 };

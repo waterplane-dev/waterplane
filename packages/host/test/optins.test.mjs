@@ -252,3 +252,23 @@ test("exposure-watch: probe, idempotent fix, other entries kept", async () => {
   assert.equal(ghOfRemote("https://gitlab.com/A/b.git"), undefined);
   assert.equal(targetName("/x/Real Estate_Calc", new Set(["real-estate_calc"])), "real-estate_calc-2");
 });
+
+test("local-ci-status: relevant only for unpinned required local-ci with a hook", async () => {
+  const { chmodSync } = await import("node:fs");
+  const R = (o) => ({ mode: "pr-checks", requiredChecks: ["local-ci"], requiredApprovals: 0, allowedMerge: [], autoMerge: false, ...o });
+  const wt = repo("lcs");
+  const d = (rules) => deps({ rules: () => rules });
+  assert.equal(row(wt, "local-ci-status", d(undefined)).relevant, false);
+  assert.match(row(wt, "local-ci-status", d(undefined)).detail, /not read/);
+  assert.equal(row(wt, "local-ci-status", d(R({ mode: "direct", requiredChecks: [] }))).relevant, false);
+  assert.equal(row(wt, "local-ci-status", d(R({ mode: "pr", requiredChecks: [] }))).relevant, false);
+  assert.equal(row(wt, "local-ci-status", d(R({ requiredChecks: ["ci"] }))).relevant, false);
+  assert.equal(row(wt, "local-ci-status", d(R({ pinnedChecks: ["local-ci"] }))).relevant, false);
+  assert.equal(row(wt, "local-ci-status", d(R())).relevant, false); // no hook yet
+  put(wt, ".git/hooks/pre-push", "#!/bin/sh\nexit 0\n");
+  chmodSync(join(wt, ".git/hooks/pre-push"), 0o755);
+  const off = row(wt, "local-ci-status", d(R()));
+  assert.equal(off.relevant, true); assert.equal(off.state, "off");
+  git(wt, "config", "waterplane.localCiStatus", "true");
+  assert.equal(row(wt, "local-ci-status", d(R())).state, "on");
+});

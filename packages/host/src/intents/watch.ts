@@ -6,7 +6,7 @@
  *
  * `reconcileOne` never persists; `reconcile` persists once, if dirty.
  */
-import type { Intent, IntentResult } from "@waterplane/shared";
+import type { Intent, IntentResult, TurnEndNet } from "@waterplane/shared";
 import { needsSlot, postsScheduledBuild } from "@waterplane/shared";
 import { isRecurring, spanWords, type IntentCore } from "./contract.js";
 
@@ -26,13 +26,29 @@ export class WatchSlice {
    * the Stop that made the session ready cannot complete the work it made room
    * for. This is the single copy of a watcher that used to exist twice — the
    * backlog's and the fan-out's — with the two subscriptions that fed them.
+   *
+   * `net` (`sessions/apiretry.ts`, R-connection-024): the turn ended because the
+   * CLI gave up on a transient API error. `retrying`/`checking` ⇒ the turn did
+   * not do the work — the row keeps waiting, baseline untouched, for the turn
+   * the host's `continue` runs (or a person's, once they type over it).
+   * `gaveup` ⇒ FAILED with the sentence, never `done`: nothing will run it.
+   * Every settle drops the baseline, so whichever of a late verdict and a later
+   * Stop arrives second finds nothing to apply to.
    */
-  onTurnEnded(sessionId: string, stopCount: number): void {
+  onTurnEnded(sessionId: string, stopCount: number, net?: TurnEndNet): void {
+    if (net?.net === "retrying" || net?.net === "checking") return;
     for (const row of [...this.core.rows()]) {
       if (row.sessionId !== sessionId) continue;
       if (row.state !== "running" && row.state !== "starting") continue;
       const base = this.core.stopBase.get(row.id);
       if (base == null || stopCount <= base) continue;
+      if (net?.net === "gaveup") {
+        // A row still `starting` cannot be failed under its executor; it is
+        // left to its own outcome and then waits — the silence backstop below
+        // fails it if no turn ever comes.
+        if (row.state === "running") this.giveUp(row, net.detail);
+        continue;
+      }
       if (row.state === "starting") {
         // Its turn ended before the delivery finished proving itself. Remember
         // it; `fire()` reads this the moment the executor returns.

@@ -1,0 +1,111 @@
+{
+  "parentUuid": "<string>",
+  "isSidechain": "<boolean>",
+  "message": {
+    "model": "<string>",
+    "id": "<string>",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "<string>",
+        "name": "AskUserQuestion",
+        "input": {
+          "questions": [
+            {
+              "question": "<string>",
+              "header": "<string>",
+              "multiSelect": "<boolean>",
+              "options": [
+                {
+                  "label": "<string>",
+                  "description": "<string>"
+                }
+              ]
+            }
+          ]
+        },
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+      "input_tokens": "<number>",
+      "cache_creation_input_tokens": "<number>",
+      "cache_read_input_tokens": "<number>",
+      "output_tokens": "<number>",
+      "output_tokens_details": {
+        "thinking_tokens": "<number>"
+      },
+      "server_tool_use": {
+        "web_search_requests": "<number>",
+        "web_fetch_requests": "<number>"
+      },
+      "service_tier": "<string>",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": "<number>",
+        "ephemeral_5m_input_tokens": "<number>"
+      },
+      "inference_geo": "<string>",
+      "iterations": [
+        {
+          "input_tokens": "<number>",
+          "output_tokens": "<number>",
+          "cache_read_input_tokens": "<number>",
+          "cache_creation_input_tokens": "<number>",
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": "<number>",
+            "ephemeral_1h_input_tokens": "<number>"
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "<string>",
+      "fallback_credit": null
+    },
+    "input_transformations": [],
+    "diagnostics": null,
+    "context_management": null
+  },
+  "wireToolInputs": {
+    "<key>": {
+      "questions": [
+        {
+          "question": "<string>",
+          "header": "<string>",
+          "multiSelect": "<boolean>",
+          "options": [
+            {
+              "label": "<string>",
+              "description": "<string>"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "serverClassifierRequest": "<string>",
+  "apiBlockIndex": "<number>",
+  "requestId": "<string>",
+  "requestRef": "<string>",
+  "requestedModel": "<string>",
+  "type": "assistant",
+  "uuid": "<string>",
+  "timestamp": "<string>",
+  "advisorModel": "<string>",
+  "effort": "<string>",
+  "perTurnEffort": "<string>",
+  "session_id": "<string>",
+  "userType": "<string>",
+  "entrypoint": "<string>",
+  "cwd": "<string>",
+  "sessionId": "<string>",
+  "version": "<string>",
+  "gitBranch": "<string>"
+}

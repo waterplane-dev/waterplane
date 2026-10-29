@@ -138,6 +138,16 @@ export interface BacklogItem {
   error?: string;
   /** Archived items are hidden from the default backlog view but kept for reference. */
   archived?: boolean;
+  /**
+   * The row was CALLED OFF before it ran (`Intent.state` `canceled`): by the
+   * agent that posted it (`"agent"`, `isAgentWithdrawn` — a draft it replaced)
+   * or by anyone else (`"other"`: the phone, an assessment's dismissal). `status`
+   * stays `failed` so a phone that predates the field still draws a terminal
+   * row; one that reads it draws *withdrawn* / *called off*, counts it with the
+   * settled rows, and offers none of the verbs the host refuses on a cancelled
+   * row (run it again, drop the clock, re-time). `error` says who called it off.
+   */
+  calledOff?: "agent" | "other";
   /** Waits for a person's tap: auto-fire never starts it
    *  (`Intent.manual`, an agent's backlog add). The row says so in
    *  `MANUAL_HOLD_TEXT`. */

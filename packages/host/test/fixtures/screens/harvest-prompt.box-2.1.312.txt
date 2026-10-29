@@ -1,0 +1,28 @@
+⏺ Xxx xxxx xxxxx xxxxx'x xxxxx xxx xxxxx: xx xxxxxxx 0.0.00 xxxxxxx xxx xxxx
+  xxx-xxx (xxx/xxxxxx xxxx xxxxxx, xxx xx XxxXxx xxxxxxx xx xxx xxxxxx), xxxxx
+  xxxx xxx xxxxx xxxxx xx 0.0.00, xxxxxx xxx xxxxx'x xxxxx xxxxxxxxxx xx
+  xxxxxxx. X'x xxxxxxx xxxxxx xxx xxxxxxxxxxxx xxxxxx xx xxxx xxxx xxx.
+────────────────────────────────────────────────────────────────────────────────
+ ☐ Xxxxxxx xxxxx
+
+│ Xxx xxxxxx 0.0.00 xx xxxxxxxx, xxxxx xxx xxx x0.0.00 xx xxxxxxx xxxxxx xx
+│ 00xxxx00 xxx xxxx xx xxx 0.0.00?
+
+❯ 1. Xxxxxx 0.0.00 xxxx xxx (Xxxxxxxxxxx)
+     Xxxxx ~/xxx/xxxx xxxx xxxxxxx xxxx `xxxx` xx x0.0.00 (xxxx xxxxxx xx
+     xxxxxxx xx xxxxxx/xxxx), xxx xx. Xxxxx xxx xxxxxx xxxxx xx xx xxx Xxxxxxx
+     0.0.00 xxxxxxxx xxx xxxxx xxx xxxxxx xxx XXX xxxxx (xxxxx xxxxxxxx xx xxxx
+     xxxxx). Xxxx xx xxx xxx xxx, xxx xxxx XXXXXX, xxx xxx --xxx --xxxxx. Xxx
+     xxx xxxx xxx xxx xxxxxxxx xxxx xxxxxx xxxx. Xxx xxxxxx xxxx xx xxx xxxxxxx.
+  2. Xxxxxxx 0.0.00 xxxx xxxx
+     Xxxxxxx XXXX xx 0.0.00, xxxxx xxxxxxxx xxxxxxxxxx xx 0.0.00. Xxx x0.0.00
+     xxx xxxxx xx XxxXxx xxxx xx xxxxxxx. Xxxx xxxx xxxxxxx xxx 00:00 xxxxxxxxx
+     xxxxxx.
+  3. Xxxx, xxxxx xxxxxxx
+     Xxxxx xxxxxxxxxx xx xx xx (xxx xxxxxx, xxxxxxxx xxxxxx, xx xxxxxxx, xxxxxxx
+     xx xxx) xxx xxxx xxxx xxxxxxx xxx xxxxxx-xx.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

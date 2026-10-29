@@ -30,7 +30,13 @@ async function gitWorktrees(repoDir: string): Promise<{ path: string; branch: st
       }
     }
     if (cur.path) out.push({ path: cur.path, branch: cur.branch ?? "(detached)" });
-    return out;
+    // git keeps listing a linked worktree whose folder was deleted (`rm -rf`, a
+    // reaped /tmp) until someone prunes it. Listed, every route on it spawns git
+    // in a cwd that is gone — which Node words as `spawn git ENOENT`. Checked on
+    // the folder, not on git's `prunable` line: under WSL, Linux git marks every
+    // Windows-made `C:/…` worktree prunable although its /mnt/c folder is there.
+    const live = await Promise.all(out.map((w) => stat(w.path).then((s) => s.isDirectory(), () => false)));
+    return out.filter((_, i) => live[i]);
   } catch {
     return [{ path: repoDir, branch: "(unknown)" }];
   }

@@ -566,7 +566,7 @@ test("the trend ask lists every week, the gaps as gaps, and each reading's total
   assert.doesNotMatch(p, /Escape hatches \(`hatches`\)/, "a reading with no contribution has no total, not a zero");
 });
 
-test("the trend ask reads the trend first, then posts its proposals as held backlog rows", () => {
+test("the trend ask reads the trend first, asks which proposals to keep, then posts only those as held backlog rows", () => {
   const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
   assert.match(p, /Is myapp getting healthier\?/);
   assert.ok(p.indexOf("getting healthier?") < p.indexOf("propose what to change"), "the trend is read before anything is proposed");
@@ -575,7 +575,10 @@ test("the trend ask reads the trend first, then posts its proposals as held back
   assert.match(p, /key per change/, "asking twice does not post twice");
   assert.match(p, /may move none of them/);
   assert.match(p, /propose one of this repo's own/);
-  assert.match(p, /Change no file, run no fix, commit nothing: the backlog rows are the only thing you write\./);
+  assert.match(p, /ask the person which ones to put in the backlog, and stop: post nothing until they answer/, "no row is posted before the person picks");
+  assert.ok(p.indexOf("which ones to put in the backlog") < p.indexOf("POST /api/agent/backlog"), "the ask comes before the post");
+  assert.match(p, /post only the ones they picked/);
+  assert.match(p, /Change no file, run no fix, commit nothing: the backlog rows the person picked are the only thing you write\./);
 });
 
 /* ── what the two index prompts say about the tree beside the numbers ── */

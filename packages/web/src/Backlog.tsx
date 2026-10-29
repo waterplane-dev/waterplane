@@ -5,6 +5,7 @@ import { useBacklogDraft } from "./backlog/useBacklogDraft";
 import { useBacklogDrag } from "./backlog/useBacklogDrag";
 import { useBacklogEdit } from "./backlog/useBacklogEdit";
 import { useBacklogFilters } from "./backlog/useBacklogFilters";
+import { useBacklogSort } from "./backlog/useBacklogSort";
 import { useBacklogUi } from "./backlog/useBacklogUi";
 import { BacklogHead } from "./backlog/RepoBar";
 import { BacklogBody } from "./backlog/BacklogBody";
@@ -39,14 +40,15 @@ export function Backlog(p: BacklogProps) {
   // ticking clock, then the drag binding — as they ran inline.
   const draft = useBacklogDraft();
   const filters = useBacklogFilters(p);
+  const sort = useBacklogSort();
   const ui = useBacklogUi();
   // Ages are rendered, so the clock has to move: a sheet open with nothing
   // arriving would otherwise keep saying "2m ago" half an hour later.
   const now = useNow(30_000);
   const edit = useBacklogEdit(p);
-  const cuts = useBacklogCuts(p, now, filters, ui.picked);
+  const cuts = useBacklogCuts(p, now, { ...filters, ...sort }, ui.picked);
   const drag = useBacklogDrag(p, cuts);
-  const m: BacklogModel = { p, now, ...draft, ...filters, ...ui, ...edit, ...cuts, ...drag };
+  const m: BacklogModel = { p, now, ...draft, ...filters, ...sort, ...ui, ...edit, ...cuts, ...drag };
   return (
     <div className="sheet">
       <BacklogHead m={m} />

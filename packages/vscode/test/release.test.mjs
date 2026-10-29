@@ -36,6 +36,14 @@ test("a ready release publishes to every registry missing the version", () => {
   assert.deepEqual(planRelease(base), { vsix: "waterplane-0.4.0.vsix", problems: [], targets: ["marketplace", "openvsx"], skipped: [] });
 });
 
+test("the changelog heading matches the version literally, metacharacters and all", () => {
+  const miss = (version, changelog) => planRelease({ ...base, version, changelog, scripts: { package: `vsce package -o waterplane-${version}.vsix && node scripts/check-vsix.mjs waterplane-${version}.vsix` } })
+    .problems.some((p) => p.startsWith("CHANGELOG.md has no"));
+  assert.equal(miss("0.4.0", "## 0x4y0 - d\n"), true, "a dot is a dot");
+  assert.equal(miss("0.4.0+b(1)", "## 0.4.0+b(1) - d\n"), false);
+  assert.equal(miss("0.4.0\\", "## 0.4.0\\ - d\n"), false, "a backslash is escaped, not an escape");
+});
+
 test("a registry that already has the version is skipped, so a repeat is safe", () => {
   const p = planRelease({ ...base, published: { marketplace: ["0.4.0"], openvsx: ["0.4.0"] } });
   assert.deepEqual(p.targets, []);

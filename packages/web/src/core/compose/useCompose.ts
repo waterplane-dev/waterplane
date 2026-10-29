@@ -298,14 +298,14 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     if (!chordWasArmed.current) return;
     chordWasArmed.current = false;
     if (!cliModeOn && !chordFocusedBefore.current) composeRef.current?.blur();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- edge of chord.armed only; cliModeOn is read as of that render, and a CLI-mode toggle must not blur
   }, [chord.armed]);
   // A held key belongs to the screen it was armed on: a session switch, the
   // reader or a pending session (where the row and the "held" bar are not
   // drawn) lets go, rather than firing on the first key typed somewhere else.
   useEffect(() => {
     chord.clear();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chord is a fresh object each render (clear is a setState); depending on it would let go of every held key on every render
   }, [activeId, pending, readerShown]);
   /** The `+ later` screen (`isLaterId`): no session until its backlog item runs. */
   const later = isLaterId(activeId);

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { fmtCount, fmtUsd, rankRepos, tokenTotal, type CostWindowDoc, type PeriodState } from "@waterplane/shared";
 import { modelRows, pacingLine, periodTitle, usdWords } from "@waterplane/sdk";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
+import { BesideBlock } from "./BesideBlock.tsx";
 import { Composition } from "./Readouts.tsx";
 import { foldStateText, priced, rowFacts, usdOrTok } from "./weekBands.ts";
 import { Button } from "@waterplane/kit";
@@ -75,6 +76,7 @@ export function PeriodCard({ state, cap, doc, res, refusal, now }: {
       {tokenTotal(doc.unpriced) > 0 && (
         <div className="empty ts-caveat">{fmtCount(tokenTotal(doc.unpriced))} tokens ran on a model with no published rate and are <b>not</b> in this figure.</div>
       )}
+      <BesideBlock rows={doc.beside} />
       {!rows.length ? <div className="empty ts-caveat">Nothing has run on this desktop in this period.</div> : <>
         <div className="section section-head">
           <span>{by === "repo" ? "By repo" : "By model"}</span>

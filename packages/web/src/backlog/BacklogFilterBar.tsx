@@ -16,6 +16,7 @@ import { chipText } from "../kit/chips";
 import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
 import { CATEGORY_ICON } from "./backlogLabels";
+import { BacklogSortBar } from "./BacklogSortBar";
 
 export function BacklogFilterBar({ m }: { m: BacklogModel }) {
   const {
@@ -53,6 +54,8 @@ export function BacklogFilterBar({ m }: { m: BacklogModel }) {
           </FilterChip>
         )}
       </div>
+
+      <BacklogSortBar m={m} />
 
       {/* The cuts, as the kit's filter chips (`FilterChip`: tinted when lit, a ×
           to take it away — never the solid fill, which is a sheet's one primary

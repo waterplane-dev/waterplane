@@ -32,3 +32,11 @@ test("refusal names the set, and says when the mode is live-only", () => {
   assert.doesNotMatch(launchModeRefusal("Codex", "auto", caps), /switch to it/);
   assert.ok(PERMISSION_MODE_NAMES.includes("bypassPermissions"));
 });
+
+import { spendUnitProblems } from "../dist/index.js";
+
+test("spendUnitProblems: absent or a plain name passes; anything else is refused in words", () => {
+  assert.deepEqual(spendUnitProblems(undefined), []);
+  assert.deepEqual(spendUnitProblems("AI credits"), []);
+  for (const bad of ["", "  ", 3, " AI credits", "x".repeat(33)]) assert.equal(spendUnitProblems(bad).length, 1, String(bad));
+});

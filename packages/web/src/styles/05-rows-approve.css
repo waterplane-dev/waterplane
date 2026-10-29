@@ -373,6 +373,7 @@
 .approve.login { background: var(--star-wash); border-top: 1px solid var(--star); }
 .login-head { display: flex; align-items: center; gap: var(--sp-8); margin-bottom: var(--sp-8); }
 .login-title { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--star); }
+.netretry-line { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--warn, var(--muted)); }
 .login-age { flex: none; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); font-variant-numeric: tabular-nums; }
 .approve.login .approve-btn.primary { background: var(--star); border-color: var(--star); color: var(--on-star); }
 /* The URL itself, as the last resort every automatic path here needs: it wraps

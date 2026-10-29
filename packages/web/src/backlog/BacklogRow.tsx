@@ -11,7 +11,7 @@ import { Fragment } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, GripVertical, Sparkles } from "lucide-react";
 import type { BacklogItem } from "@waterplane/shared";
 import { isAgentPosted, imagePaths, itemHeadline } from "@waterplane/shared";
-import { clockGroupWords, itemClockKey, realLabel, retimeEligible } from "../backlogFilter";
+import { clockGroupWords, itemClockKey, realLabel, retimeEligible, rowStatusKey } from "../backlogFilter";
 import { PickBox, toggled } from "../RetimeBar";
 import type { BacklogModel } from "./backlogTypes";
 import { RowActions } from "./RowActions";
@@ -30,11 +30,13 @@ export interface RowFacts {
 
 export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it: BacklogItem; idx: number }) {
   const {
-    canDrag, clockCuts, dragId, editingId, filter, now, openText, p, picked, picking, setDragId, setPicked,
+    canDrag, clockCuts, dragId, editingId, filter, now, openText, p, picked, picking, setDragId, setPicked, drawSort,
     toggleText,
   } = m;
-    const up = g.items[idx - 1]?.id;
-    const down = g.items[idx + 1]?.id;
+    // The move verbs trade neighbours ON SCREEN, so they exist only while the
+    // screen is in run order; newest first, a neighbour is not a run seat.
+    const up = drawSort === "run" ? g.items[idx - 1]?.id : undefined;
+    const down = drawSort === "run" ? g.items[idx + 1]?.id : undefined;
     /** Posted by an agent through the host's loopback route — said as
      *  TEXT on the row, so the person can tell it from what they typed. */
     const agentPosted = isAgentPosted(it);
@@ -67,12 +69,13 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
     return (
       <Fragment key={it.id}>
       {clockHead}
-      <div data-blid={it.id} className={`bl-row bl-${it.status} ${dragId === it.id ? "dragging" : ""}`}>
+      <div data-blid={it.id} className={`bl-row bl-${rowStatusKey(it)} ${dragId === it.id ? "dragging" : ""}`}>
         <div className="bl-head">
           {picking && retimeEligible(it) && (
             <PickBox on={picked.has(it.id)} onToggle={() => setPicked((prev) => toggled(prev, it.id))} />
           )}
-          <span className="bl-num">{idx + 1}</span>
+          {/* The RUN seat in either view — newest first never renumbers a row. */}
+          <span className="bl-num">{g.seats.get(it.id) ?? idx + 1}</span>
           <div className="bl-main">
             {/* The item's OWN WORDS, always — never `label`, which add()
                 fills with the first 40 characters of this same text and

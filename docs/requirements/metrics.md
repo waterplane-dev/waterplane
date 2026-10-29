@@ -97,10 +97,11 @@ A script archives GitHub traffic and release download counts to a local file out
 - shipped: f8d4b23f
 
 ### R-metrics-021 · shipped
-The repo health score has Ask-AI buttons: one on the index box asking what moved the picked week, and one, *assess and propose improvements*, that reads whether the repo is getting healthier and then posts each proposed change as a held backlog row the person fires, edits or deletes (no file changed, nothing started), with a disclaimer that the biggest lever may not move the five generic readings.
+The repo health score has Ask-AI buttons: one on the index box asking what moved the picked week, and one, *assess and propose improvements*, that reads whether the repo is getting healthier, lists its proposed changes and asks which to keep, then posts only the ones the person picks as held backlog rows they fire, edit or delete (no file changed, nothing started), with a disclaimer that the biggest lever may not move the five generic readings.
 - asked: 2026-10-16
 - shipped: 86e52da1, 81e3edb5, 6e8483f7
 - amended: 2026-10-19 (owner: advice-on-request replaced by one tap whose proposals land as backlog rows, approved one at a time; button renamed from "ask if it is getting healthier")
+- amended: 2026-10-28 (owner: proposals are discussed first — the agent lists them and asks; only the ones the person selects go into the backlog)
 
 ### R-metrics-022 · shipped
 A repo can overwrite or disable one of the centrally provided health readings in its committed health.json (with a reason), and add its own readings beside them without replacing them.

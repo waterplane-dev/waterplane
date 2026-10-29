@@ -1,11 +1,37 @@
 # Changelog
 
 Notable changes. This project has no release branches — `main` is the supported
-version — so entries are grouped by the release they shipped in.
+version — so entries are grouped by the release they shipped in. A fixed security
+vulnerability in what ships is listed under a **Security:** bullet of the release that
+fixed it, with its CVE or GHSA id when one exists.
+
+## 0.1.11
+
+The first public release since 0.1.6. 0.1.10 was tagged but never released; its changes, and those of 0.1.7 to 0.1.9, ship here.
+
+### New
+
+- **The backlog lists the newest rows first.** A sort switch above the list picks *newest first* (the default) or *run order*, and the phone remembers the choice. The number on each row is still its place in the run order. Dragging and the move arrows appear only in run order, and the *on a clock* filter always shows run order.
+- **Repos that take changes only through a pull request.** The desktop reads each repo's own branch rules on GitHub. Where they require a pull request, the git view's push becomes *Push & open PR*: your commits go to a `wp/` branch with a PR, and main moves back. Open PRs show above the history with merge, auto-merge, close and the failing check's log, and a PR's checks notify you. A repo without such rules pushes as before, and the desktop never calls GitHub for it.
+- **A turn the CLI gave up on a network error is retried.** When claude ends a turn on a transient API error (no connection, DNS, 5xx, overloaded), the desktop types `continue` again on a widening ladder (20 s up to 10 min) and shows the countdown with *turn off*. Settings › Sessions › *retry on network errors* (on by default).
+- **Re-check on the watch runs the exposure watch.** On Repo readings › watch, *re-check* now runs the watch for that repo on the desktop and says what it found, instead of re-reading the last daily run.
+- **Other backends beside your spend.** Where the month and week went also lists every other backend over the same span in its own unit, never summed with claude's; a budget can be set in a backend's own unit. An opencode turn shows its subagents' tokens and cost, and an opencode session stopped at a dated limit is reopened at the reset.
+- **Trend proposals ask first.** *Assess and propose improvements* lists its proposals and posts only the ones you pick as backlog rows.
+
+### Fixes
+
+- **Security:** CodeQL fixes: complete regex escaping in the VS Code extension's git reader and the release tooling, and a backslash escaped before a pipe in generated tables. No shipped path was exploitable.
+- The phone no longer sits on "connecting" when a WebSocket handshake never completes: each dial has a timeout and dials again.
+- Back from a session started from a backlog cut returns to that cut, not the bare launcher.
+- A backlog row called off (by you, an assessment or its own agent) reads *withdrawn* or *called off*, not *failed*, and offers no action the desktop would refuse.
+- The git view: a running pull or push hides the stored failure, and *done* says what it clears.
+- A long build failure scrolls inside the build sheet instead of pushing *done* off screen; a failed build reads *failed* beside the hammer.
+- The Scorecard sheet's refresh says whether Scorecard has a newer scan, and the date is the scan's.
+- VS Code extension (0.8.0): the tree highlights the session only while the panel shows one.
 
 ## 0.1.10
 
-The first public release since 0.1.6: it also carries everything listed under 0.1.8 and 0.1.9 below.
+Tagged but never released; it ships in 0.1.11.
 
 ### New
 

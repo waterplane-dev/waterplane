@@ -21,9 +21,9 @@ After restart or an APK update, app restores the user to the exact location they
 - shipped: b2d01bc
 
 ### R-navigation-006 · shipped
-Back navigation returns to the previous screen, not the main view.
-- asked: 2026-09-28
-- shipped: 3d62f7f
+Back navigation returns to the previous screen, not the main view — the session header's back arrow included (a session started from a launcher sheet returns to that sheet), and a sheet returned to shows the cut it had (the backlog's "the 10 waiting").
+- asked: 2026-09-28, 2026-10-28
+- shipped: 3d62f7f, 46310e4a
 
 ### R-navigation-007 · shipped
 A links sheet lists every app running on the host and every deployed frontend, with pins, a search box, filter chips and grouping by repo, environment or place; it is a plugin, opened from the menu.

@@ -8,6 +8,7 @@
 import { realpathSync } from "node:fs";
 import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
+import { cachedBranchRules } from "../branchrules.js";
 import { repoOfWorktree } from "../tokenstats.js";
 import { suggestCommitMessage } from "../commitmsg.js";
 import { explainChanges } from "../changebrief.js";
@@ -21,7 +22,7 @@ import type { ComplianceReport, OptInChoice, OptInReport, RepoTarget } from "@wa
 import { REPOHEALTH_TIMEOUT_MS, readRepoHealth, refreshRepoHealth } from "../repohealth.js";
 import { approveWithConsent, withApproveToken } from "../repohealthapproval.js";
 import { cleanScope, writeScopes } from "../repohealthscopes.js";
-import { removeLeftover, worktreeLeftover, type LeftoverInput } from "../worktreeleftover.js";
+import { removeLeftover, worktreeLeftover, WorktreeGone, type LeftoverInput } from "../worktreeleftover.js";
 import { worktreeOwners } from "../worktreeowner.js";
 import { MIME, json, readJson, serveRange, treeFileSecurityHeaders } from "./apiio.js";
 import { route, type ApiCtx, type ApiEntry, type RepoReq } from "./apitable.js";
@@ -326,7 +327,9 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
 
   // ── Git review (Tier 3) ───────────────────────────────────────────
   route<RepoReq>("GET", "git/status/*", async ({ res, wt }) => {
-    json(res, await gitStatus(wt));
+    const status = await gitStatus(wt);
+    const branchRules = cachedBranchRules(wt);
+    json(res, branchRules ? { ...status, branchRules } : status);
     return true;
   }),
   route<RepoReq>("GET", "git/diff/*", async ({ res, url, wt }) => {
@@ -474,6 +477,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     try {
       json(res, await worktreeLeftover(leftoverInput(wt, target.branch, ctx.sessions.list())));
     } catch (err) {
+      if (err instanceof WorktreeGone) { json(res, { error: err.message }, 410); return true; }
       json(res, { error: `Could not check the worktree: ${(err as Error).message}` }, 500);
     }
     return true;

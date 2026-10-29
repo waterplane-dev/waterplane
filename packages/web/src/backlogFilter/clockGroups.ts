@@ -107,7 +107,7 @@ export function clockGroups(items: readonly BacklogItem[]): ClockGroup[] {
   const out: ClockGroup[] = [];
   const byKey = new Map<string, ClockGroup>();
   for (const it of items) {
-    const key = itemClockKey(it);
+    const key = it.calledOff ? null : itemClockKey(it); // a call-off never runs: no seat
     if (!key) continue;
     let g = byKey.get(key);
     if (!g) {

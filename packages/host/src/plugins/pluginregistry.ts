@@ -145,7 +145,7 @@ export interface RegistryDeps {
 export interface HandToAgentArgs { repoDir: string; text: string; label?: string; id?: string; origin: string; fire: boolean }
 
 /** Fix ids `compliance.ts` answers itself — a plugin may not take one. */
-export const CORE_FIX_IDS: readonly string[] = ["gitignore", "claude-md", "visual-check", "auto-compact", "state-dir", "android-toolchain", "signing-key", "builds-configured", "exposure-watch", "protect-main", "era-seen"];
+export const CORE_FIX_IDS: readonly string[] = ["gitignore", "claude-md", "visual-check", "auto-compact", "state-dir", "android-toolchain", "signing-key", "builds-configured", "exposure-watch", "protect-main", "era-seen", "local-ci-status"];
 
 const isPlainObject = (v: unknown): boolean => !!v && typeof v === "object" && !Array.isArray(v);
 const isEnabledDoc = (v: unknown): boolean => isPlainObject(v) && ((v as { enabled?: unknown }).enabled === undefined || isPlainObject((v as { enabled?: unknown }).enabled));

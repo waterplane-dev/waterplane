@@ -8,7 +8,7 @@ import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
 import { budgetSid } from "../../sessionBudgetDoor";
 import { SessionBudgetSheet } from "./SessionBudgetSheet";
-import { budgetSubject, budgetWindowsOff } from "./logic";
+import { budgetSpendUnit, budgetSubject, budgetWindowsOff } from "./logic";
 
 export { openSessionBudget, closeSessionBudget } from "./actions";
 export { budgetTagFacts, budgetToast, shouldNoticeBudget } from "./logic";
@@ -21,7 +21,7 @@ export const manifest: FeatureManifest = {
     { id: "sessionBudget", persisted: false, render: (c) => {
       const subject = budgetSubject(budgetSid.get(), c.world.sessions, c.world.active);
       return subject ? createElement(SessionBudgetSheet, {
-        subject, title: c.world.sessionRowTitle(subject), windowsOff: budgetWindowsOff(subject, c.world.backends),
+        subject, title: c.world.sessionRowTitle(subject), windowsOff: budgetWindowsOff(subject, c.world.backends), spendUnit: budgetSpendUnit(subject, c.world.backends),
       }) : null;
     } },
   ],

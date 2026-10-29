@@ -28,9 +28,10 @@
  * map routes by basename). What each file holds:
  *
  *   rowBuckets.ts     the age and kind buckets — the ONE edge each chip's count
- *                     and its cut share (`ageBucket`, `categoryBucket`)
+ *                     and its cut share; calledOff.ts: a call-off is not a failure
  *   rowFilter.ts      the cut (`matchesBacklogFilter`), the bar's sentence, the
  *                     archived hide (`hiddenByArchive`), the offline refusals
+ *   rowSort.ts        newest first or run order — a VIEW; the number stays the run seat
  *   cutCounts.ts      the numbers on the controls and their sentences
  *                     (`backlogCounts`, `focusRunWords`, archive/assess scope)
  *   clockGroups.ts    the GROUPS of rows that share a clock, and their seats
@@ -41,12 +42,12 @@
  *   rowWords.ts       a span, the typed label, the edit form's session options, the serial holder
  *   retimeMany.ts     re-time many
  *
- * There is no `sort` file: the order is the HOST's (`order ?? createdAt`), and
- * nothing on this side re-sorts a row. `tools/backlogpins.test.mjs` pins the
+ * The RUN order is the HOST's (`order ?? createdAt`); `rowSort.ts` only draws. `tools/backlogpins.test.mjs` pins the
  * barrel's export list, so a name cannot fall out of it in a later cut.
  */
 export * from "./backlogFilter/rowBuckets.ts";
 export * from "./backlogFilter/rowFilter.ts";
+export * from "./backlogFilter/rowSort.ts";
 export * from "./backlogFilter/cutCounts.ts";
 export * from "./backlogFilter/clockGroups.ts";
 export * from "./backlogFilter/dropClock.ts";

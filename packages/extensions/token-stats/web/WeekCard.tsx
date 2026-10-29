@@ -7,6 +7,7 @@ import {
 } from "@waterplane/shared";
 import { useBoxWidth, Button, Tag } from "@waterplane/kit";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
+import { BesideBlock } from "./BesideBlock.tsx";
 import { Composition } from "./Readouts.tsx";
 import { RepoHourChart, slotFill } from "./charts/RepoHourChart.tsx";
 import {
@@ -154,6 +155,7 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
       {tokenTotal(doc.unpriced) > 0 && (
         <div className="empty ts-caveat">{fmtCount(tokenTotal(doc.unpriced))} tokens ran on a model with no published rate and are <b>not</b> in this figure.</div>
       )}
+      <BesideBlock rows={doc.beside} />
       </>}
 
       {!cut!.total ? <div className="empty ts-caveat">Nothing has run on this desktop {span ? `in the ${span.tag}` : "since the weekly reset"}.</div> : <>

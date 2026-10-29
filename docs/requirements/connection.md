@@ -123,3 +123,14 @@ If the Mac loses internet or DNS, the owner can keep working from the phone thro
 After the local CA certificate is installed on Windows, the measurement page loads over HTTPS on the LAN host name, and the tailnet link also loads.
 - asked: 2026-10-26
 
+
+### R-connection-024 · shipped
+When a session's turn ends because claude gave up on a temporary API or network error (can't reach the API server, connection lost, no response, 529 overloaded), the desktop types "continue" for it on a widening schedule (20s, 1m, 2m, 5m, 10m, 15m…, at most 8 tries), the phone shows "Network error — retrying in 40s (2/8)" with a cancel, and anything the person types, a usage or spend limit, or the halt stops it. Past the last try it stops and says so. A backlog item (or any waiting work) fired into that session is not marked done by the failed turn: it finishes when the retried turn really answers, fails saying the API could not be reached when the retries run out, and finishes normally on the person's own turn if they type over the retry.
+- asked: 2026-10-27
+- shipped: 6358bcc1
+- amended: 2026-10-28 — waiting work follows the retry (asked by the owner, session 01NLkDCK)
+
+### R-connection-025 · shipped
+The network-error retry (R-connection-024) has a person-facing switch, "retry on network errors" in Settings › Sessions, on by default and kept by the desktop across restarts; the retry line under a session also offers "turn off". Turning it off cancels every pending retry and clears their lines. When the desktop's environment forces it off (`WATERPLANE_NET_RETRY=0`), the row says so in a sentence instead of looking like a working switch.
+- asked: 2026-10-28
+- shipped: 0618ee0d

@@ -43,7 +43,9 @@ const SKILLS = join(ROOT, ".claude", "skills");
 const MAX_LINES = {
   // 700 → 701 (2026-10-25, offline terminal of an unattached session): one public delegate,
   // `screenTail`; the behaviour lives in `sessions/drive.ts`. Far under the 1,100 end state.
-  "sessions.ts":         701,
+  // 701 → 704 (2026-10-27, R-connection-024 network retry): the slice's field, its three core
+  // members on one line, and the public `netRetryCancel`; the behaviour lives in `sessions/apiretry.ts`.
+  "sessions.ts":         704,
   // 314 → 316 (2026-10-08, store writes that fail are refusals): one core entry (`lastWriteError`,
   // which post/upsert/fire word their refusal from) and its public read for the routes; the
   // behaviour lives in `intents/disk.ts`, `write.ts` and `fire.ts`. Far under the 450 end state.

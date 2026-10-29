@@ -18,6 +18,7 @@ import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.j
 import type { OnboardJob } from "../onboard.js";
 import type { LimitResumeMode } from "../session.js";
 import type { HaltState } from "../../halt.js";
+import type { NetRetryConfig } from "../../netretrycfg.js";
 import type { MeterSummary } from "../telemetry.js";
 import type { AssessRun, AutoPullConfig, BuildConfig, BuildRun, FanoutRun, PullItem } from "../work.js";
 
@@ -109,6 +110,8 @@ export type HostToolsMsg =
    *  still blocked — the limit demonstrably has not reset, so no OTHER session
    *  may spend an attempt proving the same thing until then. */
   | { t: "limit.config"; enabled: boolean; resumingId: string | null; resumingIds?: string[]; holdUntil: number | null; mode?: LimitResumeMode }
+  /** The network-error retry switch (`netretrycfg.ts`; sent on hello and on change). */
+  | ({ t: "netretry.config" } & NetRetryConfig)
   /** The halt latch (sent on hello and on every change). */
   | { t: "halt.state"; halt: HaltState }
   | { t: "pong" } // heartbeat reply to { t: "ping" }

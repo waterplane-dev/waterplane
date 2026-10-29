@@ -116,7 +116,7 @@ const PINS = [
     name: "health observations, gated (noteFor calls)",
     re: /\bnoteFor\(/g, def: hubDefs("noteFor"), skip: ["sessions/core.ts"],
     // The hook pipe going live (`hook.pipe` good) moved turn.ts → sidechannel.ts with claude onto the sources seam (design §10).
-    today: { "sessions/boxes.ts": 7, "sessions/health.ts": 2, "sessions/sidechannel.ts": 1, "sessions/turn.ts": 1, "sessions/wall.ts": 1 },
+    today: { "sessions/boxes.ts": 3, "sessions/boxread.ts": 4, "sessions/health.ts": 2, "sessions/sidechannel.ts": 1, "sessions/turn.ts": 1, "sessions/wall.ts": 1 },
   },
   {
     name: "health observations, direct (noteHealth calls)",
@@ -161,8 +161,9 @@ const PINS = [
     name: "timeouts in the three files and their slices (setTimeout)",
     re: /\bsetTimeout\(/g,
     scope: (f) => BIG3(f) || f.startsWith("sessions/") || f.startsWith("server/") || INTENTS(f),
+    // sessions/apiretry.ts (2026-10-27, R-connection-024): the retry rung, the one log re-read after a Stop, the Text/Return gap — a new fact.
     // server/clients.ts: the one-second grace before a distrusted socket is `terminate()`d (2026-10-22 security pass).
-    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxes.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/resume.ts": 3, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 2, "sessions/wall.ts": 3 },
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxread.ts": 2, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 3, "sessions/resume.ts": 3, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 3 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -209,6 +210,9 @@ const PINS = [
   },
   {
     name: "sessions emits",
+    // apiretry.ts 1 → 3 (2026-10-28, R-connection-024): `netTurnSettled`, the late verdict on a
+    // `checking` turn end and the halt stopping a rung — the work waiting on the turn is told.
+    // apiretry.ts 0 → 1 (2026-10-27, R-connection-024): `SessionInfo.netRetry`, a new fact with its one emit.
     // roster.ts 13 → 14 (2026-10-25, R-notifications-015): `followUpCleared` names the keys a cleared
     // flag leaves, closed sessions included, so their attention item resolves — a new fact, not a copy.
     // roster.ts 11 → 13 (2026-10-21, R-conversations-007): `bookmarkChanged` re-sends a live
@@ -216,7 +220,7 @@ const PINS = [
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 7, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 9, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 5, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 18 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
@@ -225,7 +229,7 @@ const PINS = [
   {
     name: "main's subscriptions (sessions.on)",
     re: /\bsessions\.on\(\s*"/g, scope: MAIN,
-    today: { "server/sessionEvents.ts": 22 }, // +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
+    today: { "server/sessionEvents.ts": 23 }, // +1 (2026-10-28): `netTurnSettled` → intents; +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
     why: "a listener registered twice runs twice",
   },
   {
@@ -311,7 +315,8 @@ const ORDERED = [
   {
     name: "sessions.on registration order (server/sessionEvents.ts)",
     file: "server/sessionEvents.ts", re: /\bsessions\.on\(\s*"(\w+)"/g,
-    today: ["turnEnded", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
+    // `netTurnSettled` (2026-10-28) sits beside `turnEnded`: the late half of the same completion.
+    today: ["turnEnded", "netTurnSettled", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
   },
   {
     name: "intents.on registration order (server/intentEvents.ts)",

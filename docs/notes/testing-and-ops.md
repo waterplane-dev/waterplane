@@ -397,6 +397,17 @@ against a host booted with a fixed sleep. So the pool starts no NEW script while
 average is above twice the cores (`E2E_MAX_LOAD`, `0` = off) — one always keeps running, so it
 degrades toward serial, never to a stop — and says so when it throttles and when it resumes.
 
+**`test:host` has the same rule since 2026-10-27** (`scripts/run-node-tests.mjs`). Its timing
+flakes kept refusing pushes one test at a time: 2026-10-20 raised seven deadlines by hand
+(`bda93d97`), and 2026-10-27 `ocsessionid` refused a push. That case was a fixture dated off the
+test's start where the floor is the delivery's clock, so it held only while two tmux opens took under 600 ms. Up to five
+failed FILES (read off the runner's own `test:fail` events by `scripts/lib-failfiles.mjs`, a failed
+`todo` not counted) run once more alone; passes alone = LOAD FLAKE, not blocking, named at the bottom
+and appended to `~/.cache/<slug>/host-flakes.jsonl`. `TEST_RETRY_ALONE=0` turns it off. **A flake that is not fixed is a race
+that ships**, and 23 e2e flakes had piled up unread by then, so the pre-push gate ends every run
+with `scripts/flake-report.mjs` (`npm run flakes` for all): the test files still flaky, newest
+first, never blocking. A file stays OPEN until a commit to it lands after its newest flake.
+
 **A failure says which kind it is, and why, at the bottom.** 2026-10-20: a push refused from the
 phone showed e2e-halt and e2e-setup failing; both passed alone, and the phone's last-lines view held
 neither script's FAIL line, only a 4 kB temp-dir tally. Three changes. (1) Up to three failed scripts

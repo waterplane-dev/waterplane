@@ -703,6 +703,10 @@ const onSessionAckAsking: Route<"session.ackAsking"> = (a) => {
     a.c.sessions.ackAsking(a.msg.id, a.msg.text);
 };
 
+const onSessionNetRetryCancel: Route<"session.netRetryCancel"> = (a) => {
+    a.c.sessions.netRetryCancel(a.msg.id);
+};
+
 const onSessionPin: Route<"session.pin"> = (a) => {
     a.c.sessions.pin(a.msg.id, a.msg.entryId);
 };
@@ -767,6 +771,7 @@ export const sessionRoutes: RouteTable = {
   "session.star": onSessionStar,
   "session.followup": onSessionFollowUp,
   "session.ackAsking": onSessionAckAsking,
+  "session.netRetryCancel": onSessionNetRetryCancel,
   "session.pin": onSessionPin,
   "session.record": onSessionRecord,
   "session.history": onSessionHistory,

@@ -31,6 +31,15 @@ export function launchModesProblems(permissionModes: readonly unknown[], launchM
   return out;
 }
 
+/** Why a declared `spendUnit` (2.3) cannot be registered, as sentences; empty when it can (or is absent). */
+export function spendUnitProblems(spendUnit: unknown): string[] {
+  if (spendUnit === undefined) return [];
+  if (typeof spendUnit !== "string" || !spendUnit.trim()) return ["caps.spendUnit must be the unit's name as a person reads it (\"AI credits\"), or absent when the backend bills in tokens or dollars"];
+  if (spendUnit.trim().length > 32) return [`caps.spendUnit is ${spendUnit.trim().length} characters; a unit name is at most 32`];
+  if (spendUnit !== spendUnit.trim()) return ["caps.spendUnit has spaces around it; write the name as it is read"];
+  return [];
+}
+
 /** The sentence for a launch that names a mode outside the backend's launch set; null when it may start. */
 export function launchModeRefusal(label: string, mode: string | undefined, caps: { permissionModes: readonly PermissionMode[]; launchModes?: readonly PermissionMode[] }): string | null {
   if (mode === undefined) return null;

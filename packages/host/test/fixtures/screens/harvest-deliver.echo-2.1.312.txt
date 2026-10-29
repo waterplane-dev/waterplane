@@ -1,0 +1,40 @@
+xxxx/xxxxxxx-xxx-x0/xxxxxx/xxxxxxxxx/xxxxx.xx xx 0,000 xxxxx xxx xxx xxxx xxxx xxxxxxx xxxxx 0000-00-00 (0,000). 000 xxxxxxx xxxxxxx xx xxxxx Xxx; xx xx xx xxx xxx xx-xxxxxxx xxxxx xxxxx xxxxxxxxx, xxx xxxxxxxxxx xxxxxxxx xx xxxx Xxx xxxxxxx xx xx. Xx xxxxx xxxxxxxxx xxxxxxx xxx xxxxxxx ~00 xxxxxxxxxx xxxxxxx (_xxxxXxxxxxXxxx, _xxxxxxxXxxxxxxxxXxxxxx, _xxxxxxxXxxxxxXxxxx, _xxxXxxxXxx, ...) xxxx xx xxx 00 xxxxx xx xxxxxxxxx/xxxx/ xxx xxxxx xxxx — xxxxx xxxx xxxxx xxx xxxxx xxxx. Xxx xxxxx xxxx xxxxxxxxx' xxxxx.xx xxx 000-0,000 xxxxx.
+
+Xx xxxx xx x xxxx xxxx, xx xxxxxxxxx xxxxxx:
+1. Xxxx xxx `xxxxxx-xxxxxx-xxx-xxxxxxx` xxx `xxxxxx-xxxxx-xxx-xxxxxx` xxxxxx. Xxxx xxxx `xxxx -x` xxxx `xxx -x` xxxxxx <=00 xxxxx; xxxxx xxx xxx xxxxx xxxx.
+2. Xxxxxx xxxxxxx, xxxxxx `xxxx -x "xxxxxxx.xxx(Xxxxxx.xxxx(xxxxxxx('./xxxxx.xx')).xxxx().xxxx('\x'))" > /xxx/xxxxxxx.xxxxxx` xx xxxxxxxxx/.
+3. Xxxx xxxx xxxx xxxxxxx xx xxxxxx, x.x. xxxxxxxxx/xxx/xxxx/ (xxxx, xxxxXxxxx, xxxXxxxxxx, xxxx xxxx, xxxxxx/xxx/xxxxxxxx xxxxxxxx), xxx/xxxxxxxxx/ (xxxxxxxxx, xxxxxxx, xxxxxxx, xxxxxx, xxxxxx), xxx/xxxxxx/ (xxxxxx, xxxxxxxxx, xxxxxxxx), xxx/xxxxx/ (xxxxxXxxxxxxXxxxxx), xxx/xxxx/, xxx/xxxx/ (_xxxXxxxXxx, _xxxxxxXxXx, _xxXxxxxXx). xxxxx.xx xxxxx xxxx xxx xxxxxxx xxxxxxx, xx-xxxxxxxx xxxx xxx xxxxxxx. Xxxx xxx xxxxxxxxxx xxxxx xx-xxxxxxxx xxxx xxxxx.xx xx xxxxxxxx xxxxx xxxx xxxxxxxxx; xxxx xxxxx xxxx xxxx xx xxx xxxxxx.
+4. Xx xxx xxxxx _xxxxxx/ (xx xx x xxxxxx xxxxxx xx xxxxxx/xxxxxx-xxxxxx/xxxxxxxxx-xxx) xxx xx xxx xxxxxx xxx xxxxxxx: xxxxxxxx xxxxx xxx xxxxxx xxxxxx xxxxxxxxx.
+5. Xxxxx xxxx xxxxxxx xxxxxxx (xxx xxxxxx xxx xxxxxx) xx xxxx xx xxxxxxxxxx.
+
+Xxxxx: xxx xxxxxxx xxxx xxxxx xxxxxx /xxx/xxxxxxx.xxxxxx; `xx xxxxxxxxx && xxx xxxx` xxxxxx; xxxxxx/xxxxxx-xxxxxx/xxxxxxx/xx_xxxxx.xx xxxxxx (xxxxx_xxxxxxxxx_xxx_xxxx.xx, xxxxx_xxxxxxxx_xxxxxxxxx.xx, xxxxx_xxxxxxxxx_xxxx_xxxxxx.xx); xxx xxxxxxxxx xxxxxxxx xxxxx xxx xxxxxxxx. Xxxxxx + xxxx. Xxxxxxxxx xx x xxxxxxxx, xxxxxxxx xxxx: xxxx/xxxxxxx-xxx-x0/xxxxxxx/xxxxxx-xxxxxx.xx --xxxxxxxxx, xxxx xxxxxx_xxxxxxxxx_xxxxx.xx xxx xxxx xxxx-xxxxx xxxxxx xx xxx xxxx (x xxxxxxxx xxx XXXxx xx 000XxX xxxxxx).
+
+## Xxx xx xxxxxxxx (xxxxxxx xx xxxxx xxxx xxxxx)
+Xxxx xx x xxxxxxxx xxx xxxxxxxxxxxxx, xxx x xxxx xxxxx. Xxxxxx xxxxx xxxx xxxx xxxxx xxxxxxx xxxxxxxx xxx xxx xxxx xx xxxxxxxxx xx xxx xxx xxxx xxx xxxx xxx xxxxx xx xxxx.
+- Xxxxxx xxxxxx xxxxxxxx, xxxxx xxxx (xx xxx xxxxx xxxxxx xxxxxxx) xxx xxxxx: xxxxx xxxxxxxx xxxx xxxx xxxx, xxxxx xxxx xxxx xxx xxxxx xxx xxxxxx, xxx xxxxx xxx xxxxxxxxxx xxxxxxx xxxx xxxxxx xx. Xxxxx xxxxxxx xxxxxx xxxxx xxxxxxxx, xxx xxxxxx xxxx xxxxxx.
+- Xx xxx xxxx xxxx, xxx xxxx xxx xxxx xxxxxxx: xxxxxxxxxx xxxxx (xxxxx xx, xx xxx xxx xxxxxxxx xxxxxx xx xxxxxx/xxxxxx-xxxxxx xx xxx xxxxxx, xxxxx x xxx xxxx), xxxx xxxx (xxxxxx xx, xxxx xxx xxxx xxxx xxxxxx xx xx xxxxxx), xxxxx xxxx xxxx xxxx x xxxxx xxxxx (xxxxxx xx xxx xx), xxx xxxxxx xxxxxxxx (xxxx xxxx xx xxxxxxxxxx xxxxxxx xx xxxxxxxx xxxx xxxxxxx).
+- X xxxxxx xxxxxx xx xxxxxxxxxxxxxx xxx xxxxxxxx xx xxx xxx. Xxxxx xxxxxx xxx xxxxxx xxxx xxxx, xxx x xxxxxx xxxx xxxxx xxxxxxxxxx; xxxx-xxxx xxxxxxx xx xxxx.
+- Xxxx xxxxxxxxx xxxxxxxxx xxxxxx xxx xxxx x xxxx xxx. Xx xxx xx, xxx xx xx xxx xxx xxxxxx xxxx x xxxx xxxx xxxxx xxxxxx xxx xxxxxx xxxxx, xxx xxx xx xx xxx xxxxx xxxxxxx.
+- Xxxxx, xxxxxxxxxx xxxxxxx, xxx xxxxxxx xxxx. Xxx xxxx x xxxxx xxxxxxx xx xxxx xxx xxxxxxx xx xxx xxxxxx xxx xxx, xxx x xxxx xx xxxxx xxxxx.
+⁂ screen ⁂
+▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Xxxx 0.0 xxxx xxxxxx xxxxxx · Xxxxxx Xxx
+ ▝▝   ▝▝   ~/xxx/xxxxxx/xxxxxx-xxxxxxxx
+
+  ⎿  XxxxxxxXxxxx:xxxxxxx xxxx xxxxx
+  ⎿  Xxxxxx xxxx xxx-xxxxxxxx xxxxxx xxxx: xxxx[00000]: Xxxxxxx xxx xxxxxx:
+     /xxx/xxxxxxxx/xxx/xxx-xxx/xxx/xxxxxx.0.xxxxx
+
+                                                         xxxx+x xx xxxx xx Xxx
+────────────────────────────────────────────────────────────────────────────────
+❯ [Pasted text #1 +5 lines][Pasted text #2 +4 lines][Pasted text #3 +6
+  lines]xxxxxx xxxx xxxx, xxx x xxxxxx xxxx xxxxx xxxxxxxxxx; xxxx-xxxx
+  xxxxxxx xx xxxx.
+  - Xxxx xxxxxxxxx xxxxxxxxx xxxxxx xxx xxxx x xxxx xxx. Xx xxx xx, xxx xx xx
+  xxx xxx xxxxxx xxxx x xxxx xxxx xxxxx xxxxxx xxx xxxxxx xxxxx, xxx xxx xx xx
+  xxx xxxxx xxxxxxx.
+  - Xxxxx, xxxxxxxxxx xxxxxxx, xxx xxxxxxx xxxx. Xxx xxxx x xxxxx xxxxxxx xx
+  xxxx xxx xxxxxxx xx xxx xxxxxx xxx xxx, xxx x xxxx xx xxxxx xxxxx.
+────────────────────────────────────────────────────────────────────────────────
+  [XXXXXXX]
+  xxxxx xxxxx xx xxxxxx

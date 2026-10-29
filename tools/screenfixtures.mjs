@@ -22,12 +22,19 @@
  *   node tools/screenfixtures.mjs --npm      # count published releases (asks the npm registry)
  *   node tools/screenfixtures.mjs --cli 2.1.301 --health path/to/clihealth.json
  *   node tools/screenfixtures.mjs --reading  # ONE number: signals `current` on the installed CLI
+ *   node tools/screenfixtures.mjs --unproven # ONE number: signals with NO matching real capture, any version
  *
  * `--reading` is this repo's own repo-health reading (`screenFixtures` in
  * `.waterplane-shared/health.json`): it prints one JSON number and nothing else
  * on stdout. Where no signal CAN be current — the installed version is unknown,
  * or the catalog is not built — it prints nothing and exits 1 with the reason,
  * so the series records an absence rather than a 0 that claims "none are".
+ *
+ * `--unproven` is the second reading (`screenUnproven`): how many signals have
+ * never been shown to read a real screen at all — zero `match` captures of any
+ * CLI version (a guard proves the reader declines, not that it reads). The
+ * same absence rule: no catalog, no manifest or an empty catalog prints
+ * nothing and exits 1, never a 0 nobody counted.
  *
  * A readout: it exits 0 and refuses nothing (`--reading` aside, below). Needs `npm run build:shared`
  * (the catalog is read from `packages/shared/dist`, the one list of signals).
@@ -180,6 +187,17 @@ export function currentCount(rows, installed) {
   return { value: rows.filter((r) => r.state === "current").length };
 }
 
+/**
+ * The `--unproven` figure: signals with no `match` capture of any version, or
+ * null with the reason when the inputs that count them are missing — an absent
+ * manifest would otherwise read as "all ten unproven", an empty catalog as 0.
+ */
+export function unprovenCount(rows, manifest) {
+  if (!manifest || typeof manifest !== "object") return { value: null, reason: "packages/host/test/fixtures/signals.json is missing or unreadable" };
+  if (!rows?.length) return { value: null, reason: "the signal catalog lists no signals" };
+  return { value: rows.filter((r) => r.match === 0).length };
+}
+
 // ── Output ──────────────────────────────────────────────────────────────
 
 function ago(ms, now) {
@@ -219,10 +237,24 @@ async function main(argv) {
     console.error("screenfixtures: no built signal catalog at packages/shared/dist — run `npm run build:shared` first.");
     // A readout exits 0; a READING with nothing to count is an absence, and
     // only a non-zero exit keeps it from being recorded as a number.
-    return flag("--reading") ? 1 : 0;
+    return flag("--reading") || flag("--unproven") ? 1 : 0;
   }
   const { CLI_SIGNALS } = await import(pathToFileURL(CATALOG).href);
-  const manifest = readJson(MANIFEST)?.signals ?? {};
+  const manifestFile = readJson(MANIFEST);
+
+  if (flag("--unproven")) {
+    // Version-free, so neither the installed CLI nor the live record is asked.
+    const sigs = manifestFile?.signals;
+    const got = unprovenCount(sigs ? CLI_SIGNALS.map((s) => rowFor(s, sigs[s.id], null, null, null)) : [], sigs);
+    if (got.value === null) {
+      console.error(`screenfixtures: ${got.reason}.`);
+      return 1;
+    }
+    console.log(JSON.stringify(got.value));
+    return 0;
+  }
+
+  const manifest = manifestFile?.signals ?? {};
   const health = readJson(opt("--health") ?? join(await stateDir(), "clihealth.json"));
   const installed = opt("--cli") ?? installedCli() ?? (parseVersion(health?.version) ? parseVersion(health.version).join(".") : null);
   const releases = flag("--npm") ? npmReleases() : null;

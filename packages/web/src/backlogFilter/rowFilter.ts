@@ -6,6 +6,7 @@
  * imports carry `.ts` because `node --test` loads it straight off the source.
  */
 import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
+import { statusBucket } from "./calledOff.ts";
 import { AGE_LABEL, categoryBucket, type BacklogAge, type CategoryBucket, withinAge } from "./rowBuckets.ts";
 
 /**
@@ -71,7 +72,7 @@ export const hasBacklogFilter = (f: BacklogFilter): boolean => !!(f.status || f.
 
 export function matchesBacklogFilter(it: BacklogItem, f: BacklogFilter, now: number): boolean {
   if (f.ids && !f.ids.includes(it.id)) return false;
-  if (f.status && it.status !== f.status) return false;
+  if (f.status && statusBucket(it) !== f.status) return false;
   if (f.age && !withinAge(it.createdAt, f.age, now)) return false;
   if (f.category && categoryBucket(it) !== f.category) return false;
   if (f.clock && !it.at) return false;

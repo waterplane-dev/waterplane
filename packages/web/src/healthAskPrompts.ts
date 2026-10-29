@@ -334,11 +334,12 @@ export interface IndexTrendWeek {
  *
  * Three things this prompt must hold that the week prompt need not:
  *
- * PROPOSALS ARE ROWS, NOT A PAGE. Advice in chat is read once and lost, and a
- * page of it turns five readings into a to-do list nobody owns. So each
- * proposal is posted to the repo's backlog with the agent backlog add — held,
- * never started — and the person fires, edits or deletes each one. Nothing
- * applies itself: the session changes no file, and a row runs only on a tap.
+ * PROPOSALS ARE TALKED THROUGH, THEN ROWS. Advice in chat is read once and
+ * lost, so a kept proposal becomes a backlog row (agent backlog add — held,
+ * never started). But a row posted unasked is a to-do list nobody chose: the
+ * session lists its proposals, stops, and posts only the ones the person picks
+ * in their reply. Nothing applies itself: the session changes no file, and a
+ * row runs only on a tap.
  *
  * THE TREND COMES FIRST. The proposals are argued from what the git history
  * says moved the readings, not from the gauge alone.
@@ -409,7 +410,9 @@ Is ${repoName} getting healthier? Answer it about the repo — read the git hist
 Then propose what to change for a healthier code base:
 ${advice.join("\n")}
 
-Post each proposal to this repo's backlog with ${BRAND.displayName}'s backlog add (\`POST /api/agent/backlog\`, no \`when\`; your ${BRAND.displayName} skill has the shape), one row per change, ordered by what it would buy for what it costs. Each row's prompt is the whole instruction a fresh session needs to make that change — what, where, why, and how to check it worked — and its label says the change in a few words. Use a key per change that names it, so asking again does not post it twice. Post nothing that only moves a reading. End with the list of rows you posted, one line each, and say they wait in the backlog until the person fires one.
+List the proposals as a numbered list, ordered by what each would buy for what it costs — for each, the change in a few words, then what it buys, what it costs and how to check it worked. Leave out anything that only moves a reading. Then ask the person which ones to put in the backlog, and stop: post nothing until they answer, and expect them to drop, merge or reword some.
 
-Change no file, run no fix, commit nothing: the backlog rows are the only thing you write.`;
+When they answer, post only the ones they picked to this repo's backlog with ${BRAND.displayName}'s backlog add (\`POST /api/agent/backlog\`, no \`when\`; your ${BRAND.displayName} skill has the shape), one row per change, as they agreed it. Each row's prompt is the whole instruction a fresh session needs to make that change — what, where, why, and how to check it worked — and its label says the change in a few words. Use a key per change that names it, so asking again does not post it twice. End with the list of rows you posted, one line each, and say they wait in the backlog until the person fires one.
+
+Change no file, run no fix, commit nothing: the backlog rows the person picked are the only thing you write.`;
 }

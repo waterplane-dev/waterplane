@@ -1,6 +1,6 @@
 import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
 import type { OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
-import type { ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
+import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
 
@@ -50,6 +50,7 @@ export const repoOpsApi = {
   // One exposure-watch finding: accept it (a reason, how long it holds) or mark it seen / investigating / fixed-in.
   complianceAccept: (repoId: string, req: ComplianceAcceptRequest) => jpost<ComplianceAcceptResult>(`/api/repos/${repoId}/compliance/accept`, req),
   complianceTriage: (repoId: string, req: ComplianceTriageRequest) => jpost<ComplianceAcceptResult>(`/api/repos/${repoId}/compliance/triage`, req),
+  exposureRun: (repoId: string) => jpost<ExposureRunResult>(`/api/repos/${repoId}/exposure/run`, {}, 330_000), // host exposurerun.ts, ≤5 min; a 409 body is the refusal
   // Opt-ins (`shared/optins.ts`): optional things a repo can turn on, counted
   // in nothing. `choice: null` clears what the person said.
   optIns: (repoId: string) =>

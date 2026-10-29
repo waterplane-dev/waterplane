@@ -187,6 +187,13 @@ export const WATCH_REGION_WORDS =
 export const WATCH_HEAD_WORDS =
   "What the daily exposure watch and Scorecard found about this repo's dependencies, stores and published surface.";
 
+/** The watch region's re-check: it RUNS the watch (the collector, up to minutes), not a reload. */
+export const WATCH_RECHECK_LABEL = "re-check";
+export const WATCH_RECHECK_TITLE = "Run the exposure watch for this repo now, then re-read its findings";
+export const WATCH_RECHECK_RUNNING = "running the exposure watch for this repo — a first run can take a minute or two…";
+/** No sentence came back (a lost link, an older host): said, never silent. */
+export const watchRecheckFailed = (why: string): string => `The watch did not run: ${why}`;
+
 /** The watch region's empty state: not watched, and where to turn it on (a link follows). */
 export const WATCH_EMPTY_WORDS =
   "Not watched yet: the daily exposure watch has no rows for this repo, and Scorecard has no reading yet.";

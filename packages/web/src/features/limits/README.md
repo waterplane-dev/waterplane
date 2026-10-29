@@ -13,7 +13,11 @@ stands) and the account-wide hold after a resume came back still blocked. Read h
 `useLimitAuto()`, `useLimitCfg()`. `logic.ts`: the override cycle (inherit → on → off → inherit) and
 every receipt the taps toast.
 
-**Sheet**: `limits` (not persisted). **Messages**: `limit.config`. **Toolbar item**: `limit` (the id,
+Also `netRetryCfg` (`NetRetryConfig | null`, one writer `onNetRetryConfig`, from `netretry.config`):
+the desktop's other self-typed recovery, the network-error retry switch. Null until the host says,
+so an older host shows no row. Host-persisted like auto-continue, never in settings sync.
+
+**Sheet**: `limits` (not persisted). **Messages**: `limit.config`, `netretry.config`. **Toolbar item**: `limit` (the id,
 label and icon stay in `toolbar.ts`; `null` when the session has no limit state).
 
 **Reads from core**: `world.sessions`, `conn.status/send/liveSend`, `nav.attach/close`,
@@ -27,7 +31,9 @@ screen).
 **Exports for App**: `useLimitAuto()` (the session row's `auto`/`no auto` chip and the Settings
 row), `useLimitCfg()`, `setGlobalAuto(enabled)`.
 
-**Settings rows** (`LimitSettings.tsx`, Sessions, order 10): `limit-auto` and the usage budget beside
+**Settings rows** (`NetRetrySettings.tsx`, Sessions, order 11): `net-retry` — with the env override it
+shows the SAVED value ("saved on") and the shared sentence, never a greyed switch.
+(`LimitSettings.tsx`, Sessions, order 10): `limit-auto` and the usage budget beside
 it (`budget`, `budget-session`, `budget-weekly`) — the host's `world.budget`, sent back as
 `budget.set`; a slider drag is a local draft until the host echoes the saved value.
 

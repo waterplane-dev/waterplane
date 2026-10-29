@@ -26,9 +26,11 @@ import { archivedExists, archivedToolDetails, archivedTranscript, deleteArchived
 import { bookmarkStore } from "../bookmarks.js";
 import { isSecretFile } from "../git.js";
 import { listEnvFiles } from "../secrets.js";
+import { runExposureWatch } from "../exposurerun.js";
 import { MAX_UPLOAD, headerFilename, json, parseMultipart, readBody, readJson, serveTreeFile } from "./apiio.js";
 import { dispatchApi, route, type ApiCtx, type ApiEntry, type ApiRoute, type RepoReq } from "./apitable.js";
 import { REPO_WORK_ROUTES } from "./apirepowork.js";
+import { REPO_PR_ROUTES } from "./apiprs.js";
 
 /**
  * How many paths one sweep may name.
@@ -351,10 +353,19 @@ const REPO_FILE_ROUTES: readonly ApiEntry<RepoReq>[] = [
     json(res, listing);
     return true;
   }),
+  // Re-check the exposure watch now (`exposurerun.ts`; beside the watch's accept/triage it would push
+  // `apirepowork.ts` past its 500-line cap). Runs the model-free collector for this worktree's target,
+  // one run per target (a second tap joins), up to 5 minutes; a POST because it spawns and writes.
+  // 200 `{ ok, exit, sentence }` once it ran; 409, same shape + `refused: true`, when nothing ran.
+  route<RepoReq>("POST", "exposure/run", async ({ res, target }) => {
+    const r = await runExposureWatch(target.worktreePath);
+    json(res, r, r.refused ? 409 : 200);
+    return true;
+  }),
 ];
 
 /** The repo scope's table, in order. Only same-`kind` entries can shadow each other. */
-const REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [...REPO_FILE_ROUTES, ...REPO_WORK_ROUTES];
+const REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [...REPO_FILE_ROUTES, ...REPO_WORK_ROUTES, ...REPO_PR_ROUTES];
 
 /**
  * `/api/repos/:id/…`: resolve the target FIRST — an unknown id is a 404 for

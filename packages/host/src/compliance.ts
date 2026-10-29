@@ -17,6 +17,7 @@
  * current name (`branddirs.ts`' `adoptRepoStateDir` — merge without overwrite,
  * symlink back), offered only when git tracks nothing under it.
  */
+import { LOCAL_CI_SWITCH } from "./localcistatus.js";
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -495,6 +496,7 @@ export function androidToolchainRow(worktree: string, probe = probeAndroidEnv, a
 /** The `fix` id of the `builds-configured` row: write the shared `builds.json` from what `buildscan` found. */
 export const BUILDS_CONFIGURED_FIX = "builds-configured";
 const EXPOSURE_WATCH_FIX = "exposure-watch";
+const LOCAL_CI_STATUS_FIX = "local-ci-status";
 const BUILDS_SEED_MAX = 8;
 const BUILDS_LABEL = "Build commands configured";
 
@@ -822,6 +824,15 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
       const r = addExposureTarget(wt);
       if (r.added) applied.push(EXPOSURE_WATCH_FIX);
       notes.push(r.note);
+    }
+
+    if (fixes.includes(LOCAL_CI_STATUS_FIX)) {
+      // Confirm-gated. Repo-local git config only — never the global one, never a hook.
+      try {
+        execFileSync("git", ["config", "--local", LOCAL_CI_SWITCH, "true"], { cwd: wt, stdio: "ignore", timeout: 5000 });
+        applied.push(LOCAL_CI_STATUS_FIX);
+        notes.push(`turned on reporting the local-ci status after a push from the phone (git config ${LOCAL_CI_SWITCH})`);
+      } catch { notes.push(`could not write ${LOCAL_CI_SWITCH} to this repo's git config`); }
     }
 
     if (fixes.includes(PROTECT_MAIN_FIX)) {

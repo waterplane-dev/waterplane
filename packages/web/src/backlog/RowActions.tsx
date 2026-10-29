@@ -14,7 +14,7 @@ import {
 import type { RowFacts } from "./BacklogRow";
 import { ConfirmButton } from "../Confirm";
 import { SKIP_QUEUE_BUSY_NOTE, skipQueueNote } from "../sendIntent";
-import { RUN_AGAIN_LABEL, dropClockNote, holderOffer, runAgainRowNote } from "../backlogFilter";
+import { RUN_AGAIN_LABEL, dropClockNote, holderOffer, isFailedRow, refireOffered, runAgainRowNote } from "../backlogFilter";
 import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
 import { dropOffered } from "./backlogLabels";
@@ -130,16 +130,16 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     <RotateCcw size={14} /> {RUN_AGAIN_LABEL}
                   </Button>
                 )}
-                {(it.status === "done" || it.status === "failed") && p.online && <Button data-hint="backlog.refire" title={fireTitle} onClick={() => { track("action:backlog.refire"); p.verbs.onFire(it.id); }}>re-fire</Button>}
+                {refireOffered(it) && p.online && <Button data-hint="backlog.refire" title={fireTitle} onClick={() => { track("action:backlog.refire"); p.verbs.onFire(it.id); }}>re-fire</Button>}
                 {it.sessionId && <Button title="go to the session it ran in" onClick={() => p.nav.onOpenSession(it.sessionId!)}><ArrowRight size={14} /> open</Button>}
-                {(it.status === "done" || it.status === "failed" || it.status === "running") && p.online && (
+                {(it.status === "done" || isFailedRow(it) || it.status === "running") && p.online && (
                   it.checkStatus === "checking"
                     ? <span className="bl-waiting"><CheckCheck size={14} /> checking…</span>
                     : <Button title="check if implemented" onClick={() => p.verbs.onCheck(it.id)}>
                         <CheckCheck size={14} /> check
                       </Button>
                 )}
-                {(it.status === "done" || it.status === "failed" || it.status === "running") && p.online && (
+                {(it.status === "done" || isFailedRow(it) || it.status === "running") && p.online && (
                   it.validateStatus === "validating"
                     ? <span className="bl-waiting"><Sparkles size={14} /> validating…</span>
                     : <Button title="validate the expected outcome & get next steps" onClick={() => p.verbs.onValidate(it.id)}>

@@ -148,4 +148,14 @@ export interface CostWindowDoc {
   unpriced: TokenTotals;
   pricesAsOf: string;
   scannedAt: number;
+  /** (c2) What every OTHER backend on this desktop spent over the same span, each in its own
+   *  account and unit — BESIDE the figure above, never in it, never summed with it or with each
+   *  other. Built by the `/api/costwindow` route only (the verdicts' folds never carry it); a
+   *  backend that ran nothing in the span has no row. Absent = an older host. */
+  beside?: CostWindowBeside[];
 }
+
+/** One other backend over a cost window's span (`ledgerOverSpan`): its figure, or why it has none. */
+export type CostWindowBeside =
+  | { backend: string; label: string; kinds: Record<string, number>; unit?: { name: string; amount: number }; scannedAt: number }
+  | { backend: string; label: string; absent: string };

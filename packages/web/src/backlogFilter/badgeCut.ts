@@ -12,16 +12,17 @@
  * cut, show the same numbers split further: a count is a filter.
  */
 import type { BacklogItem } from "@waterplane/shared";
+import { isFailedRow } from "./calledOff.ts";
 import { hiddenByArchive } from "./rowFilter.ts";
 
 export type BadgeCut = { waiting: string[]; failed: string[] };
 
-export function backlogBadgeCut(items: Pick<BacklogItem, "id" | "archived" | "status">[]): BadgeCut {
+export function backlogBadgeCut(items: Pick<BacklogItem, "id" | "archived" | "status" | "calledOff">[]): BadgeCut {
   const cut: BadgeCut = { waiting: [], failed: [] };
   for (const it of items) {
     if (hiddenByArchive(it)) continue;
     if (it.status === "queued" || it.status === "running") cut.waiting.push(it.id);
-    else if (it.status === "failed") cut.failed.push(it.id);
+    else if (isFailedRow(it)) cut.failed.push(it.id);
   }
   return cut;
 }

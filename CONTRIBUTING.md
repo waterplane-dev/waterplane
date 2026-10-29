@@ -127,6 +127,10 @@ process that can execute anything. Details: [supply chain](docs/notes/testing-an
 
 ## Tests
 
+**Test policy:** every behaviour change and every bug fix lands with a test in the same
+commit — a `tools/*.test.mjs` guard, a `packages/*/test` case or a `scripts/e2e-*.mjs`
+script. A change without one is not merged.
+
 Three layers, from cheapest to most expensive:
 
 | layer | command | what it covers |
@@ -168,6 +172,8 @@ skill checks a request against them. The full list is *Never do these* in `CLAUD
   (whitespace-insensitive, tail-of-screen) over brittle string matches.
 - Nothing applies itself: an assessment or a review produces sentences a person acts
   on, never a mutation.
+- Code style is enforced, not negotiated: `npm run lint` (ESLint plus the repo's own
+  rules) and strict `tsc` must pass, and `.editorconfig` sets whitespace.
 - A count on a control is a filter. Never grey out a button to mean "not clickable" —
   say why in text.
 - One send path (the queue), one WebSocket per tab.

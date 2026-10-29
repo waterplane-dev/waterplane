@@ -63,8 +63,9 @@ The counted half of the host: every token, context, cost and limit figure this d
   a lookup that throws leaves the field ABSENT, and a conversation nobody can name is still a row.
   **Past shared `COST_CONVOS_CAP` (60) conversations fold into `rest`** (repo × launch, no ids) — every total,
   hour and `byRepo` still counts them.
+- **Another backend's spend over a span** (`besidespend.ts`, c2): only the `/api/costwindow` ROUTE attaches `beside` — `tokenStats.costWindow` stays claude's fold, and no verdict reads a plugin figure. Cut by shared `ledgerOverSpan` on the ledger's `hourly` rows, never its local days; claude's three backends are skipped (already in the figure); a slow or throwing ledger is an absent sentence.
 - `burnwatch.ts` — one `burn` push when the weekly figure climbs past `WATERPLANE_BURN_PTS_PER_HOUR`
   (4; 0 = off), rule in `shared/burn.ts`. **Pushes, never holds; no timer** (`UsageChecker`'s
   callback drives it, and `syncUsagePolling` keeps that poll on while `armed()` and `burn` is
   unmuted); `burnwatch.json` is written BEFORE the push (lose one, never repeat one);
-  a cost fold that fails costs the "dearest in it" line, not the push. Why: host.md.
+  a cost fold that fails costs the "dearest in it" line, not the push. `createSourceBurnWatch` asks the same rule per non-claude source's `wk`/`mo` window (`burnwatch-sources.json`, claude's file untouched). Why: host.md.

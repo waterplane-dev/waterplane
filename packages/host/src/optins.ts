@@ -33,7 +33,7 @@ import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "n
 import { join } from "node:path";
 import {
   OPT_INS, REPOHEALTH_OWN_FILE, isStandingSchedule, optInMarkedIds, optInMarker, ruleRecurs,
-  type HistoryEntry, type Intent, type Lifecycle, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
+  type BranchRules, type HistoryEntry, type Intent, type Lifecycle, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
 } from "@waterplane/shared";
 import { isAndroidRepo } from "./androidenv.js";
 import { repoSharedDir } from "./branddirs.js";
@@ -42,6 +42,8 @@ import { seriesPathOf } from "./healthwatch.js";
 import { contributedFixIds } from "./plugins/setupcontrib.js";
 import { canReadRepoHealth } from "./repohealth.js";
 import { exposureWatchProbe } from "./exposurewatch.js";
+import { cachedBranchRules } from "./branchrules.js";
+import { LOCAL_CI_SWITCH, isRunnableHook } from "./localcistatus.js";
 import { noteOptInSent, optInChoices, optInSentTimes } from "./setupprefs.js";
 
 export interface OptInDeps {
@@ -56,6 +58,8 @@ export interface OptInDeps {
   sightings?(worktree: string): OptInSighting[] | null;
   /** When a send was last remembered. Defaults to the prefs store. */
   sentTimes?(worktree: string): Record<string, number>;
+  /** The CACHED branch rules (never a network read). Defaults to `branchrules.ts`'. */
+  rules?(worktree: string): BranchRules | undefined;
 }
 
 /** One place an offer's marked words are held right now. */
@@ -213,6 +217,19 @@ function screenshots(wt: string): Probe {
     : { relevant: true, state: "off", detail: "No capture targets are configured." };
 }
 
+/** Offered only where the remote's rules require `local-ci` unpinned (any token's status counts) and a hook exists.
+ *  Rules not read yet ⇒ unfit, never a guess. State = the repo-local git switch. */
+function localCiStatus(wt: string, deps: OptInDeps): Probe {
+  if (!isGitRepo(wt)) return unfit("This is not a git repo.");
+  const r = (deps.rules ?? cachedBranchRules)(wt);
+  if (!r) return unfit("This desktop has not read the remote's rules yet, so it cannot tell whether a local-ci status is wanted.");
+  if (r.mode !== "pr-checks" || !r.requiredChecks.includes("local-ci")) return unfit("The remote's rules do not require a local-ci status.");
+  if (r.pinnedChecks?.includes("local-ci")) return unfit("The remote pins local-ci to one GitHub App, so a status posted from here would not count.");
+  if (!isRunnableHook(wt, git(wt, ["rev-parse", "--git-path", "hooks/pre-push"]) ?? "")) return unfit("There is no runnable pre-push hook here, so there is nothing to report.");
+  const on = git(wt, ["config", "--get", "--type=bool", LOCAL_CI_SWITCH]) === "true";
+  return { relevant: true, state: on ? "on" : "off", detail: on ? `${LOCAL_CI_SWITCH} is on in this repo's git config.` : `${LOCAL_CI_SWITCH} is not set in this repo's git config.` };
+}
+
 function exposureWatch(wt: string): Probe {
   if (!isGitRepo(wt)) return unfit("This is not a git repo, so there is nothing for the watch to look up.");
   return { relevant: true, ...exposureWatchProbe(wt) };
@@ -235,6 +252,7 @@ export function inspectOptIns(worktree: string, deps: OptInDeps): OptInRow[] {
     "gcp-cleanup": () => gcpCleanup(worktree),
     "screenshots": () => screenshots(worktree),
     "exposure-watch": () => exposureWatch(worktree),
+    "local-ci-status": () => localCiStatus(worktree, deps),
   };
   return OPT_INS.map((d) => {
     let p: Probe;

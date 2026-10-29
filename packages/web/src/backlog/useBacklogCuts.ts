@@ -13,7 +13,7 @@ import { itemHeadline, repoBranchLabel, sessionPickLabel } from "@waterplane/sha
 import {
   assessableInCut, backlogCounts, clockGroups, focusRunWords, hasBacklogFilter, hiddenByArchive, matchesBacklogFilter,
   nameableInCut, realLabel, retimeEligible, clockPicks, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
-  type BacklogFilter, type FocusRunBreakdown,
+  effectiveSort, runSeats, sortRows, type BacklogFilter, type BacklogSort, type FocusRunBreakdown,
 } from "../backlogFilter";
 import { clockAhead as clockAheadAt, nextFireIdsOf, runGroupKey } from "../backlogFilter/nextFire";
 import { autoSlotSessions } from "../autoSessions";
@@ -23,13 +23,16 @@ import { isSlotAskOff, onSlotAsk } from "../slotAskStore";
 import { CLOSED_GROUP } from "./backlogLabels";
 import type { BacklogProps } from "./backlogTypes";
 
-/** One group of rows, by where they will run (see `groupKeyOf`). */
-export interface BLGroup { key: string; title: string; running: boolean; items: BacklogItem[]; }
+/** One group of rows, by where they will run (see `groupKeyOf`). `items` are in
+ *  DRAW order (`rowSort.ts`); `seats` is each row's place in the RUN order. */
+export interface BLGroup { key: string; title: string; running: boolean; items: BacklogItem[]; seats: Map<string, number>; }
 
 export function useBacklogCuts(
   p: BacklogProps,
   now: number,
-  { text, repoDir, filter, showArchived }: { text: string; repoDir: string; filter: BacklogFilter; showArchived: boolean },
+  { text, repoDir, filter, showArchived, sort: chosenSort }: {
+    text: string; repoDir: string; filter: BacklogFilter; showArchived: boolean; sort: BacklogSort;
+  },
   picked: ReadonlySet<string>,
 ) {
   // The open automatic sessions, intersected with the live list — ONE list, so
@@ -219,17 +222,21 @@ export function useBacklogCuts(
   // default group's `▶ next` could point at a row that is never going to run.
   const repoSessionIds = new Set(repoSessions.map((s) => s.id));
   const groupKeyOf = (it: BacklogItem) => runGroupKey(it, repoSessionIds);
+  /** The order rows are DRAWN in; the clock cut is always run order (`effectiveSort`). */
+  const drawSort = effectiveSort(chosenSort, !!filter.clock);
   const groups: BLGroup[] = [];
+  const group = (key: string, title: string, running: boolean, runOrder: BacklogItem[]): BLGroup =>
+    ({ key, title, running, items: sortRows(runOrder, drawSort), seats: runSeats(runOrder) });
   const defaultItems = visible.filter((it) => groupKeyOf(it) === "");
   // A group is drawn only with rows in it: an empty head plus "Nothing aimed
   // at this session" per open session pushed the first row off the screen,
   // and routing is the row's own wait verb, never the group. `running`
   // is true because there is nothing left for it to wait on — a fresh item
   // needs no session to be open, it opens one.
-  if (defaultItems.length) groups.push({ key: "", title: "Each in a new session", running: true, items: defaultItems });
+  if (defaultItems.length) groups.push(group("", "Each in a new session", true, defaultItems));
   const closedItems = visible.filter((it) => groupKeyOf(it) === CLOSED_GROUP);
   if (closedItems.length) {
-    groups.push({ key: CLOSED_GROUP, title: "Aimed at a session that closed", running: false, items: closedItems });
+    groups.push(group(CLOSED_GROUP, "Aimed at a session that closed", false, closedItems));
   }
   for (const s of repoSessions) {
     const items = visible.filter((it) => groupKeyOf(it) === s.id);
@@ -238,9 +245,10 @@ export function useBacklogCuts(
     // (`sessionPickLabel`): three sessions open in this repo headed three
     // groups all called `In <repo>`, and which item was waiting on which of them
     // was unanswerable from the sheet that routes them.
-    groups.push({ key: s.id, title: `In ${sessionPickLabel(s)}`, running: true, items });
+    groups.push(group(s.id, `In ${sessionPickLabel(s)}`, true, items));
   }
-  // Display order across all groups — the flat sequence drag-and-drop reorders.
+  // Display order across all groups — the flat sequence drag-and-drop reorders
+  // (only in run order: `useBacklogDrag` refuses a drag in any other view).
   const displayOrder = groups.flatMap((g) => g.items);
   /** The pick list's three numbers, off the rows ON SCREEN: what could be
    *  ticked, what is, and therefore what the button sends. */
@@ -431,6 +439,7 @@ export function useBacklogCuts(
     nameOf,
     namingIds,
     groupKeyOf,
+    drawSort,
     groups,
     displayOrder,
     retimeable,

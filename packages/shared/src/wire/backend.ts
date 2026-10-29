@@ -96,6 +96,10 @@ export interface BackendInfo {
      *  switches into live but has no launch flag for is left out). ABSENT means INHERIT:
      *  every `permissionModes` entry. Sent only when the backend declares it, never empty. */
     launchModes?: PermissionMode[];
+    /** 2.3, OPTIONAL (c2): the backend's own spend unit (`"AI credits"`) — what a `native`
+     *  session budget is capped in, offered before any reading exists. ABSENT = no native unit;
+     *  sent only when the descriptor declares one (claude's three never do: the pin). */
+    spendUnit?: string;
     /**
      * Backend contract v2 (`docs/plans/backend-contract-v2.md`), all OPTIONAL and additive —
      * typed now, each SENT by the package that consumes it (the `backends` frame is byte-pinned

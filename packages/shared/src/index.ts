@@ -187,6 +187,11 @@ export * from "./attach.js";
  *  landed — the handover that stops a bad tunnel from killing a whole plan. */
 export * from "./launch.js";
 
+/** The one wording of the host retrying a turn the CLI gave up on a transient
+ *  API error (`SessionNetRetry`). */
+export * from "./netretry.js";
+export * from "./netretrycfg.js";
+
 /** Several pictures as ONE picture — the arrangement, so a mark can span the
  *  screens it is about. Pure geometry; the canvas half lives in web. */
 export * from "./collage.js";
@@ -259,6 +264,8 @@ export * from "./fanoutruns.js";
  *  dollars-per-weekly-point (a refusal when it cannot be calibrated), and the
  *  burn rate's reset-cut stretch and push words. */
 export * from "./costwindow.js";
+/** A backend's own ledger cut to a span, on its hours — beside claude's figure, never in it (c2). */
+export * from "./ledgerspan.js";
 export * from "./burn.js";
 
 /** "Of the work still standing, what is actually still worth doing?" — the
@@ -393,3 +400,10 @@ export * from "./rootchoice.js";
 /** The week-end burn: when to start spending the rest of a week, when to stop,
  *  the once-a-week nudge, and the words — one reading for host and phone. */
 export * from "./weekburn.js";
+
+/** What the remote's own rules demand of a push to the default branch
+ *  (direct / pr / pr-checks): a pure classifier, absent when unreadable. */
+export * from "./branchmode.js";
+/** The PR card: the DTO and the one place a PR's blocker is worded. */
+export * from "./wire/pullrequest.js";
+export * from "./prview.js";

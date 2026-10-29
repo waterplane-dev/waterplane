@@ -43,6 +43,11 @@ export function budgetWindowsOff(s: Pick<SessionInfo, "backend" | "sourceSpend">
   return sessionBudgetWindowsOffText(label || "this session's backend");
 }
 
+/** The subject backend's own spend unit (`caps.spendUnit`), or undefined — absent means no native unit offered. */
+export function budgetSpendUnit(s: Pick<SessionInfo, "backend">, backends: readonly BackendInfo[] | null): string | undefined {
+  return backends?.find((b) => b.id === s.backend)?.caps?.spendUnit?.trim() || undefined;
+}
+
 export interface BudgetTagFacts {
   /** An existing `.tag` class — no new colour for this chip. */
   cls: string;

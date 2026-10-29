@@ -3,260 +3,22 @@
  *
  * `setTurn`/`markIdle`/`checkIdle`, the claude hook SINK (`onHookEvent`,
  * `routeHook`), every channel's turn edges (`sourceTurn`), the turn watch and
- * the Stop verify, the prose question and the
- * agents running underneath (`checkAsking`/`checkAgents`/`setAsking`,
- * `ackAsking`), the ring of prompts the CLI said it submitted, and the turn
+ * the Stop verify, the ring of prompts the CLI said it submitted, and the turn
  * queries the facade answers with (`isHooked`, `stopCount`, `turnFromHook`, …).
+ * The prose question and the CLI's proposal are `askwatch.ts`; what runs under
+ * a session is `agentpoll.ts` (reached here through `core`).
  *
  * Stateless: every fact lives on the `Session` record, so these are plain
  * functions taking `core` first (docs/notes/host-architecture.md). Moved
  * verbatim from `sessions.ts`; `this.<another slice>` became `core.<hub>`.
  */
-import { realpathSync } from "node:fs";
-import type { SessionAgent, SessionAsk, SessionShell, SourceSession, TurnFacts } from "@waterplane/shared";
-import { shellBucket, workingLine } from "@waterplane/shared";
-import { agentsChanged, readAgents, readCliRecord, readRunningAgents } from "../agents.js";
+import type { TurnFacts } from "@waterplane/shared";
+import { workingLine } from "@waterplane/shared";
 import { claudeHookWatched, postClaudeHook, type ClaudeHookPayload } from "../backends/claude-sources.js";
 import { derive } from "../backends/derive.js";
-import { liveSourceFor } from "../livesources.js";
 import { samePromptText } from "../echo.js";
-import { stripAnsi } from "../prompt.js";
-import { askLine, looksLikeQuestion, sameAsk } from "../question.js";
-import { cliSuggestionOf, composerPlain } from "../clisuggest.js";
-import { readPsTableAsync, readShellList, shellsEnabled } from "../shells.js";
 import type { Session, SessionCore } from "./core.js";
-import {
-  AGENT_POLL_MS, HEALTH_SPAWN_GRACE_MS, QUESTION_TAIL_BYTES, STOP_VERIFY_BYTES, STOP_VERIFY_MS, SUBMIT_RING, tmuxName,
-} from "./knobs.js";
-
-/**
- * The `SourceSession` `agents.list()` is handed — the SAME one every other slot gets (review R7):
- * the live channel's own when one is attached (`sidechannel.ts`'s `sourceSession`), else built the
- * same way, `cwd` REALPATHED (`/var` -> `/private/var`), so a plugin keying its agent list by cwd sees
- * one string on every call. `backendSessionId` absent rather than `undefined`. Exported for the test.
- */
-export function agentsSourceSession(s: Pick<Session, "spawnedAt"> & { info: Pick<Session["info"], "id" | "cwd" | "backendSessionId"> }): SourceSession {
-  const live = liveSourceFor(s.info.id)?.session;
-  if (live) return live;
-  let cwd = s.info.cwd;
-  try { cwd = realpathSync(cwd); } catch { /* the record's own path */ }
-  return { id: s.info.id, cwd, spawnedAt: s.spawnedAt, ...(s.info.backendSessionId ? { backendSessionId: s.info.backendSessionId } : {}) };
-}
-
-/**
- * Did this turn end on a question to the person, asked in prose?
- *
- * Run on the turn-end transition, before the ping. Deliberately NOT a
- * detector of "is the CLI blocked" — it is not; the composer is right there.
- * It is a detector of WORK being blocked, which is the state the phone had no
- * word for: a finished turn whose next step is a decision only the user can
- * make. It used to be computed only when the Gemini oracle was on duty, so
- * without an API key nothing ever asked the tail this question.
- *
- * A parsed `prompt` outranks it (that is the same question with buttons), and
- * a limit-blocked session is not waiting on an answer, it is waiting on a
- * clock.
- */
-function checkAsking(core: SessionCore, s: Session): void {
-  // "Did the turn end on a question with no box" is a rule about how THIS CLI
-  // signs off a turn. A backend it was not written against records nothing:
-  // `SessionInfo.asking` stays absent, and the phone's "asked you" badge can
-  // never be raised by a paragraph that merely ends in a question mark.
-  if (derive(s.backend).screen("asking") !== "question-ts") { setAsking(core, s, null); return; }
-  if (s.info.prompt || s.info.limit?.blocked) { setAsking(core, s, null); return; }
-  // A turn still IN FLIGHT is not a turn that ended on a question. The
-  // silence timer re-enters `markIdle` four seconds after any output, so on a
-  // hooked session a long quiet tool run would otherwise read the agent's
-  // mid-turn "should I also…?" as a handover and badge a working session
-  // "asked you" until someone typed. Only a turn that is over may raise it;
-  // by this point `markIdle`/the Stop hook have already cleared the flag for
-  // the sessions that legitimately finished.
-  if (s.turnActive) return;
-  // The rendered grid, not the byte tail: the CLI lays words out with cursor
-  // moves, and the stripped bytes read "TheUIisstillwronghere" on the card.
-  const tail = s.screenLog?.gridText() || stripAnsi(s.scrollback.slice(-QUESTION_TAIL_BYTES));
-  if (!looksLikeQuestion(tail)) { setAsking(core, s, null); return; }
-  const text = askLine(tail);
-  if (!text) { setAsking(core, s, null); return; }
-  // Already dealt with — outside this session, which is the only place it
-  // COULD have been dealt with without a turn starting. The tail still ends
-  // on the question and always will, so without this the badge re-raises on
-  // the next repaint and the acknowledgement lasts about a second.
-  const d = s.askDismissed;
-  if (d && ((s.hooksActive && d.stop === s.stopCount) || sameAsk(text, d.text))) { setAsking(core, s, null); return; }
-  // Keep the original `at`: idle re-enters here on every repaint, and a
-  // question whose clock restarted twice a second would read "asked 0s ago"
-  // for as long as it went unanswered.
-  setAsking(core, s, { text, at: s.info.asking?.at ?? Date.now() });
-}
-
-/**
- * Is the composer showing the CLI's own proposal for the next prompt?
- * (`clisuggest.ts` holds the rule and the measurement.)
- *
- * Re-entered on every quiet repaint, like `checkAsking` — the proposal is a
- * model call of the CLI's own and lands a moment AFTER the Stop, so one read on
- * the transition would miss it. The plain grid is the cheap gate; the render
- * with attributes is paid once per distinct composer text.
- */
-function checkCliSuggestion(core: SessionCore, s: Session): void {
-  // Measured on claude's TUI only (`clisuggest.ts`); another TUI's dim hint is a placeholder. The
-  // claude TUI is the one whose dialogs `prompt.ts` reads — so every backend that runs it.
-  if (derive(s.backend).screen("dialogs") !== "claude-numbered" || s.turnActive || s.info.prompt || s.info.limit?.blocked) {
-    s.hintRead = null;
-    setCliSuggestion(core, s, null);
-    return;
-  }
-  const grid = s.screenLog?.gridText();
-  if (!grid) return;
-  const rows = grid.split("\n");
-  const plain = composerPlain(rows);
-  if (!plain) { s.hintRead = null; setCliSuggestion(core, s, null); return; }
-  if (plain === s.hintRead) return;
-  s.hintRead = plain;
-  void core.screenCells(s.info.id, rows.length).then((cells) => {
-    if (s.hintRead !== plain || s.turnActive) return; // the screen moved on while this rendered
-    setCliSuggestion(core, s, cliSuggestionOf(rows, cells.map((r) => r.undimmed)));
-  }).catch(() => { /* no reading — leave what is published */ });
-}
-
-export function setCliSuggestion(core: SessionCore, s: Session, text: string | null): void {
-  if ((s.info.cliSuggestion ?? null) === text) return;
-  s.info.cliSuggestion = text;
-  core.emit("updated", s.info);
-}
-
-/**
- * Publish which agents are running UNDER this session, and keep polling while
- * any are.
- *
- * The turn flag answers for the MAIN loop only. A background agent survives
- * its Stop hook by design — the CLI prints "Waiting for 2 background agents
- * to finish" and hands the composer back — so a session with two reviewers in
- * flight published `turnActive: false, idle: true` and the reader, which has
- * no terminal to check that against, said "idle — nothing running" for six
- * minutes of real work. `agents.ts` reads the fact off the CLI's own logs.
- *
- * Polled rather than evented because there is no event: the parent's log is
- * not written while a background agent runs, and no hook fires for an agent.
- * The poll is a `readdir` plus a `stat` per agent, armed ONLY while agents
- * exist, so a desktop full of quiet sessions pays for nothing. Elapsed is
- * counted on the phone off `startedAt`, so a broadcast happens on a CHANGE
- * (an agent appearing, finishing, or moving to a different tool) and not once
- * a tick per attached client.
- */
-export function checkAgents(core: SessionCore, s: Session): void {
-  if (s.agentTimer) { clearTimeout(s.agentTimer); s.agentTimer = null; }
-  // Any call supersedes a still-pending `ps` read from an earlier one: that one
-  // must not publish an older picture over this one, nor arm a second timer.
-  const gen = (agentGen.get(s) ?? 0) + 1;
-  agentGen.set(s, gen);
-  if (!s.info.running) {
-    if (s.info.agents || s.info.shells || s.info.shellList) {
-      s.info.agents = undefined; s.info.shells = undefined; s.info.shellList = undefined; s.shellsFp = undefined;
-      core.emit("updated", s.info);
-    }
-    return;
-  }
-  // What is running under a session is read off the CLI's OWN logs
-  // (`subagents/agent-*.jsonl`). A backend that writes none has no such file
-  // to read, so the list stays ABSENT — which is what "this app cannot tell
-  // you" looks like, as against an empty list, which would claim nothing is
-  // running.
-  // claude keeps its own reader and its own error rule (a throw reads as "none running");
-  // another backend asks its `agents` providers, and no answer keeps the list ABSENT.
-  let rows: SessionAgent[] = [];
-  if (derive(s.backend).keepsClaudeLog) {
-    try { rows = readRunningAgents(s.info.cwd, s.info.claudeSessionId); } catch { rows = []; }
-  } else {
-    let read: SessionAgent[] | null = null;
-    try { read = readAgents(s.backend, agentsSourceSession(s)); } catch { read = null; }
-    if (read === null) return;
-    rows = read;
-  }
-  // Background SHELLS are the same fact by another route (a `run_in_background`
-  // Bash or a Monitor outlives its turn too), and no log records them — the
-  // CLI's own session record does (`agents.ts`'s `readCliRecord`).
-  let record: { status: string; pid: number } | null = null;
-  try { record = readCliRecord(s.info.id, tmuxName(s.info.id), s.info.claudeSessionId); } catch { record = null; }
-  const cli = record?.status ?? null;
-  const shells = cli === "shell" ? true : undefined;
-  // The RICH list, read only while the CLI's own record says there is
-  // something under it worth asking about — a `busy` main loop still gets
-  // asked, for the same edge `shells` itself is asked through: the Stop hook
-  // can land before the record catches up to `shell`.
-  if (record && (cli === "shell" || cli === "busy") && shellsEnabled()) {
-    // The process table is read ASYNC: this runs per shell/busy session every
-    // `AGENT_POLL_MS`, on the one loop that pumps every PTY, and the blocking
-    // `ps` it replaced cost ~50 ms a time. The rest of the tick is unchanged
-    // and picks up when the table is in (`publishAgents`).
-    const pid = record.pid;
-    void readPsTableAsync()
-      .then((psRows) => readShellList(pid, s.info.cwd, s.info.claudeSessionId, cli, Date.now(), psRows))
-      .catch((): SessionShell[] | undefined => undefined)
-      .then((shellList) => {
-        if (agentGen.get(s) !== gen) return;               // a newer tick owns the result and the timer
-        if (!s.info.running) { checkAgents(core, s); return; } // ended meanwhile: the early branch retires the fields
-        publishAgents(core, s, rows, shells, cli, shellList);
-      });
-    return;
-  }
-  publishAgents(core, s, rows, shells, cli, undefined);
-}
-
-/** Per-session generation of the latest `checkAgents` call — see there. */
-const agentGen = new WeakMap<Session, number>();
-
-/** The second half of `checkAgents`: compare, broadcast on a change, re-arm. */
-function publishAgents(
-  core: SessionCore, s: Session, rows: SessionAgent[], shells: true | undefined, cli: string | null,
-  shellList: SessionShell[] | undefined,
-): void {
-  const shellsFp = shellsFingerprint(shellList, Date.now());
-  const changed = agentsChanged(s.info.agents, rows) || shells !== s.info.shells || shellsFp !== s.shellsFp;
-  if (changed) {
-    s.info.agents = rows.length ? rows : undefined;
-    s.info.shells = shells;
-    s.info.shellList = shellList;
-    s.shellsFp = shellsFp;
-    core.emit("updated", s.info);
-  }
-  // Keep polling while something runs underneath — and while the CLI still
-  // says `busy` after our turn flag dropped: the Stop hook can land before the
-  // CLI rewrites its record to `shell`, and reading once at that edge would
-  // miss every shell the turn left behind. And while a TURN runs: a turn that
-  // starts with nothing under it and then fans out to N agents was read once at
-  // its start and never again, so the phone's parallel-agent count missed every
-  // agent launched mid-turn. The poll is a readdir per busy session plus the
-  // shared, memoised `ps`.
-  if (!rows.length && !shells && !(shellList && shellList.length) && cli !== "busy" && !s.turnActive) return;
-  s.agentTimer = setTimeout(() => { s.agentTimer = null; checkAgents(core, s); }, AGENT_POLL_MS);
-  s.agentTimer.unref?.();
-}
-
-/**
- * `pid:bucket:workers:fg` per row, joined — the STATE a person would see,
- * never a raw timestamp. Keying on `cpuMovedAt` directly (the old key) meant
- * a genuinely WORKING shell rebroadcast on nearly every poll: its CPU is, by
- * definition, moving, so `cpuMovedAt` ticks to `now` almost every time this
- * function is asked, and "only broadcast on a change a person would see" was
- * defeated for the one bucket that polls most often. `shellBucket` only
- * changes when the shell actually crosses working/waiting/quiet/unknown —
- * that IS a change worth a broadcast — and `workers`/`foreground` cover the
- * two other facts a person's view of the row depends on.
- */
-function shellsFingerprint(list: SessionShell[] | undefined, now: number): string {
-  if (!list) return "";
-  return list.map((sh) => `${sh.pid}:${shellBucket(sh, now)}:${sh.workers}:${sh.foreground ? "fg" : "bg"}`).join("|");
-}
-
-/** Publish/retire the prose-question fact, on a CHANGE of wording only. */
-export function setAsking(core: SessionCore, s: Session, ask: SessionAsk | null): void {
-  const had = s.info.asking?.text ?? null;
-  if ((ask?.text ?? null) === had) return;
-  s.info.asking = ask;
-  core.emit("updated", s.info);
-}
+import { HEALTH_SPAWN_GRACE_MS, STOP_VERIFY_BYTES, STOP_VERIFY_MS, SUBMIT_RING } from "./knobs.js";
 
 export function checkIdle(core: SessionCore, s: Session): void {
   if (!s.info.running || !s.sawData) return;
@@ -291,7 +53,8 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   // A turn STARTING is where a FOREGROUND agent comes from (the Task tool
   // inside the turn), and a turn ENDING is handled by `markIdle`. Both edges
   // ask, because either can change what is running underneath.
-  if (active) checkAgents(core, s);
+  if (active) core.checkAgents(s);
+  if (active) core.netTurnStarted(s); // anyone's turn but our `continue` ends a network retry
   // A turn running is the answer to "is this session still waiting on you":
   // whatever it asked at the end of the last one has been answered, or
   // overtaken. Cleared here rather than only on our own write, so a reply
@@ -299,7 +62,12 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   if (active && s.info.asking) s.info.asking = null;
   // …and the memory of an acknowledged one goes with it: the next turn may
   // end on the same words for a new reason, and that is a fresh question.
-  if (active && s.askDismissed) { s.askDismissed = null; persistAsk(core, s); }
+  if (active && s.askDismissed) {
+    s.askDismissed = null;
+    // "handled" survives a restart: the `live/` record is rewritten (`askwatch.ts`'s `persistAsk`).
+    const m = core.loadLive(s.info.id);
+    if (m) core.persistLive(m);
+  }
   // The CLI's proposal was for the composer this turn just took.
   if (active) { s.hintRead = null; if (s.info.cliSuggestion) s.info.cliSuggestion = null; }
   // A turn STARTING on a session we believe is blocked is the earliest moment
@@ -392,13 +160,13 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
   }
   // Did the turn END ON A QUESTION? Read before the ping, so the notification
   // below can say what is being asked instead of "Turn finished".
-  checkAsking(core, s);
+  core.checkAsking(s);
   // …and has the CLI proposed what to type next? (Tab at the desk; a tap here.)
-  checkCliSuggestion(core, s);
+  core.checkCliSuggestion(s);
   // …and is anything still running under it? A turn that ended by launching
   // background agents has not ended the work, and this is the transition the
   // reader reads as idle without it.
-  checkAgents(core, s);
+  core.checkAgents(s);
   // Only ping for a finished turn, not for a prompt (prompt has its own ping),
   // and only ONCE per turn — cosmetic redraws re-enter here but mustn't re-notify
   // until real input begins a new turn (see input()/write()/UserPromptSubmit).
@@ -569,8 +337,11 @@ function settleStop(core: SessionCore, s: Session): void {
   s.stopPending = false;
   setTurn(core, s, false);
   s.stopCount += 1;
-  markIdle(core, s, true);   // seal capture + turn-finished ping
-  core.emit("turnEnded", s.info.id, s.stopCount);
+  // Being retried after a transient API give-up (`apiretry.ts`)? Then not done:
+  // no ping — and the event says so, so the work waiting on this turn waits too.
+  const net = core.netTurnEnded(s);
+  markIdle(core, s, net?.net !== "retrying");   // seal capture + turn-finished ping
+  core.emit("turnEnded", s.info.id, s.stopCount, net ?? undefined);
 }
 
 /**
@@ -844,53 +615,4 @@ export function claimSubmittedPrompt(core: SessionCore, id: string, text: string
   if (!hit) return false;
   hit.claimed = true;
   return true;
-}
-
-/**
- * "I have dealt with that" — retire the prose-question badge without typing.
- *
- * The only two things that retire `asking` on their own are a turn starting
- * and a keystroke, both of which mean the question was answered HERE. A
- * question answered anywhere else — the change committed at the desk, the
- * decision taken and no longer worth a reply — has neither, so the badge, the
- * waiting count and the push stood over a decision already made.
- *
- * `text` is checked for the reason `expectPrompt` exists: the tap happened
- * against a badge that may since have been replaced by a different question,
- * and silencing THAT one is the failure this guard is here to prevent. A
- * client that cannot say (absent) acknowledges whatever is standing.
- *
- * Types nothing, runs nothing, and is not remembered past the next turn.
- */
-export function ackAsking(core: SessionCore, id: string, text?: string): void {
-  const s = core.sessions.get(id);
-  if (!s?.info.asking) return;
-  const cur = s.info.asking.text;
-  if (text != null && !sameAsk(text, cur)) return;
-  s.askDismissed = { text: cur, stop: s.stopCount };
-  s.info.asking = null;
-  persistAsk(core, s);
-  core.emit("updated", s.info);
-}
-
-/** Rewrite the `live/` record so "handled" survives a restart — `persistLive`
- *  takes `askDismissed` off the live session. */
-function persistAsk(core: SessionCore, s: Session): void {
-  const m = core.loadLive(s.info.id);
-  if (m) core.persistLive(m);
-}
-
-/**
- * Attach a plugin's suggestion to a session. A numbered-CHOICE suggestion is
- * tied to a live prompt, so it's dropped if the prompt already changed (stale)
- * — we never show a choice for a gone prompt. A free-text REPLY suggestion
- * (choice == null) has no prompt to bind to, so it's always allowed; this is
- * what surfaces the turn-end reply bar.
- */
-export function setSuggestion(core: SessionCore, id: string, s: import("@waterplane/shared").AnswerSuggestion | null): void {
-  const sess = core.sessions.get(id);
-  if (!sess) return;
-  if (s && s.choice != null && !sess.info.prompt) return; // stale numbered choice
-  sess.info.suggestion = s;
-  core.emit("updated", sess.info);
 }

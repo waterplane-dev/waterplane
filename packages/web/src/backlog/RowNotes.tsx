@@ -106,7 +106,7 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                   {openText.has(it.id) && it.headline && it.headlineBy && (
                     <span className="bl-smart-note">{HEADLINE_BY_WORDS[it.headlineBy]}</span>
                   )}
-                  {it.status === "failed" && it.error && <span className="bl-error">{it.error}</span>}
+                  {it.status === "failed" && it.error && <span className={it.calledOff ? "bl-smart-note" : "bl-error"}>{it.error}</span>}
                   {/* Why this one is still sitting here. A queued row looks the
                       same whether the backlog is waiting exactly as designed or
                       is stuck on something only the host can see (auto off, no

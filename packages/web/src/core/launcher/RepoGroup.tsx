@@ -598,7 +598,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
 }
 
 /** The header's hammer. While a build runs in this repo it spins, as the git
- *  button does for a push, so "nothing doing" is never read off a busy desktop. */
+ *  button does for a push, so "nothing doing" is never read off a busy desktop.
+ *  A failure is a red "failed" beside the hammer, no icon: the hammer already
+ *  says "build", and the icon plus "build failed" (~176px of strip) no longer fit beside a
+ *  7em name on a 390px phone, so the whole strip dropped to a line of its own. */
 function BuildHeaderButton({ repo, repoName }: { repo: RepoTarget; repoName: string }) {
   const busy = useBuildBusy(repo);
   return (
@@ -606,7 +609,7 @@ function BuildHeaderButton({ repo, repoName }: { repo: RepoTarget; repoName: str
       title={busy ? `build “${busy.name}” is running on the desktop — open build to follow it` : `build ${repoName} (run a build command, no tokens)`}
       onClick={() => { track("action:repo.build.header"); openBuildFor(repo); }}>
       {busy ? <Loader size={17} className="spin" /> : <Hammer size={17} />}
-      {repo.buildFailed && <span className="git-ab failed" title={`build “${repo.buildFailed.name}” failed — open build to see why`}><CircleAlert size={12} />build failed</span>}
+      {repo.buildFailed && <span className="git-ab failed" title={`build “${repo.buildFailed.name}” failed — open build to see why`}>failed</span>}
     </button>
   );
 }

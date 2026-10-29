@@ -29,7 +29,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `turn.ts`); and one private
   `noteFor` (`health.ts`) gates every `noteHealth` on `healthScope`. Its `--settings` hooks curl `POST /api/hook` (the positive turn-boundary signal; no pipe ⇒ silence heuristics; meaning: `backends/claude-sources.ts`). Limit-exit resurrection is `resume.ts`. **`drive.ts`'s `resize()` and the facade's `create()` FLOOR the
   client's geometry** (rule: `shared` skill, `ptysize.ts`). Clamped, never refused.
-- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` (also RECORDS a source's series; [host.md](../../../docs/notes/host.md)) + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/idlewatch.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` — the first cut of `sessions.ts` into slices
+- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` (also RECORDS a source's series; [host.md](../../../docs/notes/host.md)) + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/askwatch.ts` + `sessions/agentpoll.ts` + `sessions/idlewatch.ts` + `sessions/boxes.ts` + `sessions/boxread.ts` + `boxkit.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` + `sessions/apiretry.ts` — `sessions.ts`'s slices
   ([host-architecture.md](../../../docs/notes/host-architecture.md); the per-slice ownership inventory: [host.md](../../../docs/notes/host.md#sessions-slices--the-per-slice-ownership-inventory)). `core.ts` is TYPES ONLY: `Session`,
   `LiveMeta`, `ClosedRow`/`RecentRow`, and **`SessionCore` — the one way a `sessions/` slice reaches
   shared state or another slice**. The facade implements it as a PRIVATE object literal whose every
@@ -44,7 +44,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `roster.ts`: **`closedBy` is named by whoever calls `remove`/`kill` (`s.closeBy`); the exit path
   only infers `limit`/`exited` for a session nobody killed; every fact optional, absent = unknown.** The per-session plugin state (toggles, the "let <plugin> answer" switch) is memory only, so a restart puts it back OFF. **File read order: roster's files, then `revived.json`, `limit.json` LAST** (`resume.ts`, then `wall.ts` — `limit.json` LAST; the resume queue's state is reached only through `core`).
   `wall.ts` + `resume.ts`: the auto-continue config, reading a block off screen + log (`checkLimit`), the continue ladder, resurrection of a limit-exited session and `revivedSessionFor`.
-  `boxes.ts`: the two answer walks (`choosePromptBox`, `submitPromptBox`) and the earliest-wins `armPromptCheck`. `turn.ts`: the hook lifecycle and turn flag. `idlewatch.ts`: output ends idle only when the working line is on the grid (a redraw is not work).
+  `boxes.ts`: answering; `boxread.ts`: reading, publishing, earliest-wins `armPromptCheck`. `turn.ts`: the hook lifecycle and turn flag. `idlewatch.ts`: output ends idle only when the working line is on the grid (a redraw is not work).
   `record.ts`: the prompt history, the reader's transcript, search, the tab name, `lastTurnOf`. **There is NO per-turn AI
   summary**. **`nameTab()` is the ≤4-word
   name a phone TAB wears** (`SessionInfo.tabTitle`): its ONLY
@@ -118,7 +118,6 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   always rescans the whole directory (a cached record cannot re-prove "exactly one live process
   claims this conversation id").
   The footer's `← N agents` is machine-wide busy sessions, NOT subagents.
-  `packages/host/test/agents.test.mjs`.
 - `shells.ts` — what each background shell is actually DOING, off `ps -axo
   pid=,ppid=,pgid=,etime=,time=,command=` (memoised 2s). **The discriminator**
   (`isShellWrapper`): a direct child of the CLI's pid, in its OWN process
@@ -132,7 +131,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   PROVE a background launch and the CLI's own record still says `"busy"`.
   `killShellGroup` (the `shell.kill` route and `drive.ts`'s close path) **re-checks ppid, own pgid and start time** (still a direct child of this cli, still its own group leader, start
   time within 2s of the one the caller saw) before signalling: SIGTERM, then SIGKILL after 3s, re-checking `ppid` before it; **a survivor
-  is `ok: false, reason: "that shell did not stop"`**, never a false `ok: true`. `KillShellDeps` is injectable. `packages/host/test/shells.test.mjs`.
+  is `ok: false, reason: "that shell did not stop"`**, never a false `ok: true`. `KillShellDeps` is injectable.
 - `screenlog.ts` — **the desktop's scrollback, RECORDED, because it cannot be read back.** The CLI draws in
   the ALTERNATE screen, which keeps no scrollback. One live headless
   VT per session, fed as the bytes arrive, its grid diffed on a settle with `@waterplane/shared`'s

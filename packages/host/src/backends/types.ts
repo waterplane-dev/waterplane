@@ -61,6 +61,8 @@ export interface BackendCaps {
   readonly permissionModes: readonly PermissionMode[];
   /** 2.2: the subset of `permissionModes` a session can START in; absent = all of them (`launchModesOf`). */
   readonly launchModes?: readonly PermissionMode[];
+  /** 2.3: the native unit this backend bills in ("AI credits"); absent = tokens or dollars. */
+  readonly spendUnit?: string;
   /** The binary accepts a remote-control flag. */
   readonly remoteControl: boolean;
 }

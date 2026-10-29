@@ -52,7 +52,7 @@ test("the scroll path awaits tmux: panHistory uses no blocking helper", () => {
 });
 
 test("sessions/turn.ts: the poller reads ps async and never blocks on it", () => {
-  const text = read("sessions/turn.ts");
+  const text = read("sessions/turn.ts") + read("sessions/agentpoll.ts");
   assert.equal(calls(text), 0, "turn.ts has no execFileSync");
   assert.doesNotMatch(text, /\breadPsTable\(/, "turn.ts never calls the blocking process-table reader");
   assert.match(text, /readPsTableAsync\(/, "checkAgents reads the table async");

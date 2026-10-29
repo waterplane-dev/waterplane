@@ -26,7 +26,7 @@ import {
   BUDGET_MODES, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, budgetUnitsFor, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
 } from "./budgetInput";
 
-export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff }: {
+export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff, spendUnit }: {
   /** The cap already set, if any — read once, where the field STARTS. */
   initial?: SessionBudget | null;
   /** The host's calibration: null = the host sent none; undefined = none to expect (a launch, or no budget set yet). */
@@ -41,6 +41,9 @@ export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff 
    *  unit is offered, and THIS sentence stands under the units saying why
    *  (shared `sessionBudgetWindowsOffText`). Absent: all four, as ever. */
   windowsOff?: string | null;
+  /** The backend's own spend unit (`caps.spendUnit`, "AI credits"): offered as a fourth unit. A cap
+   *  already set in it keeps it offered. Absent: no native unit, as ever. */
+  spendUnit?: string;
 }) {
   const id = useId();
   const [unit, setUnit] = useState<SessionBudgetUnit>(initial?.unit ?? "usd");
@@ -48,17 +51,20 @@ export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff 
   const [interrupt, setInterrupt] = useState(initial?.interrupt ?? true);
   const [mode, setMode] = useState<BudgetMode>(initial?.hard ? "hard" : "soft");
   const now = Date.now();
+  const nativeLabel = spendUnit?.trim() || initial?.nativeUnit;
+  const units = budgetUnitsFor(!!windowsOff, initial?.unit, nativeLabel);
   const parsed = text.trim() ? parseBudgetInput(unit, text) : null;
   const emit = (u: SessionBudgetUnit, t: string, i: boolean, m: BudgetMode = mode) => {
     const p = t.trim() ? parseBudgetInput(u, t) : null;
     // Hard always interrupts (the host's `cleanSessionBudget` says the same).
-    onChange(p && p.ok ? (m === "hard" ? { unit: u, max: p.max, interrupt: true, hard: true } : { unit: u, max: p.max, interrupt: i }) : null);
+    const nat = u === "native" && nativeLabel ? { nativeUnit: nativeLabel } : {};
+    onChange(p && p.ok ? (m === "hard" ? { unit: u, max: p.max, interrupt: true, hard: true, ...nat } : { unit: u, max: p.max, interrupt: i, ...nat }) : null);
   };
-  const info = unitInfo(unit);
+  const info = units.find((x) => x.unit === unit) ?? unitInfo(unit);
   const pct = isPctUnit(unit);
   const calWords = !pct ? null : cal === undefined ? calFor ?? null : calibrationWords(unit, cal, now);
-  const spent = budgetSpentLine(unit, spark, cal, now);
-  const preview = parsed && parsed.ok ? budgetPreview({ unit, max: parsed.max }, spark, cal, now) : null;
+  const spent = budgetSpentLine(unit, spark, cal, now, nativeLabel);
+  const preview = parsed && parsed.ok ? budgetPreview({ unit, max: parsed.max, nativeUnit: nativeLabel }, spark, cal, now) : null;
   const typedMax = parsed && parsed.ok ? parsed.max : null;
   return (
     <div className="budget-field">
@@ -66,7 +72,7 @@ export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff 
         <div className="set-lead"><span className="set-lbl">measured in</span></div>
         <RadioRows
           label="budget unit"
-          options={budgetUnitsFor(!!windowsOff, initial?.unit).map((u) => ({ key: u.unit, label: u.label }))}
+          options={units.map((u) => ({ key: u.unit, label: u.label }))}
           value={unit}
           onChange={(u) => { setUnit(u); emit(u, text, interrupt); }} />
       </div>

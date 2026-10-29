@@ -1,0 +1,30 @@
+Xxx xxxxxx xx xx xxxxxxxx/xxx/xxx/xxxxxx/00-xxxxxxx.xxx:000 xxx
+  xxxxxx/00-xxxx-xxxxxx.xxx:000.
+
+  X xxxxx'x xxxxxxx xxxxxxxx/xxx/xxxx, xxxxx xx xxxx xxxxxxx xxxx xxxxx. Xxx
+  xxxxxxxx xxx xxxxxxxxxx xxxxx xxxx xxxxxxx xxxxxxx xx xxx xxxxx
+  (xxxxxxxXxxx.xx, XxxxxxxxXxxxx.xxx), xxx xxxxxxxx xxx xxxxx xxxx xxxxx xx xxx
+  xxxxx xxx. Xxxx xxxx xxxxxxx xxxxxxx, xxx xxx xxxxx xxxxx xxxx xxx. X xxxxx'x
+  xxxxxx xx xx xx x xxxxxx xxx xxxxxx, xx xxxxx xxx xxxxxxx xx xxxx xxxxx xxxxx
+  xxxx xxxxx.
+
+✻ Xxxxxxxx xxx 00x · xxxx 0:00 XX
+
+❯ Xxx xxx xxxx xxxx xxx xxxxxxx xx xx xxxx xxx xxxxxx
+
+  Xxxxxxxx xxx 0 xxxxxxx, xxx 0 xxxxx xxxxxxxx
+────────────────────────────────────────────────────────────────────────────────
+←  ☐ Xxxxxxx  ✔ Xxxxxx  →
+
+Xxxxx xxxxxxx xxxxxx xxxx xxxxxxx xx xxxxxxxxx xxxxxxxx?
+
+❯ 1. [ ] Xxxxxx xxxx xxx
+         Xxx xxxxx xxx xxxxx (xxxxx, $, xxxx, … › xxxx, X, xxxx)
+  2. [ ] Xxxxxxx xxx
+         Xxx xxxxxx Xxxx (↑ ↓ xxxxx xxx xxxxxx xxxx ›)
+  3. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

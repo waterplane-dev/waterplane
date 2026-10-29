@@ -1,0 +1,32 @@
+xx xxxxx xxxxxxx xxxxxxx xx xxxx xxx 0 xxx xx xxxxxxxx xxxxxxxxxx 0 xxxx
+⁂ screen ⁂
+xxxxxx xxxxx xxxxxx xx, xxx xxxx xxxxxxx xxxx, xxx xxxx xxxxxx [xxxxxx].
+  - Xxx xxxx xxxxx xxx xxxxxx (xxxxxxxx/xxxx/xxx/xxxxxxxxx.xx). Xxxx xx xxxxx
+    xxxxxxx, xx xxxxx xxxx xx xxxxx xxxxxx xxx xxxxxx xxxxxx, xxxx xx xxxxx
+    xxxxx. Xx xxx xxxxx xxxxx xxxx x xxxxxx.
+  - Xxx xxxxx xxxxxxx xxxxxx xxxxxxxxx: xxx xxx xxxxxx xxx xxx xxxxxxx xxxxxxx
+    xxxx "xxxxxx xxx xxx xxxxx…". Xxxxxxx xxx xxx xxxxxx xx xxxx xxxxxx xxxxx
+    xxxxxxx xx.
+  - Xx xxx xxxxx xx xxxx xxxxxx xxx: xxx xxxx -xxXX xxxxx://xxxxxx.xx/xxxxxxx.xx
+    | xxxx xxx xxxx xxx xxx xxxxxxx. Xx xxxxxx xxxx xx xxxxxxxxx xxxxxxx, xxx
+    XXXXXXXXXX_XXXXXX_XXX.
+
+  Xxxx X'x xxxxx:
+  1. Xxxxxx xx xxxxx x xxxxxx xxxxxxx xxxx xxx xxxxxx xxx'x xxxxx. Xxx xxxxxxx
+     xxxxx xxx xxx xx xxxxx: "Xxxxxx Xxxx xxx'x xxxxxxxxx xx xxxx xxxxxxx", xxxx
+     xxx xxxxxxx xxxxxxx xxx xxx xxxxx xx xxxxx. Xx xxxxx xxxx xxx x
+     xxxxx-xxxxx xxx xxxx xxx xxxxxx xxxxxxx xx xx xxx xxx xxxxxxx.
+  2. Xxxxxxxx, xxxxxx: x xxxxxx xxxxxxxxx xx Xxxxx → xxxxxxx xxxxxxx xxxxx
+     xxxxxxx xxxx "xxxxx + xxx xxxx" xx x xxx. Xx xxxxx xxxx x xxxxxxxx xxxx
+     xxxxxxxxx, xxx xxxxx xxx xxxxx xxx xxxxxxx xx xxxx xxxxx xxxxxxxx xxxx
+     xxxxxx.
+
+  Xxxxxx X xxxxx 0 xxx? 0 xx x xxxxxxxx xxxxxxxx.
+
+✻ Xxxxxx xxx 00x · xxxx 0:00 XX
+
+────────────────────────────────────────────────────────────────────────────────
+❯ xx xxxxx xxxxxxx xxxxxxx xx xxxx xxx 0 xxx xx xxxxxxxx xxxxxxxxxx 0 xxxx
+────────────────────────────────────────────────────────────────────────────────
+  [XXXXXXX]
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx)

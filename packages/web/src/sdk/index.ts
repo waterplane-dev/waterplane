@@ -15,7 +15,7 @@ export type {
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
 export { core } from "../core/api.ts";
-export { createStore, useStore, type Store } from "./store.ts";
+export { createStore, keepStores, useStore, type Store } from "./store.ts";
 export { mapWith, mapWithout, useCore, useLatest, useQueueEntries } from "./hooks.ts";
 export { useBackStep } from "../backStep.ts";
 /** This device's preferences (`core/prefs.ts`) — read-only from a feature; the

@@ -289,6 +289,8 @@ function normCaps(v: PluginBackendDef["caps"]): BackendDescriptor["caps"] {
     permissionModes: Object.freeze(strList(c.permissionModes)) as BackendDescriptor["caps"]["permissionModes"],
     // Copied as written (a non-list is kept so registration refuses it in words, `launchModesProblems`).
     ...(c.launchModes !== undefined ? { launchModes: (Array.isArray(c.launchModes) ? Object.freeze([...c.launchModes]) : c.launchModes) as BackendDescriptor["caps"]["launchModes"] } : {}),
+    // 2.3: copied as written (a non-string is kept so registration refuses it in words, `spendUnitProblems`).
+    ...(c.spendUnit !== undefined ? { spendUnit: c.spendUnit as BackendDescriptor["caps"]["spendUnit"] } : {}),
     remoteControl: c.remoteControl === true,
   });
 }

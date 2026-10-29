@@ -1,0 +1,30 @@
+9. xxx xxx xxxxxxx (xxxx xxxxxxx Xxxxxxxxx XX).
+
+  Xxxxx:
+  10. Xxxxxx: xxxxxxxxx xxxxx xxxxxx xxxxxxx xxxxxx; xxxxx xxxxxxx 000; xxxxx
+  xxx xxxx.
+  11. Xxxxxx xxxxxxxx: xxxxxxxxx xxxxxxx
+  xxx/000/xxx.xxxxxxxxxx.xxxxxxxxx-xxxxxxxx, xx xxxxx +
+  ~/.xxxxxx/xxxxxxxxxx/xxxxxxxxx-xxxxxxxx.xx.
+  12. Xxxxxx xxxxxxxx (xxxxxxxxx-xxx-xxxx-xxxx, xxxxxxxxx-xxxxx-xxxxx).
+  Xxxxxxxxxx xxxx Xxxxxxxxx.xxx xx xxxxx xxxxx (xxxx xxx xxxxxxxx x xxxx).
+
+  Xxxxx: xxxx-xxx xxx, Xxxxxx Xxxxxxxx (XXX xxxxxxxxx xxxx xxx xxxxxxx).
+  Xxxxxxxx: xxxx xxxxxxxxxx xxxxxxxxx-xxxxxx-xxxxxx, xxxxxx xxx, xxx xx.
+────────────────────────────────────────────────────────────────────────────────
+←  ☐ Xxxxxxxx  ☐ Xxxxxxxx  ✔ Xxxxxx  →
+
+│ Xxxxx xxxx xxx xx xxxxxx xxxxxxx? (xxxx xxxxxxxx + xxxxx-xxxxxxx xxxxxx
+│ xxxxxx; xxxxx xxxxx xxx Xxx ~0–0 xxx)
+
+❯ 1. Xx xxx Xxx (Xxxxxxxxxxx)
+     Xxxxxx: xx xxxx xx xxxxx xxxxx xxx xxx xx xx xxx xxxxxxxx. X xxxx
+     xxxxxxxxxx, xxx xxx xxx xxxx xxxxxx.
+  2. Xxxxxx xxx xxxxx
+     Xxxxx xxxx xxx xxxx xxxxxxxxxx; xxxxxx xxxx xxxxxxxx xxx xxxxx xx xx
+     xxxxxxxx xxxxx xxx xxxx xxxxx. Xxxxxxx = Xxx xxxxxxxxxxx xxxxx xxxx.
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

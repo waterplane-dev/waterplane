@@ -1,0 +1,38 @@
+Xxx 0 xxxxx xxxxxxxx
+
+⏺ Xxxxxx xxx/XxxXxx xxx xxxxx xx 0.0.0, xxxxx xxxx x0.0.0–x0.0.0 xxxxx
+  xxxxxxxxx xxx xxxxx'x xxxxxxxxx—xxx x0.0.0'x xxx xxxxxx xxxxxxxx xxx
+  XXXXXXXXX xxxxxx xxx xxxxx'x xxxxxxx, xxxxxxxxxxx xxxx xxx xxxxxxx xxxxx'x
+  xxxxxxxxxxx xxxx xxx xxx xxx xx XXXX. X'xx xxx xxxx xxxx xxxxxxx xxxxxx
+  xxxxxxx xxx xxxxx.
+
+  Xxx 0 xxxxx xxxxxxxx
+
+⏺ X'xx xxx xxxxx xxxxxxxx xxxxxxxxx xx XXXX xx xxxx xxxxxx Xxxx xxxxxxxx
+  xxxxxxx xxxxxxxx xxxx xxxxx'x xxxx xxxx: Xxxx 00.00 (xxxx xxxx xxxxx), Xxxx
+  24.00.0 (xxxxx xxxxxxx + xxxxx + xxxxx, xxxxxxxx xxx xxxxxxx xxx), xxx Xxxx
+  22.00.0 (xxxx xxxxx, xx xxx xxxxxxx xxxxxxxxx xxxxxxx).
+
+  Xxxx 0 xxxxxxxxxx xxxxx +00, xxx 0 xxxxx xxxxxxxx
+
+⏺ Xxxxx xxx xxxxxxx xx xxx xxxxxxxxxx. Xxx xxxxxxx xxxxxxxxx xxx xxxxx xx
+  xxxx, xxx xxx xxxxxxx xxxxxx xxxx X xxxxxxx.
+──────────────────────────────────────────────────────────────────────────────
+←  ☐ Xxxxxxx  ☐ Xxxx xxxx  ✔ Xxxxxx  →
+
+│ Xxx xxxxxxx xxxx'x x0.0.0 xxx xxxx xxxxxx xxx XXXXXXXXX 0.0.0 xxxxxx xxx
+│ xxxxx'x 0 xxxxxxx (xxx '! xxx' xxxxxx xxxxxx, X-xxxxx-000, xxx Xxxx xxx).
+│ Xxx xxxxxxx xxxxx xxxxxxx xxxxxx xxx xxx xx xx XXXX. Xxxxx xxxxxxx xxxxx?
+
+❯ 1. 0.0.00 (Xxxxxxxxxxx)
+     Xxxx xxxxxxx.xxxx xx 0.0.00 xxx xxx x xxxxx ## 0.0.00 XXXXXXXXX xxxxxxx
+     (Xxxx xxx 00.00.0, '! xxx' xx xxx xxxxxx). Xxxxx xxx x0.0.0 xxx xxxxx. Xx
+     xxxxxx xxx xxxx xxxxxxxxx.
+  2. Xx-xxx 0.0.0
+     Xxxx x0.0.0 xx XXXX (xxxxxx xxx xx-xxxx xxx xxx xx xxxxxx). 0.0.0 xxx
+     xxxxx xxxxxx, xx xxxxx xxx xxx xxxxxxx, xxx xx xxxxxxxx x xxxxxx xxx.
+  3. Type something.
+──────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

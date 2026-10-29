@@ -29,7 +29,7 @@ This is maintained by one person, unpaid, alongside other things. There is
   something clearly in scope and serious, could be longer for anything
   lower-severity. I'll keep you posted rather than go silent.
 
-If you don't hear back after a reasonable wait, a follow-up email is fine.
+If you don't hear back after a reasonable wait, a follow-up comment on the advisory is fine.
 
 ## Threat model
 

@@ -2852,3 +2852,61 @@ test("upsert carries closeWhenDone when the draft is silent; edit sets it on a R
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });
+
+// ── A turn the CLI gave up on a transient API error (R-connection-024) ──────
+// `sessions/apiretry.ts` says so on `turnEnded` (`TurnEndNet`): the turn did
+// not do the work, so the row must not complete off it.
+function netRow(id, sid) {
+  const h = makeStore({
+    isHooked: () => true, turnHookSeen: () => true,
+    executors: {
+      freshSession: async (i) => { h.store.noteSession(i.id, sid); return { ok: true, sessionId: sid, detail: "delivered", watch: "turn" }; },
+      sweep: async () => ({ ok: true, detail: "" }), deliver: async () => ({ ok: true, detail: "" }),
+      workItem: async () => ({ ok: true, detail: "" }), build: async () => ({ ok: true, detail: "" }), assess: async () => ({ ok: true, detail: "" }),
+    },
+  });
+  h.state.sessions.push({ id: sid, cwd: REPO, running: true });
+  return h;
+}
+const netPost = (store, id) => store.post({
+  id, cwd: REPO, payload: { kind: "prompt", steps: ["work"] },
+  target: { kind: "repo", fresh: true }, trigger: { kind: "now" }, auto: true, title: "net",
+});
+
+test("a turn end the host is RETRYING (or still checking) completes nothing; the served retry's Stop does — once", async () => {
+  const { store, root } = netRow("nr1", "N1");
+  try {
+    await store.reconcile();
+    netPost(store, "nr1"); store.kick(); await settle();
+    assert.equal(store.get("nr1").state, "running");
+    store.onTurnEnded("N1", 1, { net: "retrying" });
+    assert.equal(store.get("nr1").state, "running", "the give-up turn did not do the work");
+    store.onTurnEnded("N1", 2, { net: "checking" });
+    assert.equal(store.get("nr1").state, "running", "our continue's turn, its log row not in yet");
+    store.onTurnEnded("N1", 2, undefined); // `netTurnSettled`: the reply landed
+    assert.equal(store.get("nr1").state, "done");
+    const at = store.get("nr1").result.at;
+    store.onTurnEnded("N1", 3, undefined); // a later Stop: nothing to apply to
+    store.onTurnEnded("N1", 3, { net: "gaveup", detail: "x" });
+    assert.equal(store.get("nr1").state, "done", "at most once");
+    assert.equal(store.get("nr1").result.at, at);
+  } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("…and when the retries RAN OUT the row is FAILED with the sentence, never done", async () => {
+  const { store, root } = netRow("nr2", "N2");
+  try {
+    await store.reconcile();
+    netPost(store, "nr2"); store.kick(); await settle();
+    assert.equal(store.get("nr2").state, "running");
+    store.onTurnEnded("N2", 1, { net: "retrying" });
+    assert.equal(store.get("nr2").state, "running");
+    store.onTurnEnded("N2", 2, { net: "gaveup", detail: "the API could not be reached (ENOTFOUND) and the host stopped retrying after 2 tries" });
+    const row = store.get("nr2");
+    assert.equal(row.state, "failed");
+    assert.equal(row.result.ok, false);
+    assert.match(row.result.detail, /could not be reached/);
+    store.onTurnEnded("N2", 3); // the person's next turn there: the row stays failed
+    assert.equal(store.get("nr2").state, "failed");
+  } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
+});

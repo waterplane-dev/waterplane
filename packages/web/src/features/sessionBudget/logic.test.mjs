@@ -121,3 +121,11 @@ test("budgetWindowsOff: a source-judged or non-claude session says why; claude a
   assert.match(budgetWindowsOff({ backend: "copilot" }, backends), /and Copilot does not spend from it\.$/);
   assert.match(budgetWindowsOff({ backend: "gone", sourceSpend: { at: 1 } }, null), /this session's backend does not spend from it/);
 });
+
+import { budgetSpendUnit } from "./logic.ts";
+test("budgetSpendUnit: the subject backend's stated unit, else undefined (absent = no native unit)", () => {
+  const backends = [{ id: "copilot", caps: { spendUnit: "AI credits" } }, { id: "claude", caps: {} }];
+  assert.equal(budgetSpendUnit({ backend: "copilot" }, backends), "AI credits");
+  assert.equal(budgetSpendUnit({ backend: "claude" }, backends), undefined);
+  assert.equal(budgetSpendUnit({ backend: "copilot" }, null), undefined);
+});

@@ -40,7 +40,12 @@ import { weekUsdPerPct } from "./sessioncost.js";
 import { fmtUsd } from "./pricing.js";
 import { fmtCount } from "./tokens.js";
 
-export type SessionBudgetUnit = "tok" | "usd" | "sessionPct" | "weeklyPct";
+/** `native`: the backend's own unit (Copilot's AI credits), named by `SessionBudget.nativeUnit` —
+ *  never converted to tokens or dollars, never summed with another unit. */
+export type SessionBudgetUnit = "tok" | "usd" | "sessionPct" | "weeklyPct" | "native";
+
+/** The longest native unit label a cap keeps (`BackendInfo.caps.spendUnit`'s own cap). */
+export const SESSION_BUDGET_NATIVE_UNIT_MAX = 32;
 
 export interface SessionBudget {
   unit: SessionBudgetUnit;
@@ -55,6 +60,9 @@ export interface SessionBudget {
    *  `interrupt`. Absent on the wire means soft; `cleanSessionBudget` writes it
    *  only when true. */
   hard?: true;
+  /** The native unit's label as the person saw it when typing (`"AI credits"`). Present iff
+   *  `unit === "native"`; a reading in any other unit is `unstated`, never compared. */
+  nativeUnit?: string;
 }
 
 /** Why a verdict cannot say. Present iff `state === "unknown"`. */
@@ -81,6 +89,8 @@ export interface SessionBudgetVerdict {
   /** The subagent share of `spent`, same unit — no total prints without its split. */
   agentShare?: number | null;
   why?: SessionBudgetUnknown;
+  /** The cap's `nativeUnit`, carried so the sentence and the chip can name it. */
+  nativeUnit?: string;
 }
 
 export interface SessionBudgetInfo {
@@ -92,7 +102,7 @@ export interface SessionBudgetInfo {
 /** Least dollars a window must hold before dollars-per-point is believed. */
 export const SESSION_BUDGET_CAL_MIN_USD = 1;
 
-const UNITS: readonly SessionBudgetUnit[] = ["tok", "usd", "sessionPct", "weeklyPct"];
+const UNITS: readonly SessionBudgetUnit[] = ["tok", "usd", "sessionPct", "weeklyPct", "native"];
 const isPct = (u: SessionBudgetUnit) => u === "sessionPct" || u === "weeklyPct";
 
 /** A budget off the wire or out of a file, or null. Garbage is refused whole —
@@ -106,9 +116,15 @@ export function cleanSessionBudget(raw: unknown): SessionBudget | null {
   const max = r.max;
   if (typeof max !== "number" || !Number.isFinite(max) || !(max > 0)) return null;
   if ((unit === "sessionPct" || unit === "weeklyPct") && max > 100) return null;
+  let native: { nativeUnit: string } | Record<string, never> = {};
+  if (unit === "native") {
+    const label = typeof r.nativeUnit === "string" ? r.nativeUnit.trim() : "";
+    if (!label || label.length > SESSION_BUDGET_NATIVE_UNIT_MAX) return null;
+    native = { nativeUnit: label };
+  }
   // Hard always interrupts: "Esc every turn" with interrupting off is no cap.
-  if (r.hard === true) return { unit, max, interrupt: true, hard: true };
-  return { unit, max, interrupt: r.interrupt !== false };
+  if (r.hard === true) return { unit, max, interrupt: true, hard: true, ...native };
+  return { unit, max, interrupt: r.interrupt !== false, ...native };
 }
 
 /** Dollars per window point: `weekUsdPerPct`'s rule for either window, with a
@@ -146,6 +162,8 @@ export type SessionBudgetSpark = Pick<ContextSpark, "usageTok" | "agentTok" | "c
    *  log: a figure it did not state is `unstated` (never `unpriced` — nothing
    *  prices another backend's tokens), and a percent is `notClaude`. */
   source?: true;
+  /** The source's native-unit reading (`SourceSessionSpend.native`), vetted with the rest. */
+  native?: { amount: number; unit: string; agentAmount?: number };
 };
 
 /**
@@ -155,8 +173,8 @@ export type SessionBudgetSpark = Pick<ContextSpark, "usageTok" | "agentTok" | "c
  * the total is their sum and `agentTok` rides apart as the split — a missing
  * `agentTok` leaves the total a FLOOR, which is what claude's is too. A reading
  * `sourceSpendProblems` refuses is dropped WHOLE: the result is then a spark
- * with no figures, which reads `unstated`. `native` is not a budget unit and
- * never enters a figure here.
+ * with no figures, which reads `unstated`. `native` rides as itself — a
+ * `native` cap reads it, nothing converts it into tokens or dollars.
  */
 export function sourceSpendSpark(r: SourceSessionSpend | null | undefined): SessionBudgetSpark {
   const out: SessionBudgetSpark = { source: true };
@@ -169,6 +187,7 @@ export function sourceSpendSpark(r: SourceSessionSpend | null | undefined): Sess
     out.costUsd = r.usd + (r.agentUsd ?? 0);
     if (r.agentUsd != null) out.agentCostUsd = r.agentUsd;
   }
+  if (r.native) out.native = { amount: r.native.amount, unit: r.native.unit, ...(r.native.agentAmount != null ? { agentAmount: r.native.agentAmount } : {}) };
   return out;
 }
 
@@ -187,9 +206,16 @@ export function sessionSpend(
   spark: SessionBudgetSpark | null | undefined,
   cal: SessionBudgetCal | null | undefined,
   now: number,
+  nativeUnit?: string,
 ): { value: number | null; agent: number | null; why?: SessionBudgetUnknown } {
   const unknown = (why: SessionBudgetUnknown) => ({ value: null, agent: null, why });
   if (!spark) return unknown("noSpark");
+  if (unit === "native") {
+    // The unit must be the one the person capped in, by name — a different unit is not a smaller number.
+    const n = spark.native;
+    if (!n || !nativeUnit || n.unit.trim() !== nativeUnit) return unknown("unstated");
+    return { value: n.amount + (n.agentAmount ?? 0), agent: n.agentAmount ?? null };
+  }
   if (spark.source && isPct(unit)) return unknown("notClaude");
   if (unit === "tok") {
     if (spark.usageTok == null) return unknown(spark.source ? "unstated" : "noSpark");
@@ -213,8 +239,8 @@ export function sessionBudgetVerdict(
   now: number,
   running = true,
 ): SessionBudgetVerdict {
-  const s = sessionSpend(cfg.unit, spark, cal, now);
-  const base = { unit: cfg.unit, max: cfg.max, spent: s.value, agentShare: s.agent };
+  const s = sessionSpend(cfg.unit, spark, cal, now, cfg.nativeUnit);
+  const base = { unit: cfg.unit, max: cfg.max, spent: s.value, agentShare: s.agent, ...(cfg.nativeUnit ? { nativeUnit: cfg.nativeUnit } : {}) };
   if (s.value == null) return { ...base, state: "unknown", why: s.why };
   if (!running) return { ...base, state: "unknown", why: "notRunning" };
   return { ...base, state: s.value >= cfg.max ? "over" : "ok" };
@@ -230,11 +256,17 @@ function fmtPct(n: number): string {
   return n < 10 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n));
 }
 
+/** A native amount: as stated, at most one decimal — never a "≈", nothing was converted. */
+function fmtNative(n: number): string {
+  return Number.isInteger(n) ? fmtCount(n) : String(Math.round(n * 10) / 10);
+}
+
 /** One figure in a unit. A percent is a calibrated estimate, so it says "≈". */
-function fmtIn(unit: SessionBudgetUnit, n: number): string {
+function fmtIn(unit: SessionBudgetUnit, n: number, nativeUnit?: string): string {
   switch (unit) {
     case "tok": return `${fmtCount(n)} tokens`;
     case "usd": return fmtUsd(n);
+    case "native": return `${fmtNative(n)} ${nativeUnit ?? "of the backend's own unit"}`;
     default: return `≈${fmtPct(n)}% of ${unit === "sessionPct" ? "the 5-hour window" : "the week"}`;
   }
 }
@@ -246,13 +278,14 @@ export function sessionBudgetLabel(cfg: SessionBudget): string {
     case "usd": return `≤ ${fmtUsd(cfg.max)}`;
     case "sessionPct": return `≤ ${fmtPct(cfg.max)}% of this 5-hour window`;
     case "weeklyPct": return `≤ ${fmtPct(cfg.max)}% of this week`;
+    case "native": return `≤ ${fmtIn("native", cfg.max, cfg.nativeUnit)}`;
   }
 }
 
 /** Why a verdict cannot say, as a sentence that ends on what it means for the
  *  person: nothing is held. `readingAgeMs` sharpens the stale case, `unit` the
  *  `unstated` one. */
-export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number, unit?: SessionBudgetUnit): string {
+export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number, unit?: SessionBudgetUnit, nativeUnit?: string): string {
   const tail = " — nothing is held";
   switch (why) {
     case "noSpark": return `can't tell: this session has not logged a turn yet${tail}`;
@@ -265,7 +298,7 @@ export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs
     case "noCalibration": return `can't tell: this window has not run enough here to say what one percent costs${tail}`;
     case "notRunning": return `can't tell: the session is not running${tail}`;
     case "unstated":
-      return `can't tell: this session's backend has not stated what it spent${unit === "tok" ? " in tokens" : unit === "usd" ? " in dollars" : ""}${tail}`;
+      return `can't tell: this session's backend has not stated what it spent${unit === "tok" ? " in tokens" : unit === "usd" ? " in dollars" : unit === "native" ? ` in ${nativeUnit ?? "its own unit"}` : ""}${tail}`;
     case "notClaude": return `can't tell: ${SESSION_BUDGET_WINDOWS_CLAUDE}, which this session's backend does not spend from${tail}`;
   }
 }
@@ -291,11 +324,11 @@ export const SESSION_BUDGET_PCT_CAVEAT = "≈, from this desktop's spend — oth
 
 /** The verdict in a sentence: spend, its subagent share, and where it stands. */
 export function sessionBudgetText(v: SessionBudgetVerdict): string {
-  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark", undefined, v.unit);
-  const share = v.agentShare != null && v.agentShare > 0 ? `, ${fmtIn(v.unit, v.agentShare)} of it in subagents` : "";
-  const cap = isPct(v.unit) ? fmtIn(v.unit, v.max).replace("≈", "") : fmtIn(v.unit, v.max);
+  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark", undefined, v.unit, v.nativeUnit);
+  const share = v.agentShare != null && v.agentShare > 0 ? `, ${fmtIn(v.unit, v.agentShare, v.nativeUnit)} of it in subagents` : "";
+  const cap = isPct(v.unit) ? fmtIn(v.unit, v.max).replace("≈", "") : fmtIn(v.unit, v.max, v.nativeUnit);
   const caveat = isPct(v.unit) ? ` (${SESSION_BUDGET_PCT_CAVEAT})` : "";
-  return `${fmtIn(v.unit, v.spent)} so far${share} — ${v.state === "over" ? "over" : "within"} the ${cap} budget${caveat}`;
+  return `${fmtIn(v.unit, v.spent, v.nativeUnit)} so far${share} — ${v.state === "over" ? "over" : "within"} the ${cap} budget${caveat}`;
 }
 
 /** What being over DOES, by mode — one sentence for the host's notification
@@ -312,8 +345,10 @@ export function sessionBudgetChip(v: SessionBudgetVerdict): string {
     switch (v.unit) {
       case "tok": return fmtCount(n);
       case "usd": return fmtUsd(n);
+      case "native": return fmtNative(n);
       default: return `${isPct(v.unit) ? "≈" : ""}${fmtPct(n)}%`;
     }
   };
-  return `${v.spent == null ? "?" : f(v.spent)} / ${isPct(v.unit) ? f(v.max).replace("≈", "") : f(v.max)}`;
+  const tail = v.unit === "native" && v.nativeUnit ? ` ${v.nativeUnit}` : "";
+  return `${v.spent == null ? "?" : f(v.spent)} / ${isPct(v.unit) ? f(v.max).replace("≈", "") : f(v.max)}${tail}`;
 }

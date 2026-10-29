@@ -808,3 +808,22 @@ test("a re-queue that names no failure is applied on the state alone, as every o
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });
+
+// Not a re-queue, but the same seam: what the phone is handed for a row that
+// ended without running. Every cancelled row is `calledOff` (status stays
+// `failed` for older phones): `"agent"` only for the posting agent's own
+// call-off, `"other"` for the phone's or an assessment's. A real failure is not.
+test("intentToBacklogItem: a call-off is calledOff, and only the agent's own reads as agent", async () => {
+  const { AGENT_WITHDREW_DETAIL, ORIGIN_AGENT } = await import("@waterplane/shared");
+  const row = (over) => ({
+    id: "a1", cwd: REPO, payload: { kind: "prompt", steps: ["x"] }, target: { kind: "repo", fresh: true },
+    trigger: { kind: "idle" }, createdAt: 1, settledAt: 2, origin: ORIGIN_AGENT, state: "canceled",
+    result: { at: 2, ok: false, detail: AGENT_WITHDREW_DETAIL }, ...over,
+  });
+  const gone = intentToBacklogItem(row({}));
+  assert.equal(gone.status, "failed");
+  assert.equal(gone.calledOff, "agent");
+  assert.equal(intentToBacklogItem(row({ result: { at: 2, ok: false, detail: "called off from the phone" } })).calledOff, "other");
+  assert.equal(intentToBacklogItem(row({ origin: undefined })).calledOff, "other");
+  assert.equal(intentToBacklogItem(row({ state: "failed" })).calledOff, undefined);
+});

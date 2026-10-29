@@ -98,6 +98,12 @@ printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, o
   tarball on the desktop, signed with the Ed25519 key — and the npm one's `release.json` names the
   public snapshot's commit, not this repo's. Whether CI should build the tarball too, with the
   desktop only signing it, is an open question for the owner.
+- **The npm attestation also goes on the GitHub release**, as `<pkg>-<version>.tgz.intoto.jsonl`,
+  from a second job (`provenance-to-release`) that holds `contents: write` and nothing else, so the
+  write token never sits beside `id-token: write`. Why: OpenSSF Scorecard's Signed-Releases gives 10
+  only to a release with a `.intoto.jsonl` asset (it matches by name), and a published provenance is
+  worth having on the release anyway. It attests the npm tarball, the same bytes `npm pack
+  <pkg>@<version>` fetches, never the desktop-built install tarball or APK, which CI did not build.
 - **Wait for npm** (`npm-wait` step): `scripts/release/npm-verify.mjs <pkg> <version> --wait 900
   --repo <org>/<slug>` polls `npm view` every 20 s for up to 15 minutes, printing the workflow run's
   state for the tag on each line (`gh run list`); a run that finished without success stops the

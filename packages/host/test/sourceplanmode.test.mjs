@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 const { ChannelSlice, planToPrompt } = await import("../dist/sessions/sidechannel.js");
 const turn = await import("../dist/sessions/turn.js");
 const boxes = await import("../dist/sessions/boxes.js");
+const boxread = await import("../dist/sessions/boxread.js");
 const livemode = await import("../dist/sessions/livemode.js");
 const { isPlanBox, PLAN_CAP } = await import("../dist/planbox.js");
 const { gateRefusal, isBlocked } = await import("../dist/answergate.js");
@@ -39,7 +40,7 @@ function harness({ sources, facts, caps = {} } = {}) {
     sessions,
     emit: (ev, ...args) => { events.push([ev, ...args]); return true; },
     sourceTurn: (s, e) => turn.sourceTurn(core, s, e),
-    applyPrompt: (s, p) => boxes.applyPrompt(core, s, p),
+    applyPrompt: (s, p) => boxread.applyPrompt(core, s, p),
     armPromptCheck: () => {},
     input: (id, data) => { typed.push([id, data]); return true; },
     write: (id, data) => { wrote.push([id, data]); h.onWrite?.(data); return true; },

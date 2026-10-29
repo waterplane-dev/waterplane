@@ -48,6 +48,7 @@ export const GUARDS = [
   { test: "hostpins", tier: "edit", paths: HOST },
   { test: "hostsyncpins", tier: "edit", paths: HOST },
   { test: "atomicwrites", tier: "edit", paths: HOST },
+  { test: "forgeseam", tier: "edit", paths: HOST },
   { test: "reposkill", tier: "edit", paths: HOST },
   { test: "sharedshape", tier: "edit", paths: ["packages/shared/src/**"] },
   { test: "extensionclasses", tier: "edit", paths: EXT },
@@ -61,6 +62,7 @@ export const GUARDS = [
   { test: "uifilm", tier: "edit", paths: ["scripts/ui/**", "packages/web/src/core/session/TermArea.tsx", "packages/web/src/ZoomPair.tsx", "packages/web/src/features/demoTour/DemoHook.tsx"] },
   { test: "repohealth-packs", tier: "edit", paths: ["tools/repohealth/**"] },
   { test: "screenfixtures", tier: "edit", paths: ["tools/screenfixtures.mjs", "packages/host/test/fixtures/**"] },
+  { test: "capsqueeze", tier: "edit", paths: ["tools/capsqueeze.mjs", "tools/healthreadings.mjs"] }, // the decision; the staged-diff check itself runs in precommit.mjs
   { test: "healthreadings", tier: "edit", paths: ["tools/healthreadings.mjs", ".claude/skills/**", ".*-shared/health.json"] }, // the shared config dir by glob: this file cannot import BRAND
   { test: "site", tier: "edit", paths: ["README.md", "site/**", "scripts/site/**", "docs/media/**", "docs/assets/**"] },
   { test: "e2ewatchdog", tier: "edit", paths: ["scripts/e2e-*.mjs", "scripts/lib-watchdog.mjs", "packages/extensions/*/e2e/**"] },
@@ -75,7 +77,7 @@ export const GUARDS = [
   { test: "importcycles", tier: "commit", paths: ["packages/**"] },
   { test: "spenderssplit", tier: "commit", paths: HOST },
   { test: "hostsplitpins", tier: "commit", paths: HOST },
-  { test: "plugindocs", tier: "commit", paths: ["packages/shared/src/plugin.ts", "docs/plugins-api.md", "deploy/public-allowlist.txt", "scripts/gen-plugin-docs.mjs"] },
+  { test: "plugindocs", tier: "commit", paths: ["packages/shared/src/plugin.ts", "packages/shared/src/plugin/**", "docs/plugins-api.md", "deploy/public-allowlist.txt", "scripts/gen-plugin-docs.mjs"] },
   { test: "extensionboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "featureboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "hostboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },

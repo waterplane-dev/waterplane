@@ -127,6 +127,13 @@ export interface DeliverySource {
 export interface TranscriptSource {
   /** The CLI's own change stamp; drives the 204 poll. Null = unknown (read anyway). */
   updatedAt(s: SourceSession): number | null;
+  /**
+   * Served verbatim, so a turn's subagent fields (`agentTypes`, `agentsRunning`, `agentModels`,
+   * `agentCostUsd`, `agentUnpricedTok`) are the plugin's to fill — only off a record that links the
+   * agent to that turn's own tool call, and the token/cost ones only beside the turn's OWN
+   * `tokens`/`models` (the phone folds `agentModels` into the turn's model mix, so agents alone
+   * read as the whole turn). An agent that cannot be placed withholds the turn's agent figures.
+   */
   read(s: SourceSession, detail: "lite" | "full"): Omit<TranscriptDoc, "sessionId" | "source"> | null;
 }
 
@@ -264,7 +271,10 @@ export interface UsageSource {
 }
 
 export interface SourceAgent { id: string; name?: string; startedAt: number; endedAt?: number; lastWriteAt?: number }
-/** Polled on `agents.ts`'s cadence. */
+/**
+ * Polled on `agents.ts`'s cadence. Background SHELLS have no slot: no plugin CLI writes down which
+ * of its shells is still running (docs/analysis/backend-parity-v3/c11.md), so they stay ABSENT.
+ */
 export interface AgentSource { list(s: SourceSession): SourceAgent[] | null }
 
 export interface SourceConversation { id: string; title?: string; updatedAt: number; firstPrompt?: string }

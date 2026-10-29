@@ -47,6 +47,8 @@ jobs:
       contents: read
       id-token: write # the OIDC token npm trusted publishing and the provenance signature need
       attestations: write # the GitHub build-provenance attestation of the tarball
+    outputs:
+      attested: ${{ steps.attest.outputs.bundle-path != '' }}
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
@@ -80,11 +82,11 @@ jobs:
           node-version-file: deploy/node-version
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm >= 11.5.1. Pinned exactly, so the publishing CLI does not move
-      # with the Node pin.
+      # Trusted publishing needs npm >= 11.5.1. The npm bundled with the pinned Node is used, not a
+      # second global npm install: Scorecard counts that as an unpinned download, and the Node pin
+      # already fixes the CLI exactly. This step stops the run if a Node bump ever ships an older one.
       - name: npm CLI for trusted publishing
         run: |
-          npm install -g npm@11.12.1
           node -e '
             const [a, b, c] = process.argv[1].split(".").map(Number);
             if (a < 11 || (a === 11 && (b < 5 || (b === 5 && c < 1)))) { console.error(`npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs`); process.exit(1); }
@@ -165,9 +167,24 @@ jobs:
       # (install tarball, APK) are signed by the Ed25519 release key instead and are NOT attested
       # here: the uploaded copies are the desktop's builds, not this runner's.
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
         if: steps.npm.outputs.published == 'false'
         with:
           subject-path: dist-release/*.tgz
+
+      # The same attestation as a file, for the release job below: this job never gets contents: write.
+      - name: The attestation bundle, named for the tarball it attests
+        if: steps.npm.outputs.published == 'false'
+        run: |
+          mkdir -p provenance
+          cp "${{ steps.attest.outputs.bundle-path }}" "provenance/$(basename "$TGZ").intoto.jsonl"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.npm.outputs.published == 'false'
+        with:
+          name: provenance
+          path: provenance/
+          retention-days: 1
+          if-no-files-found: error
 
       - name: npm publish --provenance
         if: steps.npm.outputs.published == 'false'
@@ -178,3 +195,29 @@ jobs:
         run: |
           node scripts/release/npm-verify.mjs "$PKG" "$VERSION" --wait 300 --check
           echo "Published $PKG@$VERSION from $TAG ($GITHUB_SHA) with provenance: https://www.npmjs.com/package/$PKG/v/$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The attestation above, attached to the GitHub release as <tarball>.intoto.jsonl, so the release
+  # carries provenance next to its Ed25519 signatures (OpenSSF Scorecard's Signed-Releases reads release
+  # assets by name). It attests the npm tarball built in this run, the same bytes `npm pack
+  # <pkg>@<version>` fetches: verify with `gh attestation verify <tgz> --bundle <file> -R <repo>`.
+  # A job of its own so contents: write never sits beside id-token: write; it runs only after the
+  # publish job succeeded, and it checks out nothing.
+  provenance-to-release:
+    needs: publish
+    # No repo guard of its own: it needs the publish job, which only runs in the public repo.
+    if: needs.publish.outputs.attested == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # gh release upload, nothing else
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: provenance
+          path: provenance
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" provenance/*.intoto.jsonl --clobber -R "$GITHUB_REPOSITORY"

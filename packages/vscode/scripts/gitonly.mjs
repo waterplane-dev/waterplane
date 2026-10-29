@@ -8,7 +8,8 @@
 const MOD = String.raw`["'](?:node:)?child_process["']`;
 const SPAWNERS = new Set(["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork"]);
 const ID = String.raw`[A-Za-z_$][\w$]*`;
-const esc = (s) => s.replace(/[$]/g, "\\$");
+// Every regex metacharacter, backslash included (an ID holds only `$` today; the escape must not lean on that).
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // A call whose first argument is the literal git: X("git"  X('git'  X(`git`
 const GIT_ARG = String.raw`\s*\(\s*(?:"git"|'git'|\`git\`)`;
 

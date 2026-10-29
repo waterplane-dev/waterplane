@@ -7,7 +7,8 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const { worktreeLeftover, removeLeftover, LEFTOVER_IDLE_MIN } = await import("../dist/worktreeleftover.js");
+const { worktreeLeftover, removeLeftover, LEFTOVER_IDLE_MIN, WorktreeGone } = await import("../dist/worktreeleftover.js");
+const { discoverTargets } = await import("../dist/repos.js");
 
 const git = (cwd, ...args) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
 
@@ -109,5 +110,28 @@ test("uncommitted work, transport files, a session inside and a live owner each 
     assert.equal(v.ownerLive, true);
     const all = v.blockers.join(" ");
     for (const re of [/not committed/, /outbox or \.claude\/inbox/, /1 session running/, /still open/]) assert.match(all, re);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// Seen 2026-10-23: the leftover route answered 500 `spawn git ENOENT`. git was on
+// PATH; the worktree's FOLDER was gone (deleted without `git worktree remove`), git
+// still listed it, and Node words a missing cwd as `spawn git ENOENT`.
+test("a worktree whose folder was deleted is not discovered, and the read says the folder is gone", async () => {
+  const { root, repo, wt } = fixture();
+  try {
+    const kept = join(root, "kept");
+    git(repo, "worktree", "add", "-q", "-b", "k", kept, "main");
+    rmSync(wt, { recursive: true, force: true });
+    assert.match(git(repo, "worktree", "list", "--porcelain"), /prunable/, "git itself still lists it");
+
+    const paths = (await discoverTargets(root)).map((t) => t.worktreePath);
+    assert.ok(paths.includes(kept), "a live linked worktree is still listed");
+    assert.ok(!paths.includes(wt), `the gone one is not (got ${JSON.stringify(paths)})`);
+
+    await assert.rejects(worktreeLeftover(input(wt)), (e) => e instanceof WorktreeGone && /is gone/.test(e.message) && !/ENOENT/.test(e.message));
+    const r = await removeLeftover(input(wt));
+    assert.equal(r.ok, false);
+    assert.match(r.error, /folder .* is gone/);
+    assert.equal(r.leftover, undefined, "no reading of a folder that is not there");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

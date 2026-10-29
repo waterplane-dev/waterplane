@@ -102,3 +102,23 @@ export function exposureWatchedDirs(): Set<string> | null {
   if (!doc) return null;
   return new Set(doc.targets.filter((t) => typeof t?.dir === "string").map((t) => real(t.dir as string)));
 }
+
+export type ExposureTargetLookup =
+  | { ok: true; name: string; play: boolean }
+  | { ok: false; why: string };
+
+/**
+ * This worktree's entry in `targets.json`, matched by REALPATH of its dir (the probe's rule) — the
+ * NAME the collector's `--target` takes. Not listed, or a file that does not parse, is a sentence:
+ * a re-check from the phone runs only what the daily runner would run.
+ */
+export function exposureTargetOf(wt: string): ExposureTargetLookup {
+  const doc = readDoc();
+  if (!doc) return { ok: false, why: `${FILE} exists but could not be read, so nothing was run.` };
+  const me = real(wt);
+  const hit = doc.targets.find((t) => typeof t?.dir === "string" && real(t.dir) === me);
+  if (!hit || typeof hit.name !== "string" || !hit.name) {
+    return { ok: false, why: "This repo is not on the exposure watch, so there is nothing to re-check — add it from the Opt-ins region first." };
+  }
+  return { ok: true, name: hit.name, play: hit.play === true };
+}

@@ -7,6 +7,7 @@
  * five-kind document is `packages/extensions/opencode/shared/octokens.mts`); core serves either
  * verbatim and reads neither.
  */
+import type { LedgerHourly } from "../ledgerspan.js";
 
 /**
  * A ledger in the backend's OWN unit, served at `GET /api/tokenstats/<backendId>`
@@ -42,6 +43,11 @@ export type BackendTokensDoc =
       cost?: BackendLedgerCost;
       /** The unit when it is not tokens; `perDay` is keyed by the same local-zone day as `days`. */
       unit?: { name: string; perDay: Record<string, number> };
+      /** (2.3) The same spend by HOUR (each row the start of the host's local hour, epoch ms;
+       *  `unit` = the native unit's amount in it). What a span is cut on (`ledgerOverSpan`) —
+       *  the local `days` cannot be cut to a period's zone or a window's minute. Absent = the
+       *  ledger keeps days only, and a span reads absent with words. */
+      hourly?: LedgerHourly;
       firstAt: number | null;
       lastAt: number | null;
       scannedAt: number;

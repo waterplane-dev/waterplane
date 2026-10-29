@@ -4,11 +4,12 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { BacklogItem } from "@waterplane/shared";
+import type { BacklogSort } from "../backlogFilter";
 import type { BacklogProps } from "./backlogTypes";
 
 export function useBacklogDrag(
   p: BacklogProps,
-  { displayOrder, groupKeyOf }: { q: string; filtering: boolean; displayOrder: BacklogItem[]; groupKeyOf: (it: BacklogItem) => string },
+  { displayOrder, groupKeyOf, drawSort }: { displayOrder: BacklogItem[]; groupKeyOf: (it: BacklogItem) => string; drawSort: BacklogSort },
 ) {
   // ── Drag-and-drop reordering ───────────────────────────────────────────
   // Each crossover commits the order of the rows ON SCREEN; the host makes
@@ -18,7 +19,8 @@ export function useBacklogDrag(
   // filtered — including the *on a clock* cut, the one place several items on
   // one instant are gathered to be put in order.
   const [dragId, setDragId] = useState<string | null>(null);
-  const canDrag = p.online;
+  // Only in run order: newest first, the rows on screen are not a run sequence.
+  const canDrag = p.online && drawSort === "run";
   // Drag uses WINDOW-level pointer listeners, not the container's — on touch the
   // grip's pointerdown implicitly captures the pointer, so the scroll container
   // never sees pointermove (drag looked dead on mobile). Window still receives it.

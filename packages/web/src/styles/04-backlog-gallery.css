@@ -415,6 +415,8 @@ button.bl-check { cursor: pointer; }
 .tag-running { color: var(--accent); }
 .tag-done { color: var(--ok); }
 .tag-failed { color: var(--dead); }
+/* Called off (`calledOff.ts`): settled, never ran, nothing went wrong — no edge, no alarm. */
+.tag-calledoff { color: var(--muted); }
 /* A row's own chips. `bl-chip` is `bl-next`'s shape without its claim: `next`
    is the accent because it is the thing about to happen, these are facts about
    what already happened to the row. `bl-merged` (the schedule link) is a

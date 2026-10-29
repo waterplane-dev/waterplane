@@ -383,6 +383,10 @@ test("gitOnlyProblems reads minified and namespace forms, and refuses anything b
   assert.deepEqual(gitOnlyProblems('import{execFileSync as iu,spawnSync as ls}from"node:child_process";iu("git",["ls-tree","-r"]);ls("git",[\'ls-files\'])'), [],
     "a string opening with \"name-\" is not a use");
   assert.equal(gitOnlyProblems('import{spawnSync as ls}from"node:child_process";const m="ls-tree";ls("sh")').length, 1, "a real call beside it still fails");
+
+  // A `$` in a minified name is matched literally (the escape covers every metacharacter).
+  assert.deepEqual(gitOnlyProblems('import{spawnSync as $a}from"node:child_process";$a("git",[])'), [], "a $-name calling git is fine");
+  assert.equal(gitOnlyProblems('import{spawnSync as $a}from"node:child_process";$a("sh")').length, 1, "a $-name calling anything else fails");
 });
 
 test("cancel during a read also drops the refresh queued behind it", { skip: noGit }, async () => {

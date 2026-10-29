@@ -47,3 +47,13 @@ export function createStore<T>(initial: T): Store<T> {
 export function useStore<T>(s: Store<T>): T {
   return useSyncExternalStore(s.subscribe, s.get, s.get);
 }
+
+/** A sheet's `keep` over the stores its `onLeave` clears (any store: each gets back its own value): their values now, and
+ *  the closure that puts them back. Set through an updater, so a function value
+ *  is restored rather than called. */
+export function keepStores(...stores: Store<any>[]): () => () => void {
+  return () => {
+    const vals = stores.map((s) => s.get());
+    return () => stores.forEach((s, i) => s.set(() => vals[i]));
+  };
+}

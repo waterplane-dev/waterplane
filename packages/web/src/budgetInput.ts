@@ -52,15 +52,25 @@ export const BUDGET_UNITS: readonly {
  * except the unit a cap was ALREADY set in, which stays so it is never
  * silently swapped for another.
  */
-export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit): typeof BUDGET_UNITS {
-  return windowsOff ? BUDGET_UNITS.filter((u) => !isPctUnit(u.unit) || u.unit === keep) : BUDGET_UNITS;
+export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit, spendUnit?: string): typeof BUDGET_UNITS {
+  const base = windowsOff ? BUDGET_UNITS.filter((u) => !isPctUnit(u.unit) || u.unit === keep) : BUDGET_UNITS;
+  // The backend's own unit: offered where it NAMES one, or where a cap is already set in it
+  // (never silently swapped). Without a name the kept cap still shows, under a generic label.
+  const label = spendUnit?.trim() || (keep === "native" ? "native unit" : "");
+  if (!label) return base;
+  return [...base, { unit: "native", label, example: "5 or 0.5", suffix: label, presets: ["1", "5", "20"] }];
+}
+
+/** The launch-time twin of `launchWindowsOff`: the unit name a backend states for its own spend, if any. */
+export function launchSpendUnit(backends: BackendList, backend: string | undefined): string | undefined {
+  return backends?.find((b) => b.id === backend)?.caps?.spendUnit?.trim() || undefined;
 }
 
 export const unitInfo = (u: SessionBudgetUnit) => BUDGET_UNITS.find((x) => x.unit === u) ?? BUDGET_UNITS[0];
 
 /** A quick pick as its chip reads: `$2`, `1m`, `10%`. */
 export function presetLabel(unit: SessionBudgetUnit, text: string): string {
-  return unit === "usd" ? `$${text}` : isPctUnit(unit) ? `${text}%` : text;
+  return unit === "native" ? text : unit === "usd" ? `$${text}` : isPctUnit(unit) ? `${text}%` : text;
 }
 
 export const isPctUnit = (u: SessionBudgetUnit): boolean => u === "sessionPct" || u === "weeklyPct";
@@ -126,15 +136,20 @@ function fmtPct(n: number): string {
   return n < 10 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n));
 }
 
+/** A native amount as stated, at most one decimal (shared's own rule: nothing was converted). */
+const fmtNat = (n: number): string => (Number.isInteger(n) ? fmtCount(n) : String(Math.round(n * 10) / 10));
+
 /** One amount, short — the figure a preview line compares: `$0.48`, `1.2M`, `≈3.1%`. */
 function fmtShort(unit: SessionBudgetUnit, n: number, approx: boolean): string {
+  if (unit === "native") return fmtNat(n);
   if (unit === "usd") return fmtUsd(n);
   if (unit === "tok") return fmtCount(n);
   return `${approx ? "≈" : ""}${fmtPct(n)}%`;
 }
 
 /** One amount with its unit spelled, for a sentence. */
-function fmtLong(unit: SessionBudgetUnit, n: number): string {
+function fmtLong(unit: SessionBudgetUnit, n: number, nativeUnit?: string): string {
+  if (unit === "native") return `${fmtNat(n)} ${nativeUnit ?? "of the backend's own unit"}`;
   if (unit === "tok") return `${fmtCount(n)} tokens`;
   if (unit === "usd") return fmtUsd(n);
   return `≈${fmtPct(n)}% of ${unit === "sessionPct" ? "the 5-hour window" : "the week"}`;
@@ -154,7 +169,7 @@ function withSplit(value: number, agent: number | null, f: (n: number) => string
  * percent that cannot be converted still prints the DOLLARS it would convert,
  * because "can't tell" alone leaves the person typing blind.
  */
-export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpark | null | undefined, cal: SessionBudgetCal | null | undefined, now: number): string | null {
+export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpark | null | undefined, cal: SessionBudgetCal | null | undefined, now: number, nativeUnit?: string): string | null {
   if (spark === undefined) return null;
   // `cal` undefined: the host sends a calibration only with a budget, so before
   // one is set a percent cannot be converted here — say the dollars, not "no reading".
@@ -162,10 +177,10 @@ export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpa
     if (spark && spark.costUsd != null) return `in dollars, ${withSplit(spark.costUsd, spark.agentCostUsd ?? null, fmtUsd)}`;
     return sessionBudgetUnknownText(spark ? "unpriced" : "noSpark");
   }
-  const s = sessionSpend(unit, spark, cal, now);
+  const s = sessionSpend(unit, spark, cal, now, nativeUnit);
   // The window is named once, on the total; the two parts are its shares.
-  if (s.value != null) return withSplit(s.value, s.agent, (n) => fmtLong(unit, n), isPctUnit(unit) ? (n) => fmtShort(unit, n, true) : undefined, !!spark?.source);
-  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined, unit);
+  if (s.value != null) return withSplit(s.value, s.agent, (n) => fmtLong(unit, n, nativeUnit), isPctUnit(unit) ? (n) => fmtShort(unit, n, true) : undefined, !!spark?.source);
+  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined, unit, nativeUnit);
   if (isPctUnit(unit) && spark && spark.costUsd != null) {
     return `${why}. In dollars: ${withSplit(spark.costUsd, spark.agentCostUsd ?? null, fmtUsd)}.`;
   }
@@ -177,9 +192,9 @@ export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpa
  * Null where the spend is unknown (the spent line already says why) or there
  * is no session. Past the cap it says what setting it would do, at once.
  */
-export function budgetPreview(cfg: Pick<SessionBudget, "unit" | "max">, spark: SessionBudgetSpark | null | undefined, cal: SessionBudgetCal | null | undefined, now: number): string | null {
+export function budgetPreview(cfg: Pick<SessionBudget, "unit" | "max" | "nativeUnit">, spark: SessionBudgetSpark | null | undefined, cal: SessionBudgetCal | null | undefined, now: number): string | null {
   if (!spark) return null;
-  const s = sessionSpend(cfg.unit, spark, cal, now);
+  const s = sessionSpend(cfg.unit, spark, cal, now, cfg.nativeUnit);
   if (s.value == null) return null;
   const pct = isPctUnit(cfg.unit);
   const head = `${fmtShort(cfg.unit, s.value, pct)} of ${fmtShort(cfg.unit, cfg.max, false)}`;
@@ -249,7 +264,7 @@ export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, s
     return line ? `Spent: ${line}.` : null;
   }
   const v = b.verdict;
-  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined, v.unit);
+  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined, v.unit, v.nativeUnit);
   return `${sessionBudgetText(v)}${v.state === "over" ? `. ${sessionBudgetHoldText(b.cfg)}` : "."}`;
 }
 

@@ -143,7 +143,7 @@ test("sourceSpendSpark: a source's tok EXCLUDES its agents, so the total is the 
     { source: true, usageTok: 140, agentTok: 40, costUsd: 1.5, agentCostUsd: 0.5 });
   assert.deepEqual(sourceSpendSpark({ at: 1, tok: 100 }), { source: true, usageTok: 100 }, "no agent figure: a floor, no split claimed");
   assert.deepEqual(sourceSpendSpark({ at: 1, agentTok: 40 }), { source: true }, "agents alone are no total");
-  assert.deepEqual(sourceSpendSpark({ at: 1, native: { amount: 300, unit: "AI credits" } }), { source: true }, "native never becomes a figure");
+  assert.deepEqual(sourceSpendSpark({ at: 1, native: { amount: 300, unit: "AI credits" } }), { source: true, native: { amount: 300, unit: "AI credits" } }, "native rides as itself — never a token or dollar figure");
   assert.deepEqual(sourceSpendSpark(null), { source: true });
   assert.deepEqual(sourceSpendSpark({ at: 1, tok: -5, usd: 2 }), { source: true }, "a refused reading is dropped WHOLE");
   assert.deepEqual(sourceSpendSpark({ at: 1, usd: 2, native: { amount: 2, unit: "$" } }), { source: true }, "dollars in native are refused whole");
@@ -187,4 +187,29 @@ test("claude's spark is unchanged by the source rules (no `source` ⇒ noSpark /
   assert.equal(sessionSpend("tok", {}, null, NOW).why, "noSpark");
   assert.equal(sessionSpend("usd", { usageTok: 5 }, null, NOW).why, "unpriced");
   assert.equal(sessionSpend("weeklyPct", { costUsd: 1 }, null, NOW).why, "noReading");
+});
+
+import { sessionBudgetChip as chipN, sessionBudgetLabel as labelN, sessionBudgetText as textN } from "../dist/index.js";
+
+test("native: a cap needs its unit's name; the name is dropped on any other unit", () => {
+  assert.equal(cleanSessionBudget({ unit: "native", max: 50 }), null);
+  assert.equal(cleanSessionBudget({ unit: "native", max: 50, nativeUnit: "x".repeat(33) }), null);
+  assert.deepEqual(cleanSessionBudget({ unit: "native", max: 50, nativeUnit: " AI credits " }), { unit: "native", max: 50, interrupt: true, nativeUnit: "AI credits" });
+  assert.deepEqual(cleanSessionBudget({ unit: "tok", max: 5, nativeUnit: "AI credits" }), { unit: "tok", max: 5, interrupt: true });
+});
+
+test("native: judged on the source's own unit, by NAME, never converted", () => {
+  const cfg = { unit: "native", max: 50, interrupt: true, nativeUnit: "AI credits" };
+  const spark = sourceSpendSpark({ at: 1, tok: 100, native: { amount: 40, unit: "AI credits", agentAmount: 12 } });
+  const v = sessionBudgetVerdict(cfg, spark, null, 2);
+  assert.deepEqual({ state: v.state, spent: v.spent, agent: v.agentShare }, { state: "over", spent: 52, agent: 12 });
+  assert.equal(textN(v), "52 AI credits so far, 12 AI credits of it in subagents — over the 50 AI credits budget");
+  assert.equal(chipN(v), "52 / 50 AI credits");
+  assert.equal(labelN(cfg), "≤ 50 AI credits");
+  // Another unit's name is not a smaller number: unstated.
+  const other = sessionBudgetVerdict(cfg, sourceSpendSpark({ at: 1, native: { amount: 3, unit: "premium requests" } }), null, 2);
+  assert.deepEqual({ state: other.state, why: other.why }, { state: "unknown", why: "unstated" });
+  assert.match(textN(other), /in AI credits — nothing is held$/);
+  // Claude's spark has no native figure.
+  assert.equal(sessionBudgetVerdict(cfg, { usageTok: 5, costUsd: 1 }, null, 2).why, "unstated");
 });

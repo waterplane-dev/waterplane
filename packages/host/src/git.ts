@@ -6,6 +6,8 @@ import { spawn } from "node:child_process";
 import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
 import { PushProgress } from "./pushprogress.js";
+import { pushForPr, rulesFor } from "./prpush.js";
+import { branchRules, invalidateBranchRules } from "./branchrules.js";
 
 
 export interface GitFile {
@@ -597,6 +599,11 @@ const STREAM_MAX = 16 * 1024 * 1024;
 
 export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk: string) => void): Promise<{ ok: boolean; output?: string; error?: string }> {
   if (pulling.has(wt)) return { ok: false, error: "A pull is running in this worktree — push once it has ended." };
+  const rules = await rulesFor(wt);
+  if (rules && rules.mode !== "direct") {
+    const r = await pushForPr(wt, rules, { push: (args) => gitStreamed(wt, args, onData), failText: pushFailureText });
+    if (r) return r;
+  }
   try {
     // Set upstream automatically on first push of a branch.
     const { stdout, stderr } = await gitStreamed(wt, ["push", "--porcelain"], onData).catch(async (e) => {
@@ -608,7 +615,15 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     });
     return { ok: true, output: (stdout || stderr || "pushed").toString().trim() };
   } catch (err: any) {
-    return { ok: false, error: pushFailureText(String(err?.stdout ?? ""), String(err?.stderr ?? "") || String(err)) };
+    const so = String(err?.stdout ?? ""), se = String(err?.stderr ?? "") || String(err);
+    let error = pushFailureText(so, se);
+    // A branch-rule refusal on the plain path: the rules changed under us. Forget the reading.
+    if (/GH013|GH006|protected branch|repository rule violations/i.test(`${so}\n${se}`)) {
+      invalidateBranchRules(wt);
+      void branchRules(wt); // re-read now, so the next push finds PR mode without waiting
+      error += "\n\nThis repo now takes changes through a PR — push again to open one.";
+    }
+    return { ok: false, error };
   }
 }
 

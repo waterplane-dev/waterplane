@@ -264,6 +264,15 @@ export const LIMIT_PROBE_MS = Number(env("LIMIT_PROBE_MS") || 0);
 export const LIMIT_LADDER_MS: number[] = (env("LIMIT_LADDER_MS") || "")
   .split(",").map((n) => Number(n.trim())).filter((n) => Number.isFinite(n) && n > 0);
 export const LIMIT_SWEEP_MS = Number(env("LIMIT_SWEEP_MS") || 60_000);
+/**
+ * The retry of a turn the CLI GAVE UP on a transient API error (`sessions/apiretry.ts`,
+ * `netlog.ts`): the ladder (comma-separated ms, empty ⇒ `netlog.ts`'s own) and the cap on
+ * retries per outage. Whether it runs at all is `netretrycfg.ts`'s (the person's switch, and
+ * `WATERPLANE_NET_RETRY=0` as the hard override).
+ */
+export const NET_RETRY_LADDER_MS: number[] = (env("NET_RETRY_LADDER_MS") || "")
+  .split(",").map((n) => Number(n.trim())).filter((n) => Number.isFinite(n) && n > 0);
+export const NET_RETRY_MAX = Number(env("NET_RETRY_MAX") || 8);
 /** How often the running-agent list is re-read while any agent is running. A
  *  readdir plus a stat per agent, and armed only while there is something to
  *  re-read — see `checkAgents`. */

@@ -30,6 +30,7 @@ import {
   scheduleActionText,
   cleanRule,
   describeRule,
+  isAgentWithdrawn,
   isTimedWorkRow,
   reopensConversation,
   type BacklogItem,
@@ -489,6 +490,9 @@ export function intentToBacklogItem(i: Intent, review?: ReviewSidecar): BacklogI
       }
       : undefined,
     archived: i.archived,
+    // A call-off is not a failure: the `canceled` arm of `status` above, said
+    // precisely without a third terminal status (`BacklogItem.calledOff`).
+    calledOff: i.state === "canceled" ? (isAgentWithdrawn(i) ? "agent" : "other") : undefined,
     manual: i.manual,
     // WHERE this one lands, for the row to say so rather than the sheet
     // inferring it from the absence of a `targetSessionId`. `fresh` is "a new

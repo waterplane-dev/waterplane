@@ -63,6 +63,14 @@ export interface ExposureRow {
   firstRun?: true;
 }
 
+/**
+ * `POST /api/repos/:id/exposure/run`'s answer (host `exposurerun.ts`): the collector's exit code
+ * (`null` = never started, refused or killed) and the ONE sentence the phone shows for it. `ok` is a
+ * run that wrote a reading (exit 0 or 10). `refused` = nothing was run (not on the watch, no
+ * collector on this desktop); `joined` = this tap joined a run already in flight.
+ */
+export interface ExposureRunResult { ok: boolean; exit: number | null; sentence: string; refused?: true; joined?: true }
+
 /** Built-in accepts, merged UNDER the accepts file's (the file wins). Keys are what parse.mjs emits. */
 export const PRE_ACCEPTED: Record<string, ExposureAccept> = {
   "A2:node-pty": { reason: "node-pty is pinned to a pre-release on purpose (SECURITY.md)", at: "2026-10-26" },

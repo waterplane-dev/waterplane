@@ -202,6 +202,9 @@ const configs = [
     format: "esm",
     target: "node20",
     external: ["vscode", "typescript"],
+    // check-vsix reads "only git" off this file's shipped text. Minified, `spawnSync` became `ci`
+    // and every "local-ci"/"npm ci" in the bundled preset prose counted as a call (0.8.0 release).
+    minify: false, minifyWhitespace: release, minifySyntax: release,
     alias,
     plugins: [healthState, healthJudge, healthUnused, healthNoRun, sharedDist],
   },

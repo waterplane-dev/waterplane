@@ -291,6 +291,13 @@ export type ClientSessionMsg =
    * new question from the next turn raises the badge again.
    */
   | { t: "session.ackAsking"; id: string; text?: string }
+  /**
+   * Call off the host's automatic retry of a turn the CLI gave up on a
+   * TRANSIENT API error (`SessionInfo.netRetry`, host `sessions/netretry.ts`).
+   * Types nothing. Not durable and never queued offline, like `intent.cancel`:
+   * a cancel delivered an hour late speaks for a retry that has since run.
+   */
+  | { t: "session.netRetryCancel"; id: string }
   /** Record a prompt the client just submitted, so it lands in the session history. */
   | { t: "session.record"; id: string; text: string; kind: "prompt" | "command" }
   /** Request the full history for a session. */

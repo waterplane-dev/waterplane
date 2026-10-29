@@ -506,6 +506,7 @@ const BACKLOG_FACADES = {
  *  cap. None may exceed 900 (`MAX_FEATURE_FILE_LINES`); aim ≤ 500. */
 const BACKLOG_SPLIT_FILES = {
   "backlog/BacklogBody.tsx": 60,
+  "backlog/BacklogSortBar.tsx": 45, // newest first / run order (`rowSort.ts`)
   "backlog/BacklogFilterBar.tsx": 160, // +one kit FilterChip row per axis, and the archived chip
   "backlog/BacklogList.tsx": 75,
   "backlog/BacklogRow.tsx": 205,
@@ -526,13 +527,16 @@ const BACKLOG_SPLIT_FILES = {
   "backlog/useBacklogDrag.ts": 68,
   "backlog/useBacklogEdit.ts": 90,
   "backlog/useBacklogFilters.ts": 125,
+  "backlog/useBacklogSort.ts": 25,
   "backlog/useBacklogUi.ts": 70,
   "backlogFilter/rowBuckets.ts": 100,
+  "backlogFilter/calledOff.ts": 50,
   "backlogFilter/clockGroups.ts": 200,
   "backlogFilter/cutCounts.ts": 330, // +drawnChips (a chip that cuts nothing is not drawn) and the pools it reads
   "backlogFilter/dropClock.ts": 150,
   "backlogFilter/nextFire.ts": 70, // the one `▶ next` predicate, shared with the Automation foot
   "backlogFilter/rowFilter.ts": 130,
+  "backlogFilter/rowSort.ts": 60,
   "backlogFilter/titleWords.ts": 175,
   "backlogFilter/retimeMany.ts": 110, // +clockPicks: one clock's movable rows as one tap
   "backlogFilter/rowWords.ts": 120, // +holderOffer (the serial row's way to the session it waits behind)
@@ -999,10 +1003,10 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
-  "webapi/webapiGit.ts": 81, // +pull, +log/show/fetch, +blob progress, +explain
+  "webapi/webapiGit.ts": 88, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log)
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 106, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch)
+  "webapi/webapiRepoOps.ts": 107, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run
   "webapi/webapiRepos.ts": 50,
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached

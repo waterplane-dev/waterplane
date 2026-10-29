@@ -3,10 +3,10 @@
  * toggle send. All live-only: a limit decision replayed an hour later is a
  * decision about a situation that has moved on.
  */
-import type { LimitResumeMode } from "@waterplane/shared";
+import { netRetryToggleText, type LimitResumeMode, type NetRetryConfig } from "@waterplane/shared";
 import { core } from "../../sdk";
 import { modeToast, overrideToast } from "./logic";
-import { limitCfg } from "./store";
+import { limitCfg, netRetryCfg } from "./store";
 
 /** `limit.config`: the switch and the hold always; the mode only when sent (an
  *  older host omits it, and the last known mode stands). */
@@ -44,4 +44,14 @@ export function resumeNow(id?: string): void {
   const c = core();
   c.conn.send({ t: "limit.resume", id });
   c.say.toast(id ? "resuming that session…" : "starting the queue…");
+}
+
+/** `netretry.config`: the host's saved switch and whether its environment overrides it. */
+export function onNetRetryConfig(msg: NetRetryConfig): void {
+  netRetryCfg.set({ enabled: msg.enabled === true, ...(msg.envOff ? { envOff: true } : {}) });
+}
+
+/** The Settings switch. Off also cancels every pending retry on the desktop. */
+export function setNetRetry(enabled: boolean, envOff = false): void {
+  core().conn.liveSend({ t: "netretry.set", enabled }, netRetryToggleText(enabled, envOff));
 }

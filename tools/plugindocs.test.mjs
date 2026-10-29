@@ -25,9 +25,9 @@ test("docs/plugins-api.md is what scripts/gen-plugin-docs.mjs makes of plugin.ts
 });
 
 test("the reference names the API version plugin.ts declares", () => {
-  const src = readFileSync(join(ROOT, "packages/shared/src/plugin.ts"), "utf8");
+  const src = readFileSync(join(ROOT, "packages/shared/src/plugin/version.ts"), "utf8");
   const v = /export const PLUGIN_API_VERSION = "([^"]+)"/.exec(src)?.[1];
-  assert.ok(v, "plugin.ts declares PLUGIN_API_VERSION as a string literal");
+  assert.ok(v, "plugin/version.ts declares PLUGIN_API_VERSION as a string literal");
   assert.match(readFileSync(join(ROOT, "docs/plugins-api.md"), "utf8"), new RegExp(`API version: \`${v.replace(/\./g, "\\.")}\``));
 });
 

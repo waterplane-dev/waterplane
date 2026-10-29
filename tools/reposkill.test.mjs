@@ -71,3 +71,9 @@ test("every excuse is still a file the host reads", () => {
     assert.ok(found.has(name), `${name} is excused but the host no longer reads it — drop the excuse`);
   }
 });
+
+test("the skill tells an agent what to do when the default branch takes only PRs (R-git-027)", () => {
+  for (const needle of ["GH013", "wp/<short-slug>", "gh pr create --fill", "never force", "unless they asked in words"]) {
+    assert.ok(SKILL.includes(needle), `the PR-mode paragraph lost "${needle}"`);
+  }
+});

@@ -15,11 +15,12 @@ import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
-import { networkInterfaces, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { bootWait } from "./lib-e2e.mjs";
 import { E, SLUG, WS_PROTOCOL, rootEnv } from "./lib-brand.mjs";
+import { lanIps } from "../packages/host/dist/net.js";
 
 const PORT = 8812;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-root-`));
@@ -71,13 +72,14 @@ function openWs(addr, protocols) {
 }
 const closed = (ws) => new Promise((r) => { if (ws.readyState === WebSocket.CLOSED) return r(true); ws.once("close", () => r(true)); setTimeout(() => r(false), 3000); });
 
+// The host's own list (`net.ts` lanIps), never a second copy of it: the host
+// accepts a Host header only for these, so an address it skips — an OrbStack
+// `bridge100` 192.168.139.x — booted fine and then answered every request with
+// "host not allowed" (2026-10-28).
 function lanAddress() {
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family !== "IPv4" || a.internal) continue;
-      const p = a.address.split(".").map(Number);
-      if (p[0] === 10 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31)) return a.address;
-    }
+  for (const ip of lanIps()) {
+    const p = ip.split(".").map(Number);
+    if (p[0] === 10 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31)) return ip;
   }
   return null;
 }

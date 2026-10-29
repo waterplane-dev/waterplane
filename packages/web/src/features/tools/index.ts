@@ -5,7 +5,7 @@
  * owns and which rules apply.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
+import { keepStores, type FeatureManifest } from "../../sdk";
 import {
   ArchiveToolSheet, FeaturesToolSheet, LocalRtToolSheet, NetHealthToolSheet, RepoColorToolSheet, SecretToolSheet,
   SpeedTestToolSheet, StorageToolSheet,
@@ -22,8 +22,8 @@ export const manifest: FeatureManifest = {
     { id: "storage", persisted: true, render: () => createElement(StorageToolSheet) },
     // A focus is about the tap that opened the sheet, so it goes when the
     // sheet does — however it was left (×, Back, another sheet on top).
-    { id: "nethealth", persisted: false, render: () => createElement(NetHealthToolSheet), onLeave: () => netFocus.set(undefined) },
-    { id: "localrt", persisted: false, render: () => createElement(LocalRtToolSheet), onLeave: () => localRtFocus.set(undefined) },
+    { id: "nethealth", persisted: false, render: () => createElement(NetHealthToolSheet), onLeave: () => netFocus.set(undefined), keep: keepStores(netFocus) },
+    { id: "localrt", persisted: false, render: () => createElement(LocalRtToolSheet), onLeave: () => localRtFocus.set(undefined), keep: keepStores(localRtFocus) },
     { id: "repocolor", persisted: true, render: () => createElement(RepoColorToolSheet) },
     { id: "archive", persisted: true, render: () => createElement(ArchiveToolSheet) },
   ],

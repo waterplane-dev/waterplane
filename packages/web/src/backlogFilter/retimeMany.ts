@@ -24,7 +24,7 @@ import { SHEET } from "../sheetNames.ts";
 export function retimeEligible(it: BacklogItem): boolean {
   if (it.archived) return false;
   if (it.status === "running" || it.status === "done") return false;
-  if (it.status === "failed") return !!it.at;
+  if (it.status === "failed") return !!it.at && !it.calledOff; // the host refuses to re-arm a call-off
   return true;
 }
 /** The toggle that turns the list into a pick list. */

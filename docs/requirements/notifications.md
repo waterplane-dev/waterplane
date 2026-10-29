@@ -89,7 +89,7 @@ Agents in driven repos are told to flag only when the person must act (new crash
 - shipped: 52910130
 
 ### R-notifications-019 · shipped
-While a repo's newest failed build is unhandled, its build button carries a red worded "build failed" chip; a tap on the notification opens that repo's build sheet on the failure. The next successful run of that build, or done, clears it and says so.
+While a repo's newest failed build is unhandled, its build button (the hammer) carries a red worded "failed" chip; a tap on the notification opens that repo's build sheet on the failure. The next successful run of that build, or done, clears it and says so.
 - asked: 2026-10-25
 - shipped: 52910130
 ### R-notifications-020 · shipped

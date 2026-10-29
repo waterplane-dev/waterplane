@@ -15,12 +15,13 @@ import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
-import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
+import { blockedReasonText, netRetryToggleText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
 import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine } from "../../backendCaps";
 import { ago } from "../../format";
 import { LoginBar } from "../../LoginBar";
+import { NetRetryBar } from "./NetRetryBar";
 import { ShellLinksBar } from "../../ShellLinksBar";
 import { hasShellBar } from "../../shellLinks";
 import { ZoomPair } from "../../ZoomPair";
@@ -80,7 +81,7 @@ const ICON = 16;
 export interface TermAreaProps {
   active: SessionInfo;
   pending: boolean;
-  conn: Pick<Connection, "status" | "connVisible" | "send" | "info" | "liveAsk">;
+  conn: Pick<Connection, "status" | "connVisible" | "send" | "info" | "liveAsk" | "liveSend">;
   term: Pick<TermFeed, "termRef" | "geomRef" | "buffers" | "lastPtyAt" | "ptyTail" | "exitedRef" | "staleAt" | "writeSeq"
     | "termNonce" | "readMode" | "setView" | "readerCmd" | "outlineJump" | "transcriptNonce">;
   q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput" | "blocked">;
@@ -740,6 +741,18 @@ export function TermArea(p: TermAreaProps): ReactNode {
           onOpen={openLink}
           onCopy={(u) => void copyLink(u)}
           onPasteCode={() => void pasteLoginCode(active.id)}
+        />
+      )}
+
+      {/* The desktop retrying a turn the CLI gave up on a network error
+          (R-connection-024): the line and its Cancel, above the prompt bar. */}
+      {active.netRetry && active.running && (
+        <NetRetryBar
+          retry={active.netRetry}
+          onCancel={() => conn.liveSend({ t: "session.netRetryCancel", id: active.id },
+            active.netRetry!.state === "gaveup" ? "hidden" : "retry cancelled — nothing more is typed")}
+          onTurnOff={() => conn.liveSend({ t: "netretry.set", enabled: false },
+            `${netRetryToggleText(false)} — Settings › Sessions turns it back on`)}
         />
       )}
 

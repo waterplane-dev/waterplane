@@ -139,7 +139,7 @@ test("R9: a non-number offset/limit is the default page, never an empty one", as
 });
 
 test("R7: agents.list() is handed a REALPATHED cwd, like every other slot", async () => {
-  const { agentsSourceSession } = await import("../dist/sessions/turn.js");
+  const { agentsSourceSession } = await import("../dist/sessions/agentpoll.js");
   const { mkdtempSync, realpathSync, symlinkSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { tmpdir } = await import("node:os");

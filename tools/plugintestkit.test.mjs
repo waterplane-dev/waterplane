@@ -1,17 +1,17 @@
 // Guard: the plugin testkit's fake implements EVERY member of `HostPluginApi`, and adds none the
 // host lacks. A new API member fails this until `packages/plugin-testkit/fakeapi.mjs` has it (and
-// the plugins' tests are then run against the new contract). Reads plugin.ts; imports the kit,
+// the plugins' tests are then run against the new contract). Reads plugin/api.ts; imports the kit,
 // which needs shared/dist (`npm run build:shared`), so this runs in the push tier.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const src = readFileSync(new URL("../packages/shared/src/plugin.ts", import.meta.url), "utf8");
+const src = readFileSync(new URL("../packages/shared/src/plugin/api.ts", import.meta.url), "utf8");
 
 /** The member names of `export interface HostPluginApi { … }`: statements at brace depth 0. */
 export function apiMembers(text) {
   const at = text.indexOf("export interface HostPluginApi {");
-  assert.ok(at >= 0, "HostPluginApi not found in plugin.ts");
+  assert.ok(at >= 0, "HostPluginApi not found in plugin/api.ts");
   let i = text.indexOf("{", at) + 1, depth = 1;
   const start = i;
   for (; i < text.length && depth > 0; i++) { if (text[i] === "{") depth++; else if (text[i] === "}") depth--; }

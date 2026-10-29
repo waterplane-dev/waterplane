@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync, statSync } from "node:fs";
 import { keepLastLines } from "../jsonstore.js";
 import { basename, join } from "node:path";
-import type { DetectedPrompt, FollowUp, HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared";
+import type { DetectedPrompt, FollowUp, HistoryEntry, HostMessage, SessionInfo, TurnEndNet } from "@waterplane/shared";
 import { AGENT_WINDOW_WARN_KEY, followUpPushText } from "@waterplane/shared";
 import { createAgentWatch } from "../agentwatch.js";
 import { isMarkdownPath, readsInline } from "../files.js";
@@ -53,7 +53,14 @@ export function wireSessionEvents(ctx: ServerCtx) {
   // maps; this is the commit that deletes one.
   // …and a HARD session budget re-owes its Esc for the next turn while over
   // (`sessions/budgetwatch.ts`; sent by the judge that sees it working).
-  ctx.sessions.on("turnEnded", (id: string, stopCount: number) => { ctx.intents.onTurnEnded(id, stopCount); ctx.sessions.budgetTurnEnded(id); });
+  // A turn the CLI gave up on a transient API error carries `net`
+  // (`sessions/apiretry.ts`): the intents do not complete off it. The budget
+  // still counts it — the retry's `continue` is a turn that spends, and a HARD
+  // budget over owes it its Esc exactly as any other.
+  ctx.sessions.on("turnEnded", (id: string, stopCount: number, net?: TurnEndNet) => { ctx.intents.onTurnEnded(id, stopCount, net); ctx.sessions.budgetTurnEnded(id); });
+  // The late answer to a `checking` turn end (or the halt stopping a retry):
+  // the intents only — the budget already counted that turn.
+  ctx.sessions.on("netTurnSettled", (id: string, stopCount: number, net: TurnEndNet | null) => ctx.intents.onTurnEnded(id, stopCount, net ?? undefined));
   ctx.sessions.on("exit", (id: string) => ctx.intents.onSessionExit(id));
 
   // The CLI's own on-screen "Update available!" nag → surface the update button

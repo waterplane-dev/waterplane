@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { parseFocus, parseHash, routeFromPop, routeKey, routeStep, routeToUrl, type Overlay } from "../../routing.ts";
-import { popStepsTo, pushBackDepth, routeStack } from "../../backStep.ts";
+import { forgetKept, keepCovered, popStepsTo, pushBackDepth, restoreKept, routeStack } from "../../backStep.ts";
 import { defineShellGlobal } from "../../shellBridge.ts";
 import { rememberRoute } from "../../resumeRoute.ts";
 import { viewerHandles } from "../../docKind.ts";
@@ -151,9 +151,16 @@ export function useRoute() {
       // commit (`backStep.ts`) reads the depth in a microtask and must see
       // that this unwind already took its entry with it.
       routeStack.depth += step.delta;
+      // Landing on the very screen the tap named is a fresh open — its own
+      // focus is already set. Landing on one BELOW it (a close, a leave) is a
+      // Back, and the pop restores what that sheet showed (`restoreKept`).
+      if (routeStack.keys[routeStack.depth] === key) forgetKept(routeStack.depth);
       history.go(step.delta);
       return;
     }
+    // The sheet underneath is being covered, not closed: keep its cut for the
+    // Back that returns to it, before its `onLeave` (App's effect) drops it.
+    keepCovered(routeStack.depth);
     const url = routeToUrl(activeId, overlay, focusRepo);
     const depth = routeStack.depth + 1;
     const state = { navRoute: key, navDepth: depth };
@@ -199,6 +206,8 @@ export function useRoute() {
         routeStack.keys.length = r.depth + 1;
       }
       pushBackDepth();
+      // Before the sheet renders, so it opens on its cut rather than flashing the whole list.
+      if (!r.adopt) restoreKept(r.depth, r.key);
       setActiveId(r.activeId); setOverlay(r.overlay); setFocusRepo(parseFocus());
     };
     window.addEventListener("popstate", onPop);

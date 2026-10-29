@@ -12,7 +12,7 @@
  * demo-mode-plan.md, "WP2b: what landed". Wire types are reached through
  * `HostMessage` (`Frame<"…">`) so a wire change shows up here as a tsc error.
  */
-import type { DetectedPrompt, HostMessage, SessionInfo, TranscriptTurn } from "@waterplane/shared";
+import type { DetectedPrompt, HostMessage, NetRetryConfig, SessionInfo, TranscriptTurn } from "@waterplane/shared";
 import type { DemoState } from "./snapshot.ts";
 
 /** The `HostMessage` of type `T`. */
@@ -165,6 +165,8 @@ export interface DemoModel {
   };
   /** The host-wide auto-continue switch and resume mode (`limit.config`); absent = switched off. */
   limitConfig?: { enabled: boolean; mode?: Frame<"limit.config">["mode"] };
+  /** The network-error retry switch (`netretry.config`); absent = on, the host's default. */
+  netRetry?: NetRetryConfig;
   /** `/api/storage/*` answers; absent = an empty, honest report. */
   storage?: { transport?: unknown; host?: unknown };
   /** What a submitted prompt gets back. */

@@ -14,6 +14,7 @@ import { deviceToken, wsProtocols } from "./deviceToken";
 import { LS } from "./storage";
 import { demoTransport } from "./demo/transport";
 import { HeldFrames } from "./heldFrames";
+import { dialTimeoutMs } from "./dialFuse";
 import { bgFresh, parksWhenHidden } from "./core/term/bgFresh";
 
 /** How a socket is made: the browser's `WebSocket`, or the demo's in-memory one. */
@@ -82,6 +83,10 @@ export class HostConnection {
   private early = new HeldFrames<HostMessage>();
   private queue: ClientMessage[] = [];
   private reconnectTimer: number | null = null;
+  /** The dial in flight's deadline (`dialFuse.ts`): a handshake that never completes
+   *  fires no close, so without it the 1 s retry never runs. */
+  private dialTimer: number | null = null;
+  private dialsCut = 0; // consecutive dials the fuse gave up; reset on open
   private heartbeatTimer: number | null = null;
   private awaitingPong = false; // a ping is outstanding (no pong yet)
   /** When the outstanding ping went out, so the pong can be priced. The socket
@@ -171,6 +176,7 @@ export class HostConnection {
       // A resume fires several wake events back-to-back (visibilitychange,
       // focus, pageshow). If one of them (or the 1s retry) already has a
       // connect in flight, let it finish — churning it restarts the handshake.
+      // One that never finishes is bounded by its dial fuse (`dialFuse.ts`).
       if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
       this.forceReconnect();
       return;
@@ -407,6 +413,7 @@ export class HostConnection {
 
   /** Drop any pending timer + stale socket and open a fresh one immediately. */
   private forceReconnect(): void {
+    this.clearDialFuse();
     if (this.reconnectTimer != null) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -443,12 +450,15 @@ export class HostConnection {
       return;
     }
     this.ws = ws;
+    this.armDialFuse(ws);
     // Plugin streams arrive as binary frames on this same socket (`shared/stream.ts`; never a
     // second one). An ArrayBuffer is synchronous to read, where a Blob would need a promise per
     // frame and could reorder them. Text frames are untouched by this.
     try { ws.binaryType = "arraybuffer"; } catch { /* a socket that cannot say — its binary frames are dropped below */ }
 
     ws.onopen = () => {
+      this.clearDialFuse();
+      this.dialsCut = 0;
       this.status = "open";
       this.clearWatchdog();
       this.verifyPending = false;
@@ -511,6 +521,7 @@ export class HostConnection {
       this.deliver(msg);
     };
     ws.onclose = () => {
+      this.clearDialFuse();
       this.status = "closed";
       // A probe outstanding over a socket that just died has its answer: none.
       this.settleProbe(null);
@@ -519,6 +530,30 @@ export class HostConnection {
       this.scheduleReconnect();
     };
     ws.onerror = () => ws.close();
+  }
+
+  /** Give up `ws` if it is still CONNECTING when the fuse runs out, and dial again
+   *  through the ordinary 1 s retry. Detached first, so a late open or close from
+   *  the abandoned handshake cannot touch the socket that replaces it. Nothing is
+   *  re-sent from here: frames queued while it was not open stay in `this.queue`
+   *  for the next `onopen`, and the outbox retries with the same ackId. */
+  private armDialFuse(ws: WebSocket): void {
+    this.clearDialFuse();
+    this.dialTimer = window.setTimeout(() => {
+      this.dialTimer = null;
+      if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
+      this.dialsCut++;
+      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      try { ws.close(); } catch { /* never opened */ }
+      this.ws = null;
+      this.status = "closed";
+      this.emitStatus();
+      this.scheduleReconnect();
+    }, dialTimeoutMs(this.dialsCut));
+  }
+
+  private clearDialFuse(): void {
+    if (this.dialTimer != null) { window.clearTimeout(this.dialTimer); this.dialTimer = null; }
   }
 
   private scheduleReconnect(): void {
@@ -553,7 +588,7 @@ export class HostConnection {
 
   private fanOut(msg: HostMessage): void {
     for (const l of this.listeners) {
-      try { l(msg); } catch (e) { console.error(`${logTag} socket listener failed on ${msg.t}`, e); }
+      try { l(msg); } catch (e) { console.error("%s socket listener failed on %s", logTag, String(msg.t), e); }
     }
   }
 

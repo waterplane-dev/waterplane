@@ -44,7 +44,7 @@ import {
 } from "./exposure/parse.mjs";
 import * as src from "./exposure/sources.mjs";
 import { collectPlayVitals } from "./exposure/play.mjs";
-import { parseTargets, targetRunArgv } from "./exposure/targets.mjs";
+import { parseTargets, targetRunArgv, unsetTargetVars, unsetVarsSentence } from "./exposure/targets.mjs";
 
 const USAGE = `usage: exposure.mjs run --target <name> [flags] | targets | scorecard --target <name>
        exposure.mjs run <repoDir> [--name n] [--gh owner/repo] [--npm pkg] [--vscode publisher.ext --vscode-manifest path]
@@ -420,7 +420,10 @@ function cmdScorecard(argv) {
 async function cmdRun(argv) {
   if (argv.includes("--target")) {
     const { t, rest } = pickTarget(argv);
-    argv = targetRunArgv(t, { HOME: homedir(), SITE: process.env.EXPOSURE_SITE ?? "", NPM_2FA_CONFIRMED: process.env.EXPOSURE_NPM_2FA_CONFIRMED ?? "" }, rest);
+    const vars = { HOME: homedir(), SITE: process.env.EXPOSURE_SITE ?? "", NPM_2FA_CONFIRMED: process.env.EXPOSURE_NPM_2FA_CONFIRMED ?? "" };
+    const unset = unsetTargetVars(t, vars);
+    if (unset.length) die(unsetVarsSentence(t, unset), 64);
+    argv = targetRunArgv(t, vars, rest);
   }
   const { pos, o } = parseArgs(argv, ["--name", "--gh", "--npm", "--vscode", "--vscode-manifest", "--release-repo", "--apk-cert", "--domain", "--npm-2fa-confirmed", "--play", "--play-key-missing", "--era-check", "--only"], ["--json", "--no-write", "--verbose"], ["--privacy-url"]);
   if (pos.length !== 1) die(USAGE);

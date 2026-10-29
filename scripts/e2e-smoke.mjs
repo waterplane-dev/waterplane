@@ -10,7 +10,8 @@ import { WebSocket } from "ws";
 import { bootWait } from "./lib-e2e.mjs";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 
-const PORT = 8791;
+// Moved off its old port: the dictation daemon (dictate-private, launchd de.hoh.dictated) holds that one since 2026-10-27.
+const PORT = 8793;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-smoke-`));
 const env = { ...process.env, [E.PREFLIGHT]: "0", [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CLAUDE_BIN]: process.cwd() + "/scripts/claude-stub.sh" };
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });

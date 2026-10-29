@@ -56,6 +56,18 @@ export const ORIGIN_FANOUT_FOLLOWUP = "fanout:fu:";
 export const ORIGIN_AGENT = "agent";
 /** Did an agent post this? Exact, never a prefix — `origin` is capped at 40. */
 export const isAgentPosted = (i: { origin?: string }): boolean => i.origin === ORIGIN_AGENT;
+/**
+ * **The reason an agent's DELETE writes** (`agentintents.ts`) — and the one way
+ * the backlog tells a row the agent WITHDREW from one that failed. An agent that
+ * reposts a corrected draft calls the old one off seconds later, before it ever
+ * ran; drawn as `failed` (the backlog's only terminal word but `done`) it read as
+ * a broken run beside the one that actually ran, and offered `re-fire` on it.
+ */
+export const AGENT_WITHDREW_DETAIL = "called off by the agent that posted it";
+/** Did the agent that posted this row call it off itself? Exact on all three:
+ *  an agent's row the PERSON called off is theirs to read as they like. */
+export const isAgentWithdrawn = (i: { origin?: string; state?: string; result?: { detail?: string } }): boolean =>
+  i.origin === ORIGIN_AGENT && i.state === "canceled" && i.result?.detail === AGENT_WITHDREW_DETAIL;
 /** A job a PEER desktop posted here: `origin` is `peer:<name>` (the name this
  *  host lists the peer by; `origin` is capped at 40). Written by the host on the
  *  token-gated peer route and nowhere else. */

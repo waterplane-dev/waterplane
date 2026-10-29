@@ -430,10 +430,10 @@ export class UsageSourceRegistry {
 /** The daemon's registry, as `main.ts` builds it, with ONE `usage.status` publisher (`publish`)
  *  that claude's checker callback and every source's change both call — so two publishes in one
  *  tick both carry the whole list, and the phone's last write wins. */
-export function createUsageSources(root: string, claude: () => UsageInfo, broadcast: (msg: HostMessage) => void): UsageSourceRegistry & { publish(): void } {
+export function createUsageSources(root: string, claude: () => UsageInfo, broadcast: (msg: HostMessage) => void, onReading?: (r: UsageReading) => void): UsageSourceRegistry & { publish(): void } {
   const publish = () => broadcast({ t: "usage.status", usage: claude(), readings: reg.readings() });
   const log = (m: string) => console.log(`${logTag} ${m}`);
-  const reg = new UsageSourceRegistry({ claude, onUpdate: () => publish(), openLog: sourceLogOpener(root), ttlMs: USAGE_POLL_MS, log });
+  const reg = new UsageSourceRegistry({ claude, onUpdate: (_s, r) => { publish(); if (r) { try { onReading?.(r); } catch { /* a watcher never breaks the publisher */ } } }, openLog: sourceLogOpener(root), ttlMs: USAGE_POLL_MS, log });
   // Every backend's own `sources.usage` (contract 2.0) beside `api.usageProbe`'s: the same
   // registry, one probe per backend, following the backend list.
   const held = new Map<string, { usage: unknown; off: () => void }>();

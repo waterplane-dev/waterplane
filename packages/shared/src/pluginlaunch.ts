@@ -105,6 +105,13 @@ export interface BackendCapsV2 {
    * relaunch) whose mode falls outside, in words at create.
    */
   launchModes?: readonly PermissionMode[];
+  /**
+   * 2.3: the backend's own spend unit as a person reads it (`"AI credits"`), when its bill is not
+   * tokens or dollars — the unit a `native` session budget is capped in. It must be the exact
+   * `unit` its `tokens.session` reading states in `native` (a different name reads "not stated",
+   * never compared). Trimmed, 1–32 chars; absent = no native unit.
+   */
+  spendUnit?: string;
   /** It accepts a remote-control flag. */
   remoteControl: boolean;
 }

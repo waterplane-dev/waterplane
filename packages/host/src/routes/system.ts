@@ -5,6 +5,7 @@
  */
 import { PLUGIN_ACK_RE, PROTOCOL_VERSION, haltReceiptWords, logTag, roleAfterHello } from "@waterplane/shared";
 import { haltState, isHalted, setHalted, stopRuns } from "../halt.js";
+import { netRetryConfig, setNetRetry } from "../netretrycfg.js";
 import type { HostMessage, PeerKind, PluginCaller } from "@waterplane/shared";
 import type { WebSocket } from "ws";
 import { cliHealth } from "../clihealth.js";
@@ -140,6 +141,7 @@ const onHello: Route<"hello"> = (a) => {
     a.c.send(a.ws, { t: "billing.status", ...a.c.billing.status() }); // unknown too: it resets a face a phone kept from another host or an earlier answer
     a.c.send(a.ws, { t: "halt.state", halt: haltState() });
     a.c.send(a.ws, { t: "limit.config", enabled: a.c.sessions.getAutoContinue(), ...a.c.sessions.resumeState() });
+    a.c.send(a.ws, { t: "netretry.config", ...netRetryConfig() });
     a.c.send(a.ws, { t: "fanout.list", runs: a.c.fanout.list() });
     a.c.send(a.ws, { t: "pull.list", items: a.c.autopull.list() });
     a.c.send(a.ws, a.c.scheduleSnapshot());
@@ -487,6 +489,17 @@ const onBudgetSet: Route<"budget.set"> = (a) => {
 };
 
 /**
+ * The network-error retry switch (`netretrycfg.ts`, R-connection-025). Off
+ * cancels every pending retry through the slice's own cancel path, which also
+ * clears each session's bar; broadcast, as the auto-continue switch is.
+ */
+const onNetRetrySet: Route<"netretry.set"> = (a) => {
+    const cfg = setNetRetry(a.msg.enabled === true);
+    if (!cfg.enabled) for (const s of a.c.sessions.list()) if (s.netRetry) a.c.sessions.netRetryCancel(s.id);
+    a.c.broadcast({ t: "netretry.config", ...cfg });
+};
+
+/**
  * The emergency halt (`halt.ts`). The latch is set BEFORE the kill, so nothing
  * that wakes during the second of grace — the intent tick, a resurrect timer, a
  * sidecar event — can start anything; then every live headless run and every
@@ -569,6 +582,7 @@ export const systemRoutes: RouteTable = {
   "localrt.evict": onLocalRtEvict,
   "backends.recheck": onBackendsRecheck,
   "budget.set": onBudgetSet,
+  "netretry.set": onNetRetrySet,
   "billing.get": onBillingGet,
   "billing.set": onBillingSet,
 };

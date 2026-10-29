@@ -68,7 +68,9 @@ rather than chasing the sketch's guess.
 | `wall.ts` | `WallSlice`: auto-continue config, `checkLimit`, the continue ladder | 494 |
 | `resume.ts` | `ResumeSlice`: the resume queue, resurrection, `revivedSessionFor` | 548 |
 | `turn.ts` | the turn flag, the hook lifecycle, asking + agents, the submits ring, the turn queries | 694 |
-| `boxes.ts` | the choice box: when to look, reading, publishing, sign-in link, the two answer walks | 618 |
+| `boxread.ts` | the choice box, read side: when to look, reading, publishing, sign-in link | 620 |
+| `boxes.ts` | the choice box, answer side: `answerBox` and the two answer walks | 290 |
+| `boxkit.ts` (flat leaf, not a slice) | the tail/pause/safe helpers both box slices use, because a slice reaches a slice only through `core` | 40 |
 | `drive.ts` | the public verbs: `input`/`write`, `waitReady`/`autoFireBlocker`, `resize`, `kill`/`detach`/`remove`, the screen readers | 480 |
 | `record.ts` | prompt history, transcript, search, `nameTab`/`nameNow` (`host-spenders`), the history/tab-name files, `lastTurnOf` | 528 |
 

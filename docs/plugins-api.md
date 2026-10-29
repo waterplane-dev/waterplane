@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.2.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.3.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -47,7 +47,6 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PLUGIN_API_VERSION`](#plugin_api_version) — const
 - [`PLUGIN_API_V2_DOC`](#plugin_api_v2_doc) — const
 - [`V1_LAST_MINOR`](#v1_last_minor) — const
-- [`PluginCaller`](#plugincaller) — interface
 - [`PluginApiVersion`](#pluginapiversion) — interface
 - [`parsePluginApiVersion`](#parsepluginapiversion) — function
 - [`pluginApiProblem`](#pluginapiproblem) — function
@@ -69,6 +68,10 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginManifest`](#pluginmanifest) — interface
 - [`PluginView`](#pluginview) — interface
 - [`PluginStatus`](#pluginstatus) — interface
+- [`manifestProblems`](#manifestproblems) — function
+- [`cleanPluginValue`](#cleanpluginvalue) — function
+- [`pluginValues`](#pluginvalues) — function
+- [`PluginCaller`](#plugincaller) — interface
 - [`AnswerSuggestion`](#answersuggestion) — interface
 - [`PluginBadge`](#pluginbadge) — interface
 - [`DecisionLogEntry`](#decisionlogentry) — interface
@@ -90,6 +93,16 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginStoreLook`](#pluginstorelook) — interface
 - [`PluginStoreContext`](#pluginstorecontext) — interface
 - [`PluginStoreReader`](#pluginstorereader) — interface
+- [`PluginDoctorCheck`](#plugindoctorcheck) — interface
+- [`PLUGIN_HOOK_HOLD_DEFAULT_MS`](#plugin_hook_hold_default_ms) — const
+- [`PLUGIN_HOOK_HOLD_MAX_MS`](#plugin_hook_hold_max_ms) — const
+- [`PluginHookHold`](#pluginhookhold) — interface
+- [`PluginRepoScope`](#pluginreposcope) — interface
+- [`SetupSubject`](#setupsubject) — interface
+- [`SetupFixOutcome`](#setupfixoutcome) — interface
+- [`HandToAgentResult`](#handtoagentresult) — type
+- [`HostPluginModule`](#hostpluginmodule) — interface
+- [`handleAll`](#handleall) — function
 - [`PLUGIN_THERMAL_TIMEOUT_MS`](#plugin_thermal_timeout_ms) — const
 - [`PluginThermalReading`](#pluginthermalreading) — type
 - [`PluginThermalReader`](#pluginthermalreader) — interface
@@ -104,19 +117,6 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`FACT_NAMES`](#fact_names) — const
 - [`BackendFacts`](#backendfacts) — type
 - [`BackendCapsV2`](#backendcapsv2) — interface
-- [`PluginDoctorCheck`](#plugindoctorcheck) — interface
-- [`PLUGIN_HOOK_HOLD_DEFAULT_MS`](#plugin_hook_hold_default_ms) — const
-- [`PLUGIN_HOOK_HOLD_MAX_MS`](#plugin_hook_hold_max_ms) — const
-- [`PluginHookHold`](#pluginhookhold) — interface
-- [`PluginRepoScope`](#pluginreposcope) — interface
-- [`SetupSubject`](#setupsubject) — interface
-- [`SetupFixOutcome`](#setupfixoutcome) — interface
-- [`HandToAgentResult`](#handtoagentresult) — type
-- [`HostPluginModule`](#hostpluginmodule) — interface
-- [`handleAll`](#handleall) — function
-- [`manifestProblems`](#manifestproblems) — function
-- [`cleanPluginValue`](#cleanpluginvalue) — function
-- [`pluginValues`](#pluginvalues) — function
 
 ## PLUGIN_API_VERSION
 
@@ -159,9 +159,12 @@ so a 1.x plugin that registers NO backend (a reader, a panel, a usage probe) sti
 `ended(at)` waits ≤1.5 s for a `sources.context` sample stamped `>= at` — no end-gate hold needed.
 **2.2** (additive, `docs/plans/backend-parity-v3.md` §7): facts + slots `mode`/`commands`, Tab and
 Shift+Tab in `SourceKeys`, context `window` + `compactions`, `tokens.session`. 2.1 plugins load as-is.
+**2.3** (additive, `docs/analysis/backend-parity-v3/c2.md`): `caps.spendUnit` (a native session-budget
+unit) and `BackendTokensDoc.hourly` (a ledger cut to a period or week window, beside claude's
+figure). 2.2 plugins load as-is; an older host ignores both.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.2.0";
+export const PLUGIN_API_VERSION = "2.3.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -183,23 +186,6 @@ The last 1.x minor: a 1.0–1.8 plugin with no `backends` in its manifest loads 
 ```ts
 export const V1_LAST_MINOR = 8;
 ```
-
-## PluginCaller
-
-*interface*
-
-Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
- device's id/name (null: no token, or an in-process call). Never a proof beyond pairing.
-
-```ts
-export interface PluginCaller { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `kind` | `kind: PeerKind` |  |
-| `deviceId` | `deviceId: string \| null` |  |
-| `deviceName` | `deviceName: string \| null` |  |
 
 ## PluginApiVersion
 
@@ -511,6 +497,53 @@ export interface PluginStatus { … }
 | `tone` | `tone: "ok" \| "warn" \| "bad"` |  |
 | `text` | `text: string` |  |
 
+## manifestProblems
+
+*function*
+
+Validate a parsed manifest: problems in words (empty = valid). Unknown fields are allowed — a newer manifest on an older daemon loads with what it understands.
+
+```ts
+export function manifestProblems(m: unknown): string[];
+```
+
+## cleanPluginValue
+
+*function*
+
+A value as the manifest allows it, or undefined (refused, never repaired).
+
+```ts
+export function cleanPluginValue(f: PluginField, v: unknown): PluginValue | undefined;
+```
+
+## pluginValues
+
+*function*
+
+The settings with defaults filled in.
+
+```ts
+export function pluginValues(m: PluginManifest, stored: Record<string, unknown>): Record<string, PluginValue>;
+```
+
+## PluginCaller
+
+*interface*
+
+Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
+ device's id/name (null: no token, or an in-process call). Never a proof beyond pairing.
+
+```ts
+export interface PluginCaller { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `kind` | `kind: PeerKind` |  |
+| `deviceId` | `deviceId: string \| null` |  |
+| `deviceName` | `deviceName: string \| null` |  |
+
 ## AnswerSuggestion
 
 *interface*
@@ -680,7 +713,7 @@ export interface HostPluginApi { … }
 | `meter` | `meter(call: { service: string; model: string; inTok: number; outTok: number; }): void` | Record a paid model call, so it shows in the phone's usage numbers. |
 | `notify` | `notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean; tag?: string; }): void` | `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. `tag` (optional, no version bump): a stable key, a later notification with the same tag replaces the earlier one in the OS tray; the host namespaces it per plugin. |
 | `claudeUsage` | `claudeUsage(): { sessionPct: number \| null; weeklyPct: number \| null; } \| null` | The Claude plan usage (5-hour / weekly %), or null when unknown. |
-| `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (`GET /api/repos`) or absolute worktree path (realpath); null when unknown or outside the root. |
+| `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (the ids `GET /api/repos` hands out), or by its absolute worktree path (realpath-compared against the repos the host lists — a CLI names its repo by path); null when unknown or outside the root. |
 | `setupCheck` | `setupCheck(fn: (repo: SetupSubject) => ComplianceCheck \| null): () => void` | Contribute a row to every repo's setup checklist. Called on each check of each repo, so keep it cheap; null = no row for this repo. A throw drops the row and becomes the plugin's status line. Returns an unregister. |
 | `setupFix` | `setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome): () => void` | Handle the fix a contributed row names in `fix`. Ids the core owns (`gitignore`, `claude-md`, …) or another plugin already took are refused: the call throws, saying which. Returns an unregister. |
 | `handle` | `handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when it presented a paired device's token, that device's id and name. A handler that ignores it is unchanged. A throw is the caller's `{ ok:false, error }` and the plugin's status line. Returns an unregister. |
@@ -695,7 +728,7 @@ export interface HostPluginApi { … }
 | `onHook` | `onHook(fn: (payload: unknown, hold: PluginHookHold) => unknown \| Promise<unknown>, opts?: { maxHoldMs?: number; }): () => void` | Receive the posts to `hookSink()`. The handler's return value (JSON) is the HTTP response body; `undefined` answers `{}`. Return a Promise to HOLD the response (a CLI that waits on its hook for a permission answer): the core answers `{}` itself after `maxHoldMs` (default `PLUGIN_HOOK_HOLD_DEFAULT_MS`, at most `PLUGIN_HOOK_HOLD_MAX_MS`) and calls `hold.onExpired` — so keep it BELOW the CLI's own hook timeout, or the CLI kills the hook first. One handler per plugin; a second replaces the first. A throw answers `{}` and becomes the status line. |
 | `route` | `route(method: PluginHttpMethod, pattern: string, fn: (req: PluginHttpRequest) => PluginHttpReply \| Promise<PluginHttpReply>): () => void` | Serve an HTTP route (since 1.2) at `/api/plugin/<id>/<pattern>`. It sits behind the SAME origin/Host gate and token gate as every core `/api` route — never loopback-only, never exempt. `pattern` is `/`-separated: literal segments, `:name` (exactly one segment, handed over RAW in `params`), and a trailing `*` (what follows, in `rest`). JSON in and out: the body is parsed (`{}` when there is none or it is not JSON; past `PLUGIN_ROUTE_BODY_MAX` the request is a 413), and the reply's `body` goes back as JSON with its `status` (default 200). A GET must not change anything — the core's rule for every `/api` GET. THROWS a sentence for a method outside `PluginHttpMethod`, a malformed pattern, one whose first segment is `hook` (the sink's), or one this plugin already serves for that method. A throw in the handler answers 500 `{ ok:false, error }` and becomes the status line. Unregistered with the plugin; the returned function earlier. |
 | `stream` | `stream(name: string, handlers: PluginStreamHandlers): () => void` | Since 1.4. Serve live stream `name` to the sockets that open it: binary frames on the one socket, never durable or retried (`shared/stream.ts` has the whole contract). THROWS on a bad name or one already served. The returned function ends every open subscription. |
-| `offerFile` | `offerFile(file: string, opts: import("./pluginfile.js").PluginFileOfferOpts): import("./pluginfile.js").PluginFileOffer` | Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). |
+| `offerFile` | `offerFile(file: string, opts: import("../pluginfile.js").PluginFileOfferOpts): import("../pluginfile.js").PluginFileOffer` | Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). |
 
 ## PluginHttpMethod
 
@@ -936,6 +969,160 @@ export interface PluginStoreReader { … }
 | `discover` | `discover(look: PluginStoreLook): { id: string \| null; carry: unknown; }` | One pass of finding WHICH conversation a session is in, for a backend whose launch does not know the id. `id` only when exactly one candidate answers — a guess points the reader at somebody else's conversation. `carry` is handed back on the next pass. |
 | `ledger` | `ledger?(maxAgeMs: number \| undefined): Promise<unknown>` | The backend's own ledger, served verbatim at `GET /api/tokenstats/<backendId>` for a backend whose `facts.transcript` names this reader and which has no `sources.tokens`. JSON; a store that cannot be read answers `{ available: false, reason }`, never throws. |
 
+## PluginDoctorCheck
+
+*interface*
+
+One line of the preflight report a builtin's `doctor` contributes.
+
+```ts
+export interface PluginDoctorCheck { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `id` | `id: string` | Short stable name, e.g. `opencode-binary`. |
+| `status` | `status: "ok" \| "warn" \| "fail"` |  |
+| `detail` | `detail: string` |  |
+| `fix` | `fix?: string` |  |
+
+## PLUGIN_HOOK_HOLD_DEFAULT_MS
+
+*const*
+
+How long the core holds a hook's HTTP response for a pending answer by default, and at most.
+
+```ts
+export const PLUGIN_HOOK_HOLD_DEFAULT_MS = 8000;
+```
+
+## PLUGIN_HOOK_HOLD_MAX_MS
+
+*const*
+
+```ts
+export const PLUGIN_HOOK_HOLD_MAX_MS = 60000;
+```
+
+## PluginHookHold
+
+*interface*
+
+What an `onHook` handler is handed beside the payload.
+
+```ts
+export interface PluginHookHold { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `maxHoldMs` | `readonly maxHoldMs: number` | How long the core holds this response before answering `{}` itself. |
+| `onExpired` | `onExpired(fn: () => void): void` | Called once when the core answered `{}` instead of the handler: the hold ran out, or the plugin was switched off. The CLI then goes its own way. |
+
+## PluginRepoScope
+
+*interface*
+
+One repo, as a plugin may look at it (`api.repo(repoId)`): its files and git
+facts through the core's containment guard — a path that leaves the worktree,
+or names a secret (`.env*`), reads as null, never as an error.
+
+```ts
+export interface PluginRepoScope { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `id` | `readonly id: string` |  |
+| `name` | `readonly name: string` |  |
+| `branch` | `readonly branch: string` |  |
+| `isPrimary` | `readonly isPrimary: boolean` |  |
+| `worktree` | `readonly worktree: string` | Absolute path of the worktree. |
+| `readFile` | `readFile(relPath: string, maxBytes?: number): string \| null` | A text file inside the worktree; null if absent, outside, binary or a secret. |
+| `listDir` | `listDir(relPath?: string): { name: string; dir: boolean; }[] \| null` | One directory's entries (not recursive); null if absent or outside. Secrets are left out. |
+| `git` | `git(): { branch: string; head: string \| null; changed: number; } \| null` | HEAD and the working tree, read now — synchronous subprocesses, not from a setup check. `head` is null in a repo with no commit. |
+
+## SetupSubject
+
+*interface*
+
+What a contributed setup check or fix is handed: the worktree it is about.
+
+```ts
+export interface SetupSubject { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `worktree` | `worktree: string` | Absolute path of the worktree being checked. |
+
+## SetupFixOutcome
+
+*interface*
+
+A contributed fix's outcome: `applied` says whether it changed anything, `note` says what, in words.
+
+```ts
+export interface SetupFixOutcome { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `applied` | `applied: boolean` |  |
+| `note` | `note: string` |  |
+
+## HandToAgentResult
+
+*type*
+
+`api.handToAgent`'s answer: the intent id the prompt now waits under, or why not.
+
+```ts
+export type HandToAgentResult = {
+    ok: true;
+    intentId: string;
+    existing: boolean;
+    state?: string;
+} | {
+    ok: false;
+    reason: string;
+};
+```
+
+## HostPluginModule
+
+*interface*
+
+A plugin module's shape. `deactivate` runs on disable and on shutdown
+(started, never awaited there). `shutdown` runs ONLY as the daemon exits, after
+every store is flushed, SYNCHRONOUSLY and whether or not the plugin is still
+switched on — the place to kill child processes it owns (a switched-off
+plugin's running sessions keep their children until then).
+
+```ts
+export interface HostPluginModule { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `activate` | `activate(api: HostPluginApi): void \| Promise<void>` |  |
+| `deactivate` | `deactivate?(): void \| Promise<void>` |  |
+| `shutdown` | `shutdown?(): void` |  |
+| `doctor` | `doctor?(req: { usedBackends: readonly string[]; }): Promise<PluginDoctorCheck[]>` | Lines for the preflight report (`npm run doctor` and the boot summary), since 1.1. Asked of the IN-REPO extensions only, WITHOUT `activate` — the doctor loads no plugin — so it must stand alone. `usedBackends` are the backend ids this host's recent sessions ran on: a line about a binary nobody asked for says "something is wrong" about nothing, so answer [] then. Never throws; a throw drops the lines. |
+
+## handleAll
+
+*function*
+
+Register every method of a typed table with `api.handle`; returns one unregister.
+Args arrive from the wire UNCHECKED — the types are a convenience, each handler validates.
+
+```ts
+export function handleAll<M extends PluginMethods>(api: Pick<HostPluginApi, "handle">, fns: {
+    [K in keyof M & string]: (args: M[K]["args"], caller: PluginCaller) => M[K]["result"] | Promise<M[K]["result"]>;
+}): () => void;
+```
+
 ## PLUGIN_THERMAL_TIMEOUT_MS
 
 *const*
@@ -1147,188 +1334,5 @@ export interface BackendCapsV2 { … }
 | `effort` | `effort?: readonly string[]` | The reasoning-effort ladder the binary accepts, in order; absent = no knob. Measured, never guessed. |
 | `permissionModes` | `permissionModes: readonly PermissionMode[]` | The permission modes it accepts, in the order offered; empty = no such concept. |
 | `launchModes` | `launchModes?: readonly PermissionMode[]` | 2.2: the subset of `permissionModes` a session can START in; absent = all of them. Non-empty, each mode once. Narrowing it refuses a stored launch (backlog, schedule, intent, fork, limit relaunch) whose mode falls outside, in words at create. |
+| `spendUnit` | `spendUnit?: string` | 2.3: the backend's own spend unit as a person reads it (`"AI credits"`), when its bill is not tokens or dollars — the unit a `native` session budget is capped in. It must be the exact `unit` its `tokens.session` reading states in `native` (a different name reads "not stated", never compared). Trimmed, 1–32 chars; absent = no native unit. |
 | `remoteControl` | `remoteControl: boolean` | It accepts a remote-control flag. |
-
-## PluginDoctorCheck
-
-*interface*
-
-One line of the preflight report a builtin's `doctor` contributes.
-
-```ts
-export interface PluginDoctorCheck { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `id` | `id: string` | Short stable name, e.g. `opencode-binary`. |
-| `status` | `status: "ok" \| "warn" \| "fail"` |  |
-| `detail` | `detail: string` |  |
-| `fix` | `fix?: string` |  |
-
-## PLUGIN_HOOK_HOLD_DEFAULT_MS
-
-*const*
-
-How long the core holds a hook's HTTP response for a pending answer by default, and at most.
-
-```ts
-export const PLUGIN_HOOK_HOLD_DEFAULT_MS = 8000;
-```
-
-## PLUGIN_HOOK_HOLD_MAX_MS
-
-*const*
-
-```ts
-export const PLUGIN_HOOK_HOLD_MAX_MS = 60000;
-```
-
-## PluginHookHold
-
-*interface*
-
-What an `onHook` handler is handed beside the payload.
-
-```ts
-export interface PluginHookHold { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `maxHoldMs` | `readonly maxHoldMs: number` | How long the core holds this response before answering `{}` itself. |
-| `onExpired` | `onExpired(fn: () => void): void` | Called once when the core answered `{}` instead of the handler: the hold ran out, or the plugin was switched off. The CLI then goes its own way. |
-
-## PluginRepoScope
-
-*interface*
-
-One repo, as a plugin may look at it (`api.repo(repoId)`): its files and git
-facts through the core's containment guard — a path that leaves the worktree,
-or names a secret (`.env*`), reads as null, never as an error.
-
-```ts
-export interface PluginRepoScope { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `id` | `readonly id: string` |  |
-| `name` | `readonly name: string` |  |
-| `branch` | `readonly branch: string` |  |
-| `isPrimary` | `readonly isPrimary: boolean` |  |
-| `worktree` | `readonly worktree: string` | Absolute path of the worktree. |
-| `readFile` | `readFile(relPath: string, maxBytes?: number): string \| null` | A text file inside the worktree; null if absent, outside, binary or a secret. |
-| `listDir` | `listDir(relPath?: string): { name: string; dir: boolean; }[] \| null` | One directory's entries (not recursive); null if absent or outside. Secrets are left out. |
-| `git` | `git(): { branch: string; head: string \| null; changed: number; } \| null` | HEAD and the working tree, read now — synchronous subprocesses, not from a setup check. `head` is null in a repo with no commit. |
-
-## SetupSubject
-
-*interface*
-
-What a contributed setup check or fix is handed: the worktree it is about.
-
-```ts
-export interface SetupSubject { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `worktree` | `worktree: string` | Absolute path of the worktree being checked. |
-
-## SetupFixOutcome
-
-*interface*
-
-A contributed fix's outcome: `applied` says whether it changed anything, `note` says what, in words.
-
-```ts
-export interface SetupFixOutcome { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `applied` | `applied: boolean` |  |
-| `note` | `note: string` |  |
-
-## HandToAgentResult
-
-*type*
-
-`api.handToAgent`'s answer: the intent id the prompt now waits under, or why not.
-
-```ts
-export type HandToAgentResult = {
-    ok: true;
-    intentId: string;
-    existing: boolean;
-    state?: string;
-} | {
-    ok: false;
-    reason: string;
-};
-```
-
-## HostPluginModule
-
-*interface*
-
-A plugin module's shape. `deactivate` runs on disable and on shutdown
-(started, never awaited there). `shutdown` runs ONLY as the daemon exits, after
-every store is flushed, SYNCHRONOUSLY and whether or not the plugin is still
-switched on — the place to kill child processes it owns (a switched-off
-plugin's running sessions keep their children until then).
-
-```ts
-export interface HostPluginModule { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `activate` | `activate(api: HostPluginApi): void \| Promise<void>` |  |
-| `deactivate` | `deactivate?(): void \| Promise<void>` |  |
-| `shutdown` | `shutdown?(): void` |  |
-| `doctor` | `doctor?(req: { usedBackends: readonly string[]; }): Promise<PluginDoctorCheck[]>` | Lines for the preflight report (`npm run doctor` and the boot summary), since 1.1. Asked of the IN-REPO extensions only, WITHOUT `activate` — the doctor loads no plugin — so it must stand alone. `usedBackends` are the backend ids this host's recent sessions ran on: a line about a binary nobody asked for says "something is wrong" about nothing, so answer [] then. Never throws; a throw drops the lines. |
-
-## handleAll
-
-*function*
-
-Register every method of a typed table with `api.handle`; returns one unregister.
-Args arrive from the wire UNCHECKED — the types are a convenience, each handler validates.
-
-```ts
-export function handleAll<M extends PluginMethods>(api: Pick<HostPluginApi, "handle">, fns: {
-    [K in keyof M & string]: (args: M[K]["args"], caller: PluginCaller) => M[K]["result"] | Promise<M[K]["result"]>;
-}): () => void;
-```
-
-## manifestProblems
-
-*function*
-
-Validate a parsed manifest: problems in words (empty = valid). Unknown fields are allowed — a newer manifest on an older daemon loads with what it understands.
-
-```ts
-export function manifestProblems(m: unknown): string[];
-```
-
-## cleanPluginValue
-
-*function*
-
-A value as the manifest allows it, or undefined (refused, never repaired).
-
-```ts
-export function cleanPluginValue(f: PluginField, v: unknown): PluginValue | undefined;
-```
-
-## pluginValues
-
-*function*
-
-The settings with defaults filled in.
-
-```ts
-export function pluginValues(m: PluginManifest, stored: Record<string, unknown>): Record<string, PluginValue>;
-```

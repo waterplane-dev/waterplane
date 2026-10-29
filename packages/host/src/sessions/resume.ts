@@ -375,12 +375,12 @@ export class ResumeSlice {
     // answering `true` from a banner-shaped line on its screen would park work
     // for ever on a reset that is never coming.
     //
-    // Only claude's `limit-ts` answers this, deliberately — not a backend's `usage.wall`
-    // (`{source:true}` in `limits`): `true` here makes a row FOLLOW a resurrection, and only a
-    // `limit-ts` exit is ever resurrected (`maybeScheduleResurrect`). A source-walled session
-    // that dies is an exit, so its work fails in words rather than waiting for a revival that
-    // nothing would ever start.
-    if (derive(s.backend).screen("limits") !== "limit-ts") return false;
+    // `true` here makes a row FOLLOW a resurrection, so it answers true only for an exit that
+    // `maybeScheduleResurrect` would reopen: claude's `limit-ts` (below), or a backend's own
+    // `usage.wall` (`{source:true}`) last seen blocked at a DATED reset on a conversation whose
+    // id is known (`sourceWallExit`). An undated source wall (`needsYou`) reopens nothing, so
+    // its work fails in words rather than waiting for a revival that nothing would ever start.
+    if (derive(s.backend).screen("limits") !== "limit-ts") return this.sourceWallExit(s) != null;
     // Same asymmetry `checkLimit` documents: the screen cannot date its banner,
     // so a session that exited hours after an old wall looks identical to one
     // the wall just killed. A readable log settles it.
@@ -433,13 +433,35 @@ export class ResumeSlice {
     if (s.resurrectTimer) { clearTimeout(s.resurrectTimer); s.resurrectTimer = null; }
   }
 
+  /**
+   * A source-walled session's exit, as resurrection reads it: the reset to wait for, or null.
+   *
+   * The source dies with the process, so the evidence is the LAST verdict `wall.ts`'s
+   * `applySourceWall` wrote onto `info.limit` while the session ran — blocked, and DATED (the
+   * source's `resetAt` is an instant, trusted like claude's log). Null — nothing scheduled — for
+   * a backend whose `limits` is not a source, a session not blocked when it went, an undated
+   * wall (`needsYou`: credit does not come back by itself, so a reopen would only spend the
+   * first credit the person adds), and a conversation whose id was never learnt: the plugin's
+   * bare "continue" picks the directory's NEWEST conversation, which may be somebody else's.
+   */
+  private sourceWallExit(s: Session): { resetAt: number; convId: string } | null {
+    if (!derive(s.backend).askSource("limits")) return null;
+    const lim = s.info.limit;
+    if (!lim?.blocked || lim.needsYou != null) return null;
+    const resetAt = lim.resetAt;
+    if (typeof resetAt !== "number" || !Number.isFinite(resetAt) || resetAt <= 0) return null;
+    const convId = s.info.backendSessionId;
+    if (!convId) return null;
+    return { resetAt, convId };
+  }
+
   maybeScheduleResurrect(s: Session): void {
     // Resurrection is "reopen the conversation when the ACCOUNT serves again".
     // A backend with no account limit has no such moment to wait for, so an exit
     // is just an exit. A backend whose wall is its own `usage.wall` is resumed while it RUNS
-    // (`wall.ts` → the same queue); reopening one that exited is claude's `--continue`, read off
-    // claude's screen and log, so it stays `limit-ts`'s alone.
-    if (derive(s.backend).screen("limits") !== "limit-ts") return;
+    // (`wall.ts` → the same queue), and reopened at its dated reset when it EXITED there
+    // (`maybeScheduleSourceResurrect`, the plugin's own resume argv by exact id).
+    if (derive(s.backend).screen("limits") !== "limit-ts") { this.maybeScheduleSourceResurrect(s); return; }
     // If this was the session the queue let through, its verdict is in: it EXITED
     // rather than resuming. Treat a limit exit as evidence about the account (so
     // the rest of the queue holds off), anything else as merely gone.
@@ -485,12 +507,32 @@ export class ResumeSlice {
       this.core.noteGaveUp(s, next.why);
       return;
     }
-    const at = next.at;
+    this.armResurrect(s, next.at, now);
+  }
+
+  /** Book the reopen at `at`: the row says when, the queue takes it from there. */
+  private armResurrect(s: Session, at: number, now: number): void {
     if (s.info.limit) { s.info.limit.nextAttemptAt = at; this.core.emit("updated", s.info); }
     this.clearResurrectTimer(s);
     s.resurrectTimer = setTimeout(() => { s.resurrectTimer = null; this.requestResume(s); }, Math.max(50, at - now));
     s.resurrectTimer.unref?.();
     this.core.emit("limit", s.info.id, s.info, "scheduled");
+  }
+
+  /** The source-wall half of `maybeScheduleResurrect`: the same queue verdict, timer and attempts
+   *  cap, on the last verdict the source gave (`sourceWallExit`) — never a screen or a claude log. */
+  private maybeScheduleSourceResurrect(s: Session): void {
+    if (!s.info.limit) return; // no account limit (no `limits`, or no wall to ask) ⇒ an exit
+    if (this.resumingIds.has(s.info.id)) {
+      this.releaseResume(s.info.id, s.info.limit.blocked && s.info.limit.attempts > 0 ? "blocked" : "gone");
+    }
+    if (s.killed || s.detaching) return;
+    const exit = this.sourceWallExit(s);
+    if (!exit || !this.core.limitAuto(s)) return;
+    const now = Date.now();
+    const next = this.core.limitRetry(s, now, exit.resetAt);
+    if (next.kind === "giveup") { this.core.noteGaveUp(s, next.why); return; }
+    this.armResurrect(s, next.at, now);
   }
 
   /** Reopen a limit-exited conversation with `--continue`, carrying the block —
@@ -505,7 +547,10 @@ export class ResumeSlice {
     const attempts = (old.info.limit?.attempts ?? 0) + 1;
     const created = await this.core.create(old.info.cwd, {
       cols: old.cols, rows: old.rows, title: old.info.title,
-      resumeMode: "continue", resumeSessionId: old.info.claudeSessionId, launch: old.launch,
+      // A plugin's conversation is its own id (`sourceWallExit` refused one without it); each
+      // plugin turns continue + id into its argv (Copilot `--session-id=`, Codex `resume <id>`,
+      // Gemini `--resume <id>`). claude carries no `backendSessionId`, so its launch is unchanged.
+      resumeMode: "continue", resumeSessionId: old.info.claudeSessionId ?? old.info.backendSessionId, launch: old.launch,
       // The item it was working for (if any) is still what it is working for.
       origin: { ...(old.origin?.itemId ? { itemId: old.origin.itemId } : {}), ...(old.origin?.itemLabel ? { itemLabel: old.origin.itemLabel } : {}), kind: "resurrect", fromSession: id },
     });

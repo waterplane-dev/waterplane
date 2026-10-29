@@ -133,3 +133,16 @@
 /* A `manual` row's hold (`MANUAL_HOLD_TEXT`): the row's STATE — nothing but its
    own `fire` starts it — so it is read, not skimmed past like a footnote. */
 .bl-hold { display: block; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); font-weight: var(--fw-semibold); margin-top: var(--sp-4); }
+
+/* The PR card (features/prs): PR-mode repos only, above the history. */
+.pr-card { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border, rgba(128,128,128,.25)); }
+.pr-head { display: flex; align-items: center; gap: 6px; font-weight: var(--fw-semibold); }
+.pr-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border, rgba(128,128,128,.2)); }
+.pr-title { font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.pr-meta { opacity: .75; font-size: .9em; overflow-wrap: anywhere; }
+.pr-checks { display: flex; align-items: center; gap: 6px; }
+.pr-checks.failed { color: var(--dead, #d9534f); }
+.pr-checks.passed { color: var(--ok, #3fa56b); }
+.pr-failed { align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; }
+.pr-methods { align-items: center; }
+.pr-log { display: flex; flex-direction: column; gap: 6px; }

@@ -52,7 +52,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
 - `prompt.ts` — two-stage choice-box detector: a lenient scan of a byte window produces a candidate,
   re-detected STRICTLY against `screenText()`. Unparsable dialog ⇒ `awaitingInput`. **Both stages
   must survive a half-read screen.** **A box is PUBLISHED only once two consecutive strict reads agree**
-  (`sessions/boxes.ts`'s `readTwice`, `PROMPT_SETTLE_MS`): tmux paints in chunks, and a read between two is a
+  (`sessions/boxread.ts`'s `readTwice`, `PROMPT_SETTLE_MS`): tmux paints in chunks, and a read between two is a
   label cut mid-word that `mergeBox` would keep for ever (`e2e-promptlive.mjs`). **A box that has scrolled UP is a box that was ANSWERED** —
   retired the moment the CLI draws its COMPOSER under it (`isComposerRow`), never on a row count.
   **Output never retires a prompt — only the strict verifier clears it.** A box may be TALLER than
@@ -78,7 +78,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   key (`sessions/boxes.ts`'s `chooseClaudeNavBox`), refuses if the label at that index changed, never types a
   digit. `packages/host/test/trustbox.test.mjs`, `e2e-trustbox.mjs`.
 - **A TUI with no numbers** (opencode's) is read by a SCREEN READER its extension contributes by
-  name (`api.screenReader`, `PluginScreenReader`): `sessions/boxes.ts`'s `checkNavBox` keeps the
+  name (`api.screenReader`, `PluginScreenReader`): `sessions/boxread.ts`'s `checkNavBox` keeps the
   shape — cheap gate, render, miss budget, resize grace — and `choosePromptBox` walks one arrow per
   pass, RE-READS, and **REFUSES rather than pressing a bare Return**; the reader only answers
   `candidate`/`read`/`prompt`/`stillUp`/`navTo`, and a throw reads as no box. opencode's
@@ -184,6 +184,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
 - `limitretry.ts` — the retry cadence is pure (`nextLimitAttempt`, `LADDER_MS`): a DATED reset is
   trusted, weekly or not; with no dated reset the delay WIDENS instead of a flat cadence.
 - **Spend walls** (`limit.ts`'s `spend`, `limitlog.ts`'s API-error rows, `spendwall.ts`): an API-key/cloud account out of credit or over a spend limit is a wall with NO ladder - one attempt at the printed instant or a configured usd calendar period's reset (`periodBounds`), else `noteGaveUp` (`sessions/wall.ts`; needs the person). Never a guessed clock. Messages are built from halves in tests too. `spendlimit.test.mjs`.
+- `netlog.ts` — the CLI GAVE UP on a transient API error: the NEWEST assistant row is `<synthetic>`, `isApiErrorMessage`, `error: "server_error"` AND its text a known transient shape (errno, can't reach, connection lost/dropped/refused, no response, 5xx/529). A spend wall (`detectSpendText`) or a `quotaLimits` row is never one; an unknown shape is no retry. Feeds `sessions/apiretry.ts`'s ladder (`netRetryDelay`). `netlog.test.mjs`.
 - `limitlog.ts` — the same question asked of the CLI's own log, which is DATED. **The log OUTRANKS
   the screen in both directions**; **`unknown` when there is nothing to read** — an absent log is
   never a verdict.

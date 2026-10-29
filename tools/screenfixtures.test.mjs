@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseVersion, cmpVersion, bannerVersion, versionGap, resolveEntries, rowFor, currentCount } from "./screenfixtures.mjs";
+import { parseVersion, cmpVersion, bannerVersion, versionGap, resolveEntries, rowFor, currentCount, unprovenCount } from "./screenfixtures.mjs";
 
 test("parseVersion reads x.y.z anywhere, else null", () => {
   assert.deepEqual(parseVersion("2.1.293"), [2, 1, 293]);
@@ -139,6 +139,33 @@ test("--reading prints exactly one JSON number on stdout", () => {
   const out = execFileSync(process.execPath, [script, "--reading", "--cli", "2.1.301", "--health", "/nonexistent"], { encoding: "utf8" });
   assert.match(out, /^\d+\n$/);
   assert.equal(typeof JSON.parse(out), "number");
+});
+
+// --unproven: the second reading (`screenUnproven`).
+
+test("unprovenCount counts signals with NO match of any version; a guard proves nothing", () => {
+  const rows = [{ match: 0, guard: 4 }, { match: 1, guard: 0 }, { match: 0, guard: 0 }, { match: 3, guard: 2 }];
+  assert.deepEqual(unprovenCount(rows, {}), { value: 2 });
+  assert.deepEqual(unprovenCount([{ match: 1 }], {}), { value: 0 }, "every signal proven IS a zero");
+});
+
+test("unprovenCount is ABSENT — not 0, not all — without a manifest or a catalog", () => {
+  const rows = [{ match: 0 }, { match: 2 }];
+  for (const m of [null, undefined]) {
+    const got = unprovenCount(rows, m);
+    assert.equal(got.value, null);
+    assert.match(got.reason, /signals\.json/);
+  }
+  const empty = unprovenCount([], {});
+  assert.equal(empty.value, null);
+  assert.match(empty.reason, /no signals/);
+});
+
+test("--unproven prints exactly one JSON number on stdout", () => {
+  const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
+  const out = execFileSync(process.execPath, [script, "--unproven"], { encoding: "utf8" });
+  assert.match(out, /^\d+\n$/);
+  assert.ok(JSON.parse(out) <= 10);
 });
 
 // ── tools/harvestfixtures.mjs: the host's captures into the manifest ────

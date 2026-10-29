@@ -509,6 +509,10 @@ export interface SheetDef {
   /** Runs once when this sheet stops being the one on top — clear a scope, drop
    *  a focus. Not on unmount of App. */
   onLeave?: () => void;
+  /** Called when another screen is pushed OVER this sheet, before `onLeave`:
+   *  returns what puts back the focus `onLeave` is about to drop, so a Back to
+   *  this sheet shows what was on it (`backStep.ts`'s `keepCovered`). */
+  keep?: () => () => void;
 }
 
 /** A toolbar entry's action. The item itself (label, icon) is still declared in

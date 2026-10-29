@@ -245,6 +245,8 @@ export const VACANT = "\u0000vacant";
  * send) closed straight past the sheet it came from to the session or the
  * launcher. So a close — same session and focus, no sheet — returns to the
  * entry below when that entry is on the same session and focus, sheet and all.
+ * Leaving a session for the launcher does the same when the entry below is
+ * the launcher (a sheet on it included) on the same focus.
  *
  * Otherwise the old rules: a screen already in the stack is UNWOUND to (the
  * stack stays a path of distinct screens), anything else is pushed. Steps and
@@ -275,6 +277,22 @@ export function routeStep(
     let below = top - 1;
     while (below > 0 && stack[below] === VACANT) below--;
     if (below >= 0 && onSame(stack[below])) return { kind: "go", delta: below - depth };
+  }
+  // Leaving a session for the launcher is ONE Back as well, when the entry
+  // under the session IS the launcher — sheet and all. Backlog → fire → the
+  // new session: the header arrow searched for the bare launcher and unwound
+  // past the backlog the session was started from, while the gesture popped
+  // one entry into it. Anything else under the session (another session, a
+  // different focus) keeps the search: the arrow means "the list", not "the
+  // previous session".
+  if (!a && !o && live(cur) && screenOfKey(cur!).split("|")[0]) {
+    let below = top - 1;
+    while (below > 0 && stack[below] === VACANT) below--;
+    const k = below >= 0 ? stack[below] : undefined;
+    if (live(k) && !isStep(k)) {
+      const [ka, , kr] = k!.split("|");
+      if (!ka && kr === r) return { kind: "go", delta: below - depth };
+    }
   }
   for (let i = top - 1; i >= 0; i--) {
     if (stack[i] === key) return { kind: "go", delta: i - depth };

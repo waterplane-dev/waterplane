@@ -139,3 +139,26 @@ test("the spent line off a source: its own figures and split, and a sentence whe
   assert.match(budgetSpentLine("weeklyPct", spark, undefined, 0), /claude's account/);
   assert.match(budgetSpentLine("tok", sourceSpendSpark({ at: 1, tok: 10 }), undefined, 0), /not stated by this session's backend/);
 });
+
+import { budgetUnitsFor as _bu, launchSpendUnit as _lsu, parseBudgetInput as _pbi, budgetText as _bt, budgetPreview as _bp } from "./budgetInput.ts";
+
+test("native unit: offered only with a spendUnit or a kept native cap", () => {
+  assert.ok(!_bu(false).some((u) => u.unit === "native"));
+  assert.ok(!_bu(true, "usd").some((u) => u.unit === "native"));
+  const n = _bu(true, "usd", "AI credits").find((u) => u.unit === "native");
+  assert.equal(n.label, "AI credits");
+  assert.ok(_bu(true, "native").some((u) => u.unit === "native"), "a kept native cap is never swapped");
+  assert.deepEqual(_lsu([{ id: "copilot", caps: { spendUnit: " AI credits " } }], "copilot"), "AI credits");
+  assert.equal(_lsu([{ id: "claude", caps: {} }], "claude"), undefined);
+  assert.equal(_lsu(null, "x"), undefined);
+});
+
+test("native unit: plain positive number, round-trips with nativeUnit", () => {
+  assert.deepEqual(_pbi("native", "12.5"), { ok: true, max: 12.5 });
+  assert.equal(_pbi("native", "$5").ok, false);
+  assert.equal(_pbi("native", "500k").ok, false, "no k/m suffix on a native unit");
+  assert.equal(_pbi("native", "0").ok, false);
+  const cfg = { unit: "native", max: 1500, interrupt: true, nativeUnit: "AI credits" };
+  assert.equal(_bt(cfg), "1500");
+  assert.match(_bp(cfg, { native: { amount: 300, unit: "AI credits" } }, null, 0) ?? "", /300 of 1\.5k — 20% used/);
+});

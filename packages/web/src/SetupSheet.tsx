@@ -93,6 +93,7 @@ import { AcceptControl, AcceptedSection, StaleMarksSection, DigestGroup, TriageC
 import {
   WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, inExposureMainList,
   clearTriageRequest, WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
+  WATCH_RECHECK_LABEL, WATCH_RECHECK_RUNNING, WATCH_RECHECK_TITLE, watchRecheckFailed,
 } from "./exposureWords";
 
 const STATUS_ICON = {
@@ -514,6 +515,9 @@ function SetupRegion({
   sessionDoors?: SessionDoor[];
   onAllSessions?: () => void;
 }) {
+  // The watch re-check's run and its one sentence, for the repo it ran on (a switch hides it).
+  const [watchRunAt, setWatchRun] = useState<{ repoId: string; running: boolean; ok?: boolean; sentence?: string } | null>(null);
+  const watchRun = watchRunAt?.repoId === repoId ? watchRunAt : null;
   // What the context-weight row's figure is made of, file by file, plus this desktop's rows and
   // the doors to what a live session actually carried. Absent `instructions` (an older host) is
   // said by the component, never drawn as an empty list.
@@ -561,6 +565,19 @@ function SetupRegion({
       size={report.autoCompactDefault} onIgnore={onIgnore}
       extra={<>{twin}{c.id === "context-weight" ? aoRows : null}{limits}{xp}</>} />;
   }
+  // The watch's re-check RUNS the collector on the desktop (host `exposurerun.ts`), then re-reads.
+  async function onWatchRun() {
+    if (watchRun?.running) return;
+    const forRepo = repoId;
+    setWatchRun({ repoId: forRepo, running: true });
+    let r: { ok: boolean; sentence: string };
+    try {
+      const a = await api.exposureRun(forRepo);
+      r = { ok: !!a?.ok, sentence: typeof a?.sentence === "string" && a.sentence ? a.sentence : watchRecheckFailed("the desktop gave no answer.") };
+    } catch (e) { r = { ok: false, sentence: watchRecheckFailed((e as Error).message || "no link to the desktop.") }; }
+    res.reload({ quiet: true });
+    setWatchRun({ repoId: forRepo, running: false, ...r });
+  }
   const xcut = exposureCut(allRows);
   const hasAlwaysOn = !!(report?.instructions?.files.length || report?.instructions?.desktop?.length);
 
@@ -573,10 +590,12 @@ function SetupRegion({
             inbox/outbox are gitignored and secrets aren&apos;t committed. Re-run regularly.
           </>}
         </span>
-        <Button onClick={() => res.reload({ quiet: true })} title="re-check">
-          <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
+        <Button onClick={kind === "watch" ? onWatchRun : () => res.reload({ quiet: true })} title={kind === "watch" ? WATCH_RECHECK_TITLE : "re-check"}>
+          <RefreshCw size={14} className={res.inflight || watchRun?.running ? "spin" : undefined} /> {kind === "watch" ? WATCH_RECHECK_LABEL : "re-check"}
         </Button>
       </div>
+      {kind === "watch" && watchRun?.running && <Hint>{WATCH_RECHECK_RUNNING}</Hint>}
+      {kind === "watch" && watchRun?.sentence && <Hint tone={watchRun.ok ? undefined : "warn"}>{watchRun.sentence}</Hint>}
 
       {/* The checklist's OWN four nothings — and only one of them means "this
           repo is fine". `empty` is passed explicitly so the cached-age line can

@@ -107,6 +107,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "local-sessions", group: "sessions", label: "local model sessions at once", keywords: "ollama qwen gpu runner local model limit cap one at a time concurrent" },
   { id: "hosted-notice", group: "sessions", label: "hosted-model notice", keywords: "privacy disclaimer acknowledge server third party leaves machine" },
   { id: "limit-auto", group: "sessions", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
+  { id: "net-retry", group: "sessions", label: "retry on network errors", keywords: "network wifi offline dns outage api error continue retry automatic connection lost" },
   { id: "budget", group: "sessions", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
   { id: "budget-session", group: "sessions", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
   { id: "automation", group: "sessions", label: "automation", keywords: "schedule schedules clock cron runs on its own backlog auto peer" },

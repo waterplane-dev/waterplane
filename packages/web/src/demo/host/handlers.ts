@@ -72,6 +72,7 @@ const PLUGINS = because("Plugins run on your desktop, and the demo has none inst
 const LOCALRT = because("Local models run on your desktop — the demo has none loaded.");
 const UPDATE = because("Updating claude happens on your desktop — the demo's claude is not a real install.");
 const LIMITS = because("Usage-limit resumes need a real claude session — the demo never hits a limit of its own.");
+const NETRETRY = because("The network-error retry types into a real claude session on your desktop — the demo's sessions never lose the network.");
 const CONVO = because("This reads the real conversation log on your desktop — the demo keeps no logs.");
 const RUNS = because("The demo keeps your waiting work but does not start it — on your own desktop it would run here.");
 const DESKTOP = because("A live desktop streams your own screen, and the demo has no desktop to show.");
@@ -142,6 +143,7 @@ export function helloFrames(md: DemoModel): HostMessage[] {
       t: "limit.config", enabled: md.limitConfig?.enabled ?? false, resumingId: null, holdUntil: null,
       ...(md.limitConfig?.mode ? { mode: md.limitConfig.mode } : {}),
     },
+    { t: "netretry.config", ...(md.netRetry ?? { enabled: true }) },
     { t: "fanout.list", runs: [] },
     { t: "pull.list", items: md.pulls ?? [] },
     { t: "schedule.list", entries: md.schedules ?? [] },
@@ -412,6 +414,7 @@ export const HANDLERS = {
   "session.search": CONVO,
   "session.remoteControl": B,
   "session.ackAsking": B,
+  "session.netRetryCancel": B,
   "input.settle": B,
   "shell.kill": because("The demo runs no background shells to stop."),
   "backlog.archive": STORE,
@@ -469,6 +472,7 @@ export const HANDLERS = {
   "limit.session": LIMITS,
   "host.halt": because("The demo has no AI processes to stop — on a real desktop this halts every agent session and holds automatic work until lifted."),
   "limit.setAuto": LIMITS,
+  "netretry.set": NETRETRY,
   "limit.setMode": LIMITS,
   "backends.recheck": B,
   "localrt.evict": LOCALRT,

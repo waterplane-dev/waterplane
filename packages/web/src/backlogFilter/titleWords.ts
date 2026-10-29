@@ -102,10 +102,10 @@ export function nameLabel(n: number): string {
  * model to title the record of something that is over is money for nothing.
  */
 export function nameableInCut(
-  items: readonly Pick<BacklogItem, "id" | "text" | "label" | "status" | "archived" | "headline" | "category">[],
+  items: readonly Pick<BacklogItem, "id" | "text" | "label" | "status" | "archived" | "headline" | "category" | "calledOff">[],
 ): string[] {
   return items
-    .filter((it) => !it.archived && (it.status === "queued" || it.status === "failed")
+    .filter((it) => !it.archived && (it.status === "queued" || (it.status === "failed" && !it.calledOff))
       && (itemHeadline(it) === null || !it.category))
     .map((it) => it.id);
 }

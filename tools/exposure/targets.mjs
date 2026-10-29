@@ -31,3 +31,17 @@ export function targetRunArgv(t, vars, extra = []) {
   if (t.args.includes("--npm") && vars.NPM_2FA_CONFIRMED && !t.args.includes("--npm-2fa-confirmed")) argv.push("--npm-2fa-confirmed", vars.NPM_2FA_CONFIRMED);
   return [...argv, ...extra];
 }
+
+/** The `{HOME}`/`{SITE}` placeholders a target's args use while `vars` holds nothing for them. A target run
+ *  with one empty would check a URL like "/privacy.html" — a wrong reading, worse than none — so the CLI
+ *  refuses (exit 64) with `unsetVarsSentence` instead. */
+export function unsetTargetVars(t, vars) {
+  const used = new Set();
+  for (const a of t.args ?? []) for (const m of a.matchAll(/\{(HOME|SITE)\}/g)) used.add(m[1]);
+  return [...used].filter((k) => !vars[k]);
+}
+
+const VAR_ENV = { SITE: "EXPOSURE_SITE", HOME: "HOME" };
+export function unsetVarsSentence(t, missing) {
+  return `target ${t.name} uses ${missing.map((k) => `{${k}}`).join(" and ")} but ${missing.map((k) => VAR_ENV[k]).join(" and ")} is empty here: not run, because a check against a half-built address would be a wrong reading. Set it (the daily runner's env file) and run again.`;
+}

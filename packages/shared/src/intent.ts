@@ -81,10 +81,10 @@ export { type ClockMember, type Slot, type SlotRow, findSlot, latestClock, parse
 
 export type { IntentKind } from "./intent/kind.js";
 export {
-  AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT,
+  AGENT_POSTED_WORDS, AGENT_WITHDREW_DETAIL, MANUAL_HOLD_TEXT,
   ORIGIN_AGENT, ORIGIN_FANOUT_FOLLOWUP, ORIGIN_FANOUT_RUN, ORIGIN_FANOUT_TARGET, ORIGIN_PEER_PREFIX,
   ORIGIN_SCHEDULE_BUILD, ORIGIN_SCHEDULE_PREFIX, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK,
-  clockKey, intentKind, isAgentPosted, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
+  clockKey, intentKind, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
   isFanoutRow, isLaunchRow, isPeerPosted, isScheduleRow, isTimedWorkRow, peerOfOrigin,
   postsScheduledBuild, queuesBacklogItem, scheduleIdFromOrigin, scheduleItemOrigin, timedWorkKey,
 } from "./intent/kind.js";

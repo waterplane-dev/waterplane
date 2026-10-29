@@ -3,6 +3,7 @@ import type { ContextLimitsView } from "../contextweight.js";
 import type { RepoHealthIndex } from "../healthindex.js";
 import type { RepoInstructionsDoc } from "./alwayson.js";
 import type { ExposureTriage } from "../exposure.js";
+import type { BranchRules } from "../branchmode.js";
 
 /**
  * How this desktop's `claude` got onto the PATH, which is the ONLY thing that
@@ -60,6 +61,9 @@ export interface GitStatus {
   behind: number;
   files: GitFile[];
   clean: boolean;
+  /** What the remote's own rules demand of the default branch. ABSENT = direct
+   *  or unknown (no gh, no auth, non-GitHub, not read yet) — behave as direct. */
+  branchRules?: BranchRules;
 }
 
 /** One commit as the history view lists it. `at` is the author date, epoch ms. */

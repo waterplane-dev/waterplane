@@ -70,7 +70,7 @@ import type {
   IntentResult,
   IntentTarget,
   ItemName,
-  NameAuthor,
+  NameAuthor, TurnEndNet,
 } from "@waterplane/shared";
 import { TICK_MS, isTerminal, type IntentCore, type IntentDeps } from "./contract.js";
 import { armFrom, armNew, newBasis, setArmed, skipNext } from "./clock.js";
@@ -290,7 +290,7 @@ export class IntentManager extends EventEmitter {
 
   // ── Completion and restart reconciliation — delegations (`intents/watch.ts`) ──
 
-  onTurnEnded(sessionId: string, stopCount: number): void { this.watch.onTurnEnded(sessionId, stopCount); }
+  onTurnEnded(sessionId: string, stopCount: number, net?: TurnEndNet): void { this.watch.onTurnEnded(sessionId, stopCount, net); }
   onSessionExit(sessionId: string): void { this.watch.onSessionExit(sessionId); }
   /** Called once by `main.ts`, after `sessions.rediscover()`. */
   reconcile(): Promise<void> { return this.watch.reconcile(); }
