@@ -39,6 +39,12 @@
  * `null` and the reason names the specifiers that did not resolve, which is
  * what a person needs to fix it (usually: declare the alias in `tsconfig`).
  *
+ * The same holds for a file whose imports the pack could not read at all
+ * (`graphImports` returns `null` — the TypeScript lexer misread a spot it
+ * cannot recover from): counted as a module with fewer imports it would
+ * delete every edge after the spot, so one such file makes the reading
+ * absent, and the reason names the files.
+ *
  * A language whose pack has no import-graph rule is skipped, never counted
  * as a module with no imports; a tree where no pack has one is absent with
  * the packs' names, as every other pack-dependent metric reports.
@@ -126,9 +132,10 @@ export function measureGraph(snapshot, _history, _index, prereg) {
   const files = snapshot.files ?? [];
   if (files.length === 0) return { value: null, reason: "no source files in this tree" };
 
-  const speakers = packsWith(prereg, "graphImports").filter((p) => typeof p.pack.keysFor === "function");
-  const noRule = (p) =>
-    typeof p.pack.graphImports === "function" && typeof p.pack.keysFor === "function" ? null : "no import-graph rule for this language";
+  const rule = (pack) =>
+    typeof pack.graphImports === "function" && typeof pack.keysFor === "function" && typeof pack.graphKeysFor === "function";
+  const speakers = packsWith(prereg, "graphImports").filter((p) => rule(p.pack));
+  const noRule = (p) => (rule(p.pack) ? null : "no import-graph rule for this language");
   if (speakers.length === 0) return { value: null, reason: reasonFor(prereg, noRule) };
   const speaks = new Set(speakers.map((p) => p.name));
 
@@ -143,13 +150,20 @@ export function measureGraph(snapshot, _history, _index, prereg) {
 
   // key -> every module answering to it. Two modules on one key (`x.ts` and
   // `x.tsx`, which no build accepts) are both edges, as in `untested`.
+  // `byKey` holds every suffix a module answers to, for a relative import;
+  // `byPath` only its full path, for one the pack's resolver turned into a
+  // tree path — matched against suffixes, `src/lib/x` would also reach
+  // `vendor/src/lib/x.ts` and draw an edge nobody wrote.
   const byKey = new Map();
+  const byPath = new Map();
+  const add = (map, k, i) => {
+    const list = map.get(k);
+    if (list) list.push(i);
+    else map.set(k, [i]);
+  };
   readable.forEach((r, i) => {
-    for (const k of r.owner.pack.keysFor(r.f.path)) {
-      const list = byKey.get(k);
-      if (list) list.push(i);
-      else byKey.set(k, [i]);
-    }
+    for (const k of r.owner.pack.keysFor(r.f.path)) add(byKey, k, i);
+    for (const k of r.owner.pack.graphKeysFor(r.f.path)) add(byPath, k, i);
   });
 
   const contexts = snapshot.graphContexts ?? {};
@@ -157,13 +171,20 @@ export function measureGraph(snapshot, _history, _index, prereg) {
   let internal = 0;
   let resolved = 0;
   const misses = new Map();
+  const unread = [];
   readable.forEach((r, i) => {
     const out = new Set();
-    for (const imp of r.owner.pack.graphImports(r.f, contexts[r.owner.name] ?? null)) {
+    const imps = r.owner.pack.graphImports(r.f, contexts[r.owner.name] ?? null);
+    if (imps === null) {
+      unread.push(r.f.path);
+      return;
+    }
+    for (const imp of imps) {
       let hit = null;
+      const keys = imp.relative ? byKey : byPath;
       for (const key of imp.candidates) {
-        if (byKey.has(key)) {
-          hit = byKey.get(key);
+        if (keys.has(key)) {
+          hit = keys.get(key);
           break;
         }
       }
@@ -178,6 +199,21 @@ export function measureGraph(snapshot, _history, _index, prereg) {
     }
     adj[i] = [...out].sort((a, b) => a - b);
   });
+
+  if (unread.length) {
+    const named = unread
+      .sort()
+      .slice(0, MISSES_NAMED)
+      .map((p) => `\`${p}\``)
+      .join(", ");
+    const more = unread.length > MISSES_NAMED ? ` and ${unread.length - MISSES_NAMED} more` : "";
+    return {
+      value: null,
+      reason:
+        `the imports of ${unread.length} file${unread.length === 1 ? "" : "s"} could not be read: ${named}${more} — ` +
+        "a comment or template the reader saw opened and never closed; every edge after it is unknown",
+    };
+  }
 
   if (internal > 0 && resolved / internal < prereg.GRAPH_MIN_RESOLVED) {
     const named = [...misses.entries()]

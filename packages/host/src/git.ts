@@ -9,6 +9,7 @@ import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
 import { branchRules, invalidateBranchRules } from "./branchrules.js";
 import { pushFailureText, pushRefusedByRule, refsLockedAt } from "./pushverdict.js";
+import { landedAlready, recordLanded } from "./pushlanded.js";
 
 
 export interface GitFile {
@@ -613,6 +614,7 @@ function gitStreamed(wt: string, args: string[], onData?: (stream: "out" | "err"
 const STREAM_MAX = 16 * 1024 * 1024;
 
 export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk: string) => void): Promise<{ ok: boolean; output?: string; error?: string }> {
+  let setUpstream: { remote: string; branch: string } | null = null;
   if (pulling.has(wt)) return { ok: false, error: "A pull is running in this worktree — push once it has ended." };
   const rules = await rulesFor(wt);
   if (rules && rules.mode !== "direct") {
@@ -626,16 +628,19 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     const args = ["push", "--porcelain"];
     if (!(await hasUpstream(wt))) {
       const br = (await git(wt, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => ({ stdout: "" }))).stdout.trim();
-      if (br && br !== "HEAD" && safeBranch(br)) args.push("--set-upstream", "origin", br);
+      if (br && br !== "HEAD" && safeBranch(br)) { args.push("--set-upstream", "origin", br); setUpstream = { remote: "origin", branch: br }; }
     }
     const { stdout, stderr } = await gitStreamed(wt, args, onData);
     return { ok: true, output: (stdout || stderr || "pushed").toString().trim() };
   } catch (err: any) {
     const so = String(err?.stdout ?? ""), se = String(err?.stderr ?? "") || String(err);
     // Another push of the same commit landed while this one's hook ran: the remote holds
-    // exactly what we sent, so this push's work is done — not a failure to retry.
+    // exactly what we sent, so this push's work is done — not a failure to retry. Its local half
+    // (tracking ref, the upstream it asked for) is done here, to the sha the remote confirmed.
     const locked = refsLockedAt(so, se);
-    if (locked && (await landedAlready(wt, locked))) {
+    const landed = locked && (await landedAlready(wt, locked));
+    if (landed) {
+      await recordLanded(wt, landed, setUpstream);
       return { ok: true, output: `Already on the remote — another push of the same commit landed while this one ran.\n\n${so.trim()}` };
     }
     let error = pushFailureText(so, se);
@@ -647,21 +652,6 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     }
     return { ok: false, error };
   }
-}
-
-/** Whether every locked ref's remote sha is the one this push sent (`rev-parse src`) — read off
- *  the refusal when the remote named it, else asked of the remote (`ls-remote`, the push's `To`). */
-async function landedAlready(wt: string, locked: { to: string | null; refs: { src: string; dst: string; at?: string }[] }): Promise<boolean> {
-  for (const { src, dst, at } of locked.refs) {
-    const sha = (await git(wt, ["rev-parse", "--verify", "--end-of-options", `${src}^{commit}`]).catch(() => ({ stdout: "" }))).stdout.trim();
-    let there = at;
-    if (!there && locked.to) {
-      const ls = (await git(wt, ["ls-remote", "--end-of-options", locked.to, dst]).catch(() => ({ stdout: "" }))).stdout;
-      there = ls.split("\n").map((l) => l.split("\t")).find((c) => c[1] === dst)?.[0];
-    }
-    if (!sha || sha !== there) return false;
-  }
-  return true;
 }
 
 /** Whether HEAD's branch has an upstream — git's answer, not a phrase in a push's output. */

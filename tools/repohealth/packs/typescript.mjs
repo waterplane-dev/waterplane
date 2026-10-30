@@ -200,6 +200,141 @@ const PATH_REF = new RegExp(
 const IMPORT_SPEC =
   /\b(?:import|export)\s+(type\s+)?[\w$*{}\s,]*?\bfrom\s*(["'])([^"'\n]+)\2|\b(?:import\s*\(\s*|import\s*|require\s*\(\s*)(["'])([^"'\n]+)\4/g;
 
+/** Words after which a `/` opens a regex rather than divides. */
+const REGEX_AFTER_WORD = new Set(["return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "instanceof", "yield", "await"]);
+
+/**
+ * Every import specifier a file's CODE holds, as `{type, spec}` — `type` set
+ * for `import type` / `export type`.
+ *
+ * `IMPORT_SPEC` over the raw text read `// was: import { a } from "./a"` and
+ * a fixture held in a template string as edges: a module that no longer
+ * imports `./a` was reported in a cycle with it. So the text is lexed first:
+ * comments and the body of a template literal or a regex are blanked, and
+ * every quoted string is swapped for a placeholder that `IMPORT_SPEC` still
+ * reads as a specifier and that maps back to the string. An import spelled
+ * INSIDE a string therefore loses its quotes along with its words, and one
+ * spelled in code keeps its specifier. The code inside `${…}` is code.
+ *
+ * Deliberately a lexer, not a parser, and so it misreads some spots. A quote
+ * stops at the end of its line, so an apostrophe in JSX text (`<p>don't</p>`)
+ * blanks the rest of that line only. Three misreads are not line-bounded:
+ *
+ *   - `/*` in JSX text (`<p>matches src/*.ts</p>`) opens a block comment that
+ *     runs to the next `*\/` or to the end of the file;
+ *   - a `/` after `)`, `]` or an identifier is a division, so a regex there
+ *     holding a backtick (`if (x) /`/.test(s)`) opens a template;
+ *   - so does a lone backtick in JSX text (`<kbd>`</kbd>`).
+ *
+ * A template opened that way flips the parity of every backtick after it, and
+ * every import from the spot on can be lost — a hidden cycle, a wrong number.
+ * When the lex ends with a block comment, a template or a `${` still open,
+ * `whole` is false: the file's imports are UNKNOWN, not the short list in
+ * `specs`, and `graphImports` says so. A misread that closes again before the
+ * end (two such backticks) re-balances and cannot be seen from here.
+ *
+ * @param {string} text
+ * @returns {{specs: {type: boolean, spec: string}[], whole: boolean}}
+ */
+function importSpecs(text) {
+  const strings = [];
+  const n = text.length;
+  let out = "";
+  let i = 0;
+  let prev = ""; // the last code character emitted, for regex-or-division
+  let word = ""; // the identifier `prev` ends, for `return /re/`
+  const braces = []; // one `{` depth per open `${`
+  let open = false; // a span the lex never closed — see `whole`
+  const template = () => {
+    while (i < n) {
+      const c = text[i];
+      if (c === "\\") i += 2;
+      else if (c === "`") {
+        out += "`";
+        i++;
+        prev = "`";
+        return;
+      } else if (c === "$" && text[i + 1] === "{") {
+        out += "${";
+        i += 2;
+        braces.push(0);
+        prev = "{";
+        return;
+      } else i++;
+    }
+    open = true;
+  };
+  while (i < n) {
+    const c = text[i];
+    const d = text[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < n && text[i] !== "\n") i++;
+      out += " ";
+    } else if (c === "/" && d === "*") {
+      const end = text.indexOf("*/", i + 2);
+      if (end === -1) open = true;
+      i = end === -1 ? n : end + 2;
+      out += " ";
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      let body = "";
+      while (j < n && text[j] !== c && text[j] !== "\n") {
+        if (text[j] === "\\") body += text[j++];
+        body += text[j++] ?? "";
+      }
+      i = text[j] === c ? j + 1 : j;
+      out += `${c}\u0000${strings.length}${c}`;
+      strings.push(body);
+      prev = c;
+    } else if (c === "`") {
+      i++;
+      out += "`";
+      template();
+    } else if (c === "/" && (prev === "" || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || (/[\w$]/.test(prev) && REGEX_AFTER_WORD.has(word)))) {
+      let j = i + 1;
+      let cls = false;
+      while (j < n && text[j] !== "\n" && (cls || text[j] !== "/")) {
+        if (text[j] === "\\") j++;
+        else if (text[j] === "[") cls = true;
+        else if (text[j] === "]") cls = false;
+        j++;
+      }
+      i = j + 1;
+      out += " 0 ";
+      prev = "0";
+      word = "";
+    } else if (braces.length && c === "{") {
+      braces[braces.length - 1]++;
+      out += c;
+      prev = c;
+      i++;
+    } else if (braces.length && c === "}") {
+      i++;
+      if (braces[braces.length - 1] === 0) {
+        braces.pop();
+        out += "}";
+        template();
+      } else {
+        braces[braces.length - 1]--;
+        out += c;
+        prev = c;
+      }
+    } else {
+      if (/[\w$]/.test(c)) word = /[\w$]/.test(prev) ? word + c : c;
+      if (!/\s/.test(c)) prev = c;
+      out += c;
+      i++;
+    }
+  }
+  const specs = [];
+  for (const m of out.matchAll(IMPORT_SPEC)) {
+    const raw = m[3] ?? m[5];
+    if (!raw.startsWith("\u0000")) continue; // not a whole string: a placeholder is the only literal code holds
+    specs.push({ type: Boolean(m[1]), spec: strings[Number(raw.slice(1))] });
+  }
+  return { specs, whole: !open && braces.length === 0 };
+}
+
 /** `packages/web/src/foo/bar.tsx` -> `bar`. */
 function basename(path) {
   const slash = path.lastIndexOf("/");
@@ -275,21 +410,27 @@ function pathKey(repoPath) {
   return bare.includes("/") ? bare : null;
 }
 
-/** Specifiers per blob, for `graphImports`: the regex pass is the cost. */
+/**
+ * Specifiers per blob, for `graphImports`: the regex pass is the cost. `null`
+ * when the lex did not end whole (`importSpecs`): the file's imports are
+ * unknown, and a short list would be a deleted edge.
+ */
 const SPECS_MEMO = new Map();
 function specsOf(file) {
   const scan = () => {
+    const { specs, whole } = importSpecs(file.text);
+    if (!whole) return null;
     const out = [];
-    for (const m of file.text.matchAll(IMPORT_SPEC)) {
-      if (m[1]) continue; // `import type`: erased, loads nothing — the rule `imports` reads by.
-      const spec = m[3] ?? m[5];
+    for (const { type, spec } of specs) {
+      if (type) continue; // `import type`: erased, loads nothing — the rule `imports` reads by.
       if (!ASSET_SPEC.test(spec) && !out.includes(spec)) out.push(spec);
     }
     return out;
   };
   if (!file.oid) return scan();
-  let specs = SPECS_MEMO.get(file.oid);
-  if (!specs) SPECS_MEMO.set(file.oid, (specs = scan()));
+  if (SPECS_MEMO.has(file.oid)) return SPECS_MEMO.get(file.oid);
+  const specs = scan();
+  SPECS_MEMO.set(file.oid, specs);
   return specs;
 }
 
@@ -305,7 +446,12 @@ export default Object.freeze({
   // 6: `.mts` / `.cts` are source (and `.d.mts` / `.d.cts` are not) — see the header.
   // 7: `graphConfigPath`, `graphContext` and `graphImports` exist — the import
   //    graph, aliases and workspace packages resolved (`lang/typescript-resolve.mjs`).
-  version: "7",
+  // 8: an import in a comment or a string is no edge (`importSpecs`), and a
+  //    resolved import reaches only the module at its full path (`graphKeysFor`).
+  // 9: a file whose lex ends with a comment, template or `${` still open has
+  //    unknown imports (`graphImports` -> null), and the graph is absent
+  //    rather than missing every edge after the misread spot.
+  version: "9",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: EXTS,
@@ -556,9 +702,11 @@ export default Object.freeze({
     const requireDir = opts.requireDir !== false;
     const base = dirSegments(path ?? "");
     const out = new Set();
-    for (const m of text.matchAll(IMPORT_SPEC)) {
-      if (m[1]) continue; // `import type` / `export type`: erased, loads nothing.
-      const spec = m[3] ?? m[5];
+    // A lex that did not end whole still yields what it read before the
+    // misread spot: a module reached only after it stays on the list, the
+    // direction this reading already errs in for a bare specifier.
+    for (const { type, spec } of importSpecs(text).specs) {
+      if (type) continue; // `import type` / `export type`: erased, loads nothing.
       if (!spec.startsWith("./") && !spec.startsWith("../")) continue;
       // Re-quoted so the extensionless form meets the closing quote
       // `PATH_REF` looks for — the specifier is read by the one rule that
@@ -590,18 +738,30 @@ export default Object.freeze({
    * was not found — rather than a package from outside. An external package
    * and an asset produce no entry at all.
    *
+   * `relative` marks a `./` / `../` specifier: its keys are matched as
+   * `imports` matches them, against every suffix `keysFor` offers. Every
+   * other candidate is a whole tree path the resolver built, and is matched
+   * only against `graphKeysFor` — a module's own full path — so `@/lib/x`
+   * (→ `src/lib/x`) does not also reach `vendor/src/lib/x.ts`, which answers
+   * to the suffix `src/lib/x` too.
+   *
+   * `null` when the file's imports are unknown — the lexer misread a spot it
+   * cannot recover from (`importSpecs`) — never a shorter list.
+   *
    * @param {{path: string, oid?: string, text: string}} file
    * @param {object | null} ctx  What `graphContext` returned for this tree.
-   * @returns {{spec: string, internal: boolean, candidates: string[]}[]}
+   * @returns {{spec: string, internal: boolean, relative?: boolean, candidates: string[]}[] | null}
    */
   graphImports(file, ctx) {
     const base = dirSegments(file.path ?? "");
+    const specs = specsOf(file);
+    if (specs === null) return null;
     const out = [];
-    for (const spec of specsOf(file)) {
+    for (const spec of specs) {
       if (spec.startsWith("./") || spec.startsWith("../")) {
         const keys = new Set();
         refKeys(`"${spec}"`, base, true, keys);
-        if (keys.size) out.push({ spec, internal: true, candidates: [...keys] });
+        if (keys.size) out.push({ spec, internal: true, relative: true, candidates: [...keys] });
         continue;
       }
       const r = resolveSpecifier(spec, file.path ?? "", ctx);
@@ -650,6 +810,27 @@ export default Object.freeze({
         const self = dir[dir.length - 1];
         for (let i = 0; i < parent.length; i++) keys.push(parent.slice(i).join("/") + "/" + self);
       }
+    }
+    return keys;
+  },
+
+  /**
+   * The keys `keysFor` offers that start at the tree's root: the module's own
+   * path, its compiled mirror, and an `index`'s directory — never a shorter
+   * suffix. What a resolved (non-relative) import is matched against in
+   * `metrics/graph.mjs`; see `graphImports`.
+   *
+   * @param {string} path
+   * @returns {string[]}
+   */
+  graphKeysFor(path) {
+    const name = basename(path);
+    const segs = dirSegments(path);
+    const mirrors = segs.includes("src") ? [segs, segs.map((s) => (s === "src" ? "dist" : s))] : [segs];
+    const keys = [];
+    for (const dir of mirrors) {
+      if (dir.length) keys.push(dir.join("/") + "/" + name);
+      if (name === "index" && dir.length > 1) keys.push(dir.join("/"));
     }
     return keys;
   },

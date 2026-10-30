@@ -454,6 +454,7 @@ export default Object.freeze({
   graphConfigPath: null,
   graphContext: null,
   graphImports: null,
+  graphKeysFor: null,
   /**
    * Every `dir/name` key the module at `path` answers to: each non-empty
    * suffix of its own directory, joined to its basename.

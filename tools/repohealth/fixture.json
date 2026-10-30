@@ -1,5 +1,5 @@
 {
-  "prereg": "2026-10-30a+6a4856e0",
+  "prereg": "2026-10-30a+c75fa639",
   "lastSha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
   "rows": [
     {
@@ -7,7 +7,7 @@
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 383,
@@ -454,7 +454,7 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 676,
@@ -937,7 +937,7 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 1088,
@@ -1441,7 +1441,7 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -1933,7 +1933,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 12,
           "files": 37,
-          "internal": 48,
+          "internal": 47,
           "largestCycle": 0,
           "resolved": 46
         }
@@ -1959,7 +1959,7 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -2451,7 +2451,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 12,
           "files": 37,
-          "internal": 48,
+          "internal": 47,
           "largestCycle": 0,
           "resolved": 46
         }
@@ -2477,7 +2477,7 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 3217,
@@ -3051,7 +3051,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 6,
           "files": 64,
-          "internal": 100,
+          "internal": 99,
           "largestCycle": 0,
           "resolved": 99
         }
@@ -3101,7 +3101,7 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 3322,
@@ -3678,7 +3678,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 6,
           "files": 69,
-          "internal": 111,
+          "internal": 110,
           "largestCycle": 0,
           "resolved": 110
         }
@@ -3725,7 +3725,7 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 6514,
@@ -4365,7 +4365,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 7,
           "files": 111,
-          "internal": 206,
+          "internal": 205,
           "largestCycle": 0,
           "resolved": 205
         }
@@ -4429,7 +4429,7 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 7853,
@@ -5092,7 +5092,7 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 7,
           "files": 147,
-          "internal": 312,
+          "internal": 311,
           "largestCycle": 0,
           "resolved": 311
         }
@@ -5147,7 +5147,7 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 9631,
@@ -5887,9 +5887,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 8,
           "files": 191,
-          "internal": 498,
+          "internal": 496,
           "largestCycle": 0,
-          "resolved": 497
+          "resolved": 496
         }
       },
       "tripwires": [],
@@ -5944,7 +5944,7 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 10303,
@@ -6708,9 +6708,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 8,
           "files": 202,
-          "internal": 563,
+          "internal": 561,
           "largestCycle": 2,
-          "resolved": 562
+          "resolved": 561
         }
       },
       "tripwires": [],
@@ -6773,7 +6773,7 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 10897,
@@ -7557,9 +7557,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 219,
-          "internal": 631,
+          "internal": 629,
           "largestCycle": 2,
-          "resolved": 630
+          "resolved": 629
         }
       },
       "tripwires": [],
@@ -7622,7 +7622,7 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -8414,9 +8414,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 226,
-          "internal": 657,
+          "internal": 655,
           "largestCycle": 2,
-          "resolved": 656
+          "resolved": 655
         }
       },
       "tripwires": [],
@@ -8479,7 +8479,7 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -9272,9 +9272,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 227,
-          "internal": 660,
+          "internal": 658,
           "largestCycle": 2,
-          "resolved": 659
+          "resolved": 658
         }
       },
       "tripwires": [],
@@ -9337,7 +9337,7 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 12294,
@@ -10148,9 +10148,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 252,
-          "internal": 722,
+          "internal": 720,
           "largestCycle": 2,
-          "resolved": 721
+          "resolved": 720
         }
       },
       "tripwires": [],
@@ -10221,7 +10221,7 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 12802,
@@ -11046,9 +11046,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 267,
-          "internal": 764,
+          "internal": 762,
           "largestCycle": 2,
-          "resolved": 763
+          "resolved": 762
         }
       },
       "tripwires": [
@@ -11134,7 +11134,7 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 13977,
@@ -11996,9 +11996,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 295,
-          "internal": 851,
+          "internal": 848,
           "largestCycle": 2,
-          "resolved": 849
+          "resolved": 848
         }
       },
       "tripwires": [
@@ -12093,7 +12093,7 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 13975,
@@ -12954,9 +12954,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 296,
-          "internal": 857,
+          "internal": 854,
           "largestCycle": 2,
-          "resolved": 855
+          "resolved": 854
         }
       },
       "tripwires": [],
@@ -13045,7 +13045,7 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 15599,
@@ -13923,9 +13923,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 313,
-          "internal": 914,
+          "internal": 911,
           "largestCycle": 2,
-          "resolved": 912
+          "resolved": 911
         }
       },
       "tripwires": [
@@ -14081,7 +14081,7 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 15723,
@@ -14964,9 +14964,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 9,
           "files": 320,
-          "internal": 935,
+          "internal": 933,
           "largestCycle": 2,
-          "resolved": 934
+          "resolved": 933
         }
       },
       "tripwires": [],
@@ -15122,7 +15122,7 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 16081,
@@ -16011,9 +16011,9 @@
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 10,
           "files": 325,
-          "internal": 949,
+          "internal": 947,
           "largestCycle": 2,
-          "resolved": 947
+          "resolved": 946
         }
       },
       "tripwires": [],
@@ -16169,7 +16169,7 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 16343,
@@ -16604,8 +16604,7 @@
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
           "packages/web/src/storage.ts",
-          "tools/repohealth/lang/typescript-ast.mjs",
-          "tools/repohealth/types.mjs"
+          "tools/repohealth/lang/typescript-ast.mjs"
         ],
         "value": [
           ".tsview.tsx",
@@ -16766,7 +16765,8 @@
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
           "scripts/fix-node-pty.mjs",
-          "scripts/run-e2e.mjs"
+          "scripts/run-e2e.mjs",
+          "tools/repohealth/types.mjs"
         ]
       },
       "classics": {
@@ -17103,14 +17103,14 @@
               "size": 2
             }
           ],
-          "edges": 1125,
+          "edges": 1102,
           "fanOutMax": 128,
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 11,
           "files": 387,
-          "internal": 1128,
+          "internal": 1102,
           "largestCycle": 2,
-          "resolved": 1126
+          "resolved": 1102
         }
       },
       "tripwires": [
@@ -17321,7 +17321,7 @@
       "day": "2026-09-22",
       "ts": 1790110804,
       "batch": false,
-      "prereg": "2026-10-30a+6a4856e0",
+      "prereg": "2026-10-30a+c75fa639",
       "size": {
         "value": {
           "appTsx": 16389,
@@ -17764,8 +17764,7 @@
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
           "packages/web/src/storage.ts",
-          "tools/repohealth/lang/typescript-ast.mjs",
-          "tools/repohealth/types.mjs"
+          "tools/repohealth/lang/typescript-ast.mjs"
         ],
         "value": [
           ".tsview.tsx",
@@ -17931,7 +17930,8 @@
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
           "scripts/fix-node-pty.mjs",
-          "scripts/run-e2e.mjs"
+          "scripts/run-e2e.mjs",
+          "tools/repohealth/types.mjs"
         ]
       },
       "classics": {
@@ -18268,14 +18268,14 @@
               "size": 2
             }
           ],
-          "edges": 1170,
+          "edges": 1146,
           "fanOutMax": 130,
           "fanOutMaxPath": "packages/web/src/App.tsx",
           "fanOutP95": 11,
           "files": 399,
-          "internal": 1173,
+          "internal": 1146,
           "largestCycle": 2,
-          "resolved": 1171
+          "resolved": 1146
         }
       },
       "tripwires": [],

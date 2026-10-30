@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pushState, startPush } from "../dist/git.js";
+import { landedAlready, recordLanded } from "../dist/pushlanded.js";
 import { pushFailureText, pushRefusedByRule, refsLockedAt } from "../dist/pushverdict.js";
 
 test("a refused push names the hook step from STDOUT, not only git's stderr", () => {
@@ -177,6 +178,9 @@ test("a lock refusal names the sha the remote is at; any other refusal beside it
   const lock = `!\trefs/heads/main:refs/heads/main\t[remote rejected] (cannot lock ref 'refs/heads/main': is at ${sha} but expected ${old})`;
   assert.deepEqual(refsLockedAt(`To x\n${lock}\nDone\n`, "error: failed to push some refs to 'x'\n"), { to: "x", refs: [{ src: "refs/heads/main", dst: "refs/heads/main", at: sha }] });
   assert.deepEqual(refsLockedAt("To ../r.git\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (incorrect old value provided)\nDone\n", ""), { to: "../r.git", refs: [{ src: "refs/heads/main", dst: "refs/heads/main" }] });
+  // a NEW branch the other push created first: local receive-pack's words, then GitHub's
+  assert.deepEqual(refsLockedAt("To ../r.git\n!\trefs/heads/f:refs/heads/f\t[remote rejected] (reference already exists)\nDone\n", ""), { to: "../r.git", refs: [{ src: "refs/heads/f", dst: "refs/heads/f" }] });
+  assert.deepEqual(refsLockedAt("To x\n!\trefs/heads/f:refs/heads/f\t[remote rejected] (cannot lock ref 'refs/heads/f': reference already exists)\nDone\n", ""), { to: "x", refs: [{ src: "refs/heads/f", dst: "refs/heads/f" }] });
   assert.equal(refsLockedAt(`To x\n${lock}\n!\trefs/heads/dev:refs/heads/dev\t[remote rejected] (protected branch hook declined)\nDone\n`, ""), null);
   assert.equal(refsLockedAt("To x\n!\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)\nDone\n", ""), null);
   // the hook's own log quoting the phrase is not git's porcelain line
@@ -202,5 +206,62 @@ test("a lock refusal where the remote moved to someone else's commit stays a ref
     const r = await startPush(wt).done;
     assert.equal(r.ok, false);
     assert.match(r.error, /remote refused/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// review 2026-10-30: answered as landed, the push still left `refs/remotes/origin/<branch>` where it
+// was — git status said ahead 1 — and a first push meant to set the upstream left none. The other
+// push is a second clone's (by URL), so nothing but this push can move this clone's tracking ref.
+test("a push answered as already landed moves the tracking ref to the sha the remote holds", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushlandedref-"));
+  try {
+    const wt = hookRepo(dir, `git push -q --no-verify "${join(dir, "remote.git")}" HEAD:refs/heads/$(git rev-parse --abbrev-ref HEAD) </dev/null`);
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, true, r.error);
+    const g = (...a) => execFileSync("git", a, { cwd: wt }).toString().trim();
+    assert.equal(g("rev-parse", "@{u}"), g("rev-parse", "HEAD"));
+    assert.equal(g("rev-list", "--count", "@{u}..HEAD"), "0");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a first push answered as already landed still sets the upstream it asked for", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushlandedup-"));
+  try {
+    const wt = hookRepo(dir, `git push -q --no-verify "${join(dir, "remote.git")}" HEAD:refs/heads/$(git rev-parse --abbrev-ref HEAD) </dev/null`);
+    execFileSync("sh", ["-c", "git checkout -q -b feature && git commit -q --allow-empty -m three"], { cwd: wt });
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, true, r.error);
+    const g = (...a) => execFileSync("git", a, { cwd: wt }).toString().trim();
+    assert.equal(g("rev-parse", "--abbrev-ref", "@{u}"), "origin/feature");
+    assert.equal(g("rev-parse", "origin/feature"), g("rev-parse", "HEAD"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// review 2026-10-30: a first push goes to origin by name (--set-upstream origin <b>), but %(push)
+// follows remote.pushDefault — so with a fork as the push default, the fork's tracking ref was moved
+// to a sha only origin was confirmed at, and git status called the branch level with the fork.
+test("a landed first push never moves another remote's tracking ref", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushdefault-"));
+  try {
+    execFileSync("sh", ["-c", "git init -q --bare origin.git && git init -q --bare fork.git && git init -q wt && cd wt && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m one && git remote add origin ../origin.git && git remote add fork ../fork.git && git config remote.pushDefault fork && git config push.default current && git push -q fork HEAD:refs/heads/feat && git checkout -q -b feat && git commit -q --allow-empty -m two"], { cwd: dir });
+    const wt = join(dir, "wt");
+    const g = (...a) => execFileSync("git", a, { cwd: wt }).toString().trim();
+    const before = g("rev-parse", "refs/remotes/fork/feat");
+    await recordLanded(wt, [{ dst: "refs/heads/feat", sha: g("rev-parse", "HEAD") }], { remote: "origin", branch: "feat" });
+    assert.equal(g("rev-parse", "refs/remotes/fork/feat"), before);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// review 2026-10-30: the ls-remote that confirms a lock refusal had no timeout — a hung remote or a
+// credential prompt held the push job open for ever. A timeout cannot confirm: it stays a refusal.
+test("a remote that never answers the landed check is a refusal, within the bound", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushhang-"));
+  try {
+    execFileSync("sh", ["-c", "git init -q wt && cd wt && git config user.email t@t && git config user.name t && git config protocol.ext.allow always && git commit -q --allow-empty -m one"], { cwd: dir });
+    const wt = join(dir, "wt");
+    const t0 = Date.now();
+    const landed = await landedAlready(wt, { to: "ext::sh -c sleep% 5", refs: [{ src: "HEAD", dst: "refs/heads/main" }] }, 500);
+    assert.equal(landed, null);
+    assert.ok(Date.now() - t0 < 4000, `took ${Date.now() - t0}ms`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -203,6 +203,7 @@ export default Object.freeze({
   graphConfigPath: null,
   graphContext: null,
   graphImports: null,
+  graphKeysFor: null,
   analyzer: null,
   analyzerReason: null,
 });

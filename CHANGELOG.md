@@ -5,6 +5,21 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.14
+
+0.1.13 and 0.1.12 were tagged but never released; their changes ship here.
+
+### New
+
+- **Token stats step back through earlier weeks.** The weekly limit chart has older and newer arrows at its two edges, over the desktop's 30 days of kept usage. A past week shows no rate or projection, and the running window's figure hides while you look back.
+- **Repo health reads the import graph.** Two new series: the files caught in import cycles (the largest cycles listed with their members) and imports per file at the 95th percentile, with the file that imports most. TypeScript `paths`, `baseUrl` and workspace packages are resolved, so a missed edge does not hide a cycle; an import inside a comment or a string is not an edge, and a file whose imports cannot be read makes the reading absent rather than smaller.
+
+### Fixed
+
+- A push that lost a race to another push of the same commit says it landed, instead of showing a failure for work that is on the remote, and leaves git's tracking branch and upstream as a successful push would. A remote that moved to anyone else's commit, or one that does not answer the check in time, is still a refusal.
+- The context badge no longer reads a meter figure that the conversation itself shows, such as a quoted line, a diff row or a tool result.
+- The always-on overhead is read from the session's first request even when that request names no model; it is absent rather than a bigger, later figure.
+
 ## 0.1.13
 
 0.1.12 was tagged but never released; its changes ship here.

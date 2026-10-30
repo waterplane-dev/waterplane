@@ -112,6 +112,7 @@ export default Object.freeze({
   graphConfigPath: null,
   graphContext: null,
   graphImports: null,
+  graphKeysFor: null,
 
   /**
    * No parser, and a sentence rather than a silence: `metrics/route.mjs` puts

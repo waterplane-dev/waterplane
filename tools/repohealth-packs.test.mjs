@@ -411,7 +411,7 @@ test("a declined capability is null — never undefined, 0 or false", () => {
   // No pack but TypeScript has an import-graph rule yet, and saying so is
   // what makes the graph absent for them rather than a tree with no coupling.
   for (const pack of [common, kotlin, python, dart, shell, c]) {
-    for (const cap of ["graphConfigPath", "graphContext", "graphImports"]) {
+    for (const cap of ["graphConfigPath", "graphContext", "graphImports", "graphKeysFor"]) {
       assert.equal(pack[cap], null, `${pack.name}.${cap} must be an explicit null`);
     }
   }
@@ -861,6 +861,7 @@ test("graph: a workspace package resolves through its exports, and dist is answe
   );
   assert.equal(main.candidates[0], "packages/shared/dist/index");
   assert.ok(typescript.keysFor("packages/shared/src/index.ts").includes(main.candidates[0]), "the src module answers to its dist key");
+  assert.ok(typescript.graphKeysFor("packages/shared/src/index.ts").includes(main.candidates[0]), "and so does the graph's full-path match");
   assert.equal(sub.candidates[0], "packages/shared/dist/wire/notify");
 });
 
@@ -928,4 +929,67 @@ test("graph: a long import chain does not overflow the stack", () => {
   const comps = cyclesOf(n, adj);
   assert.equal(comps.length, 1);
   assert.equal(comps[0].length, n);
+});
+
+test("graph: an import in a comment or a string loads nothing, so it is no edge", () => {
+  const snap = {
+    files: [
+      file("src/a.ts", 'import { b } from "./b";'),
+      file(
+        "src/b.ts",
+        [
+          '// was: import { a } from "./a";',
+          '/* import x from "./a" */',
+          'const doc = `import y from "./a"; ${n} import "./a"`;',
+          "const q = 'import z from \"./a\"';",
+          'const r = /import "\\.\\/a"/;',
+          'const ok = `${(() => { return "}"; })()}`;',
+          'import { c } from "./c";',
+        ].join("\n"),
+      ),
+      file("src/c.ts", 'const url = "http://x"; // a slash in a string is no comment\nimport "./d";'),
+      file("src/d.ts"),
+    ],
+    graphContexts: {},
+  };
+  const got = measureGraph(snap, null, 0, GRAPH_TS).value;
+  assert.equal(got.cycleFiles, 0, "a commented-out import is no cycle");
+  assert.equal(got.edges, 3, "the real imports after the comments, strings and regex still count");
+  // The same text, asked the `imports` question: no edge to ./a either.
+  assert.deepEqual([...typescript.imports(snap.files[1].text, "src/b.ts")].some((k) => k.endsWith("src/a")), false);
+});
+
+// A lexer misreads some spots — `/*` in JSX text, a regex after `)` that the
+// lexer takes for a division, a lone backtick in JSX text — and each opens a
+// comment or a template that runs to the end of the file. Every import after
+// it would be lost and the cycle through it hidden: a clean number for the
+// file read worst. The file's imports are unknown, so the reading is absent.
+const MISREAD = [
+  ["JSX text holding /*", "src/b.tsx", 'const A = () => <p>matches src/*.ts</p>;\nconst L = lazy(() => import("./a"));\n'],
+  ["a regex after ) holding a backtick", "src/b.ts", 'if (ok) /`/.test(s);\nconst m = await import("./a");\nconst t = `x`;\n'],
+  ["a lone backtick in JSX text", "src/b.tsx", 'const K = () => <kbd>`</kbd>;\nconst L = lazy(() => import("./a"));\n'],
+];
+for (const [what, path, text] of MISREAD) {
+  test(`graph: ${what} leaves the file's imports unknown — the reading is absent, never a lost cycle`, () => {
+    assert.equal(typescript.graphImports({ path, text }, null), null, "imports unknown, not a short list");
+    const snap = { files: [file("src/a.ts", 'import "./b";'), file(path, text)], graphContexts: {} };
+    const got = measureGraph(snap, null, 0, GRAPH_TS);
+    assert.equal(got.value, null);
+    assert.match(got.reason, new RegExp(`\`${path.replace(".", "\\.")}\``));
+  });
+}
+
+test("graph: an alias reaches the module at its own path, never one sharing its suffix", () => {
+  const ctx = ctxOf({ "tsconfig.json": '{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] } } }' });
+  const snap = {
+    files: [
+      file("src/m.ts", 'import "@/lib/x";'),
+      file("src/lib/x.ts", 'import "../m";'),
+      file("vendor/src/lib/x.ts", 'import "../../../src/m";'),
+    ],
+    graphContexts: { typescript: ctx },
+  };
+  const got = measureGraph(snap, null, 0, GRAPH_TS).value;
+  assert.deepEqual(got.cycles, [{ size: 2, files: ["src/lib/x.ts", "src/m.ts"] }]);
+  assert.equal(got.edges, 3);
 });
