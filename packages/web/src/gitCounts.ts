@@ -1,4 +1,4 @@
-import type { RepoTarget } from "@waterplane/shared";
+import type { GitBranch, GitStatus, RepoTarget } from "@waterplane/shared";
 
 /**
  * What a repo's git button says: files changed, commits out (↑) and in (↓)
@@ -36,4 +36,15 @@ export function gitTitle(r: GitCounted): string {
   if ((r.behind ?? 0) > 0) parts.push(`${r.behind} commit${r.behind! > 1 ? "s" : ""} to pull`);
   if (noOrigin(r)) parts.push("no origin remote, nothing to push to");
   return `${parts.length ? parts.join(", ") : "nothing pending"} — open git`;
+}
+
+/**
+ * The upstream the branch LIST prints for a row. For the CURRENT branch it is the status header's
+ * verdict (host `branchHeader`), the one reading the sheet's head shows, so the row and the head
+ * agree when status is the fresher read. Another branch, or no status for this one yet, keeps its
+ * own listing — which reads a `[gone]` upstream as none through the same host helper
+ * (`liveUpstream`, design round 5).
+ */
+export function branchUpstream(b: Pick<GitBranch, "name" | "current" | "upstream">, status: Pick<GitStatus, "branch" | "upstream"> | null | undefined): string | undefined {
+  return b.current && status?.branch === b.name ? status.upstream : b.upstream;
 }

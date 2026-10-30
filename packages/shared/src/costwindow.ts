@@ -26,7 +26,7 @@
  */
 import type { CostBreakdown } from "./pricing.js";
 import { addCost, fmtUsd, normalizeModel, zeroCost } from "./pricing.js";
-import { addTotals, hourToMs, tokenTotal, zeroTotals } from "./tokens.js";
+import { addTotals, tokenTotal, zeroTotals } from "./tokens.js";
 import type { ModelSlice, TokenGroup, TokenTotals, UsageSample } from "./wire/telemetry.js";
 import type { CostConvo, CostConvoRest, CostHour, CostHourRepo, CostLaunch, CostWindowDoc } from "./wire/costwindow.js";
 import type { FanoutRun } from "./wire/work.js";
@@ -42,11 +42,42 @@ export const HOUR_MS = 3_600_000;
  */
 export const COST_CONVOS_CAP = 60;
 
-/** Top of the local hour `t` is in. Same as host `hourFloorMs` / web `hourFloor`. */
-export function hourFloor(t: number): number {
+/**
+ * The local hour bucket — ONE trio, every ledger, cut and chart on both ends keys an hour by it:
+ * `hourKey(t)` (`YYYY-MM-DDTHH`, the key the host's token store files a request under),
+ * `hourKeyMs(key)` (that key back to an instant) and `hourFloor(t)`, which IS
+ * `hourKeyMs(hourKey(t))`. So for every t, `hourKeyMs(hourKey(t)) === hourFloor(t)`, and every
+ * comparison of an hour top against a parsed bucket key is exact (`shared/test/hourkey.test.mjs`
+ * walks a Berlin fall-back and spring-forward, Asia/Kolkata and Australia/Lord_Howe's 30-min DST).
+ *
+ * **The fall-back hour is ONE bucket.** Both passes of a repeated local hour carry the same key,
+ * so the store has already merged them; the bucket's instant is its FIRST top, and the bucket is
+ * up to two hours wide. A window edge inside the second pass therefore counts the whole merged
+ * bucket — up to 1 h over-counted, once a year per zone. A floor that splits the two passes
+ * (543b2feb's offset arithmetic) agrees with no parsed key and turns that into an UNDER-count, so
+ * it is not done here. Splitting the hour needs a key that says which pass it is (e.g. an offset
+ * suffix on the second pass), i.e. a store VERSION bump and a rescan — a separate proposal.
+ *
+ * A spring-forward hour that does not exist has no key; Lord Howe's half-hour gap gives its
+ * `T02` bucket the 30 minutes that do exist, and `hourKeyMs` resolves to their start.
+ */
+export function hourKey(t: number): string {
   const d = new Date(t);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}`;
+}
+
+/** `YYYY-MM-DDTHH` → the local top of that hour, epoch ms; a repeated hour resolves to its FIRST
+ *  pass. A missing or unreadable hour reads as the day's midnight. See `hourKey`. */
+export function hourKeyMs(key: string): number {
+  const [y, m, d] = key.slice(0, 10).split("-").map(Number);
+  const h = Number(key.slice(11, 13));
+  return new Date(y, (m || 1) - 1, d || 1, Number.isFinite(h) ? h : 0).getTime();
+}
+
+/** Top of the local hour bucket `t` is in: `hourKeyMs(hourKey(t))`, by definition. See `hourKey`. */
+export function hourFloor(t: number): number {
+  return hourKeyMs(hourKey(t));
 }
 
 /**
@@ -65,18 +96,6 @@ export function hourFloor(t: number): number {
  */
 export function windowStartHour(openedAt: number): number {
   return hourFloor(openedAt + HOUR_MS / 2);
-}
-
-/** `YYYY-MM-DDTHH` in the LOCAL zone — the host's `localHour`, one copy both ends use. */
-export function hourKey(t: number): string {
-  const d = new Date(t);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}`;
-}
-
-/** `YYYY-MM-DDTHH` → the local top of that hour, epoch ms (`tokens.ts`' `hourToMs`). */
-export function hourKeyMs(key: string): number {
-  return hourToMs(key);
 }
 
 // ── small folds ──────────────────────────────────────────────────────────
@@ -439,6 +458,7 @@ export function ptsText(usd: number | null | undefined, cal: PtsCalibration | Pt
 
 /** One sentence per refusal — a statement of what is missing, never a hint. */
 export function ptsRefusalText(r: PtsRefusal): string {
+  // closed: `why` is `ptsCalibration`, computed by this build
   switch (r.why) {
     case "noSamples":
       return "Points can't be calibrated yet — there are not two weekly readings in this span to compare.";

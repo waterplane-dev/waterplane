@@ -13,7 +13,7 @@
  */
 import { useState } from "react";
 import { CircleDollarSign, Plus, UserRound, X } from "lucide-react";
-import { hasScrapedWindows, withLimit, withoutLimit, type BillingProfile, type BudgetPeriod, type UsageBudget } from "@waterplane/shared";
+import { hasScrapedWindows, withLimit, withoutLimit, wordOf, type BillingProfile, type BudgetPeriod, type UsageBudget } from "@waterplane/shared";
 import { useCore } from "../../sdk";
 import { SetChoice, SetCustom, SetNote } from "../../SettingsKit";
 import { ConfirmButton } from "../../Confirm";
@@ -28,6 +28,8 @@ type Pick = "auto" | Exclude<BillingProfile, "unknown">;
 const PROFILE_WORD: Record<BillingProfile, string> = {
   subscription: "a Claude subscription", api: "an API key", cloud: "Bedrock or Vertex", unknown: "not detected yet",
 };
+/** `profile` is the host's: a newer host's profile is still a word. */
+const profileWord = (p: string): string => wordOf(PROFILE_WORD, p, "a plan this app version cannot name");
 
 export function BillingSettings() {
   const c = useCore();
@@ -109,10 +111,10 @@ export function BillingSettings() {
         note={!status
           ? "This desktop has not reported one — the usage chips show the 5-hour and weekly windows."
           : status.source === "setting"
-            ? <>You set this to {PROFILE_WORD[status.profile]}. Auto-detect clears it.</>
+            ? <>You set this to {profileWord(status.profile)}. Auto-detect clears it.</>
             : status.profile === "unknown"
               ? "Not detected — the usage chips show the 5-hour and weekly windows."
-              : <>Detected: {PROFILE_WORD[status.profile]}.</>}
+              : <>Detected: {profileWord(status.profile)}.</>}
         more={<p>A subscription is read from <code>/usage</code> (two windows). An API key or a cloud account has no such windows, so the chips show dollars for the period below instead and <code>/usage</code> is not asked.</p>}
       />
 

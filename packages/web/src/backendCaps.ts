@@ -207,6 +207,7 @@ export function usageReadNoWallText(label: string): string {
 /** The wording, split out so the test can pin it without building a descriptor
  *  per case. One sentence per capability, worded once. */
 export function reasonText(cap: AnyCap, label: string): string {
+  // closed: the cap is one of this file's own BoolCap/OptCap names
   switch (cap) {
     case "transcript":
       return `this session runs ${label}, which keeps no Claude conversation log — there is no transcript to fork from here. The terminal scrollback is still on this screen.`;

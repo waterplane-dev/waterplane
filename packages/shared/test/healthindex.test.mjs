@@ -347,6 +347,45 @@ test("a clear rise is called and worded with the falling metrics", () => {
   assert.match(w.body, /fewer escape hatches/);
 });
 
+test("a rise that lifts the cap says so, and the parts add up to the move", () => {
+  // Every other entry at its good line (100); size far over its line caps the
+  // score at worst + 30. The last week fixes size.
+  const good = { retouch: 0.15, hatches: 200, md: 12_000, desc: 4_000, untested: 200 };
+  const rows = [];
+  for (let w = 0; w < 10; w++) rows.push(row(w, { ...good, lineMean: 20_000 + (w % 2 ? 100 : -100), max: 40_000 }));
+  rows.push(row(10, { ...good, lineMean: 600, max: 1200 }));
+  const s = healthIndex(rows, null);
+  const [prev, last] = s.points.slice(-2);
+  assert.equal(prev.cappedBy, "size");
+  assert.equal(last.cappedBy, null);
+  const m = assessHealthMove(s.points);
+  assert.equal(m.kind, "rise");
+  const w = healthMoveWords(s.points, m, last.week);
+  assert.match(w.body, /files got shorter \(\+\d+\)/);
+  assert.match(w.body, /file length no longer holds the score down \(\+\d+\)/);
+  const named = [...w.body.matchAll(/\(\+(\d+)\)/g)].reduce((t, x) => t + Number(x[1]), 0);
+  assert.ok(Math.abs(named - m.delta) <= 1, `${named} vs ${m.delta}: ${w.body}`);
+  assert.doesNotMatch(w.body, /split up/, "the tree kept its file count: no split note");
+});
+
+test("a rise carried by file length while the files multiplied says it is mostly splitting", () => {
+  // Hatches (per 1,000 lines) at zero and untested a share of files, so only size and the tree move.
+  const good = { retouch: 0.15, hatches: 0, md: 12_000, desc: 4_000, untested: 200 };
+  const rows = [];
+  for (let w = 0; w < 10; w++) rows.push(row(w, { ...good, lineMean: 20_000 + (w % 2 ? 100 : -100), max: 40_000, files: 1500, loc: 800_000 }));
+  rows.push(row(10, { ...good, lineMean: 600, max: 1200, files: 5400, loc: 1_060_000 }));
+  const s = healthIndex(rows, null);
+  const m = assessHealthMove(s.points);
+  const w = healthMoveWords(s.points, m, s.points[s.points.length - 1].week);
+  assert.match(w.body, /Mostly files split up: 1,500 → 5,400 source files while the code went from 800,000 to 1,060,000 lines\. The score cannot tell whether the design got better\./);
+  // The same move with the code shrinking by more than a tenth is not called splitting.
+  rows[10] = row(10, { ...good, lineMean: 600, max: 1200, files: 5400, loc: 600_000 });
+  const s2 = healthIndex(rows, null);
+  const m2 = assessHealthMove(s2.points);
+  assert.equal(m2.kind, "rise");
+  assert.doesNotMatch(healthMoveWords(s2.points, m2).body, /split up/);
+});
+
 test("a slow slide is called on the month horizon when no single week stands out", () => {
   const rows = steady(12);
   // Four weeks of lineMean ×1.2: ~0.9 points a week (under the 2-point floor), ~3.5 over the month.
@@ -521,4 +560,10 @@ test("no scored week names what the latest week lacks, with the engine's reason"
   const two = row(0, { context: null, retouch: null });
   assert.match(noScoredWeekWords([two]), /no re-touches \(x\), no CLAUDE\.md \+ skill descriptions \(x\)$/);
   assert.equal(noScoredWeekWords([]), "no week has every enabled reading yet, so there is no scored week");
+});
+
+test("isoWeekOf refuses a day that does not exist (SS-1)", () => {
+  assert.equal(isoWeekOf("2026-02-31"), null);
+  assert.equal(isoWeekOf("2026-13-01"), null);
+  assert.equal(isoWeekOf("2026-02-28"), "2026-02-23");
 });

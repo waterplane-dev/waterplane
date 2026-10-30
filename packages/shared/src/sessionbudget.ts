@@ -38,7 +38,8 @@ import { sourceSpendProblems } from "./sourceshape.js";
 import { BUDGET_STALE_MS } from "./budget.js";
 import { weekUsdPerPct } from "./sessioncost.js";
 import { fmtUsd } from "./pricing.js";
-import { fmtCount } from "./tokens.js";
+import { fmtCount, fmtNative } from "./tokens.js";
+import { CLAUDE_LEDGER_LABEL, undatedClause } from "./ledgerspan.js";
 
 /** `native`: the backend's own unit (Copilot's AI credits), named by `SessionBudget.nativeUnit` —
  *  never converted to tokens or dollars, never summed with another unit. */
@@ -70,7 +71,10 @@ export type SessionBudgetUnknown = "noSpark" | "unpriced" | "noReading" | "stale
   /** A backend's own source did not state the spend in this unit (tokens, dollars). */
   | "unstated"
   /** A percent, on a session whose backend does not spend from claude's windows. */
-  | "notClaude";
+  | "notClaude"
+  /** claude's ledger holds records it could not date that could fall in this window
+   *  (`SessionBudgetCal.sessionUndated`/`weeklyUndated`): its cost would be a floor. */
+  | "undated";
 
 /** Host-computed dollars per window point, riding `SessionInfo.budget`. */
 export interface SessionBudgetCal {
@@ -78,6 +82,10 @@ export interface SessionBudgetCal {
   checkedAt: number;
   sessionUsdPerPct: number | null;
   weeklyUsdPerPct: number | null;
+  /** Records the ledger could not date that could fall in that window — why its figure is null
+   *  (shared `undatedWhy`). Present only when above 0; absent on an older host. */
+  sessionUndated?: number;
+  weeklyUndated?: number;
 }
 
 export interface SessionBudgetVerdict {
@@ -89,6 +97,8 @@ export interface SessionBudgetVerdict {
   /** The subagent share of `spent`, same unit — no total prints without its split. */
   agentShare?: number | null;
   why?: SessionBudgetUnknown;
+  /** With `why: "undated"`, how many records — the count `undatedWhy` words. */
+  undated?: number;
   /** The cap's `nativeUnit`, carried so the sentence and the chip can name it. */
   nativeUnit?: string;
 }
@@ -142,16 +152,21 @@ export function windowUsdPerPct(windowCostUsd: number | null | undefined, pct: n
  */
 export function sessionBudgetCal(
   u: UsageInfo | null | undefined,
-  costs: { session: number | null | undefined; weekly: number | null | undefined },
+  costs: { session: number | null | undefined; weekly: number | null | undefined; sessionUndated?: number; weeklyUndated?: number },
   now: number,
 ): SessionBudgetCal | null {
   if (!u || !u.ok || !u.checkedAt || now - u.checkedAt > BUDGET_STALE_MS) return null;
   const gone = (at: number | null) => at != null && at <= now;
   if (gone(u.sessionResetAt) && gone(u.weeklyResetAt)) return null;
+  const count = (n: number | undefined) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? n : undefined);
+  const su = count(costs.sessionUndated);
+  const wu = count(costs.weeklyUndated);
   return {
     checkedAt: u.checkedAt,
     sessionUsdPerPct: gone(u.sessionResetAt) ? null : windowUsdPerPct(costs.session, u.sessionPct),
     weeklyUsdPerPct: gone(u.weeklyResetAt) ? null : windowUsdPerPct(costs.weekly, u.weeklyPct),
+    ...(su != null && !gone(u.sessionResetAt) ? { sessionUndated: su } : {}),
+    ...(wu != null && !gone(u.weeklyResetAt) ? { weeklyUndated: wu } : {}),
   };
 }
 
@@ -207,7 +222,7 @@ export function sessionSpend(
   cal: SessionBudgetCal | null | undefined,
   now: number,
   nativeUnit?: string,
-): { value: number | null; agent: number | null; why?: SessionBudgetUnknown } {
+): { value: number | null; agent: number | null; why?: SessionBudgetUnknown; undated?: number } {
   const unknown = (why: SessionBudgetUnknown) => ({ value: null, agent: null, why });
   if (!spark) return unknown("noSpark");
   if (unit === "native") {
@@ -226,7 +241,11 @@ export function sessionSpend(
   if (!cal) return unknown("noReading");
   if (now - cal.checkedAt > BUDGET_STALE_MS) return unknown("stale");
   const per = unit === "sessionPct" ? cal.sessionUsdPerPct : cal.weeklyUsdPerPct;
-  if (per == null || !(per > 0)) return unknown("noCalibration");
+  if (per == null || !(per > 0)) {
+    // The real cause first: a window whose cost would be a floor, never "too young".
+    const undated = unit === "sessionPct" ? cal.sessionUndated : cal.weeklyUndated;
+    return undated != null && undated > 0 ? { ...unknown("undated"), undated } : unknown("noCalibration");
+  }
   return { value: spark.costUsd / per, agent: spark.agentCostUsd != null ? spark.agentCostUsd / per : null };
 }
 
@@ -241,7 +260,7 @@ export function sessionBudgetVerdict(
 ): SessionBudgetVerdict {
   const s = sessionSpend(cfg.unit, spark, cal, now, cfg.nativeUnit);
   const base = { unit: cfg.unit, max: cfg.max, spent: s.value, agentShare: s.agent, ...(cfg.nativeUnit ? { nativeUnit: cfg.nativeUnit } : {}) };
-  if (s.value == null) return { ...base, state: "unknown", why: s.why };
+  if (s.value == null) return { ...base, state: "unknown", why: s.why, ...(s.undated != null ? { undated: s.undated } : {}) };
   if (!running) return { ...base, state: "unknown", why: "notRunning" };
   return { ...base, state: s.value >= cfg.max ? "over" : "ok" };
 }
@@ -254,11 +273,6 @@ export function sessionBudgetHeld(s: Pick<SessionInfo, "budget">): boolean {
 
 function fmtPct(n: number): string {
   return n < 10 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n));
-}
-
-/** A native amount: as stated, at most one decimal — never a "≈", nothing was converted. */
-function fmtNative(n: number): string {
-  return Number.isInteger(n) ? fmtCount(n) : String(Math.round(n * 10) / 10);
 }
 
 /** One figure in a unit. A percent is a calibrated estimate, so it says "≈". */
@@ -279,13 +293,16 @@ export function sessionBudgetLabel(cfg: SessionBudget): string {
     case "sessionPct": return `≤ ${fmtPct(cfg.max)}% of this 5-hour window`;
     case "weeklyPct": return `≤ ${fmtPct(cfg.max)}% of this week`;
     case "native": return `≤ ${fmtIn("native", cfg.max, cfg.nativeUnit)}`;
+    // `unit` is stored on the host and served to every phone: a unit a newer
+    // build adds reaches an older one with no case for it.
+    default: return "a budget this app version cannot read";
   }
 }
 
 /** Why a verdict cannot say, as a sentence that ends on what it means for the
  *  person: nothing is held. `readingAgeMs` sharpens the stale case, `unit` the
- *  `unstated` one. */
-export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number, unit?: SessionBudgetUnit, nativeUnit?: string): string {
+ *  `unstated` one. A reason this build does not know gets the generic sentence. */
+export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number, unit?: SessionBudgetUnit, nativeUnit?: string, undated?: number): string {
   const tail = " — nothing is held";
   switch (why) {
     case "noSpark": return `can't tell: this session has not logged a turn yet${tail}`;
@@ -300,6 +317,10 @@ export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs
     case "unstated":
       return `can't tell: this session's backend has not stated what it spent${unit === "tok" ? " in tokens" : unit === "usd" ? " in dollars" : unit === "native" ? ` in ${nativeUnit ?? "its own unit"}` : ""}${tail}`;
     case "notClaude": return `can't tell: ${SESSION_BUDGET_WINDOWS_CLAUDE}, which this session's backend does not spend from${tail}`;
+    case "undated": return `can't tell: ${undatedClause(undated) ?? `${CLAUDE_LEDGER_LABEL}'s ledger holds records it could not date, which this window could be missing`}${tail}`;
+    // TOTAL on purpose: `why` arrives on the wire, and a newer host's reason reaches an older
+    // bundle that has no case for it — that must still read as a sentence, never `undefined`.
+    default: return `can't tell: this budget could not be checked${tail}`;
   }
 }
 
@@ -324,7 +345,7 @@ export const SESSION_BUDGET_PCT_CAVEAT = "≈, from this desktop's spend — oth
 
 /** The verdict in a sentence: spend, its subagent share, and where it stands. */
 export function sessionBudgetText(v: SessionBudgetVerdict): string {
-  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark", undefined, v.unit, v.nativeUnit);
+  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark", undefined, v.unit, v.nativeUnit, v.undated);
   const share = v.agentShare != null && v.agentShare > 0 ? `, ${fmtIn(v.unit, v.agentShare, v.nativeUnit)} of it in subagents` : "";
   const cap = isPct(v.unit) ? fmtIn(v.unit, v.max).replace("≈", "") : fmtIn(v.unit, v.max, v.nativeUnit);
   const caveat = isPct(v.unit) ? ` (${SESSION_BUDGET_PCT_CAVEAT})` : "";

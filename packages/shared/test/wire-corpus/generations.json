@@ -1,0 +1,64 @@
+{
+  "0.1.11": {
+    "tokenwindows": {},
+    "costwindow": {},
+    "tokenstats": {}
+  },
+  "f99f4328": {
+    "tokenwindows": {
+      "undated": 6
+    },
+    "costwindow": {
+      "undated": 6
+    },
+    "tokenstats": {
+      "undated": 6
+    }
+  },
+  "52f2fadb": {
+    "tokenwindows": {
+      "undated": 6,
+      "undatedUntil": 1793246340000
+    },
+    "costwindow": {
+      "undated": 6
+    },
+    "tokenstats": {
+      "undated": 6,
+      "undatedUntil": 1793246340000
+    }
+  },
+  "e976a22d": {
+    "tokenwindows": {
+      "undated": 6,
+      "undatedUntil": 1793246340000,
+      "undatedLogs": [
+        [
+          1792476000000,
+          5
+        ],
+        [
+          1793246340000,
+          1
+        ]
+      ]
+    },
+    "costwindow": {
+      "undated": 1
+    },
+    "tokenstats": {
+      "undated": 6,
+      "undatedUntil": 1793246340000,
+      "undatedLogs": [
+        [
+          1792476000000,
+          5
+        ],
+        [
+          1793246340000,
+          1
+        ]
+      ]
+    }
+  }
+}

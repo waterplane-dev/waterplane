@@ -2,17 +2,17 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { BarChart3, Loader, RefreshCw } from "lucide-react";
 import {
-  coldStartText, type CostBreakdown, type CostWindowDoc, cumulative, dayToMs, hourToMs, ptsCalibration, ptsText,
+  coldStartText, type CostBreakdown, type CostWindowDoc, cumulative, dayToMs, hourKeyMs, ptsCalibration, ptsText,
   rankRepos, repoRowAsGroup, weekUsdPerPct,
   type TokenConvo, type TokenStatsDoc, tokenTotal, type TokenTotals, type TokenWindowsDoc,
-  type TokenWindowSeries, type UsageHistoryDoc, type UsageInfo, zeroCost, zeroTotals, fmtCount,
+  type UsageHistoryDoc, type UsageInfo, zeroCost, zeroTotals, fmtCount,
   hasScrapedWindows, periodStates, windowStartHour, type BillingProfile, type PeriodState, type UsageBudget,
 } from "@waterplane/shared";
 import { periodCap, periodReadSpan, primaryUsdPeriod } from "@waterplane/sdk";
 import { InsightsPanel, ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { statsInsights } from "./statsInsights.ts";
 import {
-  type CutRefusal, isCut, LIVE_WINDOWS, type LiveWindowId, seriesCut, windowCut, type WindowCut,
+  type CutRefusal, isCut, LIVE_WINDOWS, type LiveWindowId, seriesCut, windowCut, windowGrids, type WindowCut,
   windowSpecs,
 } from "./usageCut.ts";
 import { ledgers, type LedgerViewParts } from "@waterplane/sdk";
@@ -23,7 +23,7 @@ import {
 } from "@waterplane/kit";
 import { FETCH_HOURS, type SourceId, TREND_DAYS } from "./constants.ts";
 import {
-  clockOf, COST_WINDOW_DAYS, dayKeyOf, daysCut, hoursCover, isLiveSpan, spanDayCount, spanDays, spanHours, spanRange,
+  calendarFrom, clockOf, COST_WINDOW_DAYS, dayKeyOf, daysCut, hoursCover, isLiveSpan, spanDayCount, spanDays, spanHours, spanRange, spanUndatedText, trendWithoutUndated, allTimeUndatedText,
   SPANS, type SpanSel,
 } from "./span.ts";
 import { WeekCard } from "./WeekCard.tsx";
@@ -397,11 +397,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   const periodDoc = docFor(periodRead.data, periodFrom);
   /** One grid per window kind, by id — absent for a host too old to know the
    *  route, which leaves the screen exactly as it was before this existed. */
-  const grids = useMemo(() => new Map<LiveWindowId, TokenWindowSeries>(
-    (hist.data?.series ?? [])
-      .filter((se): se is TokenWindowSeries & { id: LiveWindowId } => se.id === "session" || se.id === "week")
-      .map((se) => [se.id, se]),
-  ), [hist.data]);
+  const grids = useMemo(() => windowGrids(hist.data), [hist.data]);
 
   /**
    * The cut on screen, or null.
@@ -432,7 +428,12 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    * an hour record too short) has no instants and falls to ALL TIME — the limit block above says
    * why in a sentence, and the bar lights the chip that is actually in force.
    */
-  const effId = isLiveSpan(span.id) && !active ? "all" : span.id;
+  /** A calendar span whose sum of days could be missing undated records (`spanUndatedText`)
+   *  falls to ALL TIME the same way, and this sentence says why. */
+  const daysRefused = !isLiveSpan(span.id) && spanDayCount(span.id) != null && doc
+    ? spanUndatedText(doc, calendarFrom(spanDayCount(span.id)!, Date.now()))
+    : null;
+  const effId = (isLiveSpan(span.id) && !active) || daysRefused ? "all" : span.id;
   const range = useMemo(() => spanRange({ id: effId, back: span.back }, active, Date.now()), [effId, span.back, active]);
   /** The day rows the span touches — calendar days, its first and last counted whole. */
   const days = useMemo(() => spanDays(doc?.days ?? [], range), [doc, range]);
@@ -461,7 +462,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    */
   const trend = useMemo(() => {
     const all = (doc?.days ?? []).map((d) => ({ day: d.day, t: dayToMs(d.day), v: valueOf(d) }));
-    const mean = rollingMean(all, TREND_DAYS);
+    // A mean whose seven days an undated record could fall in is CUT, never drawn short.
+    const mean = trendWithoutUndated(rollingMean(all, TREND_DAYS), doc);
     if (!daily.length) return [];
     const lo = daily[0].t;
     const hi = daily[daily.length - 1].t;
@@ -504,14 +506,14 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    * (`hoursFrom`), so a span reaching further back is drawn from where the record starts AND says
    * so (`hourNote`) — never a chart quietly narrower than its tag.
    */
-  const hourRows = useMemo(() => spanHours(doc?.hours ?? [], range, hourToMs), [doc, range]);
+  const hourRows = useMemo(() => spanHours(doc?.hours ?? [], range, hourKeyMs), [doc, range]);
   const hoursWhole = hoursCover(doc?.hoursFrom, range);
   const hoursFromWords = doc?.hoursFrom != null
     ? new Date(doc.hoursFrom).toLocaleDateString(undefined, { day: "numeric", month: "short" })
     : null;
 
   const hourly: DayPoint[] = useMemo(
-    () => hourPoints(hourRows, (h) => valueOf(h), hourToMs),
+    () => hourPoints(hourRows, (h) => valueOf(h), hourKeyMs),
     [hourRows, valueOf],
   );
 
@@ -806,6 +808,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
               model that is not Anthropic's; the button is the clear way to see
               every model, and back. */}
           {split && "refused" in split && <div className="empty ts-caveat">{split.refused}</div>}
+          {daysRefused && <div className="empty ts-caveat">{daysRefused} So this shows all time.</div>}
           {cut && (
             <div className="ts-filter" role="group" aria-label="models">
               <span className="empty ts-caveat">{allModels ? allNoteText(cut, fmtCount) : splitNoteText(cut, fmtCount, localTab)}</span>
@@ -838,6 +841,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
               <OverTimeCard doc={doc} money={money} table={table} dayCharts={effId !== "session"} narrow={days.length <= 14}
                 rangeCaption={rangeCaption} rangeWords={rangeWords} clock={clock} hourNote={hourNote}
                 reqSpan={range ? { from: dayKeyOf(range.from), to: dayKeyOf(Math.max(range.from, range.to - 1)) } : null}
+                undatedNote={effId === "all" ? allTimeUndatedText(doc) : null}
                 boxRef={boxRef} width={width}
                 running={running} dayView={dayView} setDayView={setDayView} canModel={canModel} mixBy={mixBy}
                 setMixBy={setMixBy} dayArea={dayArea} setDayShape={setDayShape} dayAreaOk={dayAreaOk}

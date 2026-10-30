@@ -213,15 +213,16 @@ before the reset, spend what is left"). The Backlog holds a repo's work that nob
 <!-- site:cost -->
 ### Know what it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-edb5a4da7e.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-1940345d73.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-edb5a4da7e.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-1940345d73.mp4), with pause and seek.*
 
 Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus
 what the *next* turn will cost compared with a fresh session. The token ledger splits every total by
 day, repo and model; the header carries the 5-hour and weekly usage windows with their resets; each
-session has a context sheet showing how full the window was over time and where it compacted. A
-per-repo check weighs `CLAUDE.md` and skill descriptions, the part every turn pays for again. All
+session has a context sheet showing how full the window was over time and where it compacted, and
+on a fan-out session what its subagents cost, each one as a bar, the skills they loaded and what
+every turn carries before your prompt. A per-repo check weighs `CLAUDE.md` and skill descriptions, the part every turn pays for again. All
 read off the CLI's own logs and screens; where there is nothing to read, nothing is shown rather
 than a guess.
 <!-- /site:cost -->

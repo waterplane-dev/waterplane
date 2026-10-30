@@ -125,7 +125,7 @@ test("P1: App.tsx exports exactly App", () => {
 const ORDER = [
   "useConnection", "useAuthGate", "usePref", "usePref", "usePref", "useSessionVerbs", "useRoute",
   "useTermFeed", "useComposeDraft", "usePref", "usePref", "useSchedules", "usePullRecords",
-  "useActivityFiled", "useActivityConfirmedDone", "useBacklog", "useRepoColors", "usePref",
+  "useActivityFiled", "useActivityConfirmedDone", "useGitRoute", "useBacklog", "useRepoColors", "usePref",
   "useEffect:installSettingsSync[]", "useUsedOrderSnapshot", "useUsage", "useBilling", "useQueue", "useLaunch", "useSend",
   "useCompose", "useSessionChrome", "useTransportIndex", "useEffect:setDocTitle[focusRepo]", "useViewport",
   "useEffect:setInterval[]", "useEffect:track[overlay]", "useEffect:on[]", "useEffect:refreshRepos[status]",
@@ -135,7 +135,7 @@ const ORDER = [
   "useEffect:send[overlay,active,status]", "useEffect:setRepoNamer[]", "useEffect:viewerHandles[]",
   "useEffect:attach[sessions]", "useEffect:onShellOpenSession[]",
   "useEffect:setShellWant[sessions,shellWant]", "useEffect:noteStuckSends[stuckSends]",
-  "useEffect:setReloadGuard[]", "useEffect:runSheetLeave[overlay]", "useEffect:bootFeatures[]",
+  "useEffect:setReloadGuard[]", "useEffect:bootFeatures[]",
 ];
 
 test("P2: App's effects and subscriptions run in the pinned order, moved hooks inlined", () => {

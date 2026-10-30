@@ -1,5 +1,5 @@
 /** Wording of an instant, a span and a share: the limit windows' reset and time-axis labels, the tiles' dates and spans. */
-import { fmtShare, type TokenStatsDoc } from "@waterplane/shared";
+import { addLocalDays, fmtShare, localDaysBetween, type TokenStatsDoc } from "@waterplane/shared";
 
 /**
  * A reset instant as few words as it can be said in. Same day ⇒ the time
@@ -24,13 +24,13 @@ export function tickWhen(ts: number): string {
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-export function resetWhen(ts: number): string {
+export function resetWhen(ts: number, now: number = Date.now()): string {
   const d = new Date(ts);
   const hm = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  const today = new Date();
+  const today = new Date(now);
   const sameDay = d.toDateString() === today.toDateString();
   if (sameDay) return hm;
-  const tomorrow = new Date(today.getTime() + 86400000);
+  const tomorrow = new Date(addLocalDays(now, 1));
   if (d.toDateString() === tomorrow.toDateString()) return `tomorrow ${hm}`;
   return `${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} ${hm}`;
 }
@@ -63,5 +63,5 @@ export function shareNote(part: number, whole: number): string | undefined {
 
 export function spanDays(doc: TokenStatsDoc): number {
   if (doc.firstAt == null || doc.lastAt == null) return 0;
-  return Math.round((doc.lastAt - doc.firstAt) / 86_400_000) + 1;
+  return localDaysBetween(doc.firstAt, doc.lastAt) + 1;
 }

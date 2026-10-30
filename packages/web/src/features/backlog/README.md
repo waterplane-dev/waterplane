@@ -16,8 +16,11 @@ thin composer over `src/backlog/` (state hooks, regions, the grouped `BacklogPro
   seeded from `waterplane.snap.backlog` so the sheet renders offline; `waiting`/`naming`/`autoSlots` are
   facts about this second and are never snapshotted (`autoSlots` feeds a slot-held row's *close one
   to make room*, intersected with live sessions in `autoSessions.ts`).
-- `backlogScope` / `backlogFocus` — which repo the sheet opens on, and the ids cut it was opened
-  on (a count is a filter; `onLeave` drops the cut).
+- `backlogCut` — the cut ON SCREEN (repo, typed search, status/age/kind/clock/ids chips, the ids
+  cut's words), and its only copy: the doors write it (`openBacklogFor`/`openBacklogIn`/
+  `openBacklogCut`), the sheet reads it every render and writes every tap through
+  `editBacklogCut`, `onLeave` drops the cut but keeps the repo (a count is a filter), and `keep`
+  puts it back on Back — so Back shows what was on screen. Transitions: `logic.ts` (`cut*`).
 - `assessRuns` (per repo, `assess.state`, never persisted), `assessRepo`, `assessScope`, and
   `assessBusy` — **ref-authoritative** (a store's `get()` is synchronous): ackId → the pad notes
   an apply owes, cleared on the RECEIPT (`onAssessAck`), only `ticked ∩ msg.filed`, never on the tap.

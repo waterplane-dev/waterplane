@@ -8948,6 +8948,20 @@ Pure strip for `FanoutSheet.tsx` (`fanoutKickoff.test.mjs`): one sentence and on
 starting, failures included, the bar's fill). A sweep is ONE prompt: the host's fan-out executor reads `steps[0]` and
 nothing else, so `sendIntent/sendLabels.ts` refuses a chain into several repos in words.
 
+### `core/queue/fireFate.ts` — what became of a fired durable op (design review 2026-10-30 W2)
+
+The ONE owner of a fire's fate, for every sheet that fires a durable op and then waits for it (build, fan-out). A
+caller mints the ackId and queues with `queueOp(…, { ackId, track: true })`; the queue tracks the fire AFTER its row is
+in, so a tracked fire IS a row that was seen — a later "row gone, no receipt" was dismissed, never "not listed yet".
+`wire.ts`'s `onOpAck` records the receipt (`runId`, refusal `reason`) BEFORE it retires the row. `useFireFate(ackId)`
+reads both stores and answers `pending` / `acked`(+`runId`) / `refused` / `dropped`; it never writes the queue.
+
+Why: the tracking lived in BuildSheet alone (494c5218 fixed "Starting for ever" there), while FanoutSheet guessed its
+run as "the first run id not known at the tap" with no ackId. A failed or dismissed `fanout.run` row spun *Sent —
+waiting for the desktop…* for ever, and a sweep started from another device in that window was adopted as this tap's.
+The run is now the one the receipt NAMES (`firedRun`); `fireFate.test.mjs` holds a ratchet against the old
+`known: new Set(runs.map…)` guess, exempting no file (the build sheet's older-host `runsAtTap` fallback was removed 2026-10-30, owner decision: a receipt naming no run opens nothing and `RUN_UNNAMED_NOTE` says so). The detector matches any callback parameter name (self-tested). Capture and `schedule.run` fire the same way and can take `track: true`.
+
 ### `buildScope.ts` + `BuildScopeChoice.tsx` — where a build entry lives
 
 The build editor's two-way choice: the committed `builds.json` every checkout shares, or this desktop's own file.

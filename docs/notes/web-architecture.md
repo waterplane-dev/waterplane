@@ -24,7 +24,7 @@ packages/web/src/
     api.ts       bindCore() / core() — the CoreApi singleton, rebound by App every render
     dispatch.ts  dispatchFeatureMessage(), runFeatureCommand(), bootFeatures()
     featureRun.ts  the pure runner behind all four: per-feature isolation + saying a failure once
-    sheets.ts    featureSheets() merged into overlayViews; runSheetLeave()
+    sheets.ts    featureSheets() merged into overlayViews; registers the route's leave dispatch
     settingsRows.ts  featureSettingsRows(group) — drawn at the end of each Settings group
     toolbarItems.ts  featureToolbarItem(id, ctx) — asked by renderToolbarItem's default arm
     <module>/    the things there must be ONE of, as hooks App calls (table below)
@@ -189,7 +189,8 @@ A feature declares what it adds; it does not patch App:
   `Overlay` in `routing.ts` (Back, the hash and a reload all key on it). `featureSheets()` turns them
   into entries of `overlayViews`' own shape and App spreads them in FIRST, so while App still draws
   a sheet itself App's entry wins — moving a sheet is deleting it in App. `onLeave` runs once when
-  the sheet stops being the one on top (`runSheetLeave`, an effect on `[overlay]`): the place for
+  the sheet stops being the one on top, told "cover" or "close" by the route layer itself
+  (`announceLeaves` in `backStep.ts`, from the stack before and after each move): the place for
   "clear the scope when this closes", which App wrote as one effect per sheet.
 - `messages` — handlers by wire `t`. `dispatchFeatureMessage` runs them AFTER App's own
   `switch (msg.t)`, in registry order, each in its own try/catch: one feature's bug does not stop

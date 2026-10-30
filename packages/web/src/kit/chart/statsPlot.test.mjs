@@ -45,7 +45,7 @@ import {
   weekStart,
   weekTotals,
 } from "./statsPlot.ts";
-import { TOKEN_KINDS, cumulative, dayToMs, hourToMs, tokenTotal } from "@waterplane/shared";
+import { TOKEN_KINDS, cumulative, dayToMs, hourKeyMs, tokenTotal } from "@waterplane/shared";
 
 const PAD = { top: 8, right: 8, bottom: 18, left: 40 };
 const plot = (points, width = 340, height = 150) => makeDayPlot({ width, height, pad: PAD, points });
@@ -164,7 +164,7 @@ test("a day axis survives a DST day in the running zone", (t) => {
 
 test("an intraday plot keeps its clock labels, and a plot knows its step", () => {
   const base = { width: 340, height: 150, pad: PAD };
-  const h = (n) => ({ day: "x", t: hourToMs(`2026-10-02T${String(n).padStart(2, "0")}`), v: 1 });
+  const h = (n) => ({ day: "x", t: hourKeyMs(`2026-10-02T${String(n).padStart(2, "0")}`), v: 1 });
   const ip = makeDayPlot({ ...base, points: [h(9), h(14)], stepMs: 3_600_000 });
   assert.ok(dayTicks(ip).some((x) => x.label.includes(":")));
   assert.equal(ip.step, 3_600_000);
@@ -694,7 +694,7 @@ test("a projection is a TIME when it fills first and a LEVEL when it resets firs
 
 test("hours are plotted as instants an hour apart, not as 24 categories", () => {
   const rows = [{ hour: "2026-03-10T09" }, { hour: "2026-03-10T10" }, { hour: "2026-03-11T09" }];
-  const pts = hourPoints(rows, () => 1, hourToMs);
+  const pts = hourPoints(rows, () => 1, hourKeyMs);
   assert.equal(pts[1].t - pts[0].t, 3_600_000);
   assert.equal(pts[2].t - pts[1].t, 23 * 3_600_000,
     "the overnight gap is 23 hours of elapsed time, not one slot");
@@ -743,7 +743,7 @@ test("the fill never runs past the record at either end", () => {
 });
 
 test("a fortnight of missing hours is filled hour by hour, not day by day", () => {
-  const pts = hourPoints([{ hour: "2026-03-10T09" }, { hour: "2026-03-10T12" }], () => 5, hourToMs);
+  const pts = hourPoints([{ hour: "2026-03-10T09" }, { hour: "2026-03-10T12" }], () => 5, hourKeyMs);
   const out = fillSeries(pts, 3_600_000);
   assert.deepEqual(out.map((d) => d.day),
     ["2026-03-10T09", "2026-03-10T10", "2026-03-10T11", "2026-03-10T12"]);
@@ -768,6 +768,22 @@ test("the day walk survives a DST switch", () => {
   const out = fillSeries([pt("2026-03-28", 1), pt("2026-04-01", 1)]);
   assert.deepEqual(out.map((d) => d.day),
     ["2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01"]);
+});
+
+test("the hour walk keeps a fall-back hour ONCE: the store merged its two passes into one key", () => {
+  // Berlin 2026-10-25: 03:00 CEST falls back to 02:00 CET, so 00:00Z and 01:00Z both key T02.
+  // Pushing the merged point twice made the filled series count that hour double.
+  const prev = process.env.TZ;
+  process.env.TZ = "Europe/Berlin";
+  try {
+    const pts = hourPoints([{ hour: "2026-10-25T01" }, { hour: "2026-10-25T02" }, { hour: "2026-10-25T04" }], () => 5, hourKeyMs);
+    const out = fillSeries(pts, 3_600_000);
+    assert.deepEqual(out.map((d) => d.day), ["2026-10-25T01", "2026-10-25T02", "2026-10-25T03", "2026-10-25T04"]);
+    assert.deepEqual(out.map((d) => d.v), [5, 5, 0, 5]);
+  } finally {
+    if (prev === undefined) delete process.env.TZ;
+    else process.env.TZ = prev;
+  }
 });
 
 test("a mix row that was never recorded is four zeros, not an unknown split", () => {

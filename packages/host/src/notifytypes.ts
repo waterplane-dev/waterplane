@@ -36,6 +36,8 @@ export interface NotifyParams {
   detail?: string;
   /** HOST-ONLY: the build entry a failed build was (`RepoTarget.buildFailed`). */
   build?: { id: string; name: string };
+  /** HOST-ONLY: a failed push's branch and commit — what resolves it (`attentionstore.ts`). */
+  pushHead?: { branch: string; sha: string };
 }
 
 /** `notify()` as every dependency bag spells it. */

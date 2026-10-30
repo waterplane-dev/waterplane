@@ -19,11 +19,11 @@ export function AutoCompactSettings() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let live = true;
-    api.setupPrefs()
-      .then((r) => { if (live) setValue(r.autoCompactDefault); })
-      .catch((e) => { if (live) setError(String((e as Error).message || e)); });
-    return () => { live = false; };
+    const ac = new AbortController();
+    api.setupPrefs(ac.signal)
+      .then((r) => { if (!ac.signal.aborted) setValue(r.autoCompactDefault); })
+      .catch((e) => { if (!ac.signal.aborted) setError(String((e as Error).message || e)); });
+    return () => ac.abort();
   }, []);
 
   async function choose(v: string) {

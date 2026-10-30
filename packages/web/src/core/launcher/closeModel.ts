@@ -27,6 +27,7 @@ import { convoStart, inactiveMs, inactivityKnown } from "../../format.ts";
 // ── State (`sessionStatus`'s own buckets, handed in) ────────────────────────
 export type CloseState = "coding" | "wait" | "done" | "limit" | "exited";
 export const CLOSE_STATE_OPTIONS: readonly CloseState[] = ["wait", "limit", "coding", "done", "exited"];
+// closed: the close facets are in-memory filter picks from this build's option lists
 export const CLOSE_STATE_LABEL: Record<CloseState, string> = {
   coding: "working", wait: "waiting for your answer", done: "idle", limit: "at the usage limit", exited: "exited",
 };
@@ -35,11 +36,13 @@ export const CLOSE_STATE_LABEL: Record<CloseState, string> = {
 export type TimeEdge = "1h" | "6h" | "1d" | "3d";
 export const TIME_EDGE_OPTIONS: readonly TimeEdge[] = ["1h", "6h", "1d", "3d"];
 export const TIME_EDGE_MS: Record<TimeEdge, number> = { "1h": 3600e3, "6h": 6 * 3600e3, "1d": 24 * 3600e3, "3d": 3 * 24 * 3600e3 };
+// closed: an in-memory filter pick from this build's option list
 export const TIME_EDGE_LABEL: Record<TimeEdge, string> = { "1h": "> 1h", "6h": "> 6h", "1d": "> 1d", "3d": "> 3d" };
 
 // ── Underneath: what is still running, independent of `state` ───────────────
 export type UnderFacet = "agents" | "shellsLive" | "shellsQuiet" | "nothing";
 export const UNDER_OPTIONS: readonly UnderFacet[] = ["agents", "shellsLive", "shellsQuiet", "nothing"];
+// closed: an in-memory filter pick from this build's option list
 export const UNDER_LABEL: Record<UnderFacet, string> = {
   agents: "agents running", shellsLive: "shells live", shellsQuiet: "shells quiet", nothing: "nothing running",
 };
@@ -85,6 +88,7 @@ export function underneathOf(s: SessionInfo, now: number, opt: UnderFacet): bool
 // ── Words at stake: what closing would lose or strand ────────────────────────
 export type StakesFacet = "draft" | "queued" | "none";
 export const STAKES_OPTIONS: readonly StakesFacet[] = ["draft", "queued", "none"];
+// closed: an in-memory filter pick from this build's option list
 export const STAKES_LABEL: Record<StakesFacet, string> = {
   draft: "unsent draft on this phone", queued: "prompts queued for it", none: "nothing waiting",
 };
@@ -106,6 +110,7 @@ export function stakesOf(s: SessionInfo, draftIds: ReadonlySet<string>, outbox: 
 // ── Conversation: never started / started (`convoStart`'s first two) ────────
 export type ConvoFacet = "fresh" | "started";
 export const CONVO_OPTIONS: readonly ConvoFacet[] = ["fresh", "started"];
+// closed: an in-memory filter pick from this build's option list
 export const CONVO_LABEL: Record<ConvoFacet, string> = { fresh: "never started", started: "started" };
 
 // ── The facet selection, and the context every predicate reads ──────────────

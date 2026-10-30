@@ -29,7 +29,7 @@ import { Explain } from "./Explain";
 import { CantInline } from "./Unavailable";
 import type { IndexNow, IndexTrendWeek, IndexVsSubject, IndexWeekSubject } from "./setupRemedy";
 import {
-  HEALTH_ENTRY_NAME, HEALTH_ENTRY_ORDER, INDEX_TREND_ASK_LABEL, areaD, barsCaptionWords, barsWeeksOnlyWords, carriedWords, commitsAbsentWords,
+  HEALTH_ENTRY_NAME, HEALTH_ENTRY_ORDER, INDEX_QUALITY_RUN_LABEL, INDEX_TREND_ASK_LABEL, areaD, barsCaptionWords, barsWeeksOnlyWords, carriedWords, commitsAbsentWords,
   contributionBars, gapWords, indexAskLabel, indexCommitGeom, indexExplainWords, indexLineGeom, indexReadoutWords, indexVsWords, linkSpanWords,
   olderHostSeries, olderHostWords, signedTenths, thinnedWords, treeGrowthWords, trendWords, type HealthAxisMode, type IndexLineGeom,
 } from "./healthIndexWords";
@@ -57,12 +57,14 @@ const RING_STROKE = 6;
  * `SeriesTile`'s `actions` is: this file paints a chart and words it, and the
  * sheet decides what a prompt is and where it goes. Absent = no button at all.
  */
-export function HealthIndexChart({ view, empty, onAsk, onAskTrend, axis = "weeks" }: {
+export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun, axis = "weeks" }: {
   view: HealthIndexResponse | null | undefined;
   /** The caller's state line under the head — loading, offline, or why there is no series. */
   empty: ReactNode;
   onAsk?: (w: IndexWeekSubject, vs: IndexVsSubject | null) => void;
   onAskTrend?: (weeks: IndexTrendWeek[], baselineWeek: string, vs: IndexVsSubject | null, now?: IndexNow) => void;
+  /** Seeds the design-quality run (`healthQualityRunPrompt`); absent draws no button. */
+  onQualityRun?: () => void;
   /** Which x the region draws. Commits falls back to weeks — saying so — where the host sends no commit series. */
   axis?: HealthAxisMode;
 }) {
@@ -340,7 +342,7 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, axis = "weeks
               ) : null}
             </div>
           ) : null}
-          {(ask && at) || askTrend ? (
+          {(ask && at) || askTrend || onQualityRun ? (
             <div className="rh-tile-acts">
               {ask && at ? (
                 <Button className="rh-verb" onClick={ask}>
@@ -350,6 +352,11 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, axis = "weeks
               {askTrend ? (
                 <Button className="rh-verb" onClick={askTrend}>
                   <Send size={12} /> {INDEX_TREND_ASK_LABEL}…
+                </Button>
+              ) : null}
+              {onQualityRun ? (
+                <Button className="rh-verb" onClick={onQualityRun}>
+                  <Send size={12} /> {INDEX_QUALITY_RUN_LABEL}…
                 </Button>
               ) : null}
             </div>

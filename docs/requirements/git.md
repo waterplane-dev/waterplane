@@ -77,7 +77,7 @@ A failed git pull or push of a repo raises a *needs you* notification naming the
 - shipped: 52910130
 
 ### R-git-016 · shipped
-While a repo's last pull or push failed and nobody has handled it, its git button carries a red worded chip ("push failed" / "pull failed"). It goes away, saying so, when the next pull or push of that verb succeeds or the person taps done.
+While a repo's last pull or push failed and nobody has handled it, its git button carries a red worded chip ("push failed" / "pull failed"). It goes away, saying so, when the next pull or push of that verb succeeds or the person taps done — for a push, a push of the same branch that succeeds, or the commit that failed to go up being found on that branch's upstream when a pull or push ends; switching to another branch never clears it, and reading the repo list never changes it.
 - asked: 2026-10-25
 - shipped: 52910130
 
@@ -108,7 +108,7 @@ While the git screen holds a lease on a repo (it renews about every 30 s and lap
 - asked: 2026-10-26
 
 ### R-git-023 · requested
-Merging, switching auto-merge on or off, and closing a pull request are each one explicit tap (a POST, never automatic). Merge uses the method the person chose, else the first the repo allows, and refuses a method the repo does not allow. Auto-merge on is refused in words when the repo does not allow it. After a merge the host pulls the base branch if it is checked out and the tree allows it, deletes the head branch locally (never forced) and on origin, and answers with a receipt that says what was done and what was not (for example "did not pull main (this checkout is on wp/x)").
+Merging, switching auto-merge on or off, and closing a pull request are each one explicit tap (a POST, never automatic). Merge uses the method the person chose, else the first the repo allows, and refuses a method the repo does not allow. Auto-merge on is refused in words when the repo does not allow it. After a merge that GitHub reports as merged (never on gh's exit code alone: in a merge-queue repo the PR is only enqueued, and the receipt says it is queued and touches no branch; a merge GitHub reports late, lands from the queue later, or lands after the host's gh gave up waiting is tidied by whichever later reading of the PR list first sees it merged, exactly once, across a host restart too; a PR still open a day after the tap is no longer awaited, but one that reads as merged is tidied when it is first read, up to a week after the tap — past a week the host no longer assumes the merge was the person's and tidies nothing) the host pulls the base branch if it is checked out and the tree allows it, deletes the head branch locally (never forced) and on origin, and answers with a receipt that says what was done and what was not (for example "did not pull main (this checkout is on wp/x)").
 - asked: 2026-10-26
 
 ### R-git-024 · requested
@@ -116,7 +116,7 @@ A failing check can be read from the phone: the host returns the last 80 lines o
 - asked: 2026-10-26
 
 ### R-git-025 · requested
-While the PR list is being polled, a check that newly fails, a review that asks for changes, and a PR that was merged or closed somewhere else each raise one notification through the git notification path, so the push preferences decide whether it is delivered. A first reading and a PR the phone itself just merged or closed raise nothing.
+While the PR list is being polled, a check that newly fails, a review that asks for changes, and a PR that was merged or closed somewhere else each raise one notification through the git notification path, so the push preferences decide whether it is delivered. A first reading and a PR the phone itself merged or closed raise nothing. A merge the phone asked for that lands later (queue, late report, gh giving up) is not news either; instead it raises one notice saying what the tidy did — an attention item, keeping the receipt, when something was left that needs the person (origin refused the delete, the checkout is not on a branch, the tidy stopped); a routine leftover (a squash merge's kept local head: "delete it yourself if you are sure"; a linked worktree on another branch; a head that is checked out) only rides in the receipt of an ok notice. A pull the tidy could not do is the git view's own "Pull failed" item, cleared by the next good pull, and is only mentioned in the receipt, never a second item. A merge the phone asked for that someone else closes instead is news.
 - asked: 2026-10-26
 
 ### R-git-026 · requested

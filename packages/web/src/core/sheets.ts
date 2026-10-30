@@ -8,8 +8,8 @@
  * through to the screen underneath, the same as any other entry.
  */
 import { createElement, type ReactNode } from "react";
-import { overlayFromKey, type Overlay } from "../routing.ts";
-import { setSheetKeeper } from "../backStep.ts";
+import { overlayFromKey } from "../routing.ts";
+import { setSheetKeeper, setSheetLeave } from "../backStep.ts";
 import { FEATURES } from "../features/registry.ts";
 import type { SheetId } from "../sdk/types.ts";
 import { core } from "./api.ts";
@@ -18,6 +18,8 @@ import { createSheetTable } from "./featureRun.ts";
 
 const TABLE = createSheetTable(FEATURES);
 setSheetKeeper((key) => TABLE.sheets.get(overlayFromKey(key) as SheetId)?.keep?.() ?? null);
+// The route layer tells each sheet that left its stack, and why (`announceLeaves`, backStep.ts).
+setSheetLeave((id, reason) => TABLE.leave(id, reason));
 
 // An extension's sheet is drawn inside its own boundary — and `render` must run INSIDE it, as a
 // component (a throw during the parent's `s.render(core())` would never reach the boundary). The inner
@@ -35,10 +37,4 @@ export function featureSheets(): Partial<Record<SheetId, () => ReactNode>> {
   const out: Partial<Record<SheetId, () => ReactNode>> = {};
   for (const [id, s] of TABLE.sheets) out[id] = EXT_SHEETS.get(id) ?? (() => s.render(core()));
   return out;
-}
-
-/** The overlay changed from `prev` to `next`: the sheet that stopped being on
- *  top gets its `onLeave`. */
-export function runSheetLeave(prev: Overlay, next: Overlay): void {
-  TABLE.leave(prev, next);
 }

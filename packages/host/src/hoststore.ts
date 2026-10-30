@@ -159,7 +159,7 @@ const LIVE_FILES = new Set([
   "acks.json", "assess.json", "auth.json", "backend-catalogue.json", "backlog-config.json", "backlog.json",
   "budget.json", "burnwatch.json", "clihealth.json", "closed.json", "contextlimits.json", "ctxwindow.json", "explains.json",
   "installs.json", "intents-archive.jsonl", "intents.json", "launches.json", "limit.json",
-  "notify.json", "oracle.json", "peer-jobs.json", "plugins.json", "pulls.json", "push-subs.json", "reviews.json",
+  "notify.json", "oracle.json", "peer-jobs.json", "plugins.json", "pr-merges-asked.json", "pulls.json", "push-subs.json", "reviews.json",
   "schedules.json", "sessions.json", "settings.json", "setup.json",
   "stars.json", "tmux.conf", "updates.json", "vapid.json",
 ]);

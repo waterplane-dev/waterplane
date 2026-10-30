@@ -17,30 +17,30 @@
 import { open, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { claudeConfigDir } from "../claudeconfig.js";
+import { isAnchor, usageRecordOf } from "../ctxlog/usagerecord.js";
 
 const MAX_DIRS = 40;
 const MAX_FILES = 300;
 const HEAD_BYTES = 256 * 1024;
 
 /**
- * The first assistant row of one conversation log's head: which model answered
- * it and how many input tokens that first request carried (fresh + cache read
- * + cache write — the whole prompt, however it was billed). Null when the head
- * holds no such row or its usage is not a positive number. A torn last line is
- * skipped, never guessed. Pure.
+ * The first request of one conversation log's head: which model answered it
+ * and how many input tokens it carried (fresh + cache read + cache write — the
+ * whole prompt, however it was billed). The record's rules are
+ * `usagerecord.ts`'s: a `<synthetic>` usage-wall row and an output-only reply
+ * carried nothing and are passed over, never read as the answer — the anchor is
+ * the first request that carried context. Null when the head holds no such row
+ * with a model. A torn last line is skipped, never guessed. Pure.
  */
 export function firstRequestOf(head: string): { model: string; tok: number } | null {
   for (const line of head.split("\n")) {
     if (!line.includes('"assistant"')) continue;
-    let row: { type?: unknown; isSidechain?: unknown; message?: { model?: unknown; usage?: Record<string, unknown> } };
+    let row: { isSidechain?: unknown };
     try { row = JSON.parse(line); } catch { continue; }
-    if (row.type !== "assistant" || row.isSidechain === true) continue;
-    const model = row.message?.model;
-    const u = row.message?.usage;
-    if (typeof model !== "string" || !model || !u) return null;
-    const n = (k: string) => (typeof u[k] === "number" && Number.isFinite(u[k] as number) && (u[k] as number) > 0 ? (u[k] as number) : 0);
-    const tok = n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens");
-    return tok > 0 ? { model, tok } : null;
+    if (row?.isSidechain === true) continue;
+    const rec = usageRecordOf(row);
+    if (!rec || !isAnchor(rec) || !rec.model) continue;
+    return { model: rec.model, tok: rec.carried };
   }
   return null;
 }

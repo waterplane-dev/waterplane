@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, CheckCheck, ChevronLeft, CircleCheck, CloudOff, CornerDownLeft, Ellipsis, FilePenLine, Hourglass, Image as ImageIcon, ListOrdered, Loader, MessageCircleQuestion, Pencil, Play, Plus, SendHorizontal, RotateCw, Shuffle, Trash2, X } from "lucide-react";
 import { describeLaunch, type LaunchIntent, type RepoTarget, type SessionInfo } from "@waterplane/shared";
 import { AttachStrip } from "./AttachStrip";
 import { PromptComposer } from "./PromptComposer";
 import { RepoPicker } from "./RepoPicker";
 import { isCreateOp, isEditableEntry, isSerializable, type OutboxEntry } from "./outbox";
+import { PHASE_LABEL, PHASE_NOT_QUEUED, nextConfirmBoundary, phaseNotes, revivable, rowPhase, type RowPhase } from "./core/queue/phase.ts";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
@@ -110,10 +111,16 @@ interface Props {
   onRunLaunch: (id: string) => void;
 }
 
-const STATUS: Record<string, { icon: typeof CloudOff; label: string }> = {
-  queued: { icon: CloudOff, label: "waiting" },
-  pending: { icon: Loader, label: "sending" },
-  failed: { icon: AlertTriangle, label: "not delivered" },
+/** A row's glyph by its phase (`core/queue/phase.ts`); the word is
+ *  `PHASE_LABEL`, the same reading the strip and Activity take. */
+const PHASE_ICON: Record<RowPhase, typeof CloudOff> = {
+  waiting: CloudOff,
+  retrying: Hourglass,
+  sending: Loader,
+  confirming: Hourglass,
+  "failed-retryable": AlertTriangle,
+  "failed-unknown": AlertTriangle,
+  "failed-final": AlertTriangle,
 };
 
 /**
@@ -208,10 +215,24 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
   // one give-up at a time, which is what it used to do.
   const strandedCount = entries.filter(isStranded).length;
   const queuedCount = entries.filter((e) => e.status === "queued").length;
-  // Given-up rows that may be revived in bulk. `unconfirmed`/`unsubmitted` are
-  // excluded on purpose — see `onRetryFailed`.
-  const retryable = entries.filter((e) => e.status === "failed"
-    && e.failState !== "unconfirmed" && e.failState !== "unsubmitted").length;
+  // Given-up rows that may be revived in bulk — the SAME predicate the tap
+  // revives by (`retryFailedQueued`), so the number is the cut. The other
+  // failed rows are counted by phase so the sentence says what they are.
+  const now = Date.now();
+  // The confirm window ends with no outbox change when the host never answers:
+  // wake once at the earliest end so "confirming it ran" does not outlive it.
+  const [, setTick] = useState(0);
+  const untilBoundary = nextConfirmBoundary(entries, now);
+  useEffect(() => {
+    if (untilBoundary == null) return;
+    const t = setTimeout(() => setTick((n) => n + 1), untilBoundary + 50);
+    return () => clearTimeout(t);
+  }, [untilBoundary, entries]);
+  const retryable = entries.filter(revivable).length;
+  const phases = entries.map((e) => rowPhase(e, now));
+  const confirmingCount = phases.filter((p) => p === "confirming").length;
+  const maybeRanCount = phases.filter((p) => p === "failed-unknown").length;
+  const refusedCount = phases.filter((p) => p === "failed-final").length;
 
   function startEdit(e: OutboxEntry) { setEditing(e.ackId); setDraft(e.text); }
   function commitEdit(ackId: string) {
@@ -229,12 +250,13 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
    * from the row the failure is actually printed on.
    */
   function renderRow(e: OutboxEntry, i: number, arr: OutboxEntry[], owner?: OutboxEntry) {
-      const st = STATUS[e.status] ?? STATUS.queued;
+      const phase = rowPhase(e, now);
+      const st = { icon: PHASE_ICON[phase], label: PHASE_LABEL[phase] };
       const StIcon = st.icon;
       const locked = e.status === "pending";
       // Why a row's hold/serial/retarget/add are off: a pending row is on its
       // way; a failed one has to be sent again (the ↻ on the row) first.
-      const notQueued = e.status === "failed" ? "it didn't go through — try it again first" : "already on its way";
+      const notQueued = PHASE_NOT_QUEUED[phase];
       // An OP is an ACTION, not text: "start a session here", "fan out",
       // "run this build". Two consequences in this sheet — its body is
       // only editable when the text IS the payload (a fan-out prompt),
@@ -304,7 +326,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
       }
       return (
         <div key={e.ackId} className={`queue-row-wrap ${retargeting === e.ackId ? "aiming" : ""}`}>
-        <div className={`queue-row ${e.status}`}>
+        {/* A row still being confirmed is not red: it is muted, like the strip's
+            (`sendConfirm.ts`) — the triangle is for a known failure. */}
+        <div className={`queue-row ${phase === "confirming" ? "confirming" : e.status}`}>
           <button className="queue-text" disabled={!editable} onClick={() => startEdit(e)}
             title={locked ? "already on its way"
               : isCreateOp(e) ? "tap to write what this session should do first"
@@ -359,7 +383,8 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
             <Button data-hint="queue.sendone"
               disabled={e.status === "pending"}
               title={e.status === "pending" ? "already on its way"
-                : e.status === "failed" ? (online ? "try this one again" : "put it back in the queue — it goes out when the link is back")
+                : e.status === "failed" ? (phase !== "failed-retryable" ? PHASE_NOT_QUEUED[phase]
+                  : online ? "try this one again" : "put it back in the queue — it goes out when the link is back")
                 : backoffIn != null ? "waiting before the next attempt — tap to try it right now"
                 : "send this one now"}
               onClick={() => { track("action:queue.sendone"); onSendNow(e.ackId); }}>
@@ -514,6 +539,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         {retryable > 0 && (
           <> {retryable} gave up waiting. Try them again and they go back in the queue — now, or as soon as the link is back.</>
         )}
+        {/* The failed rows "try again" does NOT cover, said by what they are —
+            a re-send of these could run words twice or is only refused again. */}
+        {phaseNotes(confirmingCount, maybeRanCount, refusedCount).map((t) => <span key={t}> {t}</span>)}
         {/* Said once, above the list, for the same reason the retry-all button
             is: a whole lane is stranded by ONE fact, and per-row is the wrong
             place to learn it. "Try again" is deliberately not offered — it would

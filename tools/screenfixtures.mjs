@@ -21,14 +21,44 @@
  *   node tools/screenfixtures.mjs --json     # rows as JSON
  *   node tools/screenfixtures.mjs --npm      # count published releases (asks the npm registry)
  *   node tools/screenfixtures.mjs --cli 2.1.301 --health path/to/clihealth.json
- *   node tools/screenfixtures.mjs --reading  # ONE number: signals `current` on the installed CLI
+ *   node tools/screenfixtures.mjs --reading  # ONE number: signals with NO proof on the installed CLI
  *   node tools/screenfixtures.mjs --unproven # ONE number: signals with NO matching real capture, any version
+ *   node tools/screenfixtures.mjs --debt     # ONE number: host captures the repo has no fixture for yet
+ *   node tools/screenfixtures.mjs --captures <dir>  # another host capture dir (default <state>/clifixtures)
  *
- * `--reading` is this repo's own repo-health reading (`screenFixtures` in
+ * `--reading` is this repo's own repo-health reading (`screenNoProof` in
  * `.waterplane-shared/health.json`): it prints one JSON number and nothing else
- * on stdout. Where no signal CAN be current — the installed version is unknown,
- * or the catalog is not built — it prints nothing and exits 1 with the reason,
- * so the series records an absence rather than a 0 that claims "none are".
+ * on stdout. A signal has PROOF on the installed CLI when any of three holds:
+ * (a) a repo fixture from that version (`current`); (b) a host capture of it
+ * in `<state>/clifixtures/<installed>/`, which `clifixtures.ts` writes only the
+ * first time the signal WORKS on that version; (c) the live clihealth record
+ * for that version has a `lastGoodAt`. The reading counts the signals with
+ * none, so lower is better and the number names real gaps.
+ *
+ * It used to count (a) alone, and that measured harvest cadence, not drift:
+ * every CLI release (several a week) dropped it to 0 until someone ran
+ * `tools/harvestfixtures.mjs --write` and committed — on v2.1.314 it read 0 of
+ * 10 while the host held 2.1.314 captures for five signals and the table below
+ * printed "last good 3m ago" beside them. Captures the repo does not have yet
+ * are a chore, not a gap; they are not counted here but by `--debt`.
+ *
+ * `--debt` is that chore as its own figure (`harvestDebt`): how many host
+ * captures, of any version, have no fixture in `signals.json` at the path
+ * `tools/harvestfixtures.mjs --write` would give them — including any it would
+ * refuse (a leak, no reader): those need a person too, and that tool says
+ * which. Not filtered here because its reader check needs `packages/host/dist`
+ * and a reading should not need a host build. Machine state too, and
+ * the same absence rule: no manifest or no capture dir prints nothing, exits 1.
+ *
+ * The figure depends on THIS machine's installed CLI and its host state, not
+ * on the commit, so the same sha reads differently on two days. That is why it
+ * is a repo's own reading (`tools/repohealth/own.mjs`): run at HEAD only, never
+ * back-filled for an old commit, never part of the health index. Where it
+ * cannot be counted honestly — the installed version is unknown, the catalog
+ * is not built, the manifest or this desktop's clihealth.json is unreadable,
+ * or the capture dir cannot be listed — it prints nothing and exits 1 with the
+ * reason, so the series records an absence rather than a number that claims
+ * signals unproved which nobody here could look at.
  *
  * `--unproven` is the second reading (`screenUnproven`): how many signals have
  * never been shown to read a real screen at all — zero `match` captures of any
@@ -44,6 +74,7 @@ import { join, dirname, basename } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { listSamples, fixturePath } from "./harvestfixtures.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURES = join(ROOT, "packages/host/test/fixtures");
@@ -123,7 +154,25 @@ export function resolveEntries(entries, read = (p) => readFileSync(join(FIXTURES
 
 // ── One row per signal ──────────────────────────────────────────────────
 
-export function rowFor(spec, entries, live, installed, releases) {
+/**
+ * The ids the host captured on `installed` — proof (b). `samples` is
+ * `listSamples`' list; another version's capture proves nothing here.
+ */
+export function capturedOn(samples, installed) {
+  return new Set(installed ? samples.filter((s) => s.version === installed).map((s) => s.id) : []);
+}
+
+/** Which of the three proofs a signal has on `installed`; empty without a version. */
+function proofOf(id, state, live, installed, captured) {
+  if (!installed) return [];
+  const proof = [];
+  if (state === "current") proof.push("fixture");
+  if (captured?.has(id)) proof.push("capture");
+  if (live?.lastGoodAt && parseVersion(live.version) && cmpVersion(live.version, installed) === 0) proof.push("live");
+  return proof;
+}
+
+export function rowFor(spec, entries, live, installed, releases, captured) {
   const { fixtures, missing } = resolveEntries(entries);
   const dated = fixtures.filter((f) => parseVersion(f.cli));
   const newest = dated.length ? dated.map((f) => f.cli).sort(cmpVersion).at(-1) : null;
@@ -144,6 +193,7 @@ export function rowFor(spec, entries, live, installed, releases) {
     newest,
     gap,
     state,
+    proof: proofOf(spec.id, state, live, installed, captured),
     missing,
     live: live
       ? { version: live.version ?? null, misses: live.misses ?? 0, lastGoodAt: live.lastGoodAt ?? null, lastMissAt: live.lastMissAt ?? null }
@@ -179,12 +229,12 @@ function npmReleases() {
 }
 
 /**
- * The `--reading` figure: how many rows are `current`, or null with the reason
- * when that count cannot be told from zero.
+ * The `--reading` figure: how many rows have no proof on the installed CLI,
+ * or null with the reason when that count cannot be told from zero.
  */
-export function currentCount(rows, installed) {
-  if (!installed) return { value: null, reason: "the installed claude version is unknown, so no capture can be called current" };
-  return { value: rows.filter((r) => r.state === "current").length };
+export function noProofCount(rows, installed) {
+  if (!installed) return { value: null, reason: "the installed claude version is unknown, so nothing can be proof on it" };
+  return { value: rows.filter((r) => r.proof.length === 0).length };
 }
 
 /**
@@ -196,6 +246,18 @@ export function unprovenCount(rows, manifest) {
   if (!manifest || typeof manifest !== "object") return { value: null, reason: "packages/host/test/fixtures/signals.json is missing or unreadable" };
   if (!rows?.length) return { value: null, reason: "the signal catalog lists no signals" };
   return { value: rows.filter((r) => r.match === 0).length };
+}
+
+/**
+ * The `--debt` figure: host captures (`listSamples`' list) whose fixture path
+ * the manifest does not list, or null with the reason when there is no
+ * manifest or no capture dir to compare — either would read as a false 0.
+ */
+export function harvestDebt(samples, manifest, dirExists) {
+  if (!manifest?.signals || typeof manifest.signals !== "object") return { value: null, reason: "packages/host/test/fixtures/signals.json is missing or unreadable" };
+  if (!dirExists) return { value: null, reason: "there is no host capture dir on this desktop" };
+  const listed = new Set(Object.values(manifest.signals).flat().map((e) => e?.path));
+  return { value: samples.filter((x) => !listed.has(fixturePath(x))).length };
 }
 
 // ── Output ──────────────────────────────────────────────────────────────
@@ -218,6 +280,7 @@ function sentence(r, now) {
   else if (r.state === "unknown") age = `; newest from v${r.newest}, installed version unknown`;
   else if (r.state === "current") age = `; newest from v${r.newest}, the installed version`;
   else age = `; newest from v${r.newest}, ${r.gap ? `${r.gap.n} ${r.gap.unit} behind` : "behind by an amount not countable offline (try --npm)"}`;
+  const proof = r.proof.length ? ` Proof on this CLI: ${r.proof.join(", ")}.` : " No proof on this CLI.";
   let live = "";
   if (r.live) {
     const bits = [];
@@ -226,7 +289,7 @@ function sentence(r, now) {
     if (bits.length) live = ` Live: ${bits.join(", ")}.`;
   }
   const miss = r.missing.length ? ` Manifest names ${r.missing.length} file(s) that are not there: ${r.missing.join(", ")}.` : "";
-  return `${fx}${age}.${live}${miss}`;
+  return `${fx}${age}.${proof}${live}${miss}`;
 }
 
 async function main(argv) {
@@ -254,18 +317,45 @@ async function main(argv) {
     return 0;
   }
 
+  if (flag("--debt")) {
+    // Version-free: every capture the host kept counts, whatever CLI drew it.
+    let got;
+    try {
+      const dir = opt("--captures") ?? join(await stateDir(), "clifixtures");
+      got = harvestDebt(listSamples(dir, new Set(CLI_SIGNALS.map((s) => s.id))).samples, manifestFile, existsSync(dir));
+    } catch (err) {
+      got = { value: null, reason: `the capture dir could not be read (${err.message})` };
+    }
+    if (got.value === null) {
+      console.error(`screenfixtures: ${got.reason}.`);
+      return 1;
+    }
+    console.log(JSON.stringify(got.value));
+    return 0;
+  }
+
   const manifest = manifestFile?.signals ?? {};
   const health = readJson(opt("--health") ?? join(await stateDir(), "clihealth.json"));
-  const installed = opt("--cli") ?? installedCli() ?? (parseVersion(health?.version) ? parseVersion(health.version).join(".") : null);
+  const installed = (opt("--cli") ? parseVersion(opt("--cli"))?.join(".") ?? null : null) ?? installedCli() ?? (parseVersion(health?.version) ? parseVersion(health.version).join(".") : null);
   const releases = flag("--npm") ? npmReleases() : null;
   const now = Date.now();
 
   const known = new Set(CLI_SIGNALS.map((s) => s.id));
-  const rows = CLI_SIGNALS.map((s) => rowFor(s, manifest[s.id], health?.signals?.[s.id], installed, releases));
+  const captureDir = opt("--captures") ?? join(await stateDir(), "clifixtures");
+  let samples = [], captured = null, captureError = null;
+  try { samples = listSamples(captureDir, known).samples; captured = capturedOn(samples, installed); } catch (err) { captureError = err.message; }
+  const rows = CLI_SIGNALS.map((s) => rowFor(s, manifest[s.id], health?.signals?.[s.id], installed, releases, captured));
   const strays = Object.keys(manifest).filter((k) => !known.has(k));
 
   if (flag("--reading")) {
-    const got = currentCount(rows, installed);
+    // Proof (b) and (c) are read off the host's state; without them a count
+    // would claim "unproved" for signals nobody here could look at. A missing
+    // capture dir beside a readable record is the host having captured
+    // nothing yet, which IS a reading.
+    const blind = !manifestFile?.signals ? "packages/host/test/fixtures/signals.json is missing or unreadable"
+      : !health ? "no readable clihealth.json on this desktop (is the host's state dir here?), so the live proof cannot be asked"
+      : captureError ? `the capture dir could not be read (${captureError})` : null;
+    const got = blind ? { value: null, reason: blind } : noProofCount(rows, installed);
     if (got.value === null) {
       console.error(`screenfixtures: ${got.reason}.`);
       return 1;
@@ -287,6 +377,11 @@ async function main(argv) {
   const behind = rows.filter((r) => r.state === "behind").length;
   console.log("");
   console.log(`${rows.length - none} of ${rows.length} signals have a real capture behind them; ${behind} of those are behind the installed CLI.`);
+  const unproved = rows.filter((r) => r.proof.length === 0);
+  if (installed) console.log(`${unproved.length} of ${rows.length} have no proof on v${installed} (no fixture, host capture or live good from it)${unproved.length ? `: ${unproved.map((r) => r.id).join(", ")}` : ""}.`);
+  const debt = captureError ? null : harvestDebt(samples, manifestFile, existsSync(captureDir)).value;
+  if (debt) console.log(`${debt} host capture(s) have no repo fixture yet; \`node tools/harvestfixtures.mjs\` lists them and says which it would refuse.`);
+  if (captureError) console.log(`The capture dir ${captureDir} could not be read (${captureError}); captures were not counted as proof.`);
   if (strays.length) console.log(`signals.json lists ${strays.length} id(s) the catalog does not have: ${strays.join(", ")}.`);
   return 0;
 }

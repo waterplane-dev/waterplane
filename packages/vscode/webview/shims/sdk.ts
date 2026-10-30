@@ -30,9 +30,9 @@ export const ledgers = {
   localUsage: statsApi.localUsage,
   usageLog: statsApi.usageLog,
   /** The phone's rule (`sdk/ledgers.ts`): any failure or a bad shape is absent, never a guess. */
-  sourceHistory: async (source: string): Promise<UsageSourceHistoryDoc | null> => {
+  sourceHistory: async (source: string, signal?: AbortSignal): Promise<UsageSourceHistoryDoc | null> => {
     try {
-      const d = await statsApi.usageLogSource(source);
+      const d = await statsApi.usageLogSource(source, signal);
       return d && Array.isArray(d.samples) ? d : null;
     } catch { return null; }
   },

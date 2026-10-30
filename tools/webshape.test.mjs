@@ -42,7 +42,7 @@ warnLongFiles("web", SRC);
  * file every change conflicts in, not a way to make the check pass: the new
  * code belongs in a feature folder.
  */
-const MAX_APP_LINES = 394;
+const MAX_APP_LINES = 391; // -4 (design round 4): the sheet leave effect left App — the route layer dispatches onLeave itself
 
 /** A feature file is a slice, never a new App. The same number eslint's
  *  `max-lines` warns at — here it fails. */
@@ -527,6 +527,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlog/useBacklogDraft.ts": 30,
   "backlog/useBacklogDrag.ts": 68,
   "backlog/useBacklogEdit.ts": 90,
+  "backlog/scopedRepo.ts": 25, // which repo the sheet shows; the items-derived pick is pinned into the cut
   "backlog/useBacklogFilters.ts": 125,
   "backlog/useBacklogSort.ts": 25,
   "backlog/useBacklogUi.ts": 70,
@@ -592,7 +593,7 @@ const SEND_SPLIT_FILES = {
   "send/RetimeHint.tsx": 40,
   "send/RuleEditor.tsx": 140,
   "send/SendActions.tsx": 35,
-  "send/ToSection.tsx": 205, // +the flag-when-done row (FlagWhenDoneRow) in the repo and sweep arms
+  "send/ToSection.tsx": 247, // +the flag-when-done row (FlagWhenDoneRow) in the repo and sweep arms; +the cap a backend change clears and its sentence (budgetAcrossBackend, C2-2), props one per line; +where a send really starts (sendBackend, review r3-1); +the model row's functional update and the effect that says the clear (review r3-1); +the When/defaults move re-checking the cap by the same rule (withStartAndCap, design round 4); +a cap a start cannot carry is KEPT aside and restored on the way back, with the note-and-apply effect that lands it (capOnStart, review r4-2 M1)
   "send/WhenSection.tsx": 180,
   "send/WindowRule.tsx": 150,
   "send/sendSheetTypes.ts": 80,
@@ -602,7 +603,7 @@ const SEND_SPLIT_FILES = {
   "sendIntent/sendChain.ts": 175,
   "sendIntent/sendClock.ts": 150,
   "sendIntent/sendFlag.ts": 30,
-  "sendIntent/sendLabels.ts": 305, // +the flag-when-done clause on the To row
+  "sendIntent/sendLabels.ts": 308, // +the flag-when-done clause on the To row; +3 `// closed:` notes (local/total-wire-words)
   "sendIntent/sendLaunch.ts": 50,
   "sendIntent/sendLead.ts": 80,
   "sendIntent/sendRetime.ts": 170,
@@ -706,7 +707,7 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/activityLabels.ts": 95,
   "activity/activityPieces.ts": 145,
   "activity/activityPullRow.ts": 90,
-  "activity/activityQueueRow.ts": 320,
+  "activity/activityQueueRow.ts": 321, // +1: the restored why-comment on `refused` (W3 review)
   "activity/activitySelect.ts": 150,
   "activity/activitySheetTypes.ts": 140,
   "activity/activityTriage.ts": 210,
@@ -1310,4 +1311,46 @@ test("no <Button> static className starts with primary/danger (those are variant
     }
   }
   assert.deepEqual(bad, [], `Move primary/danger to variant=.`);
+});
+
+/**
+ * Hand-rolled async reads — `let live|alive|cancelled|gone|dead = true|false` — in files that also call
+ * the host (`api.x`, `ledgers.x`, a `<slice>Api.x`, `bgFetch(`/`nfetch(`/`jget(`). Such a flag drops a
+ * late answer but leaves its request running to the 20 s fuse, and the APK has six HTTP/1.1 sockets to
+ * the host: a few orphans and every read queues
+ * behind them (edae4484, 41b3c8c3, 8c431b11). A read moves onto `useRemoteResource` or an effect-owned
+ * `AbortController` whose signal reaches the request (`tools/hostreadabort.test.mjs` pins the client
+ * half). Counted per flag over web/src and every extension's web half (a checkout with fewer extensions
+ * only counts lower). The floor is not a dropped HOST read: a flag guarding a native-shell or
+ * IndexedDB read in a file that also calls the host (install sources, whatsnew, hostTools' shell link
+ * and push, the cold-start tail restore, useGallery's object-URL lookup), useVoice's recorder,
+ * main.tsx's boot, and the gallery listing's own abort plus its "live landed" flag. Lower it, never
+ * raise it. (Raised once, 10 → 18,
+ * when review found the `gone`/`dead` spellings and the slice calls it had missed: a wider net, not
+ * new hand-rolled reads.)
+ */
+const MAX_HAND_ROLLED_HOST_READS = 12;
+
+test(`at most ${MAX_HAND_ROLLED_HOST_READS} hand-rolled 'let live = true' reads in files that call the host`, () => {
+  const files = readdirSync(SRC, { recursive: true }).map((f) => f.split("\\").join("/"))
+    .filter((f) => /\.tsx?$/.test(f) && !f.endsWith(".d.ts")).map((f) => [f, join(SRC, f)]);
+  const EXT = join(ROOT, "packages", "extensions");
+  for (const e of readdirSync(EXT)) {
+    const web = join(EXT, e, "web");
+    if (!existsSync(web)) continue;
+    for (const f of readdirSync(web, { recursive: true })) {
+      if (/\.tsx?$/.test(String(f)) && !String(f).includes("node_modules")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
+    }
+  }
+  const hits = [];
+  for (const [rel, abs] of files) {
+    const text = readFileSync(abs, "utf8");
+    if (!/\b(api|ledgers|\w+Api)\.[A-Za-z]+[.(]|\b(bgFetch|nfetch|jget)\(/.test(text)) continue;
+    const n = (text.match(/\blet (live|alive|cancelled|gone|dead) = (true|false)\b/g) ?? []).length;
+    for (let i = 0; i < n; i++) hits.push(rel);
+  }
+  assert.ok(hits.length <= MAX_HAND_ROLLED_HOST_READS,
+    `${hits.length} hand-rolled host reads, over the ${MAX_HAND_ROLLED_HOST_READS} ratchet. Use useRemoteResource, or an ` +
+    `AbortController in the effect whose signal reaches the request (abort it in the cleanup).\n${hits.join("\n")}`);
+  if (hits.length < MAX_HAND_ROLLED_HOST_READS) console.log(`# ${hits.length} hand-rolled host reads -- lower MAX_HAND_ROLLED_HOST_READS in tools/webshape.test.mjs to lock that in`);
 });

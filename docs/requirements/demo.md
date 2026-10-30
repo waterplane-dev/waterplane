@@ -266,3 +266,11 @@ two paired desktops can hand each other a job (R-peers-002).
 The water plane game and little painter are offered as additional example repos in the demo.
 - asked: 2026-10-16
 
+
+### R-demo-038 · shipped
+The numbers film shows a long fan-out session's context sheet: most of its cost in subagents, each
+subagent as a bar, the skills they loaded over time, and what every turn carries before the prompt.
+Its shape is one real session's (`scripts/media/fanout-fixture.mjs` over an `/api/context` capture),
+under fictional names; the gif loops the subagent beat in place of the short session's re-read one.
+- asked: 2026-10-30 (owner, of a phone screenshot of a ten-hour fan-out session's context sheet: "a nice visualization of aspects that we miss in our readme material so far … take that data from that session into our demo"; "go ahead, subagent beat in the loop")
+- shipped: `packages/web/src/demo/scenarios/numbers-fanout.ts` + generated `fanout-data.ts`, `scripts/ui/journey-numbers.mjs` step "a fan-out session", README `site:cost`

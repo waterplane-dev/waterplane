@@ -20,8 +20,14 @@ export interface Forge {
   rules(): Promise<ForgeRulesRaw | undefined>;
   /** The remote's default branch name, or undefined. */
   defaultBranch(): Promise<string | undefined>;
-  /** The PR for the checked-out branch, if one exists. */
-  existingPr(): Promise<{ url: string; number?: number } | undefined>;
+  /**
+   * What the forge calls branch `name` NOW, following its rename redirect: the new name when it was
+   * renamed (or its own name when it is live), `null` when the forge says it does not exist (deleted),
+   * undefined when it could not answer. Short timeout: asked on a push, before any byte moves.
+   */
+  branchNow(name: string): Promise<string | null | undefined>;
+  /** The OPEN PR whose head is `head`, if one exists; a merged or closed one is no PR. */
+  existingPr(head: string): Promise<{ url: string; number?: number } | undefined>;
   /** Open a PR (fill from commits); returns its URL. Throws on failure. */
   openPr(o?: { head: string; base: string }): Promise<string>;
   /** Open PRs authored by me, raw JSON for `prViewsFrom`. Throws on failure. */

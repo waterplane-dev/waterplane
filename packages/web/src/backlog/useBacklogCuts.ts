@@ -137,7 +137,7 @@ export function useBacklogCuts(
   const here = p.activeSession && p.sessions.some((s) => s.running && s.id === p.activeSession!.id)
     ? p.activeSession : null;
   /** …and it is in the repo this sheet is scoped to. The sheet can be opened
-   *  from a REPO header (`backlogScope`) while a session in a different repo is
+   *  from a REPO header (`backlogCut`) while a session in a different repo is
    *  the one on screen, and an item can only be aimed at a session in its own
    *  checkout — so the button is absent there, and the line at the top has to
    *  say that rather than promising a control that is nowhere on the page. */

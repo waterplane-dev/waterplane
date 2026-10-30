@@ -16,6 +16,8 @@
    drop onto their own line below it when that no longer fits. */
 .queue-row { display: flex; flex-wrap: wrap; padding: var(--sp-6) var(--sp-12) var(--sp-10); }
 .queue-row.pending { opacity: .65; }
+/* typed, the desktop still confirming: a state look, not "off" — its buttons answer in words */
+.queue-row.confirming { opacity: .65; }
 .queue-row.failed .queue-meta { color: var(--dead); }
 .queue-text {
   flex: 1 1 240px; min-width: 0; text-align: left; background: none; border: 0; color: var(--fg);

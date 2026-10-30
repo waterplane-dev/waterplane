@@ -483,6 +483,19 @@ export interface TokenGroup extends TokenTotals {
  */
 export interface TokenStatsDoc {
   totals: TokenTotals;
+  /** Records in `totals` that are in NO hour (no readable timestamp) — `LedgerHourly.undated`'s
+   *  field and rule (`undatedWhy`): above 0, any sum of hours over a span is a floor, so a span
+   *  figure reads ABSENT. Absent = an older host that does not say: read as before. */
+  undated?: number;
+  /** The newest mtime (epoch ms) of a log holding one of those `undated` records: none can be
+   *  later, so a span starting after it misses none (`undatedSince`). Absent while `undated` is
+   *  0, or when a log's mtime is unknown — then every span is refused. */
+  undatedUntil?: number;
+  /** Per log holding `undated` records: `[mtime, count]`, ascending, bounded (shared
+   *  `undatedLogsOf`), so a span counts only the logs written since it opened — the same N the
+   *  host's `/api/costwindow` says (`undatedSince`). A log with an unknown mtime has no pair and is
+   *  always counted. Absent = an older host: `undatedUntil` decides, as before. */
+  undatedLogs?: Array<[number, number]>;
   /** Ascending, and only days that had activity — a gap IS the weekend. */
   days: TokenDay[];
   /**
@@ -652,6 +665,19 @@ export interface TokenWindowSeries {
  *  in the order they were asked. */
 export interface TokenWindowsDoc {
   series: TokenWindowSeries[];
+  /** Records in `totals` that are in NO hour (no readable timestamp) — `LedgerHourly.undated`'s
+   *  field and rule (`undatedWhy`): above 0, any sum of hours over a span is a floor, so a span
+   *  figure reads ABSENT. Absent = an older host that does not say: read as before. */
+  undated?: number;
+  /** The newest mtime (epoch ms) of a log holding one of those `undated` records: none can be
+   *  later, so a span starting after it misses none (`undatedSince`). Absent while `undated` is
+   *  0, or when a log's mtime is unknown — then every span is refused. */
+  undatedUntil?: number;
+  /** Per log holding `undated` records: `[mtime, count]`, ascending, bounded (shared
+   *  `undatedLogsOf`), so a span counts only the logs written since it opened — the same N the
+   *  host's `/api/costwindow` says (`undatedSince`). A log with an unknown mtime has no pair and is
+   *  always counted. Absent = an older host: `undatedUntil` decides, as before. */
+  undatedLogs?: Array<[number, number]>;
   /** When the ledger behind this was last brought up to date (the same scan
    *  `TokenStatsDoc.scannedAt` reports), so a grid can say how old it is. */
   scannedAt: number;

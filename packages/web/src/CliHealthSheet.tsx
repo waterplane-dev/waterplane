@@ -41,6 +41,7 @@ import {
   signalSpec,
   signalVerdict,
   supersededByGood,
+  wordOf,
   type CliHealth,
   type HealthRollup,
   type HealthVerdict,
@@ -90,6 +91,8 @@ const VERDICT_LABEL: Record<HealthVerdict, string> = {
   broken: "broken",
   unknown: "unknown",
 };
+/** The rollup's verdict is the HOST's: a newer host's verdict is still a word. */
+const verdictWord = (v: string): string => wordOf(VERDICT_LABEL, v, "a state this app version cannot name");
 
 export function CliHealthSheet({ online, request, onClose, filter, onClearFilter, onClearWarnings, onInspect }: {
   /** The socket's own verdict, not `navigator.onLine` — see the hook's note. */
@@ -173,7 +176,7 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
       <div className="list">
         {rollup && (
           <div className={`cli-summary cli-${rollup.verdict}`}>
-            <span className={`cli-pill cli-${rollup.verdict}`}>{VERDICT_LABEL[rollup.verdict]}</span>
+            <span className={`cli-pill cli-${rollup.verdict}`}>{verdictWord(rollup.verdict)}</span>
             <span className="cli-summary-txt">
               {rollup.broken.length + rollup.degraded.length > 0
                 ? `${rollup.broken.length ? `${rollup.broken.length} broken` : ""}${rollup.broken.length && rollup.degraded.length ? " · " : ""}${rollup.degraded.length ? `${rollup.degraded.length} degraded` : ""}`
@@ -219,7 +222,7 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
           <FilterBar section onClear={onClearFilter!}
             clearTitle={`show every signal, including the ${allRows.length - rows.length} working or unobserved ones`}
             clearLabel={<><X size={13} /> show all {allRows.length}</>}>
-            showing {filter.map((v) => VERDICT_LABEL[v]).join(" and ")}
+            showing {filter.map(verdictWord).join(" and ")}
             {" · "}{rows.length} of {allRows.length}
             {rows.length === 0 && " — nothing is in that state any more"}
           </FilterBar>
@@ -256,7 +259,7 @@ function Row({ sig, now, version, onInspect }: {
     <div className={`cli-row cli-${check.verdict}`}>
       <div className="cli-row-top">
         <span className="cli-name">{spec.name}</span>
-        <span className={`cli-pill cli-${check.verdict}`}>{VERDICT_LABEL[check.verdict]}</span>
+        <span className={`cli-pill cli-${check.verdict}`}>{verdictWord(check.verdict)}</span>
       </div>
       {/* The one sentence, generated in `@waterplane/shared`. The host's push
           notification says the same words; that is the point. */}

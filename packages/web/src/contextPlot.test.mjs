@@ -1122,3 +1122,11 @@ test("the dearest agents: dollars lead, unpriced follow by tokens, absent stays 
   assert.equal(agentTop(rows.map((r) => r.run), models, 2).length, 2);
   assert.deepEqual(agentTop([], models), []);
 });
+
+import { autoCompactSetText as setTextOf } from "./contextPlot/cplotCompactSet.ts";
+
+test("autoCompactSetText names a source this build does not know", () => {
+  // `autoCompactSet.source` rides on the host's context spark.
+  const text = setTextOf({ tokens: 400000, source: "someFutureSource" });
+  assert.doesNotMatch(text, /undefined/);
+});

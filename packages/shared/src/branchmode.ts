@@ -2,8 +2,12 @@
  * What a remote's own rules demand of a push to the default branch — read from
  * GitHub's rules, never chosen by waterplane. `direct` is today's behaviour and
  * the owner's: no rules, or only force-push/deletion blocked. Only a
- * `pull_request`, `required_status_checks` or required-review rule makes it
- * anything else. Unparseable input is ABSENT (undefined), never a guess.
+ * `pull_request`, `required_status_checks`, `merge_queue` or required-review rule
+ * makes it anything else. Unparseable input is ABSENT (undefined), never a guess.
+ *
+ * `mergeQueue`: a merge on this branch is ENQUEUED, not done — `gh pr merge` exits 0
+ * having only queued the PR, so its exit code is never the merge's outcome (the host
+ * re-reads the PR's state before it touches a branch).
  */
 export type BranchMode = "direct" | "pr" | "pr-checks";
 export type MergeMethod = "merge" | "squash" | "rebase";
@@ -19,6 +23,8 @@ export interface BranchRules {
   /** Merge methods the repo allows; empty = the repo JSON did not say. */
   allowedMerge: MergeMethod[];
   autoMerge: boolean;
+  /** The branch's rules demand a merge queue (`merge_queue` rule). Omitted when not. */
+  mergeQueue?: boolean;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -36,6 +42,7 @@ export function classifyBranchRules(rules: unknown, classic?: unknown, repo?: un
   const checks = new Set<string>();
   const pinned = new Set<string>();
   let statusChecks = false;
+  let queue = false;
   for (const r of rules) {
     if (!isObj(r) || typeof r.type !== "string") return undefined;
     const p = isObj(r.parameters) ? r.parameters : {};
@@ -43,6 +50,10 @@ export function classifyBranchRules(rules: unknown, classic?: unknown, repo?: un
       pr = true;
       const n = p.required_approving_review_count;
       if (typeof n === "number" && n > 0) approvals = Math.max(approvals, Math.floor(n));
+    } else if (r.type === "merge_queue") {
+      // A queue lands only PRs: a push to the branch is refused as surely as under `pull_request`.
+      pr = true;
+      queue = true;
     } else if (r.type === "required_status_checks") {
       statusChecks = true;
       const list = p.required_status_checks;
@@ -80,5 +91,6 @@ export function classifyBranchRules(rules: unknown, classic?: unknown, repo?: un
   }
   const out: BranchRules = { mode, requiredChecks: [...checks], requiredApprovals: approvals, allowedMerge, autoMerge };
   if (pinned.size) out.pinnedChecks = [...pinned];
+  if (queue) out.mergeQueue = true;
   return out;
 }

@@ -31,7 +31,7 @@ import { hostStateDir } from "../branddirs.js";
 import { readJsonGuardedDetail, writeTextAtomic } from "../jsonstore.js";
 import { discoverTargets } from "../repos.js";
 import { installLocalSlots, localModelHold, localSlotsDetail, localSlotsPass, localStartNotice } from "../localslot.js";
-import { logVerdict } from "../settle.js";
+import { ranVerdict } from "../settle.js";
 import { haltRefusal } from "../halt.js";
 import type { ServerCtx } from "./ctx.js";
 
@@ -198,9 +198,9 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     budgetHeldSessions: () => new Set(ctx.sessions.list().filter(sessionBudgetHeld).map((s) => s.id)),
     autoFire: () => ctx.backlog.getAuto(),
     halted: haltRefusal, // the emergency halt: nothing fires, nothing is spent (`halt.ts`)
-    // Restart reconciliation's evidence: the CLI's own conversation log, which
-    // outlives both the session and this process.
-    logVerdict: (sessionId, text, since, claimer) => logVerdict(ctx.sessions, sessionId, text, since, { claimer }),
+    // Restart reconciliation's evidence: a backend's own channel, else the CLI's
+    // own conversation log, which outlives both the session and this process.
+    logVerdict: (sessionId, text, since, claimer) => ranVerdict(ctx.sessions, sessionId, text, since, { claimer }),
     executors: {
       // A parked create, opened at last. Everything about it is the ordinary
       // path — the same `sessions.create()` and the same at-most-once

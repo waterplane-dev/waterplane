@@ -54,12 +54,12 @@ import {
   PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc,
-  type CostWindowDoc, windowStartHour } from "@waterplane/shared";
+  type CostWindowDoc, hourKey, hourKeyMs, windowStartHour } from "@waterplane/shared";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { env } from "./env.js";
-import { CROSS, type FileSummary, localHour, summarizeLog, type Tally, walkLogs } from "./tokenscan.js";
+import { CROSS, type FileSummary, summarizeLog, type Tally, walkLogs } from "./tokenscan.js";
 import { hostStateDir } from "./branddirs.js";
-import { foldCostWindow, repoOfWorktree, type CostMeta } from "./costwindow.js";
+import { foldCostWindow, repoOfWorktree, undatedFields, type CostMeta } from "./costwindow.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 /** A single log this big is not read. Nothing observed comes near it; the cap
@@ -125,16 +125,6 @@ type Store = Record<string, Record<string, FileSummary>>;
 
 function tallyToTotals(t: Tally): TokenTotals {
   return { input: t[0], output: t[1], cacheRead: t[2], cacheWrite: t[3], cacheWrite1h: t[4], turns: t[5] };
-}
-
-
-/** `YYYY-MM-DDTHH` back to the epoch ms of the TOP of that local hour — the
- *  inverse of `localHour`, and the same local-zone assumption `dayToMs` makes
- *  one level up. */
-function hourToMs(hour: string): number {
-  const [y, mo, d] = hour.slice(0, 10).split("-").map(Number);
-  const h = Number(hour.slice(11, 13));
-  return new Date(y, (mo || 1) - 1, d || 1, h || 0, 0, 0, 0).getTime();
 }
 
 /**
@@ -503,7 +493,7 @@ export class TokenStatsStore {
         // Absent, not `[]`, on a conversation with no agents.
         const am = agentModel.get(cKey);
         return {
-          ...c, firstAt: first ? hourToMs(first) : null, lastAt: last ? hourToMs(last) : null,
+          ...c, firstAt: first ? hourKeyMs(first) : null, lastAt: last ? hourKeyMs(last) : null,
           ...(am?.size ? {
             agentByModel: [...am.entries()].map(([model, b]) => ({ model, totals: b.totals, cost: b.cost }))
               .sort((x, y) => tokenTotal(y.totals) - tokenTotal(x.totals)),
@@ -539,7 +529,7 @@ export class TokenStatsStore {
     const cutFrom = new Date();
     cutFrom.setHours(0, 0, 0, 0);
     cutFrom.setDate(cutFrom.getDate() - (HOURS_DAYS - 1));
-    const cutKey = localHour(cutFrom.getTime()).slice(0, 10);
+    const cutKey = hourKey(cutFrom.getTime()).slice(0, 10);
     const hourRows: TokenHour[] = [...hours.entries()]
       .filter(([hour]) => hour.slice(0, 10) >= cutKey)
       .map(([hour, t]) => ({
@@ -591,6 +581,10 @@ export class TokenStatsStore {
 
     return {
       totals,
+      // In `totals`, in no hour: a span cut of `hours` reads absent above 0 (`undatedWhy`).
+      // With the bound (`undatedUntil`) and per-log pairs (`undatedLogs`) a span reads through
+      // shared `undatedSince`, the same function `/api/costwindow` counts with.
+      ...undatedFields(this.store),
       days: dayRows,
       hours: hourRows,
       hoursFrom,
@@ -677,7 +671,7 @@ export class TokenStatsStore {
           if (!hour) continue;
           if (!oldest || hour < oldest) oldest = hour;
           if (!newest || hour > newest) newest = hour;
-          const hourMs = hourToMs(hour);
+          const hourMs = hourKeyMs(hour);
           const day = hour.slice(0, 10);
           const v = tallyToTotals(tally);
           const c = costOf(v, model, day || undefined);
@@ -722,11 +716,11 @@ export class TokenStatsStore {
         // drawn from one end or the other by the screen, never by the order a
         // Map happened to be filled in.
         .sort((a, b) => a.back - b.back),
-      oldestHour: oldest ? hourToMs(oldest) : null,
-      newestHour: newest ? hourToMs(newest) : null,
+      oldestHour: oldest ? hourKeyMs(oldest) : null,
+      newestHour: newest ? hourKeyMs(newest) : null,
     }));
 
-    return { series, scannedAt: this.lastScan };
+    return { series, scannedAt: this.lastScan, ...undatedFields(this.store) };
   }
 
   /**

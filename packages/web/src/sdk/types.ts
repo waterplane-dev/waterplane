@@ -17,6 +17,8 @@ import type { OutboxEntry } from "../outbox.ts";
 import type { ResourceState } from "../useRemoteResource.ts";
 import type { DayPoint } from "../kit/chart/stats/splotDay.ts";
 import type { Overlay } from "../routing.ts";
+import type { LeaveReason } from "../backStep.ts";
+export type { LeaveReason };
 import type { SettingsGroupId } from "../settingsIndex.ts";
 import type { SendSeed, SendTarget } from "../sendIntent.ts";
 import type { RenderRetime } from "../RetimeBar.tsx";
@@ -224,7 +226,7 @@ export interface CoreApi {
      *  and its switch (written through to the flusher's ref at once). */
     readonly serial: { readonly on: boolean; set(on: boolean): void };
     queueOp(op: DurableOp, laneKey: string, text: string,
-      opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean }): boolean;
+      opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean; track?: boolean }): boolean;
     submitInput(id: string, cwd: string, text: string, kind: "prompt" | "command", holdUntilIdle?: boolean): boolean;
     /** The send queue as of the last render. Components read `useQueueEntries()`. */
     readonly entries: readonly OutboxEntry[];
@@ -399,6 +401,9 @@ export interface CoreApi {
   world: {
     readonly sessions: SessionInfo[];
     readonly repos: RepoTarget[];
+    /** When the host last answered for `repos` (epoch ms, 0 = never on this device): an empty
+     *  `repos` is "not read yet" until then and "none" after — ask `listRead`, never the length. */
+    readonly reposAt: number;
     readonly visibleRepos: RepoTarget[];
     readonly active: SessionInfo | null;
     readonly activeRepo: RepoTarget | null;
@@ -508,8 +513,12 @@ export interface SheetDef {
   /** `null` falls through to the screen underneath, exactly like `overlayViews`. */
   render: (core: CoreApi) => ReactNode | null;
   /** Runs once when this sheet stops being the one on top — clear a scope, drop
-   *  a focus. Not on unmount of App. */
-  onLeave?: () => void;
+   *  a focus. Not on unmount of App. `reason` is the route's own decision
+   *  (`backStep.ts`'s `announceLeaves`): `"close"` — gone, Back will not return to it
+   *  (a covered sheet an unwind removes is told this too);
+   *  `"cover"` — another screen was pushed over it and Back returns here. A handler
+   *  that ignores the argument behaves as before (it runs on both). */
+  onLeave?: (reason: LeaveReason) => void;
   /** Called when another screen is pushed OVER this sheet, before `onLeave`:
    *  returns what puts back the focus `onLeave` is about to drop, so a Back to
    *  this sheet shows what was on it (`backStep.ts`'s `keepCovered`). */

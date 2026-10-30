@@ -6,6 +6,7 @@
 import type { AssessRun, AssessScope, AutoSlotFacts, BacklogItem, RepoTarget } from "@waterplane/shared";
 import { createStore, useStore } from "../../sdk";
 import { LS } from "../../storage";
+import { NO_CUT, type BacklogCut } from "./logic";
 import { loadSnap } from "../../localState";
 
 /**
@@ -52,16 +53,15 @@ function seed(): BacklogState {
 export const backlog = createStore<BacklogState>(seed());
 
 /**
- * Which repo the backlog sheet opens on when it was reached from the launcher
- * (or a session) rather than by its own preference order. Null ⇒ the sheet's
- * own choice (last used, then a repo with items) is left alone.
+ * **The cut on screen** — repo, typed search, status/age/kind/clock/ids chips
+ * and the words naming an ids cut. ONE owner: the doors (`openBacklogFor`,
+ * `openBacklogIn`, `openBacklogCut`) write it, the sheet reads it on every render
+ * and writes every tap and keystroke through `editBacklogCut`, `onLeave` clears
+ * it (the cut was the tap, not a setting) and `keep` puts it back on Back. No
+ * local copy in the sheet, so Back restores what was on screen, from the first
+ * frame. Shapes and transitions: `logic.ts` (`NO_CUT`, `cutOpenedOn`, …).
  */
-export const backlogScope = createStore<string | null>(null);
-/** The ids cut the sheet was OPENED on — a schedule card's "1 item", a groomed
- *  notification's rows. A filter is what the TAP asked for and never a
- *  setting, so leaving the sheet drops it (`onLeave`). A FRESH object per open:
- *  `Backlog` re-applies on identity. */
-export const backlogFocus = createStore<{ ids: string[]; label: string } | null>(null);
+export const backlogCut = createStore<BacklogCut>(NO_CUT);
 
 /**
  * Each repo's newest assessment run, keyed by worktree path. Host-held and

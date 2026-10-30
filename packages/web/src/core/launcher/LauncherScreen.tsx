@@ -43,6 +43,8 @@ import { enterDemo, isDemo } from "../../demo/mode";
 import { isNativeShell } from "../../hostUrl";
 import type { LauncherProps } from "./types";
 import { launcherScroll, useLauncherModel } from "./useLauncherModel";
+import { noReposWords } from "./model";
+import { listRead } from "../../listRead";
 import { RepoGroup } from "./RepoGroup";
 import { ClosedRows } from "./ClosedRows";
 import { CloseSheet } from "./CloseSheet";
@@ -78,6 +80,7 @@ const REPOS_STALE_MS = 60_000;
 export function LauncherScreen(p: LauncherProps) {
   const m = useLauncherModel(p);
   const { sessions, recent, repos, reposAt, reposFailAt, launch } = p;
+  const noReposText = noReposWords(listRead({ rows: repos, readAt: reposAt }));
   const { status, connVisible } = p.conn;
   const { tailscaleIp } = p.conn.info;
   const { focusRepo, setOverlay, lastVisitedId } = p.route;
@@ -556,7 +559,7 @@ export function LauncherScreen(p: LauncherProps) {
           {repoGroups.map(({ repoName, sessions: groupSessions }) => (
             <RepoGroup key={`g:${repoName}`} p={p} m={m} repoName={repoName} sessions={groupSessions} />
           ))}
-          {repos.length === 0 && <Empty>No repos under host root.</Empty>}
+          {noReposText && <Empty>{noReposText}</Empty>}
           {textOn && repoGroups.length === 0 && <Empty>No session or repo shows “{textQuery.trim()}”. The search at the end of the filter looks through what sessions said.</Empty>}
 
           <ClosedRows p={p} m={m} />

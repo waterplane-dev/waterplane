@@ -428,7 +428,7 @@ export function detach(core: SessionCore, id: string): boolean {
   try { s.proc.kill(); } catch { /* already gone */ }
   if (s.promptTimer) clearTimeout(s.promptTimer);
   if (s.idleTimer) clearTimeout(s.idleTimer);
-  if (s.agentTimer) clearTimeout(s.agentTimer);
+  core.retireAgentPoll(s);
   core.clearLimitTimer(s);
   core.sessions.delete(id);
   // Session stays alive in tmux (LiveMeta persists). List it as reopenable with
@@ -475,7 +475,7 @@ export function remove(core: SessionCore, id: string, onShellsStopped?: (counts:
   if (s.info.running) { try { s.proc.kill(); } catch { /* dead */ } }
   if (s.promptTimer) clearTimeout(s.promptTimer);
   if (s.idleTimer) clearTimeout(s.idleTimer);
-  if (s.agentTimer) clearTimeout(s.agentTimer);
+  core.retireAgentPoll(s);
   core.clearLimitTimer(s);
   core.stopClaudeIdWatch(s);
   s.screenLog?.dispose();  // the row is going; so is what it showed

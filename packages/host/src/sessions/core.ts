@@ -706,6 +706,8 @@ export interface SessionCore {
   setAsking(s: Session, ask: SessionAsk | null): void;
   setCliSuggestion(s: Session, text: string | null): void;
   checkAgents(s: Session): void;
+  /** Retire the agent poll of a session that stops being the live one (detach, remove). */
+  retireAgentPoll(s: Session): void;
   checkAsking(s: Session): void;
   checkCliSuggestion(s: Session): void;
   clearStopVerify(s: Session): void;

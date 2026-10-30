@@ -20,7 +20,7 @@
 import { join } from "node:path";
 import {
   BURN_DEFAULT_COOLDOWN_MS, BURN_DEFAULT_PTS_PER_HOUR,
-  SOURCE_BURN_UNITS, burnPushText, burnStretch, sourceBurnPushText, sourceBurnSamples, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText,
+  SOURCE_BURN_UNITS, burnPushText, burnStretch, sourceBurnPushText, sourceBurnSamples, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText, undatedWhy,
   type BurnState, type CostWindowDoc, type UsageHistoryDoc, type UsageInfo, type UsageReading, type UsageSourceSample,
 } from "@waterplane/shared";
 import { writeJsonAtomic, readJsonGuarded } from "./jsonstore.js";
@@ -79,7 +79,8 @@ export function createBurnWatch(deps: BurnWatchDeps): { observe(u: UsageInfo): P
     try {
       const doc = await deps.costWindow(s.from, t);
       // `rest` too: a run of many cheap sessions the cap folded is still one dear launch.
-      const row = foldLaunches(doc.convos, doc.rest)[0];
+      // Records in no hour make every launch's figure and share a floor: no top line, as unreadable.
+      const row = undatedWhy(doc.undated) ? undefined : foldLaunches(doc.convos, doc.rest)[0];
       if (row && row.cost.total > 0) {
         top = { label: row.label, usd: row.cost.total, share: doc.cost.total > 0 ? row.cost.total / doc.cost.total : 0 };
         // Points are only worth saying when the week's own readings and ledger
@@ -139,7 +140,8 @@ export function createSourceBurnWatch(deps: SourceBurnWatchDeps): { observe(r: U
   const state: Record<string, BurnState> = readJsonGuarded<Record<string, BurnState>>(
     file, {}, (v) => !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v as object).every(isState),
   );
-  let inFlight: Promise<boolean> | null = null;
+  /** One guard PER SOURCE, taken only for a reading that will be judged: a rejected claude/remembered reading or another source must never hold it. */
+  const inFlight = new Map<string, Promise<boolean>>();
 
   async function run(r: UsageReading): Promise<boolean> {
     if (threshold <= 0 || r.source === "claude" || r.remembered) return false;
@@ -164,9 +166,11 @@ export function createSourceBurnWatch(deps: SourceBurnWatchDeps): { observe(r: U
   return {
     armed: () => threshold > 0,
     observe(r: UsageReading): Promise<boolean> {
-      if (inFlight) return Promise.resolve(false);
-      inFlight = run(r).catch(() => false).finally(() => { inFlight = null; });
-      return inFlight;
+      if (threshold <= 0 || r.source === "claude" || r.remembered) return Promise.resolve(false);
+      if (inFlight.has(r.source)) return Promise.resolve(false);
+      const p = run(r).catch(() => false).finally(() => { inFlight.delete(r.source); });
+      inFlight.set(r.source, p);
+      return p;
     },
   };
 }

@@ -331,14 +331,6 @@ export function dayToMs(day: string): number {
   return new Date(y, (m || 1) - 1, d || 1).getTime();
 }
 
-/** `YYYY-MM-DDTHH` → epoch ms at the LOCAL top of that hour. Same zone
- *  argument as `dayToMs`, one level down. */
-export function hourToMs(hour: string): number {
-  const [y, m, d] = hour.slice(0, 10).split("-").map(Number);
-  const h = Number(hour.slice(11, 13));
-  return new Date(y, (m || 1) - 1, d || 1, Number.isFinite(h) ? h : 0).getTime();
-}
-
 /** The day an hour key belongs to. A prefix, never a re-derivation — that is
  *  the whole point of nesting the two keys. */
 export function hourDay(hour: string): string {
@@ -361,6 +353,15 @@ export function fmtCount(n: number): string {
   if (!unit) return String(Math.round(n));
   const v = n / unit[1];
   return `${v.toFixed(Math.abs(v) < 100 ? 1 : 0).replace(/\.0$/, "")}${unit[0]}`;
+}
+
+/** A native amount (a backend's own unit): as stated, at most one decimal — never a "≈",
+ *  nothing was converted. The ONE rule behind the ledger beside-row, the session-budget words and
+ *  the budget form's preview. */
+export function fmtNative(n: number): string {
+  if (Number.isInteger(n)) return fmtCount(n);
+  const r = Math.round(n * 10) / 10;
+  return n > 0 && r === 0 ? "<0.1" : String(r); // a positive amount is never printed as nothing
 }
 
 /** The same number in full, grouped — for the one place a reader wants to see

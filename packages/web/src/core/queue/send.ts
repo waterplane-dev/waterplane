@@ -30,6 +30,7 @@ import {
   serialStates, serialTextFor, markAttempt, entryFrame, answerSendingToast,
 } from "./logic.ts";
 import type { QueueCtx, SendFns } from "./types.ts";
+import { noteFired } from "./fireFate.ts";
 
 export function sendFns(c: QueueCtx): SendFns {
   const { connRef, sessionsRef, exitedRef, outboxRef, ackTimers, uploadsInFlight, uploadAborts, busyLanesRef, budgetHeldLanesRef,
@@ -502,7 +503,7 @@ export function sendFns(c: QueueCtx): SendFns {
     op: DurableOp,
     laneKey: string,
     text: string,
-    opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean },
+    opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean; track?: boolean },
   ): boolean {
     // Usually minted here. A caller passes one in when something else has to
     // NAME this op before it exists — the prompts chained behind a
@@ -534,6 +535,10 @@ export function sendFns(c: QueueCtx): SendFns {
       // intent has to reach it BEFORE the megabytes do. Handing it over is one
       // small JSON message; the pictures can then take as long as they take.
     }, opts?.frontOfLane);
+    // `track`: a sheet waits on this fire (`useFireFate`). The row is in the
+    // queue now, so a tracked fire whose row later goes without a receipt
+    // was failed or dismissed — never "not listed yet".
+    if (opts?.track) noteFired(ackId);
     if (!offline) armLane(laneKey);
     flushOutbox();
     return offline;

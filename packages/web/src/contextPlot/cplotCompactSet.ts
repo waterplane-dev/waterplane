@@ -4,7 +4,7 @@
  * never worded alike (docs/notes/charts-architecture.md).
  */
 
-import { formatTokenWindow, type AutoCompactSource } from "@waterplane/shared";
+import { formatTokenWindow, wordOf, type AutoCompactSource } from "@waterplane/shared";
 
 const SET_WHERE: Record<AutoCompactSource, string> = {
   env: "the daemon's CLAUDE_CODE_AUTO_COMPACT_WINDOW",
@@ -27,7 +27,7 @@ export function autoCompactSetLabel(tokens: number): string {
  */
 export function autoCompactSetText(s: { tokens: number | null; source: AutoCompactSource; raw?: string }): string {
   if (s.source === "unset") return "No autoCompactWindow is set for this repo, so the CLI compacts near the model's own window — no setting line is drawn.";
-  const where = SET_WHERE[s.source];
+  const where = wordOf(SET_WHERE, s.source, "a place this app version cannot name");
   if (s.tokens == null) {
     return /^auto$/i.test(s.raw?.trim() ?? "")
       ? `autoCompactWindow is "auto" in ${where}, so the CLI compacts near the model's own window — no setting line is drawn.`

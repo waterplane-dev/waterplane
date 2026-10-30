@@ -1,9 +1,9 @@
 /** Every window before this one as a box: the stepper, the two heat grids and their selection. */
 import { useCallback, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Grid3x3 } from "lucide-react";
-import { fmtCount, fmtUsd, tokenTotal, type TokenWindowSeries } from "@waterplane/shared";
+import { fmtCount, fmtUsd, tokenTotal } from "@waterplane/shared";
 import {
-  heatFrac, heatStep, LIVE_WINDOWS, type LiveWindowId, type WindowCell, type WindowCut, windowGrid,
+  type GridSeries, heatFrac, heatGrid, heatStep, LIVE_WINDOWS, type LiveWindowId, type WindowCell, type WindowCut, windowGrid,
   windowWhen,
 } from "./usageCut.ts";
 import { type ResourceState, Button } from "@waterplane/kit";
@@ -38,7 +38,7 @@ const HEAT_STEPS = 5;
  */
 export function WindowStep({ cut, grid, onScope }: {
   cut: WindowCut;
-  grid: TokenWindowSeries | null;
+  grid: GridSeries | null;
   onScope: (s: WindowScope) => void;
 }) {
   // How far back the ledger reaches for this kind, straight off the same grid
@@ -86,13 +86,16 @@ export function WindowStep({ cut, grid, onScope }: {
  * did before this existed.
  */
 export function WindowHeats({ grids, res, money, scope, onScope }: {
-  grids: Map<LiveWindowId, TokenWindowSeries>;
+  grids: Map<LiveWindowId, GridSeries>;
   res: { state: ResourceState };
   money: boolean;
   scope: WindowScope;
   onScope: (s: WindowScope) => void;
 }) {
   const kinds = LIVE_WINDOWS.filter((w) => grids.has(w.id));
+  // Whether any grid draws a box at all: when every one is a sentence (`heatGrid`), a caption
+  // about boxes describes nothing on screen.
+  const boxes = useMemo(() => [...grids.values()].some((g) => heatGrid(g).cells.length > 0), [grids]);
   if (!kinds.length) return null;
   return (
     <div className="ts-heats">
@@ -115,7 +118,7 @@ export function WindowHeats({ grids, res, money, scope, onScope }: {
       {(res.state === "cached" || res.state === "offline") && (
         <div className="empty ts-caveat">These grids are the last copy this phone had.</div>
       )}
-      <div className="empty ts-caveat">
+      {boxes && <><div className="empty ts-caveat">
         Oldest first; the last box is the window running now. An <b>empty</b> box ran
         nothing, which is a reading; an <b>outlined</b> one is a window the hour record
         does not reach, which is not.
@@ -133,7 +136,7 @@ export function WindowHeats({ grids, res, money, scope, onScope }: {
           hour is in exactly one box, and a box is off its window by at most half an hour
           at each end.
         </p>
-      </details>
+      </details></>}
     </div>
   );
 }
@@ -143,12 +146,13 @@ export function WindowHeats({ grids, res, money, scope, onScope }: {
  *  lines twice, and a caveat a reader has already skipped once is a caveat. */
 function WindowHeat({ spec, grid, money, scope, onScope }: {
   spec: (typeof LIVE_WINDOWS)[number];
-  grid: TokenWindowSeries;
+  grid: GridSeries;
   money: boolean;
   scope: WindowScope;
   onScope: (s: WindowScope) => void;
 }) {
-  const cells = useMemo(() => windowGrid(grid), [grid]);
+  // The boxes no undated record can fall in, and one sentence for the run before them (`heatGrid`).
+  const { cells, refused: allRefused } = useMemo(() => heatGrid(grid), [grid]);
   /** What a box is worth under the metric the whole screen is on. One switch,
    *  never a second one here: these are the same numbers the hero is showing,
    *  asked one window at a time. */
@@ -160,7 +164,8 @@ function WindowHeat({ spec, grid, money, scope, onScope }: {
   const max = vals.reduce<number>((m, v) => Math.max(m, v ?? 0), 0);
   const counted = vals.filter((v) => v != null).length;
   const ran = vals.filter((v) => (v ?? 0) > 0).length;
-  if (!cells.length) return null;
+  const head = spec.id === "session" ? "Five-hour windows" : "Weekly windows";
+  if (!cells.length && !allRefused) return null;
   const fmt = (v: number) => (money ? fmtUsd(v) : `${fmtCount(v)} tokens`);
   const dense = cells.length > HEAT_DENSE;
 
@@ -169,23 +174,27 @@ function WindowHeat({ spec, grid, money, scope, onScope }: {
       <div className="section section-head">
         <span>
           <Grid3x3 size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          {spec.id === "session" ? "Five-hour windows" : "Weekly windows"}
+          {head}
         </span>
-        <span className="ts-heat-n">{ran} of {counted} had anything in them</span>
+        {cells.length > 0 && <span className="ts-heat-n">{ran} of {counted} had anything in them</span>}
       </div>
 
+      {cells.length > 0 && <>
       <div className={`ts-heat-grid${dense ? " dense" : ""}`}>
         {cells.map((c, i) => {
           const v = vals[i];
           const on = scope?.id === spec.id && scope.back === c.back;
           const step = v == null ? 0 : heatStep(heatFrac(v, max), HEAT_STEPS);
           const when = windowWhen(c.openedAt, c.resetAt);
-          const said = v == null
-            ? "outside the hour record"
-            : v > 0 ? fmt(v) : "nothing counted";
+          const said = c.refused
+            ? `no figure: ${c.refused}`
+            : v == null
+              ? "outside the hour record"
+              : v > 0 ? fmt(v) : "nothing counted";
+          const state = c.refused ? " undated" : v == null ? " unknown" : "";
           return (
             <button key={c.back} type="button"
-              className={`ts-heat-b s${step}${v == null ? " unknown" : ""}${c.back === 0 ? " now" : ""}${on ? " on" : ""}`}
+              className={`ts-heat-b s${step}${state}${c.back === 0 ? " now" : ""}${on ? " on" : ""}`}
               aria-label={`${when} — ${said}`}
               title={`${when} — ${said}`}
               // A box is the same decision the stepper takes, so it writes the
@@ -204,6 +213,11 @@ function WindowHeat({ spec, grid, money, scope, onScope }: {
         ))}
         <span className="ts-heat-key-l">more{max > 0 ? ` · busiest ${fmt(max)}` : ""}</span>
       </div>
+      </>}
+
+      {/* The windows an undated record could fall in are an ABSENCE, so the reason is said in
+          the open (never folded, never only a `title`), once for the whole run (`heatGrid`). */}
+      {allRefused && <div className="empty ts-caveat">{allRefused}</div>}
 
     </div>
   );

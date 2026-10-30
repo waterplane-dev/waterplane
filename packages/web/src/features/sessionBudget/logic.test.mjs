@@ -129,3 +129,10 @@ test("budgetSpendUnit: the subject backend's stated unit, else undefined (absent
   assert.equal(budgetSpendUnit({ backend: "claude" }, backends), undefined);
   assert.equal(budgetSpendUnit({ backend: "copilot" }, null), undefined);
 });
+
+test("a reason this bundle does not know reads as a generic can't-tell, never `undefined` (design round 5, r4-1b L2)", () => {
+  const f = budgetTagFacts({ running: true, budget: info("unknown", { why: "someFutureReason" }) }, 0);
+  assert.equal(f.text, "budget ? — can't tell");
+  assert.equal(f.title, "can't tell: this budget could not be checked — nothing is held");
+  assert.ok(!budgetStateLine(info("unknown", { why: "someFutureReason" }), 0).includes("undefined"));
+});

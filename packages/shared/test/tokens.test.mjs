@@ -283,3 +283,23 @@ test("one conversation is not told what its own norm is", () => {
   assert.doesNotMatch(lean.contextNote, /not the norm here/);
   assert.match(lean.contextNote, /well under/);
 });
+
+import { fmtNative as _fmtNative, besideFigure as _besideFigure } from "../dist/index.js";
+
+test("fmtNative: integers via fmtCount, else one decimal (pinned through its call sites)", () => {
+  assert.equal(_fmtNative(12), "12");
+  assert.equal(_fmtNative(1500), "1.5k");
+  assert.equal(_fmtNative(12.54), "12.5");
+  assert.equal(_fmtNative(0.4), "0.4");
+  assert.equal(_besideFigure({ kinds: {}, unit: { name: "AI credits", amount: 3.26 } }), "3.3 AI credits");
+});
+
+test("fmtNative: a positive amount never prints as 0; zero and negatives unchanged", () => {
+  assert.equal(_fmtNative(0.02), "<0.1");
+  assert.equal(_fmtNative(0.049), "<0.1");
+  assert.equal(_fmtNative(0.05), "0.1");
+  assert.equal(_fmtNative(0), "0");
+  assert.equal(_fmtNative(-0.02), "0");
+  assert.equal(_fmtNative(-3.26), "-3.3");
+  assert.equal(_besideFigure({ kinds: {}, unit: { name: "AI credits", amount: 0.02 } }), "<0.1 AI credits");
+});

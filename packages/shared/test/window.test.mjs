@@ -153,8 +153,10 @@ test("a window rule with nothing armed is WAITING FOR A READING, not switched of
   assert.doesNotMatch(v.detail, /switched off/);
 });
 
-test("a WEEKLY rule with nothing armed still reads as switched off", () => {
-  const weekly = winIntent({ nextAt: null, trigger: { kind: "at", graceMin: 30, rule: cleanRule({ kind: "weekly", hour: 9 }) } });
+test("a paused WEEKLY rule reads as switched off", () => {
+  // The pause is its own flag (`trigger.paused`); `nextAt: null` alone no
+  // longer means switched off (208aa148).
+  const weekly = winIntent({ nextAt: null, trigger: { kind: "at", graceMin: 30, paused: true, rule: cleanRule({ kind: "weekly", hour: 9 }) } });
   const v = intentVerdict(weekly, facts);
   assert.equal(v.reason, "gate");
   assert.match(v.detail, /switched off/);

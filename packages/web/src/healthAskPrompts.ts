@@ -416,3 +416,36 @@ When they answer, post only the ones they picked to this repo's backlog with ${B
 
 Change no file, run no fix, commit nothing: the backlog rows the person picked are the only thing you write.`;
 }
+
+/**
+ * The third ask: a design-quality RUN that changes code, after the trend ask
+ * has been read. Written from a measured run (picture-app, 2026-10-29): a
+ * free-typed "work on anything related to quality" drifted, once the
+ * design proposals were done, into rounds of file splits that took the index
+ * from 46 to 100 while the repo's own reading moved under one point. So this
+ * names the index as NOT the target, allows a split only as part of a design
+ * change, keeps tests-first (it found most of that run's bugs), and stops at
+ * "only splits remain" with proposals for the backlog. Nothing here is sent:
+ * the Send sheet holds the words, and the person adds a budget or stop time.
+ */
+export function healthQualityRunPrompt(repoName: string, ctx: HealthAskContext = {}): string {
+  const own = ownBlock(ctx.own);
+  const hasOwn = !!ctx.own?.readings.length;
+  const ownFile = ctx.own?.file ?? REPOHEALTH_OWN_FILE;
+  const track = hasOwn
+    ? "Report this repo's own readings (above) after each round; a round that moves only the health index is a wasted round."
+    : `This repo has no reading of its own yet. If the design cause you work on most has a countable measure, declare it in ${ownFile} with a script that prints it, and report it after each round; a round that moves only the health index is a wasted round.`;
+  return `Improve ${repoName}'s design, in rounds, until I stop you or the stop condition below is met. ${BRAND.displayName}'s health index is NOT the target: ignore its score, and never make a change because it would move a reading. The target is fewer places bugs come from.
+${own ? `\n${own}\n` : ""}
+Each round:
+1. Re-plan from evidence: the fix commits in the git history (recent first), any bug audit or proposal list from earlier in this conversation, and what the last round found. Name the DESIGN cause behind each class of bug — logic duplicated in two places, a contract only one side enforces, state with two owners, an error path that goes silent, a missing seam that makes code hard to test.
+2. Pick the changes that remove a cause rather than one symptom: unify duplicated logic, make an implicit contract explicit and tested on both sides, give state one owner, make an error policy uniform. Design each one before it is built — what changes, what it decouples, what would break if it is wrong — on the strongest model you have; mechanical implementation can go to a cheaper one.
+3. A file split is allowed only as part of such a change, and its commit says which responsibility it separates and what now depends on less. Splitting a file for its length is out of scope, and so is any rule about line counts.
+4. Tests first wherever behaviour is touched: pin what the code does now, then change it. A bug that turns up becomes its own fix commit with a test that fails without it.
+5. Have each change reviewed by someone who did not write it, for behaviour drift and for tests that do not check what they claim, before it lands.
+6. ${track}
+
+Stop implementing when the only candidates left are file splits or cosmetic changes. Then review the main areas for design instead, and list what you would change next as proposals — what, why, what it costs, how to check it worked — and ask me which ones to put in the backlog; post nothing until I answer.
+
+Keep the repo's own gate green after every round, and end with: what changed in the design (not the line counts), the bugs found, what each reading of this repo's own did, and what is left.`;
+}

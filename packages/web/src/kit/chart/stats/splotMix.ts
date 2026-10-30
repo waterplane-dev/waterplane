@@ -6,10 +6,11 @@
  */
 
 import {
-  type TokenTotals,
+  hourKey, type TokenTotals,
 } from "@waterplane/shared";
 import { byPrice, familyTintSlots, newestFirst, REST_SLOT } from "../../../modelHue.ts";
 import { f1, bandOutline } from "../chartPath.ts";
+import { addLocalDays, localDaysBetween } from "@waterplane/shared";
 import { DAY_MS, type DayPlot, type DayPoint } from "./splotDay.ts";
 import { dayKey } from "./splotWeeks.ts";
 
@@ -157,14 +158,16 @@ export function fillSeries(pts: DayPoint[], stepMs = DAY_MS, maxPoints = 4000): 
   const span = pts[pts.length - 1].t - pts[0].t;
   if (span / stepMs + 1 > maxPoints) return null;
   const have = new Map(pts.map((p) => [p.day, p]));
-  const key = stepMs < DAY_MS ? hourKeyOf : dayKey;
+  const key = stepMs < DAY_MS ? hourKey : dayKey;
   const out: DayPoint[] = [];
   const end = pts[pts.length - 1].t;
   // Half a step of slack on the comparison: an hour walk across a DST switch
   // lands 3_600_000 ms off the local top of the hour, and an exact `<=` would
   // drop the last bucket of that day.
+  // A fall-back hour is ONE key (shared `hourKey`): two steps land in it, and it is one bucket.
   for (let t = pts[0].t; t <= end + stepMs / 2; t = stepDate(t, stepMs)) {
     const k = key(t);
+    if (out.length && out[out.length - 1].day === k) continue;
     out.push(have.get(k) ?? { t, day: k, v: 0 });
   }
   return out;
@@ -186,11 +189,12 @@ export function fillMix<T extends MixRow>(
   maxPoints = 4000,
 ): T[] | null {
   if (rows.length < 2) return rows;
-  if ((rows[rows.length - 1].t - rows[0].t) / DAY_MS + 1 > maxPoints) return null;
+  if (localDaysBetween(rows[0].t, rows[rows.length - 1].t) + 1 > maxPoints) return null;
   const have = new Map(rows.map((r) => [r.day, r]));
   const out: T[] = [];
   const end = rows[rows.length - 1].t;
-  for (let t = rows[0].t; t <= end + DAY_MS / 2; t = stepDate(t, DAY_MS)) {
+  const endKey = dayKey(end);
+  for (let t = rows[0].t; dayKey(t) <= endKey; t = stepDate(t, DAY_MS)) {
     const k = dayKey(t);
     const row = have.get(k);
     out.push(row ?? blank(t, k));
@@ -255,17 +259,11 @@ export function modelBands(models: { key: string; label: string }[]): {
  *  walk at 23:00 of the day before (`weekDays`' rule, one level down). */
 function stepDate(t: number, stepMs: number): number {
   if (stepMs !== DAY_MS) return t + stepMs;
-  const d = new Date(t);
-  d.setDate(d.getDate() + 1);
+  const d = new Date(addLocalDays(t, 1));
   d.setHours(0, 0, 0, 0);
   return d.getTime();
 }
 
-/** `YYYY-MM-DDTHH` in the LOCAL zone — the key the host bucketed hours under. */
-function hourKeyOf(t: number): string {
-  const d = new Date(t);
-  return `${dayKey(t)}T${String(d.getHours()).padStart(2, "0")}`;
-}
 
 export interface AreaBand {
   /** Which kind this band is, and its palette slot — the same slot the strip

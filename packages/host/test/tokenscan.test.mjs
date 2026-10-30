@@ -134,3 +134,38 @@ test("b skips an output-only first record and anchors on the first request that 
   const s = await summarizeLog(p, statSync(p).size, 1);
   assert.equal(s.b, 143, "b is the first request with input or cache, never 0 from an output-only record");
 });
+
+test("read, costWindow and windowSeries all carry the store's undated count (design round 4)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wp-tokenscan-undated-"));
+  const store = new TokenStatsStore(join(home, "root"));
+  const hour = "2026-10-08T11";
+  store.store = { "-r": { conv: { m: 0, s: 0, w: "/r", x: { [`\u0000claude-sonnet-4-5`]: [5, 5, 0, 0, 0, 2], [`${hour}\u0000claude-sonnet-4-5`]: [1, 1, 0, 0, 0, 1] } } } };
+  store.lastScan = Date.now();
+  const big = 1e12;
+  assert.equal((await store.read(big)).undated, 2);
+  assert.equal((await store.costWindow(0, Date.now(), { byConv: new Map() }, big)).undated, 2);
+  assert.equal((await store.windowSeries([{ id: "w", anchor: Date.now(), lenMs: 3_600_000 }], big)).undated, 2);
+});
+
+test("an assistant line with a missing or unparseable timestamp lands under the empty hour undatedRecords reads (design round 4, r4-1 L2)", async () => {
+  const { undatedRecords } = await import("../dist/costwindow.js");
+  const dir = mkdtempSync(join(tmpdir(), "wp-tokenscan-undated-"));
+  const p = join(dir, "conv.jsonl");
+  const usage = { input_tokens: 3, output_tokens: 5, cache_read_input_tokens: 10, cache_creation_input_tokens: 0 };
+  const rec = (id, ts) => JSON.stringify({ type: "assistant", ...(ts === undefined ? {} : { timestamp: ts }), message: { id, model: "claude-opus-4-1", usage } });
+  writeFileSync(p, [
+    rec("m-none", undefined),
+    rec("m-bad", "not a time"),
+    rec("m-dated", "2026-10-01T10:00:00Z"),
+  ].join("\n") + "\n");
+  const mtime = 1_790_000_000_000;
+  const s = await summarizeLog(p, statSync(p).size, mtime);
+  const empty = Object.entries(s.x).filter(([k]) => k.split("\u0000")[0] === "");
+  assert.equal(empty.length, 1, "both undated records share ONE empty-hour key");
+  assert.equal(empty[0][0], "\u0000claude-opus-4-1");
+  assert.equal(empty[0][1][5], 2, "two requests, counted");
+  assert.equal(s.m, mtime, "the file's mtime rides with it — the bound a window's undated count is cut by");
+  const files = { "-r": { conv: s } };
+  assert.equal(undatedRecords(files), 2);
+  assert.equal(undatedRecords(files, mtime + 1), 0, "a span opened after the log was written misses none");
+});

@@ -22,6 +22,7 @@
  * pinned in `packages/shared/test/autocompact.test.mjs` with no disk.
  */
 import { BRAND } from "./brand.js";
+import { wordOf } from "./wordof.js";
 
 /** Where the effective value came from. `unset` = nobody said, which the CLI
  *  treats as `auto`. */
@@ -208,7 +209,7 @@ export const AUTO_MEANS =
 export function autoCompactVerdict(r: AutoCompactResolution, chosen?: string): { status: "pass" | "warn"; detail: string } {
   const c = chosen ? parseAutoCompactWindow(chosen) : null;
   const okMax = Math.max(AUTO_COMPACT_OK_MAX, c?.kind === "size" ? c.tokens : 0);
-  const from = `Set in ${SOURCE_WORDS[r.source]}.`;
+  const from = `Set in ${wordOf(SOURCE_WORDS, r.source, "a place this version cannot name")}.`;
   const broken = r.unreadable.length
     ? ` Not valid JSON (the CLI cannot read it either, so it decides nothing): ${r.unreadable.join(", ")}.`
     : "";

@@ -8,6 +8,7 @@ import { execFileP as pexec } from "./proc.js";
 import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
 import { branchRules, invalidateBranchRules } from "./branchrules.js";
+import { pushFailureText, pushRefusedByRule } from "./pushverdict.js";
 
 
 export interface GitFile {
@@ -72,16 +73,37 @@ async function countStatus(wt: string): Promise<{ changed: number; ahead?: numbe
     // never a made-up 0.
     const { stdout } = await git(wt, ["status", "--porcelain=v1", "--branch", "--untracked-files=all"]);
     const lines = stdout.split("\n").filter((l) => l.trim());
-    const head = lines[0]?.startsWith("## ") ? lines.shift()! : "";
-    if (!head.includes("...")) return { changed: lines.length };
-    return {
-      changed: lines.length,
-      ahead: Number(/ahead (\d+)/.exec(head)?.[1] ?? 0),
-      behind: Number(/behind (\d+)/.exec(head)?.[1] ?? 0),
-    };
+    const h = branchHeader(lines[0]?.startsWith("## ") ? lines.shift()!.slice(3) : "");
+    return h.upstream ? { changed: lines.length, ahead: h.ahead, behind: h.behind } : { changed: lines.length };
   } catch {
     return { changed: 0 };
   }
+}
+
+/**
+ * `git status --branch`'s `## <branch>...<upstream> [ahead 2, behind 1]` header — the ONE reading
+ * of it, for the listing's counts and the git view alike. git counts against the CONFIGURED
+ * upstream (a local `.` one or `upstream/main` included). A `[gone]` upstream (its remote branch
+ * deleted) has nothing to count against: no upstream, as `@{u}` says — never ahead 0 (design round 4).
+ */
+function branchHeader(head: string): { branch?: string; upstream?: string; ahead: number; behind: number } {
+  const m = /^(.+?)(?:\.\.\.(\S+))?(?:\s+\[(.+)\])?$/.exec(head);
+  if (!m) return { ahead: 0, behind: 0 };
+  const tail = m[3] ?? "";
+  const upstream = liveUpstream(m[2], tail);
+  return {
+    branch: m[1] === "HEAD (no branch)" ? "(detached)" : m[1], upstream,
+    ahead: Number(/ahead (\d+)/.exec(tail)?.[1] ?? 0), behind: Number(/behind (\d+)/.exec(tail)?.[1] ?? 0),
+  };
+}
+
+/**
+ * The ONE notion of a gone upstream, for the status header and `for-each-ref` alike: git's track
+ * word (`gone`, or `ahead 2, behind 1`, brackets optional) beside the configured name. Gone ⇒ no
+ * upstream, so no listing draws "→ origin/x" for a remote branch that was deleted (design round 5).
+ */
+function liveUpstream(upstream: string | undefined, track: string): string | undefined {
+  return upstream && track.replace(/^\[|\]$/g, "").trim() !== "gone" ? upstream : undefined;
 }
 
 export type ChangedCount = Awaited<ReturnType<typeof countChangedFiles>>;
@@ -203,15 +225,8 @@ export async function gitStatus(wt: string): Promise<GitStatus> {
   for (const line of lines) {
     if (!line) continue;
     if (line.startsWith("## ")) {
-      const head = line.slice(3);
-      const m = /^(.+?)(?:\.\.\.(\S+))?(?:\s+\[(.+)\])?$/.exec(head);
-      if (m) {
-        status.branch = m[1] === "HEAD (no branch)" ? "(detached)" : m[1];
-        status.upstream = m[2];
-        const tail = m[3] ?? "";
-        status.ahead = Number(/ahead (\d+)/.exec(tail)?.[1] ?? 0);
-        status.behind = Number(/behind (\d+)/.exec(tail)?.[1] ?? 0);
-      }
+      const h = branchHeader(line.slice(3));
+      if (h.branch) Object.assign(status, { branch: h.branch, upstream: h.upstream, ahead: h.ahead, behind: h.behind });
       continue;
     }
     const code = line.slice(0, 2);
@@ -473,7 +488,7 @@ export interface GitBranch {
 }
 
 /** Reject branch names that could be read as flags or break the ref grammar. */
-function safeBranch(name: string): string | null {
+export function safeBranch(name: string): string | null {
   const n = name.trim();
   if (!n || n.startsWith("-") || /[\s~^:?*\[\\]|\.\.|@\{|^\/|\/$|\/\/|\.lock$/.test(n)) return null;
   return n;
@@ -504,17 +519,17 @@ export async function gitBranches(wt: string): Promise<GitBranch[]> {
     const self = resolve(wt);
     const inUse = await worktreeBranchMap(wt);
     const { stdout } = await git(wt, [
-      "for-each-ref", "--format=%(refname:short)%09%(upstream:short)%09%(HEAD)", "refs/heads",
+      "for-each-ref", "--format=%(refname:short)%09%(upstream:short)%09%(HEAD)%09%(upstream:track)", "refs/heads",
     ]);
     const out: GitBranch[] = [];
     for (const line of stdout.split("\n")) {
       if (!line.trim()) continue;
-      const [name, upstream, head] = line.split("\t");
+      const [name, upstream, head, track = ""] = line.split("\t");
       const path = inUse.get(name);
       out.push({
         name,
         current: head === "*",
-        upstream: upstream || undefined,
+        upstream: liveUpstream(upstream, track),
         inUseElsewhere: !!path && path !== self,
       });
     }
@@ -605,26 +620,32 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     if (r) return r;
   }
   try {
-    // Set upstream automatically on first push of a branch.
-    const { stdout, stderr } = await gitStreamed(wt, ["push", "--porcelain"], onData).catch(async (e) => {
-      if (/no upstream|set-upstream/i.test(String(e?.stderr || e))) {
-        const { stdout: br } = await git(wt, ["rev-parse", "--abbrev-ref", "HEAD"]);
-        return gitStreamed(wt, ["push", "--set-upstream", "origin", br.trim()], onData);
-      }
-      throw e;
-    });
+    // A branch with no upstream is pushed ONCE with --set-upstream — decided by asking git
+    // (`rev-parse @{u}`), never by a phrase in the output: that output carries the pre-push
+    // hook's own log, and a failing hook that printed "set-upstream" re-ran the whole local CI.
+    const args = ["push", "--porcelain"];
+    if (!(await hasUpstream(wt))) {
+      const br = (await git(wt, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => ({ stdout: "" }))).stdout.trim();
+      if (br && br !== "HEAD" && safeBranch(br)) args.push("--set-upstream", "origin", br);
+    }
+    const { stdout, stderr } = await gitStreamed(wt, args, onData);
     return { ok: true, output: (stdout || stderr || "pushed").toString().trim() };
   } catch (err: any) {
     const so = String(err?.stdout ?? ""), se = String(err?.stderr ?? "") || String(err);
     let error = pushFailureText(so, se);
     // A branch-rule refusal on the plain path: the rules changed under us. Forget the reading.
-    if (/GH013|GH006|protected branch|repository rule violations/i.test(`${so}\n${se}`)) {
+    if (pushRefusedByRule(so, se)) {
       invalidateBranchRules(wt);
       void branchRules(wt); // re-read now, so the next push finds PR mode without waiting
       error += "\n\nThis repo now takes changes through a PR — push again to open one.";
     }
     return { ok: false, error };
   }
+}
+
+/** Whether HEAD's branch has an upstream — git's answer, not a phrase in a push's output. */
+async function hasUpstream(wt: string): Promise<boolean> {
+  try { await git(wt, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]); return true; } catch { return false; }
 }
 
 /**
@@ -660,15 +681,23 @@ export interface GitOutcome {
   error?: string;
   startedAt: number;
   finishedAt: number;
+  /** The worktree it ran in — where whoever files the outcome asks git about it. */
+  wt?: string;
+  /** A push only: the branch and the commit it tried to send, read when it started. A failure
+   *  is filed with this, and resolved only once THAT commit is on THAT branch's upstream. */
+  head?: PushHead;
 }
+/** Which branch and commit a push tried to send. */
+export interface PushHead { branch: string; sha: string }
 /** Which repo/worktree a run was for, as the route resolved it (`RepoTarget`). */
 export interface GitRepoRef { id: string; name: string; branch?: string }
 
-let outcomeSink: ((o: GitOutcome) => void) | null = null;
+let outcomeSink: ((o: GitOutcome) => void | Promise<void>) | null = null;
 /** Install (or, with null, remove) the one listener for git outcomes. */
-export function setGitOutcomeSink(fn: ((o: GitOutcome) => void) | null): void { outcomeSink = fn; }
+export function setGitOutcomeSink(fn: ((o: GitOutcome) => void | Promise<void>) | null): void { outcomeSink = fn; }
 function report(o: GitOutcome): void {
-  try { outcomeSink?.(o); } catch (e) { console.error(`[git] outcome sink threw: ${(e as Error).message}`); }
+  const said = (e: unknown) => console.error(`[git] outcome sink threw: ${(e as Error)?.message ?? e}`);
+  try { void Promise.resolve(outcomeSink?.(o)).catch(said); } catch (e) { said(e); }
 }
 
 /** Start a push in `wt`, or join the one already running there. `repo`, when
@@ -677,12 +706,13 @@ function report(o: GitOutcome): void {
 export function startPush(wt: string, repo?: GitRepoRef): GitPushJob {
   const live = pushes.get(wt);
   if (live?.running) return live;
-  const refused = pulling.has(wt);
   const job: GitPushJob = { running: true, startedAt: Date.now(), progress: new PushProgress(), done: null as never };
-  job.done = gitPush(wt, (k, d) => job.progress.feed(k, d)).then((r) => {
+  job.done = (repo ? headOf(wt) : Promise.resolve(undefined)).then(async (head) => {
+    const refused = pulling.has(wt);
+    const r = await gitPush(wt, (k, d) => job.progress.feed(k, d));
     job.running = false;
     job.result = { ...r, finishedAt: Date.now() };
-    if (repo && !refused) report({ repo, verb: "push", ...r, startedAt: job.startedAt, finishedAt: job.result.finishedAt });
+    if (repo && !refused) report({ repo, verb: "push", ...r, startedAt: job.startedAt, finishedAt: job.result.finishedAt, wt, ...(head ? { head } : {}) });
     return r;
   });
   pushes.set(wt, job);
@@ -695,16 +725,12 @@ export function pushState(wt: string): GitPushState | null {
   return job ? { running: job.running, startedAt: job.startedAt, result: job.result, progress: job.progress.snapshot() } : null;
 }
 
-/**
- * True when HEAD has nothing its upstream lacks — every commit is pushed, by
- * this host or not (a terminal, another machine). A fresh `rev-list`, never
- * the listing's cached count, which can predate the failure it would clear.
- * No upstream, or git broke: undefined, never a made-up "nothing to push".
- */
-export async function nothingToPush(wt: string): Promise<boolean | undefined> {
+/** The branch and commit HEAD is on, or undefined (detached, unborn, git broke). */
+async function headOf(wt: string): Promise<PushHead | undefined> {
   try {
-    const { stdout } = await git(wt, ["rev-list", "--count", "@{u}..HEAD"]);
-    return stdout.trim() === "0";
+    const branch = (await git(wt, ["symbolic-ref", "--quiet", "--short", "HEAD"])).stdout.trim();
+    const sha = (await git(wt, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])).stdout.trim();
+    return branch && /^[0-9a-f]{40,64}$/.test(sha) ? { branch, sha } : undefined;
   } catch { return undefined; }
 }
 
@@ -744,7 +770,7 @@ export async function gitPull(wt: string, repo?: GitRepoRef): Promise<{ ok: bool
   } finally {
     pulling.delete(wt);
   }
-  if (repo) report({ repo, verb: "pull", ...r, startedAt, finishedAt: Date.now() });
+  if (repo) report({ repo, verb: "pull", ...r, startedAt, finishedAt: Date.now(), wt });
   return r;
 }
 
@@ -783,57 +809,6 @@ async function pullOnce(wt: string): Promise<{ ok: boolean; output?: string; err
     return { ok: false, error: `Replaying ${plural(ahead, "local commit")} on top of ${up} hit a conflict, so it was undone — nothing was changed. Resolve it in a session on the desktop.\n\n${errText(err)}` };
   }
   return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up} and replayed your ${plural(ahead, "local commit")} on top.${toPush}` };
-}
-
-/**
- * The rules GitHub names when a ruleset (GH013, `remote: - <rule>` lines) or classic branch
- * protection (GH006, `remote: error: <rule>` lines) refuses a push, plus the page that lists them —
- * as a clause, or "" when the remote named none. Only the remote's own words, never a guess.
- */
-function ruleWords(lines: string[]): string {
-  const rules: string[] = [];
-  let page = "";
-  for (const l of lines) {
-    const at = /^remote:\s+Review all repository rules at (\S+)/.exec(l);
-    if (at) { page = at[1]; continue; }
-    const r = /^remote:\s+(?:- |error: )(.+?)\s*$/.exec(l);
-    if (r && !/^GH0\d\d:/.test(r[1]) && !rules.includes(r[1])) rules.push(r[1].replace(/\.$/, ""));
-  }
-  return (rules.length ? `: ${rules.join("; ")}` : "") + (page ? ` (rules: ${page})` : "");
-}
-
-/**
- * What a refused push says on the phone. A pre-push hook (the local CI) prints
- * its steps to git's STDOUT, so stderr alone held only node's warnings and
- * git's closing "failed to push" — the step that failed was in the half that
- * was dropped. Both halves, colour codes and node's MODULE_TYPELESS noise out,
- * the hook's `FAILED: <step>` line first, then the last lines that explain it.
- *
- * A hook that PASSED and a remote that then refused is the other case: `--porcelain`
- * writes the refusal (`!\t<ref>\t[rejected] (fetch first)`) to stdout, and 20k of e2e
- * chatter on stderr pushed it out of the tail — the phone showed host warnings and
- * "failed to push" after a green 24-minute check, with the reason nowhere on screen.
- */
-export function pushFailureText(stdout: string, stderr: string, tail = 40): string {
-  const clean = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").split("\n")
-    .filter((l) => !/^\(node:\d+\) \[MODULE_TYPELESS_PACKAGE_JSON\]|^Reparsing as ES module|^To eliminate this warning|^\(Use `node --trace-warnings/.test(l));
-  const lines = [...clean(stdout), ...clean(stderr)].filter((l, i, a) => l.trim() || (i > 0 && a[i - 1].trim()));
-  const failed = lines.find((l) => /^FAILED: /.test(l));
-  const body = lines.slice(-tail).join("\n").trim();
-  if (failed) return `The pre-push check stopped it — ${failed.replace(/^FAILED: /, "")}\n\n${body}`;
-  const rejected = lines.map((l) => /^!\t(\S+)\t(.*)$/.exec(l)).find(Boolean);
-  if (rejected) {
-    const ref = rejected[1].split(":").pop()!.replace(/^refs\/heads\//, "");
-    const why = rejected[2].trim();
-    const passed = lines.some((l) => /^local CI passed\b/.test(l)) ? "The pre-push check passed, but the" : "The";
-    const moved = /fetch first|non-fast-forward/.test(why)
-      ? ` — ${ref} moved on the remote while this ran. Pull, then push again.`
-      : /repository rule violations|protected branch hook declined/.test(why)
-        ? ` — a branch rule on the remote blocks this push${ruleWords(lines)}. Nothing changed there; your commits are still here.`
-        : ` — ${why}`;
-    return `${passed} remote refused ${ref}${moved}\n\n${rejected[0]}\n${body}`;
-  }
-  return body;
 }
 
 // ── Peer jobs (peers/serve.ts): find a clone by its remote, run a job in a detached worktree ──

@@ -10,6 +10,7 @@ import { usePref } from "../core/prefs";
 import type { SendSheetProps } from "./sendSheetTypes";
 import { defaultTarget } from "./sendTargets";
 import { useRuleFields } from "./useRuleFields";
+import { resumeKept, type KeptCap } from "../budgetInput";
 
 export function useSendSheet(props: SendSheetProps) {
   const {
@@ -74,6 +75,9 @@ export function useSendSheet(props: SendSheetProps) {
   // choice's default (inherit) means today.
   const closeGlobal = usePref("closeWhenDone");
   const [sequential, setSequential] = useState(() => resume?.sequential ?? !!seed.sequential);
+  // A cap the start could not carry, SET ASIDE (`capOnStart`, drawn by ToSection). Sheet state, not
+  // the target's: the target is what is sent. Held here so it rides the decision below (r4-2b M2).
+  const [kept, setKept] = useState<KeptCap | null>(() => resumeKept(resume));
   // Same promise as the draft, for the half of the decision that is not words.
   // Reported on every change rather than on the way out, for the draft's reason:
   // handing images to the annotator unmounts this sheet, and a component that
@@ -84,11 +88,12 @@ export function useSendSheet(props: SendSheetProps) {
   decideRef.current = onDecide;
   // `parkedAt` rides along: the rule a trip out of the clock is HOLDING is as
   // much of the decision as the three live answers, and the row promises it is
-  // kept. Read off the ref rather than from state because `leaveAt` writes it in
+  // kept. So does a set-aside cap (`kept`): its sentence promises it comes back.
+  // `parkedAt` is read off the ref rather than from state because `leaveAt` writes it in
   // the same breath as `setWhen`, so this effect already sees the fresh one.
   useEffect(
-    () => { decideRef.current?.({ target, when, sequential, parkedAt: atMemo.current ?? undefined }); },
-    [target, when, sequential],
+    () => { decideRef.current?.({ target, when, sequential, parkedAt: atMemo.current ?? undefined, kept: kept ?? undefined }); },
+    [target, when, sequential, kept],
   );
   /** Which summary row is expanded. One at a time — two open pickers on a phone
    *  is a scroll, and the point of a summary row is that it is one line. */
@@ -286,7 +291,7 @@ export function useSendSheet(props: SendSheetProps) {
 
   return {
     ...props,
-    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, launchOpen, setLaunchOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, switchAnchor, setAnchor, setAfter, leaveAt, go,
+    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, kept, setKept, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, launchOpen, setLaunchOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, switchAnchor, setAnchor, setAfter, leaveAt, go,
   };
 }
 

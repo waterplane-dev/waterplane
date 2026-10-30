@@ -13,7 +13,7 @@ import { WindowHeats, type WindowScope, WindowStep } from "./WindowHeats.tsx";
 import { Bars, ModelLegend } from "./charts/Bars.tsx";
 import { Composition, DaysTiles, Tiles, WindowTiles } from "./Readouts.tsx";
 import { TableView } from "./TableView.tsx";
-import { foldStateText } from "./weekBands.ts";
+import { type FoldRead, foldStateText } from "./weekBands.ts";
 
 /**
  * The Totals box and the costliest conversations under it: the hero, the split it
@@ -44,7 +44,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
   /** The window's repos, folded by the host over the cut on screen (`/api/costwindow`) — null
    *  while it is read or when it cannot be, which `scopeRes` words. Unused without a cut. */
   scopeRepos?: TokenGroup[] | null;
-  scopeRes?: { state: string; error?: string | null };
+  scopeRes?: FoldRead;
   /** Why the span has no repo split at all (a calendar span longer than the host's cost window
    *  folds) — a sentence in place of the bars. */
   reposRefusal?: string | null;

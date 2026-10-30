@@ -1,4 +1,4 @@
-import { levelOf, needsYou, notifyLevel, type NotificationItem, type NotificationKind } from "@waterplane/shared";
+import { isRepoChipKey, levelOf, needsYou, notifyLevel, parseAttentionKey, type NotificationItem, type NotificationKind } from "@waterplane/shared";
 
 /**
  * The notification feed's pure half — no React, no storage, no socket — so
@@ -35,7 +35,7 @@ export function repoChipKeys(items: readonly NotificationItem[]): string {
 
 /** The items behind those chips — a failed pull, push or build still unhandled. What's new counts and cuts by this. */
 export function repoChipItems<T extends Pick<NotificationItem, "kind" | "level" | "handled" | "key">>(items: readonly T[]): T[] {
-  return items.filter((n) => needsYou(n) && /^(git|build):/.test(n.key ?? ""));
+  return items.filter((n) => needsYou(n) && isRepoChipKey(parseAttentionKey(n.key)));
 }
 
 export function needsYouItems<T extends Pick<NotificationItem, "kind" | "level" | "handled">>(items: readonly T[]): T[] {
@@ -80,7 +80,7 @@ export function newlyResolved<T extends Pick<NotificationItem, "id" | "handled" 
   const was = new Map(prev.map((n) => [n.id, n]));
   return next.filter((n) => {
     const o = was.get(n.id);
-    return !!o && !o.handled && n.handled?.by === "resolved" && !!n.handled.note && n.handled.note !== "replaced by a newer one" && /^(git|build):/.test(n.key ?? "");
+    return !!o && !o.handled && n.handled?.by === "resolved" && !!n.handled.note && n.handled.note !== "replaced by a newer one" && isRepoChipKey(parseAttentionKey(n.key));
   });
 }
 
@@ -169,14 +169,15 @@ export type NotifTarget =
   | { to: "backlogByName" }
   | { to: "repohealth"; repoId: string }
   | { to: "tokens" }
-  | { to: "git"; repoId: string; explain?: boolean }
+  /** `failureId`: the tapped failure's own item id, so the git view shows THAT record. */
+  | { to: "git"; repoId: string; explain?: boolean; failureId?: string }
   | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
   | { to: "setup"; repoId: string }
   | { to: "row" };
 
 export function notifTarget(n: {
-  kind: string; file?: unknown; image?: unknown; sessionId?: string; plugin?: string;
+  id?: string; key?: string; kind: string; file?: unknown; image?: unknown; sessionId?: string; plugin?: string;
   backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string; buildId?: string; verb?: string };
 }): NotifTarget {
   if (n.file) return { to: "file" };
@@ -187,7 +188,11 @@ export function notifTarget(n: {
   const o = n.open;
   if (o?.to === "repohealth" && o.repoId) return { to: "repohealth", repoId: o.repoId };
   if (o?.to === "tokens") return { to: "tokens" };
-  if (o?.to === "git" && o.repoId) return o.verb === "explain" ? { to: "git", repoId: o.repoId, explain: true } : { to: "git", repoId: o.repoId };
+  if (o?.to === "git" && o.repoId) {
+    if (o.verb === "explain") return { to: "git", repoId: o.repoId, explain: true };
+    // A failure (its key names a git verb) opens on itself; a receipt opens the view as is.
+    return n.id && parseAttentionKey(n.key)?.kind === "git" ? { to: "git", repoId: o.repoId, failureId: n.id } : { to: "git", repoId: o.repoId };
+  }
   if (o?.to === "build" && o.repoId) return { to: "build", repoId: o.repoId, buildId: o.buildId };
   if (o?.to === "setup" && o.repoId) return { to: "setup", repoId: o.repoId };
   if (n.kind === "weekburn") return { to: "weekburn" };

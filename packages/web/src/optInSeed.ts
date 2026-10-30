@@ -113,6 +113,9 @@ export function optInSentWords(sent: OptInSent, day: (at: number) => string = se
     case "failed": return `${on} — that run failed.`;
     case "canceled": return `${on} — that row was cancelled.`;
     case "ended": return `${on} — that session has closed, and it is not set up yet.`;
+    // `status` is the host's: a newer host's word reaches an older phone with
+    // no case for it, and is still said rather than guessed.
+    default: return `${on} — this app version cannot say what became of it.`;
   }
 }
 

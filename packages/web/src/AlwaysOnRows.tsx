@@ -47,6 +47,7 @@ type Scope = AlwaysOnRow["scope"];
 /** The scope chips, in order; VS Code's Always-on view cuts by the same two. */
 export const AO_SCOPES: readonly Scope[] = ["repo", "desktop"];
 const SCOPES = AO_SCOPES;
+// closed: keyed by this file's own scope list
 const GROUP_HEAD: Record<Scope, string> = { repo: "In this repo", desktop: "On this desktop" };
 
 /** A live session's door into what its own first request carried. */

@@ -59,6 +59,9 @@ export function passiveUnlockErrorText(error: Exclude<PassiveUnlockResponse, { o
     case "wrong-pin": return "Wrong PIN.";
     case "rate-limited": return `Too many tries. Try again in ${Math.max(1, Math.ceil(retryAfterS / 60))} min.`;
     case "bad-request": return `A PIN is ${PIN_MIN}–${PIN_MAX} digits.`;
+    // `error` is the host's answer: a refusal a newer host adds reaches an
+    // older phone with no case for it.
+    default: return "The desktop refused the unlock for a reason this app version cannot name.";
   }
 }
 

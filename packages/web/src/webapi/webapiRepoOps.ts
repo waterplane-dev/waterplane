@@ -62,7 +62,7 @@ export const repoOpsApi = {
   // the shipped default.
   hostSetup: () => jget<HostSetupReport>("/api/host/setup"),
   hostSetupFix: (fixes: string[]) => jpost<HostSetupFixResult>("/api/host/setup/fix", { fixes }),
-  setupPrefs: () => jget<{ ok: boolean; autoCompactDefault: string; chosen: boolean }>("/api/host/setupprefs"),
+  setupPrefs: (signal?: AbortSignal) => jget<{ ok: boolean; autoCompactDefault: string; chosen: boolean }>("/api/host/setupprefs", undefined, signal),
   setSetupPrefs: (autoCompactDefault: string | null) =>
     jpost<{ ok: boolean; error?: string; autoCompactDefault?: string; chosen?: boolean }>("/api/host/setupprefs", { autoCompactDefault }),
 

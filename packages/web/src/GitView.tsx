@@ -4,7 +4,7 @@ import type { GitBranch, GitFile, GitPushProgress, GitPushState, GitStatus } fro
 import { api, copyText } from "./api";
 import { track } from "./usage";
 import { useRemoteResource } from "./useRemoteResource";
-import { SheetHead } from "./Sheet";
+import { Sheet, SheetHead } from "./Sheet";
 import { useBackStep } from "./backStep";
 import { ConfirmButton, askConfirm } from "./Confirm";
 import { Empty } from "./Empty";
@@ -13,7 +13,8 @@ import { GitMediaDiff, isMediaDiff } from "./GitMediaDiff";
 import { GitTextDiff } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GitExplain } from "./GitExplain";
-import { takeExplainLanding } from "./gitLanding";
+import { clearFailureFocus, gitNoRepoWords, storedFailure, storedFailureWords, takeExplainLanding, useFailureFocus } from "./gitLanding";
+import type { ListRead } from "./listRead";
 import { GIT_COPIED, GIT_COPY_FAILED, GIT_COPY_LABEL, GIT_FIX_LABEL, gitFailPrompt, type GitFailure } from "./gitFailPrompt";
 import { showToast } from "./toast";
 import { ago } from "./format";
@@ -23,6 +24,7 @@ import { Row, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { PrCard } from "./PrCard";
 import { cardVisible, pushLabel as pushLabelText } from "./prCardLogic";
+import { branchUpstream } from "./gitCounts";
 
 interface Props {
   repoId: string;
@@ -37,10 +39,16 @@ interface Props {
   onClose: () => void;
   /** The host's stored failure of the last pull/push here (`RepoTarget.gitFailed`), kept
    *  across restarts and devices; shown when this screen holds no failure note of its own. */
-  stored?: { verb: "pull" | "push"; at: number; error: string; id: string };
+  stored?: StoredGitFailure;
+  /** Every stored failure here (`RepoTarget.gitFailures`, newest first; absent = an older
+   *  host). A notification tap names one (`landOnGit`), and THAT one is shown — not the
+   *  newest, which may be another branch's (review A3b). */
+  failures?: StoredGitFailure[];
   /** `done` on the stored failure — `notification.handle(stored.id)`. */
   onDone?: (id: string) => void;
 }
+
+type StoredGitFailure = { verb: "pull" | "push"; at: number; error: string; id: string; branch?: string };
 
 /** Map a porcelain code to a short human label. */
 function label(f: GitFile): string {
@@ -120,8 +128,25 @@ function PushProgressView({ p, fill }: { p: GitPushProgress; fill: boolean }) {
   );
 }
 
+/**
+ * The git route with no repo named — not by its entry, the `?repo=` focus nor a session (a reload
+ * or an update resume over the launcher). Says so, and the head's back arrow is the way out: never a
+ * guessed repo and never an empty screen one Back pops invisibly (review R2-2b M2).
+ */
+export function GitNoRepo({ focus, list, session, onClose }: { focus: string | null; list: ListRead; session: boolean; onClose: () => void }) {
+  return (
+    <Sheet title="Review" onClose={onClose}>
+      <Empty>{gitNoRepoWords(focus, list, session)}</Empty>
+    </Sheet>
+  );
+}
+
 /** Review changed files, view diffs, stage, commit, pull and push from the phone. */
-export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone }: Props) {
+export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestStored, failures, onDone }: Props) {
+  // The failure a notification tap put this screen on (`gitLanding.ts`): the screen's own
+  // state, read on every mount and re-read when a tap re-targets it while open.
+  const tappedFailure = useFailureFocus(repoId);
+  const stored = storedFailure(failures, newestStored, tappedFailure);
   const [openFile, setOpenFile] = useState<GitFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [message, setMessage] = useState("");
@@ -139,7 +164,10 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
     setFailure({ note: text, f });
   }
   /** The failure with what the screen knows now — both buttons hand over the same words. */
-  function fullFailure(f: Omit<GitFailure, "branch" | "upstream" | "ahead">): GitFailure {
+  function fullFailure(f: Omit<GitFailure, "branch" | "upstream" | "ahead">, onBranch?: string): GitFailure {
+    // A stored push of ANOTHER branch than the one checked out: its own branch, and none of
+    // this branch's upstream or ahead count, which say nothing about it.
+    if (onBranch && onBranch !== status?.branch) return { ...f, branch: onBranch };
     return { ...f, branch: status?.branch ?? "the current branch", upstream: status?.upstream, ahead: f.verb === "push" ? status?.ahead : undefined };
   }
   /** A push that ended badly, told in the note and offered to a new session. */
@@ -169,9 +197,9 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   const [explainRunning, setExplainRunning] = useState(false);
   useEffect(() => {
     if (explaining) return;
-    let gone = false;
-    api.gitExplainState(repoId).then((s) => { if (!gone) setExplainRunning(!!s?.running); }).catch(() => { /* an older desktop */ });
-    return () => { gone = true; };
+    const ac = new AbortController();
+    api.gitExplainState(repoId, ac.signal).then((s) => { if (!ac.signal.aborted) setExplainRunning(!!s?.running); }).catch(() => { /* an older desktop */ });
+    return () => ac.abort();
   }, [explaining, repoId]);
   /**
    * A drafted message that is NOT in the box, because the box already had
@@ -331,9 +359,9 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
   // the sheet closed, or from another tab) and follows it; one that ended
   // while nobody was looking is told once.
   useEffect(() => {
-    let gone = false;
-    api.gitPushState(repoId).then((p) => {
-      if (gone || !p) return;
+    const ac = new AbortController();
+    api.gitPushState(repoId, ac.signal).then((p) => {
+      if (ac.signal.aborted || !p) return;
       if (p.running) {
         setPushStart(p.startedAt);
         setPushProgress(p.progress ?? null);
@@ -348,15 +376,15 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
         });
       }
     }).catch(() => { /* the status read above says when the desktop is unreachable */ });
-    return () => { gone = true; };
+    return () => ac.abort();
   }, [repoId]);
   useEffect(() => {
     if (pushStart == null) return;
-    let gone = false;
+    const ac = new AbortController();
     const t = setInterval(async () => {
       let p: GitPushState | null;
-      try { p = await api.gitPushState(repoId); } catch { return; /* a missed ask; the push carries on */ }
-      if (gone) return;
+      try { p = await api.gitPushState(repoId, ac.signal); } catch { return; /* a missed ask; the push carries on */ }
+      if (ac.signal.aborted) return;
       if (!p || p.startedAt !== pushStart) {
         setPushStart(null);
         setPushProgress(null);
@@ -370,7 +398,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
       notePushEnd(pushEndedWords(p), p);
       refresh();
     }, PUSH_POLL_MS);
-    return () => { gone = true; clearInterval(t); };
+    return () => { ac.abort(); clearInterval(t); };
     // `refresh` is a new closure every render; re-arming the poll on each would
     // reset its interval every second while the clock ticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -522,7 +550,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
                 <Row as={b.current || b.inUseElsewhere ? "div" : "button"} kind="grow" onClick={b.current || b.inUseElsewhere ? undefined : () => switchTo(b)}
                   title={b.current || b.inUseElsewhere ? undefined : "switch to this branch"}>
                   <span className={`gstat ${b.current ? "g-added" : ""}`}>{b.current ? "●" : "○"}</span>
-                  <RowTitle className="mono">{b.name}{b.upstream ? ` → ${b.upstream}` : ""}{b.inUseElsewhere ? " (checked out in another worktree)" : b.current ? " (current)" : ""}</RowTitle>
+                  <RowTitle className="mono">{b.name}{branchUpstream(b, status) ? ` → ${branchUpstream(b, status)}` : ""}{b.inUseElsewhere ? " (checked out in another worktree)" : b.current ? " (current)" : ""}</RowTitle>
                 </Row>
                 {!b.current && (
                   <ConfirmButton className="row-act" title={`delete branch ${b.name}`}
@@ -613,19 +641,19 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone 
           stayed up under "pulling…". */}
       {stored && !note && !pulling && pushStart == null && (
         <>
-          <Hint className="git-note">The last {stored.verb} failed {ago(stored.at)}. A {stored.verb} that goes through clears it; dismiss clears it now.{"\n"}{stored.error}</Hint>
+          <Hint className="git-note">{storedFailureWords(stored, ago(stored.at))}{"\n"}{stored.error}</Hint>
           <div className="sheet-actions">
             {onAskAgent && (
-              <Button onClick={() => { track("action:git.askAgent"); onAskAgent(fullFailure({ verb: stored.verb === "pull" ? "pull" : "push", error: stored.error })); }}
+              <Button onClick={() => { track("action:git.askAgent"); onAskAgent(fullFailure({ verb: stored.verb === "pull" ? "pull" : "push", error: stored.error }, stored.branch)); }}
                 title="open the Send sheet with this log and its context, aimed at a new session in this repo — nothing is sent yet">
                 <SquareTerminal size={16} /> {GIT_FIX_LABEL}
               </Button>
             )}
-            <Button onClick={async () => { showToast(await copyText(gitFailPrompt(fullFailure({ verb: stored.verb, error: stored.error }))) ? GIT_COPIED : GIT_COPY_FAILED); }}
+            <Button onClick={async () => { showToast(await copyText(gitFailPrompt(fullFailure({ verb: stored.verb, error: stored.error }, stored.branch))) ? GIT_COPIED : GIT_COPY_FAILED); }}
               title="copy the same words to the clipboard: the log, with the branch, upstream and how long it ran">
               <Copy size={16} /> {GIT_COPY_LABEL}
             </Button>
-            {onDone && <Button onClick={() => onDone(stored.id)} title="mark this failure as dealt with; the red chip on the repo goes away"><Check size={16} /> dismiss</Button>}
+            {onDone && <Button onClick={() => { onDone(stored.id); if (stored.id === tappedFailure) clearFailureFocus(); }} title="mark this failure as dealt with; the red chip on the repo goes away"><Check size={16} /> dismiss</Button>}
           </div>
         </>
       )}

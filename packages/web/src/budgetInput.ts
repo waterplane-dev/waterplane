@@ -13,10 +13,12 @@
  * typed string becomes a cap, and what the calibration is, as a sentence.
  */
 import {
-  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtUsd, sessionBudgetHoldText, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionBudgetWindowsOffText, sessionSpend,
-  type SessionBudgetInfo, type SessionBudget, type SessionBudgetCal, type SessionBudgetSpark, type SessionBudgetUnit,
+  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtNative, fmtUsd, sessionBudgetHoldText, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionBudgetWindowsOffText, sessionSpend,
+  type LaunchOpts, type SessionBudgetInfo, type SessionBudget, type SessionBudgetCal, type SessionBudgetSpark, type SessionBudgetUnit,
 } from "@waterplane/shared";
-import { runsClaudeTui, type BackendList } from "./backendCaps.ts";
+import { backendInfo, runsClaudeTui, type BackendList } from "./backendCaps.ts";
+import { launchOfTarget } from "./sendIntent/sendLaunch.ts";
+import type { SendTarget } from "./sendIntent/sendTypes.ts";
 
 /**
  * The budget field's `windowsOff` sentence for a backend named at LAUNCH time (no session yet):
@@ -65,6 +67,150 @@ export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit, sp
 export function launchSpendUnit(backends: BackendList, backend: string | undefined): string | undefined {
   return backends?.find((b) => b.id === backend)?.caps?.spendUnit?.trim() || undefined;
 }
+
+/**
+ * **Whether a cap survives a switch to backend `to`, and the one sentence when it does not.**
+ * The ONE rule the launch ask and the Send sheet apply when the backend under a cap changes:
+ * dollars and tokens mean the same on every backend and stay; a native cap stays only where
+ * `to` counts that SAME unit, and a percent cap only where `to` spends from claude's windows.
+ * Anything else is CLEARED — never re-united, because "20" typed as AI credits is not 20 of
+ * another unit, and a cap left in a unit the backend never states reads unknown and never holds.
+ * Clearing deletes words a person typed, so `cleared` names the old value. A host that listed
+ * no backends knows of no difference: the cap stays (bughunt 2026-10-29 C2-2).
+ * `to` is `sendBackend`'s answer: `null` is the DESKTOP's own defaults, which this phone cannot
+ * see — judged as the claude default (as before), but the sentence names that as the cause.
+ */
+export function budgetAcrossBackend(
+  b: SessionBudget | null | undefined, backends: BackendList, to: string | undefined | null,
+): { budget: SessionBudget | null; cleared: string | null } {
+  if (!b) return { budget: null, cleared: null };
+  const why = capCantRide(b, backends, to);
+  if (!why) return { budget: b, cleared: null };
+  return { budget: null, cleared: `Your cap ${sessionBudgetLabel(b)} was cleared: ${why}. Set it again in a unit it counts.` };
+}
+
+/** `budgetAcrossBackend`'s reason, bare: why cap `b` cannot ride to backend `to`, or null where it can.
+ *  The ONE reading behind both the clear (launch ask) and the set-aside (`capOnStart`). */
+function capCantRide(b: SessionBudget, backends: BackendList, to: string | undefined | null): string | null {
+  if (!backends) return null;
+  const id = to ?? undefined;
+  // `backendInfo` reads an absent id as claude, the backend it starts — never "this backend" for a named one.
+  const label = backendInfo(backends, id)?.label || "this backend";
+  const desk = "nothing is picked, so a later run opens on the desktop's own defaults, which this phone cannot see";
+  if (b.unit === "native") {
+    const now = launchSpendUnit(backends, id);
+    const was = b.nativeUnit?.trim();
+    if (now && was && now === was) return null;
+    if (to === null) return `${desk} — they may not count ${was || "that unit"}`;
+    return now ? `${label} counts ${now}, not ${was || "that unit"}` : `${label} does not count ${was || "that unit"}`;
+  }
+  if (isPctUnit(b.unit) && launchWindowsOff(backends, id)) {
+    return to === null ? `${desk} — they may not spend from claude's usage windows` : `${label} does not spend from claude's usage windows`;
+  }
+  return null;
+}
+
+/** Where a send stands, for `sendBackend`: is it a NOW send, and this phone's new-session defaults. */
+export interface SendStart { now: boolean; defaults?: LaunchOpts }
+
+/**
+ * **The backend a send's new session(s) start on, as far as this phone knows** — the ONE reading
+ * the model row's cap rule, its sentence and the budget field all take. The picked launch's;
+ * with nothing picked a NOW send opens on this phone's new-session defaults (`useSend` hands its
+ * `launch` to the start and to `fanout.run`), while a later run is opened by the DESKTOP on its
+ * own defaults: `null`, unknown here. `undefined` is claude, as `backendInfo` reads an absent id.
+ * Reading "no launch" as claude cleared a copilot cap on a copilot default (review r3-1, C2-2).
+ */
+export function sendBackend(t: SendTarget, at: SendStart): string | undefined | null {
+  const l = launchOfTarget(t);
+  if (l) return l.backend;
+  return at.now ? at.defaults?.backend : null;
+}
+
+/** A cap the send's start could not carry, KEPT aside — never deleted — and the sentence naming it. */
+export interface KeptCap { budget: SessionBudget; said: string }
+
+/**
+ * **The ONE transition of a send's cap across a change of where it starts** — any input of
+ * `sendBackend`: the model row's launch (`next` is `t` with another launch, `from` = `to`), or
+ * WHEN / this phone's defaults (`next` is `t`, `from` and `to` the two starts). Only a CHANGE
+ * of backend decides anything:
+ * - a cap the new start cannot carry (`capCantRide`) leaves the target and goes into `kept`,
+ *   with a sentence saying it is set aside and comes back;
+ * - with no cap on the target, a `kept` cap the new start CAN carry comes back, and the
+ *   sentence goes;
+ * - a cap on the target (one typed since) discards `kept`: the person's newer words win.
+ * A navigation tap — *at a time* and back, another backend and back — used to delete the typed
+ * cap for good (review r4-2 M1/L1; CLAUDE.md: never overwrite typed words). A kept cap is not
+ * the target's budget, so a send never carries it. Design round 4.
+ */
+export function capOnStart(
+  t: SendTarget, next: SendTarget, kept: KeptCap | null, backends: BackendList, from: SendStart, to: SendStart,
+): { target: SendTarget; kept: KeptCap | null } {
+  if (next.kind !== "repo" && next.kind !== "repos") return { target: next, kept };
+  if (next.budget) {
+    const dest = sendBackend(next, to);
+    const why = dest === sendBackend(t, from) ? null : capCantRide(next.budget, backends, dest);
+    if (!why) return { target: next, kept: null };
+    const { budget, ...rest } = next;
+    return { target: rest as SendTarget, kept: { budget, said: setAside(budget, why) } };
+  }
+  if (!kept) return { target: next, kept: null };
+  const dest = sendBackend(next, to);
+  if (dest === sendBackend(t, from)) return { target: next, kept };
+  const why = capCantRide(kept.budget, backends, dest);
+  // Still cannot ride: kept, its sentence naming the start it is under NOW.
+  if (why) return { target: next, kept: { budget: kept.budget, said: setAside(kept.budget, why) } };
+  return { target: { ...next, budget: kept.budget }, kept: null };
+}
+
+/**
+ * `capOnStart` in the launch ask's shapes — that sheet holds a picked backend and a cap, not a
+ * `SendTarget`. `from` is the backend before the change (null: unknown, the caller's cap arriving),
+ * `to` the one picked (`undefined` is claude). Only an adapter: the rule is `capOnStart`'s, so the
+ * ask's picker sets a cap aside and brings it back exactly as the Send sheet's model row does.
+ * The ask used to clear it one way (design round 4).
+ */
+export function capOnBackend(
+  cap: SessionBudget | null | undefined, kept: KeptCap | null, backends: BackendList,
+  from: string | undefined | null, to: string | undefined,
+): { budget: SessionBudget | null; kept: KeptCap | null } {
+  // A picked launch is its backend; no launch on a not-now start reads as null (unknown here).
+  const on = (b: string | undefined | null): SendTarget => ({
+    kind: "repo", cwd: "", ...(cap ? { budget: cap } : {}), ...(b === null ? {} : { launch: { backend: b } }),
+  });
+  const at: SendStart = { now: false };
+  const r = capOnStart(on(from), on(to), kept, backends, at, at);
+  return { budget: (r.target.kind === "repo" ? r.target.budget : undefined) ?? null, kept: r.kept };
+}
+
+/**
+ * **Where the Send sheet draws a set-aside cap's sentence**, by which summary row is open (one at
+ * a time): beside the budget chip when *To* is open, else under the *To* summary — the tap that
+ * sets a cap aside is often *at a time*, made with *When* open, and a sentence inside the collapsed
+ * *To* row left the cap vanishing from the summary unexplained (review r4-2b L1; `ux` §1).
+ */
+export const keptNoteAt = (open: "to" | "when" | null): "budget" | "summary" => (open === "to" ? "budget" : "summary");
+
+/**
+ * **The cap the Send sheet was holding aside when it last unmounted** (`SendResume.kept`): the
+ * annotator round trip remounts the sheet, and a set-aside cap that did not ride that trip broke
+ * the sentence's "It comes back if you switch back" (review r4-2b M2). Read like `parkedAt`
+ * (`resumeWhen`); never part of the `SendIntent`, so it is never sent.
+ */
+export const resumeKept = (resume: { kept?: KeptCap } | null | undefined): KeptCap | null => resume?.kept ?? null;
+
+/**
+ * **What a set-aside cap becomes when the person edits the budget field: gone.** Any edit —
+ * `BudgetField`'s `onEdit`, a keystroke, unit, quick pick, mode or switch, parsed or not — is
+ * "a cap typed now", which the sentence says replaces it. Inferring it from a non-null parsed cap
+ * missed half-typed text, and the next backend move restored the kept cap over those words
+ * (review r4-2b M1; CLAUDE.md: never overwrite typed words). Both sheets call this one rule.
+ */
+export const keptOnEdit = (_kept: KeptCap | null): null => null;
+
+const setAside = (b: SessionBudget, why: string): string =>
+  `Your cap ${sessionBudgetLabel(b)} is set aside: ${why}. It comes back if you switch back; a cap typed now replaces it.`;
 
 export const unitInfo = (u: SessionBudgetUnit) => BUDGET_UNITS.find((x) => x.unit === u) ?? BUDGET_UNITS[0];
 
@@ -126,7 +272,10 @@ export function calibrationWords(unit: SessionBudgetUnit, cal: SessionBudgetCal 
   const age = now - cal.checkedAt;
   if (age > BUDGET_STALE_MS) return sessionBudgetUnknownText("stale", age);
   const per = unit === "sessionPct" ? cal.sessionUsdPerPct : cal.weeklyUsdPerPct;
-  if (per == null || !(per > 0)) return sessionBudgetUnknownText("noCalibration");
+  if (per == null || !(per > 0)) {
+    const undated = unit === "sessionPct" ? cal.sessionUndated : cal.weeklyUndated;
+    return undated ? sessionBudgetUnknownText("undated", undefined, unit, undefined, undated) : sessionBudgetUnknownText("noCalibration");
+  }
   const win = unit === "sessionPct" ? "the 5-hour window" : "the week";
   const mins = Math.max(0, Math.round(age / 60_000));
   return `1% of ${win} ≈ ${fmtUsd(per)} of list-price spend, from the usage reading ${mins} min ago (${SESSION_BUDGET_PCT_CAVEAT})`;
@@ -136,12 +285,9 @@ function fmtPct(n: number): string {
   return n < 10 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n));
 }
 
-/** A native amount as stated, at most one decimal (shared's own rule: nothing was converted). */
-const fmtNat = (n: number): string => (Number.isInteger(n) ? fmtCount(n) : String(Math.round(n * 10) / 10));
-
 /** One amount, short — the figure a preview line compares: `$0.48`, `1.2M`, `≈3.1%`. */
 function fmtShort(unit: SessionBudgetUnit, n: number, approx: boolean): string {
-  if (unit === "native") return fmtNat(n);
+  if (unit === "native") return fmtNative(n);
   if (unit === "usd") return fmtUsd(n);
   if (unit === "tok") return fmtCount(n);
   return `${approx ? "≈" : ""}${fmtPct(n)}%`;
@@ -149,7 +295,7 @@ function fmtShort(unit: SessionBudgetUnit, n: number, approx: boolean): string {
 
 /** One amount with its unit spelled, for a sentence. */
 function fmtLong(unit: SessionBudgetUnit, n: number, nativeUnit?: string): string {
-  if (unit === "native") return `${fmtNat(n)} ${nativeUnit ?? "of the backend's own unit"}`;
+  if (unit === "native") return `${fmtNative(n)} ${nativeUnit ?? "of the backend's own unit"}`;
   if (unit === "tok") return `${fmtCount(n)} tokens`;
   if (unit === "usd") return fmtUsd(n);
   return `≈${fmtPct(n)}% of ${unit === "sessionPct" ? "the 5-hour window" : "the week"}`;
@@ -180,7 +326,7 @@ export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpa
   const s = sessionSpend(unit, spark, cal, now, nativeUnit);
   // The window is named once, on the total; the two parts are its shares.
   if (s.value != null) return withSplit(s.value, s.agent, (n) => fmtLong(unit, n, nativeUnit), isPctUnit(unit) ? (n) => fmtShort(unit, n, true) : undefined, !!spark?.source);
-  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined, unit, nativeUnit);
+  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined, unit, nativeUnit, s.undated);
   if (isPctUnit(unit) && spark && spark.costUsd != null) {
     return `${why}. In dollars: ${withSplit(spark.costUsd, spark.agentCostUsd ?? null, fmtUsd)}.`;
   }
@@ -264,7 +410,7 @@ export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, s
     return line ? `Spent: ${line}.` : null;
   }
   const v = b.verdict;
-  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined, v.unit, v.nativeUnit);
+  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined, v.unit, v.nativeUnit, v.undated);
   return `${sessionBudgetText(v)}${v.state === "over" ? `. ${sessionBudgetHoldText(b.cfg)}` : "."}`;
 }
 

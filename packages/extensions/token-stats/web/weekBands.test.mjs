@@ -174,3 +174,12 @@ test("a capped list says n of N, and each row counts its folded sessions in", ()
   // A picked hour lists what it can and names what it cannot.
   assert.equal(cut.restText("2026-10-06T14"), "20 more sessions in this hour are not listed");
 });
+
+test("a cost window over a ledger holding undated records is not drawn, and the shared sentence stands there (design round 4)", async () => {
+  const { undatedText } = await import("@waterplane/shared");
+  const doc = { from: 5, to: 9, fromHour: 0, hours: [], convos: [], cost: zeroCost(), agentCost: zeroCost() };
+  assert.equal(docFor({ ...doc, undated: 0 }, 5).from, 5);
+  assert.equal(docFor({ ...doc, undated: 3 }, 5), null);
+  assert.equal(foldStateText({ state: "ready", data: { ...doc, undated: 3 } }, "week"), undatedText(3));
+  assert.match(foldStateText({ state: "loading" }, "week"), /Folding/);
+});

@@ -9,7 +9,7 @@
 import {
   type CostHourRepo, type CostWindowDoc, fmtCount, fmtUsd, HOUR_MS, hourKeyMs, type PtsCalibration,
   type PtsRefusal, ptsRefusalText, SESSION_BUDGET_PCT_CAVEAT, type UsageInfo, usageChip, type WeekBucket, type WeekCut,
-  windowStartHour,
+  undatedText, undatedWhy, windowStartHour,
 } from "@waterplane/shared";
 import { leadClause } from "./usageCut.ts";
 
@@ -164,16 +164,25 @@ export function scopeSpan(
 export function docFor(doc: CostWindowDoc | null | undefined, from: number | null): CostWindowDoc | null {
   if (!doc || from == null) return null;
   if (!Array.isArray(doc.convos) || !Array.isArray(doc.hours) || !doc.cost || !doc.agentCost) return null;
+  // Records in no hour are in no span: every figure would be a floor that looks exact.
+  if (undatedWhy(doc.undated)) return null;
   return doc.from === Math.round(from) ? doc : null;
 }
 
 // ── words ─────────────────────────────────────────────────────────────────
 
-/** What a cost-window read that has nothing to draw says, by state — four states, four sentences. */
+/** A cost-window read as `foldStateText` words it: its state, and the answer when one came. */
+export interface FoldRead { state: string; error?: string | null; data?: { undated?: number } | null }
+
+/** What a cost-window read that has nothing to draw says, by state — four states, four sentences,
+ *  and the ledger's own refusal (`undatedText`) when the answer came but cannot be drawn. */
 export function foldStateText(
-  res: { state: string; error?: string | null },
+  res: FoldRead,
   what: "window" | "week",
 ): string {
+  // The answer came, and is refused by `docFor` for what it cannot count (shared `undatedWhy`).
+  const undated = undatedText(res.data?.undated);
+  if (undated) return undated;
   if (res.state === "offline") {
     return what === "window"
       ? "No connection — the repo split for a window is folded on the desktop."

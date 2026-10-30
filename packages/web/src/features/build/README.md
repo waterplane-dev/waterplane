@@ -16,11 +16,20 @@ sheet `BuildButtonsSheet.tsx`; the words and the name lookup are `logic.ts`):
   is the sheet you open when the link is bad) with the age it was last confirmed, the runs (upserted
   by id, capped at 60) and each run's output (300 kB tail, pruned with its run).
 - `buildRepo` — the repo the sheet is open on, which a reconnect re-asks `build.list` for.
+- No fire store of its own: `runBuild` queues with `track: true` and the sheet reads `useFireFate`
+  (`core/queue/fireFate.ts`, the one owner of a fired op's fate since design review 2026-10-30 W2).
+  The sheet opens the run the receipt's `runId` NAMES (`runSelect.ts` `startedRun`), never "the
+  first run it did not know": a scheduled build or another device's fire landing first is not this
+  tap's run. A receipt with no `runId` opens nothing and says so (`RUN_UNNAMED_NOTE`; the
+  older-host guess is gone, owner decision 2026-10-30); one naming a run not listed yet keeps
+  *Starting…*. A refusal says so in the sheet with the desktop's reason (its toast is not always
+  there: a verdict replayed after a reconnect has none). A row that failed or was dismissed says *not sent*.
 - `buildCands` (`build.candidates`), `buildOpts` (`build.options`), `artifactPolicies`
   (`artifacts.config`) — never cached to disk, for the reasons on each.
 
 **Sheet**: `build` (not persisted). **Messages**: `welcome` (re-sync), `artifacts.config`,
 `build.list`, `build.options`, `build.candidates`, `build.run` (toast on done/failed), `build.output`.
+`op.ack` stays core's frame: `core/queue/wire.ts`'s `onOpAck` records a tracked fire's receipt.
 **Command**: `build` (the toolbar item).
 
 **Reads from core**: `conn.send`/`conn.liveSend`, `queue.queueOp` (a `build.run` is DURABLE, one

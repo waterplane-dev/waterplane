@@ -73,12 +73,12 @@ export function ScrollbackSheet({ sessionId, title, live, linkUp, onClose }: Pro
     // every flap would refetch and re-anchor the list under the reader's
     // thumb, which is the snapshot-on-open property this sheet is built on.
     if (!linkUp || host) { setAsking(false); return; }
-    // `alive`, not `live` — the prop of that name is the visible grid.
-    let alive = true;
+    // An AbortController, not a `live` flag — the prop of that name is the visible grid.
+    const ac = new AbortController();
     setAsking(true);
-    api.scrollback(sessionId)
+    api.scrollback(sessionId, ac.signal)
       .then((d) => {
-        if (!alive || !d.lines.length) return;
+        if (ac.signal.aborted || !d.lines.length) return;
         // **A host answer only WINS when it is actually more.** The desktop
         // cannot replay what scrolled away — the CLI draws in the alternate
         // screen — so it answers from a recording that begins when the daemon
@@ -90,8 +90,8 @@ export function ScrollbackSheet({ sessionId, title, live, linkUp, onClose }: Pro
         else setHostThin(true);
       })
       .catch(() => { /* the device's own copy is the answer; the strip says so */ })
-      .finally(() => { if (alive) setAsking(false); });
-    return () => { alive = false; };
+      .finally(() => { if (!ac.signal.aborted) setAsking(false); });
+    return () => ac.abort();
   }, [sessionId, linkUp, host, local.length]);
 
   const lines = host ? host.lines : local;

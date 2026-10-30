@@ -9,9 +9,13 @@
  * item is never deleted by either: it stays in the feed, stops counting, and
  * ages out of the handled cap like any other.
  *
- * One cause counts once: a new item whose `key` equals a still-unhandled one
- * hands the older one off as resolved ("replaced by a newer one"), so the bell
- * says 1 for a push that failed three times, not 3.
+ * One cause counts once: a new item whose IDENTITY equals a still-unhandled
+ * one's hands the older one off as resolved ("replaced by a newer one"), so the
+ * bell says 1 for a push that failed three times, not 3. The identity is the
+ * `key`, except for a failed push filed with its branch: that one is per BRANCH
+ * (`attentionIdentity`, `gitPushFailureKey`) — a failure on another branch is
+ * another cause, never a replacement (review A3b). `resolve` matches the same
+ * identity, so the bare push key no longer reaches a branch's record.
  *
  * Host-only extras (`detail`, the full failure text; `build`, the entry that
  * failed) live BESIDE the wire item and never ride a frame: the feed row
@@ -24,7 +28,7 @@
  * gets.
  */
 import { join } from "node:path";
-import { buildAttentionKey, gitAttentionKey, needsYou, type NotificationItem } from "@waterplane/shared";
+import { buildAttentionKey, gitAttentionKey, gitPushFailureKey, needsYou, parseAttentionKey, type NotificationItem, type RepoTarget } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -34,12 +38,35 @@ export interface AttentionExtras {
   detail?: string;
   /** The build entry a failed build was (`buildAttentionKey`). */
   build?: { id: string; name: string };
+  /** A failed push: the branch and commit that did not go up. It is resolved only once that
+   *  commit is on that branch's upstream (`gitnotify.ts`). Absent on a record an older host
+   *  kept — such a record is cleared, as it always was, by the next push that succeeds. */
+  pushHead?: { branch: string; sha: string };
 }
 
 export interface AttentionRecord { item: NotificationItem; extras?: AttentionExtras }
 
 /** Newest N unhandled + newest N handled are kept; older ones age out. */
 export const ATTENTION_CAP = 50;
+
+/** A kept `pushHead` read back, or undefined when it is not the shape the host writes
+ *  (a hand-edited or older file): such a record is an unknown branch. */
+function validHead(h: unknown): { branch: string; sha: string } | undefined {
+  const x = h as { branch?: unknown; sha?: unknown } | null | undefined;
+  return x && typeof x.branch === "string" && x.branch && !x.branch.includes(":") && typeof x.sha === "string" && /^[0-9a-f]{40,64}$/.test(x.sha)
+    ? { branch: x.branch, sha: x.sha } : undefined;
+}
+
+/** What one cause IS for "replaced by a newer one" and `resolve`: the item's key, or for a
+ *  failed push filed with its branch, that key plus the branch (`gitPushFailureKey`'s form). */
+export function attentionIdentity(r: AttentionRecord): string | undefined {
+  const k = r.item.key;
+  if (!k) return undefined;
+  const h = validHead(r.extras?.pushHead);
+  if (!h) return k;
+  const p = parseAttentionKey(k);
+  return p?.kind === "git" && p.verb === "push" ? gitPushFailureKey(p.repoId, h.branch) : k;
+}
 
 const isRecord = (v: unknown): v is AttentionRecord => {
   const it = (v as AttentionRecord | null)?.item;
@@ -57,7 +84,11 @@ export class AttentionStore {
     if (this.path) {
       const raw = readJsonGuarded<unknown>(this.path, null, (v) => !!v && typeof v === "object" && Array.isArray((v as { items?: unknown }).items));
       const items = (raw as { items?: unknown[] } | null)?.items ?? [];
-      this.recs = items.filter(isRecord).map((r) => ({ item: { ...r.item, level: "attention" }, ...(r.extras ? { extras: r.extras } : {}) }));
+      this.recs = items.filter(isRecord).map((r) => {
+        // A record filed before the wire item carried its branch gets it from its kept head.
+        const head = validHead(r.extras?.pushHead);
+        return { item: { ...r.item, level: "attention", ...(head ? { branch: head.branch } : {}) }, ...(r.extras ? { extras: r.extras } : {}) };
+      });
       this.recs.sort((a, b) => b.item.ts - a.item.ts);
     }
   }
@@ -74,33 +105,45 @@ export class AttentionStore {
   }
 
   /** Keep a new attention item. A still-unhandled item under the same `key`
-   *  is handed off as resolved first. Returns whether an older one was replaced. */
-  add(item: NotificationItem, extras?: AttentionExtras): boolean {
+   *  is handed off as resolved first. Returns the item AS KEPT (enriched: a failed push's
+   *  `branch`) — the one object the live frame, the OS push and the feed all carry, never a
+   *  second hand-built copy — and whether an older one was replaced. */
+  add(item: NotificationItem, extras?: AttentionExtras): { item: NotificationItem; replaced: boolean } {
     const now = item.ts;
     let replaced = false;
-    if (item.key) {
+    const rec: AttentionRecord = { item: { ...item, level: "attention" } };
+    if (extras && (extras.detail !== undefined || extras.build || extras.pushHead)) {
+      rec.extras = { ...extras };
+      for (const k of ["detail", "build", "pushHead"] as const) if (rec.extras[k] === undefined) delete rec.extras[k];
+    }
+    // The branch the key cannot carry (its format is frozen for phones in the field): its own
+    // optional wire field, set only from a head the store itself files under.
+    const head = validHead(rec.extras?.pushHead);
+    if (head) rec.item.branch = head.branch;
+    else delete rec.item.branch;
+    const id = attentionIdentity(rec);
+    if (id) {
       for (const r of this.recs) {
-        if (r.item.key === item.key && !r.item.handled) {
+        if (!r.item.handled && attentionIdentity(r) === id) {
           r.item = { ...r.item, handled: { at: now, by: "resolved", note: "replaced by a newer one" } };
           replaced = true;
         }
       }
     }
-    const rec: AttentionRecord = { item: { ...item, level: "attention" } };
-    if (extras && (extras.detail !== undefined || extras.build)) rec.extras = { ...extras };
     this.recs.unshift(rec);
     this.cap();
     this.changed();
-    return replaced;
+    return { item: rec.item, replaced };
   }
 
-  /** Every unhandled item whose key is `key` (or starts with it, `prefix`) ⇒
-   *  handled `{by:"resolved", note}`. Returns how many changed; 0 writes nothing. */
+  /** Every unhandled item whose identity (`attentionIdentity`: the key, or a failed push's
+   *  key + branch) is `key` (or starts with it, `prefix`) ⇒ handled `{by:"resolved", note}`.
+   *  Returns how many changed; 0 writes nothing. */
   resolve(key: string, note: string, opts: { prefix?: boolean; at?: number } = {}): number {
     const at = opts.at ?? Date.now();
     let n = 0;
     for (const r of this.recs) {
-      const k = r.item.key;
+      const k = attentionIdentity(r);
       if (!k || r.item.handled) continue;
       if (opts.prefix ? !k.startsWith(key) : k !== key) continue;
       r.item = { ...r.item, handled: { at, by: "resolved", note } };
@@ -147,20 +190,53 @@ function newest(store: Pick<AttentionStore, "unhandled">, pred: (r: AttentionRec
   return store.unhandled(pred)[0];
 }
 
-/** `RepoTarget.gitFailed` for one worktree id, off the store. */
-export function gitFailedFor(store: Pick<AttentionStore, "unhandled">, repoId: string): { verb: "pull" | "push"; at: number; error: string; id: string } | undefined {
-  const keys = new Map<string, "pull" | "push">([[gitAttentionKey(repoId, "push"), "push"], [gitAttentionKey(repoId, "pull"), "pull"]]);
-  const r = newest(store, (x) => !!x.item.key && keys.has(x.item.key));
-  if (!r) return undefined;
-  return { verb: keys.get(r.item.key!)!, at: r.item.ts, error: r.extras?.detail ?? r.item.body, id: r.item.id };
+type GitFailed = NonNullable<RepoTarget["gitFailed"]>;
+
+/** `RepoTarget.gitFailures` for one worktree id, off the store: every unhandled failed pull or
+ *  push there, newest first — one per branch for a push — so the git view shows the record that
+ *  was TAPPED, not whichever is newest (review A3b). */
+export function gitFailuresFor(store: Pick<AttentionStore, "unhandled">, repoId: string): GitFailed[] {
+  const out: GitFailed[] = [];
+  for (const r of store.unhandled()) {
+    const k = parseAttentionKey(r.item.key);
+    if (k?.kind !== "git" || k.repoId !== repoId) continue;
+    const head = validHead(r.extras?.pushHead);
+    out.push({ verb: k.verb, at: r.item.ts, error: r.extras?.detail ?? r.item.body, id: r.item.id, ...(head ? { branch: head.branch } : {}) });
+  }
+  return out;
+}
+
+/** `RepoTarget.gitFailed` for one worktree id, off the store: the newest of `gitFailuresFor`. */
+export function gitFailedFor(store: Pick<AttentionStore, "unhandled">, repoId: string): GitFailed | undefined {
+  return gitFailuresFor(store, repoId)[0];
+}
+
+/** The branch and commit of a repo's NEWEST still-unhandled failed push, when it was filed with
+ *  them (a record an older host kept has none: undefined) — for display; each branch's failure is
+ *  its own record (`pushFailures`). A malformed shape on disk is none too. */
+export function pushFailureHead(store: Pick<AttentionStore, "unhandled">, repoId: string): { branch: string; sha: string } | undefined {
+  return pushFailures(store, repoId)[0]?.head;
+}
+
+/** Every still-unhandled failed push of one repo, newest first: its identity (what `resolve`
+ *  takes) and, when it was filed with one, the branch and commit that did not go up. */
+export function pushFailures(store: Pick<AttentionStore, "unhandled">, repoId: string): { identity: string; head?: { branch: string; sha: string } }[] {
+  const key = gitAttentionKey(repoId, "push");
+  return store.unhandled((x) => x.item.key === key).map((r) => {
+    const head = validHead(r.extras?.pushHead);
+    return head ? { identity: gitPushFailureKey(repoId, head.branch), head } : { identity: key };
+  });
 }
 
 /** `RepoTarget.buildFailed` for one worktree id, off the store. */
 export function buildFailedFor(store: Pick<AttentionStore, "unhandled">, repoId: string): { buildId: string; name: string; at: number; error?: string; id: string } | undefined {
-  const prefix = buildAttentionKey(repoId, "");
-  const r = newest(store, (x) => !!x.item.key?.startsWith(prefix));
+  // The entry kept beside the record names the key exactly (a build id may hold `:`, which the
+  // key's last segment cannot); a record without it is read back by the one parser.
+  const mine = (x: AttentionRecord) => x.extras?.build ? x.item.key === buildAttentionKey(repoId, x.extras.build.id) : (() => { const k = parseAttentionKey(x.item.key); return k?.kind === "build" && k.repoId === repoId; })();
+  const r = newest(store, mine);
   if (!r) return undefined;
-  const buildId = r.extras?.build?.id ?? r.item.key!.slice(prefix.length);
+  const k = parseAttentionKey(r.item.key);
+  const buildId = r.extras?.build?.id ?? (k?.kind === "build" ? k.buildId : "");
   const out: { buildId: string; name: string; at: number; error?: string; id: string } = { buildId, name: r.extras?.build?.name ?? buildId, at: r.item.ts, id: r.item.id };
   if (r.extras?.detail !== undefined) out.error = r.extras.detail;
   return out;

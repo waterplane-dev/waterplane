@@ -17,11 +17,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { forgetSpentTurns, logMatch, logVerdict, settleDelivery } from "../dist/settle.js";
+import * as settleMod from "../dist/settle.js";
 import { setLiveSourceLookup } from "../dist/livesources.js";
 import { cliHeldTable, parseTranscript, cliHeldOf } from "../dist/transcript.js";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Two prompts sharing a fourteen-character head — i.e. what a re-send looks
  *  like to the old probe, and what two neighbouring instructions look like too. */
@@ -308,6 +310,85 @@ test("a claude session never asks the source, even when one is installed", async
   const r = await settleDelivery(claude, "s-claude", A, Date.now());
   assert.equal(calls.length, 0, "claude's log is the evidence there, as it always was");
   assert.notEqual(r.verdict, "landed");
+});
+
+// ── One question, three callers ──────────────────────────────────────────────
+//
+// "Did these words run?" is asked by the sweep (`settleDelivery`), by the
+// delivery's own last proof (`awaitLanded`, `deliver/deliverproof.ts`) and by
+// the intents' restart reconciliation (`ranVerdict`, `server/intentDeps.ts`).
+// They used to be two entry points: only the sweep asked a backend's own
+// channel, so for a non-claude session the other two could never see `landed`.
+
+test("a backend's own channel gets the same `landed` from all three callers", async (t) => {
+  forgetSpentTurns();
+  t.after(() => { forgetSpentTurns(); setLiveSourceLookup(null); });
+  const now = Date.now();
+  const { sessions } = sourced([{ id: "msg_9", text: A, at: now + 10 }]);
+  assert.equal((await settleDelivery(sessions, "s-oc", A, now, { claimer: "sweep" })).verdict, "landed");
+  forgetSpentTurns();
+  assert.equal(await settleMod.awaitLanded(sessions, "s-oc", A, now, 300, undefined, "deliver"), true,
+    "the delivery's own last proof reads the channel too");
+  forgetSpentTurns();
+  assert.equal(await settleMod.ranVerdict(sessions, "s-oc", A, now, { claimer: "intent-1" }), "landed");
+  // …and the ledger still holds across them: the intent spent that message.
+  assert.equal(await settleMod.awaitLanded(sessions, "s-oc", A, now, 300, undefined, "deliver-2"), false,
+    "one user message proves one delivery, whichever caller claimed it");
+});
+
+test("the restart check never reads a source's `absent` as authority to re-send", async (t) => {
+  forgetSpentTurns();
+  t.after(() => { forgetSpentTurns(); setLiveSourceLookup(null); });
+  const now = Date.now();
+  // The channel lists turns, none ours: `settleDelivery` may go on to read the
+  // screen; the restart check has no screen, and its `absent` requeues.
+  const { sessions } = sourced([{ id: "msg_b", text: B, at: now + 10 }]);
+  assert.equal(await settleMod.ranVerdict(sessions, "s-oc", A, now), "unknown");
+  // The claude log's `absent` is unchanged.
+  assert.equal(await settleMod.ranVerdict(fakeSessions({ turns: [turn("u1", B, now + 10)] }), "s1", A, now), "absent");
+});
+
+test("a source that never answers is `unknown` within a bound, never a hang", async (t) => {
+  forgetSpentTurns();
+  t.after(() => { forgetSpentTurns(); setLiveSourceLookup(null); });
+  const { sessions } = sourced(() => new Promise(() => {}));
+  const t0 = Date.now();
+  assert.equal(await settleMod.awaitLanded(sessions, "s-oc", A, t0, 300), false);
+  assert.ok(Date.now() - t0 < 2_000, "the delivery's proof keeps its own deadline");
+});
+
+test("ratchet: one turn-matching loop — `spendTurn(` is called from exactly one function", async () => {
+  const ts = (await import("typescript")).default;
+  const src = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+  /** The name of every function-like node enclosing a `spendTurn(…)` call. */
+  const callers = (file) => {
+    const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    const out = [];
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "spendTurn") {
+        let p = node.parent;
+        while (p && !ts.isFunctionLike(p)) p = p.parent;
+        out.push(p?.name?.getText(sf) ?? "<anonymous>");
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    return out;
+  };
+  assert.deepEqual([...new Set(callers(join(src, "settle.ts")))], ["turnMatch"],
+    "the log and a backend's channel share one loop");
+  // Outside settle.ts the only caller is the open-delivery store re-seeding the
+  // ledger from rows it persisted — a restore, not a match.
+  const elsewhere = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (p.endsWith(".ts") && p !== join(src, "settle.ts") && callers(p).length) elsewhere.push(p.slice(src.length + 1));
+    }
+  };
+  walk(src);
+  assert.deepEqual(elsewhere, ["opendeliveries.ts"]);
 });
 
 // ── The CLI's own queue (2.1.310) ────────────────────────────────────────────

@@ -18,7 +18,7 @@
  * `unknown`, which never trips).
  */
 import type { SessionBudgetCal, TokenWindowsDoc, UsageInfo, UsageWindow } from "@waterplane/shared";
-import { sessionBudgetCal } from "@waterplane/shared";
+import { sessionBudgetCal, undatedSince, undatedWhy, windowStartHour } from "@waterplane/shared";
 
 export const SESSION_WINDOW_MS = 5 * 3_600_000;
 export const WEEK_WINDOW_MS = 7 * 24 * 3_600_000;
@@ -64,12 +64,22 @@ export function calSpecs(u: UsageInfo): WindowSpec[] {
 }
 
 /** The newest cell's priced total per grid, null where there is none. */
-export function calCosts(doc: TokenWindowsDoc): { session: number | null; weekly: number | null } {
-  const of = (id: string) => {
-    const w = doc.series.find((s) => s.id === id)?.windows.find((c) => c.back === 0);
-    return w ? w.cost.total : null;
-  };
-  return { session: of("session"), weekly: of("weekly") };
+export function calCosts(doc: TokenWindowsDoc): { session: number | null; weekly: number | null; sessionUndated?: number; weeklyUndated?: number } {
+  const out: { session: number | null; weekly: number | null; sessionUndated?: number; weeklyUndated?: number } = { session: null, weekly: null };
+  for (const id of ["session", "weekly"] as const) {
+    const s = doc.series.find((x) => x.id === id);
+    // Records in no hour that could fall in THIS window (their log written since it opened)
+    // fold it short: no figure, never a floor — and the count rides along so the budget's
+    // sentence names that cause. Older logs cannot hold one of its records.
+    const undated = s ? undatedSince(doc, windowStartHour(s.anchor - s.lenMs)) : undefined;
+    if (undatedWhy(undated)) {
+      if (typeof undated === "number" && undated > 0) out[id === "session" ? "sessionUndated" : "weeklyUndated"] = undated;
+      continue;
+    }
+    const w = s?.windows.find((c) => c.back === 0);
+    out[id] = w ? w.cost.total : null;
+  }
+  return out;
 }
 
 export interface CalibratorDeps {

@@ -449,6 +449,7 @@ export function healthSentence(sig: SignalRecord, now: number): string {
   const lastGood =
     sig.lastGoodAt != null ? `last confirmed ${agoText(now - sig.lastGoodAt)} ago` : "never confirmed at all";
 
+  // closed: `because` is `signalVerdict`, computed by this build from the record
   switch (c.because) {
     case "confirmed":
       return `${spec.name} is working — ${lastGood}.`;

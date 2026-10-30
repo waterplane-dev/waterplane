@@ -2,6 +2,7 @@
  * Work routes — intent slice of `routes/work.ts` (see that file for the whole picture).
  */
 import { containPayloadCwd, postClientDraft } from "../../agentintents.js";
+import { clientIntentFields, type IntentPatch } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 const OUTSIDE = "that folder is outside the configured root";
@@ -102,8 +103,11 @@ const onIntentRequeue: RouteSpec<"intent.requeue"> = {
 const onIntentUpdate: RouteSpec<"intent.update"> = {
   durable: true,
   run: async (a) => {
-    // Same gate as `intent.post`: wire directories are contained, never raw.
-    const patch = { ...a.msg.patch };
+    // Only what a client may PATCH (`clientIntentFields`, shared's one list):
+    // a decoded frame is whatever the sender put in it, and a `nextAt: null`
+    // or a `clearedOccurrence` spread over the stored row is a clock nobody
+    // re-arms. Then the same gate as `intent.post`: directories are contained.
+    const patch: IntentPatch = clientIntentFields(a.msg.patch ?? {}, "edit");
     if (patch.cwd !== undefined) {
       const cwd = await a.c.containRepoDir(patch.cwd);
       if (!cwd) return refuseOutside(a, a.msg.id);

@@ -70,6 +70,11 @@ export function isOffline(e: unknown): boolean {
  *
  * The budget covers the RESPONSE HEADERS, which is what `fetch` resolves on —
  * a slow body that is actually streaming is not this function's problem.
+ * The caller's signal is a different matter: it stays wired for the body too,
+ * so a screen that lets go of a read mid-body (a megabyte gif side, a
+ * scrollback document) frees the socket instead of downloading on to the end —
+ * the APK has six to the host. Only a FAILED fetch unhooks it at once; after a
+ * response the listener is `once` and dies with the caller's controller.
  */
 export async function timedFetch(
   url: string,
@@ -91,10 +96,10 @@ export async function timedFetch(
   try {
     return await doFetch(url, { ...init, signal: ac.signal });
   } catch (e) {
+    outer?.removeEventListener("abort", onOuterAbort);
     if (ac.signal.aborted && !outer?.aborted) throw new TimeoutError(url, ms);
     throw e;
   } finally {
     clearTimeout(timer);
-    outer?.removeEventListener("abort", onOuterAbort);
   }
 }

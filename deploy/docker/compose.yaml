@@ -46,6 +46,8 @@ services:
       TS_SERVE: "${TS_SERVE:-1}"
       # 0 = do not install Claude Code on first start; bring your own.
       CLAUDE_INSTALL: "${CLAUDE_INSTALL:-1}"
+      # Empty = the sha256 of claude.ai/install.sh pinned in entrypoint.sh; set it after reading a newer installer.
+      CLAUDE_INSTALL_SHA256: "${CLAUDE_INSTALL_SHA256:-}"
       # Optional instead of signing in to a Claude subscription.
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:

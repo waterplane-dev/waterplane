@@ -16,7 +16,8 @@ other); `tools/forgeseam.test.mjs` fails on a new one.
 
 - `rules()` — RAW JSON of the default branch's rules (`{ rules, classic, repo }`); `branchrules.ts`
   feeds it to the pure `classifyBranchRules` in shared. Undefined = absent = behave as direct.
-- `defaultBranch()`, `existingPr()`, `openPr({head, base}?)` — the push-and-open-PR flow (`prpush.ts`).
+- `defaultBranch()`, `existingPr(head)` (the OPEN PR for that head branch only — a merged or closed
+  one is no PR, so a new one is opened), `openPr({head, base}?)` — the push-and-open-PR flow (`prpush.ts`).
 - `listPrs()` — RAW JSON, classified by shared's `prViewsFrom`; `prState(n)`, `prInfo(n)`.
 - `merge(n, method)`, `autoMerge(n, on, method?)`, `close(n)` — one explicit tap each.
 - `checksLog(runId)` — the failing-step log text.

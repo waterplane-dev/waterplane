@@ -180,3 +180,13 @@ A session's context view says what every turn of it carried (instructions, skill
 In the all-sessions view each costliest conversation names its first request's tokens, measured, with no estimate or average.
 - asked: 2026-10-26
 - shipped: 2d220c87
+
+### R-metrics-038 · shipped
+The health score has a third button, *start a design-quality run*, that seeds (never sends) a prompt for a run that changes code: the index is named as not the target, a file split is allowed only inside a design change that says what it separates, tests come first, each change is reviewed by someone who did not write it, the repo's own readings are reported each round (or one is proposed where there is none), and the run stops implementing when only splits remain and asks which proposals go into the backlog.
+- asked: 2026-10-29
+- shipped: 1db8da28
+
+### R-metrics-039 · shipped
+When the score rises, its sentence names the cap lifting as its own part, splits the move exactly between the readings and the cap, and says "mostly files split up" with the file and line counts where file length carried most of the rise while the source files grew by half or more and the code did not shrink.
+- asked: 2026-10-29
+- shipped: 9f22d253, c49a21b0

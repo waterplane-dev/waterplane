@@ -3,7 +3,9 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { openSearch } from "../../features/search";
 import { openScrollback } from "../../features/scrollback";
+import { openBacklogIn } from "../../features/backlog";
 import { runFeatureCommand } from "../dispatch";
+import { openToolbarGit } from "../../gitLanding";
 import type { Connection } from "../conn/useConnection";
 import type { QueueApi } from "../queue/useQueue";
 import type { Route } from "../route/useRoute";
@@ -36,7 +38,8 @@ export function runToolbarCommand(id: string, ctx: ToolbarCtx) {
   switch (id) {
     case "model": setOverlay("model"); break;
     case "cmd": setOverlay("slash"); break;
-    case "diff": activeRepoId ? setOverlay("git") : showToast("not a known repo"); break;
+    // An ASK on the session's repo, never a bare open (`openToolbarGit`, review R2-2 b).
+    case "diff": if (!openToolbarGit(activeRepoId, setOverlay)) showToast("not a known repo"); break;
     case "ctx": runSlash("/context"); break;
     // The CLI's canonical name. It answers to `/cost` too — that is a
     // registered alias, not a leftover — but sending the alias meant the
@@ -46,7 +49,9 @@ export function runToolbarCommand(id: string, ctx: ToolbarCtx) {
     case "teleport": runSlash("/teleport"); break;
     case "remote": runSlash("/remote-control"); break;
     case "tasks": runSlash("/tasks"); break;
-    case "backlog": setOverlay("backlog"); break;
+    // The session's repo, like the compose badge and the next-prompt strip: a
+    // plain open would land on a repo hand-picked last time.
+    case "backlog": openBacklogIn(active?.cwd); break;
     case "history": setOverlay("history"); break;
     // The outline is reachable from the terminal too, not only from inside the
     // reader — "where am I in this session?" shouldn't cost a view swap. In

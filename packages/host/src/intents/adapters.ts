@@ -30,9 +30,11 @@ import {
   scheduleActionText,
   cleanRule,
   describeRule,
+  intentPaused,
   isAgentWithdrawn,
   isTimedWorkRow,
   reopensConversation,
+  ruleRecurs,
   type BacklogItem,
   type BacklogStatus,
   type BudgetPass,
@@ -188,6 +190,21 @@ export function launchesToDrafts(raw: unknown[], now: number): IntentDraft[] {
 // ── Schedules ───────────────────────────────────────────────────────────────
 
 /**
+ * `keepAfterRun` as the save SAID it: `true` sets, `false` clears, and absent
+ * is SILENCE — `undefined`, which `upsert()` reads as "unchanged" and carries
+ * the stored one. Folding `false` and absent together made every re-save from
+ * a sheet that never heard of the field a clear (bughunt 2026-10-29 BLD-1).
+ *
+ * `enabled` is deliberately NOT read here: it is derived from `nextAt` on the
+ * way out (`intentToSchedule`) and every sheet sends `true` back, so it cannot
+ * be a switch — pausing is `schedule.setEnabled`, and a pause survives a
+ * re-save because `upsert()` carries it.
+ */
+function keepAfterRunOf(e: Record<string, any>): boolean | undefined {
+  return e.keepAfterRun === true ? true : e.keepAfterRun === false ? false : undefined;
+}
+
+/**
  * One saved schedule, as an intent.
  *
  * The action maps DIRECTLY onto the intent's own target, which is the sentence
@@ -243,7 +260,7 @@ export function scheduleToIntent(raw: unknown, now: number): IntentDraft | null 
       cwd: action.repoDir,
       payload: { kind: "build" as const, buildId: action.buildId, ...(action.params ? { params: { ...action.params } } : {}) },
       target: { kind: "shell" as const },
-      trigger: { kind: "at" as const, rule, graceMin, keepAfterRun: e.keepAfterRun === true ? true : undefined },
+      trigger: { kind: "at" as const, rule, graceMin, keepAfterRun: keepAfterRunOf(e) },
       title: name,
       createdAt: Number(e.createdAt) > 0 ? Number(e.createdAt) : now,
       origin: ORIGIN_SCHEDULE_BUILD,
@@ -261,7 +278,7 @@ export function scheduleToIntent(raw: unknown, now: number): IntentDraft | null 
   const base = {
     id,
     payload: { kind: "prompt" as const, steps },
-    trigger: { kind: "at" as const, rule, graceMin, keepAfterRun: e.keepAfterRun === true ? true : undefined },
+    trigger: { kind: "at" as const, rule, graceMin, keepAfterRun: keepAfterRunOf(e) },
     title: name,
     createdAt: Number(e.createdAt) > 0 ? Number(e.createdAt) : now,
     serial: waitUntilFree || undefined,
@@ -350,10 +367,10 @@ export function intentToSchedule(i: Intent): ScheduleEntry | null {
   return {
     id: i.id,
     name: i.title || scheduleActionText(action).split("\n")[0].slice(0, 120),
-    // There is no separate `enabled` flag on an intent, and there does not need
-    // to be: `nextAt === null` is already the explicit "nothing is armed", which
-    // is exactly what disabling one means and exactly what a spent `once` is.
-    enabled: i.nextAt !== null,
+    // "Is anything armed": false for a PAUSED rule (`trigger.paused`, which
+    // always comes with `nextAt: null`) and for a spent one-off alike. The
+    // sheet tells the two apart by recurrence; the host by `intentPaused`.
+    enabled: !intentPaused(i) && i.nextAt !== null,
     rule: i.trigger.rule,
     action,
     createdAt: i.createdAt,
@@ -381,8 +398,12 @@ export function schedulesToDrafts(raw: unknown[], now: number): IntentDraft[] {
     const e = v as Record<string, any>;
     // History belongs to the host: a spent occurrence must survive the move, or
     // the first tick after migration re-fires whatever already ran.
+    // A legacy `enabled: false` on a standing rule was a person's pause, and
+    // becomes the pause switch's flag; on a one-off it was "off", i.e. spent.
+    const paused = e.enabled === false && draft.trigger.kind === "at" && ruleRecurs(draft.trigger.rule);
     out.push({
       ...draft,
+      ...(paused && draft.trigger.kind === "at" ? { trigger: { ...draft.trigger, paused: true } } : {}),
       ...{
         lastOccurrence: Number.isFinite(Number(e.lastOccurrence)) ? Number(e.lastOccurrence) : undefined,
         nextAt: e.enabled === false ? null : undefined,

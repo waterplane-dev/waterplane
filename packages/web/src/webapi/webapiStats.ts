@@ -46,8 +46,8 @@ export const statsApi = {
     jget<UsageHistoryDoc>(`/api/usagelog${hours > 0 ? `?hours=${hours}` : ""}`),
 
   /** One non-claude source's kept readings (`GET /api/usagelog/<source>`); an older host 404s. */
-  usageLogSource: (source: string) =>
-    jget<UsageSourceHistoryDoc>(`/api/usagelog/${encodeURIComponent(source)}`),
+  usageLogSource: (source: string, signal?: AbortSignal) =>
+    jget<UsageSourceHistoryDoc>(`/api/usagelog/${encodeURIComponent(source)}`, undefined, signal),
 
   /**
    * The same ledger folded into PAST rate-limit windows — one grid per spec.

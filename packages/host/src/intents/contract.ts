@@ -370,17 +370,19 @@ export interface IntentDeps {
   halted?(): string | null;
   autoFire(): boolean;
   /**
-   * What the CLI's own conversation log says about a delivery — `settle.ts`'s
-   * `logVerdict`, injected. Restart reconciliation is the one place this store
-   * needs evidence rather than facts, and the log is the only evidence that
-   * outlives the process that produced it.
+   * What the CLI's own record says about a delivery — `settle.ts`'s
+   * `ranVerdict`, injected: a backend's own channel first, the claude log
+   * otherwise. Restart reconciliation is the one place this store needs
+   * evidence rather than facts, and that record is the only evidence that
+   * outlives the process that produced it. May be async (a channel is);
+   * `reconcile()` awaits it before deciding anything, and a throw is `unknown`.
    *
    * `claimer` is the intent's own id. A log turn is evidence for exactly one
    * delivery, and two rows carrying the same words — a schedule that fires the
    * same instruction twice, a retry of a row — must not both read the one turn
    * as proof they ran.
    */
-  logVerdict(sessionId: string, text: string, since: number, claimer: string): "landed" | "absent" | "unknown";
+  logVerdict(sessionId: string, text: string, since: number, claimer: string): "landed" | "absent" | "unknown" | Promise<"landed" | "absent" | "unknown">;
   executors: IntentExecutors;
   /** One row changed (or, with no argument, several did). */
   onChange(intent?: Intent): void;

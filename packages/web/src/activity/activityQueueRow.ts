@@ -4,7 +4,8 @@ import {
   type SendBlockReason,
   intentReasonText,
 } from "@waterplane/shared";
-import { CONFIRMING_WHY, hostStillConfirming } from "../sendConfirm.ts";
+import { CONFIRMING_WHY } from "../sendConfirm.ts";
+import { isFailedPhase, isUnconfirmed, rowPhase } from "../core/queue/phase.ts";
 import { serialTextFor } from "../core/queue/serialStates.ts";
 import type { OutboxEntry } from "../outbox";
 import {
@@ -59,24 +60,33 @@ const QUEUE_DETAIL: Partial<Record<SendBlockReason, string>> = {
   pendingCreate: "waiting for its session to open",
 };
 
-function deliveryOf(failState: OutboxEntry["failState"]): DeliveryTruth {
-  switch (failState) {
-    case "unconfirmed": return "unconfirmed";
-    case "unsubmitted": return "unsubmitted";
-    // The host answered and said no: the fingerprint the answer carried no
-    // longer names the box on screen, so nothing was written. That is a
-    // REFUSAL, and it is the one failure here that is provably harmless.
-    case "stale": return "refused";
-    // The same fact on the durable-OP path — `op.ack` came back `ok:false`, so
-    // the action was never started. Without this it fell to the default and the
-    // row said "nobody recorded whether it ran" over a verdict the desktop had
-    // spelled out.
-    case "refused": return "refused";
-    // Deliberately not "unreachable". Nothing recorded which it was, and
-    // guessing the kinder of the two is how a real refusal reads as a bad link.
-    default: return "unknown";
-  }
-}
+// Each verdict in Activity's words; the PHASE is `core/queue/phase.ts`'s.
+const DELIVERY: Record<NonNullable<OutboxEntry["failState"]>, DeliveryTruth> = {
+  unconfirmed: "unconfirmed",
+  unsubmitted: "unsubmitted",
+  // The host answered and said no: the fingerprint the answer carried no
+  // longer names the box on screen, so nothing was written. That is a
+  // REFUSAL, and it is the one failure here that is provably harmless.
+  stale: "refused",
+  // The same fact on the durable-OP path — `op.ack` came back `ok:false`, so
+  // the action was never started. Without this it fell to the default and the
+  // row said "nobody recorded whether it ran" over a verdict the desktop had
+  // spelled out.
+  refused: "refused",
+  // Deliberately not "unreachable". Nothing recorded which it was, and
+  // guessing the kinder of the two is how a real refusal reads as a bad link.
+  other: "unknown",
+};
+const deliveryOf = (fs: OutboxEntry["failState"]): DeliveryTruth => fs ? DELIVERY[fs] : "unknown";
+
+/** Why "try again" is not the move, per recorded verdict (none = it is). */
+const STUCK_WHY: Record<NonNullable<OutboxEntry["failState"]>, string | undefined> = {
+  unconfirmed: "it was typed into the session and the desktop could not read the screen back — it may have run. Sending it again could run it twice: open the session and look, or rewrite it to send a fresh copy.",
+  unsubmitted: "the words are already sitting in that session's composer — open it and press Return. Sending again would leave two copies.",
+  stale: "the desktop refused this one because the question it answers is gone, and it remembers refusing it — a re-send is answered with the same no. Answer the question that is up now.",
+  refused: "the desktop answered no and remembers it, so this exact message can only be refused again — rewrite it to send it as a new one.",
+  other: undefined,
+};
 
 function queueKind(e: OutboxEntry, deps: ActivityDeps): ActivityKind {
   if (e.answer) return "answer";
@@ -94,7 +104,8 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
   // What the row is DOING right now, in the shared lifecycle. `pending` is
   // `starting` and not `running`: the bytes are on the wire, the turn has not
   // begun, and the difference is exactly the window a delivery goes missing in.
-  let state: Lifecycle = e.status === "pending" ? "starting" : e.status === "failed" ? "failed" : "queued";
+  const phase = rowPhase(e, now);
+  let state: Lifecycle = phase === "sending" ? "starting" : isFailedPhase(phase) ? "failed" : "queued";
   let reason: BlockReason | null = null;
   let detail: string | undefined;
 
@@ -105,7 +116,7 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
   // asking for a decision nobody had the facts for, about the one action that
   // can run a prompt twice. It is `running` because something IS happening to
   // it, and it carries its own sentence.
-  const confirming = hostStillConfirming(e, now);
+  const confirming = phase === "confirming";
   if (confirming) {
     state = "running";
     detail = "the desktop is confirming whether it ran — it types it again itself if it never did";
@@ -219,14 +230,7 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
     // While the host is still asking, the reason "try again" is not the move is
     // simpler than the settled one — and it does not end with a decision.
     : confirming ? CONFIRMING_WHY
-    : e.failState === "unconfirmed"
-      ? "it was typed into the session and the desktop could not read the screen back — it may have run. Sending it again could run it twice: open the session and look, or rewrite it to send a fresh copy."
-    : e.failState === "unsubmitted"
-      ? "the words are already sitting in that session's composer — open it and press Return. Sending again would leave two copies."
-    : e.failState === "stale"
-      ? "the desktop refused this one because the question it answers is gone, and it remembers refusing it — a re-send is answered with the same no. Answer the question that is up now."
-    : e.failState === "refused"
-      ? "the desktop answered no and remembers it, so this exact message can only be refused again — rewrite it to send it as a new one."
+    : e.failState ? STUCK_WHY[e.failState]
     : undefined;
   const actions: ActivityAction[] = [
     ...(needsAnswer ? [act("answer", "answer the question", { primary: true })] : []),
@@ -273,7 +277,7 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
     // other failure verdicts (`refused`, `unsubmitted`, a stale fingerprint)
     // already know what happened — this button would be asserting something
     // the row's own words already contradict.
-    ...(e.failState === "unconfirmed" ? [act("confirmDone", "save as done", {
+    ...(isUnconfirmed(e) ? [act("confirmDone", "save as done", {
       disabledReason: confirming ? CONFIRMING_WHY : locked ? "already on its way" : undefined,
     })] : []),
     act("discard", "discard", { danger: true, alwaysShown: true, disabledReason: locked ? "already on its way" : undefined }),

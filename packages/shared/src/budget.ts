@@ -154,7 +154,14 @@ export interface BudgetVerdict {
    * verdict is re-asked, never scheduled — nothing fires ON this instant.
    */
   resumeAt?: number | null;
+  /** With `state: "unknown"`, the cause a dollar ceiling's figure is missing for, as the
+   *  caller worded it (`BudgetSpendWhy`) — so the sentence names it instead of guessing. */
+  why?: string;
 }
+
+/** Why a dollar period has no figure, by period id, when the ledger SAID (e.g. claude's
+ *  `undatedClause`). Missing = nobody said; the figure is then just "could not be read". */
+export type BudgetSpendWhy = Partial<Record<PeriodId, string>>;
 
 /**
  * One tripped ceiling: which window, the reading, the line it crossed, and when
@@ -296,13 +303,18 @@ export function budgetLeftoverText(c: BudgetCeiling, now: number, afterReset = f
  * soonest: if both are over, the sentence a human wants is "back in 40
  * minutes", not "back on Thursday".
  */
-export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number, spend?: BudgetSpend): BudgetVerdict {
+export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number, spend?: BudgetSpend, spendWhy?: BudgetSpendWhy): BudgetVerdict {
   if (!cfg.enabled) return { blocked: false, state: "off" };
   const limits = activeLimits(cfg);
   if (!limits.length) return { blocked: false, state: "unset" };
   const usageOk = !!usage && usage.ok && !!usage.checkedAt && now - usage.checkedAt <= BUDGET_STALE_MS;
   const hasUsd = limits.some((l) => l.unit === "usd");
   if (!usageOk && !hasUsd) return { blocked: false, state: "unknown" };
+  // The first dollar ceiling with no figure whose ledger said why — the unknown sentence's cause.
+  // A percent ceiling with no usable reading is a second cause, and the sentence names both.
+  const unread = limits.find((l) => l.unit === "usd" && typeof spend?.[l.periodId] !== "number" && spendWhy?.[l.periodId]);
+  const pctUnread = !usageOk && limits.some((l) => l.unit !== "usd");
+  const why = unread ? { why: `${pctUnread ? "usage could not be read, and " : ""}${spendWhy![unread.periodId]!}` } : {};
 
   // One computation of "over", shared with the ladder's per-window reading.
   const first = budgetCeilings(cfg, usage, now, spend)[0];
@@ -329,7 +341,7 @@ export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefi
   const tightest = room.sort((a, b) => (b.pct / b.max) - (a.pct / a.max))[0];
   return tightest
     ? { blocked: false, state: "ok", which: tightest.which, pct: tightest.pct, max: tightest.max, ...(tightest.unit ? { unit: tightest.unit } : {}) }
-    : { blocked: false, state: "unknown" };
+    : { blocked: false, state: "unknown", ...why };
 }
 
 /**
@@ -354,9 +366,12 @@ export function budgetReasonText(v: BudgetVerdict): string {
   switch (v.state) {
     case "off": return "usage budget is off";
     case "unset": return "usage budget is on, but no ceiling is set";
-    case "unknown": return "usage could not be read — the budget is not holding anything back";
+    case "unknown": return `${v.why ?? "usage could not be read"} — the budget is not holding anything back`;
     case "ok": return v.pct != null ? `${v.pct}% of the ${window} window used (budget ${v.max}%)` : "under the usage budget";
     case "over": return `paused — ${v.pct}% of the ${window} window used, over the ${v.max}% budget`;
+    // `state` arrives in the host's `budget.state` message: a state a newer
+    // host adds reaches an older phone with no case for it.
+    default: return "the usage budget is in a state this app version cannot name";
   }
 }
 

@@ -251,6 +251,9 @@ export * from "./optins.js";
  *  them, including why a single "tokens used" number is 96% cache reads. */
 export * from "./tokens.js";
 
+/** Local calendar-day stepping and counting (DST-safe) — the one place a day is added or counted. */
+export * from "./calday.js";
+
 /** What those tokens WOULD have cost at Anthropic's published list prices — a
  *  counterfactual, not a bill, and the module says so at length. */
 export * from "./pricing.js";
@@ -411,3 +414,7 @@ export * from "./branchmode.js";
 /** The PR card: the DTO and the one place a PR's blocker is worded. */
 export * from "./wire/pullrequest.js";
 export * from "./prview.js";
+
+/** `wordOf(table, k, fallback)`: a table's word for a wire value this build
+ *  may not know (`local/total-wire-words`). */
+export * from "./wordof.js";

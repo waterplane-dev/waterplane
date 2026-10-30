@@ -35,19 +35,19 @@ function MediaSide({ repoId, path, side, staged }: { repoId: string; path: strin
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let url: string | null = null;
-    let live = true;
+    const ac = new AbortController();
     setGot({ state: "loading", got: 0, total: 0 });
-    const onProgress = (n: number, total: number) => { if (live) setGot({ state: "loading", got: n, total }); };
-    api.gitBlob(repoId, path, side, staged, onProgress).then(
+    const onProgress = (n: number, total: number) => { if (!ac.signal.aborted) setGot({ state: "loading", got: n, total }); };
+    api.gitBlob(repoId, path, side, staged, onProgress, ac.signal).then(
       (b) => {
-        if (!live) return;
+        if (ac.signal.aborted) return;
         if (!b) return setGot({ state: "absent" });
         url = URL.createObjectURL(b);
         setGot({ state: "ok", url, size: b.size });
       },
-      (e: unknown) => { if (live) setGot({ state: "error", reason: e instanceof Error ? e.message : String(e) }); },
+      (e: unknown) => { if (!ac.signal.aborted) setGot({ state: "error", reason: e instanceof Error ? e.message : String(e) }); },
     );
-    return () => { live = false; if (url) URL.revokeObjectURL(url); };
+    return () => { ac.abort(); if (url) URL.revokeObjectURL(url); };
   }, [repoId, path, side, staged, attempt]);
 
   let body;

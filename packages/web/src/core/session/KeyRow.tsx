@@ -47,6 +47,7 @@ const specialKeys = (who: string): { label: ReactNode; title: string; data: stri
 const MOD_KEYS: { mod: ChordMod; label: string }[] = [
   { mod: "ctrl", label: "Ctrl" }, { mod: "alt", label: "Alt" }, { mod: "shift", label: "Shift" },
 ];
+// closed: the modifier state is this row's own
 const MOD_WORD: Record<ModState, string> = { off: "", once: "next", lock: "lock" };
 const modTitle = (label: string, s: ModState) =>
   s === "off" ? `${label} — tap, then a key (on this row or typed): it goes with ${label}. Tap twice to lock.`

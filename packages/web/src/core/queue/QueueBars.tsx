@@ -20,7 +20,8 @@ import { PullBar, PullBrowserAsk } from "../../PullSheet";
 import { autoPull, pulls } from "../../pull";
 import { core } from "../api.ts";
 import { stripRows } from "../../downloadState";
-import { confirmingLine, hostStillConfirming } from "../../sendConfirm";
+import { confirmingLine } from "../../sendConfirm";
+import { isFailedPhase, rowPhase } from "./phase.ts";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { setPref } from "../prefs.ts";
@@ -68,8 +69,8 @@ export function QueueBars(props: QueueBarsProps) {
   // it gets its own sentence in the same strip, because "the desktop is
   // checking" is a thing worth seeing — it is only the red triangle and the
   // three recovery buttons that are wrong while it is true.
-  const confirming = outbox.filter((e) => hostStillConfirming(e, now));
-  const failed = outbox.filter((e) => e.status === "failed" && !hostStillConfirming(e, now));
+  const confirming = outbox.filter((e) => rowPhase(e, now) === "confirming");
+  const failed = outbox.filter((e) => isFailedPhase(rowPhase(e, now)));
   // A `queued` entry that is counting down a retry backoff is NOT waiting for
   // the user or for the link — it is mid-delivery, between two attempts. It is
   // grouped with the in-flight ones for DISPLAY only, and the reason is
@@ -81,7 +82,7 @@ export function QueueBars(props: QueueBarsProps) {
   // elapsed counter that resets to 0s each time, which reads as "the upload
   // keeps getting killed". One shape for the whole delivery, with the label
   // saying which phase it is in.
-  const retrying = (e: OutboxEntry) => e.status === "queued" && e.retryAt != null && e.retryAt > now;
+  const retrying = (e: OutboxEntry) => rowPhase(e, now) === "retrying";
   const queuedAll = outbox.filter((e) => e.status === "queued" && !retrying(e));
   // Only while the link is up and nothing is held by hand: offline and a
   // manual hold are this bar's own facts (and its auto switch), not the strip's.

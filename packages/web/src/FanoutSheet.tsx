@@ -14,7 +14,8 @@ import { SyncMark } from "./SyncMark";
 import { LaunchPicker, launchOf, type LaunchPick } from "./LaunchPicker";
 import { backendUnavailable, launchAskStart } from "./backendCaps";
 import { CantInline } from "./Unavailable";
-import { kickoff, kickoffSent, targetSubline } from "./fanoutKickoff";
+import { fanoutFireLine, fanoutMine, kickoff, targetSubline } from "./fanoutKickoff";
+import { useFireFate } from "./core/queue/useFireFate";
 import { Button } from "./kit/Button";
 import { ConfirmButton } from "./Confirm";
 import { Row, RowTitle, RowSub } from "./kit/Row";
@@ -33,7 +34,7 @@ interface Props {
   /** Fire the sweep. App routes it through the durable send queue, so this is
    *  never lost to a dead tunnel — it just runs later. `launch` is the sweep's
    *  own pick (backend, model, effort) over the new-session defaults. */
-  onRun: (dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean) => void;
+  onRun: (dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean) => string;
   /** Send another instruction into the sessions a run already spawned. */
   onFollowUp: (runId: string, text: string, dirs: string[]) => void;
   /** Hand the composed sweep to the schedule editor instead of running it now.
@@ -126,10 +127,11 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
   // A backend the host says cannot start now: the sentence replaces Run, as
   // on the ask — N launches that would fail are not offered.
   const blocked = backendUnavailable(backends, chose.backend);
-  /** The tap that has not shown up as a run yet: the run ids that existed
-   *  before it, so the first new one is this tap's. The host stamps
-   *  `startedAt`, and the phone's clock is not its clock. */
-  const [fired, setFired] = useState<{ known: Set<string>; repos: number; offline: boolean } | null>(null);
+  /** The last tap: the ackId of its tracked queue row. Its run is the one the
+   *  receipt NAMES (`fanoutMine`); a row that failed or was dismissed says so
+   *  (`fanoutFireLine`) — never "the first run id not seen before the tap". */
+  const [fired, setFired] = useState<{ ackId: string; repos: number; offline: boolean } | null>(null);
+  const fate = useFireFate(fired?.ackId ?? null);
 
   // A selected worktree stays selected (and counted) even while the shared
   // picker is filtered to primaries — hiding a row must not silently drop it
@@ -171,13 +173,14 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
     if (!dirs.length || !text.trim()) return;
     track("action:fanout.run");
     save(TEXT_KEY, text);
-    setFired({ known: new Set(runs.map((r) => r.id)), repos: dirs.length, offline: !online });
-    onRun(dirs, text.trim(), sweep, flagWhenDone || undefined);
+    const ackId = onRun(dirs, text.trim(), sweep, flagWhenDone || undefined);
+    setFired({ ackId, repos: dirs.length, offline: !online });
   }
 
   // The strip above Run: this tap's run once the host wrote it down, else the
   // newest run still going (reopening the sheet mid-sweep still shows it).
-  const mine = fired ? runs.find((r) => !fired.known.has(r.id)) : undefined;
+  const mine = fired ? fanoutMine(runs, fate) : undefined;
+  const fireLine = fired && fate && !mine ? fanoutFireLine(fate, fired.offline, fired.repos) : null;
   const shown = mine ?? (fired ? undefined : runs.find((r) => !r.finishedAt));
   const kick = shown ? kickoff(shown.targets) : null;
 
@@ -318,7 +321,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                         {t.status === "starting" || t.status === "running" ? <Loader size={12} className="spin" /> : null}
                         {t.status === "done" ? <CircleCheck size={12} /> : null}
                         {t.status === "failed" ? <CircleAlert size={12} /> : null}
-                        {" "}{t.title} <Tag className={STATUS_TAG[t.status]}>{t.status}</Tag>
+                        {" "}{t.title} <Tag className={STATUS_TAG[t.status] ?? ""}>{t.status}</Tag>
                       </RowTitle>
                       <RowSub>{targetSubline(t)}</RowSub>
                     </Row>
@@ -377,7 +380,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
           whole repo checklist, so without this a tap on Run showed a toast and
           then nothing. Words, never a tap that filters — "show" scrolls to the
           run's full list. */}
-      {(kick || (fired && !mine)) && (
+      {(kick || fireLine) && (
         <div className="fanout-kick">
           {kick && shown ? <>
             {kick.waiting + kick.starting > 0 ? <Loader size={14} className="spin" /> : kick.failed ? <CircleAlert size={14} /> : kick.working ? <Loader size={14} className="spin" /> : <CircleCheck size={14} />}
@@ -386,9 +389,9 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
               show the {kick.total}
             </button>
             <span className="pull-bar"><span className="pull-bar-fill" style={{ width: `${kick.total ? (100 * kick.kicked) / kick.total : 0}%` }} /></span>
-          </> : fired && <>
-            <Loader size={14} className="spin" />
-            <span className="grow">{kickoffSent(fired.offline, fired.repos)}</span>
+          </> : fireLine && <>
+            {fireLine.spin ? <Loader size={14} className="spin" /> : <CircleAlert size={14} />}
+            <span className="grow">{fireLine.line}</span>
           </>}
         </div>
       )}

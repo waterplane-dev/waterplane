@@ -16,7 +16,7 @@ import type { HostMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import { addSettingRows } from "../settingsIndex.ts";
 import type { ComponentType } from "react";
 import type {
-  Availability, ContributionIcon, CoreApi, FeatureManifest, LauncherItemCount, LauncherItemDef, MenuItemDef, RepoChipDef, SecretFillContext, SecretFillerDef, SessionViewDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef,
+  Availability, ContributionIcon, CoreApi, FeatureManifest, LauncherItemCount, LauncherItemDef, LeaveReason, MenuItemDef, RepoChipDef, SecretFillContext, SecretFillerDef, SessionViewDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef,
 } from "../sdk/types.ts";
 
 type AnyHandler = (msg: HostMessage, c: CoreApi) => void;
@@ -121,11 +121,10 @@ export function createSheetTable(features: readonly FeatureManifest[]) {
   const sheets = new Map<SheetId, SheetDef>(features.flatMap((f) => (f.sheets ?? []).filter((s) => ownsId(f, s)).map((s) => [s.id, s] as const)));
   return {
     sheets,
-    /** The overlay changed from `prev` to `next`: the sheet that stopped being
-     *  on top gets its `onLeave`. */
-    leave(prev: string | null, next: string | null): void {
-      if (!prev || prev === next) return;
-      sheets.get(prev as SheetId)?.onLeave?.();
+    /** Sheet `id` left the route stack's top, told why — the route layer's own derivation
+     *  (`announceLeaves`, backStep.ts): each sheet that left, once per move. */
+    leave(id: string, reason: LeaveReason): void {
+      sheets.get(id as SheetId)?.onLeave?.(reason);
     },
   };
 }

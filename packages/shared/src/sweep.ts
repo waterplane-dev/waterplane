@@ -63,7 +63,8 @@ export const SWEEP_AGE_MS: Record<SweepAge, number> = {
   "365d": 365 * 86_400_000,
 };
 
-/** Said in full wherever it is said — "30d" is a key, never a label. */
+/** Said in full wherever it is said — "30d" is a key, never a label.
+ * closed: the age is the phone's own pick from this build's ladder */
 export const SWEEP_AGE_LABEL: Record<SweepAge, string> = {
   "7d": "older than a week",
   "30d": "older than 30 days",

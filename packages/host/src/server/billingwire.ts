@@ -9,13 +9,13 @@
  * poll switch and `publishBudget` are assigned after this runs), and nothing
  * starts at import - the fold's timer runs only while a dollar period exists.
  */
-import { hasScrapedWindows, type BudgetPeriod, type BudgetSpend } from "@waterplane/shared";
+import { hasScrapedWindows, type BudgetPeriod, type BudgetSpend, type BudgetSpendWhy } from "@waterplane/shared";
 import { BillingStore, runAuthStatus } from "../billing.js";
 import { createPaceWatch } from "../burnwatch.js";
 import { hostStateDir } from "../branddirs.js";
 import { claudeBackend } from "../backends/index.js";
 import { costMeta } from "../costwindow.js";
-import { PeriodSpend, SPEND_REFRESH_MS, foldTotal } from "../periodspend.js";
+import { PeriodSpend, SPEND_REFRESH_MS, foldAnswer } from "../periodspend.js";
 import type { ServerCtx } from "./ctx.js";
 
 export function createBillingWire(ctx: ServerCtx) {
@@ -30,7 +30,7 @@ export function createBillingWire(ctx: ServerCtx) {
     fold: async (from, to) => {
       const doc = await ctx.tokenStats.costWindow(from, to, costMeta(ctx.sessions, ctx.intents), SPEND_REFRESH_MS);
       // A ledger never scanned folds to an empty (zero) document, and a stalled scan to an old one: "nobody measured", not $0.
-      return foldTotal(doc);
+      return foldAnswer(doc);
     },
   });
   const scraped = (): boolean => hasScrapedWindows(billing.status().profile);
@@ -54,6 +54,8 @@ export function createBillingWire(ctx: ServerCtx) {
     /** Whether `session`/`weekly` mean anything here; `unknown` counts as yes (today's behaviour). */
     scraped,
     spend: (): BudgetSpend => periodSpend.get(),
+    /** Why a dollar period has no figure, where the ledger said (`foldAnswer`). */
+    spendWhy: (): BudgetSpendWhy => periodSpend.why(),
     /** Run the ledger fold only while a dollar period exists: once now, then every minute. */
     syncSpendFold(): void {
       if (ctx.DOCTOR || !ctx.budget.usdPeriods().length) {

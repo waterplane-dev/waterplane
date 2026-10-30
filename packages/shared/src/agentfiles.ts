@@ -26,6 +26,7 @@
  */
 import { CHARS_PER_TOKEN, frontmatterLines, skillDescChars } from "./contextweight.js";
 import type { ContextWeightInput, SkillWeight } from "./contextweight.js";
+import { wordOf } from "./wordof.js";
 
 export type InstructionReader = "claude" | "copilot";
 
@@ -352,7 +353,7 @@ export function claudeWeightInput(files: InstructionFile[]): ContextWeightInput 
 
 /** One repeat, said: the two files, what they share, who carries both — and for the migration case, how one copy serves both agents. */
 export function overlapWords(o: InstructionOverlap, fmt: (n: number) => string = String): string {
-  const who = o.readers.map((r) => READER_NAME[r]).join(" and ");
+  const who = o.readers.map((r) => wordOf(READER_NAME, r, r)).join(" and ");
   const pair = new Set([o.a, o.b]);
   const fix = pair.has("CLAUDE.md") && pair.has("AGENTS.md")
     ? " One copy is enough: keep the text in AGENTS.md and let CLAUDE.md be the single line @AGENTS.md, which Claude Code inlines."

@@ -44,7 +44,7 @@ const KIND_WORDS: Record<SessionOriginKind, string> = {
 
 /** How the session was opened, as a chip's words; absent kind ⇒ no chip. */
 export function closedKindWord(c: ClosedSession): string | undefined {
-  return c.kind ? KIND_WORDS[c.kind] : undefined;
+  return c.kind && c.kind in KIND_WORDS ? KIND_WORDS[c.kind] : undefined;
 }
 
 /** Closed by the HOST, not a person and not the CLI: close-when-done after

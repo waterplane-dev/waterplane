@@ -7,6 +7,7 @@ import { useEffect, useMemo } from "react";
 import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
+import { useNow } from "../../useNow";
 import { buildLogSeed } from "../../buildLogPrompt";
 import { artifactPolicies, buildCands, buildLocalIds, buildVersions, buildOpts, buildRunFocus, buildScheduleEdit, builds } from "./store";
 import { buildScheduleCue } from "../../buildSchedule";
@@ -49,6 +50,8 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
   const focusRun = useStore(buildRunFocus);
   useEffect(() => { if (focusRun) buildRunFocus.set(null); }, [focusRun]);
   const schedules = core.world.schedules;
+  // The cue says "next in …": a clock that ticks, or it freezes at the last render.
+  const now = useNow(30_000);
   return (
     <BuildSheet
       repo={repo}
@@ -78,7 +81,7 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
       onScan={() => scanRepo(dir)}
       onClose={() => core.nav.close("build")}
       // A clock: the cue off the phone's rule list, its cut, and the form's save.
-      scheduleCue={(b) => buildScheduleCue(schedules, dir, b, Date.now())}
+      scheduleCue={(b) => buildScheduleCue(schedules, dir, b, now)}
       onOpenScheduleCut={openBuildScheduleCut}
       onSaveSchedule={(b, entry, when, vals, preview) => saveBuildSchedule(dir, b, entry, when, vals, preview)}
       usage={core.world.usage}

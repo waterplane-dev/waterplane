@@ -148,6 +148,11 @@ export interface CostWindowDoc {
   unpriced: TokenTotals;
   pricesAsOf: string;
   scannedAt: number;
+  /** Records in `totals` that are in NO hour (no readable timestamp) and that COULD fall in this
+   *  window — only logs last written at or after `fromHour` count (a record is never later than
+   *  its file's mtime; an unknown mtime counts). `LedgerHourly.undated`'s rule (`undatedWhy`):
+   *  above 0, the window's figure is a floor and reads ABSENT. Absent = an older host. */
+  undated?: number;
   /** (c2) What every OTHER backend on this desktop spent over the same span, each in its own
    *  account and unit — BESIDE the figure above, never in it, never summed with it or with each
    *  other. Built by the `/api/costwindow` route only (the verdicts' folds never carry it); a

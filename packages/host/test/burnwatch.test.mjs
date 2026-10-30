@@ -142,3 +142,10 @@ test("one observation at a time: a second call while the first is in flight retu
   assert.equal(await first, true);
   assert.equal(sent.length, 1);
 });
+
+test("a ledger holding undated records costs the push its top line, never the push (design round 4)", async () => {
+  const { w, sent } = make({ costWindow: async () => ({ ...doc(), undated: 1 }) });
+  assert.equal(await w.observe(ok), true);
+  assert.doesNotMatch(sent[0].body, /Dearest in it/);
+  assert.match(sent[0].body, /Nothing was paused\.$/);
+});

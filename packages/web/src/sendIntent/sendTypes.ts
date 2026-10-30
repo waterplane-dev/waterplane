@@ -158,6 +158,8 @@ export interface SendResume {
    * to prose; a schedule is something somebody made.
    */
   parkedAt?: SendWhen;
+  /** A cap set aside by a start that cannot carry it (`KeptCap`, `resumeKept`): held, never sent. */
+  kept?: { budget: SessionBudget; said: string };
 }
 
 /**

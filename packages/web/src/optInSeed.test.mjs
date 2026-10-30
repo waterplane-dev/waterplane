@@ -78,3 +78,14 @@ test("a sent offer says when and what became of it, one sentence per status", ()
   assert.equal(new Set(all).size, all.length, "every status reads differently");
   assert.equal(startedHead(2), "Started here · 2");
 });
+
+import { optInSentWords as sentWordsOf } from "./optInSeed.ts";
+
+test("optInSentWords words a status this build does not know", () => {
+  // `OptInSent.status` is the host's; a newer host's word reached this switch
+  // with no case and printed "undefined".
+  const text = sentWordsOf({ status: "someFutureStatus", at: 0 }, () => "24 Oct");
+  assert.equal(typeof text, "string");
+  assert.doesNotMatch(text, /undefined/);
+  assert.match(text, /^Sent 24 Oct/);
+});

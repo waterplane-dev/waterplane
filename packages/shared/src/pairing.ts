@@ -205,5 +205,9 @@ export function pairRedeemErrorText(error: PairRedeemError): string {
       return "Too many attempts. Wait a minute and try again.";
     case "no-password":
       return "This desktop has no password set, so it refuses pairing over the Wi-Fi. Pair over Tailscale instead.";
+    // `error` is the host's answer: a refusal a newer host adds reaches an
+    // older phone with no case for it.
+    default:
+      return "The desktop refused that code for a reason this app version cannot name. Show a new QR and try again.";
   }
 }

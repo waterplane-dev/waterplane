@@ -8,6 +8,10 @@ description: waterplane host as the machine the phone drives (packages/host/src)
 This desktop as a resource the phone reaches: its files and worktrees, its build commands, its screens, its hardware readings and its microphone, and the setup checks that say what a repo is missing — host-side plumbing that acts on the machine rather than on a session. Router: `host`. Reasoning: [host.md](../../../docs/notes/host.md); the cut-out measurements and design prose: [moved out of this skill](../../../docs/notes/host.md#moved-out-of-skill-host-machine-2026-10-17).
 
 - `files.ts` — inbox uploads, artifact gallery, traversal guards. **`DISCOVERABLE` ≠ `VIEWABLE`**;
+  **Serving an artifact (`routes/apirepofiles.ts`):** artifacts over `STREAM_MIN` are **piped, not
+  buffered**; resuming rests on `accept-ranges`, a correct `content-range`, **416 not 200** past the
+  end, and `if-range` — on the buffered path too. `artifact?…&stat=1` answers mtime+size and no
+  bytes, behind the same gate.
   `.env` refused everywhere. The repo badge is `countOutbox()` — UNSEEN OUTBOX files, never the inbox.
   **`listTransport`/`sweepTransport` are the BULK cleanup** (`GET`/`POST /api/repos/:id/sweep/*`, in `routes/apirepofiles.ts`):
   listing is EVERY file in the transport dir, not the paintable subset (a `.zip` is bytes), `.seen`

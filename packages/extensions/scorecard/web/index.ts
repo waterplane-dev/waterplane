@@ -14,14 +14,14 @@ import { featureSheetId, useConnStatus, useStore, type FeatureManifest } from "@
 import { CHECK_ID, PUSH_CHANGED } from "../shared/wire.mts";
 import { ScorecardSheet } from "./ScorecardSheet.tsx";
 import { scoreChip, type ScoreCut } from "./logic.ts";
-import { ensureRead, onChanged, openScorecard, views } from "./state.ts";
+import { ensureRead, leaveScorecard, onChanged, openScorecard, views } from "./state.ts";
 
 const cutFor = (repo: RepoTarget): ScoreCut => ({ repo: repo.id });
 
 export const manifest: FeatureManifest = {
   id: "scorecard",
   // The literal form (`tools/webshape.test.mjs` reads it); `state.ts` opens the same id as SCORE_SHEET.
-  sheets: [{ id: featureSheetId("scorecard", "main"), persisted: false, render: () => createElement(ScorecardSheet) }],
+  sheets: [{ id: featureSheetId("scorecard", "main"), persisted: false, render: () => createElement(ScorecardSheet), onLeave: leaveScorecard }],
   pushes: { [PUSH_CHANGED]: (data) => onChanged(data) },
   setupRows: [{ check: CHECK_ID, agentVerb: "see the failing checks",
     guidance: "Close the failing OpenSSF Scorecard checks the sheet lists for this repo, one at a time, starting with the lowest score. Where a check cannot pass for a solo maintainer, say why and propose accepting it with a reason; change nothing you were not asked to.", agent: (repo) => openScorecard(repo, cutFor(repo)) }],

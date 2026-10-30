@@ -38,7 +38,7 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { RepoSetupState } from "@waterplane/shared";
-import { inspectRepo, inspectRepoAsync, summarize } from "./compliance.js";
+import { inspectRepoAsync, summarize } from "./compliance.js";
 import { discoverTargets } from "./repos.js";
 import { env } from "./env.js";
 import { logTag } from "@waterplane/shared";
@@ -89,6 +89,10 @@ export class SetupWatcher {
   private sweeping = false;
   /** A `checkedAt` moved without the verdict changing, not yet written. */
   private unsaved = false;
+  /** Bumped by every `record`; per worktree, the bump of its last one. A background check that
+   *  started before a newer `record` drops its now-older verdict (`checkInBackground`). */
+  private recordSeq = 0;
+  private recordedAt = new Map<string, number>();
 
   constructor(private root: string) {
     this.path = join(hostStateDir(root), "setup.json");
@@ -140,27 +144,23 @@ export class SetupWatcher {
   }
 
   /**
-   * Inspect one worktree now and remember the verdict. Used by the sweep, by the
-   * session-start re-check, and by the checklist endpoints — so the badge always
-   * reflects the last thing anyone actually learned, including a fix applied a
-   * second ago.
+   * Inspect one worktree and remember the verdict, its git and its tree walks run in the background
+   * (`inspectRepoAsync`). Used by the sweep and by the session-start re-check — nobody waits on
+   * either, and a blocking git per path held the loop for minutes on WSL over a Windows drive, so
+   * there is no synchronous twin: the checklist endpoints inspect on their own and hand the
+   * verdict to `record`, so the badge still reflects the last thing anyone actually learned.
    */
-  check(worktreePath: string, repoName = ""): RepoSetupState | undefined {
+  async checkInBackground(worktreePath: string, repoName = ""): Promise<void> {
+    const startedAt = this.recordSeq;
     try {
-      return this.record(worktreePath, inspectRepo(worktreePath), repoName);
+      const checks = await inspectRepoAsync(worktreePath);
+      // A fix tapped while this ran recorded a fresher verdict: never land the older one on it.
+      if ((this.recordedAt.get(key(worktreePath)) ?? 0) > startedAt) return;
+      this.record(worktreePath, checks, repoName);
     } catch {
       // A repo that vanished mid-check, or a machine with no git: leave the last
       // verdict alone rather than inventing a clean one.
-      return this.stateFor(worktreePath);
     }
-  }
-
-  /** `check` with its git run in the background (`inspectRepoAsync`) — the sweep's, which nobody
-   *  waits on: a blocking git per path held the loop for minutes on WSL over a Windows drive. */
-  private async checkInBackground(worktreePath: string, repoName: string): Promise<void> {
-    try {
-      this.record(worktreePath, await inspectRepoAsync(worktreePath), repoName);
-    } catch { /* as in `check`: the last verdict stands */ }
   }
 
   /** Remember a checklist someone else already produced (the sheet's GET, a fix's
@@ -177,6 +177,7 @@ export class SetupWatcher {
     };
     const changed = !prev || prev.ok !== entry.ok || prev.issues !== entry.issues;
     this.entries.set(k, entry);
+    this.recordedAt.set(k, ++this.recordSeq);
     // An unchanged verdict still moved `checkedAt`; the sweep saves those once per pass. Unsaved,
     // every restart found every repo stale and re-inspected the whole root.
     if (changed) this.persist();
@@ -207,6 +208,7 @@ export class SetupWatcher {
       for (const wt of [...this.entries.keys()]) {
         if (live.has(wt) || existsSync(wt)) continue;
         this.entries.delete(wt);
+        this.recordedAt.delete(wt);
         pruned = true;
       }
       if (pruned) this.persist();

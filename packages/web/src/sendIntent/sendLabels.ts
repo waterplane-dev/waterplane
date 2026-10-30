@@ -24,6 +24,7 @@ export function targetWords(t: SendTarget, n: SendNames, w?: SendWhen): string {
   // Said only where it will be honoured (`flagWhenDoneOffered`) — a tick left
   // over from a WHEN that no longer takes it is not on the row.
   const flag = (t.kind === "repo" || t.kind === "repos") && t.flagWhenDone && (!w || flagWhenDoneOffered(t, w)) ? ", flagged when done" : "";
+  // closed: SendTarget is the phone's own composer state
   switch (t.kind) {
     case "session": return n.sessionTitle(t.sessionId);
     // `X · work item` went with the retired second reading of a repo target.
@@ -80,6 +81,7 @@ function sendLabelBase(i: SendIntent, n: SendNames, preview: number | null): str
   // three lines on a phone is one nobody reads before tapping.
   if (i.when.kind === "after") {
     const a = afterWords(i.when.title, i.when.onlyIfOk);
+    // closed: SendTarget is the phone's own composer state
     switch (i.target.kind) {
       case "session": return `Send to ${n.sessionTitle(i.target.sessionId)} ${a}`;
       case "repo": return `Queue for ${n.repoName(i.target.cwd)} · a new session ${a}`;
@@ -98,6 +100,7 @@ function sendLabelBase(i: SendIntent, n: SendNames, preview: number | null): str
     }
   }
   const later = i.when.kind === "idle";
+  // closed: SendTarget is the phone's own composer state
   switch (i.target.kind) {
     case "session":
       return later ? `Send to ${n.sessionTitle(i.target.sessionId)} when it's free` : `Send to ${n.sessionTitle(i.target.sessionId)}`;

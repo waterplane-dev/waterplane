@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { BarChart3, ChevronDown, ChevronUp, SearchCheck, X } from "lucide-react";
 import {
   agentModelInsight, type CostConvo, type CostWindowDoc, fmtCount, fmtUsd, foldLaunches, LAUNCH_KIND_WORD,
-  type PtsCalibration, type PtsRefusal, ptsText, rankRepos, tokenTotal, type TokenConvo, type UsageSample, weekCut,
+  type PtsCalibration, type PtsRefusal, ptsText, rankRepos, tokenTotal, type TokenConvo, undatedWhy, type UsageSample, weekCut,
 } from "@waterplane/shared";
 import { useBoxWidth, Button, Tag } from "@waterplane/kit";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
@@ -11,7 +11,7 @@ import { BesideBlock } from "./BesideBlock.tsx";
 import { Composition } from "./Readouts.tsx";
 import { RepoHourChart, slotFill } from "./charts/RepoHourChart.tsx";
 import {
-  agentPct, calText, foldStateText, hourText, hourWords, legendEntries, listedText, moreText, priced, repoSlots,
+  agentPct, calText, type FoldRead, foldStateText, hourText, hourWords, legendEntries, listedText, moreText, priced, repoSlots,
   rowFacts, usdOrTok, weekCaption,
 } from "./weekBands.ts";
 
@@ -47,10 +47,10 @@ interface Group {
  * it refused. Reads nothing itself: the body reads the week (`weekcost:`) so the calibration and
  * the Totals box's repo split are made from the same document.
  */
-export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, compact = false, nameOf, onExplain, isLive, onOpenConvo }: {
+export function WeekCard({ doc: given, res, openedAt, samples, everyMs, cal, span, compact = false, nameOf, onExplain, isLive, onOpenConvo }: {
   /** The week's document, already checked to answer this week (`docFor`). */
   doc: CostWindowDoc | null;
-  res: { state: string; error?: string | null };
+  res: FoldRead;
   /** The instant the week opened (`weekSpan`), or null without a future weekly reset instant —
    *  then there is no week to cut. */
   openedAt: number | null;
@@ -70,6 +70,8 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
   isLive?: (id: string) => boolean;
   onOpenConvo?: (id: string) => void;
 }) {
+  // `docFor`'s refusal, here too: the VS Code panel hands its own fold in without asking `docFor`.
+  const doc = given && !undatedWhy(given.undated) ? given : null;
   const [hour, setHour] = useState<string | null>(null);
   const [by, setBy] = useState<"repo" | "launch">("repo");
   const [open, setOpen] = useState<Set<string>>(() => new Set());
@@ -122,7 +124,7 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
   if (!doc) {
     return (
       <ScopeCard title="Where the week went" chips={null}>
-        <div className="empty ts-caveat">{foldStateText(res, "week")}</div>
+        <div className="empty ts-caveat">{foldStateText({ ...res, data: res.data ?? given }, "week")}</div>
       </ScopeCard>
     );
   }

@@ -219,3 +219,30 @@ test("cleanBudget: an absent leftoverMax is the default, an explicit null stays 
   assert.equal(cleanBudget({ leftoverMax: 35 }).leftoverMax, 35);
   assert.equal(cleanBudget({ leftoverMax: "x" }).leftoverMax, 20);
 });
+
+test("a dollar ceiling refused for undated records names that cause (design round 4, r4-1 M2)", () => {
+  const cfg = { ...CFG, sessionMax: 100, periods: [{ id: "month", kind: "calendar", unit: "usd", cycle: "month", anchorDay: 1, tz: "UTC" }], ceilings: [{ periodId: "month", unit: "usd", max: 50 }] };
+  const why = { month: "Claude Code's ledger holds 3 records it could not date, which any span could be missing" };
+  const v = budgetVerdict(cfg, null, NOW, {}, why);
+  assert.equal(v.state, "unknown");
+  assert.equal(v.blocked, false, "fails open");
+  assert.equal(budgetReasonText(v), `${why.month} — the budget is not holding anything back`);
+  // Nobody said why: the old sentence.
+  assert.equal(budgetReasonText(budgetVerdict(cfg, null, NOW, {})), "usage could not be read — the budget is not holding anything back");
+});
+
+test("a stale /usage reading AND a dollar ceiling refused for undated records: the sentence names both causes (design round 5, r4-1b L3)", () => {
+  const cfg = { ...CFG, sessionMax: 80, periods: [{ id: "month", kind: "calendar", unit: "usd", cycle: "month", anchorDay: 1, tz: "UTC" }], ceilings: [{ periodId: "month", unit: "usd", max: 50 }] };
+  const why = { month: "Claude Code's ledger holds 3 records it could not date, which any span could be missing" };
+  const stale = u({ checkedAt: NOW - BUDGET_STALE_MS - 1 });
+  const v = budgetVerdict(cfg, stale, NOW, {}, why);
+  assert.equal(v.state, "unknown");
+  assert.equal(v.blocked, false);
+  assert.equal(budgetReasonText(v), `usage could not be read, and ${why.month} — the budget is not holding anything back`);
+  // A fresh reading names only the ledger: the percent ceiling is readable and under.
+  const fresh = budgetVerdict(cfg, u({ sessionPct: 10 }), NOW, {}, why);
+  assert.equal(fresh.state, "ok");
+  // No percent ceiling: only the ledger's cause, as before.
+  const usdOnly = budgetVerdict({ ...cfg, sessionMax: 100 }, stale, NOW, {}, why);
+  assert.equal(budgetReasonText(usdOnly), `${why.month} — the budget is not holding anything back`);
+});

@@ -101,9 +101,9 @@
 <section class="row" id="know-what-it-costs">
   <div class="text">
 <h2>Know what it costs</h2>
-<p>Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus what the <em>next</em> turn will cost compared with a fresh session. The token ledger splits every total by day, repo and model; the header carries the 5-hour and weekly usage windows with their resets; each session has a context sheet showing how full the window was over time and where it compacted. A per-repo check weighs <code>CLAUDE.md</code> and skill descriptions, the part every turn pays for again. All read off the CLI's own logs and screens; where there is nothing to read, nothing is shown rather than a guess.</p>
+<p>Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus what the <em>next</em> turn will cost compared with a fresh session. The token ledger splits every total by day, repo and model; the header carries the 5-hour and weekly usage windows with their resets; each session has a context sheet showing how full the window was over time and where it compacted, and on a fan-out session what its subagents cost, each one as a bar, the skills they loaded and what every turn carries before your prompt. A per-repo check weighs <code>CLAUDE.md</code> and skill descriptions, the part every turn pays for again. All read off the CLI's own logs and screens; where there is nothing to read, nothing is shown rather than a guess.</p>
   </div>
-  <figure class="phone"><img src="assets/numbers.gif" width="420" height="996" loading="lazy" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></figure>
+  <figure class="phone"><img src="assets/numbers.gif" width="390" height="924" loading="lazy" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></figure>
 </section>
 <!-- /readme:cost -->
 

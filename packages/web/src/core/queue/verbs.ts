@@ -14,6 +14,7 @@ import { track } from "../../usage";
 import { entryProse, onlyUploadsFailed, restorableFailed } from "../../activityRows";
 import { sendModeToast } from "../../composeSend";
 import { pendingLaneId, unpark } from "./logic.ts";
+import { mayBeInSession, revivable } from "./phase.ts";
 import type { QueueCtx, VerbFns } from "./types.ts";
 
 export function verbFns(c: QueueCtx): VerbFns {
@@ -303,9 +304,8 @@ export function verbFns(c: QueueCtx): VerbFns {
       // a prompt run twice if the ledger had aged out first. Activity states
       // this per row and offers "rewrite it" instead; this is the guard for
       // every other caller, and it SAYS so rather than reviving in silence.
-      const remembered = target0.failState && target0.failState !== "other";
-      if (remembered) {
-        showToast(target0.failState === "unconfirmed" || target0.failState === "unsubmitted"
+      if (!revivable(target0)) {
+        showToast(mayBeInSession(target0)
           ? "it may already be in that session — open it and look, or rewrite it to send a fresh copy"
           : "the desktop remembers refusing this exact message — rewrite it to send it as a new one");
         return;
@@ -377,8 +377,7 @@ export function verbFns(c: QueueCtx): VerbFns {
    * way out is a rewrite, one at a time (see `sendQueuedNow`).
    */
   function retryFailedQueued() {
-    const revive = outboxRef.current.filter((e) => e.status === "failed"
-      && (!e.failState || e.failState === "other"));
+    const revive = outboxRef.current.filter(revivable);
     if (!revive.length) { showToast("nothing to try again"); return; }
     // The dead mark AND the copy kept against it: this row is going to upload
     // from its own ackId again, so a second copy under the path would outlive

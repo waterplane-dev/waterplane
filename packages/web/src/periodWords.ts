@@ -123,6 +123,7 @@ export function pacing(s: PeriodState, cap: number | null, now: number): Pacing 
   return { pace: r > 1 + PACE_BAND ? "ahead" : r < 1 - PACE_BAND ? "under" : "on", perDay, projected };
 }
 
+// closed: the pace is `pacing()`, computed by this build
 export const PACE_WORD: Record<Pace, string> = { over: "over the cap", ahead: "ahead of pace", on: "on pace", under: "under pace" };
 
 export interface PeriodChip {

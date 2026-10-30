@@ -22,7 +22,9 @@ export const REPO_PR_ROUTES: readonly ApiEntry<RepoReq>[] = [
     return true;
   }),
   route<RepoReq>("POST", "git/prs/merge", async ({ req, res, wt }) => {
-    const r = await mergePr(wt, (await readJson(req)) ?? {});
+    // Answered in words whatever happens: a throw here would leave the tap with no receipt at all.
+    const r = await mergePr(wt, (await readJson(req)) ?? {})
+      .catch((e: unknown) => ({ ok: false, error: `The merge stopped with an error: ${String((e as Error)?.message ?? e).split("\n")[0]}` }));
     json(res, r, r.ok ? 200 : 400);
     return true;
   }),

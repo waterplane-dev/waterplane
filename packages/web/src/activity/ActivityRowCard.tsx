@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { AttachStrip } from "../AttachStrip";
-import { CHECK_ICON, CHECK_LABEL } from "../backlog/backlogLabels";
+import { checkLook } from "../backlog/backlogLabels";
 import { refsIn } from "../fileRefs";
 import { RepoPicker } from "../RepoPicker";
 import type { ActivityAction, ActivityActionId, ActivityRow } from "../activityRows";
@@ -241,8 +241,8 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
             {/* The verdict's own icon, from the same table as its words — the
                 glyphs that used to be glued to the front of the label were two
                 emoji and four typographic stand-ins doing an icon's job. */}
-            {(() => { const I = CHECK_ICON[check.checkStatus]; return <I size={11} style={{ verticalAlign: "-1px" }} />; })()}{" "}
-            {CHECK_LABEL[check.checkStatus]}{check.checkNote ? ` · ${check.checkNote}` : ""}
+            {(() => { const I = checkLook(check.checkStatus).Icon; return <I size={11} style={{ verticalAlign: "-1px" }} />; })()}{" "}
+            {checkLook(check.checkStatus).label}{check.checkNote ? ` · ${check.checkNote}` : ""}
             {checkDetail ? (checkOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : null}
           </button>
           {checkDetail && checkOpen ? (

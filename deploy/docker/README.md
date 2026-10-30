@@ -131,6 +131,7 @@ Put these in a `.env` file next to `compose.yaml`, or export them before `docker
 | `TS_SERVE` | `1` | `0` means do not set up `tailscale serve` (no HTTPS front door). |
 | `TS_EXTRA_ARGS` | empty | Extra flags for `tailscale up`, e.g. `--advertise-tags=tag:waterplane`. |
 | `CLAUDE_INSTALL` | `1` | `0` means do not install Claude Code on first start. |
+| `CLAUDE_INSTALL_SHA256` | pinned in `entrypoint.sh` | The sha256 Anthropic's `install.sh` must match before it runs. A changed installer is refused; set this after reading the new one. |
 | `ANTHROPIC_API_KEY` | empty | Use an API key instead of signing in to a Claude subscription. |
 | `WATERPLANE_DOCKER_ANDROID` | `0` | `1` means bake the JDK and Android SDK into the image (you accept the licence). |
 | `WATERPLANE_DOCKER_MEM` | `8g` | The container's memory limit. |

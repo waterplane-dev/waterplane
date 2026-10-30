@@ -10,6 +10,7 @@ import { buildRepo, builds } from "./store";
 import { onArtifactsConfig, onBuildLocalIds, onBuildVersions, onBuildCandidates, onBuildOptions, onBuildRun, openBuildFor, resyncBuild } from "./actions";
 
 export { buildNameOf, useBuildBusy, useBuildNames } from "./store";
+// `op.ack` is core's one frame (useHostFrames.ts); a fire's receipt names the run it started.
 export { openBuildFor } from "./actions";
 export { buildLane, buildQueueTitle, buildQueuedToast } from "./logic";
 

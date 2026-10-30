@@ -42,3 +42,10 @@ test("the cost hint counts the targets the host folded past its cap, and their r
   // A run whose every target was folded is still found.
   assert.match(fanoutCostWords({ convos: [], rest: [folded] }, run, "review"), /^last similar run \(1 repo\): \$20\.00/);
 });
+
+test("the cost hint is absent over a ledger holding undated records: the run's figure would be a floor (design round 4)", () => {
+  const doc = { convos: [convo("a", "r1", "/x", 100, 60)] };
+  const run = { id: "r1", text: "review", startedAt: 0, finishedAt: 1, targets: [] };
+  assert.notEqual(fanoutCostWords({ ...doc, undated: 0 }, run, "review"), null);
+  assert.equal(fanoutCostWords({ ...doc, undated: 1 }, run, "review"), null);
+});

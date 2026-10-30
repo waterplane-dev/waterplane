@@ -132,10 +132,29 @@ test("P5: the sheet's localStorage keys are the registry's, spelled as they alwa
   assert.match(storage, /backlogSortRun: lsKey\("backlogSortRun"\)/);
   const s = sheet();
   for (const k of ["backlogRepo", "backlogDraft", "backlogShowArchived", "backlogSortRun"]) assert.ok(s.includes(`LS.${k}`), `LS.${k} is read through the registry`);
-  // The effects the sheet registers: one cut-from-outside, one drag binding,
-  // one ticking clock, plus the re-scope to a changed `defaultRepoDir`. A second copy of any of them runs twice per change.
-  assert.equal(s.split("useEffect(").length - 1, 3, "three effects");
+  // The effects the sheet registers: one drag binding (the clock is `useNow`)
+  // and the one that pins a repo derived from the items into the cut. The cut
+  // is otherwise no effect at all: it is one store outside the sheet, read every
+  // render, so nothing re-applies a cut from outside or mirrors one back (NAV-1).
+  // A second copy of any of them runs twice per change.
+  assert.equal(s.split("useEffect(").length - 1, 2, "two effects");
   assert.equal(s.split("useNow(").length - 1, 1, "one clock");
+});
+
+// ── the cut has one owner, and Back keeps exactly it ────────────────────────
+// NAV-1: Back restored the cut the sheet was OPENED on, because the cut on
+// screen lived in the sheet's own state while `keep` saved the open-time
+// stores. The behaviour is pinned in `features/backlog/livecut.test.mjs`; this
+// pins the two lines no unit test can import (the manifest needs the SDK): the
+// store `onLeave` clears is the one store `keep` puts back.
+test("the backlog sheet keeps the one store its onLeave clears", () => {
+  const index = readFileSync(join(SRC, "features", "backlog", "index.ts"), "utf8");
+  const actions = readFileSync(join(SRC, "features", "backlog", "actions.ts"), "utf8");
+  assert.match(index, /id: "backlog",[^\n]*onLeave: clearBacklogFocus, keep: keepStores\(backlogCut\) \}/);
+  const leave = actions.slice(actions.indexOf("export function clearBacklogFocus("));
+  assert.match(leave.slice(0, leave.indexOf("\n}\n")), /^\s*backlogCut\.set\(cutLeft\);$/m);
+  const hook = readFileSync(join(SRC, "backlog", "useBacklogFilters.ts"), "utf8");
+  assert.deepEqual(hook.match(/useState[<(]|useRef[<(]/g), ["useState<"], "the cut is never local state in the sheet — only the archived toggle is");
 });
 
 // ── fire is the manual override: ONE tap, always ────────────────────────────

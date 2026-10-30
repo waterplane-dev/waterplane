@@ -424,6 +424,13 @@ button.ts-lim-used { cursor: pointer; }
 /* A window the hour record does not cover is UNKNOWN, which is not zero: no
    fill at all and a dashed edge, so it cannot be read as a quiet night. */
 .ts-heat-b.unknown { background: transparent; border: 1px dashed var(--line); }
+/* A window records with no date could fall in is REFUSED, a third fact: no fill on the ramp and
+   diagonal stripes, so it reads as neither a quiet night nor outside the record. Still a full-ink
+   tap target (a tap says why under the grid), never a dimmed look. */
+.ts-heat-b.undated {
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--line) 3px 4px);
+  border: 1px solid var(--line);
+}
 /* The window running now, and the one the readouts are cut to. `--fg` for the
    selection because it is the one ink that is far from every step of an accent
    ramp in both themes. */

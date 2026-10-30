@@ -23,8 +23,8 @@ import { weekBurnLine } from "../../automationLines";
 import { useCore, usePref, useStore } from "../../sdk";
 import { closeChoicePatch, closeChoiceToast } from "../../autoSessions";
 import { BL_OFFLINE, clockParentsOf, scheduleMaps } from "./logic";
-import { assessBusy, assessRuns, backlog, backlogFocus, backlogScope } from "./store";
-import { openAssessFor, openBacklogCut, openSlotCheck, runAgain, runAgainMany } from "./actions";
+import { assessBusy, assessRuns, backlog, backlogCut } from "./store";
+import { editBacklogCut, openAssessFor, openBacklogCut, openSlotCheck, runAgain, runAgainMany } from "./actions";
 
 export function BacklogSheet() {
   const core = useCore();
@@ -33,8 +33,7 @@ export function BacklogSheet() {
   const { intents, sessions, visibleRepos, active, pending, budget, schedules } = core.world;
   const online = core.conn.status === "open";
   const bl = useStore(backlog);
-  const focusIds = useStore(backlogFocus);
-  const scope = useStore(backlogScope);
+  const cut = useStore(backlogCut);
   const runs = useStore(assessRuns);
   const busy = useStore(assessBusy);
   // The global *close automatic sessions when done* — what a row with no
@@ -69,14 +68,15 @@ export function BacklogSheet() {
       naming={online ? bl.naming : []}
       snapAt={bl.snapAt}
       online={online}
-      // The cut this sheet was opened on, and the seam back to the rule that
-      // wrote a row. Both halves of "these two lists are the same subject".
-      focusIds={focusIds}
+      // The cut on screen: one store, read here and written by every tap on
+      // the sheet, by the doors that open it, and by Back.
+      cut={cut}
+      setCut={editBacklogCut}
       /* The "here". Never a pending session: a queued `session.create` has no
          id a host-side item can be aimed at. */
       activeSession={active && !pending ? { id: active.id, cwd: active.cwd, title: active.title || "this session" } : null}
       sessions={sessions}
-      defaultRepoDir={scope ?? active?.cwd}
+      defaultRepoDir={active?.cwd}
       verbs={{
         /* The per-row answer, live-only like every backlog mutation; `null`
            clears it back to the global. Never a requeue (host's `edit()`). */

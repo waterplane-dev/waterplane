@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { keepStores, type FeatureManifest } from "../../sdk";
 import { BacklogSheet } from "./BacklogSheet";
 import { AssessmentSheet } from "./AssessmentSheet";
-import { assessRepo, backlogFocus, backlogScope } from "./store";
+import { assessRepo, backlogCut } from "./store";
 import { setSlotCheckOpener } from "../../slotAskStore";
 import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList, openSlotCheck } from "./actions";
 
@@ -22,8 +22,9 @@ export const manifest: FeatureManifest = {
   // a feature, so its *check* is this feature's door, registered here.
   boot: () => { setSlotCheckOpener(openSlotCheck); return () => setSlotCheckOpener(null); },
   sheets: [
-    // The cut is the tap, not a setting: leaving the sheet drops it.
-    { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus, keep: keepStores(backlogScope, backlogFocus) },
+    // The cut is the tap, not a setting: leaving the sheet drops it, and Back
+    // puts back the one store it lives in — so what returns is what was on screen.
+    { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus, keep: keepStores(backlogCut) },
     // Repo-scoped: with no repo in memory this returns null and falls through
     // to the screen underneath, rather than painting an empty sheet.
     { id: "assess", persisted: false, render: () => {

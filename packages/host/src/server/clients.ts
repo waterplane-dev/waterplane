@@ -195,12 +195,16 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const { detail, build, outcome, level: explicit, ...wire } = p;
+    const { detail, build, pushHead, outcome, level: explicit, ...wire } = p;
     const level = notifyLevel(kind, outcome, explicit);
     const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: wire.title, body: wire.body, sessionId: wire.sessionId, tag: wire.tag, image: wire.image, file: wire.file, backlog: wire.backlog, plugin: wire.plugin, open: wire.open, level };
     if (wire.key) item.key = wire.key;
+    // ONE item from here on: an attention item is the store's enriched copy (`add` returns it),
+    // and that object is what the frame and the push carry — a field the store adds (a failed
+    // push's `branch`) can no longer be dropped by a second hand-built copy (review A3c M1).
+    let sent = item;
     let replaced = false;
-    if (level === "attention") replaced = attention.add(item, { detail, build });
+    if (level === "attention") ({ item: sent, replaced } = attention.add(item, { detail, build, pushHead }));
     else {
       notifications.unshift(item);
       if (notifications.length > 100) notifications.length = 100;
@@ -211,14 +215,14 @@ export function createClients(deps: ClientsDeps) {
     // A default-off kind (`idle`) the person switched ON asked to be pushed: they said so.
     const askedFor = NOTIFY_DEFAULT_OFF.includes(kind) && notifyPrefs.get?.()[kind] === true;
     const toLinks = level === "attention" || !!wire.pull || pushInfo() || askedFor;
-    const frame: HostMessage = { t: "notification", item };
+    const frame: HostMessage = { t: "notification", item: sent };
     for (const ws of clients) { if (toLinks || wsRole.get(ws) !== "notify") send(ws, frame); }
     // The older item under this key just became handled — say so, or every
     // phone keeps counting it until its next reconnect.
     if (replaced) broadcastFeed();
-    // The push carries the item's identity and targets too, so a tap on the OS
-    // notification can land where a tap on the feed row does (`sw.js`).
-    if (toLinks) void push.notify({ ...wire, id: item.id, kind, ts: item.ts, level });
+    // The push IS the item (plus `pull`, the auto-download transport), so a tap on the OS
+    // notification can land where a tap on the feed row does (`sw.js` forwards it whole).
+    if (toLinks) void push.notify({ ...sent, ...(wire.pull ? { pull: wire.pull } : {}) });
   }
 
   function clearNotifications(): void {

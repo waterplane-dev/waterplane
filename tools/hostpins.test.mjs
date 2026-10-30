@@ -151,9 +151,10 @@ const PINS = [
     re: /\bsetInterval\(/g,
     // +1 main.ts (2026-10-21): the MagicDNS name is re-read until known (origin fallback, S1).
     // +1 sessions/sidechannel.ts (2026-10-22): a source turn's end re-asks for a fresh context sample (≤1.5 s).
+    // +1 gitnotify.ts (2026-10-30): the minute tick asking git about each open push failure (a terminal push is no host-run outcome); idle while none is open, stopped in shutdown.ts.
     today: {
       "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 2, "opendeliveries.ts": 1,
-      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "gitnotify.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },
@@ -210,6 +211,7 @@ const PINS = [
   },
   {
     name: "sessions emits",
+    // sessions.ts 9 → 7, endsession.ts 0 → 2 (2026-10-29): MOVED — the exit teardown's `updated` + `exit`, unchanged.
     // apiretry.ts 1 → 3 (2026-10-28, R-connection-024): `netTurnSettled`, the late verdict on a
     // `checking` turn end and the halt stopping a rung — the work waiting on the turn is told.
     // apiretry.ts 0 → 1 (2026-10-27, R-connection-024): `SessionInfo.netRetry`, a new fact with its one emit.
@@ -220,7 +222,7 @@ const PINS = [
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 5, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 5, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 18 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.

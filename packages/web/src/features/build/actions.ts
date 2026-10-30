@@ -78,15 +78,20 @@ export function saveBuilds(repoDir: string, list: BuildConfig[], local?: string[
  * itself over the same output dir. The lane is per repo, so two builds of one
  * repo queue behind each other instead of interleaving.
  */
-export function runBuild(repoDir: string, id: string, params?: Record<string, string>): void {
+export function runBuild(repoDir: string, id: string, params?: Record<string, string>): string {
   const c = core();
+  // Minted HERE so the sheet can name this fire before it exists: `track`
+  // has the queue core keep its receipt (with the `runId` it started) and its
+  // row's fate (`core/queue/fireFate.ts`, read by `useFireFate`).
+  const ackId = c.queue.mintAckId();
   // The values are part of what ran, so they are part of what the queue row is
   // CALLED — two rows reading `build “Screenshot”` are two rows nobody can tell
   // apart, and this one may sit in the outbox for an hour before it starts.
   const name = buildRunTitle(buildNameOf(repoDir, id), params);
   const offline = c.queue.queueOp({ t: "build.run", repoDir, buildId: id, params },
-    buildLane(repoDir), buildQueueTitle(name), { cwd: repoDir });
+    buildLane(repoDir), buildQueueTitle(name), { cwd: repoDir, ackId, track: true });
   c.say.toast(buildQueuedToast(offline, name));
+  return ackId;
 }
 
 export function cancelBuild(runId: string): void {
@@ -159,7 +164,7 @@ export function saveBuildSchedule(repoDir: string, build: BuildConfig, editing: 
   when: Extract<SendWhen, { kind: "at" }>, vals: Record<string, string>, preview: number | null): void {
   const c = core();
   const id = editing?.id ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  const entry = buildScheduleEntry({ id, repoDir, build, vals, when, preview, now: Date.now() });
+  const entry = buildScheduleEntry({ id, editing, repoDir, build, vals, when, preview, now: Date.now() });
   const offline = c.queue.queueOp({ t: "schedule.save", entry }, `sched:${entry.id}`, entry.name);
   c.say.toast(buildScheduleToast(offline, !!editing));
 }

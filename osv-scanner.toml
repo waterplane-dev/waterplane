@@ -1,0 +1,11 @@
+# Advisories osv-scanner (and OpenSSF Scorecard's Vulnerabilities check) should not count here.
+# Each entry says why it cannot apply; `ignoreUntil` forces a re-look instead of a permanent mute.
+
+[[IgnoredVulns]]
+id = "GHSA-xxph-c9ww-hj94"
+ignoreUntil = 2027-04-30
+reason = """Guava deserialization DoS. Only guava 32.0.1-jre / 33.3.1-jre appear, in \
+packages/app/android/gradle/verification-metadata.xml: the Android Gradle Plugin's own build \
+classpath, never packaged. The APK carries only com.google.common.util.concurrent.ListenableFuture \
+(the listenablefuture artifact), no CompactHashMap/CompactHashSet/MapMakerInternalMap, and the \
+build never deserializes untrusted Java objects. Clears when an AGP upgrade pulls guava >= 33.7.2."""

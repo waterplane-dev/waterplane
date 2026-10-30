@@ -1,9 +1,10 @@
 // tools/screenfixtures.mjs: version arithmetic, manifest resolution, row states.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseVersion, cmpVersion, bannerVersion, versionGap, resolveEntries, rowFor, currentCount, unprovenCount } from "./screenfixtures.mjs";
+import * as sf from "./screenfixtures.mjs";
+import { parseVersion, cmpVersion, bannerVersion, versionGap, resolveEntries, rowFor, unprovenCount } from "./screenfixtures.mjs";
 
 test("parseVersion reads x.y.z anywhere, else null", () => {
   assert.deepEqual(parseVersion("2.1.293"), [2, 1, 293]);
@@ -122,23 +123,39 @@ test("rowFor: live health is carried, defaults filled", () => {
 
 // --reading: the repo's own repo-health reading (`.waterplane-shared/health.json`).
 
-test("currentCount counts `current` rows, and is ABSENT — not 0 — with no installed version", () => {
-  const rows = [{ state: "current" }, { state: "behind" }, { state: "current" }, { state: "none" }];
-  assert.deepEqual(currentCount(rows, "2.1.301"), { value: 2 });
-  assert.deepEqual(currentCount([], "2.1.301"), { value: 0 }, "a known version with nothing current IS a zero");
-  const unknown = currentCount(rows, null);
+test("noProofCount counts rows with NO proof, and is ABSENT — not 0 — with no installed version", () => {
+  const rows = [{ proof: ["fixture"] }, { proof: [] }, { proof: ["capture", "live"] }, { proof: [] }];
+  assert.deepEqual(sf.noProofCount(rows, "2.1.301"), { value: 2 });
+  assert.deepEqual(sf.noProofCount([], "2.1.301"), { value: 0 }, "a known version with no signals lacking proof IS a zero");
+  const unknown = sf.noProofCount(rows, null);
   assert.equal(unknown.value, null);
   assert.match(unknown.reason, /unknown/);
 });
 
-test("--reading prints exactly one JSON number on stdout", () => {
+test("--reading prints exactly one JSON number on stdout", async (t) => {
   const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
-  // A pinned --cli makes the count deterministic: every capture is behind a v9.9.9.
-  const future = execFileSync(process.execPath, [script, "--reading", "--cli", "9.9.9", "--health", "/nonexistent"], { encoding: "utf8" });
-  assert.equal(future, "0\n");
-  const out = execFileSync(process.execPath, [script, "--reading", "--cli", "2.1.301", "--health", "/nonexistent"], { encoding: "utf8" });
+  const { CLI_SIGNALS } = await import(new URL("../packages/shared/dist/clihealth/healthcatalog.js", import.meta.url).href);
+  const empty = mkdtempSync(join(tmpdir(), "captures-"));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const health = join(empty, "clihealth.json");
+  writeFileSync(health, JSON.stringify({ version: "9.9.9", signals: {} }));
+  // A pinned --cli, a live record with no goods and an empty capture dir make
+  // the count deterministic: on a v9.9.9 nothing has proof, so every signal counts.
+  const future = execFileSync(process.execPath, [script, "--reading", "--cli", "9.9.9", "--health", health, "--captures", empty], { encoding: "utf8" });
+  assert.equal(future, `${CLI_SIGNALS.length}\n`);
+  const out = execFileSync(process.execPath, [script, "--reading", "--cli", "v2.1.301", "--health", health, "--captures", empty], { encoding: "utf8" });
   assert.match(out, /^\d+\n$/);
   assert.equal(typeof JSON.parse(out), "number");
+});
+
+test("--reading is ABSENT — exit 1, nothing on stdout — without a live record to ask", (t) => {
+  const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
+  const empty = mkdtempSync(join(tmpdir(), "captures-"));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const r = spawnSync(process.execPath, [script, "--reading", "--cli", "2.1.314", "--health", "/nonexistent", "--captures", empty], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "", "a desktop with no host state reads absent, never every signal unproved");
+  assert.match(r.stderr, /clihealth/);
 });
 
 // --unproven: the second reading (`screenUnproven`).
@@ -253,4 +270,64 @@ test("formatManifest: signals.json round-trips byte for byte, so --write adds on
   const file = fileURLToPath(new URL("../packages/host/test/fixtures/signals.json", import.meta.url));
   const raw = readFileSync(file, "utf8");
   assert.equal(formatManifest(JSON.parse(raw)), raw);
+});
+
+// ── Proof on the installed CLI: fixture, host capture or live record ────
+
+test("proof: a 2.1.314 host capture and a live good on 2.1.314 prove a signal whose fixtures stop at 2.1.312", (t) => {
+  const dir = captureDir({ "2.1.314/deliver.echo.txt": "echo", "2.1.312/prompt.box.txt": "old", "2.1.314/hook.pipe.json": "{}" });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const known = new Set(["deliver.echo", "prompt.box", "hook.pipe"]);
+  const captured = sf.capturedOn(listSamples(dir, known).samples, "2.1.314");
+  assert.deepEqual([...captured].sort(), ["deliver.echo", "hook.pipe"], "only the installed version's captures count");
+  const e = [{ ...real, cli: "2.1.312" }];
+  const live = { version: "2.1.314", lastGoodAt: 1_793_359_762_127, misses: 0 };
+  const echo = rowFor({ id: "deliver.echo", name: "Echo" }, e, live, "2.1.314", null, captured);
+  assert.equal(echo.state, "behind", "the fixture age is still reported as it is");
+  assert.deepEqual(echo.proof, ["capture", "live"]);
+  assert.deepEqual(sf.noProofCount([echo], "2.1.314"), { value: 0 });
+});
+
+test("proof: each of fixture, capture and live is enough alone; an older or never-good live record is none", () => {
+  const e = [{ ...real, cli: "2.1.314" }];
+  const old = [{ ...real, cli: "2.1.312" }];
+  assert.deepEqual(rowFor(spec, e, null, "2.1.314", null, new Set()).proof, ["fixture"]);
+  assert.deepEqual(rowFor(spec, old, null, "2.1.314", null, new Set(["s"])).proof, ["capture"]);
+  assert.deepEqual(rowFor(spec, old, { version: "2.1.314", lastGoodAt: 1 }, "2.1.314", null, null).proof, ["live"]);
+  assert.deepEqual(rowFor(spec, old, { version: "2.1.312", lastGoodAt: 1 }, "2.1.314", null, null).proof, [], "good on the previous CLI proves nothing here");
+  assert.deepEqual(rowFor(spec, old, { version: "2.1.314", lastGoodAt: null, misses: 3 }, "2.1.314", null, null).proof, [], "a record with only misses is no proof");
+  assert.deepEqual(rowFor(spec, undefined, null, "2.1.314", null, new Set(["s"])).proof, ["capture"], "a capture proves a signal with no fixture at all");
+  assert.deepEqual(rowFor(spec, e, { version: "2.1.314", lastGoodAt: 1 }, null, null, new Set(["s"])).proof, [], "with no installed version nothing is proof");
+});
+
+// ── --debt: host captures the repo does not have yet (`harvestDebt`) ────
+
+test("harvestDebt counts captures whose fixture path the manifest lacks, any version", () => {
+  const samples = [
+    { id: "prompt.box", version: "2.1.314", ext: "txt" },
+    { id: "hook.pipe", version: "2.1.314", ext: "json" },
+    { id: "hook.pipe", version: "2.1.312", ext: "json" },
+  ];
+  const manifest = { signals: { "hook.pipe": [{ path: "screens/harvest-hook.pipe-2.1.312.json", role: "match" }] } };
+  assert.deepEqual(sf.harvestDebt(samples, manifest, true), { value: 2 });
+  assert.deepEqual(sf.harvestDebt([], manifest, true), { value: 0 }, "a capture dir with nothing new IS a zero");
+});
+
+test("harvestDebt is ABSENT — not 0 — without a manifest or a capture dir", () => {
+  const none = sf.harvestDebt([], null, true);
+  assert.equal(none.value, null);
+  assert.match(none.reason, /signals\.json/);
+  const nodir = sf.harvestDebt([], { signals: {} }, false);
+  assert.equal(nodir.value, null);
+  assert.match(nodir.reason, /capture dir/);
+});
+
+test("--debt prints exactly one JSON number on stdout", (t) => {
+  const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
+  const dir = captureDir({ "9.9.9/prompt.box.txt": "box", "9.9.9/hook.pipe.json": "{}" });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.equal(execFileSync(process.execPath, [script, "--debt", "--captures", dir], { encoding: "utf8" }), "2\n");
+  const r = spawnSync(process.execPath, [script, "--debt", "--captures", join(dir, "missing")], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
 });

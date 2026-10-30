@@ -17,6 +17,7 @@ import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
 import { bucketOf } from "../../activity/activityBucket.ts";
 import { isFlagged } from "../sessions/followUpFacts.ts";
+import type { ListRead } from "../../listRead.ts";
 
 /** A session's status bucket — `sessionFacts.tsx`'s `sessionStatus` values. */
 export type StatusBucket = "wait" | "limit" | "coding" | "done" | "exited";
@@ -252,6 +253,14 @@ export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readon
   order.sort((a, b) => (openByRepo ? (openByRepo.get(b) ?? 0) - (openByRepo.get(a) ?? 0) : 0)
     || a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
   return order.map((name) => ({ repoName: name, sessions: byName.get(name) ?? [] }));
+}
+
+/** What the launcher says in place of the repo list, or null when it has rows to draw. An unread
+ *  list is not a claim — a first boot said "No repos under host root." before the host was asked
+ *  (design round 2026-10-30 W4); the git screen's no-repo sheet reads the same `listRead`. */
+export function noReposWords(list: ListRead): string | null {
+  if (list === "rows") return null;
+  return list === "unread" ? "Waiting for the desktop's repo list." : "No repos under host root.";
 }
 
 /**

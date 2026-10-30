@@ -17,9 +17,9 @@ export function SourceWindows({ reading, online, ledger = false }: { reading: Us
   useEffect(() => {
     setDoc(null);
     if (!source || !online) return;
-    let live = true;
-    void ledgers.sourceHistory(source).then((d) => { if (live) setDoc(d); });
-    return () => { live = false; };
+    const ac = new AbortController();
+    void ledgers.sourceHistory(source, ac.signal).then((d) => { if (!ac.signal.aborted) setDoc(d); });
+    return () => ac.abort();
   }, [source, online, reading?.checkedAt]);
 
   if (!reading) {

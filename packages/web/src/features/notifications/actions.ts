@@ -6,7 +6,7 @@ import type { NotificationItem, NotificationKind, NotifyPrefs } from "@waterplan
 import { core, type CoreApi } from "../../sdk";
 import { viewerHandles } from "../../docKind";
 import { LS, lsBool, lsSetBool } from "../../storage";
-import { landOnExplain } from "../../gitLanding";
+import { landOnGit } from "../../gitLanding";
 import { backlogRepoFor, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipKeys, resolvedWords } from "./logic";
 import { heard, mutes, notifCut, notifFocus, notifs, pushInfo } from "./store";
 
@@ -156,7 +156,9 @@ export function openNotif(n: NotificationItem): void {
       c.nav.open("tokens");
       return;
     case "git": {
-      if (c.world.repos.some((r) => r.id === t.repoId)) { if (t.explain) landOnExplain(t.repoId); c.nav.openGit(t.repoId); }
+      // The git screen's state first, then the open (`landOnGit`): a view already open on this
+      // repo re-targets to the tapped failure; a closed one opens on it.
+      if (c.world.repos.some((r) => r.id === t.repoId)) landOnGit(t, c.nav.openGit);
       else showRow(n, "that repo is not in the list on this desktop any more");
       return;
     }

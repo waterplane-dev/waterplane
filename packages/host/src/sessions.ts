@@ -37,6 +37,7 @@ import * as turn from "./sessions/turn.js"; import * as askwatch from "./session
 import * as boxes from "./sessions/boxes.js"; import * as boxread from "./sessions/boxread.js";
 import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
+import { endSession } from "./sessions/endsession.js";
 import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions, withHostApi } from "./reposkill.js";
 import { env } from "./env.js"; import { answerTermQueries, lateQueryLog } from "./termqueries.js"; import { hostTermColors } from "./themeoverlay.js";
 /** Matches DECSET/DECRST private-mode sequences, e.g. `\x1b[?1049h`, `\x1b[?1000;1006h`. */
@@ -139,7 +140,7 @@ export class SessionManager extends EventEmitter {
       // turn.ts
       setTurn: (s, active, opts) => turn.setTurn(this.core, s, active, opts), checkIdle: (s) => turn.checkIdle(this.core, s),
       armTurnWatch: (s, seqAt) => turn.armTurnWatch(this.core, s, seqAt), setAsking: (s, ask) => askwatch.setAsking(this.core, s, ask), setCliSuggestion: (s, text) => askwatch.setCliSuggestion(this.core, s, text), checkAsking: (s) => askwatch.checkAsking(this.core, s), checkCliSuggestion: (s) => askwatch.checkCliSuggestion(this.core, s),
-      checkAgents: (s) => agentpoll.checkAgents(this.core, s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
+      checkAgents: (s) => agentpoll.checkAgents(this.core, s), retireAgentPoll: (s) => agentpoll.retireAgentPoll(s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
       // boxes.ts
       scheduleChecks: (s) => boxread.scheduleChecks(this.core, s), armPromptCheck: (s, delayMs) => boxread.armPromptCheck(this.core, s, delayMs), setAwaiting: (s, on) => boxread.setAwaiting(this.core, s, on),
       applyPrompt: (s, prompt) => boxread.applyPrompt(this.core, s, prompt), armLinksCheck: (s) => links.armLinksCheck(this.core, s), // + links.ts
@@ -415,62 +416,14 @@ export class SessionManager extends EventEmitter {
       if (session.detaching) {
         if (session.promptTimer) clearTimeout(session.promptTimer);
         if (session.idleTimer) clearTimeout(session.idleTimer);
-      if (session.agentTimer) clearTimeout(session.agentTimer);
+        this.core.retireAgentPoll(session);
         this.clearStopVerify(session);
         this.clearLimitTimer(session);
         this.stopClaudeIdWatch(session);
         return;
       }
-      console.log(exitReport(session.info, exitCode, signal, session.backend.bin())); // before teardown
-      session.info.running = false;
-      session.turnActive = false;
-      session.info.turnActive = false; // a dead PTY is never mid-turn
-      // …and never parked on a dialog. The verifier no longer clears these on
-      // output, so the exit path has to.
-      session.info.prompt = null;
-      session.info.awaitingInput = undefined;
-      session.info.asking = null; // nor waiting on an answer it can no longer read
-      session.info.cliSuggestion = null; // nor proposing a prompt nobody can type
-      session.info.login = null; delete session.info.links; delete session.info.awaitingCode; // a shell's links (`sessions/links.ts`) die with it
-      // The recorder's VT is freed, not its archive: `lines()` still answers
-      // from the state it has (what scrolled off, plus the last grid it read),
-      // so the scrollback of a session that just exited is still readable.
-      // Nothing will be added to it — the PTY is gone.
-      session.screenLog?.dispose();
-      record.finalizeCapture(this.core, session);
-      if (session.promptTimer) clearTimeout(session.promptTimer);
-      if (session.idleTimer) clearTimeout(session.idleTimer);
-      if (session.agentTimer) clearTimeout(session.agentTimer);
-      this.clearStopVerify(session);
-      this.clearLimitTimer(session);
-      this.stopClaudeIdWatch(session);
-      // Last chance to learn which conversation this was, so the reopen/recent
-      // entries below can target it exactly.
-      if (!session.info.claudeSessionId) this.adoptClaudeId(session, this.detectClaudeId(session));
-      // …and the same last chance for the other backend's own id, so a reader
-      // opened right after the session died still has a conversation to read.
-      if (!session.info.backendSessionId && namesStoreReader(session.backend)) {
-        this.adoptBackendId(session, this.detectBackendId(session));
-      }
-      // A real exit (claude quit / killed) ⇒ the tmux session is gone too; drop
-      // its metadata so a later rediscover doesn't try to re-attach a corpse.
-      this.deleteLive(id);
-      // Remember it as reopenable (newest-first, deduped per session — each
-      // conversation reopens individually via --resume <claudeSessionId>).
-      // Restores the same launch flags.
-      // No `exitCode`/`signal` on the row or the wire: the PTY we hold is the tmux
-      // CLIENT, whose code is 0 whatever the CLI exited with — passing it on would
-      // be a wrong number where the honest answer is "unknown" (absent). The
-      // client's own code still goes into `exitReport`'s log line, labelled as such.
-      this.roster.pushClosed(this.roster.closedRowOf(session, false, { by: session.closeBy ?? (session.killed ? undefined : this.resume.diedAtLimit(id) ? "limit" : "exited") }));
-      this.emit("updated", session.info);
-      this.emit("exit", id, null);
-      // Newer `claude` EXITS on a usage limit (prints the /usage-credits banner and
-      // quits) instead of parking at a wait-menu — so there's no live PTY for
-      // auto-continue to type into. Resurrect the conversation with `--continue`
-      // at the reset time so the session (and any backlog work) comes back on its
-      // own. Gated by auto-continue + the attempts cap; never for a user kill.
-      this.maybeScheduleResurrect(session);
+      const exitLine = exitReport(session.info, exitCode, signal, session.backend.bin());
+      endSession(this.core, session, { exitLine, exitCode, signal, diedAtLimit: (sid) => this.resume.diedAtLimit(sid) });
     });
 
     // Announce creation so clients learn about sessions made internally (e.g. by
@@ -484,17 +437,12 @@ export class SessionManager extends EventEmitter {
   private spawnBackend(id: string, cwd: string, cols: number, rows: number, args: string[], backend: BackendDescriptor, launchEnv?: Readonly<Record<string, string>>, dropEnv?: readonly string[]): IPty { return spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv); }
   private persistLive(m: LiveMeta): void { persistLive(this.core, m); }
   private loadLive(id: string): LiveMeta | null { return loadLive(this.core, id); }
-  private deleteLive(id: string): void { deleteLive(this.core, id); }
   private armOrphanSweep(): void { armOrphanSweep(this.core); }
 
   // ── conversation ids and the running model (sessions/convid.ts): one-line
   // delegations for `register`; slices reach them through `core`.
-  private detectClaudeId(s: Session): string | null { return detectClaudeId(this.core, s); }
-  private adoptClaudeId(s: Session, cid: string | null): void { adoptClaudeId(this.core, s, cid); }
   private watchClaudeId(s: Session): void { watchClaudeId(this.core, s); }
   private stopClaudeIdWatch(s: Session): void { stopClaudeIdWatch(s); }
-  private detectBackendId(s: Session): string | null { return detectBackendId(this.core, s); }
-  private adoptBackendId(s: Session, id: string | null): void { adoptBackendId(this.core, s, id); }
   private watchBackendId(s: Session): void { watchBackendId(this.core, s); }
 
   /**
@@ -577,7 +525,6 @@ export class SessionManager extends EventEmitter {
   // ── Resurrect a session that EXITED at the usage limit: `sessions/resume.ts` ──
 
   diedAtLimit(id: string): boolean { return this.resume.diedAtLimit(id); }
-  private maybeScheduleResurrect(s: Session): void { this.resume.maybeScheduleResurrect(s); }
 
   // ── Recent (cross-restart): `sessions/roster.ts` ─────────────────────
 

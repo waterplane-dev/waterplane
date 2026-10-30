@@ -29,7 +29,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   BUILTIN_PERIODS, DEFAULT_USAGE_BUDGET, budgetCeilings, budgetLimits, budgetVerdict, cleanBudget, leftoverCeiling, periodStates, withLimit,
-  type BudgetCeiling, type BudgetSpend, type BudgetVerdict, type KnownReset, type PeriodId, type PeriodState, type UsageBudget, type UsageInfo } from "@waterplane/shared";
+  type BudgetCeiling, type BudgetSpend, type BudgetSpendWhy, type BudgetVerdict, type KnownReset, type PeriodId, type PeriodState, type UsageBudget, type UsageInfo } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -46,7 +46,7 @@ export class BudgetStore {
    * account (`hasScrapedWindows`); both default to "nothing", which is exactly
    * the subscription-only behaviour that predates periods.
    */
-  constructor(root: string, private readUsage: () => UsageInfo | null, private spend: () => BudgetSpend = () => ({}), private scraped: () => boolean = () => true) {
+  constructor(root: string, private readUsage: () => UsageInfo | null, private spend: () => BudgetSpend = () => ({}), private scraped: () => boolean = () => true, private spendWhy: () => BudgetSpendWhy = () => ({})) {
     const dir = hostStateDir(root);
     mkdirSync(dir, { recursive: true });
     this.path = join(dir, "budget.json");
@@ -84,7 +84,7 @@ export class BudgetStore {
    * delivered and nobody awake to receive it.
    */
   verdict(now = Date.now()): BudgetVerdict {
-    return budgetVerdict(this.cfg, this.readUsage(), now, this.spend());
+    return budgetVerdict(this.cfg, this.readUsage(), now, this.spend(), this.spendWhy());
   }
 
   /** Every ceiling over right now, session first — the per-window truth
@@ -139,7 +139,7 @@ export class BudgetStore {
   changed(v: BudgetVerdict): boolean {
     const spend = this.spend();
     const usd = this.usdPeriods().map((p) => `${p.id}=${typeof spend[p.id] === "number" ? Math.round(spend[p.id]! * 100) : "-"}`).join(",");
-    const key = `${v.state}:${v.blocked}:${v.which ?? ""}:${v.pct ?? ""}:${v.max ?? ""}:${usd}`;
+    const key = `${v.state}:${v.blocked}:${v.which ?? ""}:${v.pct ?? ""}:${v.max ?? ""}:${usd}:${v.why ?? ""}`;
     if (key === this.lastKey) return false;
     this.lastKey = key;
     return true;

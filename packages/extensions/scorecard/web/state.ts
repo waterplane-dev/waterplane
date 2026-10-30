@@ -5,8 +5,9 @@
  * last error as text. The host's one push, `changed`, means "read that repo again".
  */
 import type { RepoTarget } from "@waterplane/shared";
-import { core, createStore, featureSheetId, openExternal, pluginClient, type PluginCallResult } from "@waterplane/sdk";
+import { core, createStore, featureSheetId, openExternal, pluginClient, type LeaveReason, type PluginCallResult } from "@waterplane/sdk";
 import type { ScoreView, ScorecardMethods } from "../shared/wire.mts";
+import { latest, leaveResets, remedyOutcome } from "./latest.ts";
 import { remedyWords, type ScoreCut } from "./logic.ts";
 
 export const SCORE_SHEET = featureSheetId("scorecard", "main");
@@ -18,6 +19,9 @@ export const views = createStore<ReadonlyMap<string, Read>>(new Map());
 export interface SheetState { repo: RepoTarget | null; cut: ScoreCut | null; err: string | null; busy: boolean }
 const EMPTY: SheetState = { repo: null, cut: null, err: null, busy: false };
 export const sheet = createStore<SheetState>(EMPTY);
+
+/** The one remedy call that may still open the backlog: a later call or leaving the sheet makes a pending reply stale. */
+const remedyToken = latest();
 
 const CHIP_TTL_MS = 5 * 60_000;
 const inflight = new Set<string>();
@@ -55,21 +59,37 @@ export const scoredAs = (repo: string, slug: string | null) => act(() => client.
 /** Ask Claude: the host files the remedy prompt in the backlog, waiting for a tap — and the backlog opens on that row. */
 export async function remedy(repo: string, check: string): Promise<void> {
   sheet.set((s) => ({ ...s, err: null }));
+  const token = remedyToken.begin();
+  const name = sheet.get().repo?.repoName ?? repo;
   const res = await client.call("remedy", { repo, check });
-  if (!res.ok) { fail(res); return; }
-  core().say.toast(remedyWords(check, res.result));
+  const out = remedyOutcome(remedyToken.current(token), res.ok ? { ok: true, text: remedyWords(check, res.result) } : res, name, check);
+  if (out.sheetErr !== null) fail({ ok: false, error: out.sheetErr });
+  if (out.toast !== null) core().say.toast(out.toast);
+  // Only a current reply navigates, and only if the sheet still shows that repo.
   const open = sheet.get().repo;
-  if (open?.id === repo) core().nav.openBacklogCut(open.worktreePath, [res.result.intentId], `Scorecard: ${check}`);
+  if (out.navigate && res.ok && open?.id === repo) core().nav.openBacklogCut(open.worktreePath, [res.result.intentId], `Scorecard: ${check}`);
 }
 
 export function openScorecard(repo: RepoTarget, cut: ScoreCut | null = null): void {
+  remedyToken.invalidate();
   sheet.set({ repo, cut, err: null, busy: false });
   core().nav.open(SCORE_SHEET);
   void client.read("read", { repo: repo.id }).then((res) => { if (res.ok) keep(repo.id, res.result); else fail(res); });
 }
 
 export const clearCut = () => sheet.set((s) => ({ ...s, cut: null }));
-export const closeScorecard = () => { sheet.set(EMPTY); core().nav.close(SCORE_SHEET); };
+/**
+ * The sheet's `onLeave`, told by the route whether it was CLOSED or COVERED (`leaveResets`). Both make a
+ * pending remedy reply stale; a cover keeps the state (its repo, re-reading on `changed`, a read error
+ * for Back), and a close — ×, Back, an unwind past it — resets it, so `changed` stops re-reading a repo
+ * nobody has open.
+ */
+export const leaveScorecard = (reason?: LeaveReason) => {
+  remedyToken.invalidate();
+  if (leaveResets(reason)) sheet.set(EMPTY);
+};
+/** The sheet's ×: one close; the reset arrives through `onLeave("close")`, the one place it happens. */
+export const closeScorecard = () => { core().nav.close(SCORE_SHEET); };
 export function openLink(url: string): void {
   if (!openExternal(url)) core().say.toast(`could not open ${url} — the browser blocked it`);
 }

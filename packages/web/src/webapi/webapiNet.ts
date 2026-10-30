@@ -97,7 +97,7 @@ export const netApi = {
 
   /** Other waterplane desktops the connected one can see on the tailnet (`host/tailnetpeers.ts`). */
   tailnet: {
-    peers: () => jget<TailnetPeersResponse>("/api/tailnet/peers", 12_000),
+    peers: (signal?: AbortSignal) => jget<TailnetPeersResponse>("/api/tailnet/peers", 12_000, signal),
   },
 
   // Pairing another phone, and the device ledger (`host/pair.ts`, `host/authroutes.ts`).

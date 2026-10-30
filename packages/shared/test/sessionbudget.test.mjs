@@ -213,3 +213,29 @@ test("native: judged on the source's own unit, by NAME, never converted", () => 
   // Claude's spark has no native figure.
   assert.equal(sessionBudgetVerdict(cfg, { usageTok: 5, costUsd: 1 }, null, 2).why, "unstated");
 });
+
+test("a percent budget refused for undated records says THAT, not that the window is too young (design round 4, r4-1 M2)", () => {
+  const c = sessionBudgetCal(usage(), { session: null, weekly: 40, sessionUndated: 3 }, NOW);
+  assert.equal(c.sessionUsdPerPct, null);
+  assert.equal(c.sessionUndated, 3);
+  assert.equal(c.weeklyUndated, undefined, "absent where none could fall in the window");
+  const s = sessionSpend("sessionPct", spark, c, NOW);
+  assert.equal(s.why, "undated");
+  const v = sessionBudgetVerdict({ unit: "sessionPct", max: 10, interrupt: true }, spark, c, NOW);
+  assert.equal(v.state, "unknown", "fails open: the documented degrade");
+  assert.equal(v.why, "undated");
+  const text = sessionBudgetText(v);
+  assert.match(text, /3 records it could not date/);
+  assert.doesNotMatch(text, /has not run enough/);
+  assert.match(text, /nothing is held$/);
+  // The weekly window has a figure: undated records in the 5-hour one do not touch it.
+  assert.equal(sessionBudgetVerdict({ unit: "weeklyPct", max: 99, interrupt: true }, spark, c, NOW).state, "ok");
+  // No undated records: the young-window sentence, as before.
+  const young = sessionBudgetVerdict({ unit: "sessionPct", max: 10, interrupt: true }, spark, { ...cal, sessionUsdPerPct: null }, NOW);
+  assert.equal(young.why, "noCalibration");
+});
+
+test("an unknown reason a newer host sends is a generic sentence, never undefined (design round 5, r4-1b L2)", () => {
+  assert.equal(sessionBudgetUnknownText("someFutureReason"), "can't tell: this budget could not be checked — nothing is held");
+  assert.equal(sessionBudgetText({ state: "unknown", unit: "usd", max: 2, spent: null, why: "someFutureReason" }), "can't tell: this budget could not be checked — nothing is held");
+});

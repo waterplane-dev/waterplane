@@ -28,7 +28,11 @@ export const BUDGET_WHY_SHORT: Record<SessionBudgetUnknown, string> = {
   notRunning: "not running",
   unstated: "backend states no figure",
   notClaude: "not claude's window",
+  undated: "ledger has undated records",
 };
+
+/** The chip's words for a reason a newer host sent and this bundle does not know. */
+export const BUDGET_WHY_UNKNOWN = "can't tell";
 
 /**
  * The budget field's sentence for a session whose backend does not spend from
@@ -79,7 +83,8 @@ export function budgetTagFacts(s: { running?: boolean; budget?: SessionBudgetInf
   if (v.state === "unknown") {
     const age = v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined;
     const why = v.why ?? "noSpark";
-    return { cls: "idle", text: `budget ? — ${BUDGET_WHY_SHORT[why]}`, title: sessionBudgetUnknownText(why, age, v.unit) };
+    // `?? BUDGET_WHY_UNKNOWN`: a newer host's reason this bundle has no words for.
+    return { cls: "idle", text: `budget ? — ${BUDGET_WHY_SHORT[why] ?? BUDGET_WHY_UNKNOWN}`, title: sessionBudgetUnknownText(why, age, v.unit, undefined, v.undated) };
   }
   return { cls: "ctx-ok", text: sessionBudgetChip(v), title: sessionBudgetText(v) };
 }

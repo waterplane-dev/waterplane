@@ -380,3 +380,15 @@ test("fanoutHintText: the week clause is omitted on null, never '0%'", () => {
   assert.ok(!/% of week/.test(fanoutHintText({ same: true, usd: 0, weekPct: 0, agentPct: 0, repos: 1 })));
   assert.match(fanoutHintText({ same: true, usd: 5, weekPct: 0.35, agentPct: 0, repos: 1 }), /≈ 0\.3% of week|≈ 0\.4% of week/);
 });
+
+test("hourFloor floors to the local hour in a half-hour zone", () => {
+  const prev = process.env.TZ;
+  process.env.TZ = "Asia/Kolkata";
+  try {
+    assert.equal(hourFloor(Date.parse("2026-10-06T10:50:00Z")), Date.parse("2026-10-06T10:30:00Z"));
+  } finally {
+    // Assigning undefined would set the STRING "undefined" (UTC) for every later test.
+    if (prev === undefined) delete process.env.TZ;
+    else process.env.TZ = prev;
+  }
+});

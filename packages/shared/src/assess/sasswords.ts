@@ -20,6 +20,9 @@ export function assessVerdictLabel(v: AssessVerdict): string {
     case "merged": return "merged with others";
     case "wanted": return "still wanted";
     case "unclear": return "could not tell";
+    // The verdict rides on the host-stored proposal; a newer host's word
+    // reaches an older phone with no case for it.
+    default: return "a verdict this app version cannot name";
   }
 }
 
@@ -36,6 +39,7 @@ export function downgradeText(d: AssessDowngrade): string {
     case "merge-conflict": return "left undecided: more than one outcome claimed it";
     case "merge-dropped": return "left undecided: the merge it was part of did not stand";
     case "merge-unknown": return "left undecided: it names a merge that does not exist";
+    default: return "left undecided: for a reason this app version cannot name";
   }
 }
 

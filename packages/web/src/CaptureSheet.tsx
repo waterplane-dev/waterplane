@@ -1,3 +1,4 @@
+import { RUN_GONE_NOTE, selectRun } from "./runSelect";
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   CloudOff, Download, Eye, FileText, Loader, Pencil, Play, Plus, ScanEye, ShieldCheck, Sparkles, Square, Trash2, X,
@@ -181,7 +182,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
   // claim about which runs exist, and a pane you opened should not close itself
   // because a newer run pushed its row past the eighth.
   const [sel, setSel] = useState<string | null>(null);
-  const selRun = shownRuns.find((r) => r.runId === sel) ?? shownRuns[0] ?? null;
+  const { run: selRun, gone: selGone } = selectRun(shownRuns, sel, true, runs);   // an open run stays open while it is in the list, even if its status left the cut; only a run gone from the list selects nothing
   const logRef = useRef<HTMLPreElement>(null);
 
   // Follow the tail of the live log.
@@ -458,6 +459,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
           </>
         )}
 
+        {selGone && <Hint>{RUN_GONE_NOTE}</Hint>}
         {selRun && (
           <div className="build-run">
             <Hint>
@@ -526,6 +528,9 @@ function targetDetail(t: CaptureTarget): string {
     case "android": return t.serial ?? "";
     case "garmin": return [t.screen, t.device].filter(Boolean).join(" · ");
     case "window": return t.windowTitle ?? "";
+    // `backend` is stored on the host: one a newer host adds reaches this
+    // build with no case for it, and still says something.
+    default: return "a target this app version cannot show";
   }
 }
 

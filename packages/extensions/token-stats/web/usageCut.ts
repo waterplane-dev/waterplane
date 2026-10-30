@@ -38,9 +38,9 @@
  * three different sentences.
  */
 import {
-  addCost, addTotals, normalizeModel, tokenTotal, windowStartHour, zeroCost, zeroTotals,
+  addCost, addTotals, hourKeyMs, normalizeModel, tokenTotal, undatedSince, undatedText, undatedWhy, windowStartHour, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenGroup, type TokenHour, type TokenStatsDoc,
-  type TokenTotals, type TokenWindowSeries, type UsageInfo,
+  type TokenTotals, type TokenWindowsDoc, type TokenWindowSeries, type UsageInfo,
 } from "@waterplane/shared";
 
 const HOUR_MS = 3_600_000;
@@ -93,7 +93,9 @@ export type CutRefusal =
    *  over, so its own start is no longer the one running. */
   | { why: "rolled"; resetAt: number }
   /** The host's hour record does not reach back to the start of the window. */
-  | { why: "short"; fromHour: number; hoursFrom: number | null };
+  | { why: "short"; fromHour: number; hoursFrom: number | null }
+  /** The ledger holds records with no readable hour (`TokenStatsDoc.undated`): any cut is a floor. */
+  | { why: "undated"; undated: unknown };
 
 export interface WindowCut {
   id: LiveWindowId;
@@ -155,7 +157,7 @@ export interface WindowCut {
  */
 export function windowCut(
   spec: (typeof LIVE_WINDOWS)[number],
-  doc: Pick<TokenStatsDoc, "hours" | "hoursFrom" | "models"> | null,
+  doc: Pick<TokenStatsDoc, "hours" | "hoursFrom" | "models" | "undated" | "undatedUntil" | "undatedLogs"> | null,
   usage: UsageInfo | null,
   now: number,
 ): WindowCut | CutRefusal {
@@ -168,6 +170,9 @@ export function windowCut(
 
   const openedAt = resetAt - spec.lenMs;
   const fromHour = windowStartHour(openedAt);
+  // Only an undated record whose log was written since the cut's first hour can be in it.
+  const undated = undatedSince(doc, fromHour);
+  if (undatedWhy(undated)) return { why: "undated", undated };
   const hoursFrom = doc?.hoursFrom ?? null;
   // `hoursFrom` is local midnight of the first day on the wire. The record
   // reaching back further than the cut is the whole condition — an empty
@@ -240,14 +245,6 @@ export function foldModels(hours: readonly { byModel?: ModelSlice[] }[], all: To
     .sort((a, b) => tokenTotal(b) - tokenTotal(a));
 }
 
-/** `YYYY-MM-DDTHH` in the host's local zone back to epoch ms. The same
- *  local-zone assumption `dayToMs` makes, one level down. */
-function hourKeyMs(hour: string): number {
-  const [y, mo, d] = hour.slice(0, 10).split("-").map(Number);
-  const h = Number(hour.slice(11, 13));
-  return new Date(y, (mo || 1) - 1, d || 1, h || 0, 0, 0, 0).getTime();
-}
-
 /**
  * What the cut covers, as a sentence — the one place the hour-edge caveat is
  * worded, so the readout under the limit bar and the scope line under the hero
@@ -307,6 +304,7 @@ export function cutRefusalText(spec: (typeof LIVE_WINDOWS)[number], r: CutRefusa
   if (r.why === "no-reset") {
     return `The /usage screen did not name a reset time for ${spec.long}, so there is no instant to count from.`;
   }
+  if (r.why === "undated") return undatedText(r.undated) ?? "";
   if (r.why === "rolled") {
     return `The last /usage reading described a window that has since reset, so the one running now has no known start. Re-read it above.`;
   }
@@ -353,7 +351,15 @@ export interface WindowCell {
   resetAt: number;
   totals: TokenTotals | null;
   cost: CostBreakdown | null;
+  /** Set when records the ledger could not date could fall in this window (shared
+   *  `undatedSince` from its first hour): the sentence it shows INSTEAD of a figure, and
+   *  `totals`/`cost` are null. A third state beside a reading and "outside the record". */
+  refused?: string;
 }
+
+/** A host grid with the ledger's undated fields riding on it (`windowGrids`), so each box can
+ *  be asked on its own whether a record with no date could fall in it. */
+export type GridSeries = TokenWindowSeries & { undated?: number; undatedUntil?: number; undatedLogs?: Array<[number, number]> };
 
 /** How many boxes a grid may draw at most. Four months of five-hour windows is
  *  ~570, which is a legible heatmap on a phone; the cap is the guard against a
@@ -369,7 +375,7 @@ export const MAX_CELLS = 800;
  * before that is not a quiet night, it is a period nobody has a ledger for, and
  * an empty box there would be a claim.
  */
-export function windowGrid(series: TokenWindowSeries | null): WindowCell[] {
+export function windowGrid(series: GridSeries | null): WindowCell[] {
   if (!series || !(series.lenMs > 0) || !(series.anchor > 0)) return [];
   const rows = new Map(series.windows.map((w) => [w.back, w]));
   const out: WindowCell[] = [];
@@ -385,17 +391,57 @@ export function windowGrid(series: TokenWindowSeries | null): WindowCell[] {
     // counted: half a window drawn as a whole one is the box that reads
     // quietest on the heatmap and is the one with the least behind it.
     const covered = series.oldestHour <= windowStartHour(openedAt);
+    // Covered, but a record with no date could be in it: the box refuses on its own, and its
+    // neighbours that no such record can reach keep their numbers.
+    const refused = covered ? undatedText(undatedSince(series, windowStartHour(openedAt))) : null;
+    const counted = covered && !refused;
     out.push({
       back,
       openedAt,
       resetAt,
-      totals: covered ? (row ? cellTotals(row) : zeroTotals()) : null,
-      cost: covered ? (row?.cost ?? zeroCost()) : null,
+      totals: counted ? (row ? cellTotals(row) : zeroTotals()) : null,
+      cost: counted ? (row?.cost ?? zeroCost()) : null,
+      ...(refused ? { refused } : {}),
     });
   }
   // Ascending in TIME: oldest first, the window running now last, which is the
   // direction a reader scans a history in.
   return out.reverse();
+}
+
+/**
+ * The grid as a heatmap DRAWS it: the boxes no undated record can fall in, and ONE sentence
+ * (`refused`) for the windows before them that it could — never a striped box per window.
+ *
+ * A wall of identical stripes says one thing N times and looks like N findings. A record is never
+ * later than its log's mtime, so the windows it could fall in are always the OLDEST run of the grid
+ * (`undatedSince` only shrinks as a window opens later): every window up to the one its newest
+ * log was written in. A host from before the per-log dates (`undatedUntil`/`undatedLogs`,
+ * f99f4328 → e976a22d) sends a bare `undated`, which makes that run the whole grid; so does a log
+ * written inside the window running now. The sentence is the oldest box's (the largest count).
+ * Only where the desktop sent no dates at all does it mention the host's age, and only as an if:
+ * today's host sends the same bare shape when it cannot read a log's mtime. The windows in the run
+ * stay reachable from the stepper (`seriesCut` refuses each in the same words); outlined boxes the
+ * record does not reach are older still and go with the run.
+ */
+export function heatGrid(series: GridSeries | null): { cells: WindowCell[]; refused: string | null } {
+  const cells = windowGrid(series);
+  let last = -1;
+  cells.forEach((c, i) => { if (c.refused) last = i; });
+  if (last < 0) return { cells, refused: null };
+  const run = cells.slice(0, last + 1).filter((c) => c.refused);
+  const n = run.length;
+  const lead = last === cells.length - 1
+    ? "No past window has a figure."
+    : `${n === 1 ? "The window" : `The ${n} windows`} before these boxes ${n === 1 ? "has" : "have"} no figure.`;
+  const noDates = series?.undatedUntil == null && series?.undatedLogs == null;
+  return {
+    cells: cells.slice(last + 1),
+    refused: `${lead} ${run[0].refused}` + (noDates
+      ? " The desktop sent no date for the logs holding them, so no window can be told from another."
+        + " A host older than this phone never sends one: if this desktop's is older, restarting it there lets each window answer on its own."
+      : ""),
+  };
 }
 
 /** A `TokenWindow` back to plain totals. The row spreads `TokenTotals` inline
@@ -406,6 +452,23 @@ function cellTotals(w: { input: number; output: number; cacheRead: number; cache
     input: w.input, output: w.output, cacheRead: w.cacheRead,
     cacheWrite: w.cacheWrite, cacheWrite1h: w.cacheWrite1h, turns: w.turns,
   };
+}
+
+/**
+ * The host's past-window grids by id, each carrying the ledger's undated fields so a box an
+ * undated record could fall in refuses on its OWN (`windowGrid`, `seriesCut`) — never the whole
+ * grid blanked for one record somewhere.
+ */
+export function windowGrids(doc: TokenWindowsDoc | null | undefined): Map<LiveWindowId, GridSeries> {
+  if (!doc) return new Map();
+  const u = {
+    ...(doc.undated != null ? { undated: doc.undated } : {}),
+    ...(doc.undatedUntil != null ? { undatedUntil: doc.undatedUntil } : {}),
+    ...(doc.undatedLogs != null ? { undatedLogs: doc.undatedLogs } : {}),
+  };
+  return new Map((doc.series ?? [])
+    .filter((se): se is TokenWindowSeries & { id: LiveWindowId } => se.id === "session" || se.id === "week")
+    .map((se) => [se.id, { ...se, ...u }]));
 }
 
 /**
@@ -421,7 +484,7 @@ function cellTotals(w: { input: number; output: number; cacheRead: number; cache
  */
 export function seriesCut(
   spec: (typeof LIVE_WINDOWS)[number],
-  series: TokenWindowSeries | null,
+  series: GridSeries | null,
   back: number,
   all: TokenGroup[],
 ): WindowCut | CutRefusal {
@@ -432,6 +495,9 @@ export function seriesCut(
   if (series.oldestHour == null || series.oldestHour > fromHour) {
     return { why: "short", fromHour, hoursFrom: series.oldestHour };
   }
+  // The box's own refusal (`windowGrid`): the same count, the same words as the live cut's.
+  const undated = undatedSince(series, fromHour);
+  if (undatedWhy(undated)) return { why: "undated", undated };
   const row = series.windows.find((w) => w.back === back);
   const totals = row ? cellTotals(row) : zeroTotals();
   // Absent ⇒ an older host that folds no split. An EMPTY array is a window that

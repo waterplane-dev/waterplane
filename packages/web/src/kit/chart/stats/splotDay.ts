@@ -7,6 +7,7 @@
 
 import { yScale, plotBox, plotY, nearestByTime } from "../chartScale.ts";
 import { f1, polyline, closedArea } from "../chartPath.ts";
+import { addLocalDays } from "@waterplane/shared";
 
 // ── the cumulative / daily plot ───────────────────────────────────────────
 
@@ -153,7 +154,6 @@ export function nearestDay(p: DayPlot, pts: DayPoint[], clientX: number): DayPoi
  */
 export function rollingMean(pts: DayPoint[], days = 7): DayPoint[] {
   if (pts.length < 2 || days < 2) return [];
-  const span = (days - 1) * DAY_MS;
   const out: DayPoint[] = [];
   const first = pts[0].t;
   let lo = 0;
@@ -161,8 +161,12 @@ export function rollingMean(pts: DayPoint[], days = 7): DayPoint[] {
   for (let i = 0; i < pts.length; i++) {
     sum += pts[i].v;
     // Only a point whose whole window lies inside the series is emitted.
-    while (lo <= i && pts[lo].t < pts[i].t - span) { sum -= pts[lo].v; lo++; }
-    if (pts[i].t - first < span) continue;
+    // The window opens `days - 1` CALENDAR days back (a 25 h day is still one day).
+    // Snapped to that day's start: where DST switches at midnight the day's own `t`
+    // is 01:00 and the point six days back (00:00) would read as outside the window.
+    const open = new Date(addLocalDays(pts[i].t, -(days - 1))).setHours(0, 0, 0, 0);
+    while (lo <= i && pts[lo].t < open) { sum -= pts[lo].v; lo++; }
+    if (open < first) continue;
     out.push({ t: pts[i].t, day: pts[i].day, v: sum / days });
   }
   return out;

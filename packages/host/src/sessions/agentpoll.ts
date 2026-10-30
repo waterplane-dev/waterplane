@@ -47,6 +47,7 @@ export function agentsSourceSession(s: Pick<Session, "spawnedAt"> & { info: Pick
  * a tick per attached client.
  */
 export function checkAgents(core: SessionCore, s: Session): void {
+  if (core.sessions.get(s.info.id) !== s) { retireAgentPoll(s); return; } // not the live one: never poll, publish or arm
   if (s.agentTimer) { clearTimeout(s.agentTimer); s.agentTimer = null; }
   // Any call supersedes a still-pending `ps` read from an earlier one: that one
   // must not publish an older picture over this one, nor arm a second timer.
@@ -92,12 +93,11 @@ export function checkAgents(core: SessionCore, s: Session): void {
     // `ps` it replaced cost ~50 ms a time. The rest of the tick is unchanged
     // and picks up when the table is in (`publishAgents`).
     const pid = record.pid;
-    void readPsTableAsync()
+    void agentPollSeams.readPs()
       .then((psRows) => readShellList(pid, s.info.cwd, s.info.claudeSessionId, cli, Date.now(), psRows))
       .catch((): SessionShell[] | undefined => undefined)
       .then((shellList) => {
-        if (agentGen.get(s) !== gen) return;               // a newer tick owns the result and the timer
-        if (!s.info.running) { checkAgents(core, s); return; } // ended meanwhile: the early branch retires the fields
+        if (agentGen.get(s) !== gen || core.sessions.get(s.info.id) !== s) return;               // a newer tick owns the result and the timer
         publishAgents(core, s, rows, shells, cli, shellList);
       });
     return;
@@ -107,6 +107,19 @@ export function checkAgents(core: SessionCore, s: Session): void {
 
 /** Per-session generation of the latest `checkAgents` call — see there. */
 const agentGen = new WeakMap<Session, number>();
+
+/** The process-table read, replaceable so a test can hold it in flight. */
+export const agentPollSeams = { readPs: (): ReturnType<typeof readPsTableAsync> => readPsTableAsync() };
+
+/**
+ * The poll's owner lifecycle: a session that stops being the live one (detach,
+ * remove) retires its poll. Bumps the generation so an in-flight `ps` read
+ * publishes nothing and arms nothing, and clears the pending timer.
+ */
+export function retireAgentPoll(s: Session): void {
+  agentGen.set(s, (agentGen.get(s) ?? 0) + 1);
+  if (s.agentTimer) { clearTimeout(s.agentTimer); s.agentTimer = null; }
+}
 
 /** The second half of `checkAgents`: compare, broadcast on a change, re-arm. */
 function publishAgents(
@@ -131,7 +144,8 @@ function publishAgents(
   // agent launched mid-turn. The poll is a readdir per busy session plus the
   // shared, memoised `ps`.
   if (!rows.length && !shells && !(shellList && shellList.length) && cli !== "busy" && !s.turnActive) return;
-  s.agentTimer = setTimeout(() => { s.agentTimer = null; checkAgents(core, s); }, AGENT_POLL_MS);
+  if (core.sessions.get(s.info.id) !== s) return;
+  s.agentTimer = setTimeout(() => { s.agentTimer = null; if (core.sessions.get(s.info.id) === s) checkAgents(core, s); }, AGENT_POLL_MS);
   s.agentTimer.unref?.();
 }
 

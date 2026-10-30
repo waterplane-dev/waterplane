@@ -332,7 +332,7 @@ export async function afterUpload(relPath: string, note?: string): Promise<void>
     flow.backlogEdit = null;
     flow.ret = "session";
     const next = swapImageRef(text, oldPath, ref);
-    ann.set(null); core().nav.open("backlog");
+    ann.set(null); goTo("backlog");
     // `backlog.update` is not a durable op (no ackId, nothing on the queue can
     // carry it), so the receipt is `liveSend`'s: said only when the frame left
     // on an open socket. A bare `send` offline sat in ws.ts's RAM buffer — lost
@@ -369,7 +369,7 @@ export function afterText(text: string): void {
     const { id, oldPath, text: row } = flow.backlogEdit;
     flow.backlogEdit = null;
     flow.ret = "session";
-    ann.set(null); c.nav.open("backlog");
+    ann.set(null); goTo("backlog");
     c.conn.liveSend({ t: "backlog.update", id, text: swapImageRef(row, oldPath, block) }, "the image is now its text",
       "no connection — the backlog row lives on the desktop and still names the image");
     return;

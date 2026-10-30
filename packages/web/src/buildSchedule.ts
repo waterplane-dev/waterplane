@@ -102,19 +102,31 @@ export function buildScheduleBlocker(build: BuildConfig, vals: Record<string, st
  * same rule); a new one mints its own, client-side, so an offline replay
  * overwrites rather than adding a second nightly build. With no name typed the
  * rule takes the build's (the host does the same).
+ *
+ * **An edit is a PATCH over the stored rule** (`editing`): it starts from that
+ * entry and overrides only what this form edits — the name, the clock, the
+ * grace, wait-until-free and the build's values. Everything the form does not
+ * show (`enabled`, `keepAfterRun`, `createdAt`, …) is the stored one, never a
+ * default: a rebuilt-from-the-form entry said `enabled: true` and dropped
+ * `keepAfterRun`, so saving a paused rule re-armed it (bughunt 2026-10-29
+ * BLD-1, "nothing applies itself"). The host carries the same fields when a
+ * draft is silent, so neither side decides a field it does not own.
  */
 export function buildScheduleEntry(o: {
-  id: string; repoDir: string; build: BuildConfig; vals: Record<string, string>;
+  id: string; editing?: ScheduleEntry | null; repoDir: string; build: BuildConfig; vals: Record<string, string>;
   when: Extract<SendWhen, { kind: "at" }>; preview: number | null; now: number;
 }): ScheduleEntry {
   const { values } = resolveParamValues(o.build.params, o.vals);
+  const base: ScheduleEntry = o.editing
+    ? { ...o.editing }
+    : { id: o.id, name: "", enabled: true, rule: o.when.rule, action: { kind: "build", repoDir: o.repoDir, buildId: o.build.id }, createdAt: o.now, nextAt: null, graceMin: o.when.graceMin };
+  delete base.waitUntilFree;
   return {
+    ...base,
     id: o.id,
     name: o.when.name?.trim() || o.build.name,
-    enabled: true,
     rule: o.when.rule,
     action: { kind: "build", repoDir: o.repoDir, buildId: o.build.id, ...(Object.keys(values).length ? { params: values } : {}) },
-    createdAt: o.now,
     nextAt: o.preview,
     graceMin: o.when.graceMin,
     ...(o.when.waitUntilFree ? { waitUntilFree: true } : {}),

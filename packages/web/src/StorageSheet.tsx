@@ -46,7 +46,7 @@
 import { useEffect, useState } from "react";
 import { HardDrive, Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
 import {
-  HOST_STORE_KIND_LABEL, clearableRows, hostStoreButtonText, hostStoreResultText,
+  HOST_STORE_KIND_LABEL, clearableRows, wordOf, hostStoreButtonText, hostStoreResultText,
   scopeChipText, surveyHeadText,
   type HostStoreReport, type HostStoreRow, type SweepScope, type TransportSurvey,
 } from "@waterplane/shared";
@@ -339,7 +339,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                     <span className="sweep-path">{r.label}</span>
                     <span className="sweep-meta">{tallyText(r.count, r.bytes, "file")}</span>
                   </div>
-                  <Hint>{HOST_STORE_KIND_LABEL[r.kind]} — {r.cost}</Hint>
+                  <Hint>{wordOf(HOST_STORE_KIND_LABEL, r.kind, "a store this app version cannot name")} — {r.cost}</Hint>
                   {r.cant ? (
                     <Unavailable className="form-hint" cants={[{ label: `clear ${r.label}`, reason: r.cant }]} />
                   ) : r.count > 0 ? (

@@ -96,7 +96,16 @@ case "$cl" in
   ""|/mnt/*)
     if command -v curl >/dev/null; then
       say "installing the Linux Claude Code (claude.ai/install.sh)…"
-      curl -fsSL --retry 3 https://claude.ai/install.sh | bash || { say "Claude Code install failed"; fail=1; }
+      # Pinned by sha256 (same pin as deploy/docker/entrypoint.sh): a changed installer is refused,
+      # never run. After reading the new one, set CLAUDE_INSTALL_SHA256 to its hash.
+      sum="${CLAUDE_INSTALL_SHA256:-3a68d3406cf674e17bed1733a4dcf37805e2e47d87417700007d7e1aa766a944}"
+      f="$(mktemp)"
+      if curl -fsSL --retry 3 -o "$f" https://claude.ai/install.sh \
+         && echo "$sum  $f" | sha256sum -c --quiet - \
+         && bash "$f"; then :
+      else say "Claude Code install failed, or install.sh no longer matches CLAUDE_INSTALL_SHA256"; fail=1
+      fi
+      rm -f "$f"
     fi
     cl="$(command -v claude 2>/dev/null || true)";;
 esac

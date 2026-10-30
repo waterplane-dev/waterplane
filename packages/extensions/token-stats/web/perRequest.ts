@@ -18,7 +18,7 @@
  *   would make an unpriced model look like a cheap one. What was left out is
  *   COUNTED, so the screen can say so.
  */
-import type { TokenDay, TokenGroup } from "@waterplane/shared";
+import { localDaysBetween, type TokenDay, type TokenGroup } from "@waterplane/shared";
 import type { DayPoint } from "@waterplane/kit";
 
 export const PER_REQ_DAYS = 7;
@@ -157,7 +157,7 @@ export function repoPerRequest(
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const back = (n: number) => { const d = new Date(today); d.setDate(d.getDate() - n); return keyOf(d.getTime()); };
   const shift = (key: string, n: number) => { const d = new Date(dayMsOf(key)); d.setDate(d.getDate() - n); return keyOf(d.getTime()); };
-  const len = span ? Math.round((dayMsOf(span.to) - dayMsOf(span.from)) / 86_400_000) + 1 : 0;
+  const len = span ? localDaysBetween(dayMsOf(span.from), dayMsOf(span.to)) + 1 : 0;
   const k0 = span ? span.to : back(0);
   const k7 = span ? shift(span.from, 1) : back(7);
   const k14 = span ? shift(span.from, 1 + len) : back(14);

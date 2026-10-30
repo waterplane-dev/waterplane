@@ -29,6 +29,7 @@ import { demoTopConvos } from "../host/ledger.ts";
 import type { DemoModel } from "../host/model.ts";
 import { DAY, GARDEN, HOUR, MIN, NOTES, TRAIL, bullet, repos, screen, tool } from "./garden.ts";
 import { CLAUDE_BANNER, claudeBanner } from "../host/banner.ts";
+import { fanoutDoc, fanoutLeft, fanoutSpark } from "./numbers-fanout.ts";
 
 /** Window the demo session runs in, and what the series ends at. */
 export const WINDOW_TOK = 200_000;
@@ -37,6 +38,9 @@ export const LAST_TOK = 78_000;
 export function numbers(now: number): DemoScenario {
   const ago = (ms: number) => now - ms;
   const g1 = "demo-g1";
+  // A long fan-out session beside it, for the context sheet's agent lanes, skills and carried weight.
+  const g2 = "demo-g2";
+  const fan = fanoutDoc(now, g2);
 
   // 14 requests over the last hour and a half: a climb, one auto-compaction, a climb again.
   const climb = [18_000, 26_000, 35_000, 44_000, 55_000, 67_000, 81_000, 96_000, 112_000, 124_000];
@@ -53,6 +57,13 @@ export function numbers(now: number): DemoScenario {
         idle: true, idleSince: ago(6 * MIN), createdAt: ago(100 * MIN), claudeSessionId: "c-garden-4", contextLeft: 61, starred: false,
         firstPrompt: "group the tasks by day, today first", lastPrompt: "add a test for the empty day",
       },
+      {
+        id: g2, cwd: GARDEN, title: "todo-garden · main", tabTitle: "Design sweep", remoteControl: true, running: true,
+        idle: true, idleSince: fan.updatedAt, createdAt: fan.samples[0].t, claudeSessionId: "c-garden-fan",
+        contextLeft: fanoutLeft(fan), contextSpark: fanoutSpark(fan), starred: false,
+        firstPrompt: "improve the app's design in rounds, until I stop you",
+        lastPrompt: "finish the loose ends and tell me what is still left",
+      },
     ],
     screens: {
       [g1]: screen(
@@ -63,6 +74,11 @@ export function numbers(now: number): DemoScenario {
           tool("Update", "src/store/tasks.test.ts", "Added 14 lines") +
           tool("Bash", "npm test -- tasks", "PASS src/store/tasks.test.ts (10 tests)") +
           bullet("Done. An empty day draws nothing; the test pins it.") +
+          "\r\n",
+      ),
+      [g2]: screen(
+        `${claudeBanner("~/dev/todo-garden", "Opus 5.5")}> finish the loose ends and tell me what is still left\r\n` +
+          bullet("Three loose ends closed; two need a decision from you, listed below.") +
           "\r\n",
       ),
     },
@@ -112,6 +128,8 @@ export function numbers(now: number): DemoScenario {
           events: [{ t: compactAt, kind: "compact", trigger: "auto", preTok: 130_000, postTok: 30_000 }],
           windowTok: WINDOW_TOK, windowFrom: "model", model: "sonnet", autoCompactTok: 160_000, truncated: false, turns: 14,
         },
+        // The model's context map is untyped JSON per id; the document is served as-is.
+        [g2]: fan as unknown as { updatedAt: number },
       },
     },
     banner: CLAUDE_BANNER,

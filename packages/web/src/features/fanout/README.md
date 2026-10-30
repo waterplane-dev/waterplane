@@ -14,6 +14,10 @@ Opened from the launcher header's split button and from Activity.
   `fanout` lane so two sweeps queued offline go out in order, and a `fu:<runId>` lane per run so a
   follow-up lands after what it follows), `scheduleFanout` (`nav.openSend`, nothing queued),
   `openFanoutSession`.
+  `runFanout` mints its ackId and queues with `track: true`, answering that id: the sheet reads the
+  fire's fate (`useFireFate`, `core/queue/fireFate.ts`) and opens the run the receipt's `runId`
+  names (`fanoutMine`) — a failed or dismissed row says *not sent* without a spinner, and a run
+  another device started is never taken for this tap's (design review 2026-10-30 W2).
 - `logic.ts` — the lanes and the two receipts, tested in `logic.test.mjs`.
 - `FanoutCostHint.tsx` (words in `logic.ts`'s `fanoutCostWords`) — one sentence above Run: what the last similar finished sweep cost
   (`pickSimilarRun` → `GET /api/costwindow` over its span → `foldLaunches` → `fanoutHintText`). A reading,

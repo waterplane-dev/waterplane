@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { discoverTargets, listTargets } from "../dist/repos.js";
+import { cachedTargets, discoverTargets, listTargets } from "../dist/repos.js";
 
 function fakeRepo(dir, head) {
   mkdirSync(join(dir, ".git"), { recursive: true });
@@ -55,4 +55,17 @@ test("repolist: the listing shows a repo made a moment ago (a quick scan is neve
   assert.equal((await listTargets(root)).length, 1);
   fakeRepo(join(root, "b"), "ref: refs/heads/main\n");
   assert.deepEqual((await listTargets(root)).map((t) => t.repoName).sort(), ["a", "b"]);
+});
+
+test("repolist: cachedTargets answers the last finished scan and walks only when there is none", async () => {
+  const root = mkdtempSync(join(tmpdir(), "repolist-"));
+  fakeRepo(join(root, "a"), "ref: refs/heads/main\n");
+  assert.deepEqual((await cachedTargets(root)).map((t) => t.repoName), ["a"], "no scan yet: it scans");
+  fakeRepo(join(root, "b"), "ref: refs/heads/main\n");
+  assert.deepEqual((await cachedTargets(root)).map((t) => t.repoName), ["a"], "the cached scan, no new walk");
+  await discoverTargets(root);
+  assert.deepEqual((await cachedTargets(root)).map((t) => t.repoName).sort(), ["a", "b"], "any newer scan is what it reads");
+  const copy = await cachedTargets(root);
+  copy[0].repoName = "mutated";
+  assert.notEqual((await cachedTargets(root))[0].repoName, "mutated", "each caller gets its own copies");
 });

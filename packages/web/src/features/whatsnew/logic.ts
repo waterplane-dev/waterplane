@@ -7,7 +7,7 @@
  * **A fact not read is null, and a null fact draws no state line** — never a
  * guess: the row then shows its title, its line and its default door.
  */
-import type { WeekBurnStatus } from "@waterplane/shared";
+import { gitVerbWords, isRepoChipKey, parseAttentionKey, type WeekBurnStatus } from "@waterplane/shared";
 import type { SheetId } from "../../sdk";
 import { APK_0_1_8, apkNeedWords, apkOk, cmpVersion, versionParts } from "../../apkGate.ts";
 import { SHEET } from "../../sheetNames.ts";
@@ -138,16 +138,16 @@ export function launcherLine(app: string, r: Release, f: Pick<HubFacts, "native"
 }
 
 /**
- * The failure items as repos and verbs, from their attention keys (`git:<repo>:<verb>`,
- * `build:<repo>:<buildId>`). An item whose key does not parse is left out of the words AND the cut.
+ * The failure items as repos and verbs, from their attention keys (`parseAttentionKey`, the
+ * one reader). A failed push names its branch when the host said one (`gitVerbWords`), so two
+ * branches' failures read apart. An item whose key does not parse, or names a PR, is left out of the words AND the cut.
  */
-export function failuresOf(items: readonly { id: string; key?: string }[], repoName: (repoId: string) => string | null): Failure[] {
+export function failuresOf(items: readonly { id: string; key?: string; branch?: string }[], repoName: (repoId: string) => string | null): Failure[] {
   const out: Failure[] = [];
   for (const n of items) {
-    const m = /^(git|build):(.+):([^:]+)$/.exec(n.key ?? "");
-    if (!m) continue;
-    const kind = m[1] as "git" | "build";
-    out.push({ id: n.id, repoId: m[2], repoName: repoName(m[2]) ?? m[2], verb: kind === "git" ? m[3] : "build", kind });
+    const k = parseAttentionKey(n.key);
+    if (!isRepoChipKey(k)) continue; // a PR's notice is not a repo failure
+    out.push({ id: n.id, repoId: k.repoId, repoName: repoName(k.repoId) ?? k.repoId, verb: k.kind === "git" ? gitVerbWords(k.verb, n.branch) : "build", kind: k.kind });
   }
   return out;
 }

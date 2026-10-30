@@ -248,7 +248,22 @@ export type IntentTrigger =
    * expire it. Set `graceMin` as "how long is this still worth starting", which
    * is what the send sheet's chips have always said it is.
    */
-  | { kind: "at"; rule: ScheduleRule; graceMin: number; keepAfterRun?: boolean }
+  | {
+    kind: "at"; rule: ScheduleRule; graceMin: number; keepAfterRun?: boolean;
+    /**
+     * Switched off by a person — the ONE owner of "paused". Written only by the
+     * pause switch (`schedule.setEnabled` → the host's `setArmed`), carried by
+     * an edit that is silent about it, read through `intentPaused`. A paused
+     * row also has `nextAt: null` (nothing is armed), but `nextAt: null` alone
+     * means only "not armed / spent" — it used to mean both, and a paused
+     * weekly rule re-timed as a one-off was then failed as spent (bughunt
+     * 2026-10-29 review D F1). Absent = not paused, or a host from before the
+     * flag (whose recurring weekly `nextAt: null` is stamped paused once, at
+     * disk load, by the host's `stampLegacyPause`; `intentPaused` reads only
+     * this flag).
+     */
+    paused?: true;
+  }
   /** The files the prompt names, and the instant we stop waiting for them. */
   | { kind: "files"; needs: string[]; deadlineAt: number }
   /** When the usage window allows it again. */

@@ -21,6 +21,8 @@ import { ArtifactPolicyRow, ArtifactRow } from "./BuildArtifacts";
 import { Button } from "./kit/Button";
 import { RowSub, Row, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { RUN_GONE_NOTE, ackOfFate, drawnRuns, fireNote, selectRun, startingSel, type PendingFire } from "./runSelect";
+import { useFireFate } from "./core/queue/useFireFate";
 import { Tag } from "./kit/Tag";
 
 interface Props {
@@ -42,7 +44,8 @@ interface Props {
   /** Start a build, with whatever its parameters were answered with. App routes
    *  it through the durable send queue, so a tap on a dead tunnel is kept and
    *  started on reconnect (and never run twice). */
-  onRun: (buildId: string, params?: Record<string, string>) => void;
+  /** Fire a build; answers the ackId of its TRACKED queue row (`useFireFate`). */
+  onRun: (buildId: string, params?: Record<string, string>) => string;
   /** false = no socket. The run is still accepted (it queues); the hint says so. */
   online?: boolean;
   /**
@@ -146,9 +149,20 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
      It used to be a pane at the foot of the list, attached to nothing: a
      screen of eight runs and three files below them did not say which run
      the files were from. */
-  const [sel, setSel] = useState<string | null>(null);
-  useEffect(() => { if (focusRun) setSel(focusRun); }, [focusRun]);
-  const selRun = sel === "" ? null : runs.find((r) => r.runId === sel) ?? runs[0] ?? null;
+  const [sel, setSelRaw] = useState<string | null>(null);
+  /** A fire waiting for ITS run: the ackId whose receipt names
+   *  the run (`startingSel` — identity, never "the first new run"). */
+  const [starting, setStarting] = useState<{ ackId: string } | null>(null);
+  // What became of the fire — receipt, or a row that failed or was dismissed
+  // and will never get one: the queue core's one answer (`core/queue/fireFate.ts`).
+  const fate = useFireFate(starting?.ackId ?? null);
+  const pendingFire: PendingFire | null = starting ? { ack: ackOfFate(fate) } : null;
+  const setSel = (v: string | null) => { setStarting(null); setSelRaw(v); };
+  /* When a door NAMED a run. "Left the list" is only claimed against a list read
+     after that (`listAt`), else a reload's first live run makes a kept one look gone. */
+  const [focusAt, setFocusAt] = useState(0);
+  useEffect(() => { if (focusRun) { setSel(focusRun); setFocusAt(Date.now()); } }, [focusRun]);
+  const { run: selRun, gone: selGone } = selectRun(runs, startingSel(runs, pendingFire, sel), focusAt === 0 || listAt > focusAt);
   const logRef = useRef<HTMLPreElement>(null);
   const openRef = useRef<HTMLDivElement>(null);
 
@@ -193,8 +207,11 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
       return;
     }
     track("action:build.run");
-    onRun(b.id);
+    startFire(onRun(b.id));
   }
+
+  // Starting a build opens ITS run: nothing until it is known, never the previous newest.
+  function startFire(ackId: string) { setSelRaw(null); setStarting({ ackId }); }
 
   // Back — the gesture as much as the arrow — closes this step, not the sheet.
   useBackStep(editing !== null, () => setEditing(null));
@@ -220,7 +237,7 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
     return <BuildRunAsk build={asking} options={paramOptions?.[asking.id]} online={online}
       onApprove={(paramId, cmd) => { track("action:build.approve-options"); onAskOptions(asking.id, { paramId, cmd }); }}
       onCancel={() => setAsking(null)}
-      onRun={(values) => { track("action:build.run"); onRun(asking.id, values); setAsking(null); }} />;
+      onRun={(values) => { track("action:build.run"); startFire(onRun(asking.id, values)); setAsking(null); }} />;
   }
 
   return (
@@ -353,11 +370,14 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
 
         <ArtifactPolicyRow policy={policy} online={online} onSave={onSavePolicy} />
 
+        {/* About the tap, not the list: the first build in a repo has no runs to sit beside. */}
+        {starting && fate && fireNote(fate, !!selRun) && <Hint>{fireNote(fate, !!selRun)}</Hint>}
         {runs.length > 0 && (
           <>
             <div className="section">Runs</div>
+            {selGone && <Hint>{RUN_GONE_NOTE}</Hint>}
             <div className="list build-runs">
-              {runs.slice(0, 8).map((r) => {
+              {drawnRuns(runs, selRun).map((r) => {
                 const text = stripAnsi(output.get(r.runId) ?? "");
                 const log = selRun?.runId === r.runId
                   && <BuildRunLog r={r} text={text} logRef={logRef} onSendLog={onSendLog} />;

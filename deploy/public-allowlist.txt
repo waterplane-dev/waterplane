@@ -69,6 +69,8 @@ site/**
 # The gitleaks config (publish-public.mjs's scan reads it from the snapshot root). Names public
 # test fixtures only; /.gitleaksignore, which holds the rest, is deliberately not listed.
 /.gitleaks.toml
+# osv-scanner / Scorecard ignore list: each advisory with the reason it cannot apply.
+/osv-scanner.toml
 
 # ---- carve-outs: personal, or credentials -----------------------------------
 # Env files hold keys. Only the template is public.

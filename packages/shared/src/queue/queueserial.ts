@@ -194,6 +194,7 @@ export function serialHolders(
 /** The serial sentence when nobody said who holds the group. */
 export const SERIAL_WAIT_TEXT = "one at a time in this repo — waiting for the session before it";
 
+// closed: the wall is `sessionWall`, computed by this build
 const SERIAL_WALL_WORDS: Record<Exclude<SerialHolder["wall"], "awaitingAnswer" | "netStalled">, string> = {
   sessionBusy: "working",
   limit: "on a usage limit",

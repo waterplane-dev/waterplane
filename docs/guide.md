@@ -118,9 +118,9 @@ Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-edb5a4da7e.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-1940345d73.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-edb5a4da7e.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-1940345d73.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session

@@ -10,16 +10,23 @@ import { onceIn } from "../../sendIntent";
 import { FANOUT_LANE, fanoutToast, followUpLane, followUpToast } from "./logic";
 
 /** `launch` is the sweep's own (the sheet's launch row — backend, model and
- *  effort over the new-session defaults, which every other option still is). */
-export function runFanout(dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean): void {
+ *  effort over the new-session defaults, which every other option still is).
+ *  Answers the ackId of its TRACKED queue row: the sheet reads that fire's fate
+ *  (`useFireFate`) and opens the run its receipt names. */
+export function runFanout(dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean): string {
   const c = core();
+  // Minted HERE so the sheet can name this fire before it exists — the
+  // receipt's `runId` is THIS tap's run, not "the first run id it did not
+  // know" (another device's sweep landing first). design review 2026-10-30 W2.
+  const ackId = c.queue.mintAckId();
   // `launch.wire`, for the same reason every `session.create` gets it
   // (`createOp`): a sweep spawns N real sessions, so a stale synced
   // `backend` here is the same bad spawn N times over.
   const { cols, rows } = c.term.geom();
   const offline = c.queue.queueOp({ t: "fanout.run", dirs, text, launch: c.launch.wire(launch), ...(flagWhenDone ? { flagWhenDone: true } : {}), cols, rows },
-    FANOUT_LANE, text);
+    FANOUT_LANE, text, { ackId, track: true });
   c.say.toast(fanoutToast(offline, dirs.length));
+  return ackId;
 }
 
 export function followUpFanout(runId: string, text: string, dirs: string[]): void {

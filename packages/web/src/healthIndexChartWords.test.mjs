@@ -31,3 +31,12 @@ test("no verdict words (the index's ban)", () => {
     assert.doesNotMatch(all, new RegExp(`\\b${word}\\b`, "i"), word);
   }
 });
+
+import { heldDownWords as heldDownOf } from "./healthIndexChartWords.ts";
+
+test("heldDownWords names an entry this build does not know", () => {
+  // `cappedBy` is the host's; 3846dc90 fixed shared's healthCapWords for this,
+  // and this line beside the hero read the same table straight.
+  const text = heldDownOf({ value: 40, mean: 70, cappedBy: "someFutureEntry" });
+  assert.doesNotMatch(String(text), /undefined/);
+});

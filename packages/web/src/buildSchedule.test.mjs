@@ -113,3 +113,22 @@ test("a rule card's last run says what the RUN came to, never that it was posted
   assert.equal(lastRunWord(run("queued")), "waiting");
   assert.equal(lastRunWord(run("canceled")), "cancelled");
 });
+
+test("an EDIT starts from the stored rule: paused stays paused, keepAfterRun and createdAt kept (bughunt 2026-10-29 BLD-1)", () => {
+  // The form owns name, clock, grace, wait-until-free and the values — and
+  // nothing else. A field it does not show is the stored one, never a default.
+  const stored = rule("a", { enabled: false, keepAfterRun: true, createdAt: 42, nextAt: null, waitUntilFree: true, lastOccurrence: NOW - H });
+  const when = { ...buildScheduleWhen(stored, NOW), rule: { ...weekly, hour: 9 }, waitUntilFree: false };
+  const e = buildScheduleEntry({ id: "a", editing: stored, repoDir: "/r", build: APK, vals: {}, when, preview: NOW + 2 * H, now: NOW });
+  assert.equal(e.enabled, false, "a re-time is not a resume");
+  assert.equal(e.keepAfterRun, true);
+  assert.equal(e.createdAt, 42);
+  assert.equal(e.rule.hour, 9, "…while what the form edits is saved");
+  assert.equal("waitUntilFree" in e, false, "un-ticking it is the form's to say");
+  assert.equal(e.nextAt, NOW + 2 * H);
+  // A NEW rule is still born armed, with nothing it was not given.
+  const fresh = buildScheduleEntry({ id: "n", repoDir: "/r", build: APK, vals: {}, when: buildScheduleWhen(null, NOW), preview: NOW + H, now: NOW });
+  assert.equal(fresh.enabled, true);
+  assert.equal("keepAfterRun" in fresh, false);
+  assert.equal(fresh.createdAt, NOW);
+});

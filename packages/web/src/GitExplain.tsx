@@ -90,24 +90,24 @@ export function GitExplain({ repoId, ahead, behind, onFetched, onClose }: Props)
 
   // Opening the view picks up the desktop's run: still going, or the last answer.
   useEffect(() => {
-    let gone = false;
-    api.gitExplainState(repoId).then((s) => {
-      if (gone || !s || heldRef.current) return;
+    const ac = new AbortController();
+    api.gitExplainState(repoId, ac.signal).then((s) => {
+      if (ac.signal.aborted || !s || heldRef.current) return;
       if (s.running) setRunStart(s.startedAt);
       else if (s.result) took(s);
     }).catch(() => { /* an older desktop keeps no brief; the form is the whole view */ });
-    return () => { gone = true; };
+    return () => ac.abort();
   }, [repoId]);
 
   useEffect(() => {
     if (runStart == null) return;
-    let gone = false;
+    const ac = new AbortController();
     const clockT = setInterval(() => tick((n) => n + 1), 1000);
     const pollT = setInterval(async () => {
       if (heldRef.current) return;
       let s: GitExplainState | null;
-      try { s = await api.gitExplainState(repoId); } catch { return; /* a missed ask; the brief carries on */ }
-      if (gone) return;
+      try { s = await api.gitExplainState(repoId, ac.signal); } catch { return; /* a missed ask; the brief carries on */ }
+      if (ac.signal.aborted) return;
       if (!s || s.startedAt !== runStart) {
         setRunStart(null);
         setBrief({ reason: "The desktop restarted while it was explaining, so nothing came back. Tap Explain to ask again." });
@@ -118,7 +118,7 @@ export function GitExplain({ repoId, ahead, behind, onFetched, onClose }: Props)
       took(s);
       onFetched();
     }, POLL_MS);
-    return () => { gone = true; clearInterval(clockT); clearInterval(pollT); };
+    return () => { ac.abort(); clearInterval(clockT); clearInterval(pollT); };
     // `onFetched` is a new closure every render; re-arming would reset the poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runStart, repoId]);

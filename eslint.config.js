@@ -148,6 +148,16 @@ export default tseslint.config(
     },
     rules: { "local/extension-boundary": "error" },
   },
+  // A value that crosses the wire is an OPEN set: the phone is often a release
+  // behind the host, and the reverse when it has not reloaded. A wording with
+  // no answer for a value it does not know printed "undefined" twice
+  // (e7adb005, 57c5dff7). Shared and the phone only: the host words the values
+  // it mints itself.
+  {
+    files: ["packages/shared/src/**/*.ts", "packages/web/src/**/*.{ts,tsx}"],
+    plugins: { local },
+    rules: { "local/total-wire-words": "error" },
+  },
   // The same 900-line cap on the source the TypeScript block cannot see: an
   // extension's host/shared/cli halves and the repo's own tools. Uncapped,
   // `vault/host/index.mts` grew to 4,450 lines in twelve days and had to be cut

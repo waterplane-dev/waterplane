@@ -185,7 +185,13 @@ export interface RepoTarget {
    *  chip, the bell and the feed row are one predicate. `id` is the feed
    *  item's (the git view's done sends `notification.handle` with it); `error`
    *  is the full failure text. ABSENT = none (or an older host). */
-  gitFailed?: { verb: "pull" | "push"; at: number; error: string; id: string };
+  gitFailed?: { verb: "pull" | "push"; at: number; error: string; id: string;
+    /** A failed push's branch (`NotificationItem.branch`); absent = older host or detached HEAD. */
+    branch?: string };
+  /** EVERY unhandled failed pull/push here, newest first (`gitFailed` is its head): a repo
+   *  keeps one failed push per branch, and a tapped failure must open on ITSELF. ABSENT = an
+   *  older host — the git view then shows `gitFailed`. */
+  gitFailures?: NonNullable<RepoTarget["gitFailed"]>[];
   /** The newest build entry here whose last run FAILED, unhandled — same
    *  predicate as `gitFailed`. ABSENT = none (or an older host). */
   buildFailed?: { buildId: string; name: string; at: number; error?: string; id: string };

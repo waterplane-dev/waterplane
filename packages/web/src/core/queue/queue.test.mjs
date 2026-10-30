@@ -85,6 +85,11 @@ const QUEUE_SITES = 10;
  * through `core().queue.mintAckId()`: sent LIVE, never retried, so the fresh
  * id is the only one those words ever have. `core/pluginCalls.ts` mints a `plugin.call`'s id: a LIVE
  * question, never queued; only a read is re-sent after a reconnect, with the SAME id.
+ * `features/build/actions.ts` mints a build fire's id (`runBuild`) on the line above
+ * its `queueOp`: the sheet must NAME the fire before it exists, because the
+ * receipt's `runId` is how it opens THAT run and not another new one.
+ * `features/fanout/actions.ts` does the same for a sweep (`runFanout`, design
+ * review 2026-10-30 W2): both queue with `track: true` (`fireFate.ts`).
  */
 const ELSEWHERE = {
   "App.tsx": 1,
@@ -92,6 +97,8 @@ const ELSEWHERE = {
   "core/pluginCalls.ts": 1,
   "core/send/useSend.tsx": 1,
   "features/backlog/actions.ts": 2,
+  "features/build/actions.ts": 1,
+  "features/fanout/actions.ts": 1,
   "outbox.ts": 2,
 };
 
@@ -126,7 +133,7 @@ test("nothing outside core/queue mints an ackId except the named files", () => {
  * create before it is sent. A feature passing an id it did not just mint is a
  * RE-SEND under an old ack, which the host re-acks and never runs.
  */
-const QUEUE_OP_WITH_ACK = { "core/launch/useLaunch.ts": 3 };
+const QUEUE_OP_WITH_ACK = { "core/launch/useLaunch.ts": 3, "features/build/actions.ts": 1, "features/fanout/actions.ts": 1 };
 
 /** Every `queueOp(` call's balanced argument text (not its declarations). */
 function queueOpArgs(text) {

@@ -3,7 +3,6 @@ import type { SessionInfo } from "@waterplane/shared";
 import { setDocTitle } from "./themeOverlay";
 import { loadSheetDraft, seedSheetDraft, appendSheetDraft, newAckId, removePadNotes } from "./outbox";
 import { useTransportIndex } from "./transportIndex";
-import type { Overlay } from "./routing";
 import { FOLLOWUP_MARK, STAR_MARK, applyPendingMarks } from "./pendingMarks";
 import { clearTokensOn, readingsNow, tokensOpenOnNow, useBilling, useUsage } from "./features/tokens";
 import { askConfirm } from "./Confirm";
@@ -33,7 +32,7 @@ import { QueueBars } from "./core/queue/QueueBars";
 import { useSend } from "./core/send/useSend";
 import { useCompose, useComposeDraft } from "./core/compose/useCompose";
 import { bootFeatures, openPluginFromNotification } from "./core/dispatch";
-import { runSheetLeave } from "./core/sheets";
+import { openGitPlain, useGitRoute } from "./gitLanding";
 import { useConnection } from "./core/conn/useConnection";
 import { useRoute } from "./core/route/useRoute";
 import { useTermFeed } from "./core/term/useTermFeed";
@@ -129,9 +128,9 @@ export function App() {
   const sessionsRef = useLatest(sessions); // the verbs' dead-target check, from callbacks
   const reposRef = useLatest(repos); // the download rows' repo namer
 
-  // Repo whose git diff to show when the git overlay is opened from the launcher
-  // (no active session). Falls back to the active session's repo.
-  const [gitRepoId, setGitRepoId] = useState<string | null>(null);
+  // The repo the git view is open on: its ROUTE ENTRY's (`gitLanding.ts`), so Back takes it
+  // with the screen. None (a bare open, the toolbar's diff): the active session's repo.
+  const gitRepoId = useGitRoute()?.repoId ?? null;
   /** The backlog as the host last said it (features/backlog, seeded from the
    *  snapshot): the compose strip, the launcher's badges and the fire-nav read it. */
   const bl = useBacklog();
@@ -302,7 +301,7 @@ export function App() {
   // Downloads named, notification taps and the shell's "open this" (`core/route`).
   useOutsideOpens({ reposRef, initRoute, sessions, attach, setOverlay });
   /** Open the git diff view for a repo (untracked count tap). */
-  function openGitFor(repoId: string) { setGitRepoId(repoId); setOverlay("git"); }
+  function openGitFor(repoId: string) { openGitPlain(repoId, () => setOverlay("git")); }
   // The stuck-sends count and the reload veto (`core/queue`).
   useQueueSignals({ outbox, activityFiled, activityConfirmedDone, allBufsRef });
   // The feature contract (`sdk/types.ts`): App's own functions, rebound every
@@ -341,7 +340,7 @@ export function App() {
       loadSheetDraft, seedSheetDraft, appendSheetDraft, gridText: () => termRef.current?.getText() ?? "",
     },
     world: {
-      sessions, repos, visibleRepos, active, activeRepo, backends, recent, closed, intents, launches: q.launches, budget: q.budget, billing, meter, usage, get usageReadings() { return readingsNow(); }, get tokensOpenOn() { return tokensOpenOnNow(); }, clearTokensOn, launch, update,
+      sessions, repos, reposAt, visibleRepos, active, activeRepo, backends, recent, closed, intents, launches: q.launches, budget: q.budget, billing, meter, usage, get usageReadings() { return readingsNow(); }, get tokensOpenOn() { return tokensOpenOnNow(); }, clearTokensOn, launch, update,
       sessionRepo, sessionRowTitle, sessionCan, sessionCant, repoForCwd, refreshRepos,
       schedules, pending, backlog: bl.items, backlogAuto: bl.auto,
       cwdVisible,
@@ -355,8 +354,6 @@ export function App() {
     send: { renderRetime, seedFromSchedule, seedFromIntent, targetFor: sendTargetFor },
     say: { toast: showToast, track, confirm: askConfirm },
   });
-  const prevOverlayRef = useRef<Overlay>(overlay);
-  useEffect(() => { runSheetLeave(prevOverlayRef.current, overlay); prevOverlayRef.current = overlay; }, [overlay]);
   useEffect(() => bootFeatures(), []);
 
   if (authGate) return <AuthGate reconnect={() => connRef.current.reconnect()} />;
@@ -366,7 +363,7 @@ export function App() {
     overlay, setOverlay, closeSheet, connRef, status, setReconnectAsk, submitInput, holdQueueRef, flushOutbox, removeQueued,
     pendingSession, insertCompose, setOutlineJump, setView, active, sessions, visibleRepos, outbox, usage, intents,
     launchCore, sessionCant, pickBackend, refreshRepos, sendCore, sendSeed, voice, installed, canInstall, installEvt,
-    setCanInstall, gitRepoId, setGitRepoId, activeRepoId, repos, backends,
+    setCanInstall, gitRepoId, activeRepoId, repos, reposAt, backends,
   }));
   // ── The frame (`core/layout/Workspace`): phone = sheet ?? session ??
   // launcher, wide = the launcher as a sidebar beside them. The launcher's

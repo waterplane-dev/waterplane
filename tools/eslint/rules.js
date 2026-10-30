@@ -10,6 +10,7 @@
  */
 
 import { noSilentSend } from "./silentsend.js";
+import { totalWireWords } from "./totalwords.js";
 import {
   FEATURE_DENY, featureBoundary, featureBoundaryRule, hostBoundary, hostBoundaryRule,
   extensionBoundary, coreExtensionImport, extensionBoundaryRule,
@@ -379,5 +380,6 @@ export default {
     "no-raw-optional-cap": noRawOptionalCap,
     "no-second-socket": noSecondSocket,
     "no-storage-key-literal": noStorageKeyLiteral,
+    "total-wire-words": totalWireWords,
   },
 };

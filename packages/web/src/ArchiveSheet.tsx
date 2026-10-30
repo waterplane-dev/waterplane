@@ -12,6 +12,7 @@ import { ArchiveReader } from "./ArchiveReader";
 import { BookmarkIcon, BookmarkNoteEdit, BOOKMARK_ON, BOOKMARK_SET, removeBookmark, setBookmark } from "./core/sessions/bookmark";
 import { archiveRowLines, bookmarkChipText, bookmarkCount, bookmarkCutText, withBookmark } from "./core/sessions/bookmarkFacts";
 import { useRemoteResource, ConfirmButton, Empty, FilterChip, SearchBox, StaleHead, Row, RowTitle, RowSub, Hint, Tag } from "./kit";
+import { SheetHead } from "./Sheet";
 
 const ICON = 16;
 
@@ -97,7 +98,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   /** The row whose bookmark note is being typed — one at a time. */
   const [editing, setEditing] = useState<string | null>(null);
 
-  const repo = useMemo(() => repos.find((r) => r.id === repoId) ?? repos[0], [repos, repoId]);
+  const repo = useMemo(() => repos.find((r) => r.id === repoId) ?? null, [repos, repoId]);   // a missing repo selects NOTHING: another repo's archive offers Resume/Fork/Delete
 
   /**
    * The FIRST page, told honestly (`useRemoteResource`).
@@ -197,6 +198,22 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
     const live = liveIds.has(reading.id);
     return <ArchiveReader repoId={repo.id} row={reading} live={live} onToast={showToast} onBack={() => setReading(null)}
       onResume={() => (live ? onOpenLive(reading.id) : onResume(reading.cwd, reading.name || reading.title || "resumed", reading.id, CLAUDE_TAB.id))} />;
+  }
+
+  if (!repo) {
+    return (
+      <div className="sheet">
+        <SheetHead title={<><Archive size={ICON} style={{ verticalAlign: "-3px", marginRight: 4 }} />Archive</>} onClose={onClose} />
+        {repos.length > 0 && (
+          <div className="search-row">
+            <RepoSelect repos={repos} className="search grow" value="" placeholder="pick a repo"
+              onChange={(dir) => { const r = repos.find((x) => x.worktreePath === dir); if (r) setRepoId(r.id); }}
+              aria-label="repo" />
+          </div>
+        )}
+        <Hint>That repo is not among the repos listed here (it may be hidden from the launcher or outside its repo focus), so there is no archive to show. Pick a repo above.</Hint>
+      </div>
+    );
   }
 
   return (

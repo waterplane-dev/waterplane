@@ -36,7 +36,7 @@ export const reposApi = {
   newWorktree: (repoId: string, branch: string) =>
     jpost<{ path?: string; branch?: string; error?: string }>("/api/worktree", { repoId, branch }),
   /** Whether a worktree nobody is using holds anything that exists only there (`host/worktreeleftover.ts`). */
-  worktreeLeftover: (repoId: string) => jget<WorktreeLeftover>(`/api/repos/${repoId}/worktree/leftover`),
+  worktreeLeftover: (repoId: string, signal?: AbortSignal) => jget<WorktreeLeftover>(`/api/repos/${repoId}/worktree/leftover`, undefined, signal),
   /** Remove it — the host re-checks and refuses, in words, on any blocker. */
   removeWorktree: (repoId: string) =>
     jpost<{ ok: boolean; error?: string; note?: string; branchDeleted?: boolean; leftover?: WorktreeLeftover }>(`/api/repos/${repoId}/worktree/remove`, {}),

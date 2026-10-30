@@ -63,7 +63,8 @@ const MODE_ICON: Record<LimitResumeMode, JSX.Element> = {
   repo: <FolderTree size={16} />,
   all: <Layers size={16} />,
 };
-/** Why you would pick each one — the sentence the cycle button had no room for. */
+/** Why you would pick each one — the sentence the cycle button had no room for.
+ * closed: keyed by this sheet's own MODES list */
 const MODE_TITLE: Record<LimitResumeMode, string> = {
   one: "One session resumes at a time, in the order below — the safest, and the slowest",
   repo: "One session per repo at a time: never two agents in one worktree, but different repos run in parallel",

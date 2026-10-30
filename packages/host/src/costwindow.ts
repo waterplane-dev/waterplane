@@ -32,7 +32,8 @@
 
 import { basename } from "node:path";
 import {
-  COST_CONVOS_CAP, PRICES_AS_OF, addCost, addTotals, clipClosedText, costOf, hourFloor, hourKeyMs, tokenTotal, zeroCost, zeroTotals,
+  COST_CONVOS_CAP, PRICES_AS_OF, addCost, addTotals, clipClosedText, costOf, hourFloor, hourKeyMs, tokenTotal, undatedLogsOf, undatedSince,
+  zeroCost, zeroTotals,
   type ClosedSession, type CostBreakdown, type CostConvo, type CostConvoHour, type CostConvoRest, type CostHour, type CostHourRepo,
   type CostLaunch, type CostWindowDoc, type Intent, type ModelSlice, type SessionInfo, type SessionOrigin,
   type TokenTotals,
@@ -102,6 +103,66 @@ const groupLaunch = (l: CostLaunch): CostLaunch =>
 interface HourAcc extends Bag {
   byRepo: Map<string, Bag>;
   byModel: Map<string, Bag>;
+}
+
+/**
+ * Records the store counted that carry no readable timestamp (the empty hour of `crossKey`): in
+ * every total, in no hour. Said on every document that sums hours (`undated`), so a span figure
+ * reads ABSENT by the shared rule (`undatedWhy`) instead of a floor that looks exact. Derived from
+ * the store as it is — a store written before this field existed already keeps those records under
+ * the empty hour, so nothing is rescanned. With `from`, only logs whose mtime is at or after it
+ * (or unknown) count: per-file mtime and the per-file empty-hour tally are already in the store,
+ * so the bound needs no version bump and no rescan.
+ */
+export function undatedRecords(files: Files, from = -Infinity): number {
+  const n = undatedSince(undatedFields(files), from);
+  return typeof n === "number" ? n : 0;
+}
+
+/**
+ * The undated fields every claude document carries (`TokenStatsDoc.undated`/`undatedUntil`/
+ * `undatedLogs`), built ONCE from the store, so the count a window prints on the phone and the one
+ * `/api/costwindow` sends come from one list read by one function (shared `undatedSince`).
+ */
+export function undatedFields(files: Files): { undated: number; undatedUntil?: number; undatedLogs?: Array<[number, number]> } {
+  const byFile = undatedByFile(files);
+  const undated = byFile.reduce((n, [, k]) => n + k, 0);
+  if (undated === 0) return { undated };
+  const until = undatedUntil(files);
+  const logs = undatedLogsOf(byFile);
+  return { undated, ...(until != null ? { undatedUntil: until } : {}), ...(logs.length ? { undatedLogs: logs } : {}) };
+}
+
+/**
+ * The newest mtime of a log holding an undated record (`TokenStatsDoc.undatedUntil`), undefined
+ * when there is none or any such log's mtime is unknown (then no span may be called clean).
+ */
+export function undatedUntil(files: Files): number | undefined {
+  let newest: number | undefined;
+  for (const [m] of undatedByFile(files)) {
+    if (!Number.isFinite(m)) return undefined;
+    newest = newest == null ? m : Math.max(newest, m);
+  }
+  return newest;
+}
+
+/**
+ * `[mtime, count]` per log holding records with no readable hour. A record in a log is never
+ * later than the log's mtime (`FileSummary.m`), so only logs written at or after a span's start
+ * can hold one of its records — the bound that keeps one odd old log from blanking every window.
+ */
+function undatedByFile(files: Files): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const byFile of Object.values(files)) {
+    for (const sum of Object.values(byFile)) {
+      let k = 0;
+      for (const [key, t] of Object.entries(sum.x)) {
+        if (uncross(key)[0] === "") k += t[5];
+      }
+      if (k > 0) out.push([typeof sum.m === "number" ? sum.m : NaN, k]);
+    }
+  }
+  return out;
 }
 
 /**
@@ -270,6 +331,8 @@ export function foldCostWindow(
     totals, cost, agentTotals, agentCost, unpriced,
     pricesAsOf: PRICES_AS_OF,
     scannedAt,
+    // Only logs written since the window opened can hold an undated record IN it.
+    undated: undatedRecords(files, fromHour),
   };
 }
 

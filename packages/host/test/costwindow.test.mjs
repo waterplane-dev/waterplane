@@ -226,3 +226,62 @@ test("a folded fan-out is ONE group, named by its run and not by one target", ()
   assert.equal(doc.rest.reduce((n, g) => n + g.count, 0), 3);
   assert.equal(doc.convosTotal, 4);
 });
+
+test("records with no readable hour are COUNTED as `undated`, never folded into a span (design round 4)", async () => {
+  const { undatedRecords } = await import("../dist/costwindow.js");
+  assert.equal(undatedRecords(files), 0);
+  assert.equal(foldCostWindow(files, from, to, noMeta, 0).undated, 0);
+  // An undated key is the empty hour: `crossKey("", model)`.
+  // Last written at 11:40, inside the window — so its undated records could be in it.
+  const withUndated = { ...files, "-r-nodate": { "cccc3333": { m: at(11, 40), s: 0, w: "/r/nodate", x: {
+    [`${CROSS}${SONNET}`]: tally(400, 40, 3), [`${hk(11)}${CROSS}${SONNET}`]: tally(10, 1),
+  } } } };
+  assert.equal(undatedRecords(withUndated), 3);
+  const doc = foldCostWindow(withUndated, from, to, noMeta, 0);
+  assert.equal(doc.undated, 3, "the window says how many records it could be missing");
+  assert.equal(tokenTotal(doc.totals), 2100 + 3200 + 1500 + 110 + 55_000 + 11, "the undated tokens are in no hour");
+});
+
+test("undated records count only in windows their log was written in or after: mtime bounds them (design round 4)", async () => {
+  const { undatedRecords, undatedUntil } = await import("../dist/costwindow.js");
+  const old = { "-r-nodate": { "cccc3333": { m: at(8), s: 0, x: { [`${CROSS}${SONNET}`]: tally(400, 40, 3) } } } };
+  const withOld = { ...files, ...old };
+  // Last written at 08:00, before the 10:30 window opened: none of its records can be in it.
+  assert.equal(foldCostWindow(withOld, from, to, noMeta, 0).undated, 0);
+  assert.equal(undatedRecords(withOld, at(10)), 0);
+  assert.equal(undatedRecords(withOld), 3, "store-wide it is still counted");
+  assert.equal(undatedUntil(withOld), at(8));
+  // A window that opened at 07:00 could hold them.
+  assert.equal(foldCostWindow(withOld, at(7), to, noMeta, 0).undated, 3);
+  // Written inside the window's opening hour: counted (the fold starts at `fromHour`).
+  const inHour = { ...files, "-r-nodate": { "cccc3333": { ...old["-r-nodate"].cccc3333, m: at(10, 5) } } };
+  assert.equal(foldCostWindow(inHour, from, to, noMeta, 0).undated, 3);
+  // An unknown mtime is counted everywhere, and leaves no `undatedUntil` to bound a span by.
+  const unknown = { ...files, "-r-nodate": { "cccc3333": { ...old["-r-nodate"].cccc3333, m: undefined } } };
+  assert.equal(foldCostWindow(unknown, from, to, noMeta, 0).undated, 3);
+  assert.equal(undatedUntil(unknown), undefined);
+  assert.equal(undatedUntil(files), undefined, "nothing undated: nothing to say");
+});
+
+test("one window, one N: /api/costwindow and the documents' per-log pairs agree through shared undatedSince (design round 5, r4-1b L1)", async () => {
+  const { undatedFields, undatedRecords } = await import("../dist/costwindow.js");
+  const { undatedSince } = await import("@waterplane/shared");
+  // Log A: old, 5 undated. Log B: written inside the window, 1 undated.
+  const two = { ...files,
+    "-r-a": { "aaaa1111": { m: at(8), s: 0, x: { [`${CROSS}${SONNET}`]: tally(10, 1, 5) } } },
+    "-r-b": { "bbbb2222": { m: at(11, 40), s: 0, x: { [`${CROSS}${SONNET}`]: tally(10, 1, 1) } } },
+  };
+  const fields = undatedFields(two);
+  assert.deepEqual(fields, { undated: 6, undatedUntil: at(11, 40), undatedLogs: [[at(8), 5], [at(11, 40), 1]] });
+  const doc = foldCostWindow(two, from, to, noMeta, 0);
+  assert.equal(doc.undated, 1);
+  assert.equal(undatedSince(fields, doc.fromHour), doc.undated, "the phone's count for this window is the host's");
+  assert.equal(undatedRecords(two, doc.fromHour), 1);
+  // An unknown mtime has no pair and no bound, and is counted in every window.
+  const unknown = { ...two, "-r-c": { "cccc3333": { s: 0, x: { [`${CROSS}${SONNET}`]: tally(10, 1, 2) } } } };
+  const uf = undatedFields(unknown);
+  assert.equal(uf.undatedUntil, undefined);
+  assert.equal(undatedSince(uf, at(23)), 2);
+  assert.equal(foldCostWindow(unknown, from, to, noMeta, 0).undated, 3);
+  assert.deepEqual(undatedFields(files), { undated: 0 }, "nothing undated: no list");
+});

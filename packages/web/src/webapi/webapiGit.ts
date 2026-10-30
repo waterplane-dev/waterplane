@@ -2,10 +2,10 @@ import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitExplain
 import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
 import { readBodyFused } from "./webapiBody";
 
-async function gitSide(url: string, path: string, side: "old" | "new", staged: boolean, ms = SLOW_OP_TIMEOUT_MS): Promise<Response | null> {
+async function gitSide(url: string, path: string, side: "old" | "new", staged: boolean, ms = SLOW_OP_TIMEOUT_MS, signal?: AbortSignal): Promise<Response | null> {
   const q = new URLSearchParams({ path, side });
   if (staged) q.set("staged", "1");
-  const r = await nfetch(`${url}?${q}`, undefined, ms);
+  const r = await nfetch(`${url}?${q}`, signal ? { signal } : undefined, ms);
   if (r.status === 404) return null;
   if (r.ok) return r;
   const body = await r.json().catch(() => null) as { error?: string } | null;
@@ -33,16 +33,16 @@ export const gitApi = {
    */
   gitBlob: async (
     repoId: string, path: string, side: "old" | "new", staged: boolean,
-    onProgress?: (got: number, total: number) => void,
+    onProgress?: (got: number, total: number) => void, signal?: AbortSignal,
   ): Promise<Blob | null> => {
     // Headers take the generic fuse (the host answers in milliseconds); the
     // body, megabytes of gif, takes a stall fuse (webapiBody.ts).
-    const r = await gitSide(`/api/repos/${repoId}/git/blob`, path, side, staged, FETCH_TIMEOUT_MS);
+    const r = await gitSide(`/api/repos/${repoId}/git/blob`, path, side, staged, FETCH_TIMEOUT_MS, signal);
     if (!r) return null;
     return readBodyFused(r, BLOB_STALL_MS, onProgress);
   },
-  gitText: async (repoId: string, path: string, side: "old" | "new", staged: boolean) =>
-    (await gitSide(`/api/repos/${repoId}/git/text`, path, side, staged))?.json() as Promise<{ body: string; truncated: boolean }> | null,
+  gitText: async (repoId: string, path: string, side: "old" | "new", staged: boolean, signal?: AbortSignal) =>
+    (await gitSide(`/api/repos/${repoId}/git/text`, path, side, staged, undefined, signal))?.json() as Promise<{ body: string; truncated: boolean }> | null,
   gitStage: (repoId: string, path: string, unstage: boolean) =>
     jpost<{ ok: boolean; error?: string }>(`/api/repos/${repoId}/git/stage`, { path, unstage }),
   gitCommit: (repoId: string, message: string, all = true) =>
@@ -65,8 +65,8 @@ export const gitApi = {
   gitExplain: (repoId: string, foci: readonly string[], note: string) =>
     jpost<ChangeBrief | GitExplainState>(`/api/repos/${repoId}/git/explain`, { foci, note, background: true }, 330_000),
   /** The brief running or last finished in this repo (host `explainjob.ts`); null = none yet. */
-  gitExplainState: (repoId: string) =>
-    jget<{ explain: GitExplainState | null }>(`/api/repos/${repoId}/git/explain`).then((r) => r.explain),
+  gitExplainState: (repoId: string, signal?: AbortSignal) =>
+    jget<{ explain: GitExplainState | null }>(`/api/repos/${repoId}/git/explain`, undefined, signal).then((r) => r.explain),
   /** The branch against its upstream — incoming, outgoing, the shared history (host `gitlog.ts`). */
   gitLog: (repoId: string) => jget<GitLog>(`/api/repos/${repoId}/git/log`),
   /** One commit's message and file stat. */
@@ -80,11 +80,11 @@ export const gitApi = {
     jpost<{ ok: boolean; output?: string; error?: string }>(`/api/repos/${repoId}/git/pull`, {}, SLOW_OP_TIMEOUT_MS),
   /** Start (or join) the desktop's push JOB — its pre-push hook runs for minutes, never one held request — then ask after it (`null` = none since the desktop started). */
   gitPush: (repoId: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/push`, { background: true }),
-  gitPushState: (repoId: string) => jget<{ push: GitPushState | null }>(`/api/repos/${repoId}/git/push`).then((r) => r.push),
-  /** The PR card (PR mode only): the lease keeps the host polling `gh`; the rest are one tap each. A refusal comes back as `{ok:false,error}`. */
+  gitPushState: (repoId: string, signal?: AbortSignal) => jget<{ push: GitPushState | null }>(`/api/repos/${repoId}/git/push`, undefined, signal).then((r) => r.push),
+  /** The PR card (PR mode only): the lease keeps the host polling `gh`; the rest are one tap each (auto-merge carries the card's `method`, like merge). A refusal comes back as `{ok:false,error}`. */
   prLease: (repoId: string, holder: string) => jpost<PrListDoc>(`/api/repos/${repoId}/git/prs/lease`, { holder }),
   prMerge: (repoId: string, number: number, method?: string) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/merge`, { number, method }, SLOW_OP_TIMEOUT_MS),
-  prAutoMerge: (repoId: string, number: number, on: boolean) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/automerge`, { number, on }),
-  prClose: (repoId: string, number: number) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/close`, { number }),
+  prAutoMerge: (repoId: string, number: number, on: boolean, method?: string) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/automerge`, { number, on, method }, SLOW_OP_TIMEOUT_MS),
+  prClose: (repoId: string, number: number) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/close`, { number }, SLOW_OP_TIMEOUT_MS),
   prLog: (repoId: string, number: number, check?: string) => jpost<PrActionResult>(`/api/repos/${repoId}/git/prs/log`, { number, check }, SLOW_OP_TIMEOUT_MS),
 };

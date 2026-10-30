@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pushFailureText, pushState, startPush } from "../dist/git.js";
+import { pushState, startPush } from "../dist/git.js";
+import { pushFailureText, pushRefusedByRule } from "../dist/pushverdict.js";
 
 test("a refused push names the hook step from STDOUT, not only git's stderr", () => {
   const stdout = "local CI: myrepo\n\n\x1b[1m> npm run lint\x1b[0m\n  901:1  error  File has too many lines\n\n\x1b[31mFAILED: npm run lint (exit 1)\x1b[0m\nPush aborted. Fix it, or bypass with: git push --no-verify\n";
@@ -123,4 +124,50 @@ test("startPush streams a hook's output into the job's progress while it runs", 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// bughunt 2026-10-29 PR-10: the pre-push hook's own log is not git's verdict. This repo's tests
+// print "set-upstream" and "GH013" — a failing hook must not read as either.
+const hookRepo = (dir, hookBody) => {
+  const sh = (c, cwd) => execFileSync("sh", ["-c", c], { cwd });
+  sh("git init -q --bare remote.git && git init -q wt && cd wt && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m one && git remote add origin ../remote.git && git push -q -u origin HEAD 2>/dev/null && git commit -q --allow-empty -m two", dir);
+  const wt = join(dir, "wt");
+  writeFileSync(join(wt, ".git/hooks/pre-push"), `#!/bin/sh\n${hookBody}\n`, { mode: 0o755 });
+  return wt;
+};
+
+test("a failing hook that prints 'set-upstream' and GH013 is the hook's failure: one run, no PR-mode sentence", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushhooktext-"));
+  try {
+    const runs = join(dir, "runs");
+    const wt = hookRepo(dir, `echo run >> "${runs}"\necho "use git push --set-upstream origin x (no upstream)" >&2\necho "remote: error: GH013: Repository rule violations found" >&2\necho "FAILED: npm test (exit 1)"\nexit 1`);
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, false);
+    assert.equal(readFileSync(runs, "utf8").trim().split("\n").length, 1, "the hook ran once — no --set-upstream retry");
+    assert.doesNotMatch(r.error, /takes changes through a PR/);
+    assert.match(r.error, /^The pre-push check stopped it — npm test/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a branch with no upstream is pushed once with --set-upstream, decided by rev-parse not by text", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushnoup-"));
+  try {
+    const runs = join(dir, "runs");
+    const wt = hookRepo(dir, `echo run >> "${runs}"\nexit 0`);
+    execFileSync("sh", ["-c", "git checkout -q -b feature && git commit -q --allow-empty -m three"], { cwd: wt });
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, true, r.error);
+    assert.equal(execFileSync("git", ["rev-parse", "--abbrev-ref", "@{u}"], { cwd: wt }).toString().trim(), "origin/feature");
+    assert.equal(readFileSync(runs, "utf8").trim().split("\n").length, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a rule refusal is read off git's porcelain line only", () => {
+  const hookLog = "remote: error: GH013: Repository rule violations found\nprotected branch\n";
+  assert.equal(pushRefusedByRule(hookLog, hookLog), false, "hook text alone is not a remote refusal");
+  assert.equal(pushRefusedByRule("!\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)\n", ""), false);
+  assert.equal(pushRefusedByRule("To x\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (push declined due to repository rule violations)\nDone\n", ""), true);
+  assert.equal(pushRefusedByRule("!\trefs/heads/main:refs/heads/main\t[remote rejected] (protected branch hook declined)\n", ""), true);
+  assert.equal(pushRefusedByRule("!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\n", "remote: error: GH013: Repository rule violations found\n"), true, "a refused ref beside the remote's anchored GH013 line");
+  assert.equal(pushRefusedByRule("", "FAILED: npm test\n  remote: error: GH013: x\n"), false, "an indented GH013 in a hook log with no refused ref");
 });

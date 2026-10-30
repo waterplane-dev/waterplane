@@ -481,3 +481,28 @@ test("a re-read that moved only `at` is not news; claude's sessions are never as
   assert.equal(calls(), 3);
   assert.equal(s.info.sourceSpend, undefined);
 });
+
+test("a ledger holding undated records calibrates nothing: its window cost is a floor (design round 4)", () => {
+  assert.deepEqual(calCosts({ ...doc(12, 180), undated: 0 }), { session: 12, weekly: 180 });
+  assert.deepEqual(calCosts({ ...doc(12, 180), undated: 2 }), { session: null, weekly: null, sessionUndated: 2, weeklyUndated: 2 });
+});
+
+test("undated records bound by mtime: a window opened after every such log was written still calibrates (design round 4)", () => {
+  const H = 3_600_000;
+  const at = (h) => Date.UTC(2026, 9, 8, h);
+  const grid = (id, total) => ({ id, anchor: at(20), lenMs: 5 * H, oldestHour: 0, newestHour: 0, windows: [{ back: 0, cost: { total } }] });
+  const d = { scannedAt: NOW, series: [grid("session", 12), { ...grid("weekly", 180), lenMs: 168 * H }] };
+  // The session window opens at 15:00; the undated log was last written at 10:00 — before it, so
+  // none of its records can be in it. The weekly window opened days earlier and could hold them.
+  assert.deepEqual(calCosts({ ...d, undated: 2, undatedUntil: at(10) }), { session: 12, weekly: null, weeklyUndated: 2 });
+  // Written inside the session window: refused there too.
+  assert.deepEqual(calCosts({ ...d, undated: 2, undatedUntil: at(16) }), { session: null, weekly: null, sessionUndated: 2, weeklyUndated: 2 });
+  // No `undatedUntil` (an unknown mtime, or an older host): every window refuses.
+  assert.deepEqual(calCosts({ ...d, undated: 2 }), { session: null, weekly: null, sessionUndated: 2, weeklyUndated: 2 });
+});
+
+test("calCosts hands the undated count of a refused window on, so the budget can name it (design round 4, r4-1 M2)", () => {
+  const out = calCosts({ ...doc(12, 180), undated: 2 });
+  assert.deepEqual(out, { session: null, weekly: null, sessionUndated: 2, weeklyUndated: 2 });
+  assert.deepEqual(calCosts({ ...doc(12, 180), undated: -1 }), { session: null, weekly: null }, "not a count: refused, no count to carry");
+});

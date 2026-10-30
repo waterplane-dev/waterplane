@@ -161,16 +161,96 @@ export function needsYou(item: Pick<NotificationItem, "kind" | "level" | "handle
   return levelOf(item) === "attention" && !item.handled;
 }
 
+/**
+ * What a failure's attention `key` NAMES, read and written by ONE pair (`attentionKey` /
+ * `parseAttentionKey`) on both ends: the host files under it, the phone reads repo and verb
+ * (or build entry) back off it. The format is `git:<repoId>:<pull|push>`,
+ * `build:<repoId>:<buildId>` and `pr:<repoId>:<number>`, and it is FROZEN — phones in the field
+ * read it with their own copy of the old pattern, so nothing new rides inside it (a failed push's
+ * branch is the item's own `branch` field, never a fourth segment).
+ *
+ * `pr` is a pull request's notice (`prs.ts`: a failed check, a change request, a merge). It is NOT
+ * a repo chip — `RepoTarget.gitFailed`/`buildFailed` are `git`/`build` only, and a phone in the
+ * field parses `pr:` keys to null — so a reader that means "a failed pull, push or build" narrows
+ * with `isRepoChipKey`, never with `!== null`. The string was spelled by hand in `prs.ts` before
+ * it joined this pair; stored attention files still hold it, so its bytes never change.
+ */
+export type AttentionKey =
+  | { kind: "git"; repoId: string; verb: "pull" | "push" }
+  | { kind: "build"; repoId: string; buildId: string }
+  | { kind: "pr"; repoId: string; number: number };
+
+/** The one writer of the format, total for what `parseAttentionKey` accepts. Throws on a PR
+ *  number that is not a positive safe integer — `0`, `NaN`, `1.5` or `1e21` would be written as a
+ *  key the reader refuses, a notice nothing could ever resolve. That is a programming error in the
+ *  host (the forge hands PR numbers as integers), never input from a phone. */
+export function attentionKey(k: AttentionKey): string {
+  // closed: `parseAttentionKey` returns null for a kind this build does not know
+  switch (k.kind) {
+    case "git": return `git:${k.repoId}:${k.verb}`;
+    case "build": return `build:${k.repoId}:${k.buildId}`;
+    case "pr":
+      if (!Number.isSafeInteger(k.number) || k.number < 1) throw new Error(`PR number out of range: ${k.number}`);
+      return `pr:${k.repoId}:${k.number}`;
+  }
+}
+
+/** The kinds behind a repo's red chip (a failed pull, push or build) — what the phone's chips,
+ *  its resolved-toast and What's new count. A `pr` key is attention, but not one of these. */
+export function isRepoChipKey(k: AttentionKey | null): k is Extract<AttentionKey, { kind: "git" | "build" }> {
+  return k?.kind === "git" || k?.kind === "build";
+}
+
+/** The one reader of the format: null for anything that is not EXACTLY a key `attentionKey`
+ *  writes — an unknown kind, an empty repo, a git verb that is not pull/push, a PR number that
+ *  is not a positive integer as `attentionKey` writes it, an extra segment
+ *  after the verb (`git:<id>:push:<branch>` is a host-side identity, never a wire key). The
+ *  LAST segment is the verb or build id and everything between is the repo, as the reader
+ *  phones in the field carry it: a repo id may hold `:`, a build id may not round-trip one.
+ *  Degrades to null, never to a wrong verb. */
+export function parseAttentionKey(key: string | null | undefined): AttentionKey | null {
+  if (typeof key !== "string") return null;
+  const m = /^(git|build|pr):(.+):([^:]+)$/.exec(key);
+  if (!m) return null;
+  if (m[1] === "build") return { kind: "build", repoId: m[2], buildId: m[3] };
+  // A PR number is a positive integer written without a leading zero, so the key round-trips.
+  if (m[1] === "pr") return /^[1-9]\d*$/.test(m[3]) ? { kind: "pr", repoId: m[2], number: Number(m[3]) } : null;
+  return m[3] === "pull" || m[3] === "push" ? { kind: "git", repoId: m[2], verb: m[3] } : null;
+}
+
 /** The `key` a failed pull or push of one repo/worktree is filed under —
  *  spelled once, so the host's resolve and the phone's chip cannot drift. */
 export function gitAttentionKey(repoId: string, verb: "pull" | "push"): string {
-  return `git:${repoId}:${verb}`;
+  return attentionKey({ kind: "git", repoId, verb });
+}
+
+/** The identity a failed PUSH is kept under on the host: one per BRANCH, so a failure on
+ *  another branch never hands this one off as "replaced", and a push of that branch resolves
+ *  only its own. `gitAttentionKey(repo, "push")` + `:<branch>` (git refuses `:` in a branch
+ *  name); no branch (detached, or a record an older host kept) is the bare key. HOST-ONLY: the
+ *  WIRE item keeps the bare key (`parseAttentionKey` refuses this form) and carries the branch
+ *  as `NotificationItem.branch`. */
+export function gitPushFailureKey(repoId: string, branch?: string): string {
+  const k = gitAttentionKey(repoId, "push");
+  return branch ? `${k}:${branch}` : k;
+}
+
+/** The `key` a pull request's notices are filed under (`prs.ts`): one per PR of one
+ *  repo/worktree, so its merge or close resolves exactly the check failure filed before it. */
+export function prAttentionKey(repoId: string, number: number): string {
+  return attentionKey({ kind: "pr", repoId, number });
 }
 
 /** The `key` a failed build is filed under: one per build ENTRY of one
  *  repo/worktree, so only the next successful run of that same entry resolves it. */
 export function buildAttentionKey(repoId: string, buildId: string): string {
-  return `build:${repoId}:${buildId}`;
+  return attentionKey({ kind: "build", repoId, buildId });
+}
+
+/** "push of feature" / "push" / "pull" — a failed git verb named with its branch when the
+ *  host said one (`NotificationItem.branch`, `gitFailed.branch`); absent says the verb alone. */
+export function gitVerbWords(verb: string, branch?: string): string {
+  return verb === "push" && branch ? `push of ${branch}` : verb;
 }
 
 /** Drop anything that is not a known kind / boolean — the file is hand-editable. */
@@ -242,6 +322,12 @@ export interface NotificationItem {
    * person's done clears it.
    */
   key?: string;
+  /**
+   * A failed push's BRANCH (the one its `key` cannot carry: the key's format is frozen, see
+   * `AttentionKey`), so two branches' failures read apart. ABSENT on an older host, on a push
+   * from a detached HEAD, and on everything that is not a failed push — never a guess.
+   */
+  branch?: string;
   /**
    * Set once an attention item is dealt with: by the person's `done`, or by
    * its cause going away (`by: "resolved"`, `note` saying how — "fixed by the

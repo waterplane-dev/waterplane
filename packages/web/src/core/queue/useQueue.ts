@@ -46,6 +46,7 @@ import { usePendingState, pendingFns } from "./pending.ts";
 import { sendFns } from "./send.ts";
 import { verbFns } from "./verbs.ts";
 import { useUploadState, uploadFns } from "./uploads.ts";
+import { failToast } from "./phase.ts";
 import { wireFns, type WireFns } from "./wire.ts";
 import { migrateGiveUps, migratePadRescue } from "./migrate.ts";
 import type {
@@ -382,25 +383,12 @@ export function useQueue(input: QueueDeps): QueueApi {
     const e = cur.find((x) => x.ackId === ackId && x.status !== "failed");
     if (!e) return;
     noteSendFailed();
-    // An ambiguous verdict is a question the HOST is still working on, so it is
-    // not announced as a failure: `unconfirmed`/`unsubmitted` mean the text was
-    // typed and the screen could not be read back, and the desktop goes on to
-    // re-ask its own conversation log and retype a provably-absent prompt up to
-    // four times. Saying "not delivered" here was seven seconds after Send.
-    const asking = state === "unconfirmed" || state === "unsubmitted";
-    // "below" is the recovery bar on the main screen — true there, and a lie
-    // anywhere else. In the queue sheet the row IS on screen, in red, right
-    // where the reader is already looking.
-    showToast(asking
-      ? "Typed — the desktop is confirming it ran. It re-sends it itself if it never landed."
-      // Worded as something to pick up, not as a casualty report. By the time
-      // this fires the words are already safe in the queue and the only open
-      // question is what to do with them — and the retry paths never reach here
-      // any more: a delivery nobody ANSWERED goes to `nextRound` and keeps
-      // going, so what is left is the desktop having answered and said no.
-      : deps.overlayRef.current === "queue"
-        ? `Not sent — ${reason}. Your words are kept; the row is below.`
-        : `Not sent — ${reason}. Your words are kept below — restore or re-aim them.`);
+    // Only `unconfirmed` is a question the HOST is still working on (it re-asks
+    // its conversation log and retypes a provably-absent prompt up to four
+    // times), so it is not announced as a failure: "not delivered" seven
+    // seconds after Send was the bug. `unsubmitted` is known and waits on a
+    // person's Return. Words in `failToast` (core/queue/phase.ts).
+    showToast(failToast(state, reason, deps.overlayRef.current === "queue"));
     writeOutbox(cur.map((x) => x.ackId === ackId
       ? { ...x, status: "failed" as const, reason, failState: state ?? "other", failedAt: Date.now() }
       : x));

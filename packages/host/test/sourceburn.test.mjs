@@ -64,3 +64,18 @@ test("a corrupt latch file is moved aside, not trusted", async () => {
   const { w } = make(hist("month", 3), dir);
   assert.equal(await w.observe(reading()), true);
 });
+
+test("two sources observed in the same drain each get their push (guard is per source)", async () => {
+  const sent = [];
+  const w = createSourceBurnWatch({ history: () => hist("month", 3), notify: (k, p) => sent.push(p.tag), stateDir: tmp(), now: () => NOW, thresholdPtsPerHour: 4, cooldownMs: 3 * 60 * MIN });
+  const [a, b] = await Promise.all([w.observe(reading()), w.observe(reading({ source: "other", label: "Other" }))]);
+  assert.deepEqual([a, b], [true, true]);
+  assert.deepEqual(sent.sort(), ["burn:copilot:month", "burn:other:month"]);
+});
+
+test("a rejected claude reading does not hold the guard against a real source in the same drain", async () => {
+  const { w, sent } = make(hist("month", 3));
+  const [a, b] = await Promise.all([w.observe(reading({ source: "claude" })), w.observe(reading())]);
+  assert.deepEqual([a, b], [false, true]);
+  assert.equal(sent.length, 1);
+});

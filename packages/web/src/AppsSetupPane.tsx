@@ -117,6 +117,7 @@ export function AppsSetupPane({ rows, caps, allow, log, me, onFlip, onOpenDownlo
 const ICON: Record<CheckState, typeof CircleCheck> = {
   ok: CircleCheck, no: CircleX, warn: CircleAlert, unknown: CircleHelp,
 };
+// closed: the check state is computed on the phone (`appReady.ts`)
 const CLS: Record<CheckState, string> = { ok: "pass", no: "fail", warn: "warn", unknown: "ignored" };
 
 /** One app. Closed it is the verdict and, where there is one, the blocker in

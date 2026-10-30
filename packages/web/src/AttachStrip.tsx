@@ -153,10 +153,10 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
 
   const sendingKey = sendingUploadsKey(outbox);
   useEffect(() => {
-    let dead = false;
+    const ac = new AbortController();
     void (async () => {
-      const { refs, states } = await checkAttachments(settled, repoId, outbox, online);
-      if (dead) return;
+      const { refs, states } = await checkAttachments(settled, repoId, outbox, online, ac.signal);
+      if (ac.signal.aborted) return;
       setRows(refs.map((r, i) => ({ ref: r, state: states[i] })));
       onStates?.(states);
       // Only the LOCAL copies are resolved here: the host's are a versioned URL
@@ -170,12 +170,12 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
         next[refs[i].relPath] = url;
         minted.push(url);
       }
-      if (dead) { minted.forEach((u) => URL.revokeObjectURL(u)); return; }
+      if (ac.signal.aborted) { minted.forEach((u) => URL.revokeObjectURL(u)); return; }
       urls.current.forEach((u) => URL.revokeObjectURL(u));
       urls.current = minted;
       setSrcs(next);
     })();
-    return () => { dead = true; };
+    return () => ac.abort();
     // `outbox` itself is not a dependency: it re-identifies on every queue write
     // (a progress tick, another lane's ack) and re-running the host listing on
     // each would turn a visible sheet into a poller. `sendingKey` is the one

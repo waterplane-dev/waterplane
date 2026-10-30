@@ -124,6 +124,7 @@ export const AO_BAND_NAME: Record<AoBand, string> = {
   desktop: "this desktop",
 };
 
+// closed: the band is `bandOf`, computed by this build
 const BAND_SAYS: Record<AoBand, string> = {
   counted: "counted by the threshold row",
   listed: "listed beside the threshold, not counted by it",

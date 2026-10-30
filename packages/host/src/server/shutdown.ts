@@ -12,7 +12,9 @@ import { logTag, envName } from "@waterplane/shared";
 import { restartReason } from "../restartnote.js";
 import { runPendingRestore } from "../cli/selfupdate.js";
 
-export function installShutdown(ctx: ServerCtx): void {
+/** `stops`: host-side ticks that may WRITE a store (the push-failure watch resolves attention
+ *  items) — stopped before any flush, so none lands mid-flush. Absent ⇒ that tick never started. */
+export function installShutdown(ctx: ServerCtx, stops: Array<(() => void) | undefined> = []): void {
   /**
    * Flush the ack ledger before we go.
    *
@@ -35,6 +37,7 @@ export function installShutdown(ctx: ServerCtx): void {
       // restart is a dropped socket that looks like the tunnel (`host.restarting`).
       // `reason` is what the restarting caller posted first (`restartnote.ts`), else absent.
       try { const reason = restartReason(); ctx.broadcast({ t: "host.restarting", at: Date.now(), ...(reason ? { reason } : {}) }); } catch { /* shutdown must never throw */ }
+      for (const stop of stops) { try { stop?.(); } catch { /* shutdown must never throw */ } }
       try { ctx.acks.flush(); } catch { /* shutdown must never throw */ }
       // Debounced ~2 s, and `npm run restart` is routine — without this the last
       // observations before every restart die with the process, which for a record

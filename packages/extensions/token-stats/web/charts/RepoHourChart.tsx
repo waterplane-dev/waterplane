@@ -1,6 +1,6 @@
 /** The week, an hour per column, stacked by repo, with the weekly percentage on a fixed right axis. */
 import { useRef } from "react";
-import { fmtUsdShort, HOUR_MS, type UsageSample, usageSegments, type WeekBucket } from "@waterplane/shared";
+import { fmtUsdShort, HOUR_MS, hourFloor, type UsageSample, usageSegments, type WeekBucket } from "@waterplane/shared";
 import { dayTicks, makeDayPlot, SLOT } from "@waterplane/kit";
 import { CHART_H } from "../constants.ts";
 import { columnBands, OTHER_SLOT } from "../weekBands.ts";
@@ -51,7 +51,7 @@ export function RepoHourChart({ buckets, slots, samples, everyMs, from, now, wid
   /** The column the gesture began on: the scrub leaves it to the tap (a jittery tap that let
    *  go of the pick must not pick it again on its first pointermove). */
   const startH = useRef<string | null>(null);
-  const lastTop = Math.max(from, new Date(now).setMinutes(0, 0, 0));
+  const lastTop = Math.max(from, hourFloor(now));
   // Columns sit at the middle of their hour; two zero sentinels pin the domain to the span
   // without moving the peak.
   const half = HOUR_MS / 2;

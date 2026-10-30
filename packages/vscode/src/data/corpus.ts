@@ -22,11 +22,11 @@
 import { basename } from "node:path";
 import type { CostBreakdown, ModelSlice, TokenDay, TokenGroup, TokenHour, TokenHourSlot, TokenTotals } from "@waterplane/shared";
 import {
-  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
+  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourKey, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
 } from "@waterplane/shared";
-import { CROSS, localHour } from "../../../host/src/tokenscan.js";
+import { CROSS } from "../../../host/src/tokenscan.js";
 import type { Tally } from "../../../host/src/tokenscan.js";
-import { foldCostWindow, repoOfWorktree } from "../../../host/src/costwindow.js";
+import { foldCostWindow, repoOfWorktree, undatedFields } from "../../../host/src/costwindow.js";
 import type { Files } from "../../../host/src/costwindow.js";
 import type { CorpusDoc } from "../protocol.js";
 import type { ScanStats } from "./store.js";
@@ -200,7 +200,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
   const cutFrom = new Date(now);
   cutFrom.setHours(0, 0, 0, 0);
   cutFrom.setDate(cutFrom.getDate() - (HOURS_DAYS - 1));
-  const cutKey = localHour(cutFrom.getTime()).slice(0, 10);
+  const cutKey = hourKey(cutFrom.getTime()).slice(0, 10);
   const hourRows: TokenHour[] = [...hours.entries()]
     .filter(([hour]) => hour.slice(0, 10) >= cutKey)
     .map(([hour, t]) => ({ hour, ...t, cost: hourCost.get(hour) ?? zeroCost(), byModel: slices(hourModel.get(hour), hourModelCost.get(hour)) }))
@@ -240,6 +240,8 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
   const last = dayRows[dayRows.length - 1]?.day ?? null;
   return {
     totals, cost, unpriced, subagents, subagentCost: subCost,
+    // In `totals`, in no hour: the host's field and rule (`undatedWhy`), so a span cut refuses.
+    ...undatedFields(files),
     days: dayRows, hours: hourRows, hoursFrom, hourOfDay, models: modelRows, repos: repoRows, top,
     week, spans,
     conversations, subagentLogs, fastTurns,

@@ -41,7 +41,7 @@ export const ledgers: {
   localUsage(): Promise<LocalUsageDoc>;
   usageLog(hours: number): Promise<UsageHistoryDoc>;
   /** A non-claude source's kept readings, or null on any failure (older host, no route, bad shape) — absent, never a guess. */
-  sourceHistory(source: string): Promise<UsageSourceHistoryDoc | null>;
+  sourceHistory(source: string, signal?: AbortSignal): Promise<UsageSourceHistoryDoc | null>;
   tokenWindows(specs: { id: string; anchor: number; lenMs: number }[], fresh?: boolean): Promise<TokenWindowsDoc>;
   /** The cost window over `[from, to)`: conversations by hour, repo and launch (`GET /api/costwindow`). Uncached — an older host 404s. */
   costWindow(from: number, to: number, fresh?: boolean): Promise<CostWindowDoc>;
@@ -60,9 +60,9 @@ export const ledgers: {
   backendTokens: (id, fresh) => api.backendTokens(id, fresh),
   localUsage: () => api.localUsage(),
   usageLog: (hours) => api.usageLog(hours),
-  sourceHistory: async (source) => {
+  sourceHistory: async (source, signal) => {
     try {
-      const d = await api.usageLogSource(source);
+      const d = await api.usageLogSource(source, signal);
       return d && Array.isArray(d.samples) ? d : null;
     } catch { return null; }
   },

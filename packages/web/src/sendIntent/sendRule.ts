@@ -1,5 +1,5 @@
 /** The two rare clauses on a rule. Split from `sendIntent.ts` (docs/notes/send-architecture.md); pure, no React. */
-import { describeHours, type ScheduleRule } from "@waterplane/shared";
+import { describeHours, wordOf, type ScheduleRule } from "@waterplane/shared";
 
 // ── The two rare clauses on a rule ───────────────────────────────────
 
@@ -53,18 +53,23 @@ export function guardWords(rule: ScheduleRule): string {
   const anchor = anchorWindowOf(rule);
   const guard = guardWindowOf(rule);
   const other = anchor === "weekly" ? "session" : "weekly";
+  // closed: `anchorWindowOf` folds every `window` into these two keys
+  const [anchored, otherWord] = [WINDOW_LABEL[anchor], WINDOW_LABEL[other]];
+  // `guardWindow` is stored on the host's rule, so a window a newer host adds
+  // reaches this build unnormalised.
+  const guarded = wordOf(WINDOW_LABEL, guard, "the window the rule names");
   const pct = rule.minPctLeft;
   if (rule.edge === "after" && guard === anchor) {
-    return `A window that has just reset is empty by definition, so there is nothing to ask about ${WINDOW_LABEL[anchor]} at the instant this fires — written like this the condition is dropped and the rule runs every time. Point it at ${WINDOW_LABEL[other]}, or set it back to no condition.`;
+    return `A window that has just reset is empty by definition, so there is nothing to ask about ${anchored} at the instant this fires — written like this the condition is dropped and the rule runs every time. Point it at ${otherWord}, or set it back to no condition.`;
   }
   // A ONE-SHOT is kept until a reset meets the condition (the host re-arms it;
   // only a run spends it), so its sentence has a second half a recurring
   // rule's does not need — that one simply waits for its next occurrence.
   const kept = rule.oneShot === true ? " It stays armed for the next reset, and the next, until one meets the condition — then it runs once." : "";
   if (guard === anchor) {
-    return `If less than ${pct}% of ${WINDOW_LABEL[anchor]} is left when it fires, nothing runs and you get a notification saying it was skipped.${kept} A meter the host cannot read counts as not met — the condition exists to stop work, so an unreadable one stops it too.`;
+    return `If less than ${pct}% of ${anchored} is left when it fires, nothing runs and you get a notification saying it was skipped.${kept} A meter the host cannot read counts as not met — the condition exists to stop work, so an unreadable one stops it too.`;
   }
-  return `It waits for ${WINDOW_LABEL[anchor]} to reset, then asks about ${WINDOW_LABEL[guard]}: unless at least ${pct}% of that one is left, nothing runs and you get a notification saying it was skipped.${kept}`;
+  return `It waits for ${anchored} to reset, then asks about ${guarded}: unless at least ${pct}% of that one is left, nothing runs and you get a notification saying it was skipped.${kept}`;
 }
 
 /**

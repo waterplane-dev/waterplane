@@ -9,6 +9,7 @@ import { isCreateOp, type OutboxEntry } from "../../outbox";
 import { noteSendConfirmed } from "../../link";
 import { dismissToastIf, showToast } from "../../toast";
 import { answerSendingToast, requeue } from "./logic.ts";
+import { noteFireAck } from "./fireFate.ts";
 import type { Msg, QueueCtx } from "./types.ts";
 
 export interface WireFns {
@@ -57,6 +58,9 @@ export function wireFns(c: QueueCtx): WireFns {
     const timer = ackTimers.current.get(msg.ackId);
     if (timer != null) { clearTimeout(timer); ackTimers.current.delete(msg.ackId); }
     const entry = outboxRef.current.find((e) => e.ackId === msg.ackId);
+    // A tracked fire's receipt (`fireFate.ts`) is recorded BEFORE its row is
+    // retired, so no render sees "row gone, no receipt" and calls it dropped.
+    noteFireAck(msg.ackId, msg.ok, msg.runId, msg.reason);
     if (msg.ok) {
       writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
       // A create names the session it made: every prompt queued behind it

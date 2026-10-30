@@ -257,3 +257,30 @@ test("the pace push fires once per period, only when the projection passes the c
   assert.equal(quiet.check(), false);
   spent = null;
 });
+
+test("a ledger holding undated records is no period figure: a floor is not spend (design round 4)", () => {
+  const doc = (undated) => ({ scannedAt: NOW, cost: { total: 12 }, undated });
+  assert.equal(foldTotal(doc(0), NOW + 1000), 12);
+  assert.equal(foldTotal(doc(undefined), NOW + 1000), 12, "an older host that does not say reads as before");
+  assert.equal(foldTotal(doc(1), NOW + 1000), null);
+});
+
+test("a fold refused for undated records says so: the period has no figure and a WHY, never $0 (design round 4, r4-1 M2)", async () => {
+  const { foldAnswer } = await import("../dist/periodspend.js");
+  const doc = { scannedAt: NOW, cost: { total: 7 } };
+  assert.equal(foldAnswer(doc, NOW), 7);
+  const refused = foldAnswer({ ...doc, undated: 3 }, NOW);
+  assert.match(refused.why, /Claude Code's ledger holds 3 records it could not date/);
+  assert.equal(foldAnswer({ ...doc, scannedAt: 0, undated: 3 }, NOW), null, "never scanned: nobody measured, no cause to name");
+
+  let answer = refused;
+  const ps = new PeriodSpend({ periods: () => [monthPeriod], now: () => NOW, fold: async () => answer });
+  assert.equal(await ps.refresh(), true, "a new cause is news");
+  assert.deepEqual(ps.get(NOW), {}, "no figure");
+  assert.equal(ps.why(NOW).month, refused.why);
+  assert.deepEqual(ps.why(NOW + SPEND_STALE_MS + 1), {}, "the cause ages out like a figure");
+  answer = 12;
+  await ps.refresh();
+  assert.equal(ps.get(NOW).month, 12);
+  assert.deepEqual(ps.why(NOW), {}, "a figure clears the cause");
+});

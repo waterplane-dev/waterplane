@@ -30,7 +30,8 @@ import { onThemeOverlay, themeOverlay } from "./themeOverlay";
 export type ThemeChoice = "system" | "dark" | "light";
 export type Theme = "dark" | "light";
 
-/** What the browser chrome is painted with — must match `--bg` per theme. */
+/** What the browser chrome is painted with — must match `--bg` per theme.
+ * closed: the theme is the phone's own two-way pref */
 const CHROME: Record<Theme, string> = { dark: "#0b0d10", light: "#eef1f6" };
 /** …or a fork's `--bg` for that theme (`themeOverlay.ts`). */
 const chrome = (t: Theme): string => overlayChromeBg(t, themeOverlay()) ?? CHROME[t];

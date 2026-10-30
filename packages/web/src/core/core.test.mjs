@@ -92,17 +92,13 @@ test("boot runs every feature in order, survives a throw, and undoes in reverse"
   assert.deepEqual(log, ["boot a", "boot c", "undo c", "undo a"]);
 });
 
-test("a sheet's onLeave runs when it stops being on top, and never on no change or from nothing", () => {
+test("a sheet's onLeave gets the route's reason; a sheet with no feature entry is a no-op", () => {
   const left = [];
-  const t = createSheetTable([{ id: "f", sheets: [{ id: "tokens", persisted: false, render: () => null, onLeave: () => left.push("tokens") }] }]);
-  t.leave("tokens", "tokens");
-  t.leave(null, "tokens");
-  t.leave(null, null);
-  assert.deepEqual(left, []);
-  t.leave("tokens", null);
-  t.leave("tokens", "pull");
-  t.leave("pull", null); // a sheet with no feature entry is a no-op
-  assert.deepEqual(left, ["tokens", "tokens"]);
+  const t = createSheetTable([{ id: "f", sheets: [{ id: "tokens", persisted: false, render: () => null, onLeave: (r) => left.push(`tokens:${r}`) }] }]);
+  t.leave("tokens", "cover");
+  t.leave("tokens", "close");
+  t.leave("pull", "close");
+  assert.deepEqual(left, ["tokens:cover", "tokens:close"]);
 });
 
 /** The deferred toast lands on the next microtask. */

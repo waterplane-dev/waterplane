@@ -39,7 +39,7 @@ export function toMs(v: unknown): number | null {
  * `YYYY-MM-DD` in the LOCAL zone — the day a rate is asked for.
  *
  * Local rather than the ISO string's prefix, and the same rule (and the same
- * reason) as `tokenstats.ts`'s `localHour`: slicing the ISO would file a 01:30
+ * reason) as shared's `hourKey`: slicing the ISO would file a 01:30
  * turn under the previous UTC day. It only ever decides which side of a rate
  * change a record falls on, so being off by a day is only visible on the day a
  * price moves — which is exactly the day it would be wrong on both screens in

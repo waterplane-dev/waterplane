@@ -517,25 +517,33 @@ export function readInTree(worktree: string, relPath: string, opts: TreeReadOpts
   }
 }
 
+/** Options both artifact walks take. */
+export interface ArtifactWalkOpts {
+  scope?: "repo" | "outbox";
+  sinceSeconds?: number;
+  limit?: number;
+  /** Case-insensitive substring matched against the file name (extension included). */
+  query?: string;
+  /** Restrict to images, documents, or both. */
+  kind?: ArtifactKind;
+  /** Include the .claude/inbox dir in a "repo" scope walk (search wants it). */
+  includeInbox?: boolean;
+}
+
+/** One disk question the walk asks its driver; a failed one is answered `null`. */
+type WalkAsk = { readdir: string } | { stat: string };
+type WalkStat = { isDirectory(): boolean; isFile(): boolean; size: number; mtimeMs: number; birthtimeMs: number };
+
 /**
- * Walk a worktree (or just the outbox) for viewable artifacts, newest first.
- * `scope`: "outbox" = the outbox dirs in OUTBOX_SUBDIRS (.claude/outbox + .outbox),
- * else the whole tree minus SKIP_DIRS and the inbox.
+ * The artifact walk, ONCE — `discoverArtifacts` drives it with sync calls and
+ * `discoverArtifactsAsync` with awaited ones, so the walk, its filters and its
+ * containment rule cannot drift apart. It never touches the disk itself: each
+ * `yield` is a question (`readdir` → `Dirent[]`, `stat` → stats, `null` on
+ * failure). An entry's kind comes from the directory listing; only a symlink or
+ * a file the filter wants is `stat`ed — on WSL reading a Windows drive (9P,
+ * ~20 ms a call) a `stat` of every entry froze the host for minutes.
  */
-export function discoverArtifacts(
-  worktree: string,
-  opts: {
-    scope?: "repo" | "outbox";
-    sinceSeconds?: number;
-    limit?: number;
-    /** Case-insensitive substring matched against the file name (extension included). */
-    query?: string;
-    /** Restrict to images, documents, or both. */
-    kind?: ArtifactKind;
-    /** Include the .claude/inbox dir in a "repo" scope walk (search wants it). */
-    includeInbox?: boolean;
-  } = {},
-): { files: FileEntry[]; truncated: boolean } {
+function* artifactWalk(worktree: string, opts: ArtifactWalkOpts): Generator<WalkAsk, { files: FileEntry[]; truncated: boolean }, unknown> {
   const scope = opts.scope ?? "repo";
   const limit = Math.min(opts.limit ?? 300, 1000);
   const cutoff = opts.sinceSeconds ? Date.now() - opts.sinceSeconds * 1000 : 0;
@@ -555,31 +563,33 @@ export function discoverArtifacts(
   const nestedFull = join(root, NESTED_WORKTREES);
   while (stack.length) {
     const dir = stack.pop()!;
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const name of entries) {
+    const entries = (yield { readdir: dir }) as Dirent[] | null;
+    if (!entries) continue;
+    for (const e of entries) {
+      const name = e.name;
       const full = join(dir, name);
-      let st;
-      try {
+      let isDir = e.isDirectory();
+      let isFile = e.isFile();
+      if (e.isSymbolicLink()) {
         // A link that leaves the worktree is neither walked nor listed: a committed
         // `docs/home -> ~` would otherwise list every picture under the home directory.
-        if (lstatSync(full).isSymbolicLink() && containedReal(root, relative(root, full)) === null) continue;
-        st = statSync(full);
-      } catch {
-        continue;
+        // One that stays inside is followed.
+        if (containedReal(root, relative(root, full)) === null) continue;
+        const st = (yield { stat: full }) as WalkStat | null;
+        if (!st) continue;
+        isDir = st.isDirectory();
+        isFile = st.isFile();
       }
-      if (st.isDirectory()) {
+      if (isDir) {
         if (SKIP_DIRS.has(name)) continue;
         if (scope === "repo" && !opts.includeInbox && full === inboxFull) continue; // inbox is phone→repo
         if (full === nestedFull) continue; // other checkouts, not this tree's files
         stack.push(full);
-      } else if (st.isFile() && allow.has(extname(name).toLowerCase())) {
-        if (cutoff && st.mtimeMs < cutoff) continue;
+      } else if (isFile && allow.has(extname(name).toLowerCase())) {
         if (q && !name.toLowerCase().includes(q)) continue;
+        const st = (yield { stat: full }) as WalkStat | null;
+        if (!st) continue;
+        if (cutoff && st.mtimeMs < cutoff) continue;
         out.push({ name, relPath: relative(root, full).split(sep).join("/"), size: st.size, mtime: st.mtimeMs, ctime: birthMs(st) });
       }
     }
@@ -589,68 +599,47 @@ export function discoverArtifacts(
   return { files: out.slice(0, limit), truncated };
 }
 
+function answerSync(ask: WalkAsk): unknown {
+  try {
+    return "readdir" in ask ? readdirSync(ask.readdir, { withFileTypes: true }) : statSync(ask.stat);
+  } catch {
+    return null;
+  }
+}
+
+async function answerAsync(ask: WalkAsk): Promise<unknown> {
+  try {
+    return "readdir" in ask ? await readdirAsync(ask.readdir, { withFileTypes: true }) : await statAsync(ask.stat);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Walk a worktree (or just the outbox) for viewable artifacts, newest first.
+ * `scope`: "outbox" = the outbox dirs in OUTBOX_SUBDIRS (.claude/outbox + .outbox),
+ * else the whole tree minus SKIP_DIRS and the inbox. Blocks the loop for the
+ * whole walk — its callers are outbox-scope; a repo-scope caller wants
+ * `discoverArtifactsAsync`.
+ */
+export function discoverArtifacts(worktree: string, opts: ArtifactWalkOpts = {}): { files: FileEntry[]; truncated: boolean } {
+  const walk = artifactWalk(worktree, opts);
+  let step = walk.next();
+  while (!step.done) step = walk.next(answerSync(step.value));
+  return step.value;
+}
+
 /**
  * `discoverArtifacts` without holding the event loop: the same walk, the same filters, the same
  * answer — for every REPO-scope caller (the cross-repo search, a session's image and auto-pull
- * baselines). The sync walk `stat`s every entry of the whole tree in one go; on WSL reading a
- * Windows drive (9P, ~20 ms a call, far worse while `git status` runs) one search over 36 repos
- * froze the host for minutes. Here an entry's kind comes from the directory listing and only a
- * symlink or a file the filter wants is `stat`ed, every call awaited.
+ * baselines). On WSL reading a Windows drive one search over 36 repos walked synchronously froze
+ * the host for minutes; here every disk call is awaited.
  */
-export async function discoverArtifactsAsync(
-  worktree: string,
-  opts: Parameters<typeof discoverArtifacts>[1] = {},
-): Promise<{ files: FileEntry[]; truncated: boolean }> {
-  const scope = opts.scope ?? "repo";
-  const limit = Math.min(opts.limit ?? 300, 1000);
-  const cutoff = opts.sinceSeconds ? Date.now() - opts.sinceSeconds * 1000 : 0;
-  const allow = kindExt(opts.kind, scope);
-  const q = opts.query?.trim().toLowerCase() || "";
-  const root = resolve(worktree);
-  const starts = scope === "outbox"
-    ? OUTBOX_SUBDIRS.map((sub) => transportDir(worktree, sub)).filter((d): d is string => d !== null && existsSync(d))
-    : (existsSync(root) ? [root] : []);
-  if (!starts.length) return { files: [], truncated: false };
-
-  const out: FileEntry[] = [];
-  const stack = [...starts];
-  const inboxFull = inboxDir(worktree);
-  const nestedFull = join(root, NESTED_WORKTREES);
-  while (stack.length) {
-    const dir = stack.pop()!;
-    let entries: Dirent[];
-    try {
-      entries = await readdirAsync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      const name = e.name;
-      const full = join(dir, name);
-      let isDir = e.isDirectory();
-      let isFile = e.isFile();
-      if (e.isSymbolicLink()) {
-        // Followed like the sync walk — only while its target stays in the worktree.
-        if (containedReal(root, relative(root, full)) === null) continue;
-        try { const st = await statAsync(full); isDir = st.isDirectory(); isFile = st.isFile(); } catch { continue; }
-      }
-      if (isDir) {
-        if (SKIP_DIRS.has(name)) continue;
-        if (scope === "repo" && !opts.includeInbox && full === inboxFull) continue;
-        if (full === nestedFull) continue;
-        stack.push(full);
-      } else if (isFile && allow.has(extname(name).toLowerCase())) {
-        if (q && !name.toLowerCase().includes(q)) continue;
-        let st;
-        try { st = await statAsync(full); } catch { continue; }
-        if (cutoff && st.mtimeMs < cutoff) continue;
-        out.push({ name, relPath: relative(root, full).split(sep).join("/"), size: st.size, mtime: st.mtimeMs, ctime: birthMs(st) });
-      }
-    }
-  }
-  out.sort((a, b) => b.mtime - a.mtime);
-  const truncated = out.length > limit;
-  return { files: out.slice(0, limit), truncated };
+export async function discoverArtifactsAsync(worktree: string, opts: ArtifactWalkOpts = {}): Promise<{ files: FileEntry[]; truncated: boolean }> {
+  const walk = artifactWalk(worktree, opts);
+  let step = walk.next();
+  while (!step.done) step = walk.next(await answerAsync(step.value));
+  return step.value;
 }
 
 /**

@@ -45,13 +45,13 @@ type Whole =
 function WholeSide({ repoId, path, side, staged, zoomFont }: { repoId: string; path: string; side: "old" | "new"; staged: boolean; zoomFont: CSSProperties }) {
   const [got, setGot] = useState<Whole>({ state: "loading" });
   useEffect(() => {
-    let live = true;
+    const ac = new AbortController();
     setGot({ state: "loading" });
-    api.gitText(repoId, path, side, staged).then(
-      (t) => { if (live) setGot(t ? { state: "ok", ...t } : { state: "absent" }); },
-      (e: unknown) => { if (live) setGot({ state: "error", reason: e instanceof Error ? e.message : String(e) }); },
+    api.gitText(repoId, path, side, staged, ac.signal).then(
+      (t) => { if (!ac.signal.aborted) setGot(t ? { state: "ok", ...t } : { state: "absent" }); },
+      (e: unknown) => { if (!ac.signal.aborted) setGot({ state: "error", reason: e instanceof Error ? e.message : String(e) }); },
     );
-    return () => { live = false; };
+    return () => ac.abort();
   }, [repoId, path, side, staged]);
 
   let body;

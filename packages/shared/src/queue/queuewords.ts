@@ -7,6 +7,7 @@ import { SERIAL_WAIT_TEXT } from "./queueserial.js";
 /** The sentence for one block reason. Wording lives here so every surface that
  *  explains a stuck queue says the same thing. */
 export function blockedReasonText(r: SendBlockReason): string {
+  // closed: the reason is `planQueue`'s, computed by this build
   switch (r) {
     case "budget": return "paused — the account is past your usage budget; it resumes when the window resets";
     // "the repo's work items" was the retired name for rows in the shared

@@ -189,6 +189,10 @@ const buildAcks = acksFor("op-build-1");
 check(buildAcks.length === 2 && buildAcks.every((x) => x.ok && x.runId === buildAcks[0].runId),
   `both build receipts name the same run (${JSON.stringify(buildAcks.map((x) => x.runId))})`);
 check(state.buildRuns.length === 1, `a re-sent build.run compiles once (saw ${state.buildRuns.length} runs)`);
+// The phone opens the run the receipt NAMES (web runSelect.ts `startedRun`), so
+// that name must be the run the list carries — never inferred from "a new run".
+check(!!buildAcks[0]?.runId && state.buildRuns[0]?.runId === buildAcks[0].runId,
+  `the receipt's runId is the run that started (${buildAcks[0]?.runId} vs ${state.buildRuns[0]?.runId})`);
 
 // ── 4. fanout.followup ───────────────────────────────────────────────
 const before = state.sessions.size;

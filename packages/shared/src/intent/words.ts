@@ -89,6 +89,11 @@ export function intentReasonText(reason: BlockReason, detail?: string): string {
       // The host replaces this with its own numbers (`localSlotWaitText`) or
       // the loading sentence; this is what is true when nobody said which.
       return "waiting for the local model — another local session is working, or the model is still loading";
+    // TOTAL on purpose: `reason` arrives on the wire, and a newer host's reason
+    // reaches an older bundle that has no case for it — that must still read
+    // as a sentence, never `undefined`.
+    default:
+      return "waiting — the desktop is holding this for a reason this app version cannot name yet";
   }
 }
 

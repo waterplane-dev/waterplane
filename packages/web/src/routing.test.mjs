@@ -166,6 +166,20 @@ test("leaving a session started from a launcher sheet returns to that sheet", ()
   assert.deepEqual(routeStep(focused, 3, K(null, null, "app")), { kind: "go", delta: -2 });
 });
 
+test("leaving a session never lands on a transient launcher sheet under it (NAV-2)", () => {
+  // openSend then enterPending: Send is not persisted, so a Back onto it
+  // reopens it emptied. The arrow searches for the bare launcher instead.
+  assert.deepEqual(routeStep(["||", "|send|", "pending:1||"], 2, "||"), { kind: "go", delta: -2 });
+  assert.deepEqual(routeStep([K(null, null), K(null, "send"), K("s1", null)], 2, K(null, null)), { kind: "go", delta: -2 });
+  // a feature sheet is scoped to memory too, never a landing
+  const f = featureSheetId("requirements", "list");
+  assert.deepEqual(routeStep([K(null, null), K(null, f), K("s1", null)], 2, K(null, null)), { kind: "go", delta: -2 });
+  // …and with no bare launcher below, it is pushed, never the Send
+  assert.deepEqual(routeStep([K(null, "send"), K("s1", null)], 1, K(null, null)), { kind: "push" });
+  // a persisted launcher sheet (and the bare launcher) still is one Back
+  assert.deepEqual(routeStep([K(null, null), K(null, "git"), K("s1", null)], 2, K(null, null)), { kind: "go", delta: -1 });
+});
+
 test("leaving a session opened from another session still goes to the launcher", () => {
   const stack = [K(null, null), K("s1", null), K("s2", null)];
   assert.deepEqual(routeStep(stack, 2, K(null, null)), { kind: "go", delta: -2 });

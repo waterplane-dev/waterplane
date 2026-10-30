@@ -40,3 +40,11 @@ test("the hammer spins for a live run, or the host's seed until a frame for that
   assert.deepEqual(buildBusyIn([], seeded), { name: "Release" });
   assert.equal(buildBusyIn([run("b", "done")], seeded), null);
 });
+
+import { readFileSync } from "node:fs";
+
+test("the sheet's schedule cue reads a ticking clock, never Date.now() at render (BLD-5)", () => {
+  const src = readFileSync(new URL("./BuildButtonsSheet.tsx", import.meta.url), "utf8");
+  assert.match(src, /useNow\(/);
+  assert.doesNotMatch(src, /Date\.now\(\)/);
+});

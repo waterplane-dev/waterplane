@@ -284,14 +284,17 @@ export function routeStep(
   // past the backlog the session was started from, while the gesture popped
   // one entry into it. Anything else under the session (another session, a
   // different focus) keeps the search: the arrow means "the list", not "the
-  // previous session".
+  // previous session". The sheet under it must be one that comes back WHOLE:
+  // none, or a persisted one. A transient sheet (Send, a feature sheet) is held
+  // in memory and reopens emptied, so the arrow searches for the bare launcher.
   if (!a && !o && live(cur) && screenOfKey(cur!).split("|")[0]) {
     let below = top - 1;
     while (below > 0 && stack[below] === VACANT) below--;
     const k = below >= 0 ? stack[below] : undefined;
     if (live(k) && !isStep(k)) {
-      const [ka, , kr] = k!.split("|");
-      if (!ka && kr === r) return { kind: "go", delta: below - depth };
+      const [ka, ko, kr] = k!.split("|");
+      const whole = !ko || PERSISTED_OVERLAYS.has(ko as Overlay);
+      if (!ka && kr === r && whole) return { kind: "go", delta: below - depth };
     }
   }
   for (let i = top - 1; i >= 0; i--) {

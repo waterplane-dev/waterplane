@@ -29,6 +29,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import type { Connection } from "../conn/useConnection";
 import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
+import { openToolbarGit } from "../../gitLanding";
 import { Button } from "../../kit/Button";
 
 const ICON = 16;
@@ -83,7 +84,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
   switch (t.id) {
     case "untracked":
       if (!activeRepo || !gitPending(activeRepo)) return null;
-      return <Button key="untracked" className="count" title={gitTitle(activeRepo)} onClick={() => { dismiss(); setOverlay("git"); }}><FileDiff size={ICON} /> {activeRepo.changedCount > 0 && activeRepo.changedCount}{gitSyncText(activeRepo) && <span className="git-ab"> {gitSyncText(activeRepo)}</span>}</Button>;
+      return <Button key="untracked" className="count" title={gitTitle(activeRepo)} onClick={() => { dismiss(); openToolbarGit(activeRepo.id, setOverlay); }}><FileDiff size={ICON} /> {activeRepo.changedCount > 0 && activeRepo.changedCount}{gitSyncText(activeRepo) && <span className="git-ab"> {gitSyncText(activeRepo)}</span>}</Button>;
     // The star is stateful, so it is not the generic button: it says whether
     // this session IS starred (filled) and whether the desktop has agreed yet
     // (`star-pending`'s dotted underline). Absent on a queued open — there is

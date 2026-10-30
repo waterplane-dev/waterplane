@@ -61,6 +61,10 @@ test("failures: the number and the cut are one list; one opens that repo; none h
   assert.deepEqual(view("repo-failures", { failures: [] }), { text: "nothing has failed", door: null, verb: null });
 });
 
+test("a pull request's notice is not a repo failure (design round 4: pr keys parse now)", () => {
+  assert.deepEqual(failuresOf([{ id: "p", key: "pr:r1:17" }, { id: "g", key: "git:r1:pull" }], () => null).map((x) => x.id), ["g"]);
+});
+
 test("a repo id with a colon still parses; an unknown repo keeps its id", () => {
   assert.deepEqual(failuresOf([{ id: "a", key: "git:C:/x:pull" }], () => null)[0], { id: "a", repoId: "C:/x", repoName: "C:/x", verb: "pull", kind: "git" });
 });
@@ -142,4 +146,15 @@ test("every setting door names a row that exists in the settings index", () => {
 
 test("a row with no default door draws none until the APK gate offers one", () => {
   assert.deepEqual(view("shade-taps", {}), { text: "in this APK", door: null, verb: null });
+});
+
+test("failures name the branch when the host said one, so two branches' pushes read apart", () => {
+  const items = [
+    { id: "b", key: "git:r1:push", branch: "fix" }, { id: "a", key: "git:r1:push", branch: "feature" },
+    { id: "d", key: "git:r1:push" }, { id: "p", key: "git:r1:pull", branch: "ignored" },
+  ];
+  const f = failuresOf(items, () => "myapp");
+  assert.equal(view("repo-failures", { failures: f }).text, "4 failed: myapp push of fix, myapp push of feature, myapp push, …");
+  assert.equal(view("repo-failures", { failures: f.slice(1, 2) }).text, "myapp push of feature failed");
+  assert.equal(view("repo-failures", { failures: f.slice(3) }).text, "myapp pull failed", "a branch on a pull is not a push's");
 });

@@ -37,8 +37,8 @@ test("add keeps the item as attention; a reload of the file has it back with its
 test("a new item under a still-unhandled key hands the older one off as resolved", () => {
   const s = new AttentionStore(null);
   const key = gitAttentionKey("r1", "push");
-  assert.equal(s.add(item({ key })), false);
-  assert.equal(s.add(item({ key })), true);
+  assert.equal(s.add(item({ key })).replaced, false);
+  assert.equal(s.add(item({ key })).replaced, true);
   assert.equal(s.unhandled().length, 1, "one cause counts once");
   const old = s.items()[1];
   assert.equal(old.handled.by, "resolved");

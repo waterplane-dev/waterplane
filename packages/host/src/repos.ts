@@ -123,6 +123,16 @@ export async function listTargets(root: string, budgetMs = 1500): Promise<RepoTa
   return won ?? last.map((t) => ({ ...t }));
 }
 
+/**
+ * The last finished scan, walking only when there has been none — for a host-side TICK that maps an
+ * id it already holds to its path (`gitnotify.ts`' push-failure watch), where a ROOT walk every
+ * minute is seconds of disk on WSL. Never for a decision on a client-named directory.
+ */
+export async function cachedTargets(root: string): Promise<RepoTarget[]> {
+  const last = lastScan.get(root);
+  return last ? last.map((t) => ({ ...t })) : discoverTargets(root);
+}
+
 async function scanTargets(root: string): Promise<RepoTarget[]> {
   const maxDepth = Number(env("MAX_DEPTH") ?? DEFAULT_MAX_DEPTH);
   const roots = root.split(",").map((s) => s.trim()).filter(Boolean);

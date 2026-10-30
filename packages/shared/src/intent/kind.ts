@@ -163,6 +163,17 @@ export const isTimedWorkRow = (i: Intent): boolean =>
 export const isScheduleRow = (i: Intent): boolean => i.trigger.kind === "at" && !isTimedWorkRow(i);
 
 /**
+ * Switched off by a person — read here and nowhere else. The owner is
+ * `trigger.paused`, which only the pause switch writes (`setArmed`), and this
+ * reads that flag and NOTHING else: a `nextAt: null` is never a pause here,
+ * whatever the rule. (An older host spelled its pause as a bare `nextAt: null`
+ * on a recurring weekly rule; that migration lives in the host's disk load,
+ * `intents/disk.ts` `stampLegacyPause`, and runs on load only.)
+ */
+export const intentPaused = (i: Pick<Intent, "trigger">): boolean =>
+  i.trigger.kind === "at" && i.trigger.paused === true;
+
+/**
  * Origins the host's manager ROUTES on — the two schedule adapters. `origin`
  * is otherwise free-form provenance; see the manager's note on them. Here so
  * the phone can ask the same question the executor dispatch asks.

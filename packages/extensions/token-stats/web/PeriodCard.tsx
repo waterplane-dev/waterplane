@@ -5,7 +5,7 @@ import { modelRows, pacingLine, periodTitle, usdWords } from "@waterplane/sdk";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { BesideBlock } from "./BesideBlock.tsx";
 import { Composition } from "./Readouts.tsx";
-import { foldStateText, priced, rowFacts, usdOrTok } from "./weekBands.ts";
+import { type FoldRead, foldStateText, priced, rowFacts, usdOrTok } from "./weekBands.ts";
 import { Button } from "@waterplane/kit";
 
 const ROWS_SHOWN = 8;
@@ -26,7 +26,7 @@ export function PeriodCard({ state, cap, doc, res, refusal, now }: {
   state: PeriodState;
   cap: number | null;
   doc: CostWindowDoc | null;
-  res: { state: string; error?: string | null };
+  res: FoldRead;
   /** Why this period cannot be read at all (a span past the host's 35 days), or null. */
   refusal: string | null;
   now: number;

@@ -234,9 +234,9 @@ test("past the grace window a recurring rule skips the occurrence — never a la
 });
 
 test("a switched-off recurring rule is a gate, not a clock problem", () => {
-  // `nextAt === null` is the explicit "nothing is armed" — distinct from
-  // `undefined`, which only means the manager has not computed one yet.
-  const v = intentVerdict(at(null), facts(), NOW);
+  // The pause switch's flag is the gate; a bare `nextAt: null` is only
+  // "nothing is armed" (an older host's null pause is stamped at disk load).
+  const v = intentVerdict(at(null, { paused: true }), facts(), NOW);
   assert.equal(v.kind, "wait");
   assert.equal(v.reason, "gate");
   assert.match(v.detail, /switched off/);
@@ -778,6 +778,18 @@ test("intentReasonText answers every reason, and a finished sentence survives it
   // The offline sentence is the phone's, and it must promise the one thing the
   // old queue could not: nothing expires.
   assert.match(intentReasonText("offline"), /nothing expires/);
+});
+
+test("intentReasonText words a reason this build has never heard of", () => {
+  // `blockReason` rides on every Intent row from the HOST, and the phone's
+  // bundle is often older: `hostBusy`, `noSlot` and `localModel` each reached
+  // phones that had no case for them. `activityIntentWords` calls this with no
+  // `detail`, so a missing default printed "undefined" on the row (e7adb005 is
+  // the same bug in `sessionBudgetUnknownText`).
+  const text = intentReasonText("someFutureReason");
+  assert.equal(typeof text, "string");
+  assert.doesNotMatch(String(text), /undefined/);
+  assert.ok(text.length > 10, "a real sentence, not an empty string");
 });
 
 

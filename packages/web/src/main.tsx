@@ -45,7 +45,7 @@ import { passiveApi } from "./passiveApi";
 import { bootMode, cachedPassive, rememberPassive, type BootMode } from "./passiveMode";
 import { SHELL_NUDGE_EVENT } from "./shellLink";
 import { updateSupported, updates } from "./webUpdate";
-import { takeResumeRoute } from "./resumeRoute";
+import { resumeLanding } from "./resumeRoute";
 import { installDemoTransport } from "./demo/transport";
 import { demoProblem, setDemoActive } from "./demo/mode";
 import { leaveDemo } from "./demoEntry";
@@ -85,8 +85,8 @@ armBootTrap();
 // mounts, because `App` reads the hash in a `useRef` initializer on its first
 // render — and `replaceState` rather than a navigation, so the entry the routing
 // effect then seeds its ancestors under is this one.
-const resumeAt = takeResumeRoute(location, Date.now());
-if (resumeAt) history.replaceState(null, "", resumeAt);
+// The entry's state is what the screen was opened on (the git view's repo), so the seed adopts it.
+resumeLanding(location, Date.now());
 
 // Light or dark, before React mounts. `index.html` already set the attribute
 // inline (that is what stops the cold-start flash); this takes ownership of it

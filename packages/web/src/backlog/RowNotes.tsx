@@ -26,7 +26,7 @@ import {
 import { toggled } from "../RetimeBar";
 import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
-import { CHECK_ICON, CHECK_LABEL, VALIDATE_ICON, VALIDATE_LABEL, dropOffered } from "./backlogLabels";
+import { checkLook, dropOffered, validateLook } from "./backlogLabels";
 
 export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
   const {
@@ -221,8 +221,8 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                           title={hasDetail ? "tap for full check details" : it.checkNote || ""}
                           onClick={hasDetail ? () => toggleDetail(it.id) : undefined}
                         >
-                          {(() => { const I = CHECK_ICON[it.checkStatus]; return <I size={12} style={{ verticalAlign: "-2px" }} />; })()}{" "}
-                          {CHECK_LABEL[it.checkStatus]}{it.checkNote ? ` · ${it.checkNote}` : ""}
+                          {(() => { const I = checkLook(it.checkStatus).Icon; return <I size={12} style={{ verticalAlign: "-2px" }} />; })()}{" "}
+                          {checkLook(it.checkStatus).label}{it.checkNote ? ` · ${it.checkNote}` : ""}
                           {hasDetail ? (shown ? <ChevronDown size={12} style={{ verticalAlign: "-2px" }} /> : <ChevronRight size={12} style={{ verticalAlign: "-2px" }} />) : null}
                         </Tag>
                         {hasDetail && shown && (
@@ -251,8 +251,8 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                           title={hasDetail ? "tap for validation details & next steps" : it.validateNote || ""}
                           onClick={hasDetail ? () => toggleValidate(it.id) : undefined}
                         >
-                          {(() => { const I = VALIDATE_ICON[it.validateStatus]; return <I size={12} style={{ verticalAlign: "-2px" }} />; })()}{" "}
-                          {VALIDATE_LABEL[it.validateStatus]}{it.validateNote ? ` · ${it.validateNote}` : ""}
+                          {(() => { const I = validateLook(it.validateStatus).Icon; return <I size={12} style={{ verticalAlign: "-2px" }} />; })()}{" "}
+                          {validateLook(it.validateStatus).label}{it.validateNote ? ` · ${it.validateNote}` : ""}
                           {hasDetail ? (shown ? <ChevronDown size={12} style={{ verticalAlign: "-2px" }} /> : <ChevronRight size={12} style={{ verticalAlign: "-2px" }} />) : null}
                         </Tag>
                         {hasDetail && shown && (

@@ -34,7 +34,7 @@ import { FilterChip } from "./kit/FilterChip";
 import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
 import {
-  ENGINE_ADOPT_LABEL, engineAdoptPrompt, healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
+  ENGINE_ADOPT_LABEL, engineAdoptPrompt, healthAskContextOf, healthIndexRemedyPrompt, healthQualityRunPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
   type IndexNow, type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
 } from "./setupRemedy";
 import { TilesCard, WeightCard } from "./RepoHealthTiles";
@@ -308,6 +308,12 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
       repo, "the health index trend");
   };
 
+  const qualityRun = () => {
+    if (!onRemedy || !repo) return;
+    track("action:repohealth.qualityrun");
+    onRemedy(healthQualityRunPrompt(repo.repoName, healthAskContextOf(plot, view?.engine?.kind, "", null)), repo, "a design-quality run");
+  };
+
   // Every reading in the order the sheet drew them, with the engine line — see
   // `seriesAllRemedyPrompt` for why the narrative stays out of it.
   const askAll = () => {
@@ -515,7 +521,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
       {indexShown && repo ? (
         <HealthIndexSection repoId={repo.id} axis={drawnAxis} onCommits={onCommits}
           seriesStamp={`${series?.lastSha ?? ""}:${series?.rows ?? 0}`}
-          onAsk={onRemedy ? askIndex : undefined} onAskTrend={onRemedy ? askTrend : undefined} />
+          onAsk={onRemedy ? askIndex : undefined} onAskTrend={onRemedy ? askTrend : undefined} onQualityRun={onRemedy ? qualityRun : undefined} />
       ) : null}
 
       {drawn && plot ? (

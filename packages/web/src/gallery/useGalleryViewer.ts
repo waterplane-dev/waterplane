@@ -43,7 +43,7 @@ export function useGalleryViewer({ open, scope, repoId }: { open: Row | null; sc
     setDocRaw(false);
     setDocCachedAt(null);
     if (!open || !isText(open.relPath)) { setDoc(null); return; }
-    let cancelled = false;
+    const ac = new AbortController();
     let live = false;
     const path = open.relPath;
     const repo = repoOfRow(repoId, open);
@@ -75,16 +75,16 @@ export function useGalleryViewer({ open, scope, repoId }: { open: Row | null; sc
     const versioned = mtime > 0;
     const showCached = async (): Promise<boolean> => {
       const hit = versioned ? await getArtifactText(repo, path, mtime) : null;
-      if (cancelled || live || !hit) return false;
+      if (ac.signal.aborted || live || !hit) return false;
       setDoc({ path, text: hit.text, truncated: hit.truncated });
       setDocCachedAt(hit.savedAt);
       return true;
     };
     void showCached();     // paints instantly offline; replaced below when the file arrives
-    bgFetch(urlForRow(scope, repoId, open))
+    bgFetch(urlForRow(scope, repoId, open), { signal: ac.signal })
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((text) => {
-        if (cancelled) return;
+        if (ac.signal.aborted) return;
         live = true;
         const cut = { path, text: text.slice(0, PREVIEW_MAX), truncated: text.length > PREVIEW_MAX };
         setDoc(cut); setDocCachedAt(null);
@@ -95,14 +95,14 @@ export function useGalleryViewer({ open, scope, repoId }: { open: Row | null; sc
         if (versioned) void putArtifactText(repo, path, mtime, cut.text, cut.truncated);
       })
       .catch((e) => {
-        if (cancelled) return;
+        if (ac.signal.aborted) return;
         void showCached().then((had) => {
-          if (cancelled || had) return;
+          if (ac.signal.aborted || had) return;
           setDoc(null);
           setDocErr(isOffline(e) ? "the host didn't answer, and this device has no saved copy" : String(e?.message || e));
         });
       });
-    return () => { cancelled = true; };
+    return () => ac.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per opened file (path + repo); `open` is a fresh object per listing while the same file stays open
   }, [open?.relPath, open?.repoId, scope]);
   return { fullRes, setFullRes, doc, docErr, docCachedAt, docRaw, setDocRaw, markTick, setMarkTick };

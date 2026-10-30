@@ -1,5 +1,6 @@
+import { highlightAt, reanchor, stepHighlight } from "./tabHighlight";
 import { FileText, Layers, Loader, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useBackStep } from "./backStep";
 import { askConfirm } from "./Confirm";
 import { repoAccentStyle } from "./format";
@@ -265,13 +266,21 @@ function TabsList({ s, fileOn, viaKey, kick, onClose }: {
   const rows = useMemo(() => filterStrip(s.all, query, (st) => STATUS_LABEL[st]), [s.all, query]);
   const isOn = (x: StripTab) => x.kind === "file" ? fileTabKey(x.file) === s.fileActive : !fileOn && x.tab.id === s.activeId;
   // The highlight starts on the tab you are on, so the first ↓ is "the next one".
-  const [at, setAt] = useState(() => Math.max(0, s.all.findIndex(isOn)));
+  const rowKey = (x: StripTab) => x.kind === "file" ? fileTabKey(x.file) : x.tab.id;
+  const [hl, setHl] = useState<string | null>(() => { const x = s.all.find(isOn); return x ? rowKey(x) : null; });
+  const lastAt = useRef(0);
+  const keys = rows.map(rowKey);
+  const at = highlightAt(keys, hl, lastAt.current);
+  // Written on commit, not in render: a render React throws away must not move it.
+  useLayoutEffect(() => { lastAt.current = Math.max(0, at); });
+  // The highlighted tab closed: the row now drawn becomes the identity.
+  useLayoutEffect(() => { const k = reanchor(keys, hl, lastAt.current); if (k !== hl) setHl(k); });
   const listRef = useRef<HTMLUListElement | null>(null);
   const kicked = useRef(kick);
 
-  const step = (d: number) => setAt((i) => (rows.length ? (i + d + rows.length) % rows.length : 0));
+  const step = (d: number) => setHl(stepHighlight(keys, hl, lastAt.current, d));
   useEffect(() => { if (kick !== kicked.current) { kicked.current = kick; step(1); } });
-  useEffect(() => { if (query) setAt(0); }, [query]);
+  useEffect(() => { if (query) { lastAt.current = 0; setHl(null); } }, [query]);
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${at}"]`)?.scrollIntoView({ block: "nearest" });
   }, [at]);
@@ -290,7 +299,7 @@ function TabsList({ s, fileOn, viaKey, kick, onClose }: {
     const k = e.key.toLowerCase();
     if (e.key === "ArrowDown" || (ctrl && k === "n")) { e.preventDefault(); step(1); }
     else if (e.key === "ArrowUp" || (ctrl && k === "p")) { e.preventDefault(); step(-1); }
-    else if (e.key === "Enter") { e.preventDefault(); if (rows[at]) open(rows[at]); }
+    else if (e.key === "Enter") { e.preventDefault(); if (at >= 0) open(rows[at]); }
     // preventDefault: the wide layout's Esc (`escape.ts`) steps Back unless
     // the press was already answered — this close IS that Back.
     else if (e.key === "Escape") { e.preventDefault(); onClose(); }

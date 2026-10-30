@@ -8,8 +8,8 @@
  * every tree, pre-registered in `constants.mjs`, pinned by `fixture.json`, and
  * the only inputs the health index reads, so one repo's index can be put beside
  * another's. A repo also knows things about itself no generic metric can — in
- * waterplane, how many of the CLI screen readers are tested against a capture
- * from the installed `claude`. Those are declared by the repo, in a COMMITTED
+ * waterplane, how many of the CLI screen readers have no proof on the
+ * installed `claude`. Those are declared by the repo, in a COMMITTED
  * file, and they ride in the series row under `own`, a key no metric, no
  * reading in `readings.mjs` and no index entry ever reads. They change no
  * definition, so `PREREG_VERSION` and the pack hash do not move.
@@ -21,8 +21,8 @@
  * desktop's own things. Read out of the COMMIT (`git.readFileAt`), never off the
  * disk: only a declaration somebody committed runs.
  *
- *   { "readings": [ { "key": "screenFixtures", "name": "…", "means": "…",
- *                     "better": "higher", "unit": "signals",
+ *   { "readings": [ { "key": "screenNoProof", "name": "…", "means": "…",
+ *                     "better": "lower", "unit": "signals",
  *                     "run": ["node", "tools/screenfixtures.mjs", "--reading"] } ] }
  *
  * The same file's `central` object re-tunes waterplane's OWN readings — one

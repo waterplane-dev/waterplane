@@ -141,10 +141,14 @@ self.addEventListener("push", (event) => {
 
 // The feed item a push stands for, for a tap with no session, file, image or
 // plugin to open: the page's `openNotif` lands it (a health move opens its repo's
-// chart; anything else its own row in the feed). Null on an older host's push.
+// chart; a failed push the git view ON that failure; anything else its own row in
+// the feed). The host's payload IS the item plus `pull` (`server/clients.ts`), so it
+// is forwarded WHOLE, as the APK does — a field picked by hand here once dropped
+// `key` and `branch` (review A3c M2). Null on an older host's push.
 function notifItem(d) {
   if (typeof d.id !== "string" || typeof d.kind !== "string") return null;
-  return { id: d.id, kind: d.kind, ts: d.ts, title: d.title, body: d.body, tag: d.tag, backlog: d.backlog, open: d.open };
+  const { pull: _pull, ...item } = d;
+  return item;
 }
 
 // Tapping a notification focuses the app and asks it to open that session.

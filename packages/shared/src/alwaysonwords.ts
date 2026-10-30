@@ -14,6 +14,7 @@ import { CHARS_PER_TOKEN, weighContext } from "./contextweight.js";
 import { fmtCount } from "./tokens.js";
 import { CARRIED_KINDS } from "./wire/alwayson.js";
 import type { CarriedKind, CarriedPart, SessionCarried } from "./wire/alwayson.js";
+import { wordOf } from "./wordof.js";
 
 type Fmt = (n: number) => string;
 const tokOf = (chars: number) => Math.round(chars / CHARS_PER_TOKEN);
@@ -155,6 +156,9 @@ function carriedLabel(p: CarriedPart): string {
     case "hook_context": return n != null && n > 1 ? `hook context (${n})` : "hook context";
     case "system_prompt": return `system prompt ${UNDOC}`;
     case "tool_schemas": return `tool schemas ${UNDOC}`;
+    // `kind` is the host's reading of the CLI's log: a kind a newer host
+    // names reaches an older phone with no case for it.
+    default: return "a part this app version cannot name";
   }
 }
 
@@ -203,6 +207,8 @@ const PART_NOUN: Record<CarriedKind, string> = {
   system_prompt: "the system prompt",
   tool_schemas: "tool schemas",
 };
+/** `laterKinds` are the host's, so a kind this build lacks is still a noun. */
+const partNoun = (k: string): string => wordOf(PART_NOUN, k, "a part this app version cannot name");
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -220,7 +226,7 @@ export function carriedWords(c: SessionCarried, fmt: Fmt = fmtCount, opts: { unp
   const docChars = c.parts.filter((p) => !p.undocumented && p.kind !== "system_prompt" && p.kind !== "tool_schemas").reduce((n, p) => n + p.chars, 0);
   const named = (c.laterKinds ?? []).filter((k) => k in PART_NOUN);
   const later = named.length
-    ? ` ${capital(andList(named.map((k) => PART_NOUN[k])))} changed later in the conversation; the change is not folded in.`
+    ? ` ${capital(andList(named.map((k) => partNoun(k))))} changed later in the conversation; the change is not folded in.`
     : c.laterDeltas > 0
       ? ` ${c.laterDeltas === 1 ? "One kind" : `${c.laterDeltas} kinds`} of these changed later in the conversation; the change is not folded in.`
       : "";
@@ -228,13 +234,13 @@ export function carriedWords(c: SessionCarried, fmt: Fmt = fmtCount, opts: { unp
     return `No request has been answered yet; these are the attachments the CLI has written so far (chars).${later}`;
   }
   const out = [`The first request carried ${fmt(c.firstRequestTok)} tokens.`];
-  if (documented.length) out.push(`About ${fmt(tokOf(docChars))} of them (${fmt(docChars)} chars) are ${andList(documented.map((k) => PART_NOUN[k]))} the CLI attached;`);
+  if (documented.length) out.push(`About ${fmt(tokOf(docChars))} of them (${fmt(docChars)} chars) are ${andList(documented.map((k) => partNoun(k)))} the CLI attached;`);
   const snap = (["system_prompt", "tool_schemas"] as const).filter((k) => kinds.has(k));
-  const unknown = (["system_prompt", "tool_schemas"] as const).filter((k) => !kinds.has(k)).map((k) => PART_NOUN[k]);
+  const unknown = (["system_prompt", "tool_schemas"] as const).filter((k) => !kinds.has(k)).map((k) => partNoun(k));
   if (snap.length) {
     const said = snap.map((k) => {
       const chars = c.parts.filter((p) => p.kind === k).reduce((n, p) => n + p.chars, 0);
-      return `${PART_NOUN[k]} at about ${fmt(tokOf(chars))} tokens (${fmt(chars)} chars)`;
+      return `${partNoun(k)} at about ${fmt(tokOf(chars))} tokens (${fmt(chars)} chars)`;
     });
     out.push(`${documented.length ? "an" : "An"} undocumented record puts ${andList(said)};`);
   }

@@ -11,7 +11,7 @@
  * Dollar figures are the screen's usual COUNTERFACTUAL (list price, not a
  * bill); the sheet's caveat covers them and they are not re-caveated here.
  */
-import { fmtCount, fmtUsd, tokenTotal, type TokenDay, type TokenStatsDoc } from "@waterplane/shared";
+import { fmtCount, fmtUsd, tokenTotal, undatedSince, undatedWhy, type TokenDay, type TokenStatsDoc } from "@waterplane/shared";
 
 export interface Insight {
   id: "writes" | "cold" | "agents" | "concentration" | "trend" | "model";
@@ -103,7 +103,12 @@ export function statsInsights(doc: TokenStatsDoc, now: number): Insight[] {
 
   // 5. Last 7 days against the 7 before, per request (volume moves with how
   //    much you worked; the price of a request is the part a habit moves).
-  const cur = doc.days.filter((d) => d.day > dayKey(now, 7) && d.day <= dayKey(now, 0));
+  // Undated records are in no day: where one could fall in the fortnight, both sums are floors
+  // and the comparison is absent (shared `undatedSince`, from the fortnight's first midnight).
+  const fortnight = new Date(now);
+  const fortnightFrom = new Date(fortnight.getFullYear(), fortnight.getMonth(), fortnight.getDate() - 13).getTime();
+  const undatedIn = !!undatedWhy(undatedSince(doc, fortnightFrom));
+  const cur = undatedIn ? [] : doc.days.filter((d) => d.day > dayKey(now, 7) && d.day <= dayKey(now, 0));
   const prev = doc.days.filter((d) => d.day > dayKey(now, 14) && d.day <= dayKey(now, 7));
   const a = spanOf(cur), b = spanOf(prev);
   if (a.turns >= 20 && b.turns >= 20 && a.usd > 0 && b.usd > 0) {

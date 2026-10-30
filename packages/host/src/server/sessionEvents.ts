@@ -154,8 +154,9 @@ export function wireSessionEvents(ctx: ServerCtx) {
     // Opening a session is the moment a repo starts being driven from the phone —
     // and the moment its wiring starts to matter. Re-check it here as well as on
     // the sweep, so a repo created between two sweeps is never driven unchecked.
-    // Deferred: this shells out to git, and a session create must not wait for it.
-    setImmediate(() => { try { ctx.setupWatch.check(info.cwd, basename(info.cwd)); } catch { /* never break a create */ } });
+    // In the background: this shells out to git and walks the tree, and a session create must not
+    // wait for it — nor may it run on the loop that pumps every PTY (`checkInBackground` never throws).
+    void ctx.setupWatch.checkInBackground(info.cwd, basename(info.cwd));
   });
   ctx.sessions.on("exit", (id: string) => {
     ctx.imgSeen.delete(id);

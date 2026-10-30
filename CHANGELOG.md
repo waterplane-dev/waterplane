@@ -5,6 +5,33 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.13
+
+0.1.12 was tagged but never released; its changes ship here.
+
+### New
+
+- **A PR-mode push is safer and says what it did.** In a repo that takes changes only through a pull request, the push goes to its own `wp/` branch and never to the default branch, which is read from GitHub. Main moves back only if nothing was committed after the push; a commit that landed late is named by its sha. A retry after a failed PR open reuses the branch already pushed, and an unknown default branch is refused in words instead of pushing plain.
+- **Merge when green keeps your choice, and the desktop tidies after the merge.** The pull request card merges by the method you picked, or lets the desktop choose if you picked none. A merge you asked for survives a desktop restart, and once GitHub says it is merged the desktop tidies the checkout once. You get one notice with the receipt, and something is filed for you only when part of the tidy needs a person.
+- **A failed push names its branch and opens on itself.** The git view and What's new say which branch failed. A tapped push notification opens that failure, and a push clears only its own branch's failure, once git shows the commit on the remote. A repeated network error is one log line an hour, and a notification too large for the push service is cut to fit and resent smaller.
+- **The git view opens on the right repo, and Back keeps it.** The toolbar's diff and untracked count open the session's repo. A reload or an update restart lands on the repo you had open, and the branch list shows the current branch's upstream (a branch whose upstream is gone shows none).
+- **A build sheet shows its own run.** Starting a build selects its run, and a refused or dismissed start says so with the desktop's reason instead of reading *Starting* for ever. A run that left the list opens nothing and says why.
+- **Budget caps follow the backend you switch to.** A cap the new backend cannot carry is set aside, not deleted, says what it was, and comes back when you switch back. Editing the field discards a set-aside cap.
+- **Native-unit amounts read right.** A small positive amount in a backend's own unit prints as *<0.1* and never as 0.
+- **Pausing a schedule is its own switch.** A paused rule stays paused when you edit it or give it a new time, and an older desktop's paused rule is read as paused.
+- **Backlog and queue sheets keep your place.** The backlog cut you were on is the one Back returns to, every in-session door opens it on the session's repo, and a repo you opened it from stays in the cut. The send queue's sentences read right in singular and plural, and a failed send tells *not submitted* from *not confirmed*.
+
+### Fixed
+
+- **Token stats no longer print a span they cannot stand behind.** When some records carry no date, claude's ledger says how many it could not place. A calendar span, the trend or a budget over that range says why it refuses, one past-window box refuses without blanking the others, and the undated count reads the same on every screen.
+- The week boundary, daily averages and hourly charts keep the right days across a daylight-saving change, including the repeated hour in autumn.
+- A launcher whose repo list is still loading says it is waiting, instead of *No repos under host root*, and the git view on a host with no repos no longer waits for ever.
+- The setup checks run in the background when a session opens, and an older check never replaces a fresher result.
+- A screen you leave (gallery viewer, token-stats history, diff sides, scrollback, found desktops, leftover worktrees) now cancels its request on the desktop instead of letting it finish unwanted.
+- A backlog row, build, fan-out, health-index or budget state this phone does not recognise is shown as a sentence instead of breaking the sheet.
+- Leaving a session returns to a launcher sheet only when it comes back whole, and an exited session clears its agents and shells.
+- The Docker entrypoint and the WSL setup check the Claude installer script against a pinned sha256 before running it.
+
 ## 0.1.12
 
 ### New

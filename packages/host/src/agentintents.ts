@@ -37,6 +37,7 @@ import {
   ORIGIN_AGENT,
   cleanRule,
   cleanSessionBudget,
+  clientIntentFields,
   isAgentPosted,
   itemHeadline,
   whenWords,
@@ -93,7 +94,9 @@ export async function postClientDraft(deps: ClientPostDeps, raw: IntentDraft, op
   // agent will later be spawned in.
   const cwd = await deps.containRepoDir(raw?.cwd);
   if (!cwd) return { ok: false, reason: "cwd outside root", refusedCwd: true };
-  const draft: IntentDraft = { ...raw, cwd };
+  // Only what a client may POST (`clientIntentFields`, shared's one list): the
+  // lifecycle, the clock's bookkeeping and the history are the host's.
+  const draft = { ...clientIntentFields(raw ?? {}, "post"), cwd } as IntentDraft;
   // A build is started with `build.run`: an agent or a peer (an `origin` is
   // passed) never posts one. A device's own `intent.post` may (schedules).
   if (opts.origin && raw.payload?.kind === "build") return { ok: false, reason: "a build is started with build.run" };
@@ -109,11 +112,8 @@ export async function postClientDraft(deps: ClientPostDeps, raw: IntentDraft, op
   if (draft.headline) draft.headlineBy = "hand"; else delete draft.headlineBy;
   if (draft.category) draft.categoryBy = "hand"; else delete draft.categoryBy;
   // …and never a way past the BUDGET: `pastBudget` is `intent.waive`'s and
-  // `budgetPass` is stamped by `workItemInherits`, `leftoverOf` by the tick.
-  // All three are the host's.
-  delete draft.pastBudget;
-  delete draft.budgetPass;
-  delete draft.leftoverOf;
+  // `budgetPass` is stamped by `workItemInherits`, `leftoverOf` by the tick —
+  // all three `host` in `INTENT_FIELD_WRITER`, so the pick above dropped them.
   // …and never the AGENT mark: it is written by the agent route and nowhere
   // else, so the person can trust it both ways.
   if (opts.origin) draft.origin = opts.origin;

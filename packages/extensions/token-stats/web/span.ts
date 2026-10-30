@@ -15,8 +15,9 @@
  */
 import {
   addCost, addTotals, type CostBreakdown, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
-  type TokenTotals, zeroCost, zeroTotals,
+  fmtCount, type TokenTotals, undatedSince, undatedText, undatedWhy, zeroCost, zeroTotals,
 } from "@waterplane/shared";
+import { TREND_DAYS } from "./constants.ts";
 import { foldModels, type LiveWindowId, type WindowCut } from "./usageCut.ts";
 
 export type SpanId = LiveWindowId | "30" | "90" | "all";
@@ -130,4 +131,42 @@ export function clockOf(hours: readonly TokenHour[]): TokenHourSlot[] {
     addCost(slots[n].cost, h.cost);
   }
   return slots;
+}
+
+/** The undated fields a span cut reads (`TokenStatsDoc.undated`/`undatedUntil`/`undatedLogs`). */
+export type UndatedFields = { undated?: number; undatedUntil?: number; undatedLogs?: Array<[number, number]> };
+
+/**
+ * The sentence a calendar span prints INSTEAD of its sum of days, or null to draw it: the ledger
+ * holds records it could not date, in no day, and one of them could fall in `[from, …)` unless
+ * every log holding one was last written before `from` (shared `undatedSince`). A sum of days
+ * there is a floor that looks exact — the live window's cut refuses the same way.
+ */
+export function spanUndatedText(doc: UndatedFields | null | undefined, from: number): string | null {
+  return undatedText(undatedSince(doc, from));
+}
+
+/**
+ * Under ALL TIME the hero is `doc.totals`, which holds the records with no date, while the daily
+ * bars and the running total sum `doc.days`, which hold none of them — so the line ends below the
+ * hero. The split is said, never left for a reader to notice (a total is never printed without
+ * it). Null when nothing is undated, on an older host, or when the field is not a count.
+ */
+export function allTimeUndatedText(doc: UndatedFields | null | undefined): string | null {
+  const n = doc?.undated;
+  if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) return null;
+  const one = n === 1;
+  return `${fmtCount(n)} record${one ? " has" : "s have"} no date: ${one ? "it is" : "they are"} in the total above but in no day, so the days here add up to less than the total.`;
+}
+
+/**
+ * The 7-day mean without the points whose seven days an undated record could fall in — CUT,
+ * never drawn short. A point at local midnight `t` averages the `TREND_DAYS` days ending on it.
+ */
+export function trendWithoutUndated<P extends { t: number }>(points: readonly P[], doc: UndatedFields | null | undefined): P[] {
+  return points.filter((p) => {
+    const d = new Date(p.t);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (TREND_DAYS - 1)).getTime();
+    return !undatedWhy(undatedSince(doc, start));
+  });
 }

@@ -8,8 +8,8 @@
 #      login link to the container log and waiting for you to open it;
 #   3. fronts the host with `tailscale serve` on https :443 (TS_SERVE=0 skips it),
 #      so the phone gets a secure context;
-#   4. installs Claude Code with Anthropic's installer if it is not in the home
-#      volume yet (CLAUDE_INSTALL=0 skips it);
+#   4. installs Claude Code with Anthropic's installer, checked against a pinned
+#      sha256, if it is not in the home volume yet (CLAUDE_INSTALL=0 skips it);
 #   5. runs `waterplane start` (or the command you gave) as `wp`.
 #
 # The daemon binds the Tailscale IP and loopback only, as on a desktop. Never
@@ -95,8 +95,14 @@ fi
 if ! as_wp sh -c 'command -v claude' >/dev/null 2>&1; then
   if [ "${CLAUDE_INSTALL:-1}" = 1 ]; then
     say "installing Claude Code into $WP_HOME with Anthropic's installer (https://claude.ai/install.sh)"
-    as_wp sh -c 'curl -fsSL https://claude.ai/install.sh | bash' ||
-      warn "the Claude Code install failed; sessions will not start until claude is on PATH. Retry with a restart."
+    # The installer is pinned by sha256 (same pin as scripts/windows/wsl-setup.sh): a changed
+    # script is refused, never run. After reading the new one, set CLAUDE_INSTALL_SHA256 to its hash.
+    as_wp env SUM="${CLAUDE_INSTALL_SHA256:-3a68d3406cf674e17bed1733a4dcf37805e2e47d87417700007d7e1aa766a944}" sh -c '
+      f="$(mktemp)" &&
+      curl -fsSL -o "$f" https://claude.ai/install.sh &&
+      echo "$SUM  $f" | sha256sum -c --quiet - &&
+      bash "$f"; rc=$?; rm -f "$f"; exit $rc' ||
+      warn "the Claude Code install failed, or install.sh no longer matches CLAUDE_INSTALL_SHA256; sessions will not start until claude is on PATH. Retry with a restart."
   else
     warn "CLAUDE_INSTALL=0 and no claude on PATH: sessions will not start until you install it."
   fi

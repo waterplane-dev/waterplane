@@ -183,7 +183,7 @@ Plus a fourth package that is deliberately **not** a workspace:
 - `settings.ts` — **the settings that follow the USER, not the browser** (`<STATE_DIR>/settings.json`). Everything the app remembered lived in localStorage, which is right for a send queue or a measured uplink rate and wrong for the things the user AUTHORED: prompt templates (snippets), fan-out presets, header commands, the prompt pad, the toolbar layout, the default launch flags. Those were per-browser, so a template written on the phone did not exist on the desktop and a reinstalled PWA lost the lot — while a host that already persists the backlog, the ack ledger and the audit log sat right there. Deliberately dumb, because the alternative is a sync engine. **Opaque values**: a record is `{ value, ts }` where `value` is the client's RAW localStorage string, never parsed — shapes change with the UI, and `webbundle.ts` exists precisely so the phone can update its web bundle without the daemon moving. **Last write wins on the CLIENT's timestamp**, with equal timestamps losing (a reconnect re-push must not re-broadcast to every device), and the loser of a race is answered with the winning value instead of being ignored, so it stops holding a version nobody else has. **An allow-list, not a mirror** (`SYNCED_SETTING_KEYS` in `@waterplane/shared`, where both ends read it): syncing `waterplane.outbox` would let a second device replay another device's queue — a prompt typed twice — and syncing `waterplane.dataSaver`/`uploadScale` would copy a phone's DERP-relayed link settings onto a desktop on the LAN. An over-cap value is refused rather than truncated (a value silently cut in half is a corrupt prompt list on every other device). Persisted tmp+rename, debounced, flushed on SIGTERM, degrading to in-memory on any I/O failure. Wire: `settings.get`/`settings.set` → `settings.all` (sent unprompted on hello) + a `settings.update` broadcast. Verified by `e2e-settings.mjs`.
 - `scaffold.ts` — `newWorktree`, new-folder / new-repo scaffolding. **A new repo is a new *project*, initialized for phone use** (`newRepo(..., { setup: true, description })`, the default): `git init -b main` (symbolic-ref fallback for git < 2.28), the `.claude/inbox` + `.claude/outbox` drops and `.waterplane/` created, a `.gitignore` covering all three (plus the usual node/env noise), a README, a CLAUDE.md whose "Working from a phone" section tells the agent to write artifacts into the outbox instead of dumping unreadable walls of terminal output, and an initial commit (so `git worktree add` — hence backlog parallel mode — works immediately). No git identity configured → the commit is retried with a placeholder one and the result carries a `warning` (the phone shows it instead of jumping straight into the session). `usmc: false` is the old bare `git init` + empty commit; e2e scripts that need a non-compliant repo pass it. Verified by `e2e-scaffold.mjs`.
 - `repos.ts` / `discover.ts` — recursive multi-root repo + worktree discovery: an async walk (entry types from `readdir`, a `stat` only for a symlink), a single-worktree repo read off `.git/HEAD`, `git worktree list` only where `.git/worktrees/` has entries; concurrent scans share one. `discoverTargets` always scans; `listTargets` (the launcher's `/api/repos` only) answers the last scan when a fresh one takes over 1.5 s, and the route's git counts come from `git.ts`' `changedCountsWithin` (four at a time, cached, budgeted). Why: [distribution.md](distribution.md#windows-the-launcher-drives-the-host-in-wsl) — over WSL's `/mnt/c` the old synchronous walk froze the daemon for minutes. `repolist.test.mjs`.
-- `git.ts` — status, unified diffs, stage/unstage, commit, push (Tier-3 git review from the phone).
+- `git.ts` — status, unified diffs, stage/unstage, commit, push (Tier-3 git review from the phone). `pushverdict.ts` holds the pure half of a push: `pushRefusedByRule` / `pushFailureText` read git's verdict off the push's stdout and stderr (split out of `git.ts` so the classifier is testable without a git process).
   `countChangedFiles()` feeds the launcher's git badge (`RepoTarget.changedCount`) and counts EVERY
   uncommitted path — staged, unstaged, untracked — because the tap opens the git view, which lists
   exactly those. It counted `ls-files --others` alone once: the badge said 4 while the sheet it
@@ -3530,7 +3530,7 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
   workers under an opus parent is the ordinary shape, and it is the case where the parent's rate is
   wrong about most of the bill.
 
-  `localDay` is `tokenstats.ts`'s `localHour` truncated, for its reason: slicing the ISO string
+  `localDay` is shared `hourKey` (the `hourKey`/`hourKeyMs`/`hourFloor` trio in `costwindow.ts`) truncated, for its reason: slicing the ISO string
   would file a 01:30 turn under the previous UTC day. It only ever decides which side of a price
   change a record falls on — but two screens disagreeing about the zone would put the same record on
   different sides of it.
@@ -6766,8 +6766,8 @@ explicitly, here, which is exactly why the sentence had to stop lying about it.
 
 The engine's readings are the same method in every repo, which is what makes the health index
 comparable across repos — and what makes them blind to anything only one repo knows about itself.
-waterplane's own example: how many of the ten CLI screen/log readers are tested against a capture from
-the installed `claude` (`tools/screenfixtures.mjs --reading`). So a repo may declare readings of its
+waterplane's own example: how many of the ten CLI screen/log readers have no proof on the installed
+`claude` — no fixture, host capture or live good from that version (`tools/screenfixtures.mjs --reading`). So a repo may declare readings of its
 own in a COMMITTED `.waterplane-shared/health.json` (`REPOHEALTH_OWN_FILE`; the committed per-repo
 config dir `builds.json` already uses — `.waterplane/` is gitignored and holds this desktop's own
 things): `{ "readings": [{ key, name, means, better: "lower"|"higher", unit?, run: [argv…] }] }`.
@@ -7732,6 +7732,17 @@ _Verbatim from the skill as of 2026-10-17; the skill is the rule — where this 
 
 The skill keeps the rules; this is the narrative and the per-slice inventory it carried, verbatim.
 
+### `sessions/endsession.ts` — ending a session, apart from wiring its PTY
+
+`endSession(core, session, {exitCode, signal, diedAtLimit})` is what a REAL exit of the PTY tears down,
+moved out of `register`'s `onExit` unchanged in order: the session stops running (turn, prompt, ask,
+login, links cleared), the screen recorder is freed and the capture sealed, the prompt/idle timers are
+cleared, the agent poll is retired and `checkAgents` runs once with `running` false (it clears
+agents/shells/shellList and arms nothing), the stop-verify / limit / conversation-id watches stop, the
+last chance to adopt the conversation id, `deleteLive`, the closed row, `updated` then `exit`, and last
+the limit resurrection. It takes a `SessionCore`, so `packages/host/test/endsession.test.mjs` runs it on
+a fake core with no PTY. A tmux detach (`session.detaching`) is not an end and stays in `register`.
+
 ### `sessions/` slices — the per-slice ownership inventory
 
 The `host-core` bullet as it stood, including the `(S2)…(S11)` plan labels:
@@ -8596,3 +8607,28 @@ The 2026-10-29 fact-check of the host and shared skills named these modules for 
   by a verdict. Cut on the ledger's HOURS, never its days: a ledger day is the host's local calendar
   day while a claude period is `[start, reset)` in its own zone, so a day summed in puts up to 23
   hours into the wrong span. ABSENT, with the sentence why, wherever the cut cannot be exact.
+
+## `ctxlog/usagerecord.ts` — one reader for the CLI's usage record (2026-10-30)
+
+The claude CLI writes what each request cost on its `assistant` rows (`message.usage`). Five host
+readers counted those rows — `tokenscan.ts` (the all-conversations ledger), `ctxlog/ctxupdate.ts`
+(the live session's series), `ctxlog/ctxagents.ts` (its subagents), `transcript/transcriptparse.ts`
+(the reader's per-turn cost) and `backends/overhead.ts` (the measured always-on prompt for the
+claude-on-another-runner backends) — and each spelled the record's rules by hand, citing another copy
+by comment ("same as in the series", "as `ctxlog.ts` does"). A fix then lands in one copy:
+c3190495 taught `tokenscan.ts` that an output-only first record is not the conversation's anchor, and
+`overhead.ts` kept returning null on exactly that row — and on a `<synthetic>` usage-wall row, which
+it never skipped (a `<synthetic>` row with numbers on it was even returned AS the answer, model
+`<synthetic>`). The "always-on overhead" sentence went absent where the other two readers found an
+anchor.
+
+So `usageRecordOf(row, firstSight?)` holds the rules: assistant rows with a usage object only,
+`<synthetic>` dropped, `message.id` deduped through the CALLER's set (the series' cursor bounds its
+own at `SEEN_CAP`; a one-shot reader passes `firstSightIn(new Set())`), a missing, non-finite or
+negative counter reads 0, the 1-hour write tier read, and `carried` = input + cache read + cache
+write. **The anchor is the first record with `carried > 0`** (`isAnchor`). What a caller then does
+with a record — drop an all-four-zero one, price it, plot it, skip a sidechain — stays the caller's,
+and so do the substring pre-filters in front of `JSON.parse` that keep the cold scan cheap: the
+module takes the row already parsed. `test/usagerecord.test.mjs` runs one log (wall row, output-only
+reply, a streamed reply repeated under one id, another request) through every reader that names a
+first request and requires one answer.

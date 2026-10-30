@@ -32,7 +32,7 @@ import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
 import { AttentionStore } from "./attentionstore.js";
-import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportExplainOutcome, reportGitOutcome } from "./gitnotify.js"; import { setExplainSink } from "./explainjob.js";
+import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportExplainOutcome, reportGitOutcome, startPushFailureWatch } from "./gitnotify.js"; import { setExplainSink } from "./explainjob.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
@@ -43,7 +43,7 @@ import { Meter } from "./meter.js";
 import { UiStats } from "./uistats.js";
 import { UsageChecker } from "./usage.js"; import { createUsageSources } from "./usagesources.js";
 import { UsageLog } from "./usagelog.js";
-import { createBurnWatch, createSourceBurnWatch } from "./burnwatch.js"; import { createWeekBurn } from "./weekburn.js"; import { discoverTargets } from "./repos.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
+import { createBurnWatch, createSourceBurnWatch } from "./burnwatch.js"; import { createWeekBurn } from "./weekburn.js"; import { cachedTargets, discoverTargets } from "./repos.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
 import { BudgetStore } from "./budget.js";
 import { setSpendPeriodSource } from "./spendwall.js";
 import { createBillingWire } from "./server/billingwire.js";
@@ -144,8 +144,8 @@ Object.assign(ctx, {
   send, broadcast, notifications, notify, notificationFeed, clearNotifications, handleNotification,
   resolveAttention, resolveAttentionPrefix, attention,
 });
-// A host-run pull or push that ended is told once (`gitnotify.ts`): failed ⇒ attention, pushed ⇒ a receipt.
-setGitOutcomeSink((o) => reportGitOutcome(o, ctx)); setExplainSink((o) => reportExplainOutcome(o, ctx)); setPrNotify(ctx); // PR changes seen by the leased poll (prs.ts) ride the git notify path
+// A host-run pull or push that ended is told once (`gitnotify.ts`): failed ⇒ attention, pushed ⇒ a receipt; a push from a terminal is no outcome, so a minute tick asks git about each open push failure.
+setGitOutcomeSink((o) => reportGitOutcome(o, ctx)); const stopPushWatch = DOCTOR ? undefined : startPushFailureWatch({ attention: ctx.attention, resolveAttention: (k, n) => ctx.resolveAttention(k, n), worktrees: async () => new Map((await cachedTargets(ROOT)).map((t) => [t.id, t.worktreePath])) }); setExplainSink((o) => reportExplainOutcome(o, ctx)); setPrNotify(ctx); // PR changes seen by the leased poll (prs.ts) ride the git notify path
 
 const deliveries = createDeliveries(ctx);
 ctx.startPrompt = deliveries.startPrompt; ctx.deliverChain = deliveries.deliverChain;
@@ -435,7 +435,7 @@ const sourceBurn = createSourceBurnWatch({ history: (s) => usageSources.history(
 usage.seed(usageLog.last());
 // Billing profile + dollar-period spend (server/billingwire.ts); the budget reads them.
 const billingWire = createBillingWire(ctx); ctx.billing = billingWire.billing;
-const budget: BudgetStore = new BudgetStore(ROOT, () => usage.get(), () => billingWire.spend(), () => billingWire.scraped()); ctx.budget = budget; setSpendPeriodSource(() => budget.usdPeriods());
+const budget: BudgetStore = new BudgetStore(ROOT, () => usage.get(), () => billingWire.spend(), () => billingWire.scraped(), () => billingWire.spendWhy()); ctx.budget = budget; setSpendPeriodSource(() => budget.usdPeriods());
 ctx.publishBudget = billingWire.publishBudget; // tells clients the verdict, only when it moved
 // Keep usage warm only when something GATES on it (each poll spawns claude).
 function syncUsagePolling() {
@@ -682,7 +682,7 @@ async function main(): Promise<void> {
   }
 }
 
-installShutdown(ctx);
+installShutdown(ctx, [stopPushWatch]);
 
 main().catch((err) => {
   console.error(`${logTag} fatal`, err);

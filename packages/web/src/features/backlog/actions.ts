@@ -10,8 +10,8 @@ import { LS } from "../../storage";
 import { core, mapWith, mapWithout, type CoreApi } from "../../sdk";
 import { onSlotAskList } from "../../slotAskStore";
 import { slotCheckStart, slotCheckStartToast, type SlotCheck } from "../../slotCheck";
-import { assessRunToast, runAgainQueuedToast } from "./logic";
-import { assessBusy, assessRepo, assessRuns, assessScope, assessSlot, backlog, backlogFocus, backlogScope } from "./store";
+import { assessRunToast, cutForRepo, cutInRepo, cutLeft, cutOpenedOn, runAgainQueuedToast, type BacklogCut } from "./logic";
+import { assessBusy, assessRepo, assessRuns, assessScope, assessSlot, backlog, backlogCut } from "./store";
 
 // ── The host's pushes ────────────────────────────────────────────────
 
@@ -107,35 +107,38 @@ export function onAssessAck(ackId: string, ok: boolean, filed: string[] | undefi
  * deeper answers reachability without making it a thing you can fat-finger.
  */
 export function openBacklogFor(repo: RepoTarget): void {
-  backlogScope.set(repo.worktreePath);
-  backlogFocus.set(null);
+  backlogCut.set((c) => cutForRepo(c, repo.worktreePath));
   core().nav.open("backlog");
 }
 
 /** The backlog on a repo (the session's, the compose badge's) without touching
  *  any cut — or on the sheet's own preference when `cwd` is null. */
 export function openBacklogIn(cwd: string | null | undefined): void {
-  if (cwd) backlogScope.set(cwd);
+  backlogCut.set((c) => cutInRepo(c, cwd));
   core().nav.open("backlog");
 }
 
 /**
  * **Open the backlog on an explicit cut, from anywhere.** A count on a control
  * is a filter across a sheet boundary too: a schedule card's "1 item" and a
- * *Backlog groomed* notification both land on exactly those rows. A FRESH
- * object every call, because `Backlog` re-applies on identity — tapping the
- * same link twice after clearing the filter must filter again. App binds
- * `nav.openBacklogCut` to this.
+ * *Backlog groomed* notification both land on exactly those rows. It writes the
+ * cut itself, so tapping the same link twice after clearing the filter filters
+ * again, and a sheet already on top (re-scoped by hand, or put back by Back)
+ * follows the tap to ITS repo. App binds `nav.openBacklogCut` to this.
  */
 export function openBacklogCut(cwd: string, ids?: string[], label?: string): void {
-  backlogScope.set(cwd);
-  backlogFocus.set(ids?.length ? { ids, label: label ?? "made from these" } : null);
+  backlogCut.set((c) => cutOpenedOn(c, cwd, ids, label));
   core().nav.open("backlog");
+}
+
+/** Every tap and keystroke on the sheet's cut — the store is the one copy. */
+export function editBacklogCut(next: (c: BacklogCut) => BacklogCut): void {
+  backlogCut.set(next);
 }
 
 /** The sheet stopped being on top: the cut was the tap, not a setting. */
 export function clearBacklogFocus(): void {
-  backlogFocus.set(null);
+  backlogCut.set(cutLeft);
 }
 
 /**

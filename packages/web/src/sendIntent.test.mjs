@@ -876,3 +876,12 @@ test("a repo target carries its launch like its budget, and both restate it", ()
   assert.equal(sendLabel(send(picked, NOWISH), names, null), "Start in app · sonnet · low");
   assert.match(sendLabel(send(withLaunch({ kind: "repos", dirs: ["/a", "/b"] }, { model: "haiku" }), NOWISH), names, null), / · haiku$/);
 });
+
+import { guardWords as guardWordsOf } from "./sendIntent/sendRule.ts";
+
+test("guardWords names a guard window this build does not know", () => {
+  // `guardWindow` is stored on the host's rule; a newer host's window reached
+  // WINDOW_LABEL with no key and printed "undefined".
+  const text = guardWordsOf({ window: "session", guardWindow: "someFutureWindow", minPctLeft: 20, edge: "before" });
+  assert.doesNotMatch(text, /undefined/);
+});

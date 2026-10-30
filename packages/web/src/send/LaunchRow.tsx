@@ -1,7 +1,8 @@
 /** The *model* row: which model the session(s) a send opens start on. Split from `ToSection.tsx` (docs/notes/send-architecture.md). */
 import { Cpu } from "lucide-react";
 import { LaunchPicker, launchOf } from "../LaunchPicker";
-import { launchOfTarget, launchWords, withLaunch, withoutLaunch } from "../sendIntent";
+import type { LaunchOpts } from "@waterplane/shared";
+import { launchOfTarget, launchWords } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
 import { SetNote } from "../SettingsKit";
 
@@ -14,8 +15,12 @@ import { SetNote } from "../SettingsKit";
  * lives on the target (`SendTarget.launch`) so the *To* row and the button
  * restate it. A later run carries it to the desktop on the row itself.
  */
-export function LaunchRow({ m }: { m: SendSheetModel }) {
-  const { target, setTarget, when, launchOpen, setLaunchOpen } = m;
+export function LaunchRow({ m, setLaunch }: {
+  m: SendSheetModel;
+  /** The one write of a launch: the caller decides what a backend change does to the cap under it. */
+  setLaunch: (l: LaunchOpts | null) => void;
+}) {
+  const { target, when, launchOpen, setLaunchOpen } = m;
   const backends = m.backends ?? null;
   const defaults = m.launchDefaults ?? {};
   const lau = launchOfTarget(target);
@@ -33,14 +38,14 @@ export function LaunchRow({ m }: { m: SendSheetModel }) {
           <LaunchPicker backends={backends} defaults={defaults}
             nowLead={target.kind === "repos" ? "Every repo starts on" : "Starts on"}
             value={{ backend: at.backend, model: at.model, effort: at.effort }}
-            onChange={(p) => setTarget((t) => withLaunch(t, launchOf(defaults, p)))}>
+            onChange={(p) => setLaunch(launchOf(defaults, p))}>
             <SetNote as="span">
               {/* Where a later run's "nothing picked" lands: the DESKTOP opens
                   it, on its own defaults — not this phone's. */}
               {lau ? "Just this send — your new-session defaults don’t change." : when.kind === "now"
                 ? "Nothing picked: it starts on your new-session defaults."
                 : "Nothing picked: the desktop opens it on its own defaults."}{" "}
-              {lau && <button className="link-btn" onClick={() => setTarget(withoutLaunch)}>use the defaults</button>}
+              {lau && <button className="link-btn" onClick={() => setLaunch(null)}>use the defaults</button>}
             </SetNote>
           </LaunchPicker>
         </div>

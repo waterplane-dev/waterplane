@@ -1,6 +1,7 @@
 // healthindex/score: The absolute score: per-entry scores, alerts, the capped headline, the weekly series. Barrel: ../healthindex.ts (read the header there).
 import { HEALTH_ENTRIES, type HealthEntry, HEALTH_GOOD, HEALTH_SCORE_CAP_GAP, HEALTH_ALERT_WARN, HEALTH_ALERT_SEVERE, type HealthSeriesRow, type HealthSizeParts, type HealthAlertSubject, type HealthAlert, type HealthIndexPoint, type HealthIndexSeries } from "./types.js";
 import { healthScore, healthWeeks, healthContextGood, type HealthEntryReadings, healthEntryReadings, centralOf, treeOf, DAY_MS } from "./readings.js";
+import { wordOf } from "../wordof.js";
 
 const daysBetween = (a: string, b: string): number =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
@@ -23,6 +24,7 @@ export const HEALTH_ENTRY_LABEL: Record<HealthEntry, string> = {
 
 function alertText(level: HealthAlert["level"], subject: HealthAlertSubject, value: number, good: number, path?: string): string {
   const body = (() => {
+    // closed: the subject comes from this file's own `alertOf` literals
     switch (subject) {
       case "max":
         return `${path ?? "the longest file"} is ${commas(value)} lines (good: under ${commas(good)})`;
@@ -57,7 +59,7 @@ function alertOf(entry: HealthEntry, subject: HealthAlertSubject, value: number,
 export function healthCapWords(s: { value: number; mean: number; cappedBy: HealthEntry | null }): string | null {
   if (!s.cappedBy || !(s.value < s.mean)) return null;
   const worst = Math.round(s.value - HEALTH_SCORE_CAP_GAP);
-  return `Capped at ${Math.round(s.value)} by ${HEALTH_ENTRY_LABEL[s.cappedBy]} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
+  return `Capped at ${Math.round(s.value)} by ${wordOf(HEALTH_ENTRY_LABEL, s.cappedBy, "an entry this app version cannot name")} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
 }
 
 /** One week's score from its readings; null when any enabled entry is absent, or none is enabled. */

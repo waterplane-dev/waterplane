@@ -2,6 +2,7 @@
  * The fan-out sheet's kickoff strip, pure — `FanoutSheet.tsx` draws it and
  * `fanoutKickoff.test.mjs` runs it under `node --test`.
  */
+import { droppedWords, firedRun, type FireFate } from "./core/queue/fireFate.ts";
 /** The fields of a run's target the kickoff readout reads — `FanoutTarget`'s,
  *  restated so this file stays importable under `node --test`. */
 interface KickoffTarget {
@@ -67,4 +68,26 @@ export function targetSubline(t: KickoffTarget & { error?: string }): string {
   if (t.status === "done" || t.status === "failed") return "its session has closed";
   if (t.status === "pending") return "waiting to start";
   return "starting…";
+}
+
+/**
+ * **The strip between the tap and the run, read off the fire's FATE**
+ * (`core/queue/fireFate.ts`, the one owner — design review 2026-10-30 W2).
+ * It used to spin *Sent — waiting…* for as long as no new run id appeared, so
+ * a `fanout.run` row that failed or was dismissed spun for ever. A fire that
+ * will never start says so in words, without a spinner.
+ */
+export function fanoutFireLine(fate: FireFate, offline: boolean, repos: number): { spin: boolean; line: string } {
+  switch (fate.kind) {
+    case "dropped": return { spin: false, line: droppedWords("sweep", fate.reason) };
+    case "refused": return { spin: false, line: `The desktop refused the sweep${fate.reason ? ` — ${fate.reason}` : ""}. Nothing was started.` };
+    case "acked": return fate.runId ? { spin: true, line: kickoffSent(offline, repos) }
+      : { spin: false, line: "The desktop started the sweep — its run is in the Runs list above." };
+    default: return { spin: true, line: kickoffSent(offline, repos) };
+  }
+}
+
+/** This tap's run: the one the receipt NAMES — never "the first run id not known at the tap" (another device's). */
+export function fanoutMine<R extends { id: string }>(runs: readonly R[], fate: FireFate | null): R | undefined {
+  return firedRun(runs, fate, (r) => r.id) ?? undefined;
 }

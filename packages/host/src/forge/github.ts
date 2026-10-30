@@ -36,14 +36,27 @@ export function githubForge(wt: string, slug?: string): Forge {
     },
     async defaultBranch() {
       try {
-        const j = JSON.parse((await gh(wt, ["repo", "view", "--json", "defaultBranchRef"], 60_000, 4 * 1024 * 1024)).stdout);
+        // Asked on EVERY PR-mode push, before any byte moves: the API reads' 8 s, never 60 s of a hanging gh.
+        const j = JSON.parse((await gh(wt, ["repo", "view", "--json", "defaultBranchRef"], 8000, 4 * 1024 * 1024)).stdout);
         return typeof j?.defaultBranchRef?.name === "string" ? j.defaultBranchRef.name : undefined;
       } catch { return undefined; }
     },
-    async existingPr() {
+    async branchNow(name) {
       try {
-        const j = JSON.parse((await gh(wt, ["pr", "view", "--json", "url,number"], 60_000, 4 * 1024 * 1024)).stdout);
-        return typeof j?.url === "string" ? { url: j.url, number: j.number } : undefined;
+        // `gh api` follows GitHub's 301 for a renamed branch, so `.name` is the branch's current name.
+        const path = `repos/${slug ?? "{owner}/{repo}"}/branches/${encodeURIComponent(name)}`;
+        const j = JSON.parse((await gh(wt, ["api", path], 8000, 4 * 1024 * 1024)).stdout);
+        return typeof j?.name === "string" && j.name ? j.name : undefined;
+      } catch (e) {
+        // A 404 is an answer (the branch is gone); anything else is no answer.
+        return /\b404\b|Not Found/i.test(String((e as { stderr?: string }).stderr ?? "")) ? null : undefined;
+      }
+    },
+    async existingPr(head) {
+      try {
+        // `gh pr view <branch>` also answers a MERGED or CLOSED PR for that head: only OPEN is one to update.
+        const j = JSON.parse((await gh(wt, ["pr", "view", head, "--json", "url,number,state"], 60_000, 4 * 1024 * 1024)).stdout);
+        return typeof j?.url === "string" && j?.state === "OPEN" ? { url: j.url, number: j.number } : undefined;
       } catch { return undefined; }
     },
     async openPr(o) {

@@ -18,12 +18,15 @@ import {
   cleanCategory,
   cleanHeadline,
   cleanIntentRow,
+  clockKey,
   headlineRefusedText,
+  intentPaused,
   isTimedWorkRow,
   ruleRecurs,
   type BudgetWaiver,
   type Intent,
   type IntentDraft,
+  type IntentTrigger,
   type IntentPatch,
   type IntentTarget,
   type ItemCategory,
@@ -32,6 +35,45 @@ import {
   type SessionBudget,
 } from "@waterplane/shared";
 import { isTerminal, PENDING_MAX, type IntentCore } from "./contract.js";
+
+/**
+ * The pause, carried from the stored row onto a new trigger that is SILENT
+ * about it — an edit is a patch, and silence is "unchanged" (bughunt
+ * 2026-10-29 BLD-1). No sheet can state the pause (`ScheduleEntry.enabled` is
+ * derived on the way out and every sheet sends `true` back), so it is always
+ * carried — EXCEPT onto a one-off made out of a standing rule: picking one
+ * instant is choosing when it runs, and a paused one-off aimed at one place
+ * lands in the backlog, where no pause switch is drawn to undo it.
+ *
+ * The pause used to be inferred from the stored rule and pinned as
+ * `nextAt: null` onto the draft's rule, which on a one-off reads as SPENT: a
+ * paused weekly rule re-timed as "once, Friday 18:00" failed on the next tick
+ * as "that instant has passed" (review D F1). A carried flag disarms the row
+ * in `cleanIntentRow` instead.
+ */
+export function carryPause(prevRow: Intent | undefined, incoming: IntentTrigger): IntentTrigger {
+  const next = withoutPause(incoming);
+  const prev = prevRow?.trigger;
+  if (next.kind !== "at" || prev?.kind !== "at") return next;
+  if (!intentPaused(prevRow!)) return next;
+  return ruleRecurs(next.rule) || !ruleRecurs(prev.rule) ? { ...next, paused: true } : next;
+}
+
+/**
+ * A trigger off a draft or a patch, with the pause taken off. `trigger.paused`
+ * is the pause switch's (`setArmed`) and the disk migration's to write, never
+ * a draft's: every write path here (`post`, `upsert`, `update`) is reachable
+ * from a client (`intent.post`, `intent.update`, `schedule.save`, the agent
+ * and peer routes), and a pause carried in on one would switch a rule off with
+ * no switch pressed — on a row aimed at one place, with no switch drawn to
+ * undo it (bughunt 2026-10-29 review D2). Whether an edit KEEPS the stored
+ * pause is `carryPause`'s, from the stored row alone.
+ */
+export function withoutPause(t: IntentTrigger): IntentTrigger {
+  if (t.kind !== "at" || t.paused === undefined) return t;
+  const { paused: _paused, ...rest } = t;
+  return rest;
+}
 
 /**
  * The refusal for a row that could not be written, worded for a person: what
@@ -75,6 +117,7 @@ export class WriteSlice {
     // rule on the other write path, which had none.
     const row = cleanIntentRow({
       ...draft,
+      ...(draft.trigger ? { trigger: withoutPause(draft.trigger) } : {}),
       state: "queued",
       createdAt: now,
       result: undefined,
@@ -184,8 +227,25 @@ export class WriteSlice {
     const ro = this.core.readOnly();
     if (ro) return { ok: false, reason: ro };
     const prev = this.core.rows().find((r) => r.id === (draft.id ?? "").trim());
+    // ── The CLOCK's two host facts, carried the same way ────────────────────
+    // An edit is a PATCH over the stored row: a draft silent about a field
+    // means "unchanged", never "the default". `keepAfterRun` is not a field any
+    // sheet's save states (a draft's `undefined` is silence; an explicit
+    // `false` is a person clearing it), and the pause (`trigger.paused`, the
+    // pause switch's own flag) is not a field a sheet can state at all —
+    // `carryPause` says when it rides onto the new rule. Resuming is
+    // `setArmed`'s, the pause switch, and nothing else: "nothing applies
+    // itself" (bughunt 2026-10-29 BLD-1). A carried pause disarms the row in
+    // `cleanIntentRow`; `nextAt: null` is no longer pinned here, because on a
+    // one-off it means SPENT (review D F1).
+    const kept = draft.trigger?.kind === "at" && draft.trigger.keepAfterRun === undefined
+      && prev?.trigger.kind === "at" && prev.trigger.keepAfterRun === true
+      ? { ...draft.trigger, keepAfterRun: true }
+      : draft.trigger;
+    const trigger = kept ? carryPause(prev, kept) : kept;
     const row = cleanIntentRow({
       ...draft,
+      trigger,
       state: prev && !isTerminal(prev) ? prev.state : "queued",
       createdAt: prev?.createdAt ?? now,
       lastOccurrence: prev?.lastOccurrence,
@@ -374,6 +434,15 @@ export class WriteSlice {
     const merged = cleanIntentRow({
       ...row,
       ...patch,
+      // A new clock is not a resume: the pause rides onto it (or not, onto a
+      // one-off) by the same rule as `upsert`. The old clock's armed instant
+      // does NOT ride under it: `nextAt` is an answer about the OLD rule, and
+      // a spent one-off's `null` under a recurring weekly rule was the older
+      // host's pause spelling — the row read as switched off and, queued
+      // rather than reviving, was never armed again (review D2 F1). That
+      // spelling is now migrated only at disk load (`stampLegacyPause`). Unread ⇒ the arming below computes it from the new rule; a
+      // carried pause is disarmed by `cleanIntentRow`.
+      ...(patch.trigger ? { trigger: carryPause(row, patch.trigger), nextAt: undefined } : {}),
       state: "queued",
       blockReason: undefined,
       blockDetail: undefined,
@@ -386,7 +455,24 @@ export class WriteSlice {
     // and repos), so the conversation snapshot is taken here too — and carried
     // from the row where the aim did not move.
     this.snapshotConv(merged, row);
-    if (merged.trigger.kind !== "at") {
+    // ── A resend of the SAME clock is not a new clock ─────────────────────────
+    // The Send sheet's edit of a waiting row always sends the whole trigger,
+    // even when only the words changed. Read as "a new instant", that dropped
+    // the release rung 3 had given (`clearedOccurrence`) and armed a `once`
+    // held past its grace from scratch — to `null`, and the ladder then failed
+    // the row as a spent one-off for an edit to its words. Same rule, same
+    // grace ⇒ the row keeps its clock state exactly: `nextAt`, `lastOccurrence`
+    // and `clearedOccurrence` (the last two are already the row's, via the
+    // spread). Not on a revival (a failed row is re-clocked on purpose), and not
+    // for a recurring rule sitting at an unflagged `null` — that one falls
+    // through to the arming below, which is how it gets armed again.
+    const sameClock = !reviving && patch.trigger !== undefined
+      && row.trigger.kind === "at" && merged.trigger.kind === "at"
+      && clockKey(row.trigger.rule, row.trigger.graceMin) === clockKey(merged.trigger.rule, merged.trigger.graceMin)
+      && !(row.nextAt === null && ruleRecurs(merged.trigger.rule));
+    if (sameClock) {
+      merged.nextAt = row.nextAt;
+    } else if (merged.trigger.kind !== "at") {
       // The clock is gone, so everything that was bookkeeping ABOUT that clock
       // goes with it — otherwise the row waits its turn while still carrying a
       // spent occurrence and an armed instant nothing reads. Absent is the

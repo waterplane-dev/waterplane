@@ -6,6 +6,7 @@
  */
 import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
 import type { BackendList } from "../backendCaps";
+import type { BacklogFilter } from "../backlogFilter";
 import type { CloseChoice } from "../autoSessions";
 import type { RenderRetime } from "../RetimeBar";
 import type { SlotCheck } from "../slotCheck";
@@ -16,6 +17,16 @@ import type { useBacklogEdit } from "./useBacklogEdit";
 import type { useBacklogFilters } from "./useBacklogFilters";
 import type { useBacklogSort } from "./useBacklogSort";
 import type { useBacklogUi } from "./useBacklogUi";
+
+/** What the sheet is cut to. `repoDir` is the repo asked for or picked — `null`
+ *  leaves the choice to the sheet's own order (the session's repo, the last used,
+ *  one with items, the first). */
+export interface BacklogCut {
+  repoDir: string | null;
+  text: string;
+  filter: BacklogFilter;
+  idsLabel: string | undefined;
+}
 
 export interface BacklogProps {
   items: BacklogItem[];
@@ -62,7 +73,7 @@ export interface BacklogProps {
    *  it over. `items` is only the backlog's slice and misses a build or a
    *  launch running there. */
   intents: readonly Intent[];
-  /** Repo to scope to on open (e.g. the session you came from). */
+  /** Repo to show when the cut names none (the session you came from). */
   defaultRepoDir?: string;
   /**
    * False while the socket is disconnected. `items` and `auto` are then
@@ -98,22 +109,20 @@ export interface BacklogProps {
    */
   snapAt?: number | null;
   /**
-   * **The cut this sheet was OPENED on** — an ids filter chosen somewhere else.
+   * **The cut on screen** — repo, typed search, status/age/kind/clock/ids chips.
+   * ONE owner, outside this component (the backlog feature's store), so the
+   * doors that open the sheet, every tap on it, `onLeave` and Back all move the
+   * same value and Back restores what was on screen from the first frame.
    *
-   * Three doors need it and all three are the same rule: a schedule card saying
+   * An ids cut is chosen somewhere else as often as here: a schedule card saying
    * "the item it wrote" must open exactly that item, a *Backlog groomed*
    * notification must land on the rows it is about, and a count on any control
-   * anywhere must open the list it counted. Without it those taps landed on the
-   * whole repo for the reader to find the row by eye — which is the same
-   * failure the `merged from N` chip exists to not have, made across sheets
-   * instead of within one.
-   *
-   * Seeded into the filter on mount and whenever the tap changes, never merged
-   * with whatever cut was left on screen: it is what the tap asked for. `label`
-   * is what the filter bar then SAYS, for `idsLabel`'s reason — only the caller
-   * knows which side it came from.
+   * anywhere must open the list it counted. `idsLabel` is what the filter bar
+   * then SAYS — only the caller knows which side of a merge it came from.
    */
-  focusIds?: { ids: string[]; label: string } | null;
+  cut: BacklogCut;
+  /** The one way this sheet changes `cut`: an updater, applied to the store. */
+  setCut: (next: (c: BacklogCut) => BacklogCut) => void;
   /** Per-row verbs (`BacklogRowVerbs`). */
   verbs: BacklogRowVerbs;
   /** Whole-repo and whole-cut verbs (`BacklogCutVerbs`). */

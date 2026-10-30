@@ -39,7 +39,7 @@
  * from scenarios/garden.ts — demo/host may not import scenarios).
  */
 import {
-  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
+  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourFloor, hourKey, hourKeyMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type CostConvo, type CostConvoHour, type CostHour, type CostWindowDoc, type ModelSlice,
   type TokenConvo, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc, type UsageHistoryDoc,
@@ -132,17 +132,6 @@ function prng(seed: number): () => number {
   };
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-/** `YYYY-MM-DDTHH`, local — the host's hour key. */
-function localHour(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}`;
-}
-function hourFloorMs(t: number): number {
-  const d = new Date(t);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
-}
 
 /** One (hour, model) bucket of one file, the host's `Tally` with names. */
 interface Cell { hour: string; model: string; t: TokenTotals }
@@ -189,7 +178,7 @@ function generate(anchor: number): LogFile[] {
     const cells = new Map<string, Cell>();
     const cold: Cold[] = [];
     const add = (into: Map<string, Cell>, at: number, mdl: string, t: Partial<TokenTotals>) => {
-      const hour = localHour(Math.min(at, anchor));
+      const hour = hourKey(Math.min(at, anchor));
       const key = `${hour}\u0000${mdl}`;
       const cell = into.get(key) ?? into.set(key, { hour, model: mdl, t: zeroTotals() }).get(key)!;
       addTotals(cell.t, t);
@@ -226,7 +215,7 @@ function generate(anchor: number): LogFile[] {
           // The first request writes the whole window; so does the first after a pause — the
           // cache expired, and that one is the cold start the screen prices.
           add(cells, at, p.model, { input, output, cacheRead: 0, cacheWrite: ctx, cacheWrite1h: p.oneHour ? ctx : 0, turns: 1 });
-          if (i > 0) cold.push({ hour: localHour(Math.min(at, anchor)), model: p.model, count: 1, tok: ctx, tok1h: p.oneHour ? ctx : 0 });
+          if (i > 0) cold.push({ hour: hourKey(Math.min(at, anchor)), model: p.model, count: 1, tok: ctx, tok1h: p.oneHour ? ctx : 0 });
         } else {
           const write = Math.max(300, ctx - prev) + Math.round(rng() * 3_200);
           add(cells, at, p.model, { input, output, cacheRead: prev, cacheWrite: write, cacheWrite1h: p.oneHour ? write : 0, turns: 1 });
@@ -305,8 +294,6 @@ function generate(anchor: number): LogFile[] {
   return files;
 }
 
-/** Epoch ms of the top of the hour `hour` (`YYYY-MM-DDTHH`) names. */
-const hourMs = (hour: string) => hourToMs(hour);
 
 interface Ledger {
   doc: TokenStatsDoc;
@@ -436,7 +423,7 @@ function aggregate(files: LogFile[], now: number): Ledger {
     .filter((c) => tokenTotal(c.totals) > 0)
     .sort((a, b) => (b.cost.total - a.cost.total) || (tokenTotal(b.totals) - tokenTotal(a.totals)))
     .slice(0, TOP)
-    .map(({ first, last, ...c }) => ({ ...c, firstAt: first ? hourMs(first) : null, lastAt: last ? hourMs(last) : null }));
+    .map(({ first, last, ...c }) => ({ ...c, firstAt: first ? hourKeyMs(first) : null, lastAt: last ? hourKeyMs(last) : null }));
 
   const dayRows: TokenDay[] = [...days.entries()]
     .map(([day, t]) => ({
@@ -490,7 +477,7 @@ function aggregate(files: LogFile[], now: number): Ledger {
 
 let memo: { anchor: number; ledger: Ledger } | null = null;
 function ledgerAt(now: number): Ledger {
-  const anchor = hourFloorMs(now);
+  const anchor = hourFloor(now);
   if (!memo || memo.anchor !== anchor) memo = { anchor, ledger: aggregate(generate(anchor), now) };
   // `scannedAt` is the one field that follows `now` itself.
   return { ...memo.ledger, doc: { ...memo.ledger.doc, scannedAt: now } };
@@ -539,7 +526,7 @@ export function demoTokenWindows(now: number, specs: { id: string; anchor: numbe
   const series: TokenWindowSeries[] = specs.map((spec) => {
     const grid = new Map<number, Map<string, { t: TokenTotals; c: CostBreakdown }>>();
     for (const [hour, byModel] of cells) {
-      for (const k of windowCells(hourMs(hour), spec.anchor, spec.lenMs)) {
+      for (const k of windowCells(hourKeyMs(hour), spec.anchor, spec.lenMs)) {
         const cell = grid.get(k) ?? grid.set(k, new Map()).get(k)!;
         for (const [model, v] of byModel) {
           const bag = cell.get(model) ?? cell.set(model, { t: zeroTotals(), c: zeroCost() }).get(model)!;
@@ -555,7 +542,7 @@ export function demoTokenWindows(now: number, specs: { id: string; anchor: numbe
       for (const [model, bag] of byModel) { addTotals(t, bag.t); addCost(c, bag.c); slices.push({ model, totals: bag.t, cost: bag.c }); }
       return { back, ...t, cost: c, byModel: slices.sort((a, b) => tokenTotal(b.totals) - tokenTotal(a.totals)) };
     }).sort((a, b) => a.back - b.back);
-    return { id: spec.id, anchor: spec.anchor, lenMs: spec.lenMs, windows, oldestHour: oldest ? hourMs(oldest) : null, newestHour: newest ? hourMs(newest) : null };
+    return { id: spec.id, anchor: spec.anchor, lenMs: spec.lenMs, windows, oldestHour: oldest ? hourKeyMs(oldest) : null, newestHour: newest ? hourKeyMs(newest) : null };
   });
   return { series, scannedAt: doc.scannedAt };
 }
@@ -579,14 +566,14 @@ type ConvoAcc = Bag & { repo: string; agent: Bag; agents: number; byModel: Map<s
  */
 export function demoCostWindow(now: number, from: number, to: number, ledger = true): CostWindowDoc {
   const { files, titles, doc } = ledgerAt(now);
-  const fromHour = hourFloorMs(from);
+  const fromHour = hourFloor(from);
   const all = bag(), agent = bag(), unpriced = zeroTotals();
   const hours = new Map<string, Bag & { byRepo: Map<string, Bag>; byModel: Map<string, Bag> }>();
   const convos = new Map<string, ConvoAcc>();
   for (const f of ledger ? files : []) {
     let cv: ConvoAcc | undefined;
     for (const { hour, model, t } of f.cells) {
-      const at = hourMs(hour);
+      const at = hourKeyMs(hour);
       if (at < fromHour || at >= to || tokenTotal(t) <= 0) continue;
       if (!cv) {
         cv = slot(convos, f.convo, () => ({ repo: f.repo, ...bag(), agent: bag(), agents: 0, byModel: new Map(), agentByModel: new Map(), byHour: new Map() }));
@@ -607,14 +594,14 @@ export function demoCostWindow(now: number, from: number, to: number, ledger = t
   const convoRows = [...convos].sort(([, a], [, b]) => byCost(a, b)).map(([id, cv]): CostConvo => {
     const byHour = [...cv.byHour].sort(byKey).map(([, x]) => x);
     return {
-      id, repo: cv.repo, label: repoLabel(cv.repo), firstAt: hourMs(byHour[0].hour), lastAt: hourMs(byHour[byHour.length - 1].hour),
+      id, repo: cv.repo, label: repoLabel(cv.repo), firstAt: hourKeyMs(byHour[0].hour), lastAt: hourKeyMs(byHour[byHour.length - 1].hour),
       totals: cv.totals, cost: cv.cost, agentTotals: cv.agent.totals, agentCost: cv.agent.cost, agents: cv.agents,
       byModel: slices(cv.byModel), agentByModel: slices(cv.agentByModel), byHour, live: false,
       ...(titles.get(id) ? { title: titles.get(id) } : {}),
     };
   });
   const hourRows = [...hours].sort(byKey).map(([hour, h]): CostHour => ({
-    hour, t: hourMs(hour), totals: h.totals, cost: h.cost, byModel: slices(h.byModel),
+    hour, t: hourKeyMs(hour), totals: h.totals, cost: h.cost, byModel: slices(h.byModel),
     byRepo: [...h.byRepo].map(([repo, b]) => ({ repo, label: repoLabel(repo), ...b })).sort(byCost),
   }));
   return {
@@ -650,13 +637,13 @@ export function demoUsageLog(now: number, usage: LedgerUsage, hours?: number): U
   for (const [hour, byModel] of cells) {
     let usd = 0;
     for (const v of byModel.values()) usd += v.c.total;
-    perHour.set(hourMs(hour), usd);
+    perHour.set(hourKeyMs(hour), usd);
   }
   /** Spend between two instants, an hour's money spread evenly across it. */
   const spend = (a: number, b: number): number => {
     if (b <= a) return 0;
     let s = 0;
-    for (let h = hourFloorMs(a); h < b; h += HOUR) {
+    for (let h = hourFloor(a); h < b; h += HOUR) {
       const usd = perHour.get(h);
       if (!usd) continue;
       const lo = Math.max(a, h);

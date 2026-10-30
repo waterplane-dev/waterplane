@@ -46,3 +46,13 @@ test("pinnedChecks: ruleset integration_id and classic app_id pin; -1 / absent d
   assert.deepEqual(b.pinnedChecks, ["local-ci"]);
   assert.equal("pinnedChecks" in classifyBranchRules([], { required_status_checks: { contexts: ["ci"] } }), false);
 });
+
+test("merge_queue: a PR-only branch whose merges are enqueued; absent elsewhere (bughunt 2026-10-29 PR-3)", () => {
+  const q = classifyBranchRules([{ type: "merge_queue", parameters: { merge_method: "SQUASH" } }]);
+  assert.equal(q.mode, "pr");
+  assert.equal(q.mergeQueue, true);
+  const qc = classifyBranchRules([{ type: "merge_queue" }, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "ci" }] } }]);
+  assert.equal(qc.mode, "pr-checks");
+  assert.equal(qc.mergeQueue, true);
+  assert.equal("mergeQueue" in classifyBranchRules([{ type: "pull_request" }]), false);
+});

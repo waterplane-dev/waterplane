@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FEED_CAP, backlogRepoFor, badgeText, resolvedWords, levelWords, feedCut, feedSections, handledWords, needsYouCount, needsYouItems, newlyResolved, notifTarget, pushNotif } from "./logic.ts";
+import { FEED_CAP, backlogRepoFor, badgeText, resolvedWords, levelWords, feedCut, feedSections, handledWords, needsYouCount, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipItems } from "./logic.ts";
 
 test("a live push goes to the front and the feed stays capped", () => {
   const prev = Array.from({ length: FEED_CAP }, (_, i) => ({ id: `n${i}`, ts: i }));
@@ -55,6 +55,15 @@ test("a cause going away is toasted once: only chip keys, unhandled-before, reso
   assert.equal(resolvedWords(next[0]), "Push failed · myapp — fixed by the 14:02 push");
   assert.deepEqual(newlyResolved(next, next), [], "a repeat list says nothing");
   assert.deepEqual(newlyResolved([], next), [], "a first list never toasts history");
+});
+
+// A PR notice's key (`pr:<repo>:<n>`) parses since design round 4, but it is no repo chip: the
+// chips are a failed pull, push or build, and a PR's merge already says itself in its own notice.
+test("a pr key is attention but never a repo chip, and its resolve is not toasted as one", () => {
+  const items = [att("g", { key: "git:r:push" }), att("pr", { key: "pr:r:17" })];
+  assert.deepEqual(repoChipItems(items).map((n) => n.id), ["g"]);
+  const next = [att("pr", { key: "pr:r:17", handled: { at: 2, by: "resolved", note: "PR #17 was merged" } })];
+  assert.deepEqual(newlyResolved([att("pr", { key: "pr:r:17" })], next), []);
 });
 
 test("handled words: the host's note, else done HH:MM", () => {
@@ -118,4 +127,11 @@ test("an exposure push opens that repo's readings; without a repo id it lands on
 
 test("followup's level words say the launch flag is information", () => {
   assert.match(levelWords("followup"), /launch option's flag is information/);
+});
+
+test("a tapped git failure carries its own item id to the git view; anything else does not", () => {
+  const open = { to: "git", repoId: "r1", verb: "push" };
+  assert.deepEqual(notifTarget({ id: "A", kind: "git", key: "git:r1:push", level: "attention", open }), { to: "git", repoId: "r1", failureId: "A" });
+  assert.deepEqual(notifTarget({ id: "R", kind: "git", open }), { to: "git", repoId: "r1" }, "a receipt (no key) is not a failure");
+  assert.deepEqual(notifTarget({ id: "X", kind: "git", key: "git:r1:push", open: { ...open, verb: "explain" } }), { to: "git", repoId: "r1", explain: true });
 });

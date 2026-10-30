@@ -4,6 +4,7 @@
  * The one worded reason a PR cannot merge (`blockedBy`) is the host's; nothing here re-words it.
  */
 import type { BranchRules, MergeMethod, PrCheck, PrReviewDecision } from "@waterplane/shared";
+import { TimeoutError } from "@waterplane/shared";
 
 /** The push button's text. Direct/absent: byte-identical to what GitView always drew. */
 export function pushLabel(rules: BranchRules | undefined, ahead = 0): string {
@@ -54,4 +55,24 @@ export function mergeMethod(rules: BranchRules | undefined, chosen?: MergeMethod
   const allowed = rules?.allowedMerge ?? [];
   if (chosen && allowed.includes(chosen)) return chosen;
   return allowed[0];
+}
+
+/**
+ * The method auto-merge SENDS: only one the person picked (and the card still offers). With no pick it
+ * sends none, so the host takes the first method from its own fresh rules — the phone's copy may be
+ * older than a repo-settings change, and its first-allowed would be refused as if the person chose it.
+ */
+export function pickedMethod(rules: BranchRules | undefined, chosen?: MergeMethod): MergeMethod | undefined {
+  return chosen && (rules?.allowedMerge ?? []).includes(chosen) ? chosen : undefined;
+}
+
+/**
+ * What a PR action that got no answer says. A merge, auto-merge or close is sent and then runs `gh`
+ * on the desktop for up to a minute or more: a TIMEOUT means the request left the phone and the
+ * action may well have happened, so it is never worded as "did not reach" (the card refreshes its
+ * list right after, which shows what really happened). Any other failure never got there.
+ */
+export function prActionFailWords(e: unknown): string {
+  if (e instanceof TimeoutError) return "The desktop did not answer in time but it may still have worked; refreshing the list.";
+  return `Did not reach the desktop: ${(e as Error)?.message ?? String(e)}`;
 }

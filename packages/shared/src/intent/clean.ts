@@ -16,6 +16,7 @@ import { cleanAuthor, cleanCategory, cleanHeadline } from "../naming.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
 import type { AssessPayload, BlockReason, BudgetPass, BuildPayload, CapturePayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
 import { REQUEUE_KEEP } from "./types.js";
+import type { IntentPatch } from "../wire/intent.js";
 import type { Intent } from "./row.js";
 import { INTENT_MAX_DIRS, INTENT_MAX_NEEDS } from "./row.js";
 import { INTENT_BLOCK_ORDER, intentReasonText } from "./words.js";
@@ -92,8 +93,17 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
   const payload = cleanPayload(r.payload);
   if (!payload) return null;
 
-  const trigger = cleanTrigger(r.trigger, Number(r.createdAt) || now);
-  if (!trigger) return null;
+  const cleaned = cleanTrigger(r.trigger, Number(r.createdAt) || now);
+  if (!cleaned) return null;
+  // The pause and the clock, kept in step: a paused row is never armed. The
+  // pause is the flag and only the flag. An older host's spelling (a recurring
+  // weekly `nextAt: null`, no flag) is NOT inferred here: this runs on every
+  // write, and on a live edit a failed one-off's settled `nextAt: null` rode
+  // under a new weekly trigger and was stamped a pause nobody pressed (review
+  // D2 F1). That spelling is a fact about a FILE, so the store's disk load
+  // stamps it (`intents/disk.ts`, `stampLegacyPause`).
+  const trigger = cleaned;
+  const paused = cleaned.kind === "at" && cleaned.paused === true;
 
   const target = cleanTarget(r.target);
   if (!target) return null;
@@ -183,7 +193,7 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     requeueCount: cleanRequeueCount(r.requeueCount),
     // `null` survives as `null`: it is the explicit "nothing armed", and
     // collapsing it into `undefined` would re-arm a rule the user switched off.
-    nextAt: r.nextAt === null ? null : num(r.nextAt),
+    nextAt: r.nextAt === null || paused ? null : num(r.nextAt),
     lastOccurrence: num(r.lastOccurrence),
     // Kept across the round trip for the reason it is persisted at all: the
     // hold outlives the process, so a restart mid-hold that dropped this would
@@ -448,6 +458,7 @@ function cleanTrigger(v: unknown, createdAt: number): IntentTrigger | null {
         rule,
         graceMin: Number.isFinite(g) ? Math.min(7 * 24 * 60, Math.max(0, g)) : DEFAULT_GRACE_MIN,
         keepAfterRun: raw.keepAfterRun === true ? true : undefined,
+        paused: raw.paused === true ? true : undefined,
       };
     }
     case "after": {
@@ -493,4 +504,75 @@ function cleanTrigger(v: unknown, createdAt: number): IntentTrigger | null {
       // run, immediately, work whose whole point was that it should not.
       return null;
   }
+}
+
+// ── Who may write each field: the ONE list ───────────────────────────────────
+
+/**
+ * Who may state a field of `Intent`, field by field.
+ *
+ * - `edit` — a client may state it when it POSTS a row and when it PATCHES one
+ *   (`intent.update`). The `IntentPatch` vocabulary.
+ * - `post` — a client may state it only when it posts: the row's identity, its
+ *   provenance and the things a later edit has its own verb for (`edit()`,
+ *   `waive`, a naming pass).
+ * - `host` — the HOST's to compute: the lifecycle, the clock's bookkeeping
+ *   (`nextAt`, `lastOccurrence`, `clearedOccurrence`), the block it reports,
+ *   the budget lifts it stamps, the history it keeps. Never off a socket: a
+ *   client that could send `nextAt: null` writes a row nothing re-arms and
+ *   whose verdict calls a standing rule a one-off; one that could send
+ *   `lastOccurrence` makes a sweep fire twice.
+ *
+ * The contract used to be stated on ONE side only — `IntentDraft` and
+ * `IntentPatch` are TYPES, and a decoded frame is whatever the sender put in
+ * it — so `intent.update` spread a patch with any key at all over the stored
+ * row. The type below is a `Record` over EVERY key of `Intent`, so a field
+ * added to the row without a line here does not compile, and
+ * `clientIntentFields` is what every client entry applies at runtime.
+ * (bughunt 2026-10-29, review D3 (d).)
+ *
+ * `trigger.paused` is the pause switch's and lives inside an `edit` field;
+ * `write.ts`'s `withoutPause`/`carryPause` strip it on every client write.
+ */
+export type IntentFieldWriter = "edit" | "post" | "host";
+export const INTENT_FIELD_WRITER = {
+  // what to do, where and when — re-decidable while the row waits
+  payload: "edit", trigger: "edit", cwd: "edit", target: "edit",
+  serial: "edit", holdForHost: "edit", auto: "edit", pinned: "edit", resume: "edit",
+  closeWhenDone: "edit", flagWhenDone: "edit", archived: "edit", order: "edit",
+  label: "edit", title: "edit", launch: "edit",
+  // stated once, at the post
+  id: "post", interject: "post", manual: "post",
+  headline: "post", headlineBy: "post", category: "post", categoryBy: "post",
+  cols: "post", rows: "post", budget: "post", replaceSessionId: "post",
+  origin: "post", groupId: "post",
+  // the host's
+  pastBudget: "host", budgetPass: "host", leftoverOf: "host", handOrdered: "host",
+  attempts: "host", state: "host", blockReason: "host", blockDetail: "host",
+  blockSessionId: "host", createdAt: "host", startedAt: "host", settledAt: "host",
+  sessionId: "host", result: "host", requeues: "host", requeueCount: "host",
+  nextAt: "host", lastOccurrence: "host", clearedOccurrence: "host", missing: "host",
+  dismissedAt: "host", followed: "host",
+} as const satisfies { readonly [K in keyof Required<Intent>]: IntentFieldWriter };
+
+/** Compile-time: every `IntentPatch` key is an `edit` field above. A patch field classed `post` or
+ *  `host` would be stripped by `clientIntentFields` while the type promised the phone could send it. */
+type EditFields = { [K in keyof typeof INTENT_FIELD_WRITER]: (typeof INTENT_FIELD_WRITER)[K] extends "edit" ? K : never }[keyof typeof INTENT_FIELD_WRITER];
+const _patchKeysAreEdit: [Exclude<keyof IntentPatch, EditFields>] extends [never] ? true : false = true;
+void _patchKeysAreEdit;
+
+/**
+ * A client's object with only the fields a client may state — `post` for a
+ * draft, `edit` for a patch. Every other key is DROPPED, never defaulted: a
+ * dropped key is "the client did not say", which is what the host's write path
+ * already does with silence. Pure; returns a copy.
+ */
+export function clientIntentFields<T extends object>(raw: T, as: "post" | "edit"): Partial<T> {
+  const out: Record<string, unknown> = {};
+  if (!raw || typeof raw !== "object") return out as Partial<T>;
+  for (const [k, v] of Object.entries(raw)) {
+    const w = (INTENT_FIELD_WRITER as Record<string, IntentFieldWriter | undefined>)[k];
+    if (w === "edit" || (w === "post" && as === "post")) out[k] = v;
+  }
+  return out as Partial<T>;
 }

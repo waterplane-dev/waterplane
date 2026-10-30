@@ -315,15 +315,34 @@ export function logMatch(
   if (isSlashText(text)) return { verdict: "unknown" };
   const logged = loggedPrompts(sessions, sessionId);
   if (!logged) return { verdict: "unknown" };
-  const floor = since - (opts.slackMs ?? MATCH_SLACK_MS);
+  return turnMatch(logged.prompts, logged.held, text, since - (opts.slackMs ?? MATCH_SLACK_MS), opts.claimer);
+}
+
+/**
+ * The ONE turn-matching loop, whoever kept the record — the claude log
+ * (`logMatch`) or a backend's own channel (`sourceMatch`). It is the only
+ * caller of `spendTurn`, so a rule added here (the floor, the WHOLE-text
+ * `logEcho`, the ledger, `taken`, `held`) reaches every source of evidence at
+ * once; 8cefeaad added the held rule to one of two copies of this loop.
+ *
+ * `turns` is untrusted for a plugin source, hence the shape checks; `held` is
+ * the CLI's own queue, empty for a record that has none.
+ */
+function turnMatch(
+  turns: readonly { id?: string; text?: unknown; at?: unknown }[],
+  held: readonly CliHeld[],
+  text: string,
+  floor: number,
+  claimer: string | undefined,
+): LogMatch {
   /** A turn carrying our words that another delivery has already spent. It is
    *  not proof FOR us and it is emphatically not proof against us. */
   let taken = false;
-  for (const p of logged.prompts) {
-    if (p.at != null && p.at < floor) continue;
-    if (!logEcho(p.text, text)) continue;
-    if (spentByAnother(p.id, opts.claimer)) { taken = true; continue; }
-    if (opts.claimer) spendTurn(p.id, opts.claimer);
+  for (const p of turns) {
+    if (typeof p?.at === "number" && p.at < floor) continue;
+    if (typeof p?.text !== "string" || !logEcho(p.text, text)) continue;
+    if (spentByAnother(p.id, claimer)) { taken = true; continue; }
+    if (claimer && p.id) spendTurn(p.id, claimer);
     return { verdict: "landed", turnId: p.id };
   }
   // A readable log whose only matching turn belongs to someone else says
@@ -333,9 +352,13 @@ export function logMatch(
   // The CLI took the words into its own queue and has not started them yet:
   // no turn, an empty composer, and one keypress from a second copy if this
   // said `absent`.
-  if (logged.held.some((h) => h.at >= floor && logEcho(h.text, text))) return { verdict: "unknown", held: true };
+  if (held.some((h) => h.at >= floor && logEcho(h.text, text))) return { verdict: "unknown", held: true };
   return { verdict: "absent" };
 }
+
+/** How long one question to a backend's own channel may take before it is
+ *  `unknown` (`sourceMatch`). */
+const SOURCE_ASK_MS = 5_000;
 
 /**
  * `logMatch`'s question asked of a backend's OWN channel — `sources.delivery
@@ -357,6 +380,7 @@ async function sourceMatch(
   text: string,
   since: number,
   opts: SettleOpts,
+  askMs = SOURCE_ASK_MS,
 ): Promise<LogMatch | null> {
   if (sessions.keepsClaudeLog(sessionId)) return null;
   const live = liveSourceFor(sessionId);
@@ -365,20 +389,61 @@ async function sourceMatch(
   if (!echoProbe(text) || isSlashText(text)) return { verdict: "unknown" };
   const floor = since - (opts.slackMs ?? MATCH_SLACK_MS);
   let turns: { id: string; text: string; at: number }[] | null = null;
-  try { turns = await src.userTurns(live.session, floor); } catch { turns = null; }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Bounded: the restart reconciliation waits on this before the store
+    // fires anything, and a delivery's last proof has a deadline of its own.
+    // A plugin that never answers is a source that cannot say.
+    const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), askMs); timer.unref?.(); });
+    turns = await Promise.race([src.userTurns(live.session, floor), late]);
+  } catch { turns = null; } finally { if (timer) clearTimeout(timer); }
   if (!Array.isArray(turns)) return { verdict: "unknown" };
-  let taken = false;
-  for (const t of turns) {
-    if (typeof t?.at === "number" && t.at < floor) continue;
-    if (typeof t?.text !== "string" || !logEcho(t.text, text)) continue;
-    if (spentByAnother(t.id, opts.claimer)) { taken = true; continue; }
-    if (opts.claimer) spendTurn(t.id, opts.claimer);
-    return { verdict: "landed", turnId: t.id };
-  }
-  return { verdict: taken ? "unknown" : "absent" };
+  return turnMatch(turns, [], text, floor, opts.claimer);
 }
 
-/** The verdict alone — for callers with nothing to claim and nothing to record. */
+/**
+ * Did these words run? — the ONE entry point every caller asks: the sweep
+ * (`settleDelivery`), a delivery's last proof (`awaitLanded`) and the intents'
+ * restart reconciliation (`ranVerdict`, `server/intentDeps.ts`). A backend's
+ * own channel first (`sourceMatch`), the claude log otherwise (`logMatch`),
+ * exactly the old path for every claude session.
+ */
+export async function ranMatch(
+  sessions: SessionManager,
+  sessionId: string,
+  text: string,
+  since: number,
+  opts: SettleOpts = {},
+  askMs?: number,
+): Promise<LogMatch> {
+  return (await sourceMatch(sessions, sessionId, text, since, opts, askMs)) ?? logMatch(sessions, sessionId, text, since, opts);
+}
+
+/**
+ * The verdict alone — for the intents' restart reconciliation, which acts on it
+ * with no screen to read afterwards.
+ *
+ * A backend's channel answering `absent` is weaker evidence than the claude
+ * log's: it carries no CLI queue (`held` is empty for it), `settleDelivery`
+ * still reads the screen before trusting it, and right after a restart the
+ * channel may be attaching. Here `absent` would requeue the words — a re-send —
+ * so a SOURCE's `absent` is `unknown`, which is what that session answered
+ * before it was asked at all. Its `landed` is believed.
+ */
+export async function ranVerdict(
+  sessions: SessionManager,
+  sessionId: string,
+  text: string,
+  since: number,
+  opts: SettleOpts = {},
+): Promise<"landed" | "absent" | "unknown"> {
+  const fromSource = await sourceMatch(sessions, sessionId, text, since, opts);
+  if (fromSource) return fromSource.verdict === "absent" ? "unknown" : fromSource.verdict;
+  return logMatch(sessions, sessionId, text, since, opts).verdict;
+}
+
+/** `logMatch`'s verdict alone — the claude log only, synchronous. Kept for the
+ *  pinning tests; a caller deciding anything asks `ranVerdict`. */
 export function logVerdict(
   sessions: SessionManager,
   sessionId: string,
@@ -390,7 +455,8 @@ export function logVerdict(
 }
 
 /**
- * Wait a bounded moment for the log to say the prompt ran.
+ * Wait a bounded moment for the log — or a backend's own channel (`ranMatch`)
+ * — to say the prompt ran.
  *
  * The CLI writes the user record when it ACCEPTS the prompt, so in the ordinary
  * case the evidence is on disk before the caller even asks. The poll is for the
@@ -419,7 +485,8 @@ export async function awaitLanded(
     // Claiming here matters as much as in the sweep: this is the path that
     // answers `ok`, and an `ok` is never revisited by anything. A turn spent on
     // this delivery cannot then prove a second delivery of the same words ran.
-    if (logVerdict(sessions, sessionId, text, since, { slackMs, claimer }) === "landed") return true;
+    const left = Math.max(250, deadline - Date.now());
+    if ((await ranMatch(sessions, sessionId, text, since, { slackMs, claimer }, left)).verdict === "landed") return true;
     if (Date.now() >= deadline) return false;
     await new Promise((r) => setTimeout(r, 250));
   }
@@ -455,8 +522,8 @@ export async function settleDelivery(
   // 1. Did it RUN? The conversation log is the CLI's own record and outlives
   //    the session, so this is answerable for a session that has since closed.
   //    A backend with no claude log but a delivery source answers from its own
-  //    channel instead (`sourceMatch`); everything else is `logMatch`, unchanged.
-  const fromLog = (await sourceMatch(sessions, sessionId, text, since, opts)) ?? logMatch(sessions, sessionId, text, since, opts);
+  //    channel instead; everything else is the claude log, unchanged (`ranMatch`).
+  const fromLog = await ranMatch(sessions, sessionId, text, since, opts);
   if (fromLog.verdict === "landed") return { verdict: "landed", alive, turnId: fromLog.turnId };
   // Held in the CLI's own queue: off the composer, not yet a turn. Nothing on
   // the screen can improve on that, and nothing may be typed about it.

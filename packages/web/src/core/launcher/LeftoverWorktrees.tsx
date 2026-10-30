@@ -27,15 +27,15 @@ export function useLeftovers(ids: string[]): { readings: Map<string, Reading>; r
   const key = ids.join(",");
   useEffect(() => {
     if (!ids.length) return;
-    let live = true;
+    const ac = new AbortController();
     setReadings(new Map(ids.map((id) => [id, { state: "loading" } as Reading])));
     for (const id of ids) {
-      api.worktreeLeftover(id).then(
-        (v) => { if (live) setReadings((m) => new Map(m).set(id, { state: "ok", v })); },
-        (e: unknown) => { if (live) setReadings((m) => new Map(m).set(id, { state: "error", error: e instanceof Error ? e.message : String(e) })); },
+      api.worktreeLeftover(id, ac.signal).then(
+        (v) => { if (!ac.signal.aborted) setReadings((m) => new Map(m).set(id, { state: "ok", v })); },
+        (e: unknown) => { if (!ac.signal.aborted) setReadings((m) => new Map(m).set(id, { state: "error", error: e instanceof Error ? e.message : String(e) })); },
       );
     }
-    return () => { live = false; };
+    return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` is `ids`, by value
   }, [key, nonce]);
   return { readings, recheck: useCallback(() => setNonce((n) => n + 1), []) };

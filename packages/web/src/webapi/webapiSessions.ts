@@ -49,8 +49,8 @@ export const sessionsApi = {
    * an hour. `nfetch` because it runs on a tap and is worth a line in the
    * activity bar.
    */
-  scrollback: async (sessionId: string): Promise<{ lines: string[]; history: boolean; bounded: boolean; at: number }> => {
-    const r = await nfetch(`/api/scrollback?id=${encodeURIComponent(sessionId)}`, undefined, TRANSCRIPT_TIMEOUT_MS);
+  scrollback: async (sessionId: string, signal?: AbortSignal): Promise<{ lines: string[]; history: boolean; bounded: boolean; at: number }> => {
+    const r = await nfetch(`/api/scrollback?id=${encodeURIComponent(sessionId)}`, signal ? { signal } : undefined, TRANSCRIPT_TIMEOUT_MS);
     if (!r.ok) throw new Error(`${r.status} scrollback`);
     const d = await readJsonFused<{ lines?: string[]; history?: boolean; bounded?: boolean; at?: number }>(r, TRANSCRIPT_TIMEOUT_MS);
     // `history` absent is a host one version behind, and the honest reading of

@@ -1,9 +1,11 @@
 import type { MutableRefObject, ReactNode } from "react";
 import type { BackendInfo, Intent, RepoTarget, SessionInfo, UsageInfo } from "@waterplane/shared";
-import type { Overlay } from "../../routing";
+import { parseFocus, type Overlay } from "../../routing";
 import { SlashSheet } from "../../SlashSheet";
 import { backendIdOf, ownCommandsHere } from "../../backendCaps";
-import { GitView } from "../../GitView";
+import { GitNoRepo, GitView } from "../../GitView";
+import { gitViewRepoId } from "../../gitLanding";
+import { listRead } from "../../listRead";
 import { gitFailSeed } from "../../gitFailPrompt";
 import { OutlineSheet } from "../../OutlineSheet";
 import { SheetGuard } from "../../BootGuard";
@@ -46,10 +48,12 @@ export interface OverlayCtx extends Pick<Route, "overlay" | "setOverlay" | "clos
   canInstall: boolean;
   installEvt: MutableRefObject<any>;
   setCanInstall: (on: boolean) => void;
+  /** The repo the git route entry is open on (`useGitRoute`), or null for the active one. */
   gitRepoId: string | null;
-  setGitRepoId: (id: string | null) => void;
   activeRepoId: string | null;
   repos: RepoTarget[];
+  /** When the host last answered for `repos` (0 = never): an empty list is "waiting" only until then. */
+  reposAt: number;
   /** What this host said it can launch — the Send sheet's *model* row. */
   backends: BackendInfo[] | null;
 }
@@ -66,7 +70,7 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     overlay, setOverlay, closeSheet, connRef, status, setReconnectAsk, submitInput, holdQueueRef, flushOutbox, removeQueued,
     pendingSession, insertCompose, setOutlineJump, setView, active, sessions, visibleRepos, outbox, usage, intents,
     launchCore, sessionCant, pickBackend, refreshRepos, sendCore, sendSeed, voice, installed, canInstall, installEvt,
-    setCanInstall, gitRepoId, setGitRepoId, activeRepoId, repos, backends,
+    setCanInstall, gitRepoId, activeRepoId, repos, reposAt, backends,
   } = ctx;
   // ── Overlays ────────────────────────────────────────────────────────
   /**
@@ -143,15 +147,21 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     ),
 
     git: () => {
-      if (!((gitRepoId ?? activeRepoId))) return null;
-      const gitRepo = repos.find((r) => r.id === (gitRepoId ?? activeRepoId));
-        return <GitView repoId={(gitRepoId ?? activeRepoId)!}
+      // `?repo=` as the URL holds it: the one a reload or an update resume came back on.
+      const focus = parseFocus();
+      const gitId = gitViewRepoId(gitRepoId, focus, activeRepoId, repos);
+      if (!gitId) return <GitNoRepo focus={focus} list={listRead({ rows: repos, readAt: reposAt })} session={!!active} onClose={() => setOverlay(null)} />;
+      const gitRepo = repos.find((r) => r.id === gitId);
+        return <GitView repoId={gitId}
           // A failed push/pull's log, as a seed for a new session in this repo:
           // the Send sheet opens on it and sends nothing. Back lands here again.
           onAskAgent={gitRepo ? (f) => sendCore.openSend(gitFailSeed(f, gitRepo)) : undefined}
-          stored={gitRepo?.gitFailed} onDone={handleNotif}
-          onBrowse={() => openBrowseFor((gitRepoId ?? activeRepoId)!, "git")}
-          onClose={() => { setGitRepoId(null); setOverlay(null); refreshRepos(); }} />;
+          stored={gitRepo?.gitFailed} failures={gitRepo?.gitFailures} onDone={handleNotif}
+          onBrowse={() => openBrowseFor(gitId, "git")}
+          // The repo and the tapped failure are the git route ENTRY's (`gitLanding.ts`): the close
+          // is a Back onto an entry that holds neither; covering it with Send or the file tree,
+          // and Back to it again, keeps both.
+          onClose={() => { setOverlay(null); refreshRepos(); }} />;
     },
 
     outline: () => {

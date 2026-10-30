@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.8.0 - 2026-10-27
+## 0.8.0 - 2026-10-30
 
 - **Which build is running.** The status-bar tooltip and the panel's footer name this build: version, commit and build time (`0.7.0 · a1b2c3d · 27 Oct 08:42`, with `+ edits` when it was built from uncommitted changes). The repo's build list shows the same line for the build it last installed or published.
+- **A cost window over undated records says so.** When part of Claude Code's log carries no date, a window it cannot place them in says how many it left out instead of printing a smaller total; every view words that count the same way.
+- **The tree highlights a session only while the panel shows it**, and the note about left-out sessions always opens All sessions.
 
 ## 0.7.0 - 2026-10-26
 

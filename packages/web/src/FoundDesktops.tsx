@@ -29,12 +29,12 @@ export function FoundDesktops({ onPassword }: {
   const [say, setSay] = useState<string | null>(null);
 
   useEffect(() => {
-    let live = true;
+    const ac = new AbortController();
     setSaved(listHosts());
-    api.tailnet.peers()
-      .then((res) => { if (live) setLoad({ s: "ok", res }); })
-      .catch(() => { if (live) setLoad({ s: "bad", why: "The desktop in use did not answer (an older version cannot list the tailnet). Type the new desktop's address below." }); });
-    return () => { live = false; };
+    api.tailnet.peers(ac.signal)
+      .then((res) => { if (!ac.signal.aborted) setLoad({ s: "ok", res }); })
+      .catch(() => { if (!ac.signal.aborted) setLoad({ s: "bad", why: "The desktop in use did not answer (an older version cannot list the tailnet). Type the new desktop's address below." }); });
+    return () => ac.abort();
   }, []);
 
   async function pick(row: FoundRow): Promise<void> {

@@ -13,7 +13,7 @@ export function healthScore(value: number, good: number): number {
 export function isoWeekOf(day: string): string | null {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   const t = Date.parse(`${day}T00:00:00Z`);
-  if (!Number.isFinite(t)) return null;
+  if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== day) return null;
   const dow = (new Date(t).getUTCDay() + 6) % 7; // Monday = 0
   return new Date(t - dow * 86_400_000).toISOString().slice(0, 10);
 }

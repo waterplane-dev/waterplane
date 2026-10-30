@@ -24,7 +24,7 @@ import { HEALTH_ENTRY_MEASURE } from "./healthIndexWords.ts";
 import {
   agentFindings, agentVerb, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb,
   patchFindings, patchIds,
-  healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
+  healthAskContextOf, healthIndexRemedyPrompt, healthQualityRunPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
 } from "./setupRemedy.ts";
 
 const check = (o) => ({ id: "x", label: "L", detail: "D", status: "warn", fix: null, ...o });
@@ -735,4 +735,27 @@ test("the bulk prompt frames exposure rows the same way inside a mixed list", ()
   const p = remedyPrompt([check({ id: "invented-later", label: "N", detail: "d" }), e], "r");
   assert.match(p, /third-party/);
   assert.match(p, /Close this finding if it is real/);
+});
+
+test("the design-quality run names the index as not its target and allows a split only inside a design change", () => {
+  const p = healthQualityRunPrompt("myapp");
+  assert.match(p, /health index is NOT the target/);
+  assert.match(p, /A file split is allowed only as part of such a change/);
+  assert.match(p, /Splitting a file for its length is out of scope, and so is any rule about line counts/);
+  assert.match(p, /Tests first/);
+  assert.match(p, /reviewed by someone who did not write it/);
+  assert.match(p, /Stop implementing when the only candidates left are file splits/);
+  assert.match(p, /post nothing until I answer/, "proposals at the end wait for the person");
+  assert.doesNotMatch(p, /\d+ lines|~\d+/, "no line-count target");
+});
+
+test("the design-quality run tracks the repo's own readings, or asks for one where there is none", () => {
+  const own = { file: ".waterplane-shared/health.json", declared: true,
+    readings: [{ key: "parity", label: "Parity coverage", span: "41% on 2026-10-26 → 42% on 2026-10-29", means: "Backend methods with a parity case.", better: "higher" }] };
+  const withOwn = healthQualityRunPrompt("myapp", { own });
+  assert.match(withOwn, /Parity coverage \(`parity`\)/);
+  assert.match(withOwn, /Report this repo's own readings \(above\) after each round/);
+  const none = healthQualityRunPrompt("myapp", { own: { file: ".waterplane-shared/health.json", declared: false, readings: [] } });
+  assert.match(none, /no reading of its own yet/);
+  assert.match(none, /declare it in \.waterplane-shared\/health\.json/);
 });

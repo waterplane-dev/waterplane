@@ -391,3 +391,98 @@ test("the specs the host is asked to fold carry the SCRAPED anchors, and skip a 
   assert.equal(specs[0].lenMs, SESSION.lenMs);
   assert.deepEqual(windowSpecs(null), []);
 });
+
+test("a ledger holding undated records cuts no window, live or past, and says so in the shared words (design round 4)", async () => {
+  const { undatedText } = await import("@waterplane/shared");
+  const { windowGrids } = await import("./usageCut.ts");
+  const now = new Date(2026, 8, 20, 6, 40, 0, 0).getTime();
+  const reset = new Date(2026, 8, 20, 6, 59, 0, 0).getTime();
+  const hours = [hour(new Date(2026, 8, 20, 3, 30).getTime(), 100, 10)];
+  assert.ok(isCut(windowCut(SESSION, { ...docOf(hours), undated: 0 }, usageOf(reset), now)), "none undated: the cut as today");
+  const r = windowCut(SESSION, { ...docOf(hours), undated: 2 }, usageOf(reset), now);
+  assert.equal(isCut(r), false);
+  assert.equal(cutRefusalText(SESSION, r), undatedText(2));
+  // The host's past-window grids from the same ledger: still drawn — refused per CELL (round 5).
+  const series = { id: "session", anchor: reset, lenMs: 5 * HOUR, windows: [], oldestHour: 0, newestHour: now };
+  assert.equal(windowGrids({ series: [series], scannedAt: now }).size, 1);
+  assert.equal(windowGrids({ series: [series], scannedAt: now, undated: 1 }).size, 1);
+  assert.equal(windowGrids(null).size, 0);
+});
+
+test("the live cut refuses only when an undated record's log was written since the window opened (design round 4, r4-1 L1)", () => {
+  const now = new Date(2026, 8, 20, 6, 40, 0, 0).getTime();
+  const reset = new Date(2026, 8, 20, 6, 59, 0, 0).getTime();
+  const hours = [hour(new Date(2026, 8, 20, 3, 30).getTime(), 100, 10)];
+  const before = new Date(2026, 8, 19, 12).getTime(); // before the 02:00 opening
+  assert.ok(isCut(windowCut(SESSION, { ...docOf(hours), undated: 2, undatedUntil: before }, usageOf(reset), now)), "an old log cannot hold this window's records");
+  const inside = new Date(2026, 8, 20, 4).getTime();
+  assert.equal(isCut(windowCut(SESSION, { ...docOf(hours), undated: 2, undatedUntil: inside }, usageOf(reset), now)), false);
+});
+
+test("past windows refuse per CELL: a box an undated record could fall in has no figure, the rest keep theirs (design round 5, r4-1b)", async () => {
+  const { undatedText } = await import("@waterplane/shared");
+  const { windowGrids } = await import("./usageCut.ts");
+  const anchor = new Date(2026, 8, 20, 17, 0, 0, 0).getTime();
+  const g = grid(anchor, 5 * HOUR, [win(0, 10, 1), win(1, 30, 3), win(2, 40, 4)], anchor - 20 * HOUR);
+  // One log with 2 undated records, last written inside window back 1 (opened 07:00, reset 12:00).
+  const mtime = anchor - 7 * HOUR;
+  const doc = { series: [g], scannedAt: anchor, undated: 2, undatedUntil: mtime, undatedLogs: [[mtime, 2]] };
+  const series = windowGrids(doc).get("session");
+  const cells = windowGrid(series);
+  assert.deepEqual(cells.map((c) => c.back), [3, 2, 1, 0]);
+  // Windows that opened at or before the log was last written could hold the records.
+  for (const c of cells.slice(0, 3)) {
+    assert.equal(c.totals, null, `back ${c.back}: no figure`);
+    assert.equal(c.cost, null);
+    assert.equal(c.refused, undatedText(2));
+  }
+  // The window opened after the log's mtime keeps its number.
+  assert.equal(tokenTotal(cells[3].totals), 10);
+  assert.equal(cells[3].refused, undefined);
+  // The cut under a refused box is the same refusal, in the same words.
+  const r = seriesCut(SESSION, series, 1, []);
+  assert.equal(isCut(r), false);
+  assert.equal(cutRefusalText(SESSION, r), undatedText(2));
+  assert.ok(isCut(seriesCut(SESSION, series, 0, [])));
+  // An older host (no undated fields): every box as before.
+  assert.ok(windowGrid(g).every((c) => c.totals != null && c.refused == null));
+});
+
+test("a grid whose every counted box would be striped is ONE sentence, never a wall of stripes (design follow-up S2)", async () => {
+  const { undatedText } = await import("@waterplane/shared");
+  const { heatGrid, windowGrids } = await import("./usageCut.ts");
+  const anchor = new Date(2026, 8, 20, 17, 0, 0, 0).getTime();
+  const g = grid(anchor, 5 * HOUR, [win(0, 10, 1), win(1, 30, 3), win(2, 40, 4)], anchor - 20 * HOUR);
+  const allStriped = (h) => h.cells.length > 0 && h.cells.every((c) => c.totals == null) && h.cells.some((c) => c.refused);
+  // The middle generation of the field (f99f4328): `undated` with no `undatedUntil` and no
+  // `undatedLogs` — nothing tells one window from another, so every box refused the same count.
+  const mid = heatGrid(windowGrids({ series: [g], scannedAt: anchor, undated: 6 }).get("session"));
+  assert.equal(allStriped(mid), false, "no grid is entirely refused");
+  assert.deepEqual(mid.cells, []);
+  assert.ok(mid.refused.includes(undatedText(6)), mid.refused);
+  assert.match(mid.refused, /^No past window has a figure\./);
+  assert.match(mid.refused, /older than this phone/);
+  // Dated, but the log was written inside the window running now: every box could hold the
+  // records — still one sentence, and no claim about the host's age (it sent the dates).
+  const fresh = heatGrid(windowGrids({ series: [g], scannedAt: anchor, undated: 2, undatedUntil: anchor - HOUR, undatedLogs: [[anchor - HOUR, 2]] }).get("session"));
+  assert.equal(allStriped(fresh), false);
+  assert.ok(fresh.refused.includes(undatedText(2)));
+  assert.doesNotMatch(fresh.refused, /older than this phone/);
+  // A log written inside window back 1: every box from it back is refused — the OLDEST run, since a
+  // later window can only hold fewer (review of 71280ff6, #1). That run is one sentence too, and the
+  // boxes after it keep their figures; no drawn box is ever striped.
+  const mtime = anchor - 7 * HOUR;
+  const some = heatGrid(windowGrids({ series: [g], scannedAt: anchor, undated: 2, undatedUntil: mtime, undatedLogs: [[mtime, 2]] }).get("session"));
+  assert.deepEqual(some.cells.map((c) => c.back), [0]);
+  assert.equal(tokenTotal(some.cells[0].totals), 10);
+  assert.match(some.refused, /^The 3 windows before these boxes have no figure\./);
+  assert.ok(some.refused.includes(undatedText(2)));
+  assert.doesNotMatch(some.refused, /older than this phone/);
+  for (const h of [mid, fresh, some]) assert.ok(h.cells.every((c) => !c.refused), "no drawn box is striped");
+  // Today's host with a log whose mtime it could not read sends the same bare shape: the sentence
+  // says what the desktop sent and only MAY blame its age (review #2).
+  assert.match(mid.refused, /if this desktop's is older/);
+  // Nothing undated, and a grid the record only outlines: as before.
+  assert.equal(heatGrid(g).refused, null);
+  assert.equal(heatGrid(null).cells.length, 0);
+});

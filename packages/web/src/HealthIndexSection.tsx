@@ -16,7 +16,7 @@ import type { HealthAxisMode } from "./healthIndexWords";
  * `SeriesTile`'s `actions` is: the chart paints and words, and the sheet
  * decides what a prompt is and where it goes. Absent = no button at all.
  */
-export function HealthIndexSection({ repoId, onAsk, onAskTrend, axis, onCommits, seriesStamp }: {
+export function HealthIndexSection({ repoId, onAsk, onAskTrend, onQualityRun, axis, onCommits, seriesStamp }: {
   repoId: string;
   /** Changes whenever the series the index is computed from does (last sha + row count). */
   seriesStamp?: string;
@@ -24,6 +24,7 @@ export function HealthIndexSection({ repoId, onAsk, onAskTrend, axis, onCommits,
   axis?: HealthAxisMode;
   onAsk?: (w: IndexWeekSubject, vs: IndexVsSubject | null) => void;
   onAskTrend?: (weeks: IndexTrendWeek[], baselineWeek: string, vs: IndexVsSubject | null) => void;
+  onQualityRun?: () => void;
   /** Whether this host sends the per-commit series, reported up so the region's
    *  x-axis row offers `commits` only where it exists — read from this one
    *  fetch rather than a second read of the same document. Null until it is in. */
@@ -44,7 +45,7 @@ export function HealthIndexSection({ repoId, onAsk, onAskTrend, axis, onCommits,
   const avail = view ? healthCommitsAvailability(view) : null;
   useEffect(() => { onCommits?.(avail); }, [avail, onCommits]);
   return (
-    <HealthIndexChart view={view} onAsk={onAsk} onAskTrend={onAskTrend} axis={axis} empty={
+    <HealthIndexChart view={view} onAsk={onAsk} onAskTrend={onAskTrend} onQualityRun={onQualityRun} axis={axis} empty={
       <Empty res={res} empty={!view?.series} thing="the health index" noun="index">
         {view?.reason ?? "No health index yet: it starts at the first week every one of its five readings exists."}
       </Empty>

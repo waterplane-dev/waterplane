@@ -71,6 +71,7 @@ const SETTLED: Record<NonNullable<SentCommand["settled"]>, { label: string; cls:
 };
 
 type Who = "all" | "auto" | "user";
+// closed: the filter is this sheet's own chip set
 const WHO_LABEL: Record<Who, string> = { all: "all", auto: "automatic", user: "yours" };
 /** ONE bucketing function feeds both the number on a chip and the cut it opens (a count on a
  *  control is a filter), so the two can never disagree about an edge. */

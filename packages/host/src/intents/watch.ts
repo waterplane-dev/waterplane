@@ -11,8 +11,10 @@ import { needsSlot, postsScheduledBuild } from "@waterplane/shared";
 import { isRecurring, spanWords, type IntentCore } from "./contract.js";
 
 export class WatchSlice {
-  /** Set by the first `reconcile()`; the facade's `tick` waits on it. */
+  /** Set by the first `reconcile()` once it has run; the facade's `tick` waits on it. */
   reconciled = false;
+  /** The first `reconcile()` while it waits on its evidence — a second call joins it. */
+  private reconciling: Promise<void> | null = null;
 
   constructor(private readonly core: IntentCore) {}
 
@@ -309,8 +311,34 @@ export class WatchSlice {
    * did not come back is `failed` saying so (at the limit it is followed, as
    * every dead session is) — never `done`.
    */
-  async reconcile(): Promise<void> {
-    if (this.reconciled) return;
+  reconcile(): Promise<void> {
+    if (this.reconciled) return Promise.resolve();
+    return (this.reconciling ??= this.reconcileOnce());
+  }
+
+  /**
+   * The evidence first, then every decision in one synchronous pass. The
+   * evidence can be ASYNC — a backend's own channel (`settle.ts`'s
+   * `ranVerdict`) — and `reconciled` stays false while it is asked, so `tick`
+   * fires nothing into a store whose mid-flight rows are not decided yet.
+   */
+  private async reconcileOnce(): Promise<void> {
+    // The rows the process died with, named BEFORE the await. The server is
+    // already listening while a channel is asked, and "Run now" fires without
+    // the `reconciled` gate — a row started in that window is being delivered
+    // by THIS process and is not this pass's to decide.
+    const midFlight = new Set(this.core.rows().filter((r) => r.state === "starting" || r.state === "running").map((r) => r.id));
+    const verdicts = new Map<string, "landed" | "absent" | "unknown">();
+    await Promise.all(this.core.rows().filter((r) => midFlight.has(r.id)).map(async (row) => {
+      let v: "landed" | "absent" | "unknown" = "unknown";
+      try {
+        const text = row.payload.kind === "prompt" ? row.payload.steps[0] : "";
+        // Only the rows `reconcileOne` would ask: asking spends the turn on the row.
+        if (!row.sessionId || !text || row.target.kind === "shell" || postsScheduledBuild(row)) return;
+        v = await this.core.deps.logVerdict(row.sessionId, text, row.startedAt ?? row.createdAt, row.id);
+      } catch { /* no answer is unknown — and never a reconcile that never ends */ }
+      verdicts.set(row.id, v);
+    }));
     this.reconciled = true;
     const now = Date.now();
     let dirty = false;
@@ -331,14 +359,15 @@ export class WatchSlice {
     }
     for (const row of this.core.rows()) {
       if (row.state !== "starting" && row.state !== "running") continue;
+      if (!midFlight.has(row.id) || this.core.inflight.has(row.id)) continue;
       dirty = true;
-      this.reconcileOne(row, now);
+      this.reconcileOne(row, now, verdicts.get(row.id) ?? "unknown");
     }
     if (dirty) { this.core.persist(); this.core.deps.onChange(); }
     this.core.kick();
   }
 
-  private reconcileOne(row: Intent, now: number): void {
+  private reconcileOne(row: Intent, now: number, verdict: "landed" | "absent" | "unknown"): void {
     const fail = (detail: string): void => {
       // The start may have happened, so the waiver it was for is spent.
       row.pastBudget = undefined;
@@ -411,8 +440,8 @@ export class WatchSlice {
         : "the host restarted while this was starting — whether it began is not recorded, so it was NOT started again");
       return;
     }
-    const text = row.payload.kind === "prompt" ? row.payload.steps[0] : "";
-    const verdict = text ? this.core.deps.logVerdict(sid, text, row.startedAt ?? row.createdAt, row.id) : "unknown";
+    // `verdict` was asked by `reconcileOnce` before this pass (it may be async):
+    // `unknown` for a row with no session or no words.
     if (verdict === "landed") {
       // The CLI's log proves the words were DELIVERED — and nothing more. It
       // says nothing about the turn having ENDED (`logVerdict` finds the user

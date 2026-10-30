@@ -4,7 +4,9 @@ import { RadioRows, RowTitle, RowSub, Hint } from "../kit";
 import { LaunchRow } from "./LaunchRow";
 import { FlagWhenDoneRow } from "./FlagWhenDoneRow";
 import { BudgetField } from "../BudgetField";
-import { budgetChipWords, launchSpendUnit, launchWindowsOff } from "../budgetInput";
+import { useEffect, useRef, useState } from "react";
+import { budgetChipWords, capOnStart, keptNoteAt, keptOnEdit, launchSpendUnit, launchWindowsOff, sendBackend, type KeptCap } from "../budgetInput";
+import { SetWarn } from "../SettingsKit";
 import { RepoPicker, RepoSelect } from "../RepoPicker";
 import { Unavailable } from "../Unavailable";
 import { clockSessionNote, budgetOfTarget, launchOfTarget, targetWords, withBudget, withLaunch } from "../sendIntent";
@@ -17,6 +19,7 @@ import { firstSession, cwdOf, dirsOf } from "./sendTargets";
 export function ToSection({ m }: { m: SendSheetModel }) {
   const {
     seed, repos, live, names, closeGlobal, seqMeans, target, setTarget, when, sequential, setSequential, open, setOpen, budgetOpen, setBudgetOpen,
+    kept, setKept,
   } = m;
   /**
    * **A cap on the session(s) this send opens** — a `budget…` chip, collapsed
@@ -26,6 +29,50 @@ export function ToSection({ m }: { m: SendSheetModel }) {
    * `BudgetField`'s, which is also the launch ask's field.
    */
   const bud = budgetOfTarget(target);
+  // Where the session(s) really start — a now-send with nothing picked is on this phone's defaults (`sendBackend`).
+  const at = { now: when.kind === "now", defaults: m.launchDefaults };
+  const to = sendBackend(target, at) ?? undefined;
+  // A cap a start cannot carry is SET ASIDE in `kept`, never deleted, and `kept.said` names it; a
+  // move back restores it (`capOnStart`, review r4-2 M1). Sheet state (`useSendSheet`, so it rides
+  // the annotator round trip), not the target's: a kept cap is not this send's budget. `n` remounts the field.
+  const [n, setN] = useState(0);
+  const [tick, poke] = useState(0); // a re-render for a note whose target came back unchanged (React bails out on it)
+  // The updater decides on the QUEUED target with this render's `kept` (a value from the closure
+  // would drop a setTarget batched beside it) and only notes the result; the effect below applies it.
+  // Same inputs, same note: safe if React runs an updater twice.
+  const keptOut = useRef<{ kept: KeptCap | null } | null>(null);
+  const setLaunch: Parameters<typeof LaunchRow>[0]["setLaunch"] = (l) => {
+    setTarget((t) => {
+      const r = capOnStart(t, withLaunch(t, l), kept, m.backends ?? null, at, at);
+      keptOut.current = { kept: r.kept };
+      return r.target;
+    });
+  };
+  // WHEN and the phone's defaults are `sendBackend`'s other input: when they move, the cap goes
+  // through the same transition (`capOnStart`) on the same updater-and-ref path (design round 4).
+  const startWas = useRef(at);
+  useEffect(() => {
+    const was = startWas.current;
+    startWas.current = at;
+    if (was.now === at.now && was.defaults?.backend === at.defaults?.backend) return;
+    setTarget((t) => {
+      const r = capOnStart(t, t, kept, m.backends ?? null, was, at);
+      keptOut.current = { kept: r.kept };
+      return r.target;
+    });
+    poke((x) => x + 1); // `next` is `t` here: the note must still land when the target does not move
+  }, [at.now, at.defaults?.backend]); // eslint-disable-line react-hooks/exhaustive-deps -- `at` is rebuilt every render; these two are its inputs
+  // A decision the updater noted lands here — on a new target, or on `tick` when the target did not move.
+  useEffect(() => {
+    const out = keptOut.current;
+    if (!out) return;
+    keptOut.current = null;
+    // `capOnStart` never returns a target cap AND a kept one, so both here means a cap typed in the
+    // same batch: the person's own, and the kept one goes with no remount under their fingers.
+    if (out.kept && bud) { setKept(null); return; }
+    if ((out.kept?.budget ?? null) !== (kept?.budget ?? null)) setN((x) => x + 1); // set aside or restored: the field shows it
+    setKept(out.kept);
+  }, [target, tick]); // eslint-disable-line react-hooks/exhaustive-deps -- `bud`/`kept` are read as of the render that carries the note
   const budgetRow = (
     <>
       <div className="sched-days" style={{ marginTop: 6 }}>
@@ -34,16 +81,19 @@ export function ToSection({ m }: { m: SendSheetModel }) {
           <Wallet size={13} /> {bud ? budgetChipWords(bud) : "budget…"}
         </button>
       </div>
+      {kept && keptNoteAt(open) === "budget" && <SetWarn>{kept.said}</SetWarn>}
       {budgetOpen && (
-        <BudgetField initial={bud ?? null} onChange={(b) => setTarget((t) => withBudget(t, b))}
-          windowsOff={launchWindowsOff(m.backends ?? null, ("launch" in target ? target.launch?.backend : undefined))}
-          spendUnit={launchSpendUnit(m.backends ?? null, ("launch" in target ? target.launch?.backend : undefined))}
+        <BudgetField key={n} initial={bud ?? null}
+          onChange={(b) => setTarget((t) => withBudget(t, b))}
+          onEdit={() => setKept(keptOnEdit)} // any edit replaces a kept cap, parsed or not: nothing comes back over it
+          windowsOff={launchWindowsOff(m.backends ?? null, to)}
+          spendUnit={launchSpendUnit(m.backends ?? null, to)}
           calFor="A percent is converted from dollars at the window's measured rate once the session is running — until there is a fresh usage reading, nothing is held." />
       )}
     </>
   );
   // The *model* row — the Start-with picker, offered and never forced (`LaunchRow`).
-  const launchRow = <LaunchRow m={m} />;
+  const launchRow = <LaunchRow m={m} setLaunch={setLaunch} />;
   const flagRow = <FlagWhenDoneRow target={target} when={when} setTarget={setTarget} />;
   return (
     <>
@@ -65,6 +115,8 @@ export function ToSection({ m }: { m: SendSheetModel }) {
           {clockSessionNote(target, when, target.kind === "session" ? names.sessionTitle(target.sessionId) : "")}
         </Hint>
       )}
+      {/* Where the person is: set aside from a *When* tap, the To row is collapsed (`keptNoteAt`). */}
+      {kept && keptNoteAt(open) === "summary" && <SetWarn>{kept.said}</SetWarn>}
       {open === "to" && (
         <div className="send-exp">
           {/* Three answers to WHERE, and they are three different things:

@@ -68,3 +68,28 @@ test("shells.ts: the sync ps reader is the only blocking call, and a kill's prec
   const drive = read("sessions/drive.ts");
   assert.match(drive, /rows = readPsTable\(true\)/, "stopShellsUnder reads fresh before it kills");
 });
+
+test("compliance.ts: its blocking git is the live probe's two helpers and one confirmed fix, nothing more", () => {
+  const text = read("compliance.ts");
+  // gitOk + gitOut back `liveProbe` (the sheet's own GET, a fix's re-read, and a path the async
+  // prefetch did not ask); the third is the `local-ci-status` fix, two taps by a person.
+  assert.equal(calls(text), 3, "compliance.ts gains no new execFileSync");
+  for (const name of ["gitOk", "gitOut"]) {
+    const at = text.indexOf(`function ${name}(`);
+    assert.ok(at >= 0, `${name} is declared`);
+    assert.equal(calls(text.slice(at, text.indexOf("\n}\n", at))), 1, `${name} holds its own execFileSync`);
+  }
+  const fix = text.indexOf("export function fixRepoCompliance(");
+  assert.equal(calls(text.slice(fix)), 1, "the third is inside fixRepoCompliance");
+});
+
+test("setupwatch.ts: what it runs unasked never blocks on git or the three tree walks — session create included", () => {
+  const text = read("setupwatch.ts");
+  // The sync inspection (`inspectRepo` with its `liveProbe` + sync walks) is not reachable from here.
+  // What `inspectRepoAsync` still does synchronously is single-file reads and the root `.env` listing.
+  assert.doesNotMatch(text, /\binspectRepo\(/, "setupwatch.ts runs only inspectRepoAsync");
+  assert.match(text, /await inspectRepoAsync\(/, "the inspection is awaited in the background");
+  const events = read("server/sessionEvents.ts");
+  assert.doesNotMatch(events, /setupWatch\.check\(/, "a session create never runs the blocking check");
+  assert.match(events, /setupWatch\.checkInBackground\(/, "a session create re-checks in the background");
+});

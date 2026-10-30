@@ -8,7 +8,7 @@ import { CantInline } from "./Unavailable";
 import { Button, Hint } from "./kit";
 import { openExternal } from "./openExternal";
 import { showToast } from "./toast";
-import { LEASE_RENEW_MS, checksState, checksWords, mergeMethod, reviewWords } from "./prCardLogic";
+import { LEASE_RENEW_MS, checksState, checksWords, mergeMethod, pickedMethod, prActionFailWords, reviewWords } from "./prCardLogic";
 
 /** One failing check's log (or its page), shown under the card until closed. */
 interface LogView { title: string; text: string }
@@ -52,9 +52,11 @@ export function PrCard({ repoId, rules }: { repoId: string; rules: BranchRules }
       showToast(words.split("\n")[0]);
       setTimeout(() => { void lease(); }, 1500);
     } catch (e) {
-      const words = `Did not reach the desktop: ${(e as Error).message}`;
+      // A timeout is not a refusal: the action may have run on the desktop, so the list is re-read.
+      const words = prActionFailWords(e);
       setNote(words);
       showToast(words);
+      void lease();
     }
     setBusy(null);
   }
@@ -114,7 +116,7 @@ export function PrCard({ repoId, rules }: { repoId: string; rules: BranchRules }
                 <GitMerge size={14} /> {busy === `merge-${pr.number}` ? "merging…" : use ? `Merge (${use})` : "Merge"}
               </Button>
               {rules.autoMerge && (
-                <Button title="merge by itself once every check is green" onClick={() => { void act(`auto-${pr.number}`, () => api.prAutoMerge(repoId, pr.number, !pr.autoMerge), pr.autoMerge ? "Merge when green is off." : "Merge when green is on."); }}>
+                <Button title="merge by itself once every check is green" onClick={() => { void act(`auto-${pr.number}`, () => api.prAutoMerge(repoId, pr.number, !pr.autoMerge, pickedMethod(rules, method)), pr.autoMerge ? "Merge when green is off." : "Merge when green is on."); }}>
                   Merge when green: {pr.autoMerge ? "on" : "off"}
                 </Button>
               )}

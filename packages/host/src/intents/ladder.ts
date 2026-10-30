@@ -61,10 +61,12 @@ export class LadderSlice {
     // *waiting for a reading* rather than as *switched off*; this is what
     // eventually turns it into a real occurrence. Cheap: it only touches rows
     // that are both `window` and unarmed, and it stops the moment one is.
+    // A PAUSED one is not unarmed, it is switched off: arming it here undid the
+    // pause switch within one tick of a reading (bughunt 2026-10-29 review D F2).
     let armedAny = false;
     for (const row of this.core.rows()) {
       if (isTerminal(row) || row.trigger.kind !== "at" || row.trigger.rule.kind !== "window") continue;
-      if (row.nextAt != null) continue;
+      if (row.nextAt != null || row.trigger.paused) continue;
       const at = this.core.armFrom(row, row.lastOccurrence ?? this.core.newBasis(row), now);
       if (at != null) { row.nextAt = at; armedAny = true; }
     }

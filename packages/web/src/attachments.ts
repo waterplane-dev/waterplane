@@ -100,6 +100,7 @@ export async function checkAttachments(
   repoId: string | null,
   outbox: OutboxEntry[],
   online: boolean,
+  signal?: AbortSignal,
 ): Promise<{ refs: FileRef[]; states: AttachStatus[] }> {
   const refs = refsIn(text);
   if (!refs.length) return { refs, states: [] };
@@ -119,8 +120,8 @@ export async function checkAttachments(
     const wantInbox = refs.some((r) => r.relPath.startsWith(".claude/inbox/"));
     const wantOutbox = refs.some((r) => !r.relPath.startsWith(".claude/inbox/"));
     const [inbox, outboxFiles] = await Promise.all([
-      wantInbox ? api.inbox(repoId).catch(() => null) : Promise.resolve([]),
-      wantOutbox ? api.artifacts(repoId, "outbox").then((d) => d.files).catch(() => null) : Promise.resolve([]),
+      wantInbox ? api.inbox(repoId, signal).catch(() => null) : Promise.resolve([]),
+      wantOutbox ? api.artifacts(repoId, "outbox", undefined, { signal }).then((d) => d.files).catch(() => null) : Promise.resolve([]),
     ]);
     // Either half failing leaves the other half's answer usable only if the
     // failing half was not asked about — so a partial failure degrades the whole
@@ -190,6 +191,7 @@ export function requestAttachOpen(d: AttachOpenDetail): void {
 
 /** One line saying where a file stands, in the words the row shows. */
 export function attachLabel(s: AttachStatus): string {
+  // closed: an upload state the phone itself sets
   switch (s.state) {
     case "host": return "in the repo";
     case "sending": return "uploads before this message";

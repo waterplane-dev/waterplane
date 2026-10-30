@@ -5,7 +5,7 @@
  * holds them to the index's verdict-word ban). The longer sentences stay in
  * `healthIndexWords.ts` / `healthSpendWords.ts`.
  */
-import { HEALTH_ENTRY_LABEL, HEALTH_SCORE_CAP_GAP, type HealthEntry } from "@waterplane/shared";
+import { HEALTH_ENTRY_LABEL, HEALTH_SCORE_CAP_GAP, wordOf, type HealthEntry } from "@waterplane/shared";
 
 /** Beside the hero number. */
 export const OUT_OF_100 = "out of 100";
@@ -25,7 +25,7 @@ export const BAR_DOWN_WORDS = "pulled it down";
 export function heldDownWords(s: { value: number; mean: number; cappedBy: HealthEntry | null }): string | null {
   if (!s.cappedBy || !(s.value < s.mean)) return null;
   const worst = Math.round(s.value - HEALTH_SCORE_CAP_GAP);
-  return `held down by ${HEALTH_ENTRY_LABEL[s.cappedBy]}, at ${worst} of 100`;
+  return `held down by ${wordOf(HEALTH_ENTRY_LABEL, s.cappedBy, "an entry this app version cannot name")}, at ${worst} of 100`;
 }
 
 /** A week with scores and no moves because it is the first one — an absence, so it stays open. */

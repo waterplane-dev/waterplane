@@ -2042,6 +2042,62 @@ test("a delivered row whose session came back is RE-ADOPTED running, not settled
   }
 });
 
+test("restart reconciliation awaits an evidence answer that is asynchronous (a backend's own channel)", async () => {
+  // `ranVerdict` asks a non-claude backend's `sources.delivery` first, which is
+  // a promise; a reconcile that compared the promise to "landed" would fall
+  // through as if nothing were known.
+  const { store, root } = restartOver([midTurn("ra1s")], { logVerdict: async () => "landed" });
+  try {
+    await store.reconcile();
+    await settle();
+    const row = rowsOnDisk(root).find((r) => r.id === "ra1s");
+    assert.equal(row.state, "running", "re-adopted, exactly as for a claude log's `landed`");
+    assert.match(row.blockDetail, /restarted after this was delivered/);
+  } finally {
+    store.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a row fired while reconciliation waits on its evidence is not decided as a restart casualty", async () => {
+  // The server listens before `reconcile()` and "Run now" fires without the
+  // `reconciled` gate: a row that goes `starting` in the await window is this
+  // process's delivery, and failing it "the host restarted…" would be wrong.
+  let store;
+  const made = restartOver([midTurn("rw1"), midTurn("rw2", { state: "queued", sessionId: undefined, startedAt: undefined })], {
+    logVerdict: async () => {
+      const q = store.get("rw2");
+      q.state = "starting"; q.sessionId = "s-live"; q.startedAt = Date.now();
+      store.inflight.set("rw2", Date.now());
+      return "landed";
+    },
+  });
+  store = made.store;
+  try {
+    await store.reconcile();
+    assert.equal(store.get("rw1").state, "running", "the row the process died with is decided");
+    assert.equal(store.get("rw2").state, "starting", "the row started meanwhile is left to the start that owns it");
+    assert.equal(store.get("rw2").result, undefined);
+  } finally {
+    store.inflight.delete("rw2");
+    store.stop();
+    rmSync(made.root, { recursive: true, force: true });
+  }
+});
+
+test("a second reconcile() during the evidence wait joins the first", async () => {
+  let asked = 0;
+  const { store, root } = restartOver([midTurn("rj1")], { logVerdict: async () => { asked += 1; await settle(); return "landed"; } });
+  try {
+    await Promise.all([store.reconcile(), store.reconcile()]);
+    assert.equal(asked, 1, "the evidence is asked once");
+    assert.equal(store.get("rj1").state, "running");
+  } finally {
+    store.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("…and its Stop past the fresh baseline completes it, saying the turn finished AFTER the restart", async () => {
   const { store, root } = restartOver([midTurn("ra2")]);
   try {

@@ -11,7 +11,7 @@
  */
 export type {
   Availability, CommandDef, ImageTextReader, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, SecretFillerEntry, LedgerViewDef, LedgerViewParts, LedgerViewProps,
-  MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
+  LeaveReason, MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
 export { core } from "../core/api.ts";
@@ -38,6 +38,8 @@ export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
 export type { StreamFrame } from "@waterplane/shared";
 export { ledgers, type CachedRead } from "./ledgers.ts";
+/** A host list's rows with its read time, read as unread / empty / rows (`listRead.ts`). */
+export { listRead, type HostList, type ListRead } from "../listRead.ts";
 export { secretFillers } from "./secretFillers.ts";
 /** Open a URL outside the app — the one call that works in both a browser tab and the Android shell. */
 export { openExternal } from "../openExternal.ts";

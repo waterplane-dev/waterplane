@@ -10,6 +10,7 @@
  * missing from a RepoTarget draws NO chip, never `Health 0`.
  */
 import type { HealthEntry, HealthIndexPoint, RepoHealthIndex } from "@waterplane/shared";
+import { wordOf } from "@waterplane/shared";
 
 /** The five baskets in the order the index names them, with the plain names the phone shows. */
 export const HEALTH_ENTRY_ORDER: readonly HealthEntry[] = ["size", "retouch", "hatches", "context", "untested"];
@@ -148,8 +149,8 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
   if (!dis.length && !ov.length) return null;
   const n = HEALTH_ENTRY_ORDER.length - dis.length;
   const parts = [`Built from ${n} of ${product}'s ${HEALTH_ENTRY_ORDER.length} readings`];
-  if (dis.length) parts.push(`${listWords(dis.map((e) => HEALTH_ENTRY_NAME[e]))} ${dis.length === 1 ? "is" : "are"} disabled here`);
-  if (ov.length) parts.push(`${listWords(ov.map((e) => HEALTH_ENTRY_NAME[e]))} ${ov.length === 1 ? "reads" : "read"} this repo's own version`);
+  if (dis.length) parts.push(`${listWords(dis.map((e) => wordOf(HEALTH_ENTRY_NAME, e, e)))} ${dis.length === 1 ? "is" : "are"} disabled here`);
+  if (ov.length) parts.push(`${listWords(ov.map((e) => wordOf(HEALTH_ENTRY_NAME, e, e)))} ${ov.length === 1 ? "reads" : "read"} this repo's own version`);
   return `${parts.join("; ")}.`;
 }
 
@@ -161,7 +162,7 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
  *  repos as it stands. `firstWeek` is the first scored week. */
 export function indexExplainWords(firstWeek: string, product: string, basket?: IndexBasket | null): string {
   const changed = indexBasketWords(basket, product);
-  const good = HEALTH_ENTRY_ORDER.map((e) => HEALTH_GOOD_WORDS[e]).join("; ");
+  const good = HEALTH_ENTRY_ORDER.map((e) => wordOf(HEALTH_GOOD_WORDS, e, e)).join("; ");
   const read = `A score out of 100 for ${product}'s five readings — never a repo's own — against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it. The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind four quiet ones.`;
   const trend = `The second line is the trend: the score now against the first scored week, ${firstWeek}, and against last week.`;
   if (!changed) return `${read} ${trend} The good values are the same in every repo, so it compares across repos.`;
@@ -470,9 +471,9 @@ export function contributionBars(
     const len = max > 0 ? (Math.abs(value) / max) * half : 0;
     const side = Math.round(value * 10) === 0 ? "none" : value > 0 ? "up" : "down";
     return {
-      key, name: HEALTH_ENTRY_NAME[key], value,
+      key, name: wordOf(HEALTH_ENTRY_NAME, key, key), value,
       x: value >= 0 ? zeroX : zeroX - len, w: len, side,
-      words: `${HEALTH_ENTRY_NAME[key]} ${signedTenths(value)}`,
+      words: `${wordOf(HEALTH_ENTRY_NAME, key, key)} ${signedTenths(value)}`,
     };
   });
   return { zeroX, bars };
@@ -514,3 +515,6 @@ export function indexAskLabel(week: string, thisWeek: boolean): string {
 
 /** The second ask: the whole line, not one week — read, then propose backlog rows. */
 export const INDEX_TREND_ASK_LABEL = "assess and propose improvements";
+
+/** The third: a run that changes the design, with the index named as not its target. */
+export const INDEX_QUALITY_RUN_LABEL = "start a design-quality run";

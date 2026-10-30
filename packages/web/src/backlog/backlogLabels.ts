@@ -8,6 +8,7 @@
  */
 import { Bug, Check, CircleDashed, CircleHelp, Hourglass, Lightbulb, Loader, TrendingUp, TriangleAlert, Wrench, X, type LucideIcon } from "lucide-react";
 import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCategory } from "@waterplane/shared";
+import { wordOf } from "@waterplane/shared";
 import { isFailedRow } from "../backlogFilter";
 
 /**
@@ -75,6 +76,20 @@ export const VALIDATE_ICON: Record<BacklogValidateStatus, LucideIcon> = {
   error: TriangleAlert,
   limited: Hourglass,
 };
+/**
+ * A verdict as drawn: its words and its icon, read through `wordOf`. The
+ * status is the HOST's, and a newer host's status is not a key here — read
+ * straight, the label is `undefined` and the icon is an `undefined` component,
+ * which throws and takes the whole Backlog or Activity sheet down with it.
+ */
+export const checkLook = (s: string): { label: string; Icon: LucideIcon } => ({
+  label: wordOf(CHECK_LABEL, s, "a check result this app version cannot name"),
+  Icon: wordOf<BacklogCheckStatus, LucideIcon>(CHECK_ICON, s, CircleHelp),
+});
+export const validateLook = (s: string): { label: string; Icon: LucideIcon } => ({
+  label: wordOf(VALIDATE_LABEL, s, "a validate result this app version cannot name"),
+  Icon: wordOf<BacklogValidateStatus, LucideIcon>(VALIDATE_ICON, s, CircleHelp),
+});
 /**
  * **What KIND of thing a row is, as an icon — and deliberately NOT as a
  * colour.**

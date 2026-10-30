@@ -4,9 +4,16 @@
  * `logic.test.mjs`.
  */
 import { isTimedWorkRow, scheduleActionText, typedName, type Intent, type ScheduleEntry } from "@waterplane/shared";
+import type { ComponentProps } from "react";
+import type { Backlog } from "../../Backlog.tsx";
+import { NO_BACKLOG_FILTER } from "../../backlogFilter.ts";
 
 /** Every backlog mutation's refusal with the link down — one copy (`backlogFilter.ts`). */
 export { BL_OFFLINE } from "../../backlogFilter.ts";
+
+/** What the sheet is cut to — `BacklogProps["cut"]`, named here because a
+ *  feature reaches the sheet's types only through the top-level module. */
+export type BacklogCut = ComponentProps<typeof Backlog>["cut"];
 
 export interface ChipRef { id: string; name: string }
 
@@ -76,3 +83,40 @@ export function runAgainQueuedToast(n: number): string {
   return `queued — ${n === 1 ? "it goes" : `all ${n} go`} back in the queue when the link is back`;
 }
 
+
+// ── The cut on screen ────────────────────────────────────────────────
+// One value (`backlogCut` in store.ts), written by the doors below, by the
+// sheet's own taps and keystrokes, cleared by `onLeave` and put back by `keep`.
+// There is no second copy for Back to restore from, so it restores the screen.
+
+/** The cut a fresh sheet shows: the sheet's own repo choice, no search, no chips. */
+export const NO_CUT: BacklogCut = { repoDir: null, text: "", filter: NO_BACKLOG_FILTER, idsLabel: undefined };
+
+/** On a repo named on the launcher: that repo, and no ids cut — an ids cut names
+ *  rows of the repo it was opened from. Status, age, kind and clock mean the
+ *  same in every repo and stay — the rule the sheet's own picker follows. */
+export function cutForRepo(c: BacklogCut, dir: string): BacklogCut {
+  return { ...c, repoDir: dir, filter: c.filter.ids ? { ...c.filter, ids: null } : c.filter, idsLabel: undefined };
+}
+
+/** On a repo — the session's, the compose badge's — WITHOUT touching the cut
+ *  when it is already that repo; `null` keeps the repo already chosen. */
+export function cutInRepo(c: BacklogCut, dir: string | null | undefined): BacklogCut {
+  return !dir || dir === c.repoDir ? c : cutForRepo(c, dir);
+}
+
+/** On an explicit cut from anywhere: exactly what the tap asked for, never merged
+ *  with the chips left on screen — and never the typed search, which is the
+ *  person's words (`local/no-draft-clobber`). */
+export function cutOpenedOn(c: BacklogCut, cwd: string, ids?: string[], label?: string): BacklogCut {
+  return ids?.length
+    ? { ...c, repoDir: cwd, filter: { ...NO_BACKLOG_FILTER, ids }, idsLabel: label ?? "made from these" }
+    : { ...c, repoDir: cwd, filter: NO_BACKLOG_FILTER, idsLabel: undefined };
+}
+
+/** The sheet stopped being on top: the cut was the tap, not a setting. The repo
+ *  stays — it is where a plain open with no session lands (a door that
+ *  names a repo, `openBacklogIn`, overrides it). */
+export function cutLeft(c: BacklogCut): BacklogCut {
+  return { ...NO_CUT, repoDir: c.repoDir };
+}

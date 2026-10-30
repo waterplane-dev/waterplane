@@ -58,6 +58,7 @@ export type HorizonBucket = keyof Omit<ScheduleHorizon, "total">;
  * come from here, and the boundaries that produced the count are
  * `horizonBucket` and nothing else. Two copies of `<= 24h` is how "2 within
  * the hour" opens a list of three.
+ * closed: keyed by `horizonBucket`, computed by this build
  */
 export const HORIZON_LABEL: Record<HorizonBucket, string> = {
   soon: "within the hour",

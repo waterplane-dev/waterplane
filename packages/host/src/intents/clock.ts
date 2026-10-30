@@ -69,6 +69,9 @@ export function newBasis(row: Intent): number {
 
 export function armFrom(core: IntentCore, row: Intent, basis: number, now: number): number | null | undefined {
   if (row.trigger.kind !== "at") return null;
+  // A paused rule arms nothing, whoever asks — the tick's window loop, a
+  // settle re-arming a standing rule, a merge. Only `setArmed` resumes it.
+  if (row.trigger.paused) return null;
   const floor = graceFloor(row.trigger.rule, Math.max(0, row.trigger.graceMin), now);
   // The usage dep is asked ONLY for the rule kind that needs it. Not an
   // optimisation: `migrateLegacy()` arms every imported schedule during the
@@ -169,14 +172,24 @@ export function skipNext(core: IntentCore, id: string): { ok: boolean; reason?: 
   return { ok: true, nextAt: row.nextAt };
 }
 
-/** Arm (or disarm) a recurring rule — the schedule sheet's pause switch.
- *  Re-arming searches from NOW, never from the last occurrence: turning a
- *  rule back on must not fire everything it slept through. */
+/** Arm (or disarm) a rule — the schedule sheet's pause switch, and the only
+ *  place a pause starts or ends (`trigger.paused`; an edit merely carries it,
+ *  `intentPaused` is its one reader). Pausing
+ *  stamps the flag and disarms; resuming clears it and re-arms searching from
+ *  NOW, never from the last occurrence: turning a rule back on must not fire
+ *  everything it slept through. */
 export function setArmed(core: IntentCore, id: string, armed: boolean): boolean {
   const row = core.get(id);
   if (!row || row.trigger.kind !== "at") return false;
-  const next = armed ? nextFireAt(row.trigger.rule, Date.now(), core.deps.usageWindows?.()) : null;
-  if (row.nextAt === next) return false;
+  const wasPaused = row.trigger.paused === true;
+  // A `window` rule with no reading yet is NOT COMPUTED (`undefined`, which
+  // the tick arms once `usage.ts` reads a reset), never `null`: null is "not
+  // armed", and resuming must not write the spelling of off (review D F2).
+  const at = armed ? nextFireAt(row.trigger.rule, Date.now(), core.deps.usageWindows?.()) : null;
+  const next = armed && at == null && row.trigger.rule.kind === "window" ? undefined : at;
+  if (row.nextAt === next && wasPaused === !armed) return false;
+  const { paused: _paused, ...trigger } = row.trigger;
+  row.trigger = armed ? trigger : { ...trigger, paused: true };
   row.nextAt = next;
   if (!armed) { row.blockReason = undefined; row.blockDetail = undefined; row.state = "queued"; }
   core.persist();

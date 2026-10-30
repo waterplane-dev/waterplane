@@ -17,6 +17,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { join } from "node:path";
 import { 
   cleanIntentRow,
+  ruleRecurs,
   isTimedWorkRow,
   safeRel,
   type Intent,
@@ -37,6 +38,29 @@ import {
 const WRITE_ERROR_LOG_MS = 10 * 60_000;
 /** How soon a NEW failing streak tells a person again — a nearly-full disk flaps, and each flap is a feed row plus a push. */
 const WRITE_ERROR_NOTICE_MS = 30 * 60_000;
+
+/**
+ * An older host's pause, read off its FILE: its pause switch wrote only
+ * `nextAt: null`, and for a recurring weekly rule nothing else on that host
+ * wrote it, so on disk that spelling is a pause and is stamped as the pause
+ * switch's flag (`trigger.paused`), the one thing read from here on.
+ *
+ * This is a MIGRATION and runs only here, on the rows the store loads — never
+ * in `cleanIntentRow`, which runs on every write: there it read a failed
+ * one-off's settled `nextAt: null`, riding under a new weekly trigger, as a
+ * pause nobody pressed (bughunt 2026-10-29 review D2 F1). A `window` rule is
+ * not stamped (an older host also wrote `null` when a person turned one ON
+ * with no usage reading yet, so its `null` cannot say which), so an older host's paused window row
+ * is re-armed once after the upgrade — which that host also did on its next
+ * reading, so nothing it held is lost.
+ */
+export function stampLegacyPause(r: Intent): Intent {
+  // The old-host spelling, explicit here and nowhere else: a recurring weekly
+  // rule at `nextAt: null` with no flag. (`intentPaused` reads the flag only.)
+  if (r.trigger.kind !== "at" || r.trigger.paused) return r;
+  if (!(r.nextAt === null && r.trigger.rule.kind === "weekly" && ruleRecurs(r.trigger.rule))) return r;
+  return { ...r, trigger: { ...r.trigger, paused: true }, nextAt: null };
+}
 
 export class DiskSlice {
   /** The `schema` the file on disk carried, or today's for a host with no file
@@ -208,6 +232,7 @@ export class DiskSlice {
       this.core.setRows(arr
         .map((v: unknown) => cleanIntentRow(v, now))
         .filter((r): r is Intent => !!r)
+        .map(stampLegacyPause)
         .map((r) => {
           // `blocked` is a fact about right now and is recomputed every tick —
           // never trusted from disk.

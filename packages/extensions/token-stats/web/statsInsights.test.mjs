@@ -57,3 +57,10 @@ test("the model line names the model whose money outruns its tokens", () => {
   const m = statsInsights(base({ totals: tot(1000, 0), cost: cost(0, 100), models }), NOW).find((i) => i.id === "model");
   assert.match(m.head, /^opus: 50% of tokens, 80% of cost/);
 });
+
+test("the week-on-week trend is absent where an undated record could fall in its fortnight (design round 4, r4-1 L1)", () => {
+  const days = [day(10, 10, 100), day(2, 30, 100)];
+  assert.equal(statsInsights(base({ days, undated: 3 }), NOW).some((i) => i.id === "trend"), false);
+  const longAgo = NOW - 40 * 86_400_000;
+  assert.ok(statsInsights(base({ days, undated: 3, undatedUntil: longAgo }), NOW).some((i) => i.id === "trend"), "every such log is older than the fortnight");
+});

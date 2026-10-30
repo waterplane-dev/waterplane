@@ -3,7 +3,7 @@
  * it under `node --test`.
  */
 
-import { fanoutHintText, fanoutTextKey, foldLaunches } from "@waterplane/shared";
+import { fanoutHintText, fanoutTextKey, foldLaunches, undatedWhy } from "@waterplane/shared";
 import type { CostWindowDoc, FanoutRun } from "@waterplane/shared";
 
 /** ONE fan-out lane, deliberately: two sweeps queued while offline must go
@@ -29,6 +29,8 @@ export function followUpToast(offline: boolean, sessions: number): string {
  *  The doc's `rest` goes in too: a sweep's cheap targets are what the host's cap folds first, and
  *  a run total without them under-counts exactly the wide, cheap fan-out this hint is about. */
 export function fanoutCostWords(doc: CostWindowDoc, run: FanoutRun, text: string): string | null {
+  // A ledger holding records in no hour: the run's figure is a floor. A hint, so simply absent.
+  if (undatedWhy(doc.undated)) return null;
   const row = foldLaunches(doc.convos, doc.rest).find((l) => l.key === run.id);
   if (!row || !(row.cost.total > 0)) return null;
   return fanoutHintText({

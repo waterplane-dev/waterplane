@@ -15,7 +15,7 @@ import { HELD_MAX_MS, ON_TIME_MS } from "./row.js";
 import type { IntentFacts, IntentVerdict } from "./facts.js";
 import { CHAIN_LOOP, CHAIN_PREDECESSOR_CANCELED, CHAIN_PREDECESSOR_FAILED, chainGoneText, chainLoops, chainMissedText, chainRecurringText, chainSetAsideText, chainWaitText, filesGaveUp, filesWaiting, heldOutText, missedText, notYetText, outsideHoursText, wait } from "./words.js";
 import { budgetAfterResetOf, budgetHold, budgetLeftoverOf, budgetWaived } from "./budgetpass.js";
-import { MANUAL_HOLD_TEXT } from "./kind.js";
+import { MANUAL_HOLD_TEXT, intentPaused } from "./kind.js";
 import { needsSlot, targetVerdict } from "./target.js";
 
 // ── The verdict ──────────────────────────────────────────────────────────────
@@ -73,17 +73,13 @@ export function intentVerdict(i: Intent, facts: IntentFacts, now: number): Inten
   // `pinned` is the same exemption for work a person aimed at one session
   // themselves ("queue for this session") — that tap is not machinery either.
   if (i.auto && !i.pinned && !facts.autoFire) return wait("gate");
-  // A recurring rule that has been switched off. `nextAt === null` is the
-  // explicit "nothing is armed" — distinct from `undefined`, which only means
-  // the manager has not computed one yet.
-  // …except a `window` rule, whose unarmed state means "no reading yet" and is
-  // answered in the trigger rung below, and except a ONE-SHOT `weekly` rule
-  // (`oneShot: true`), whose `nextAt === null` after it fires means "spent",
-  // not "paused" — `ruleRecurs` is what tells the two apart; the pause switch
-  // itself is never offered to a one-shot row (`ScheduleSheet`'s `repeats`),
-  // so a rule reaching here with `nextAt === null` and no recurrence left is
-  // spent, and rung 3 below is what says so.
-  if (i.trigger.kind === "at" && i.nextAt === null && i.trigger.rule.kind === "weekly" && ruleRecurs(i.trigger.rule)) {
+  // A rule a person switched off. `intentPaused` is the one reading: the
+  // pause switch's own flag (`trigger.paused`) and nothing
+  // else, for EVERY rule kind — a paused `window` rule included. A bare
+  // `nextAt: null` is never a pause here, on any rule: on a one-off it means
+  // SPENT, and rung 3 below says so. An older host's `null` pause is stamped
+  // into the flag once, at disk load (`intents/disk.ts` `stampLegacyPause`).
+  if (intentPaused(i)) {
     return wait("gate", "this schedule is switched off — turn it back on and the next occurrence arms itself");
   }
 
@@ -171,10 +167,7 @@ export function intentVerdict(i: Intent, facts: IntentFacts, now: number): Inten
       // A ONE-SHOT window rule (`oneShot: true`) loses that reading once it has
       // fired — `lastOccurrence` is set, and a null `nextAt` after that means
       // spent, not unread. A recurring rule's null always means unread (never
-      // spent, by definition), which keeps its existing "waiting for a
-      // reading" reading even while paused — that is a real gap (a paused
-      // recurring window rule cannot say "paused" here yet), left alone rather
-      // than half-fixed by this change.
+      // spent, by definition); a PAUSED one was answered at rung 1.
       //
       // …and a one-shot that was SKIPPED on its condition is still waiting: the
       // manager keeps it queued with `nextAt` UNDEFINED ("not computed") until

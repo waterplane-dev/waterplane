@@ -41,11 +41,12 @@ import type { Effort, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { LaunchPicker, launchOf, pickHasWheel } from "./LaunchPicker";
 import { BudgetField } from "./BudgetField";
-import { budgetChipWords, launchSpendUnit, launchWindowsOff } from "./budgetInput";
+import { budgetChipWords, capOnBackend, keptOnEdit, launchSpendUnit, launchWindowsOff, type KeptCap } from "./budgetInput";
 import { CantInline } from "./Unavailable";
 import { backendUnavailable, launchAskStart, showBackendPicker, type BackendList } from "./backendCaps";
 import { LS, lsJson, lsSetJson } from "./storage";
 import { Hint } from "./kit/Hint";
+import { SetWarn } from "./SettingsKit";
 
 interface Props {
   /** What is about to be opened, for the sentence at the top. */
@@ -85,7 +86,24 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
   const [model, setModel] = useState<string | undefined>(start.model);
   const [effort, setEffort] = useState<Effort | undefined>(start.effort);
   const wheel = pickHasWheel(backend);
-  const [budget, setBudget] = useState<SessionBudget | null>(startBudget ?? null);
+  // The caller's cap was chosen without this sheet's backend (the remembered pair may differ):
+  // it crosses by the same rule as a tap on the picker — `capOnBackend`, the launch ask's shape
+  // of `capOnStart` — and a cap that cannot ride is SET ASIDE in `kept`, never deleted:
+  // `kept.said` names it, and picking a backend that carries it brings it back (design round 4).
+  const [budgetStart] = useState(() => capOnBackend(startBudget, null, backends, null, start.backend));
+  const [budget, setBudget] = useState<SessionBudget | null>(budgetStart.budget);
+  const [kept, setKept] = useState<KeptCap | null>(budgetStart.kept);
+  // Bumped when a cap is set aside or restored, so the open field shows what the cap now is
+  // rather than holding the old number under the new backend's unit.
+  const [budgetKey, setBudgetKey] = useState(0);
+  const pickBackend = (to: string | undefined) => {
+    if (to === backend) return;
+    setBackend(to);
+    const r = capOnBackend(budget, kept, backends, backend, to);
+    if (r.budget !== budget) setBudgetKey((k) => k + 1);
+    setBudget(r.budget);
+    setKept(r.kept);
+  };
   // Collapsed behind its chip, like the Send sheet's: most launches want none,
   // and a field this size is a screen of furniture between the model and Start.
   const [budgetOpen, setBudgetOpen] = useState(!!startBudget);
@@ -110,7 +128,7 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
       <div className="form">
         <LaunchPicker backends={backends} defaults={defaults} nowLead="Starts on"
           value={{ backend, model, effort }}
-          onChange={(p) => { setBackend(p.backend); setModel(p.model); setEffort(p.effort); }} />
+          onChange={(p) => { pickBackend(p.backend); setModel(p.model); setEffort(p.effort); }} />
         {/* What this session may spend, subagents included — blank is none.
             Just this launch, like the model: nothing here is remembered. A
             percent unit is converted at the window's measured rate once the
@@ -120,8 +138,10 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
             <Wallet size={13} /> {budget ? budgetChipWords(budget) : "budget…"}
           </button>
         </div>
+        {kept && <SetWarn>{kept.said}</SetWarn>}
         {budgetOpen && (
-          <BudgetField initial={budget ?? startBudget ?? null} onChange={setBudget}
+          <BudgetField key={budgetKey} initial={budget} onChange={setBudget}
+            onEdit={() => setKept(keptOnEdit)} // any edit replaces a kept cap, parsed or not: nothing comes back over it
             windowsOff={launchWindowsOff(backends, backend)} spendUnit={launchSpendUnit(backends, backend)}
             calFor="A percent is converted from dollars at the window's measured rate once this session is running — until there is a fresh usage reading, nothing is held." />
         )}

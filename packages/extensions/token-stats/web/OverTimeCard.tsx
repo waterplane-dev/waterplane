@@ -16,7 +16,7 @@ import { TableView } from "./TableView.tsx";
  * for the same reason as `TotalsCard`; `boxRef` is the body's one width probe and
  * goes onto the same element it always did.
  */
-export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = null, lead = null, reqSpan = null, rangeCaption, rangeWords, clock, hourNote, boxRef, width, running, dayView, setDayView, canModel, mixBy, setMixBy, dayArea, setDayShape, dayAreaOk, dailyFilled, daily, trend, mixFilled, mixRows, bands, days, agentDays, hourWords, hourRows, hourArea, setHourShape, hourlyFilled, hourly }: {
+export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = null, lead = null, reqSpan = null, undatedNote = null, rangeCaption, rangeWords, clock, hourNote, boxRef, width, running, dayView, setDayView, canModel, mixBy, setMixBy, dayArea, setDayShape, dayAreaOk, dailyFilled, daily, trend, mixFilled, mixRows, bands, days, agentDays, hourWords, hourRows, hourArea, setHourShape, hourlyFilled, hourly }: {
   doc: TokenStatsDoc;
   money: boolean;
   table: boolean;
@@ -31,6 +31,9 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
   /** The span's own day edges (inclusive keys) for the cost-per-request section, which then
    *  compares it with as many days before it. Absent = the drawn days, 7 against 7. */
   reqSpan?: { from: string; to: string } | null;
+  /** Under all time: the records with no date, in the hero's total and in no day (`allTimeUndatedText`).
+   *  Said above every day chart and the table, so the running line ending short is never unexplained. */
+  undatedNote?: string | null;
   rangeCaption: ReactNode;
   rangeWords: string;
   /** The clock face's slots and what span they cover (the span when the hour record reaches it). */
@@ -72,6 +75,7 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
             every chart below draws into, whichever of them the span leaves on screen. */}
         <div className="ctx-box" style={{ paddingTop: 0 }} ref={boxRef} />
         {lead}
+        {undatedNote && <div className="empty ts-caveat">{undatedNote}</div>}
         {!table ? <>
         {!dayCharts && <div className="empty ts-caveat">A five-hour window is drawn by the hour only — a day chart of it would be one or two columns.</div>}
         {dayCharts && <>

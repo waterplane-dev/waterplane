@@ -26,13 +26,17 @@ import {
   BUDGET_MODES, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, budgetUnitsFor, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
 } from "./budgetInput";
 
-export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff, spendUnit }: {
+export function BudgetField({ initial, cal, onChange, onEdit, calFor, spark, windowsOff, spendUnit }: {
   /** The cap already set, if any — read once, where the field STARTS. */
   initial?: SessionBudget | null;
   /** The host's calibration: null = the host sent none; undefined = none to expect (a launch, or no budget set yet). */
   cal?: SessionBudgetCal | null;
   /** A clean budget, or null (blank or refused). Called on every edit. */
   onChange: (b: SessionBudget | null) => void;
+  /** The person changed something here — a keystroke, unit, quick pick, mode or switch — reported
+   *  whether or not the text parses. `onChange(null)` cannot say this: it is also what a half-typed
+   *  "150" in % reports, and "typed since" read off it missed exactly that (review r4-2b M1). */
+  onEdit?: () => void;
   /** Words for a percent unit when there is no calibration to quote (a launch, or no budget set yet). */
   calFor?: string;
   /** The live session's spend, for the "so far" line and the preview. Absent: no session (a launch). */
@@ -51,10 +55,14 @@ export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff,
   const [interrupt, setInterrupt] = useState(initial?.interrupt ?? true);
   const [mode, setMode] = useState<BudgetMode>(initial?.hard ? "hard" : "soft");
   const now = Date.now();
-  const nativeLabel = spendUnit?.trim() || initial?.nativeUnit;
+  // A cap already set in a native unit keeps ITS unit's name: the number was typed in that unit
+  // and is never silently re-united to the backend's (a switch clears it first: `budgetAcrossBackend`).
+  const nativeLabel = (initial?.unit === "native" && initial.nativeUnit?.trim()) || spendUnit?.trim() || initial?.nativeUnit;
   const units = budgetUnitsFor(!!windowsOff, initial?.unit, nativeLabel);
   const parsed = text.trim() ? parseBudgetInput(unit, text) : null;
+  // Only the person's own handlers call this, so it is where their edit is said — first, parsed or not.
   const emit = (u: SessionBudgetUnit, t: string, i: boolean, m: BudgetMode = mode) => {
+    onEdit?.();
     const p = t.trim() ? parseBudgetInput(u, t) : null;
     // Hard always interrupts (the host's `cleanSessionBudget` says the same).
     const nat = u === "native" && nativeLabel ? { nativeUnit: nativeLabel } : {};

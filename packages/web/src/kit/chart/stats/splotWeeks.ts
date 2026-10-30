@@ -15,7 +15,7 @@ import {
   type TokenDay,
   type TokenTotals,
 } from "@waterplane/shared";
-import { DAY_MS } from "./splotDay.ts";
+import { localDaysBetween } from "@waterplane/shared";
 
 // ── calendar weeks ────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ export function isoWeek(t: number): { year: number; week: number } {
   // weeks' THURSDAYS is a whole number of weeks — no rounding of a day offset,
   // which is where the usual one-liner picks up its off-by-one near new year.
   const first = thursdayOf(new Date(year, 0, 4).getTime());
-  return { year, week: 1 + Math.round((thu.getTime() - first.getTime()) / (7 * DAY_MS)) };
+  return { year, week: 1 + Math.round(localDaysBetween(first.getTime(), thu.getTime()) / 7) };
 }
 
 function thursdayOf(t: number): Date {

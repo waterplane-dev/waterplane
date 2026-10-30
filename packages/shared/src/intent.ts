@@ -76,7 +76,7 @@ export {
 export type { AutoSlotFacts, LocalSlotFacts } from "./intent/words.js";
 export { INTENT_BLOCK_ORDER, autoSlotsBusy, autoSlotsWaitText, closeWhenDoneOf, intentReasonText, localSlotOverText, localSlotWaitText } from "./intent/words.js";
 
-export { cleanIntentRow } from "./intent/clean.js";
+export { INTENT_FIELD_WRITER, type IntentFieldWriter, clientIntentFields, cleanIntentRow } from "./intent/clean.js";
 export { type ClockMember, type Slot, type SlotRow, findSlot, latestClock, parseSlotKey, slotMates, slotOf, slotOthersText, slotRowOfIntent, slotRowOfItem, slotsOf } from "./intent/slot.js";
 
 export type { IntentKind } from "./intent/kind.js";
@@ -84,7 +84,7 @@ export {
   AGENT_POSTED_WORDS, AGENT_WITHDREW_DETAIL, MANUAL_HOLD_TEXT,
   ORIGIN_AGENT, ORIGIN_FANOUT_FOLLOWUP, ORIGIN_FANOUT_RUN, ORIGIN_FANOUT_TARGET, ORIGIN_PEER_PREFIX,
   ORIGIN_SCHEDULE_BUILD, ORIGIN_SCHEDULE_PREFIX, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK,
-  clockKey, intentKind, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
+  clockKey, intentKind, intentPaused, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
   isFanoutRow, isLaunchRow, isPeerPosted, isScheduleRow, isTimedWorkRow, peerOfOrigin,
   postsScheduledBuild, queuesBacklogItem, scheduleIdFromOrigin, scheduleItemOrigin, timedWorkKey,
 } from "./intent/kind.js";

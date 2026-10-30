@@ -320,6 +320,8 @@ export function itemHeadline(it: { label?: string; text: string; headline?: stri
  * fifth kind appears.
  */
 export function categoryLabel(c: ItemCategory): string {
+  // closed: called only with the four literals (`backlogFilter/rowBuckets.ts`) —
+  // a category read off the wire needs a `default` here before it is passed in
   switch (c) {
     case "bug": return "bug";
     case "feature": return "feature";

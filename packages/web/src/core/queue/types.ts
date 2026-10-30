@@ -136,7 +136,7 @@ export interface SendFns {
   guardChain(steps: readonly string[]): boolean;
   submitInput(id: string, cwd: string, text: string, kind: "prompt" | "command", holdUntilIdle?: boolean): boolean;
   queueOp(op: DurableOp, laneKey: string, text: string,
-    opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean }): boolean;
+    opts?: { cwd?: string; focus?: boolean; frontOfLane?: boolean; ackId?: string; serial?: boolean; track?: boolean }): boolean;
   queueImageUpload(repoId: string, blob: Blob, filename: string, lane: string, cwd: string): Promise<{ relPath: string; ackId: string } | null>;
   runUpload(e: OutboxEntry): Promise<void>;
   rewriteQueuedPath(from: string, to: string): void;

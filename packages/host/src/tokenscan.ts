@@ -13,7 +13,7 @@
 import { open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { isColdRebuild } from "@waterplane/shared";
+import { hourKey, isColdRebuild } from "@waterplane/shared";
 
 /** Six numbers: the four kinds, the 1-hour SUBSET of the cache writes (which is
  *  what the 2x price tier is charged on), and the turn count. Positional because
@@ -60,15 +60,6 @@ export const emptyTally = (): Tally => [0, 0, 0, 0, 0, 0];
 export function bump(bag: Record<string, Tally>, key: string, v: Tally): void {
   const a = (bag[key] ??= emptyTally());
   for (let i = 0; i < a.length; i++) a[i] += v[i];
-}
-
-/** `YYYY-MM-DDTHH` in the LOCAL zone — the hour the person was working.
- *  Slicing the ISO string would bucket a 01:30 turn under the previous UTC day,
- *  and every hour of the corpus under the wrong slot of the clock. */
-export function localHour(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}`;
 }
 
 /**
@@ -175,7 +166,7 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
     if (typeof u.speed === "string" && u.speed !== "standard") fast++;
     if (!cwd && typeof row.cwd === "string") cwd = row.cwd;
     const ts = typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
-    const key = crossKey(Number.isFinite(ts) ? localHour(ts) : "", typeof msg.model === "string" ? msg.model : "unknown");
+    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", typeof msg.model === "string" ? msg.model : "unknown");
     bump(cross, key, t);
     // Same guards, same record, same bucket — so the rebuild tokens are
     // always a SUBSET of the cache writes in the tally beside them, and the
