@@ -309,6 +309,10 @@
    the tab is still fully tappable (it opens the conversation) and its × still
    removes the row; what is gone is the PTY, which the mark and the title say. */
 .stab[data-state="exited"] .stab-label { font-style: italic; }
+/* An extension's mark (the vault's lock while this session waits on a fingerprint): the waiting
+   colour the bell's badge wears, never shrunk away by a long label. */
+.stab-mark { flex: 0 0 auto; display: inline-flex; color: var(--dead); }
+.stab-row-label .stab-mark { margin-left: var(--sp-4); vertical-align: -2px; }
 .stab[data-state="exited"] { opacity: .72; }
 /* The state mark: one slot, five answers, and the COLOURS are the launcher
    badge's own (`.tag.coding` is `--accent`, `.tag.wait` is `--dead`, the limit

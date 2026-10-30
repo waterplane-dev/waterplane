@@ -1,5 +1,5 @@
 {
-  "prereg": "2026-10-17a+211c49d5",
+  "prereg": "2026-10-30a+6a4856e0",
   "lastSha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
   "rows": [
     {
@@ -7,7 +7,7 @@
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 383,
@@ -423,6 +423,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 32,
+          "fanOutMax": 11,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 6,
+          "files": 29,
+          "internal": 32,
+          "largestCycle": 0,
+          "resolved": 32
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -439,7 +454,7 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 676,
@@ -891,6 +906,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 36,
+          "fanOutMax": 12,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 8,
+          "files": 32,
+          "internal": 36,
+          "largestCycle": 0,
+          "resolved": 36
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -907,7 +937,7 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 1088,
@@ -1375,6 +1405,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 44,
+          "fanOutMax": 13,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 12,
+          "files": 35,
+          "internal": 44,
+          "largestCycle": 0,
+          "resolved": 44
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -1396,7 +1441,7 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -1878,6 +1923,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 46,
+          "fanOutMax": 14,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 12,
+          "files": 37,
+          "internal": 48,
+          "largestCycle": 0,
+          "resolved": 46
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -1899,7 +1959,7 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -2381,6 +2441,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 46,
+          "fanOutMax": 14,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 12,
+          "files": 37,
+          "internal": 48,
+          "largestCycle": 0,
+          "resolved": 46
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -2402,7 +2477,7 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 3217,
@@ -2966,6 +3041,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 99,
+          "fanOutMax": 26,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 6,
+          "files": 64,
+          "internal": 100,
+          "largestCycle": 0,
+          "resolved": 99
+        }
+      },
       "tripwires": [
         {
           "detail": "1,300 → 3,136 lines, past the 2,000-line mark",
@@ -3011,7 +3101,7 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 3322,
@@ -3578,6 +3668,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 110,
+          "fanOutMax": 28,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 6,
+          "files": 69,
+          "internal": 111,
+          "largestCycle": 0,
+          "resolved": 110
+        }
+      },
       "tripwires": [
         {
           "detail": "`\\bTODO\\b` went 0 → 3 occurrences; 4 of 17 hatch kinds are now in use",
@@ -3620,7 +3725,7 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 6514,
@@ -4250,6 +4355,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 205,
+          "fanOutMax": 48,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 7,
+          "files": 111,
+          "internal": 206,
+          "largestCycle": 0,
+          "resolved": 205
+        }
+      },
       "tripwires": [
         {
           "detail": "`\\bas unknown as\\b` went 0 → 6 occurrences; 7 of 17 hatch kinds are now in use",
@@ -4309,7 +4429,7 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 7853,
@@ -4962,6 +5082,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 311,
+          "fanOutMax": 66,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 7,
+          "files": 147,
+          "internal": 312,
+          "largestCycle": 0,
+          "resolved": 311
+        }
+      },
       "tripwires": [
         {
           "detail": "1,982 → 2,371 lines, past the 2,000-line mark",
@@ -5012,7 +5147,7 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 9631,
@@ -5742,6 +5877,21 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 0,
+          "cycleFiles": 0,
+          "cycles": [],
+          "edges": 496,
+          "fanOutMax": 75,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 8,
+          "files": 191,
+          "internal": 498,
+          "largestCycle": 0,
+          "resolved": 497
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -5794,7 +5944,7 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 10303,
@@ -6540,6 +6690,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 561,
+          "fanOutMax": 81,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 8,
+          "files": 202,
+          "internal": 563,
+          "largestCycle": 2,
+          "resolved": 562
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -6600,7 +6773,7 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 10897,
@@ -7366,6 +7539,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 629,
+          "fanOutMax": 86,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 219,
+          "internal": 631,
+          "largestCycle": 2,
+          "resolved": 630
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -7426,7 +7622,7 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -8200,6 +8396,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 655,
+          "fanOutMax": 88,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 226,
+          "internal": 657,
+          "largestCycle": 2,
+          "resolved": 656
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -8260,7 +8479,7 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -9035,6 +9254,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 658,
+          "fanOutMax": 88,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 227,
+          "internal": 660,
+          "largestCycle": 2,
+          "resolved": 659
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -9095,7 +9337,7 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 12294,
@@ -9888,6 +10130,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 720,
+          "fanOutMax": 98,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 252,
+          "internal": 722,
+          "largestCycle": 2,
+          "resolved": 721
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -9956,7 +10221,7 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 12802,
@@ -10763,6 +11028,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 762,
+          "fanOutMax": 102,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 267,
+          "internal": 764,
+          "largestCycle": 2,
+          "resolved": 763
+        }
+      },
       "tripwires": [
         {
           "detail": "1,996 → 2,039 lines, past the 2,000-line mark",
@@ -10846,7 +11134,7 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 13977,
@@ -11690,6 +11978,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 848,
+          "fanOutMax": 111,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 295,
+          "internal": 851,
+          "largestCycle": 2,
+          "resolved": 849
+        }
+      },
       "tripwires": [
         {
           "detail": "1,491 → 2,046 lines, past the 2,000-line mark",
@@ -11782,7 +12093,7 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 13975,
@@ -12625,6 +12936,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 854,
+          "fanOutMax": 112,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 296,
+          "internal": 857,
+          "largestCycle": 2,
+          "resolved": 855
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -12711,7 +13045,7 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 15599,
@@ -13571,6 +13905,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 911,
+          "fanOutMax": 118,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 313,
+          "internal": 914,
+          "largestCycle": 2,
+          "resolved": 912
+        }
+      },
       "tripwires": [
         {
           "detail": "1,707 → 2,251 lines, past the 2,000-line mark",
@@ -13724,7 +14081,7 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 15723,
@@ -14589,6 +14946,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 933,
+          "fanOutMax": 118,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 9,
+          "files": 320,
+          "internal": 935,
+          "largestCycle": 2,
+          "resolved": 934
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -14742,7 +15122,7 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 16081,
@@ -15613,6 +15993,29 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 1,
+          "cycleFiles": 2,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 946,
+          "fanOutMax": 120,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 10,
+          "files": 325,
+          "internal": 949,
+          "largestCycle": 2,
+          "resolved": 947
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -15766,7 +16169,7 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 16343,
@@ -16680,6 +17083,36 @@
           ]
         }
       },
+      "graph": {
+        "value": {
+          "cycleCount": 2,
+          "cycleFiles": 4,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/RepoHealthRegion.tsx",
+                "packages/web/src/SetupSheet.tsx"
+              ],
+              "size": 2
+            },
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 1125,
+          "fanOutMax": 128,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 11,
+          "files": 387,
+          "internal": 1128,
+          "largestCycle": 2,
+          "resolved": 1126
+        }
+      },
       "tripwires": [
         {
           "detail": "`@ts-ignore\\b` went 0 → 5 occurrences; 9 of 17 hatch kinds are now in use",
@@ -16888,7 +17321,7 @@
       "day": "2026-09-22",
       "ts": 1790110804,
       "batch": false,
-      "prereg": "2026-10-17a+211c49d5",
+      "prereg": "2026-10-30a+6a4856e0",
       "size": {
         "value": {
           "appTsx": 16389,
@@ -17813,6 +18246,36 @@
               "pack": "typescript"
             }
           ]
+        }
+      },
+      "graph": {
+        "value": {
+          "cycleCount": 2,
+          "cycleFiles": 4,
+          "cycles": [
+            {
+              "files": [
+                "packages/web/src/RepoHealthRegion.tsx",
+                "packages/web/src/SetupSheet.tsx"
+              ],
+              "size": 2
+            },
+            {
+              "files": [
+                "packages/web/src/api.ts",
+                "packages/web/src/link.ts"
+              ],
+              "size": 2
+            }
+          ],
+          "edges": 1170,
+          "fanOutMax": 130,
+          "fanOutMaxPath": "packages/web/src/App.tsx",
+          "fanOutP95": 11,
+          "files": 399,
+          "internal": 1173,
+          "largestCycle": 2,
+          "resolved": 1171
         }
       },
       "tripwires": [],

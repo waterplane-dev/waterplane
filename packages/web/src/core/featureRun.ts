@@ -247,9 +247,9 @@ export interface ContributedEntry {
   unavailable: string | null;
   /** Contained: a throw is said once, never takes the header down. */
   open(): void;
-  /** A launcher item's count HOOK (`LauncherItemDef.useCount`), passed through as given. */
+  /** A launcher item's or menu line's count HOOK (`LauncherItemDef.useCount`, `MenuItemDef.useCount` bound to its session). */
   useCount?(): LauncherItemCount | null;
-  /** A launcher item's tap while its count is above zero (`LauncherItemDef.openCount`), contained like `open`. */
+  /** The tap while that count is above zero (`openCount`), contained like `open`. */
   openCount?(): void;
 }
 
@@ -340,7 +340,19 @@ export function menuItemCatalog(features: readonly FeatureManifest[]): { id: str
  *  entry's `key` is its catalog id. */
 export function createMenuItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const t = contributionTable<MenuItemDef, [SessionInfo]>(features, (f) => f.menuItems, "menu item", getCore, (d, c, active) => d.open(c, { active }));
-  return { items: (active: SessionInfo) => t.entries(active) };
+  const counted = new Map<string, MenuItemDef>();
+  for (const f of features) for (const d of f.menuItems ?? []) if (typeof d.useCount === "function") counted.set(menuItemKey(f.id, d.id), d);
+  const fail = createFailReporter(true);
+  // The launcher item's count, bound to this session: the hook and the tap both read `active`.
+  const withCount = (e: ContributedEntry, d: MenuItemDef, active: SessionInfo): ContributedEntry => ({
+    ...e, useCount: () => d.useCount!(active),
+    ...(typeof d.openCount === "function" ? {
+      openCount: () => { const c = getCore(); try { d.openCount!(c, { active }); } catch (err) { fail(e.feature, `menu item ${d.id}`, err, c); } },
+    } : {}),
+  });
+  return {
+    items: (active: SessionInfo) => t.entries(active).map((e) => { const d = counted.get(e.key); return d ? withCount(e, d, active) : e; }),
+  };
 }
 
 /** Contributed buttons for the masked password field, under the same containment. */

@@ -393,6 +393,12 @@ button.ts-lim-used { cursor: pointer; }
 /* An end of the record is a SENTENCE, never a dimmed arrow — a `title` is
    invisible on a phone and a greyed button states nothing at all. */
 .ts-wstep-end { opacity: .8; }
+/* The week chart's stepper ON the chart (`UsageSpark`): older at the plot's left edge (past the 36px
+   y gutter), newer at its right, the week in words between — not a clump of fat keys at the start. */
+.ts-wstep.ts-wstep-chart { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--sp-6); padding: 0 0 var(--sp-6) 36px; }
+.ts-wstep-chart > :first-child { justify-self: start; }
+.ts-wstep-chart > :last-child { justify-self: end; text-align: end; }
+.ts-wstep-chart .key { display: inline-flex; align-items: center; gap: var(--sp-4); min-height: 36px; padding: 0 var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
 
 .ts-heats { display: flex; flex-direction: column; gap: var(--sp-4); }
 .ts-heat { padding-top: var(--sp-4); }

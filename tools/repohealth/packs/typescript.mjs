@@ -115,11 +115,15 @@
  *   - **Transitive or workspace dependency resolution.** `manifests` counts
  *     the keys declared in each `package.json` and resolves nothing: no lock
  *     file is read, no version is compared, a workspace link counts as a
- *     dependency like any other.
- *   - **Any other JS-adjacent manifest.** `deno.json`, `jsr.json`,
- *     `bower.json` and a bare `tsconfig.json` are not read.
+ *     dependency like any other. (`graphImports` does map a workspace
+ *     package's NAME to its directory — which module an import loads, never
+ *     which version — through `lang/typescript-resolve.mjs`.)
+ *   - **Any other JS-adjacent manifest.** `deno.json`, `jsr.json` and
+ *     `bower.json` are not read; `tsconfig.json` is read for its `paths` and
+ *     `baseUrl` only, by `graphContext`.
  */
 import { NO_TYPESCRIPT, contentKey, identsOf, loadTypeScript, signedBlocks } from "../lang/typescript-ast.mjs";
+import { RESOLVE_CONFIG_PATH, buildResolveContext, resolveSpecifier } from "../lang/typescript-resolve.mjs";
 
 /**
  * The source extensions this pack claims. Module-level rather than written
@@ -250,6 +254,45 @@ function refKeys(text, base, requireDir, out) {
   }
 }
 
+/**
+ * A specifier naming something that is not a module of this family — a
+ * stylesheet, an image, JSON, another framework's component file. It loads
+ * bytes, not code this pack measures, so it is neither an edge nor a miss.
+ */
+const ASSET_SPEC = /\.(?:css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|json|md|mdx|html?|txt|wasm|woff2?|ttf|otf|mp3|mp4|webm|wav|ya?ml|graphql|gql|vue|svelte|astro)(?:\?.*)?$/i;
+
+/** A repo path's extension as this family writes it, declarations included. */
+const CODE_EXT = new RegExp(`(?:\\.d)?\\.(?:${extAlternation([...EXTS, ...EMITS])})$`);
+
+/**
+ * The one key a resolved repo path answers to — its full `dir/name`, which is
+ * always among `keysFor` of the module there (and of an `index` under it,
+ * which answers to its directory). `null` for a file at the tree's root,
+ * which `keysFor` offers no key for either.
+ */
+function pathKey(repoPath) {
+  const bare = repoPath.replace(CODE_EXT, "");
+  return bare.includes("/") ? bare : null;
+}
+
+/** Specifiers per blob, for `graphImports`: the regex pass is the cost. */
+const SPECS_MEMO = new Map();
+function specsOf(file) {
+  const scan = () => {
+    const out = [];
+    for (const m of file.text.matchAll(IMPORT_SPEC)) {
+      if (m[1]) continue; // `import type`: erased, loads nothing — the rule `imports` reads by.
+      const spec = m[3] ?? m[5];
+      if (!ASSET_SPEC.test(spec) && !out.includes(spec)) out.push(spec);
+    }
+    return out;
+  };
+  if (!file.oid) return scan();
+  let specs = SPECS_MEMO.get(file.oid);
+  if (!specs) SPECS_MEMO.set(file.oid, (specs = scan()));
+  return specs;
+}
+
 export default Object.freeze({
   name: "typescript",
   // 2: the test globs stopped being this repo's conventions and became the
@@ -260,7 +303,9 @@ export default Object.freeze({
   // 4: `import type` / `export type` are not edges — they load nothing.
   // 5: `hatchExplain` exists — which escapes carry their reason (see below).
   // 6: `.mts` / `.cts` are source (and `.d.mts` / `.d.cts` are not) — see the header.
-  version: "6",
+  // 7: `graphConfigPath`, `graphContext` and `graphImports` exist — the import
+  //    graph, aliases and workspace packages resolved (`lang/typescript-resolve.mjs`).
+  version: "7",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: EXTS,
@@ -519,6 +564,51 @@ export default Object.freeze({
       // `PATH_REF` looks for — the specifier is read by the one rule that
       // reads every other reference.
       refKeys(`"${spec}"`, base, requireDir, out);
+    }
+    return out;
+  },
+
+  /**
+   * The config files `graphContext` reads — every `tsconfig*.json`,
+   * `jsconfig*.json` and `package.json` — as regex source over a tree path.
+   */
+  graphConfigPath: RESOLVE_CONFIG_PATH,
+
+  /** The resolver's data for one tree: aliases by scope, workspace packages. */
+  graphContext(entries, textOf) {
+    return buildResolveContext(entries, textOf);
+  },
+
+  /**
+   * Every module one file LOADS, for `metrics/graph.mjs`: relative specifiers
+   * as `imports` reads them, plus the ones `imports` leaves alone —
+   * `tsconfig` aliases, workspace packages, `#` subpath imports, `baseUrl`.
+   *
+   * One entry per specifier: `candidates` are keys in the order the resolver
+   * tries them (the first one that is a module is the edge), and `internal`
+   * says a specifier that hits no module is a MISS — this project's code that
+   * was not found — rather than a package from outside. An external package
+   * and an asset produce no entry at all.
+   *
+   * @param {{path: string, oid?: string, text: string}} file
+   * @param {object | null} ctx  What `graphContext` returned for this tree.
+   * @returns {{spec: string, internal: boolean, candidates: string[]}[]}
+   */
+  graphImports(file, ctx) {
+    const base = dirSegments(file.path ?? "");
+    const out = [];
+    for (const spec of specsOf(file)) {
+      if (spec.startsWith("./") || spec.startsWith("../")) {
+        const keys = new Set();
+        refKeys(`"${spec}"`, base, true, keys);
+        if (keys.size) out.push({ spec, internal: true, candidates: [...keys] });
+        continue;
+      }
+      const r = resolveSpecifier(spec, file.path ?? "", ctx);
+      if (!r) continue;
+      const candidates = r.candidates.filter((p) => !ASSET_SPEC.test(p)).map(pathKey).filter((k) => k !== null);
+      if (r.candidates.length && !candidates.length && r.candidates.every((p) => ASSET_SPEC.test(p))) continue;
+      out.push({ spec, internal: r.internal, candidates });
     }
     return out;
   },

@@ -200,6 +200,9 @@ export default Object.freeze({
   mentions: null,
   keysFor: null,
   imports: null,
+  graphConfigPath: null,
+  graphContext: null,
+  graphImports: null,
   analyzer: null,
   analyzerReason: null,
 });

@@ -22,7 +22,7 @@ import { bindSecretFillers } from "../sdk/secretFillers.ts";
 import { bindImageTextFeatures, bindPluginList } from "../sdk/extensions.ts";
 import { pluginList } from "../features/plugins";
 import { bindMenuCatalog } from "../toolbar.ts";
-import type { FeatureManifest, LedgerViewDef, SecretFillContext } from "../sdk/types.ts";
+import type { FeatureManifest, LedgerViewDef, SecretFillContext, TabMarkDef } from "../sdk/types.ts";
 
 let actionTable: ReturnType<typeof createRepoActionTable> | null = null;
 let chips: ReturnType<typeof createRepoChipList> | null = null;
@@ -68,6 +68,10 @@ export const secretFillers = (ctx: SecretFillContext): ContributedEntry[] =>
   (secretFillerTable ??= createSecretFillerTable(FEATURES, core)).items(ctx);
 // The same buttons for an extension's own masked field (the live desktop's protected typing).
 bindSecretFillers(secretFillers);
+
+let marks: { key: string; feature: string; d: TabMarkDef }[] | null = null;
+/** Every tab mark def (`TabMarkDef`), registry order; [] when none, which leaves a tab as it was. */
+export const tabMarks = () => (marks ??= FEATURES.flatMap((f) => (f.tabMarks ?? []).map((d) => ({ key: `${f.id}:${d.id}`, feature: f.id, d }))));
 
 /** Every repo chip def, registry order. */
 export const repoChips = () => (chips ??= createRepoChipList(FEATURES));

@@ -14,6 +14,7 @@ import { open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { hourKey, isColdRebuild } from "@waterplane/shared";
+import { firstSightIn, isAnchor, usageRecordOf } from "./ctxlog/usagerecord.js";
 
 /** Six numbers: the four kinds, the 1-hour SUBSET of the cache writes (which is
  *  what the 2x price tier is charged on), and the turn count. Positional because
@@ -117,7 +118,7 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
   // Per-file and exact: 23 of 119,207 records in the measured corpus repeat a
   // message id NON-adjacently, so a "same as the last one" shortcut would be
   // wrong — cheaply, but wrong, and this number is the whole screen.
-  const seen = new Set<string>();
+  const firstSight = firstSightIn(new Set<string>());
 
   const handle = (line: string): void => {
     if (!line || line.charCodeAt(0) !== 123 /* { */) return;
@@ -134,39 +135,26 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
     }
     let row: Record<string, unknown>;
     try { row = JSON.parse(line) as Record<string, unknown>; } catch { return; }
-    if (row.type !== "assistant") return;
-    const msg = row.message as { id?: unknown; model?: unknown; usage?: Record<string, unknown> } | undefined;
-    if (!msg || typeof msg !== "object") return;
-    // The usage-limit rejection turn: zero usage, and not a turn that ran.
-    if (msg.model === "<synthetic>") return;
-    const u = msg.usage;
-    if (!u || typeof u !== "object") return;
-    if (typeof msg.id === "string") {
-      if (seen.has(msg.id)) return;
-      seen.add(msg.id);
-    }
-    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
+    // Assistant rows only, the usage-limit rejection turn (`<synthetic>`, zero
+    // usage, not a turn that ran) skipped, a streamed reply counted once:
+    // `usagerecord.ts`'s rules, the same record every ledger reads.
+    const u = usageRecordOf(row, firstSight);
+    if (!u) return;
     // The 1-hour cache-write tier is priced at 2x input against 1.25x for the
     // 5-minute one, and it was 84% of all writes here — so the split is read
     // rather than assumed. It was present on 100% of records carrying a write;
     // when it is absent the remainder simply prices at the cheaper tier, which
     // is the conservative direction for an estimate.
-    const cc = u.cache_creation as Record<string, unknown> | undefined;
-    const t: Tally = [
-      n(u.input_tokens), n(u.output_tokens),
-      n(u.cache_read_input_tokens), n(u.cache_creation_input_tokens),
-      cc && typeof cc === "object" ? n(cc.ephemeral_1h_input_tokens) : 0,
-      1,
-    ];
+    const t: Tally = [u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, 1];
     if (!(t[0] || t[1] || t[2] || t[3])) return;
     // Fast mode bills at a premium ($10/$50 on Opus 5 rather than $5/$25) and
     // is NOT modelled — nothing in this corpus used it. Counting the turns is
     // what lets the screen say so instead of being quietly 2x low if it ever
     // starts being used.
-    if (typeof u.speed === "string" && u.speed !== "standard") fast++;
+    if (u.speed !== null && u.speed !== "standard") fast++;
     if (!cwd && typeof row.cwd === "string") cwd = row.cwd;
     const ts = typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
-    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", typeof msg.model === "string" ? msg.model : "unknown");
+    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", u.model ?? "unknown");
     bump(cross, key, t);
     // Same guards, same record, same bucket — so the rebuild tokens are
     // always a SUBSET of the cache writes in the tally beside them, and the
@@ -175,10 +163,10 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
       const r = (rebuilds[key] ??= [0, 0, 0]);
       r[0]++; r[1] += t[3]; r[2] += t[4];
     }
-    prevTok = t[0] + t[2] + t[3];
+    prevTok = u.carried;
     // An output-only first record (no input, no cache) is not the anchor: the
     // first request that carried context is.
-    if (first === undefined && prevTok > 0) first = prevTok;
+    if (first === undefined && isAnchor(u)) first = u.carried;
     compacted = false;
   };
 

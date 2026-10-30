@@ -79,6 +79,7 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p.endsWith("/waterplane-plugin.json"),     // a plugin manifest's "env" names the knobs api.env() may read; JSON cannot import BRAND
   (p) => p === ".waterplane-shared/builds.json",   // build buttons: shell commands in JSON, cannot import BRAND
   (p) => p.startsWith("brand/"),                   // the logo kit's sources (wordmark text, hero)
+  (p) => p.startsWith("scripts/site/counter/"),    // the site's visit counter: a Cloud Run image built from that folder alone (no shared/dist), naming the live domain and GCP project
   (p) => p.startsWith("site/"),                    // waterplane.dev: static HTML generated from the README (scripts/site), plus CNAME; cannot import BRAND
   (p) => /^docs\/assets\/.*\.svg$/.test(p),
   // A parked diff under docs/plans: a snapshot of code that is not in the tree yet. It is

@@ -51,3 +51,14 @@ test("overhead skips a <synthetic> row even when it carries numbers", () => {
   ].join("\n");
   assert.deepEqual(firstRequestOf(head), { model: "qwen", tok: 5661 });
 });
+
+test("overhead stops at the first request that carried context, even when it names no model", () => {
+  // The anchor is the first request, model or not — every other reader takes
+  // it without asking for one. Moving on to the NEXT request would measure the
+  // prompt plus the first reply and the next message: a bigger, wrong number.
+  const head = [
+    JSON.stringify({ type: "assistant", message: { id: "m1", usage: { ...zero, input_tokens: 5661 } } }),
+    rec("m2", "qwen", { ...zero, input_tokens: 9000 }),
+  ].join("\n");
+  assert.equal(firstRequestOf(head), null, "the first request has no model: no answer, never the second request's size");
+});

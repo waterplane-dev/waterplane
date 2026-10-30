@@ -598,6 +598,16 @@ test("the week chart spans the WEEK the reset closes, not the last day", () => {
   assert.equal(usageSpan("week", null, now).isWindow, false);
 });
 
+test("the week chart steps back whole weeks; the five-hour chart ignores the step", () => {
+  const now = Date.parse("2026-09-24T11:46:00Z");
+  const reset = Date.parse("2026-09-24T19:00:00Z");
+  const W = 7 * 86_400_000;
+  assert.deepEqual(usageSpan("week", reset, now, 24, 1), { t0: reset - 2 * W, t1: reset - W, isWindow: true });
+  assert.deepEqual(usageSpan("week", reset, now, 24, 3), { t0: reset - 4 * W, t1: reset - 3 * W, isWindow: true });
+  assert.deepEqual(usageSpan("week", null, now, 24, 1), { t0: now - 2 * W, t1: now - W, isWindow: false });
+  assert.deepEqual(usageSpan("session", reset, now, 24, 2), usageSpan("session", reset, now));
+});
+
 test("the marks are explained only where they are DRAWN", () => {
   const t0 = Date.parse("2026-09-10T08:00:00Z");
   const r1 = Date.parse("2026-09-10T10:00:00Z");

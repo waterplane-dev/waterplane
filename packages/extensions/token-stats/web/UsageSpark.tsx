@@ -1,8 +1,9 @@
 /** One limit window's recent readings as a labelled chart under its bar. */
 import { useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type UsageHistoryDoc } from "@waterplane/shared";
 import {
-  burnRate, Explain, nearestUsage, ScrubHint, SERIES, timeTicks, until, usageMarksText, usageOutlook, usageSegments,
+  burnRate, Button, Explain, nearestUsage, ScrubHint, SERIES, timeTicks, until, usageMarksText, usageOutlook, usageSegments,
   usageSpan, useBoxWidth,
 } from "@waterplane/kit";
 import { HISTORY_HOURS } from "./constants.ts";
@@ -64,7 +65,7 @@ const SPARK_TICK_PX = 78;
  * written by `resetWhen` — never as a bare wall-clock time, because the weekly
  * window's projection lands days out.
  */
-export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours = HISTORY_HOURS, name }: {
+export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours = HISTORY_HOURS, name, back = 0, onBack }: {
   samples: UsageHistoryDoc["samples"];
   which: "session" | "week";
   /** How far back the `session` lane looks. Another source's quota (a month, say) reads its
@@ -79,6 +80,10 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours =
    *  with no `ResizeObserver` measures zero and draws nothing, which is the one
    *  way a chart goes unchecked. */
   width?: number;
+  /** Whole weeks before the running one the WEEK chart shows (`usageSpan`). */
+  back?: number;
+  /** Steps the week chart; the stepper is drawn only where this is passed. */
+  onBack?: (back: number) => void;
 }) {
   const [measured, box] = useBoxWidth();
   const w = width ?? measured;
@@ -105,24 +110,60 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours =
   // is drawn from outside the plot. Minute-rounded so the memo does not re-cut
   // on every render.
   const nowMin = Math.floor(Date.now() / 60_000) * 60_000;
-  const span = usageSpan(which, reset, nowMin, hours);
+  const stepped = which === "week" ? back : 0;
+  const span = usageSpan(which, reset, nowMin, hours, stepped);
+  // The running week reaches a minute past now (a reading can land mid-render);
+  // a past week ends at its own edge, or it would borrow this week's readings.
+  const upTo = stepped ? span.t1 : Math.max(span.t1, nowMin + 60_000);
   const inSpan = useMemo(
-    () => samples.filter((r) => r.t >= span.t0 && r.t <= Math.max(span.t1, nowMin + 60_000)),
-    [samples, span.t0, span.t1, nowMin],
+    () => samples.filter((r) => r.t >= span.t0 && r.t <= upTo),
+    [samples, span.t0, upTo],
   );
   const segs = useMemo(() => usageSegments(inSpan, which, maxGap), [inSpan, which, maxGap]);
-  const rate = useMemo(() => burnRate(segs), [segs]);
-  const out = usageOutlook(pct, rate, reset, Date.now());
+  // A rate and a projection describe the window still running — a past week
+  // has neither, so both are absent there rather than read off an old line.
+  const rate = useMemo(() => (stepped ? null : burnRate(segs)), [segs, stepped]);
+  const out = stepped ? null : usageOutlook(pct, rate, reset, Date.now());
+
+  // Prev/next week. Both ends are SENTENCES, never a dimmed arrow: older is
+  // offered only while a kept reading lies before this span, newer only while
+  // this is not the running week.
+  const step = which === "week" && onBack
+    ? (
+      <div className="ts-wstep ts-wstep-chart">
+        {samples.length > 0 && samples[0].t < span.t0
+          ? <Button onClick={() => onBack(stepped + 1)} title="the week before this one">
+              <ChevronLeft size={14} /> older
+            </Button>
+          : <span className="ts-wstep-end">no readings kept before this</span>}
+        <span className="ts-wstep-at">
+          {stepped === 0 ? "this week" : stepped === 1 ? "last week" : `${stepped} weeks back`}
+        </span>
+        {stepped > 0
+          ? <Button onClick={() => onBack(stepped - 1)} title="the week after this one">
+              newer <ChevronRight size={14} />
+            </Button>
+          : <span className="ts-wstep-end">the week running now</span>}
+      </div>
+    )
+    : null;
 
   const pts = segs.flatMap((s) => s.pts);
   if (pts.length < 2) {
     // Absent, and said in words — an empty chart box reads as a broken chart.
     return (
-      <div className="ts-spark-none">
-        {inSpan.length
-          ? "Only one reading kept so far, so there is no line to draw yet."
-          : "No earlier readings kept yet — the history fills in as the screen is read."}
-      </div>
+      <>
+        {step}
+        <div className="ts-spark-none">
+          {stepped
+            ? inSpan.length
+              ? "Only one reading kept in this week, so there is no line to draw."
+              : "No readings kept in this week."
+            : inSpan.length
+              ? "Only one reading kept so far, so there is no line to draw yet."
+              : "No earlier readings kept yet — the history fills in as the screen is read."}
+        </div>
+      </>
     );
   }
 
@@ -132,7 +173,11 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours =
   /** Where "now" falls, when the axis runs past it — the week chart's
    *  remaining room. Absent on the day chart, whose right edge IS now. */
   const nowX = t1 - now > 60_000 ? now : null;
-  const spanWords = span.isWindow
+  const spanWords = stepped
+    ? span.isWindow
+      ? `The window from ${resetWhen(t0)} to ${resetWhen(span.t1)}`
+      : `The 7 days to ${resetWhen(span.t1)}`
+    : span.isWindow
     ? `This week’s window, since ${resetWhen(t0)}`
     : which === "week" ? "Last 7 days" : hours > 24 && hours % 24 === 0 ? `Last ${hours / 24} days` : `Last ${hours}h`;
   /** The plot proper, to the right of the y labels. ONE width, computed once:
@@ -182,6 +227,7 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours =
 
   return (
     <div className="ts-spark" ref={box}>
+      {step}
       {w > 0 && (
         <svg ref={svgRef} className="ts-spark-svg" width={w} height={SPARK_H + SPARK_TICK_H}
           viewBox={`0 0 ${w} ${SPARK_H + SPARK_TICK_H}`} role="img"

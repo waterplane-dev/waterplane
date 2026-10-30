@@ -79,6 +79,7 @@ import { measureRetouch } from "./repohealth/metrics/retouch.mjs";
 import { measureCochange } from "./repohealth/metrics/cochange.mjs";
 import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
+import { measureGraph } from "./repohealth/metrics/graph.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
 import { events, render } from "./repohealth/narrate.mjs";
 import { PLAIN_REASON, SERIES, numbersIn, reading } from "./repohealth/readings.mjs";
@@ -187,6 +188,7 @@ function recompute(sha, history, prevRow, knownIndex) {
     context: m(measureContext),
     untested: m(measureUntested),
     classics: m(measureClassics),
+    graph: m(measureGraph),
     tripwires: Array.isArray(tw) ? tw : (tw?.value ?? []),
     tripwireState: tw?.state ?? null,
   };
@@ -239,8 +241,16 @@ test("the recorded history still reproduces", (t) => {
     // only form in which tripwires mean anything: they are transitions, so
     // they need every commit walked in order, and `perDay` unions the ones a
     // day fired rather than keeping only its last commit's.
+    //
+    // Up to the fixture's own last commit and no further: the history keeps
+    // growing past the recorded window, and a replay through HEAD compared
+    // all of it against 23 day-rows, so this branch could only ever fail.
+    // The whole history object is still handed to `recompute` — the windowed
+    // metrics read backwards from a commit's index, never forwards.
+    const end = history.commits.findIndex((c) => c.sha === fixture.lastSha);
+    assert.ok(end !== -1, `the fixture's last commit ${String(fixture.lastSha).slice(0, 7)} is not on first-parent history`);
     let prev = null;
-    const rows = history.commits.map((c, i) => {
+    const rows = history.commits.slice(0, end + 1).map((c, i) => {
       const row = recompute(c.sha, history, prev, i);
       prev = row;
       return row;
@@ -346,7 +356,7 @@ test("absence is a reason, never a zero", () => {
     agentsMdLines: null,
   };
   const hist = { commits: [{ sha: "x", ts: 0, day: "2026-01-01", subject: "", filesTouched: [], batch: false }], touches: new Map(), batch: new Set() };
-  for (const [name, fn] of [["size", measureSize], ["context", measureContext], ["untested", measureUntested], ["classics", measureClassics]]) {
+  for (const [name, fn] of [["size", measureSize], ["context", measureContext], ["untested", measureUntested], ["classics", measureClassics], ["graph", measureGraph]]) {
     const got = fn(empty, hist, 0, CFG);
     assert.equal(got.value, null, `${name} on an empty tree must be absent`);
     assert.ok(got.reason, `${name} must say why it is absent`);
@@ -376,7 +386,7 @@ test("a tree no language pack reads reports absences, never zeros", () => {
     manifests: [],
   };
   const hist = { commits: [{ sha: "x", ts: 0, day: "2026-01-01", subject: "", filesTouched: [], batch: false }], touches: new Map(), batch: new Set() };
-  for (const [name, fn] of [["dups", measureDups], ["deadExports", measureDeadExports], ["untested", measureUntested]]) {
+  for (const [name, fn] of [["dups", measureDups], ["deadExports", measureDeadExports], ["untested", measureUntested], ["graph", measureGraph]]) {
     const got = fn(snap, hist, 0, bare);
     assert.equal(got.value, null, `${name} must not report a number over a tree nothing parsed`);
     assert.ok(got.reason && got.reason.length > 0, `${name} must say why`);

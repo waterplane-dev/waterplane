@@ -5,6 +5,7 @@ import { squash } from "../echo.js";
 import { costOf, normalizeModel } from "@waterplane/shared";
 import { MAX_TURNS, TOOL_INPUT_CAP, TOOL_RESULT_CAP, TEXT_CAP, oneLine, summarize } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
+import { firstSightIn, usageRecordOf } from "../ctxlog/usagerecord.js";
 import { agentsMtime, attachAgentSpend, noteRetired } from "../turnagents.js";
 import { localCommandOf, localOutputOf, promptOf, queuedPromptOf, readLog, resultText } from "./transcriptlog.js";
 import { BOX_ANSWER_LEAD, absorbedOpeners, boxAnswerTable, cliHeldTable, noteQueueOp } from "./transcriptturns.js";
@@ -291,36 +292,22 @@ export function parseTranscript(
 /**
  * One billable request out of an assistant record, or null.
  *
- * The CLI writes one record per content block of a streamed reply, each
- * carrying the SAME usage under the same `message.id` — counted once, by the
- * `seen` set, as `ctxlog.ts` does. `<synthetic>` is the usage-wall stand-in
- * with a usage block of zeros; a record whose four counters are all zero is
- * not a request that ran.
+ * The record's rules are `usagerecord.ts`'s, the ones every ledger reads: the
+ * CLI writes one record per content block of a streamed reply, each carrying
+ * the SAME usage under the same `message.id` — counted once, by the `seen` set;
+ * `<synthetic>` is the usage-wall stand-in with a usage block of zeros. A
+ * record whose four counters are all zero is not a request that ran.
  */
 function requestOf(rec: any, seen: Set<string>): {
   bag: { input: number; output: number; cacheRead: number; cacheWrite: number; cacheWrite1h: number };
   model: string | null;
   ctx: number;
 } | null {
-  const msg = rec?.message;
-  const usage = msg?.usage;
-  if (!usage || typeof usage !== "object" || msg.model === "<synthetic>") return null;
-  if (typeof msg.id === "string") {
-    if (seen.has(msg.id)) return null;
-    seen.add(msg.id);
-  }
-  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
-  const cc = usage.cache_creation;
-  const bag = {
-    input: n(usage.input_tokens),
-    output: n(usage.output_tokens),
-    cacheRead: n(usage.cache_read_input_tokens),
-    cacheWrite: n(usage.cache_creation_input_tokens),
-    cacheWrite1h: cc && typeof cc === "object" ? n(cc.ephemeral_1h_input_tokens) : 0,
-  };
-  const ctx = bag.input + bag.cacheRead + bag.cacheWrite;
-  if (ctx <= 0 && bag.output <= 0) return null;
-  return { bag, model: typeof msg.model === "string" ? msg.model : null, ctx };
+  const u = usageRecordOf(rec, firstSightIn(seen));
+  if (!u) return null;
+  const bag = { input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite, cacheWrite1h: u.cacheWrite1h };
+  if (u.carried <= 0 && bag.output <= 0) return null;
+  return { bag, model: u.model, ctx: u.carried };
 }
 
 /**

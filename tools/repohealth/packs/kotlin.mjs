@@ -280,6 +280,13 @@ export default Object.freeze({
     return this.mentions(text, path, opts);
   },
 
+  // No import-graph rule yet: `metrics/graph.mjs` reports this language absent
+  // rather than as a tree with no coupling. `imports` above is the safe-side
+  // rule `untested` needs; a graph needs every internal import resolved AND
+  // the unresolved ones counted, which this pack does not do.
+  graphConfigPath: null,
+  graphContext: null,
+  graphImports: null,
   /**
    * Every `dir/name` key the module at `path` answers to: each non-empty suffix
    * of its own directory, joined to its basename.

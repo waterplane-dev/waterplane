@@ -84,6 +84,7 @@ import { measureCochange } from "./repohealth/metrics/cochange.mjs";
 import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
+import { measureGraph } from "./repohealth/metrics/graph.mjs";
 import { OWN_FILE, declaresOwn, measureOwn } from "./repohealth/own.mjs";
 import { declarationsByIndex, measureCentral } from "./repohealth/central.mjs";
 
@@ -385,6 +386,7 @@ function update({ fixture }) {
       context: measureContext(snap, history, index, CFG),
       untested: measureUntested(snap, history, index, CFG),
       classics: measureClassics(snap, history, index, CFG),
+      graph: measureGraph(snap, history, index, CFG),
       ...tripwireFields(measureTripwires(snap, history, index, CFG, prevRow)),
     };
     // The repo's OWN readings (`own.mjs`): HEAD only, the whole tree only. Not

@@ -44,6 +44,8 @@ export interface UsageRecord {
   cacheWrite1h: number;
   /** `input + cacheRead + cacheWrite`: what this request carried. */
   carried: number;
+  /** `usage.speed` as logged (`"standard"`, or the fast tier); null when absent. */
+  speed: string | null;
 }
 
 /**
@@ -75,6 +77,7 @@ export function usageRecordOf(row: unknown, firstSight?: (id: string) => boolean
     cacheWrite,
     cacheWrite1h: cc && typeof cc === "object" ? num(cc.ephemeral_1h_input_tokens) : 0,
     carried: input + cacheRead + cacheWrite,
+    speed: typeof u.speed === "string" ? u.speed : null,
   };
 }
 

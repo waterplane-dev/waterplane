@@ -4,6 +4,7 @@ import type { TokenTotals } from "@waterplane/shared";
 import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { opensTurn } from "../transcript/transcriptlog.js";
+import { isAnchor, usageRecordOf } from "./usagerecord.js";
 import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank, skillLoadOf, pushSkill, blankCarried, carriedPartsOf, foldCarried, CARRIED_MARKS } from "./ctxcursor.js";
 import type { SeriesCursor } from "./ctxcursor.js";
 
@@ -127,46 +128,42 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
       continue;
     }
 
-    if (row.type !== "assistant") continue;
-    const msg = row.message as { id?: unknown; model?: unknown; usage?: Record<string, unknown> } | undefined;
-    if (!msg || typeof msg !== "object") continue;
     // The rejection above is written as an assistant turn too, with
     // `<synthetic>` for a model and a usage block of zeros. Plotting it would
     // put a hard drop to zero on the graph at every usage wall — the opposite
-    // of what happened.
-    if (msg.model === "<synthetic>") continue;
-    const usage = msg.usage;
-    if (!usage || typeof usage !== "object") continue;
-    if (typeof msg.model === "string") cur.model = msg.model; // newest wins
+    // of what happened. `usageRecordOf` drops it, with the record's other rules.
+    const rec = usageRecordOf(row);
+    if (!rec) continue;
+    if (rec.model !== null) cur.model = rec.model; // newest wins
     // Off the same record, so the pair always names one turn: a record with
     // no effort clears it rather than leaving the previous turn's beside it.
     cur.effort = typeof row.effort === "string" ? row.effort : null;
-    if (typeof msg.id === "string" && !remember(cur, msg.id)) continue;
-    const tok = num(usage.input_tokens) + num(usage.cache_read_input_tokens) + num(usage.cache_creation_input_tokens);
+    // Deduped HERE, after the model and effort, through the cursor's bounded set.
+    if (rec.id !== null && !remember(cur, rec.id)) continue;
+    const tok = rec.carried;
     // What the request sent AND what it wrote back. Counted before the `tok`
     // guard below on purpose: a turn that carried nothing readable still spent
     // its output, and dropping it would make the total quietly low.
-    cur.usageTok += tok + num(usage.output_tokens);
+    cur.usageTok += tok + rec.output;
     // The same tokens by kind, off the same record and behind the same guards,
     // so the split cannot come out disagreeing with the total beside it. The
     // 1-hour cache-write tier is READ (`tokenstats.ts` measured it at 84% of
     // all writes and present on every record carrying one) because it is what
     // the payback ratio in `cacheReading` is blended over; absent simply
     // prices at the cheaper tier, which is the conservative direction.
-    const out = num(usage.output_tokens);
+    const out = rec.output;
     // A record whose four counters are all zero is not a request that ran, and
     // `tokenstats.ts` drops it before its own turn counter. Dropped here too:
     // the totals are unaffected either way (it adds nothing), but the two
     // screens divide context BY these turns, and a denominator that counted
     // something on one screen and not the other is a per-turn figure that
     // disagrees with itself.
-    const cc = usage.cache_creation as Record<string, unknown> | undefined;
     const bag: TokenTotals = {
-      input: num(usage.input_tokens),
+      input: rec.input,
       output: out,
-      cacheRead: num(usage.cache_read_input_tokens),
-      cacheWrite: num(usage.cache_creation_input_tokens),
-      cacheWrite1h: cc && typeof cc === "object" ? num(cc.ephemeral_1h_input_tokens) : 0,
+      cacheRead: rec.cacheRead,
+      cacheWrite: rec.cacheWrite,
+      cacheWrite1h: rec.cacheWrite1h,
       // A REQUEST, not a turn — see the field.
       turns: 1,
     };
@@ -181,7 +178,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // the bar came out a different colour from the band above it while both
     // sentences named one model. `pricing.ts` still prices the RAW id, which is
     // where the dated snapshot belongs.
-    const raw = typeof msg.model === "string" ? msg.model : null;
+    const raw = rec.model;
     const mid = raw ? normalizeModel(raw) ?? raw : null;
     let mi = mid ? cur.models.indexOf(mid) : -1;
     if (mid && mi < 0) { mi = cur.models.length; cur.models.push(mid); cur.modelTok.push(0); }
@@ -269,7 +266,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // downsampler's min/max pick — which reorders — to stay index-for-index.
     // The anchor of `carried`: the first request that carried context, deduped
     // and non-synthetic like every reading.
-    cur.carried.firstReq ??= { t, tok };
+    if (isAnchor(rec)) cur.carried.firstReq ??= { t, tok };
     cur.samples.push({
       t, tok, used: cur.usageTok,
       kinds: [bag.input, bag.output, bag.cacheRead, bag.cacheWrite],

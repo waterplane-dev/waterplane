@@ -69,8 +69,6 @@ site/**
 # The gitleaks config (publish-public.mjs's scan reads it from the snapshot root). Names public
 # test fixtures only; /.gitleaksignore, which holds the rest, is deliberately not listed.
 /.gitleaks.toml
-# osv-scanner / Scorecard ignore list: each advisory with the reason it cannot apply.
-/osv-scanner.toml
 
 # ---- carve-outs: personal, or credentials -----------------------------------
 # Env files hold keys. Only the template is public.
@@ -105,6 +103,9 @@ deploy/release-pubkey.pem
 !scripts/reach-dashboard.html
 !tools/trafficarchive.test.mjs
 !tools/reachdashboard.test.mjs
+# waterplane.dev's visit counter: the owner's GCP project, billing and vault login (2026-10-30).
+!scripts/site/counter/**
+!tools/sitecounter.test.mjs
 # The opencode extension stays PRIVATE (owner decision, 2026-10-04): its host half,
 # readers, tests, e2e and stubs travel with its folder. Core discovers extensions by
 # folder (packages/host/src/plugins/builtin.ts) and builds, type-checks and tests

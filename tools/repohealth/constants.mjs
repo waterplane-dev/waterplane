@@ -141,8 +141,16 @@
  * absolute score against fixed good values, and its size entry blends
  * `lineMean` with `max`. Nothing else moves, but rows written before it carry
  * no `lineMean`, so a series on disk is re-measured, never continued.
+ *
+ * `2026-10-30a` adds a row family, `graph`: the import graph between a tree's
+ * own modules — files in import cycles, the largest cycle, fan-out p95 and
+ * max (`metrics/graph.mjs`). Two plotted series read it and the health index
+ * reads neither. The pack half moves with it (`typescript@7` gains
+ * `graphImports`, which resolves `tsconfig` aliases and workspace packages).
+ * No existing field moves, but rows written before it carry no `graph`, so a
+ * series on disk is re-measured, never continued.
  */
-export const PREREG_VERSION = "2026-10-17a";
+export const PREREG_VERSION = "2026-10-30a";
 
 export const PREREG = Object.freeze({
   // ── what counts as source ────────────────────────────────────────────────
@@ -398,6 +406,18 @@ export const PREREG = Object.freeze({
    * directory segment costs nothing and removes both.
    */
   UNTESTED_REQUIRE_DIR_SEGMENT: true,
+
+  // ── the import graph ─────────────────────────────────────────────────────
+  /**
+   * The share of a tree's own imports (relative, aliased, workspace, or a
+   * bare name no manifest declares) that must resolve to a module before the
+   * graph is reported at all. A missed edge is not a neutral error here: it
+   * deletes a cycle and lowers a fan-out, so a tree the reader half-followed
+   * reads as a tree with half the coupling. Below this, the row says which
+   * specifiers it could not follow instead of printing a flattering number.
+   * 0.9 leaves room for the odd generated module that is not committed.
+   */
+  GRAPH_MIN_RESOLVED: 0.9,
 
   // ── the day boundary ────────────────────────────────────────────────────
   // Not a constant: `git.mjs` takes a commit's day from the first 10 chars of

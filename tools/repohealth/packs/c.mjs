@@ -109,6 +109,9 @@ export default Object.freeze({
   mentions: null,
   keysFor: null,
   imports: null,
+  graphConfigPath: null,
+  graphContext: null,
+  graphImports: null,
 
   /**
    * No parser, and a sentence rather than a silence: `metrics/route.mjs` puts

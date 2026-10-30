@@ -109,6 +109,7 @@ export const ROW_KEYS = Object.freeze([
   "context",
   "untested",
   "classics",
+  "graph",
   "tripwires",
   // Not a measurement: the chain state `tripwires.mjs` needs to tell a
   // TRANSITION from a STATE. It lives on the row because it used to live in a

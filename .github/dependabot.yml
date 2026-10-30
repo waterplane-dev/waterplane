@@ -12,6 +12,20 @@ updates:
     # within days. Security-advisory PRs are not held by this.
     cooldown:
       default-days: 7
+    # @types/node tracks the oldest Node in package.json's engines (>=22.12), not the
+    # newest: newer typings let code call APIs a supported runtime does not have.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # React 19 is a planned migration (web and the vscode bundle together), not a bump.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]

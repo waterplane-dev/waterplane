@@ -190,3 +190,8 @@ The health score has a third button, *start a design-quality run*, that seeds (n
 When the score rises, its sentence names the cap lifting as its own part, splits the move exactly between the readings and the cap, and says "mostly files split up" with the file and line counts where file length carried most of the rise while the source files grew by half or more and the code did not shrink.
 - asked: 2026-10-29
 - shipped: 9f22d253, c49a21b0
+
+### R-metrics-040 · shipped
+The repo-health engine reads the import graph between a repo's own modules and plots two tiles that the health index does not read: files in import cycles (the largest cycle named by its files) and imports per file at the p95 (the file with the most named). Imports through tsconfig `paths` aliases and workspace package names are followed; if fewer than 90% of a repo's own imports resolve, both tiles show no number and name the imports that could not be followed, never a lower one. TypeScript/JavaScript only for now; other languages read as absent. Kill criterion: removed if after about four weeks the cycles tile has not pointed at something someone fixed.
+- asked: 2026-10-30
+- shipped: dce27e9b

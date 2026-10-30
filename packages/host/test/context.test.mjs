@@ -58,3 +58,40 @@ test("the meter gate ignores prose ABOUT the context window", () => {
   assert.equal(contextMeterRow("Context left until auto-compact: 42%"), "Context left until auto-compact: 42%");
   assert.equal(contextMeterRow("ctx 120k used of the context window"), "ctx 120k used of the context window");
 });
+
+test("a figure the conversation QUOTES is not the meter", () => {
+  // context.ts's own comments, as a session editing it shows them: a quoted
+  // phrase in the agent's prose, a diff row of the file, a tool result. Each read
+  // as a live gauge and set the phone's context badge to a number nobody had.
+  for (const row of [
+    '  equally heuristic, like the "Context left until auto-compact: 42%" note',
+    '      42 +  "Context left until auto-compact: 42%"',
+    '     17 -  const g = "123k/200k tokens";',
+    "⏺ Context left until auto-compact: 42%",
+    "  ⎿  Context left until auto-compact: 42%",
+    "  ⎿  the gauge said 123k/200k tokens before the /compact",
+    '  the "128k/200k tokens" gauge, the /context breakdown',
+  ]) {
+    const c = detectContext(row);
+    assert.equal(c.leftPct, null, row);
+    assert.equal(c.usedTok, undefined, row);
+  }
+  // …and none is a meter for the health gate either: the reader refusing it
+  // would file a miss against a reader that was right.
+  assert.equal(contextMeterRow('      42 +  "Context left until auto-compact: 42%"'), null);
+  assert.equal(contextMeterRow('  "Context remaining: 42%"'), null);
+  assert.equal(contextMeterRow("  ⎿  Context left until auto-compact: 42%"), null);
+});
+
+test("the meter is read wherever its row puts it, beside whatever else is on it", () => {
+  // The footer, right-aligned beside the mode at any width, and 2.1.301's /context gauge row.
+  assert.equal(detectContext("  ⏵⏵ auto mode on (shift+tab to cycle)          Context left until auto-compact: 8%").leftPct, 8);
+  assert.equal(detectContext("  ⏵⏵ auto mode on (shift+tab to cycle) Context left until auto-compact: 8%").leftPct, 8);
+  assert.equal(detectContext("  ? for shortcutsContext left until auto-compact: 8%").leftPct, 8);
+  assert.equal(detectContext("  ? for shortcuts · Context left until auto-compact: 8%").leftPct, 8);
+  assert.equal(detectContext("     ⛶ ⛶ ⛶ ⛶ ⛶   50.3k/1m tokens (5%)").usedTok, 50_300);
+  assert.equal(detectContext("  claude-opus · 45k/200k tokens (23%)").usedTok, 45_000);
+  // A person's status line, and a footer that opens on a count: neither is code.
+  assert.equal(detectContext("  Opus 4 | 12% context left | $1.20").leftPct, 12);
+  assert.equal(detectContext("  2 background tasks · Context left until auto-compact: 7%").leftPct, 7);
+});

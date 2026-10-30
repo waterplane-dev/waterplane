@@ -261,3 +261,8 @@ id = "GHSA-2363-cqg2-863c"
 ignoreUntil = 2027-01-31T00:00:00Z
 reason = "Android build-tool classpath only (jdom, jdom2), not in the APK"
 
+
+[[IgnoredVulns]]
+id = "GHSA-xxph-c9ww-hj94"
+ignoreUntil = 2027-04-30T00:00:00Z
+reason = "Android build-tool classpath only (guava 32.0.1-jre, 33.3.1-jre; deserialization DoS); the APK carries only the listenablefuture artifact and never deserializes untrusted Java objects. Clears when an AGP bump pulls guava >= 33.7.2"

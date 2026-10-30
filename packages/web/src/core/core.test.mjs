@@ -359,6 +359,27 @@ test("menu items: catalog ids are namespaced, ordered, and open with the active 
   assert.deepEqual(menuItemCatalog([{ id: "a" }]), []);
 });
 
+test("a counted menu item's count and tap are bound to the session they were drawn for; a throw is contained", () => {
+  const { core } = fakeCore();
+  const icon = () => null;
+  const ran = [];
+  const features = [
+    { id: "v", menuItems: [{ id: "vault", label: "vault", icon, open: () => ran.push("home"),
+      useCount: (active) => ({ n: active.id === "s1" ? 2 : 0, title: "t" }), openCount: (c, ctx) => ran.push([c === core, ctx.active.id]) }] },
+    { id: "b", menuItems: [{ id: "bad", label: "bad", icon, open: () => {}, useCount: () => null, openCount: () => { throw new Error("boom"); } }] },
+    { id: "p", menuItems: [{ id: "plain", label: "plain", icon, open: () => {} }] },
+  ];
+  const t = createMenuItemTable(features, () => core);
+  const [v, bad, plain] = t.items({ id: "s1" });
+  assert.equal(v.useCount().n, 2);
+  assert.equal(t.items({ id: "s2" })[0].useCount().n, 0);
+  v.openCount();
+  assert.deepEqual(ran, [[true, "s1"]]);
+  assert.doesNotThrow(() => quietly(() => bad.openCount()));
+  assert.equal(plain.useCount, undefined);
+  assert.equal(plain.openCount, undefined);
+});
+
 test("secret fillers: order, then registry order; open gets the ask's context; a throw is contained", () => {
   const { core } = fakeCore();
   const got = [];

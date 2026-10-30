@@ -93,6 +93,8 @@ export const KPI_MEANING: Readonly<Record<string, string>> = {
   "context.descChars": "the one-line skill descriptions that ride in every window",
   "context.skillCount": "how many skills the repo ships",
   "untested.count": "source modules no test names or reaches through imports",
+  "graph.cycleFiles": "source modules that import each other in a circle, through any number of steps",
+  "graph.fanOutP95": "how many of the repo's own modules a file imports — 95 in 100 files import fewer",
 };
 
 export function kpiMeaning(key: string): string | null {

@@ -1,5 +1,5 @@
 /** The two rate-limit windows, right now: their bars, the figure under each and the readings chart. */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Clock, Gauge, ScanLine } from "lucide-react";
 import { fmtCount, fmtShare, fmtUsd, tokenTotal, type UsageHistoryDoc, type UsageInfo } from "@waterplane/shared";
 import {
@@ -76,6 +76,8 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
   // read by the body (re-read whenever a new scrape lands, no cache).
   const doc = history;
   const samples = doc?.samples ?? [];
+  // Which week the weekly chart shows: 0 = the one running, n = n weeks before.
+  const [weekBack, setWeekBack] = useState(0);
 
   /** The reasons no token figure could be put on a row, de-duplicated: both
    *  windows normally fail for the same reason and printing it twice reads as
@@ -138,13 +140,16 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
               style={{ width: `${r.pct ?? 0}%` }} />
           </div>
           <UsageSpark samples={samples} which={r.which} reset={r.reset} pct={r.pct}
-            everyMs={doc?.everyMs ?? 0} />
+            everyMs={doc?.everyMs ?? 0}
+            {...(r.which === "week" ? { back: weekBack, onBack: setWeekBack } : {})} />
           {/* What the percentage is a percentage OF. The bar says 50%; this
               says 9.1B tokens and $7.40 at list prices, which is the half of
               the answer the scrape cannot carry. Drawn only where the hour
               record can actually be cut — a refusal is worded once, below the
               pair, rather than twice here. */}
-          <WindowUsed cut={cuts?.get(r.which)} scope={scope} onScope={onScope} />
+          {/* The running window's figures — absent while the chart above shows
+              an earlier week, so the two never describe different weeks. */}
+          {!(r.which === "week" && weekBack > 0) && <WindowUsed cut={cuts?.get(r.which)} scope={scope} onScope={onScope} />}
           <div className="ts-lim-sub">
             {r.reset
               ? <><Clock size={11} style={{ verticalAlign: "-1px" }} /> Resets {resetWhen(r.reset)} — in {until(r.reset)}. </>

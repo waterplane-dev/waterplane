@@ -5,7 +5,8 @@ import type { AgentRun, CostBreakdown, SkillLoad, TokenTotals } from "@waterplan
 import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOf, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { readMeta } from "../agents.js";
-import { SEEN_CAP, SKILL_BODY, readRange, num, pushSkill, skillLoadOf } from "./ctxcursor.js";
+import { SEEN_CAP, SKILL_BODY, readRange, pushSkill, skillLoadOf } from "./ctxcursor.js";
+import { usageRecordOf } from "./usagerecord.js";
 
 // ── What the subagents spent ──────────────────────────────────────────────
 
@@ -212,15 +213,11 @@ function readAgentLines(lines: string[], f: AgentFile): void {
       const sk = skillLoadOf(row, stamp(row));
       if (sk) { pushSkill(f.skills, sk); continue; }
     }
-    if (row.type !== "assistant") continue;
-    const msg = row.message as { id?: unknown; model?: unknown; usage?: Record<string, unknown> } | undefined;
-    if (!msg || typeof msg !== "object") continue;
-    // The usage-limit rejection's zero-usage turn, same as in the series.
-    if (msg.model === "<synthetic>") continue;
-    const usage = msg.usage;
-    if (!usage || typeof usage !== "object") continue;
-    if (typeof msg.id === "string" && !rememberIn(f, msg.id)) continue;
-    if (typeof msg.model === "string") f.model = msg.model;   // newest wins
+    // The usage-limit rejection's zero-usage turn and a streamed reply's
+    // repeats are dropped by `usageRecordOf`, the same record as in the series.
+    const rec = usageRecordOf(row, (id) => rememberIn(f, id));
+    if (!rec) continue;
+    if (rec.model !== null) f.model = rec.model;   // newest wins
     // When this agent ran. `stamp` is the series' own reader, so an agent and a
     // turn cannot end up on two different clocks; an undated record simply does
     // not move the window, and a log with none at all stays at 0 and is left
@@ -230,14 +227,13 @@ function readAgentLines(lines: string[], f: AgentFile): void {
       if (!f.firstAt || at < f.firstAt) f.firstAt = at;
       if (at > f.lastAt) f.lastAt = at;
     }
-    const spent = num(usage.input_tokens) + num(usage.cache_read_input_tokens)
-      + num(usage.cache_creation_input_tokens) + num(usage.output_tokens);
+    const spent = rec.carried + rec.output;
     f.tok += spent;
     // Same rule as the series: a record with nothing on it is not a request.
     if (spent <= 0) continue;
     // The agent's OWN window: what this request carried, output excluded (it
     // is not in the window until the next turn) — the parent's rule.
-    const held = num(usage.input_tokens) + num(usage.cache_read_input_tokens) + num(usage.cache_creation_input_tokens);
+    const held = rec.carried;
     if (held > f.peak) f.peak = held;
     if (at != null && held > 0 && at >= f.curAt) { f.curTok = held; f.curAt = at; }
     if (at != null && held > 0) {
@@ -250,13 +246,12 @@ function readAgentLines(lines: string[], f: AgentFile): void {
       f.cum.push([at, f.tok]);
       if (f.cum.length > AGENT_CTX_RAW) f.cum = halveLast(f.cum);
     }
-    const cc = usage.cache_creation as Record<string, unknown> | undefined;
     const bag: TokenTotals = {
-      input: num(usage.input_tokens),
-      output: num(usage.output_tokens),
-      cacheRead: num(usage.cache_read_input_tokens),
-      cacheWrite: num(usage.cache_creation_input_tokens),
-      cacheWrite1h: cc && typeof cc === "object" ? num(cc.ephemeral_1h_input_tokens) : 0,
+      input: rec.input,
+      output: rec.output,
+      cacheRead: rec.cacheRead,
+      cacheWrite: rec.cacheWrite,
+      cacheWrite1h: rec.cacheWrite1h,
       turns: 1,
     };
     addTotals(f.split, bag);
@@ -265,7 +260,7 @@ function readAgentLines(lines: string[], f: AgentFile): void {
     // too, never the parent's. The agent log has no `timestamp` guarantee this
     // fold depends on, so an unstamped record is priced at TODAY's rate, which
     // only differs on a day a price moved.
-    const c = costOf(bag, typeof msg.model === "string" ? msg.model : null,
+    const c = costOf(bag, rec.model,
       typeof row.timestamp === "string" ? localDay(toMs(row.timestamp) ?? Date.now()) : undefined);
     if (c) addCost(f.cost, c);
     else f.unpriced += tokenTotal(bag);

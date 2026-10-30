@@ -29,8 +29,8 @@ const HEAD_BYTES = 256 * 1024;
  * whole prompt, however it was billed). The record's rules are
  * `usagerecord.ts`'s: a `<synthetic>` usage-wall row and an output-only reply
  * carried nothing and are passed over, never read as the answer — the anchor is
- * the first request that carried context. Null when the head holds no such row
- * with a model. A torn last line is skipped, never guessed. Pure.
+ * the first request that carried context. Null when the head holds no such row,
+ * or that row names no model. A torn last line is skipped, never guessed. Pure.
  */
 export function firstRequestOf(head: string): { model: string; tok: number } | null {
   for (const line of head.split("\n")) {
@@ -39,8 +39,10 @@ export function firstRequestOf(head: string): { model: string; tok: number } | n
     try { row = JSON.parse(line); } catch { continue; }
     if (row?.isSidechain === true) continue;
     const rec = usageRecordOf(row);
-    if (!rec || !isAnchor(rec) || !rec.model) continue;
-    return { model: rec.model, tok: rec.carried };
+    if (!rec || !isAnchor(rec)) continue;
+    // The anchor, model or not: the request after it carried the first reply
+    // and the next message too, so it is never a stand-in for a missing model.
+    return rec.model ? { model: rec.model, tok: rec.carried } : null;
   }
   return null;
 }

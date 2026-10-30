@@ -49,6 +49,8 @@ import shell from "./repohealth/packs/shell.mjs";
 import c from "./repohealth/packs/c.mjs";
 import typescript from "./repohealth/packs/typescript.mjs";
 import { measureUntested } from "./repohealth/metrics/untested.mjs";
+import { cyclesOf, measureGraph } from "./repohealth/metrics/graph.mjs";
+import { buildResolveContext, parseJsonc } from "./repohealth/lang/typescript-resolve.mjs";
 import { SERIES, listMoves } from "./repohealth/readings.mjs";
 
 /**
@@ -405,6 +407,13 @@ test("a declined capability is null — never undefined, 0 or false", () => {
     assert.equal(typeof pack.mentions, "function", `${pack.name}.mentions`);
     assert.equal(typeof pack.keysFor, "function", `${pack.name}.keysFor`);
     assert.equal(typeof pack.imports, "function", `${pack.name}.imports`);
+  }
+  // No pack but TypeScript has an import-graph rule yet, and saying so is
+  // what makes the graph absent for them rather than a tree with no coupling.
+  for (const pack of [common, kotlin, python, dart, shell, c]) {
+    for (const cap of ["graphConfigPath", "graphContext", "graphImports"]) {
+      assert.equal(pack[cap], null, `${pack.name}.${cap} must be an explicit null`);
+    }
   }
   // Kotlin declines dependencies; Python supplies them.
   assert.equal(kotlin.manifestPath, null);
@@ -806,4 +815,117 @@ test("gitattributes: configure drops a marked file from source and moves the ver
 
   const scoped = configure("/nowhere", treeWithAttrs(paths, "shared/sdk-mcp/server.mjs linguist-generated\n"), undefined, "shared");
   assert.equal(isSource("sdk-mcp/server.mjs", scoped), false, "a scope re-roots the paths, not the rules");
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// The import graph: aliases resolved, misses counted, never a flattering zero.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** A resolver context built the way `snapshot.mjs` builds it, from literal files. */
+function ctxOf(files) {
+  const entries = Object.keys(files).map((path) => ({ path, oid: path }));
+  return buildResolveContext(entries, (e) => files[e.path]);
+}
+
+test("graph: tsconfig is read as the family writes it — comments, trailing commas, a '//' inside a string", () => {
+  const json = parseJsonc('{\n  // the alias\n  "a": "http://x", /* b */ "c": [1, 2,],\n}');
+  assert.deepEqual(json, { a: "http://x", c: [1, 2] });
+  assert.equal(parseJsonc("{ not json"), null);
+});
+
+test("graph: a Vite app's @/ alias, from a tsconfig it extends, resolves to the module", () => {
+  const ctx = ctxOf({
+    "web/tsconfig.json": '{ "files": [], "references": [{ "path": "./tsconfig.app.json" }] }',
+    "web/tsconfig.app.json": '{ "extends": "./tsconfig.base.json" }',
+    "web/tsconfig.base.json": '{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"] } } }',
+    "web/package.json": '{ "name": "web", "dependencies": { "react": "18" } }',
+  });
+  const got = typescript.graphImports(
+    { path: "web/src/App.tsx", text: 'import { B } from "@/components/Button";\nimport React from "react";\nimport "@/index.css";' },
+    ctx,
+  );
+  assert.deepEqual(got[0], { spec: "@/components/Button", internal: true, candidates: ["web/src/components/Button"] });
+  // Under a baseUrl `react` MAY be a path, so it is asked about — but not as
+  // ours: it is an edge only if a module is there, and never a miss.
+  assert.deepEqual(got.slice(1), [{ spec: "react", internal: false, candidates: ["web/react"] }]);
+});
+
+test("graph: a workspace package resolves through its exports, and dist is answered by src", () => {
+  const ctx = ctxOf({
+    "package.json": '{ "name": "root", "workspaces": ["packages/*"] }',
+    "packages/shared/package.json": '{ "name": "@w/shared", "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }, "./wire/*": "./dist/wire/*.js" } }',
+  });
+  const [main, sub] = typescript.graphImports(
+    { path: "packages/web/src/a.ts", text: 'import { x } from "@w/shared";\nimport { y } from "@w/shared/wire/notify";' },
+    ctx,
+  );
+  assert.equal(main.candidates[0], "packages/shared/dist/index");
+  assert.ok(typescript.keysFor("packages/shared/src/index.ts").includes(main.candidates[0]), "the src module answers to its dist key");
+  assert.equal(sub.candidates[0], "packages/shared/dist/wire/notify");
+});
+
+test("graph: an alias nothing declares is a MISS, never an external package", () => {
+  const ctx = ctxOf({ "package.json": '{ "name": "app", "dependencies": { "react": "18", "@tanstack/react-query": "5" } }' });
+  const text = [
+    'import "@/lib/utils";', // the template alias, undeclared
+    'import "components/Button";', // a bundler alias by bare name
+    'import "@ui/card";', // a scoped-looking alias no manifest declares
+    'import "react";',
+    'import "@tanstack/react-query/devtools";',
+    'import "fs";',
+    'import "node:path";',
+    'import "virtual:pwa-register";',
+  ].join("\n");
+  const got = typescript.graphImports({ path: "src/main.ts", text }, ctx).map((i) => [i.spec, i.internal, i.candidates.length]);
+  assert.deepEqual(got, [
+    ["@/lib/utils", true, 0],
+    ["components/Button", true, 0],
+    ["@ui/card", true, 0],
+  ]);
+});
+
+/** A prereg holding the TS pack, the shape `measureGraph` reads. */
+const GRAPH_TS = Object.freeze({ PACKS: [{ name: "typescript", pack: typescript, files: 1 }], GRAPH_MIN_RESOLVED: 0.9 });
+
+test("graph: cycles are named with their members; fan-out counts this tree's modules only", () => {
+  const snap = {
+    files: [
+      file("src/index.ts", 'export * from "./a";\nexport * from "./b";\nimport "react";'),
+      file("src/a.ts", 'import { b } from "./b";'),
+      file("src/b.ts", 'import { i } from "./index";'),
+      file("src/c.ts", 'import { a } from "./a";\nimport { self } from "./c";'),
+      file("src/d.ts"),
+    ],
+    graphContexts: {},
+  };
+  const got = measureGraph(snap, null, 0, GRAPH_TS).value;
+  assert.equal(got.cycleFiles, 3);
+  assert.equal(got.cycleCount, 1, "a self-import is not a cycle");
+  assert.deepEqual(got.cycles, [{ size: 3, files: ["src/a.ts", "src/b.ts", "src/index.ts"] }]);
+  assert.equal(got.fanOutMax, 2);
+  assert.equal(got.fanOutMaxPath, "src/index.ts");
+  assert.equal(got.edges, 5);
+});
+
+test("graph: too few internal imports resolved is an absence that names them, not a clean tree", () => {
+  const snap = {
+    files: [
+      file("src/a.ts", 'import "@/b";\nimport "@/c";'),
+      file("src/b.ts", 'import "./a";'),
+      file("src/c.ts"),
+    ],
+    graphContexts: { typescript: buildResolveContext([], () => "") },
+  };
+  const got = measureGraph(snap, null, 0, GRAPH_TS);
+  assert.equal(got.value, null);
+  assert.match(got.reason, /only 1 of 3/);
+  assert.match(got.reason, /`@\/b`/);
+});
+
+test("graph: a long import chain does not overflow the stack", () => {
+  const n = 200000;
+  const adj = Array.from({ length: n }, (_, i) => (i + 1 < n ? [i + 1] : [0]));
+  const comps = cyclesOf(n, adj);
+  assert.equal(comps.length, 1);
+  assert.equal(comps[0].length, n);
 });

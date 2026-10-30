@@ -336,6 +336,27 @@ function untestedDetail(row, _prereg, since) {
 }
 
 /**
+ * A count of files in import cycles needs the files it is a part of, how
+ * those split into cycles, and the largest one by name — the files a person
+ * opens to undo it.
+ */
+function cycleDetail(row) {
+  const g = row?.graph?.value;
+  if (!g || typeof g.files !== "number") return "";
+  if (!g.cycleFiles) return ` Over ${plural(g.files, "module")} and ${plural(g.edges, "import")} between them.`;
+  const top = g.cycles?.[0];
+  const named = top ? ` The largest holds ${nf(top.size)}: ${top.files.join(", ")}${top.size > top.files.length ? ", …" : ""}.` : "";
+  return ` ${nf(g.cycleFiles)} of ${plural(g.files, "module")}, in ${plural(g.cycleCount, "cycle")}.${named}`;
+}
+
+/** A p95 of fan-out needs its max and the file that holds it. */
+function fanOutDetail(row) {
+  const g = row?.graph?.value;
+  if (!g || typeof g.fanOutMax !== "number") return "";
+  return ` The most is ${nf(g.fanOutMax)}, in ${g.fanOutMaxPath}; ${nf(g.resolved)} of ${plural(g.internal, "internal import")} resolved.`;
+}
+
+/**
  * The scalar series a quartile move or a slope flip is worth a sentence about.
  *
  * `label` is a noun phrase that reads as the subject of "…is now": the
@@ -412,6 +433,23 @@ export const SERIES = Object.freeze([
     get: (r) => r.untested?.value?.length ?? null,
     detail: untestedDetail,
   },
+  // The import graph (`metrics/graph.mjs`). Plotted and ranked against their
+  // own past like the rest; the health index reads neither — they earn an
+  // index entry only once their series has pointed at a fix.
+  {
+    key: "graph.cycleFiles",
+    label: "the count of files in import cycles",
+    unit: "",
+    get: (r) => r.graph?.value?.cycleFiles ?? null,
+    detail: cycleDetail,
+  },
+  {
+    key: "graph.fanOutP95",
+    label: "p95 imports per file",
+    unit: "imports",
+    get: (r) => r.graph?.value?.fanOutP95 ?? null,
+    detail: fanOutDetail,
+  },
 ]);
 
 /** The families whose reading can go absent, and what to call one when it does. */
@@ -424,4 +462,5 @@ export const FAMILIES = Object.freeze([
   ["context", "the always-on context reading"],
   ["untested", "the untested-module reading"],
   ["classics", "the classics reading"],
+  ["graph", "the import-graph reading"],
 ]);

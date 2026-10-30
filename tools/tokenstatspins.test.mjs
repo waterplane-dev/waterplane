@@ -108,7 +108,8 @@ const HOOKS = {
   ],
   LimitWindows: [
     // 2026-10-09: the usagelog read moved up into TokenStatsBody.
-    "useEffect",
+    // 2026-10-30: `weekBack`, which week the weekly chart shows.
+    "useEffect", "useState",
   ],
   TokenStatsBody: [
     // Local-model split: the first useState + useMemo are `allModels` and the

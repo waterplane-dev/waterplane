@@ -26,8 +26,8 @@ const ALLOWED = {
   "packages/web/src/kit/chart/stats/splotUsage.ts": [
     ["6 * HOUR_MS, 12 * HOUR_MS, DAY_MS, 2 * DAY_MS, 7 * DAY_MS", "candidate tick widths in ms, matched against a ms span"],
     ["Math.round(step / DAY_MS)", "converts a chosen tick width to a whole day count; walked with setDate"],
-    ["reset - 7 * DAY_MS", "a rate-limit window is 168 elapsed hours long, not seven calendar days"],
-    ["now - 7 * DAY_MS", "same: the live window's length in elapsed time"],
+    ["back * 7 * DAY_MS", "a rate-limit window is 168 elapsed hours long, not seven calendar days"],
+    ["end - 7 * DAY_MS", "same: the window's length in elapsed time"],
   ],
   "packages/extensions/token-stats/web/usageCut.ts": [["7 * DAY_MS", "the weekly rate-limit window's length in elapsed ms"]],
 };

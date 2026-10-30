@@ -14,6 +14,9 @@ import {
   type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
+import { ExtBoundary } from "./core/ExtBoundary";
+import { tabMarks } from "./core/extensionPoints";
+import type { TabMarkDef } from "./sdk/types";
 import { showToast } from "./toast";
 
 /**
@@ -345,7 +348,7 @@ function TabsList({ s, fileOn, viaKey, kick, onClose }: {
                   ? <Loader size={16} className="spin stab-spin" aria-hidden="true" />
                   : <span className="stab-led" aria-hidden="true" />}
                 <span className="stab-row-text">
-                  <span className="stab-row-label">{t.label}</span>
+                  <span className="stab-row-label">{t.label}<TabMarks sessionId={t.id} size={13} /></span>
                   <span className="stab-row-sub">{t.repo} · {STATUS_LABEL[t.status]}</span>
                 </span>
                 <button className="stab-x" aria-label={`close ${t.label}`} title="close this session"
@@ -358,6 +361,31 @@ function TabsList({ s, fileOn, viaKey, kick, onClose }: {
         </ul>
       </Sheet>
     </div>
+  );
+}
+
+function TabMark({ d, sessionId, size }: { d: TabMarkDef; sessionId: string; size: number }) {
+  const m = d.useMark(sessionId);
+  if (!m) return null;
+  // Its words ride the label for a screen reader; `title` is for a desktop pointer only.
+  return <span className="stab-mark" role="img" aria-label={m.title} title={m.title}><d.icon size={size} /></span>;
+}
+
+/**
+ * What an extension says this session waits on (`TabMarkDef`, the vault's asks): a glyph beside the
+ * label, never a control — the tab's tap opens the session, whose header has the counted key.
+ */
+function TabMarks({ sessionId, size }: { sessionId: string; size: number }) {
+  const ms = tabMarks();
+  if (!ms.length) return null;
+  return (
+    <>
+      {ms.map((x) => (
+        <ExtBoundary key={x.key} feature={x.feature} what="its mark on a session tab">
+          <TabMark d={x.d} sessionId={sessionId} size={size} />
+        </ExtBoundary>
+      ))}
+    </>
   );
 }
 
@@ -392,6 +420,7 @@ function Tab({ t, active }: { t: SessionTab; active: boolean }) {
         ? <Loader size={11} className="spin stab-spin" aria-hidden="true" />
         : <span className="stab-led" aria-hidden="true" />}
       <span className="stab-label">{t.label}</span>
+      <TabMarks sessionId={t.id} size={11} />
       <button className="stab-x" aria-label={`close ${t.label}`} title="close this session" onClick={close}>
         <X size={12} />
       </button>

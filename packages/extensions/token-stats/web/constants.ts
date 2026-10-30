@@ -38,7 +38,8 @@ export type SourceId = string;
  *  shorter of the two, so a day covers four whole windows of it and a useful
  *  slice of the week — and it bounds what a phone downloads. */
 export const HISTORY_HOURS = 24;
-/** What is fetched: enough for the WEEK chart, which spans the whole window
- *  the weekly reset closes (`usageSpan`), plus an hour so a reading taken just
- *  before that window opened is in hand. The five-hour chart clips to its day. */
-export const FETCH_HOURS = 7 * 24 + 1;
+/** What is fetched: the host's whole default retention (30 days, `usagelog.ts`)
+ *  plus an hour, so the WEEK chart can step back through earlier weeks
+ *  (`usageSpan`'s `back`). The five-hour chart clips to its day; every other
+ *  reader of these samples clips to its own window. */
+export const FETCH_HOURS = 30 * 24 + 1;

@@ -200,6 +200,10 @@
  *   not a workspace label, because a label is not unique across depths. `[]`
  *   where the tree holds none — `classics.mjs` turns that into `deps: null`,
  *   since "no manifest" and "depends on nothing" are opposite claims.
+ * @property {Record<string, object>} graphContexts
+ *   Pack name -> what that pack's `graphContext()` built from its config
+ *   files (for TypeScript: `tsconfig` aliases and workspace packages), for
+ *   `metrics/graph.mjs`. Only packs with an import-graph rule appear.
  */
 
 /**
@@ -294,6 +298,14 @@
  *   `path#name` for every value export no other blob names, from the same
  *   per-pack analyzer `dups` uses, and absent with the same reason where no
  *   pack supplies one.
+ * @property {Measured<object>} graph
+ *   The import graph between the tree's own modules, over the files whose
+ *   pack has an import-graph rule: `cycleFiles` (modules in an import cycle),
+ *   `cycles` and `largestCycle`, `fanOutP95`/`fanOutMax`/`fanOutMaxPath`,
+ *   and `internal`/`resolved` — how many of the tree's own imports were
+ *   followed to a module. Absent with a reason where no pack has the rule,
+ *   or where too few internal imports resolved for a missing edge not to
+ *   read as missing coupling (`PREREG.GRAPH_MIN_RESOLVED`).
  * @property {Measured<object>} classics
  *   `deps` is `null` — never a row of zeros — both where the tree holds no
  *   dependency manifest and where no active pack reads one, with `depsReason`

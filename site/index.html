@@ -154,7 +154,7 @@
 </div>
 <p>You need:</p>
 <ul>
-  <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed</strong> (<code>curl -fsSL https://claude.ai/install.sh | bash</code>, or <code>npm install -g @anthropic-ai/claude-code</code>), and something for it to run on: a <strong>paid Claude plan</strong> (Pro, Max, Team) or an <strong>Anthropic API key</strong> — run <code>claude</code> once and sign in — or, with no account, a <strong>local model through Ollama</strong>. GitHub Copilot works too, as a plugin (<code>install.sh --with copilot</code>).</li>
+  <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed</strong> (<code>curl -fsSL https://claude.ai/install.sh | bash</code>, or <code>npm install -g @anthropic-ai/claude-code</code>), and something for it to run on: a <strong>paid Claude plan</strong> (Pro, Max, Team) or an <strong>Anthropic API key</strong> — run <code>claude</code> once and sign in — or, with no account, a <strong>local model through Ollama</strong>. GitHub Copilot works too, as a <a href="https://github.com/waterplane-dev/waterplane-plugin-copilot">plugin</a> (<code>install.sh --with copilot</code>).</li>
   <li><strong>A way for the phone to reach the desktop.</strong> Recommended: <strong><a href="https://tailscale.com">Tailscale</a></strong> on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a password does the gating instead: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md#without-tailscale-same-wi-fi-or-your-own-vpn">without Tailscale</a>. With neither, the daemon binds loopback only and is reachable just from the desktop.</li>
 </ul>
 <p>The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a <code>waterplane</code> command with <code>start</code>, <code>doctor</code>, <code>service</code>, <code>update</code> and <code>pair</code>:</p>
@@ -200,6 +200,11 @@ npm start</code></pre>
   <p><a href="privacy.html">Privacy</a><span class="sep"> · </span><a href="impressum.html">Impressum</a><span class="sep"> · </span>Claude and Claude Code are
   trademarks of Anthropic, used here only to name the CLI waterplane drives.</p>
 </footer>
+
+<!-- Visit count: a plain image from our own counter (Cloud Run, Frankfurt), no
+     script, nothing stored on the device, so no consent banner (privacy.html#statistics says what
+     it sends; keep the two in step). -->
+<img src="https://counter-324911926296.europe-west3.run.app/c?p=/" alt="" width="1" height="1" style="position:absolute;left:-9999px">
 
 </div>
 </body>

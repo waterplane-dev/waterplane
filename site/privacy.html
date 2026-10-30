@@ -20,13 +20,14 @@
 
 <main class="doc">
 <h1>Privacy</h1>
-<p class="muted">Applies to the waterplane Android app, the waterplane web app and the waterplane
-host. Effective 15 October 2026, last updated 21 October 2026.</p>
+<p class="muted">Applies to the waterplane Android app, the waterplane web app, the waterplane
+host and this website. Effective 15 October 2026, last updated 30 October 2026.</p>
 
 <p><strong>We collect nothing.</strong> waterplane has no server, no account, no analytics, no
 crash reporting and no advertising. The app talks to one machine: the desktop you run the host on,
 at the address you give it, normally over your own Tailscale network. We, the people who make
-waterplane, never receive your data, because nothing is sent to us.</p>
+waterplane, never receive your data, because nothing is sent to us. Only this website counts its
+visits, without cookies; see <a href="#statistics">Visitor statistics</a>.</p>
 
 <h2>What the phone stores</h2>
 <p>On the phone, in the app's own storage (the browser's for the web app, the WebView's for the
@@ -102,14 +103,46 @@ remove it.</p>
   downloaded from Google and Adoptium only when you ask for them.</li>
 </ul>
 <p>The demo at <a href="/demo/">waterplane.dev/demo</a> runs entirely in your browser and makes no
-network requests. This website sets no cookies, uses no analytics and loads nothing from other
-sites; GitHub Pages, which hosts it, keeps standard server logs.</p>
+network requests. This website sets no cookies, stores nothing on your device and runs no
+third-party scripts. GitHub Pages, which hosts it, keeps standard server logs.</p>
+
+<h2 id="statistics">Visitor statistics</h2>
+<p>The start page of waterplane.dev loads one invisible image from a small counting service we run
+ourselves on Google Cloud, so we know how many times a day it is opened and by how many people. Loading it sends what any
+web request sends: your IP address, your browser's User-Agent header and that the page was
+waterplane.dev. No script runs for it, and nothing is stored on or read from your device (no
+cookies, no local storage, no fingerprinting).</p>
+<ul>
+  <li><strong>What is kept:</strong> two numbers per day: how many times the start page was opened,
+  and by how many different visitors. The IP address and User-Agent are used only in memory, for
+  that one request, to leave out bots and requests from other sites, and are never written anywhere,
+  not to a database and not to a log.</li>
+  <li><strong>How visitors are told apart:</strong> the IP address and User-Agent are combined with a
+  random value made new each day (a salt) and turned into a one-way hash (SHA-256). Only the hash
+  is kept, so a second visit on the same day is not counted again. The salt and the day's hashes
+  are deleted automatically once the day is over, usually within 24 hours after it ends. Without
+  the salt a hash cannot be traced back to an address, and the same visitor gets a different hash
+  the next day, so nobody is followed from one day to the next.</li>
+  <li><strong>Who processes it:</strong> Google Cloud (Google Cloud EMEA Ltd, Ireland) runs the
+  service for us as our processor under its
+  <a href="https://cloud.google.com/terms/data-processing-addendum">Cloud Data Processing
+  Addendum</a>, in Frankfurt (region europe-west3). Google is part of a US group; any access from
+  outside the EU is covered by the EU-U.S. Data Privacy Framework and the EU standard contractual
+  clauses included in that addendum.</li>
+  <li><strong>Legal basis:</strong> Art. 6(1)(f) GDPR, our legitimate interest in knowing whether
+  anyone reads this site, in the least intrusive way we found. Because nothing is stored on or read
+  from your device, no consent is needed under &sect; 25 TDDDG.</li>
+  <li><strong>Objecting:</strong> blocking images from <code>run.app</code> (any content blocker
+  can) stops it entirely, and the site works the same. You may also object under Art. 21 GDPR by
+  email.</li>
+</ul>
 
 <h2>Children</h2>
 <p>waterplane is a developer tool and is not directed at children.</p>
 
 <h2>Data protection rights (GDPR)</h2>
-<p>The waterplane app, host and this website (apart from the server logs GitHub Pages keeps, see above) does not process any personal data about you (Art. 4(1) GDPR). If you email me, your
+<p>The waterplane app, host and this website (apart from the server logs GitHub Pages keeps and the
+<a href="#statistics">visitor count</a>, both above) do not process any personal data about you (Art. 4(1) GDPR). If you email me, your
 address and your message are processed to reply, on the basis of Art. 6(1)(f) GDPR (legitimate
 interest in answering enquiries), and deleted when no longer needed. You have the rights of access,
 rectification, erasure, restriction of processing, data portability and objection under Art. 15 to

@@ -144,16 +144,21 @@ export function timeTicks(t0: number, t1: number, want = 4): number[] {
  * With no reset instant (or one already past, which describes a window that
  * has ended) the week falls back to the last seven days ending now, and the
  * caller says so: it is a span, not the window.
+ *
+ * `back` steps the WEEK chart to an earlier week: `back` whole weeks before
+ * the one the reset closes (or before the seven days ending now, on the
+ * fallback). The five-hour chart ignores it.
  */
 export function usageSpan(
   which: "session" | "week",
   reset: number | null,
   now: number,
   dayHours = 24,
+  back = 0,
 ): { t0: number; t1: number; isWindow: boolean } {
   if (which === "session") return { t0: now - dayHours * HOUR_MS, t1: now, isWindow: false };
-  if (reset != null && reset > now) return { t0: reset - 7 * DAY_MS, t1: reset, isWindow: true };
-  return { t0: now - 7 * DAY_MS, t1: now, isWindow: false };
+  const end = (reset != null && reset > now ? reset : now) - back * 7 * DAY_MS;
+  return { t0: end - 7 * DAY_MS, t1: end, isWindow: reset != null && reset > now };
 }
 
 /**

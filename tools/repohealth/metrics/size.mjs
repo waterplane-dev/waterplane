@@ -60,7 +60,7 @@ const APP_TSX = "packages/web/src/App.tsx";
  *
  * @param {number[]} ascending  Sorted ascending. Not copied, not mutated.
  */
-function nearestRankP95(ascending) {
+export function nearestRankP95(ascending) {
   const rank = Math.ceil(0.95 * ascending.length);
   return ascending[Math.max(0, rank - 1)];
 }

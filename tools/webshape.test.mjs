@@ -1039,7 +1039,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "repoHealthWords/repoHealthWordsFmt.ts": 85, // +middleEllipsis, the longest card's path
   "repoHealthWords/repoHealthWordsOwn.ts": 90,
   "repoHealthWords/repoHealthWordsPlot.ts": 155,
-  "repoHealthWords/repoHealthWordsRank.ts": 125,
+  "repoHealthWords/repoHealthWordsRank.ts": 130, // +KPI_MEANING for the two import-graph tiles
   "repoHealthWords/repoHealthWordsRegion.ts": 195, // +notesSummaryWords, plotAxisModeWords (weeks | commits)
   "repoHealthWords/repoHealthWordsRun.ts": 115, // +outcomeRepeatsReadError, a failed read said once
   "repoHealthWords/repoHealthWordsScope.ts": 60,

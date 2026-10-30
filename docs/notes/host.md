@@ -8631,4 +8631,6 @@ with a record — drop an all-four-zero one, price it, plot it, skip a sidechain
 and so do the substring pre-filters in front of `JSON.parse` that keep the cold scan cheap: the
 module takes the row already parsed. `test/usagerecord.test.mjs` runs one log (wall row, output-only
 reply, a streamed reply repeated under one id, another request) through every reader that names a
-first request and requires one answer.
+first request and requires one answer; `tools/usagerecordpins.test.mjs` is the ratchet — the field name
+`cache_read_input_tokens` is spelled in host code (comments stripped) only there, `sidecar/sidecarclaude.ts`
+excepted because it reads `claude -p --output-format json`'s envelope, a different shape that shares the names.

@@ -22,6 +22,9 @@ import { orderedToolbarItems, type ToolbarCfg, type ToolbarItem } from "../../to
 import { Unavailable } from "../../Unavailable";
 import { featureToolbarItem } from "../toolbarItems";
 import { menuItems, sessionViews } from "../extensionPoints";
+import { countedN, type ContributedEntry } from "../featureRun";
+import { ExtBoundary } from "../ExtBoundary";
+import { badgeText } from "../../features/notifications";
 import { pinHeaderView } from "./headerViews";
 import { tallyTitle, turnTally } from "../sessions/tags";
 import { closeToolbarMenu, setToolbarOpen } from "../../features/toolbarCfg";
@@ -127,7 +130,9 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       // An extension's own line (`MenuItemDef`): its words and its open, under the catalog's
       // order/hide/pin like any other. Unavailable is the sentence on the tap, never a grey line.
       const ext = menuItems(active).find((e) => e.key === t.id);
-      if (ext) return (
+      if (ext) return ext.useCount
+        ? <ExtBoundary key={t.id} feature={ext.feature} what={`its ${ext.label} menu line`}><CountedMenuLine ext={ext} label={label} dismiss={dismiss} /></ExtBoundary>
+        : (
         <Button key={t.id} title={ext.unavailable ?? ext.label}
           onClick={() => {
             dismiss();
@@ -159,6 +164,28 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       );
     }
   }
+}
+
+/**
+ * A contributed line with a count (`MenuItemDef.useCount`, cut to this session): the bell's badge on it,
+ * and while counted the tap lands on exactly what it counts (`openCount`). Its own component because
+ * the count is a hook.
+ */
+function CountedMenuLine({ ext, label, dismiss }: { ext: ContributedEntry; label: boolean; dismiss(): void }) {
+  const c = ext.useCount!();
+  const n = countedN(c);
+  return (
+    <Button className={n ? "notif-btn" : undefined} title={ext.unavailable ?? (n ? c!.title : ext.label)}
+      onClick={() => {
+        dismiss();
+        track(`toolbar:${ext.key}`);
+        if (ext.unavailable) { showToast(ext.unavailable); return; }
+        if (n > 0 && ext.openCount) ext.openCount(); else ext.open();
+      }}>
+      <ext.icon size={ICON} />{label && <> {ext.label}</>}
+      {n > 0 && <span className="notif-badge">{badgeText(n)}</span>}
+    </Button>
+  );
 }
 
 /**

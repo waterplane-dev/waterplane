@@ -59,31 +59,40 @@ export function LauncherItems({ size, onOpen }: { size: number; onOpen: () => vo
   );
 }
 
-function LauncherItemKey({ it, size }: { it: ContributedEntry; size: number }) {
+function CountedKey({ it, size, where }: { it: ContributedEntry; size: number; where: string }) {
   const c = it.useCount!();
   const n = countedN(c);
   if (!n) return null;
   const Icon = it.icon;
   return (
-    <Button className="notif-btn" aria-label={c!.title} title={c!.title} onClick={() => tap(it, "key.", n)}>
+    <Button className="notif-btn" aria-label={c!.title} title={c!.title} onClick={() => tap(it, where, n)}>
       <Icon size={size} /><span className="notif-badge">{badgeText(n)}</span>
     </Button>
   );
 }
 
-/** The counted items, as header keys beside the bell — drawn only while their count is above zero. */
-export function LauncherItemKeys({ size }: { size: number }): ReactNode {
-  const items = launcherItems().filter((it) => it.useCount);
-  if (!items.length) return null;
+/**
+ * Counted entries as header keys beside the bell, each drawn only while its count is above zero. The
+ * launcher's (`LauncherItemKeys`) and a session header's (its counted ☰ lines, cut to that session)
+ * are the same key: same badge, same tap.
+ */
+export function CountedKeys({ items, size, where }: { items: ContributedEntry[]; size: number; where: string }): ReactNode {
+  const counted = items.filter((it) => it.useCount);
+  if (!counted.length) return null;
   return (
     <>
-      {items.map((it) => (
+      {counted.map((it) => (
         <ExtBoundary key={it.key} feature={it.feature} what={`its ${it.label} header key`}>
-          <LauncherItemKey it={it} size={size} />
+          <CountedKey it={it} size={size} where={where} />
         </ExtBoundary>
       ))}
     </>
   );
+}
+
+/** The counted launcher items, as header keys beside the bell — drawn only while their count is above zero. */
+export function LauncherItemKeys({ size }: { size: number }): ReactNode {
+  return <CountedKeys items={launcherItems()} size={size} where="key." />;
 }
 
 function MenuCount({ items, base }: { items: ContributedEntry[]; base: number }) {

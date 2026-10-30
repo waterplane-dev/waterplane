@@ -35,7 +35,8 @@ import { pinnedToolbarItems } from "../../toolbar";
 import type { Launch } from "../launch/useLaunch";
 import { keepFocus } from "../compose/ComposeBar";
 import { renameSession } from "./rename";
-import { sessionViews } from "../extensionPoints";
+import { menuItems, sessionViews } from "../extensionPoints";
+import { CountedKeys } from "../launcher/LauncherItems";
 import { unpinHeaderView, useHeaderViews } from "./headerViews";
 import { budgetTag, contextTag, costTag, limitTag, liveAgentTag, shellsTag, statusTags, tallyTitle, turnTally } from "../sessions/tags";
 import { BellButton } from "../../features/notifications";
@@ -263,6 +264,10 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         <div className="hdr-ctl">
         <>
         <HintToggle compact />
+        {/* A ☰ line with something this session waits on (the vault's asks it made), lifted
+            beside the bell while counted — the launcher's key, cut to this session. A pinned
+            line already shows its own badge above. */}
+        {!pending && <CountedKeys items={menuItems(active).filter((e) => !(toolbar.toolbarCfg.pinned ?? []).includes(e.key))} size={ICON} where="session.key." />}
         <BellButton size={ICON} />
         {/* Nothing to close on the host yet: what exists is the queued create,
             so the destructive verb here drops THAT — and the prompts written

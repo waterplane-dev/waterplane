@@ -125,3 +125,9 @@ What each script pins, in full: [testing-and-ops.md](../../../docs/notes/testing
   than a hang, so a leaked handle is still a hang.
 - Prove a timing fix UNDER LOAD (`yes > /dev/null` on every core, several copies in parallel):
   passing alone says nothing about a race. an e2e script once failed 5/5 that way and passed alone.
+  **Kill the load by PID, on exit** — never `kill %1`: an agent's shell has no job control, the
+  kill fails silently, and the `yes` processes outlive the session (three ran 17 h at 30% each):
+  ```bash
+  pids=(); for i in $(seq $(sysctl -n hw.ncpu)); do yes >/dev/null & pids+=($!); done
+  trap 'kill "${pids[@]}" 2>/dev/null' EXIT
+  ```

@@ -647,6 +647,8 @@ export interface FeatureManifest {
   menuItems?: readonly MenuItemDef[];
   /** Buttons on the masked password field's row (`SecretFillerDef`). */
   secretFillers?: readonly SecretFillerDef[];
+  /** Marks on a session's tab in the strip and its row in the open-tabs list (`TabMarkDef`). */
+  tabMarks?: readonly TabMarkDef[];
   /** Reads the words inside a mark on an image, on the phone (`ImageTextReader`). Consulted only
    *  while this extension is switched on (`isExtensionEnabled(id)`); the first such one wins. */
   imageText?: ImageTextReader;
@@ -725,6 +727,19 @@ export interface LauncherItemDef {
   openCount?(core: CoreApi): void;
 }
 
+/**
+ * A glyph on a session's tab (the strip and the open-tabs list) while that session waits on something
+ * of this extension's — the vault's fingerprint asks the session made. Not a control: the tab's own tap
+ * opens the session, whose header then carries the counted key (`MenuItemDef.useCount`) that opens
+ * exactly those. The tab's ~85 px have no room for a number; the title says it.
+ */
+export interface TabMarkDef {
+  id: string;
+  icon: ContributionIcon;
+  /** A HOOK, called once per render per tab: the sentence for the tab's title, or null = no mark. */
+  useMark(sessionId: string): { title: string } | null;
+}
+
 /** What `LauncherItemDef.useCount` says is waiting. `title` is the long reading; the badge is the number. */
 export interface LauncherItemCount { n: number; title: string }
 
@@ -745,6 +760,16 @@ export interface MenuItemDef {
   /** Absent = always available. */
   available?(core: CoreApi): Availability;
   open(core: CoreApi, ctx: { active: SessionInfo }): void;
+  /**
+   * A HOOK, called once per render by the session header and the menu: what THIS session is waiting on
+   * behind this line (the vault's asks this session made). n > 0 draws a counted badge on the menu line
+   * AND lifts the line out of the ☰ into the header beside the bell — `LauncherItemDef.useCount`'s
+   * grammar, cut to one session. A count is a filter: `openCount` lands on exactly what n counts.
+   * Absent, null or n <= 0 = the plain menu line.
+   */
+  useCount?(active: SessionInfo): LauncherItemCount | null;
+  /** The tap while `useCount` says n > 0: exactly what n counts. Absent = `open`. Ignored without `useCount`. */
+  openCount?(core: CoreApi, ctx: { active: SessionInfo }): void;
 }
 
 /**

@@ -361,9 +361,18 @@ export function buildSnapshot(root, sha, git, prereg, scope = null) {
   const claudeMd = entries.find((e) => e.path === "CLAUDE.md") ?? null;
   const agentsMd = entries.find((e) => e.path === "AGENTS.md") ?? null;
 
+  // The files a pack resolves imports with (`tsconfig`, workspace manifests),
+  // by the same exclusion: a vendored package's `tsconfig` declares nothing
+  // about this tree's own imports.
+  const graphEntries = prereg.PACKS.filter((p) => p.pack.graphConfigPath && typeof p.pack.graphContext === "function").map((p) => {
+    const re = new RegExp(p.pack.graphConfigPath);
+    return { pack: p, entries: entries.filter((e) => re.test(e.path) && !inExcludedDir(e.path, prereg.SRC.excludeDirs)) };
+  });
+
   // One batch for the whole snapshot; `git.mjs` drops the oids it already has.
   const wanted = [...srcEntries, ...testEntries, ...skillEntries];
   for (const m of manifestEntries) wanted.push(...m.entries);
+  for (const m of graphEntries) wanted.push(...m.entries);
   if (claudeMd) wanted.push(claudeMd);
   if (agentsMd) wanted.push(agentsMd);
   const blobs = git.readBlobs(root, wanted.map((e) => e.oid));
@@ -412,6 +421,10 @@ export function buildSnapshot(root, sha, git, prereg, scope = null) {
   }
   manifests.sort((a, b) => (a.pack < b.pack ? -1 : a.pack > b.pack ? 1 : a.pkg < b.pkg ? -1 : a.pkg > b.pkg ? 1 : 0));
 
+  /** pack name -> its resolver context, for `metrics/graph.mjs`. */
+  const graphContexts = {};
+  for (const m of graphEntries) graphContexts[m.pack.name] = m.pack.pack.graphContext(m.entries, textOf);
+
   const claudeText = claudeMd ? textOf(claudeMd) : null;
 
   return {
@@ -427,5 +440,6 @@ export function buildSnapshot(root, sha, git, prereg, scope = null) {
     areas: deriveAreas(skillTexts, groups),
     tests,
     manifests,
+    graphContexts,
   };
 }

@@ -20,7 +20,8 @@ const MAX_SLICE_LINES = 650;
 const SLICE_RAISED = {
   // design round 5: the past-window heat box's third state (`.ts-heat-b.undated`, refused for
   // records with no date) belongs beside `.unknown`, whose cascade it extends.
-  "11-token-stats.css": 655,
+  // 2026-10-30: the week limit chart's older/newer stepper (`.ts-wstep-chart`) extends `.ts-wstep`.
+  "11-token-stats.css": 661,
 };
 const MAX_INDEX_LINES = 40;
 const dir = join(dirname(STYLES_INDEX), "styles");

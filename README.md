@@ -120,7 +120,8 @@ You need:
   (`curl -fsSL https://claude.ai/install.sh | bash`, or `npm install -g @anthropic-ai/claude-code`),
   and something for it to run on: a **paid Claude plan** (Pro, Max, Team) or an **Anthropic API
   key** — run `claude` once and sign in — or, with no account, a **local model through Ollama**.
-  GitHub Copilot works too, as a plugin (`install.sh --with copilot`).
+  GitHub Copilot works too, as a [plugin](https://github.com/waterplane-dev/waterplane-plugin-copilot)
+  (`install.sh --with copilot`).
 - **A way for the phone to reach the desktop.** Recommended: **[Tailscale](https://tailscale.com)**
   on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS
   gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a
@@ -342,7 +343,7 @@ plainly:
 
 ## Built with waterplane
 
-**ciqkit** is developer tooling for Garmin Connect IQ watch apps: a broker that makes the Connect IQ
+**[ciqkit](https://github.com/JohannesHoh/ciqkit)** is developer tooling for Garmin Connect IQ watch apps: a broker that makes the Connect IQ
 simulator usable from scripts, CI and coding agents, plus static checks for watch screens. It and
 the watch apps it serves were developed largely from a phone with waterplane: build on the desktop,
 run it in the simulator, and get the verified screenshot in the phone's gallery. waterplane shells out
@@ -354,9 +355,30 @@ Garmin watch app on the Connect IQ store that counts indoor boulder problems by 
 rate and the accelerometer, with a companion web app for live sessions. It is closed source; it was
 built, tested on the simulator and shipped to the store with waterplane, mostly from a phone.
 
-**Little Painter** is a small Android app for children: brush, shapes that stay movable after the
-finger lifts, a paint bucket, and a parent mode. It was written with waterplane, with the APK built
-from the phone's build sheet.
+**[Little Painter](https://play.google.com/store/apps/details?id=io.github.johanneshoh.childpaint)**
+is a small Android app for children: brush, shapes that stay movable after the finger lifts, a paint
+bucket, and a parent mode. It was written with waterplane, with the APK built from the phone's build
+sheet. [Source](https://github.com/waterplane-dev/child-paint).
+
+**[Talking Pictures](https://play.google.com/store/apps/details?id=de.hoh.talkingpictures)** is an
+Android app for small children: take a photo, put invisible spots on the things in it, record your
+own voice behind each spot, and hand the phone over. It is offline, with no network permission. It
+was built with waterplane; it is closed source.
+
+**[Waterplane Game](https://play.google.com/store/apps/details?id=dev.waterplane.game)** is a small
+Android side-scroller in which you fly the waterplane logo through storm clouds, rock spires,
+lighthouses and reefs. It was built from a phone, start to finish: one prompt sent through
+waterplane, then one follow-up to test it on an emulator.
+[Source](https://github.com/waterplane-dev/waterplane-game).
+
+All public repos: [waterplane](https://github.com/waterplane-dev/waterplane) ·
+[demo](https://github.com/waterplane-dev/demo) ·
+[waterplane-plugin-copilot](https://github.com/waterplane-dev/waterplane-plugin-copilot) ·
+[waterplane.dev site](https://github.com/waterplane-dev/waterplane-dev.github.io) ·
+[media](https://github.com/waterplane-dev/media) ·
+[child-paint](https://github.com/waterplane-dev/child-paint) ·
+[waterplane-game](https://github.com/waterplane-dev/waterplane-game) ·
+[ciqkit](https://github.com/JohannesHoh/ciqkit).
 
 ## Known limits
 
