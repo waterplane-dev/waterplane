@@ -8,7 +8,7 @@ import { execFileP as pexec } from "./proc.js";
 import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
 import { branchRules, invalidateBranchRules } from "./branchrules.js";
-import { pushFailureText, pushRefusedByRule } from "./pushverdict.js";
+import { pushFailureText, pushRefusedByRule, refsLockedAt } from "./pushverdict.js";
 
 
 export interface GitFile {
@@ -632,6 +632,12 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     return { ok: true, output: (stdout || stderr || "pushed").toString().trim() };
   } catch (err: any) {
     const so = String(err?.stdout ?? ""), se = String(err?.stderr ?? "") || String(err);
+    // Another push of the same commit landed while this one's hook ran: the remote holds
+    // exactly what we sent, so this push's work is done — not a failure to retry.
+    const locked = refsLockedAt(so, se);
+    if (locked && (await landedAlready(wt, locked))) {
+      return { ok: true, output: `Already on the remote — another push of the same commit landed while this one ran.\n\n${so.trim()}` };
+    }
     let error = pushFailureText(so, se);
     // A branch-rule refusal on the plain path: the rules changed under us. Forget the reading.
     if (pushRefusedByRule(so, se)) {
@@ -641,6 +647,21 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     }
     return { ok: false, error };
   }
+}
+
+/** Whether every locked ref's remote sha is the one this push sent (`rev-parse src`) — read off
+ *  the refusal when the remote named it, else asked of the remote (`ls-remote`, the push's `To`). */
+async function landedAlready(wt: string, locked: { to: string | null; refs: { src: string; dst: string; at?: string }[] }): Promise<boolean> {
+  for (const { src, dst, at } of locked.refs) {
+    const sha = (await git(wt, ["rev-parse", "--verify", "--end-of-options", `${src}^{commit}`]).catch(() => ({ stdout: "" }))).stdout.trim();
+    let there = at;
+    if (!there && locked.to) {
+      const ls = (await git(wt, ["ls-remote", "--end-of-options", locked.to, dst]).catch(() => ({ stdout: "" }))).stdout;
+      there = ls.split("\n").map((l) => l.split("\t")).find((c) => c[1] === dst)?.[0];
+    }
+    if (!sha || sha !== there) return false;
+  }
+  return true;
 }
 
 /** Whether HEAD's branch has an upstream — git's answer, not a phrase in a push's output. */

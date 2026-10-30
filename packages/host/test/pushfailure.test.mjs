@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pushState, startPush } from "../dist/git.js";
-import { pushFailureText, pushRefusedByRule } from "../dist/pushverdict.js";
+import { pushFailureText, pushRefusedByRule, refsLockedAt } from "../dist/pushverdict.js";
 
 test("a refused push names the hook step from STDOUT, not only git's stderr", () => {
   const stdout = "local CI: myrepo\n\n\x1b[1m> npm run lint\x1b[0m\n  901:1  error  File has too many lines\n\n\x1b[31mFAILED: npm run lint (exit 1)\x1b[0m\nPush aborted. Fix it, or bypass with: git push --no-verify\n";
@@ -170,4 +170,37 @@ test("a rule refusal is read off git's porcelain line only", () => {
   assert.equal(pushRefusedByRule("!\trefs/heads/main:refs/heads/main\t[remote rejected] (protected branch hook declined)\n", ""), true);
   assert.equal(pushRefusedByRule("!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\n", "remote: error: GH013: Repository rule violations found\n"), true, "a refused ref beside the remote's anchored GH013 line");
   assert.equal(pushRefusedByRule("", "FAILED: npm test\n  remote: error: GH013: x\n"), false, "an indented GH013 in a hook log with no refused ref");
+});
+
+test("a lock refusal names the sha the remote is at; any other refusal beside it is not one", () => {
+  const sha = "2b3262d02288aa54bbf21dfd47d47a3095a34e98", old = "531426142f6b54c592125f114c2b881441fa66ac";
+  const lock = `!\trefs/heads/main:refs/heads/main\t[remote rejected] (cannot lock ref 'refs/heads/main': is at ${sha} but expected ${old})`;
+  assert.deepEqual(refsLockedAt(`To x\n${lock}\nDone\n`, "error: failed to push some refs to 'x'\n"), { to: "x", refs: [{ src: "refs/heads/main", dst: "refs/heads/main", at: sha }] });
+  assert.deepEqual(refsLockedAt("To ../r.git\n!\trefs/heads/main:refs/heads/main\t[remote rejected] (incorrect old value provided)\nDone\n", ""), { to: "../r.git", refs: [{ src: "refs/heads/main", dst: "refs/heads/main" }] });
+  assert.equal(refsLockedAt(`To x\n${lock}\n!\trefs/heads/dev:refs/heads/dev\t[remote rejected] (protected branch hook declined)\nDone\n`, ""), null);
+  assert.equal(refsLockedAt("To x\n!\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)\nDone\n", ""), null);
+  // the hook's own log quoting the phrase is not git's porcelain line
+  assert.equal(refsLockedAt(`  ${lock.replace(/\t/g, " ")}\n`, ""), null);
+});
+
+// 2026-10-30: two pushes of one commit raced (the phone's and another session's); the other landed
+// during this one's 4-minute hook, and the remote refused with "cannot lock ref … is at <ours>".
+test("a push whose commit another push already landed is done, not refused", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushlanded-"));
+  try {
+    const wt = hookRepo(dir, `git push -q --no-verify "${join(dir, "remote.git")}" HEAD:refs/heads/$(git rev-parse --abbrev-ref HEAD) </dev/null`);
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, true, r.error);
+    assert.match(r.output, /^Already on the remote — another push of the same commit landed/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a lock refusal where the remote moved to someone else's commit stays a refusal", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-pushmoved-"));
+  try {
+    const wt = hookRepo(dir, `R="${join(dir, "remote.git")}"\nC=$(git --git-dir="$R" commit-tree -p $(git --git-dir="$R" rev-parse HEAD) -m other $(git --git-dir="$R" rev-parse 'HEAD^{tree}'))\ngit --git-dir="$R" update-ref refs/heads/$(git rev-parse --abbrev-ref HEAD) $C`);
+    const r = await startPush(wt).done;
+    assert.equal(r.ok, false);
+    assert.match(r.error, /remote refused/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

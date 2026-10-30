@@ -25,6 +25,33 @@ export function pushRefusedByRule(stdout: string, stderr: string): boolean {
 }
 
 /**
+ * The refs the remote refused ONLY because its ref had already moved under the push — GitHub's
+ * `(cannot lock ref '<dst>': is at <sha> but expected <old>)`, git's own receive-pack
+ * `(incorrect old value provided)` — as `{ src, dst, at? }` plus the `To <url>` it went to, or
+ * null when any refusal is something else (or there is none). Two pushes of the same commit
+ * raced (a second session, a terminal) and the other landed first. Whether the remote now IS at
+ * what this push sent only git.ts can tell: `rev-parse src` against `at`, else `ls-remote`.
+ */
+export function refsLockedAt(stdout: string, stderr: string): { to: string | null; refs: { src: string; dst: string; at?: string }[] } | null {
+  const lines = `${stdout}\n${stderr}`.split("\n").map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
+  const refused = lines.map((l) => PORCELAIN_REFUSED.exec(l)).filter((m): m is RegExpExecArray => !!m);
+  if (!refused.length) return null;
+  const refs: { src: string; dst: string; at?: string }[] = [];
+  for (const m of refused) {
+    const [src, dst] = m[1].split(":");
+    const lock = /^cannot lock ref '[^']+': is at ([0-9a-f]{40,64}) but expected [0-9a-f]{40,64}$/.exec(m[2]);
+    if (lock) refs.push({ src, dst, at: lock[1] });
+    else if (m[2] === "incorrect old value provided") refs.push({ src, dst });
+    else return null;
+  }
+  // git's own `To <url>` heads its porcelain block; a hook prints before it, so the last one
+  // above the first refusal is git's.
+  const first = lines.findIndex((l) => PORCELAIN_REFUSED.test(l));
+  const to = lines.slice(0, first).reverse().map((l) => /^To (\S+)$/.exec(l)).find(Boolean)?.[1] ?? null;
+  return { to, refs };
+}
+
+/**
  * The rules GitHub names when a ruleset (GH013, `remote: - <rule>` lines) or classic branch
  * protection (GH006, `remote: error: <rule>` lines) refuses a push, plus the page that lists them —
  * as a clause, or "" when the remote named none. Only the remote's own words, never a guess.
