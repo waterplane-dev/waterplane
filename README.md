@@ -1,5 +1,7 @@
 # waterplane
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16195/badge)](https://www.bestpractices.dev/projects/16195)
+
 <!-- site:intro -->
 **An IDE, rethought for the phone in the age of agentic coding.** The agent writes the code; what
 you need in your hand is the steering. waterplane drives the real Claude Code CLI on your own

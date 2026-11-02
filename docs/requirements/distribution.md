@@ -25,7 +25,7 @@ Releasing waterplane is done through scripts, so each release is reproducible an
 - shipped: 60aaf327
 
 ### R-distribution-006 · shipped
-The open-source release includes the generic keystore bridge but never the vault or the opencode extension.
+The open-source release includes the generic keystore bridge; the vault is an experimental extension, not shipped by default (`ship.json` decides), and the opencode extension is never shipped.
 - asked: 2026-10-05, 2026-10-06
 - shipped: 36b98edb, c53c0924
 

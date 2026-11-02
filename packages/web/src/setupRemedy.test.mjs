@@ -258,6 +258,7 @@ test("neither prompt asserts a path that is not in the repo it lands in", () => 
 
 test("the findings cut says what it is hiding, against the unfiltered list", () => {
   assert.equal(findingsCutWords(2, 7), "2 of 7 — open findings only, the rest of the checklist is hidden");
+  assert.equal(findingsCutWords(1, 17, 3), "1 of 17 — open findings only; 3 to consider and the rest of the checklist are hidden");
 });
 
 // ── every reading at once ──────────────────────────────────────────────────

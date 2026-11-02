@@ -27,6 +27,7 @@ const { E, GITHUB_ORG, SLUG } = await import("../lib-brand.mjs");
 const { packagedStamp, verifyDevApk } = await import("./apk-lib.mjs");
 const { buildShrinkwrap } = await import("./shrinkwrap-lib.mjs");
 const { privateExtensions } = await import("./public-lib.mjs");
+const { copyExtFiles, extFilesProblem } = await import("./ext-files-lib.mjs");
 const { PUBKEY_PATH, assertKeyMatches, defaultKeyPath, loadPrivateKey, signFile } = await import("./sign-lib.mjs");
 const OUT = join(ROOT, "dist-release");
 const args = new Set(process.argv.slice(2));
@@ -205,7 +206,8 @@ function stageTree(dir, { sharedAtPackages }) {
       // A manifest `assets` folder (the OCR engine, built by `npm run build`) is served by the host
       // from the SOURCE folder too (`plugins/pluginassets.ts`): it ships beside the manifest, and a
       // shipped extension whose folder is missing or empty stops the build — it could never be ready.
-      const assets = readJson(`packages/extensions/${id}/${BRAND_MANIFEST}`).assets;
+      const manifest = readJson(`packages/extensions/${id}/${BRAND_MANIFEST}`);
+      const assets = manifest.assets;
       if (typeof assets === "string") {
         const a = `packages/extensions/${id}/${assets}`;
         if (!existsSync(join(ROOT, a)) || readdirSync(join(ROOT, a)).length === 0) {
@@ -213,6 +215,25 @@ function stageTree(dir, { sharedAtPackages }) {
           process.exit(1);
         }
         copy(a, t);
+      }
+      // A manifest `files` list (["cli", "helper"]) ships those folders verbatim beside the manifest —
+      // an extension's command line or native helper, which the host does not compile (ext-files-lib.mjs).
+      if (manifest.files !== undefined) {
+        const bad = extFilesProblem(manifest.files);
+        if (bad) { console.error(`release: packages/extensions/${id}/${BRAND_MANIFEST} "files" ${bad}.`); process.exit(1); }
+        let missing;
+        try { missing = copyExtFiles(ROOT, id, manifest.files, dir); } catch (e) { console.error(String(e.message)); process.exit(1); }
+        if (missing.length) { console.error(`release: packages/extensions/${id}/${BRAND_MANIFEST} "files" names ${missing.join(", ")}, which ${missing.length === 1 ? "is" : "are"} not a folder of the extension — ${id} ships and would be missing ${missing.length === 1 ? "it" : "them"}.`); process.exit(1); }
+        // A shipped command line must START from the staged tree: it loads its shared modules from the
+        // built copy beside it (cli/lib/shared.mjs); a release that cannot even print --help is not shipped.
+        // Every top-level .mjs of cli/ is an entry point; found, not named (no private name in public code).
+        const cliDir = join(dir, `packages/extensions/${id}/cli`);
+        const cliEntries = manifest.files.includes("cli") && existsSync(cliDir)
+          ? readdirSync(cliDir).filter((f) => f.endsWith(".mjs")).map((f) => `packages/extensions/${id}/cli/${f}`) : [];
+        for (const cliEntry of cliEntries) {
+          try { execFileSync(process.execPath, [join(dir, cliEntry), "--help"], { stdio: "pipe", timeout: 30000 }); }
+          catch (e) { console.error(`release: the staged ${cliEntry} does not start (\`node ${cliEntry} --help\` exited non-zero): ${String(e.stderr || e.message).trim().split("\n").slice(0, 6).join(" | ")}. ${id} ships it; fix the import, then build the release again.`); process.exit(1); }
+        }
       }
     } else rmSync(join(dir, "packages/host/dist/extensions", id), { recursive: true, force: true });
   }

@@ -15,8 +15,24 @@
  */
 import { frontmatterLines } from "./contextweight.js";
 
-/** A top-level key: bare (`name`), or quoted. The value is everything after `:` and whitespace. */
-const KEY_LINE = /^([A-Za-z0-9_][\w.-]*|"[^"]*"|'[^']*')[ \t]*:(?:[ \t]+(.*))?[ \t]*$/;
+/** A top-level key, bare (`name`) or quoted, up to and including its `:`. */
+const KEY_HEAD = /^([A-Za-z0-9_][\w.-]*|"[^"]*"|'[^']*')[ \t]*:/;
+
+/**
+ * A top-level `key: value` line as `[key, value]`, the value untrimmed; null when the line is not
+ * one. Answers what `/^(KEY)[ \t]*:(?:[ \t]+(.*))?[ \t]*$/` did (its value only ever read trimmed),
+ * but that regex was quadratic on a long tab run ending in a line terminator (CodeQL
+ * `js/polynomial-redos`). Same refusals: something other than a space or tab right after the `:`,
+ * and any character `.` would not cross — so a CRLF line still is not a key line.
+ */
+export function keyLine(line: string): [string, string] | null {
+  const m = KEY_HEAD.exec(line);
+  if (!m) return null;
+  const rest = line.slice(m[0].length);
+  if (rest && rest[0] !== " " && rest[0] !== "\t") return null;
+  if (/[\n\r\u2028\u2029]/.test(rest)) return null;
+  return [m[1], rest];
+}
 /** Characters that may not START a plain YAML scalar. */
 const INDICATOR = /^[-?:,\]}#&*!%@`]/;
 
@@ -58,10 +74,10 @@ export function frontmatterYamlProblem(text: string): string | null {
       }
       continue;
     }
-    const m = KEY_LINE.exec(line);
+    const m = keyLine(line);
     if (!m) { key = null; plain = false; continue; }
-    key = m[1].replace(/^["']|["']$/g, "");
-    const v = (m[2] ?? "").trim();
+    key = m[0].replace(/^["']|["']$/g, "");
+    const v = m[1].trim();
     plain = false;
     if (!v) continue;
     const c = v[0];

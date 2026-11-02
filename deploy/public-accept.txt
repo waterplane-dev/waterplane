@@ -97,3 +97,8 @@ tools/reachdashboard.test.mjs:15:a6d61ba3db
 docs/requirements/connection.md:131:e25b65e0a3
 docs/requirements/connection.md:132:c6c23715a0  # session-id: a requirement's source session, like :131
 docs/requirements/connection.md:133:42f99aab32  # session-id: a requirement's source session, like :131
+scripts/claude-stub-tui.mjs:622:f51ec33f39
+packages/shared/test/redos.test.mjs:65:dac67073a9
+packages/shared/test/redos.test.mjs:66:9be5ca044b
+packages/shared/test/redos.test.mjs:68:a1eea231f0
+packages/extensions/vault/host/gcp.mts:23:ba54aa38f8  # generic-api-key: gcloud SDK public OAuth client "secret" (public by design)

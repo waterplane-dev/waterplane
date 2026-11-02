@@ -85,8 +85,52 @@ const DUR_RE = /^(?:\d+(?:\.\d+)?\s*(?:ms|s|m|h)\s*)+$/i;
 const HINT_RE = /\b(?:esc|ctrl\+|shift\+|tab)\b/i;
 /** The phrase the spinner cycles: always a gerund, always ellipsed. Taken as the
  *  LAST such word on the line because a partial TUI redraw leaves junk in front
- *  of it ("✽Bloviating…", "│ ✻ Vibing…"). */
-const PHRASE_RE = /([A-Za-z][A-Za-z'-]*ing)\s*(?:…|\.\.\.)/g;
+ *  of it ("✽Bloviating…", "│ ✻ Vibing…").
+ *
+ *  Every match of `/([A-Za-z][A-Za-z'-]*ing)\s*(?:…|\.\.\.)/g`, group 1 only — as
+ *  a scan, because that regex re-read a long word from each of its letters
+ *  (CodeQL `js/polynomial-redos`). With `objects`, every match of the object
+ *  form below. */
+export function gerundPhrases(s: string, objects = false): string[] {
+  const out: string[] = [];
+  const isWord = (c: string | undefined) => c !== undefined && /[A-Za-z'-]/.test(c);
+  const isLetter = (c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
+  const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);
+  const wordEnd = (at: number) => { while (isWord(s[at])) at++; return at; };
+  /** Index just past `\s*(?:…|\.\.\.)` at `at`, or -1. */
+  const ellipsis = (at: number) => {
+    while (isSpace(s[at])) at++;
+    return s[at] === "…" ? at + 1 : s.startsWith("...", at) ? at + 3 : -1;
+  };
+  let i = 0;
+  while (i < s.length) {
+    if (!isWord(s[i])) { i++; continue; }
+    // A run of word characters: a match can only start at its first letter and
+    // its gerund can only end where the run does — what follows is never a word
+    // character.
+    const end = wordEnd(i);
+    let start = i;
+    while (start < end && !isLetter(s[start])) start++;
+    let next = -1;
+    let to = end;
+    if (end - start >= 4 && s.endsWith("ing", end)) {
+      if (!objects) next = ellipsis(end);
+      else {
+        for (let n = 0; n < 3 && next < 0; n++) {
+          let k = to;
+          while (isSpace(s[k])) k++;
+          if (k === to || !isLetter(s[k])) break;
+          to = wordEnd(k);
+          next = ellipsis(to);
+        }
+      }
+    }
+    if (next < 0) { i = end; continue; }
+    out.push(s.slice(start, to));
+    i = next;
+  }
+  return out;
+}
 /**
  * The same shape with an OBJECT between the gerund and the ellipsis —
  * "Compacting conversation… (35s)", which is what `/compact` prints for however
@@ -98,8 +142,10 @@ const PHRASE_RE = /([A-Za-z][A-Za-z'-]*ing)\s*(?:…|\.\.\.)/g;
  * inherited CL…" would read as "working on: saving is off" — which is this app
  * inventing an activity, the failure `workingLine`'s doc names. A measured
  * parenthetical is what a spinner has and a truncated warning does not.
+ *
+ * Read by `gerundPhrases(s, true)`: every match of
+ * `/([A-Za-z][A-Za-z'-]*ing(?:\s+[A-Za-z][A-Za-z'-]*){1,3})\s*(?:…|\.\.\.)/g`.
  */
-const PHRASE_OBJ_RE = /([A-Za-z][A-Za-z'-]*ing(?:\s+[A-Za-z][A-Za-z'-]*){1,3})\s*(?:…|\.\.\.)/g;
 /**
  * **The other measured thing, and for the first half-minute it is the ONLY one.**
  *
@@ -146,7 +192,20 @@ const PROGRESS_RE = /^[▰▱▬█▓░▒⣿⠿\s]*[▰▱▬█▓░▒⣿�
  * tokens") — the spinner always wraps its stats in parentheses.
  */
 const TRAY_ROW_RE = /^\s*[◯◉○●◎⏺]\s+[A-Za-z][\w:-]*\s{2,}\S/;
-const TRAY_STATS_RE = /(?:^|\s)\d+(?:\.\d+)?\s*[smh](?:\s+\d+\s*[sm])*\s+·\s+[↓↑]\s*[\d.,]+\s*[km]?\s+tokens?\s*$/i;
+/**
+ * The stats shape: what `/(?:^|\s)\d+(?:\.\d+)?\s*[smh](?:\s+\d+\s*[sm])*\s+·\s+[↓↑]\s*[\d.,]+\s*[km]?\s+tokens?\s*$/i`
+ * answered, without its quadratic retry from every whitespace (CodeQL
+ * `js/polynomial-redos`). Two facts make it a split: the `·` it matched is the
+ * line's LAST one (nothing after it may hold another), and the `(?:\s+\d+\s*[sm])*`
+ * run never decided anything — its last item alone, after whitespace, is already
+ * a first item — so one duration before the `·` is the same test.
+ */
+export function trayStats(line: string): boolean {
+  const dot = line.lastIndexOf("·");
+  return dot >= 0
+    && /(?:^|\s)\d+(?:\.\d+)?\s*[smh]\s+$/i.test(line.slice(0, dot))
+    && /^\s+[↓↑]\s*[\d.,]+(?:\s*[km])?\s+tokens?\s*$/i.test(line.slice(dot + 1));
+}
 
 export interface WorkingLine {
   /** "Clauding…" — the TUI's own word for what it is doing. */
@@ -181,7 +240,7 @@ export function workingLine(tail?: string): WorkingLine | null {
   let weak: WorkingLine | null = null;
   for (let i = lines.length - 1; i >= 0; i--) {
     // A background agent's tray row is the AGENT working, not the turn.
-    if (TRAY_ROW_RE.test(lines[i] ?? "") || TRAY_STATS_RE.test(lines[i] ?? "")) continue;
+    if (TRAY_ROW_RE.test(lines[i] ?? "") || trayStats(lines[i] ?? "")) continue;
     const line = clean(lines[i]);
     if (!line) continue;
     const parens = [...line.matchAll(/\(([^()]*)\)/g)];
@@ -203,17 +262,17 @@ export function workingLine(tail?: string): WorkingLine | null {
     // a terminal wide enough to keep them together.
     const pct = PROGRESS_RE.exec(clean(lines[i + 1]))?.[1] ?? PROGRESS_RE.exec(line.slice(line.search(/[▰▱▬█▓░▒⣿⠿]/) < 0 ? line.length : line.search(/[▰▱▬█▓░▒⣿⠿]/)))?.[1] ?? null;
     if (pct) extra.push(`${pct}%`);
-    const phrases = [...head.matchAll(PHRASE_RE)];
+    const phrases = gerundPhrases(head);
     // The gerund-with-an-object form is read ONLY off a line that also carries
     // something MEASURED — a parenthetical with a duration or a token count, or
-    // the progress row above. See `PHRASE_OBJ_RE` for why it is never read on
+    // the progress row above. See the object form's doc for why it is never read on
     // its own. It is how `/compact` announces itself, and `/compact` fires no
     // hook at all, so this line is the only thing that says the CLI is busy for
     // the minutes it runs.
-    const objs = phrases.length || !(elapsed || tokens || pct) ? [] : [...head.matchAll(PHRASE_OBJ_RE)];
+    const objs = phrases.length || !(elapsed || tokens || pct) ? [] : gerundPhrases(head, true);
     const hit = phrases[phrases.length - 1] ?? objs[objs.length - 1];
     if (!hit) continue;
-    const phrase = `${hit[1]}…`;
+    const phrase = `${hit}…`;
     if (!elapsed && !tokens && !pct) {
       // A gerund with nothing measured behind it — the first repaint of a turn,
       // or a redraw that split the line. Worth showing if nothing better turns

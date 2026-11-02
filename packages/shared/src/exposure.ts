@@ -255,6 +255,7 @@ export const EXPOSURE_THRESHOLD: Record<string, string> = {
   B5: "the workflow token default became write",
   B6: "the organisation's 2FA requirement changed",
   B7: "a repo with dependency manifests and no Dependabot config",
+  B8: "an open code-scanning security alert (high or critical, or open over 14 days)",
   C1: "the published npm package no longer verifies",
   C2: "a release asset or the APK signer does not match",
   C3: "the Marketplace listing is behind the latest release or unlisted",

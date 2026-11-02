@@ -5,6 +5,23 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.16
+
+### New
+
+- **Exposure watch reads code-scanning alerts.** CodeQL's open alerts on a watched repo now reach the watch, one row for each rule (a rule that fired 13 times is one row). High or critical alerts, and any open over 14 days, raise an alert. A repo with code scanning switched off is never nagged.
+- **The findings-only cut says what it hides.** Over open medium advisories it now gives the number of rows to consider, instead of saying the rest of the checklist is hidden.
+
+### Fixed
+
+- The context meter no longer stalls on a long screen row that repeats the word *context*. About 8 KB of it took roughly 10 seconds to read, and it is now linear.
+- The spinner phrase and the tray stats row are read in linear time, so a pathological line can no longer slow the session screen.
+- A front-matter line ending in CRLF is still not read as a key line, and it no longer costs polynomial time.
+
+### Security
+
+- The VS Code extension's `follow-redirects` is updated to 1.16.2 (GHSA-mrwp-f3q8-3g9p).
+
 ## 0.1.15
 
 ### New

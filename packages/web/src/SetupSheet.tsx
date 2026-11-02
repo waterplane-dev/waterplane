@@ -631,7 +631,7 @@ function SetupRegion({
           {cut && (
             <div className="section filter-bar">
               <span className="filter-bar-txt">
-                {findingsCutWords(rows.length, allRows.length)}
+                {findingsCutWords(rows.length, allRows.length, kind === "watch" ? xcut.digest.length : allRows.filter(isSetupConsider).length)}
                 {elsewhere > 0 && <> · <button className="link-btn" onClick={onElsewhere}>
                   {cutElsewhereWords(elsewhere, kind === "watch" ? "setup" : "watch")}</button></>}
               </span>

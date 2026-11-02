@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 - 2026-11-02
+
+- **Long or odd lines no longer stall the extension.** Reading a markdown file's front matter, or the activity and stats lines of a running session, could slow to a crawl on a very long line with a repeating pattern. These lines are now read in a single pass, so the time depends only on their length. Results for normal input are unchanged.
+
 ## 0.9.0 - 2026-11-02
 
 0.8.0 and 0.7.0 were never published to the Marketplace; their changes ship here.

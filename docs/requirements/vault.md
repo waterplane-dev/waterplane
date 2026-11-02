@@ -1,7 +1,7 @@
 # vault
 
 ### R-vault-001 · shipped
-Plaintext credentials such as the gcloud login, Gemini API keys and Garmin session cookies are stored encrypted and released on demand only after fingerprint confirmation on the phone.
+Plaintext credentials such as the gcloud login, Gemini API keys and dashboard session cookies are stored encrypted and released on demand only after fingerprint confirmation on the phone.
 - asked: 2026-10-05
 - shipped: 36b98edb, de056f3a, acee58dd
 
@@ -80,7 +80,7 @@ Secrets moved in by the scan are released only to the repos they were found in, 
 - shipped: 5f1ff3cb
 
 ### R-vault-017 · shipped
-When two different values would get the same secret id, the ids carry the project name instead of a counter (`trading.gemini_api_key`, `billing.gemini_api_key`); a numeric suffix is the last resort.
+When two different values would get the same secret id, the ids carry the project name instead of a counter (`ledger-app.gemini_api_key`, `billing.gemini_api_key`); a numeric suffix is the last resort.
 - asked: 2026-10-12 (owner: "different projects might need different Gemini API keys")
 - shipped: 5f1ff3cb
 
@@ -96,7 +96,7 @@ A "projects & credentials" screen shows which projects reference which vault cre
 
 ### R-vault-020 · shipped
 After a secret is moved in with its originals kept, the person can see which programs read those originals (a script that sources the `.env`, a dotenv loader, a compose `env_file`, a package script, a launchd / systemd / cron starter) and which of them start by themselves and so cannot wait for a fingerprint. The list is found by names and paths only and never holds a value; when nothing is found it says to check by hand, never "none".
-- asked: 2026-10-12 (owner: after "remove original", Tiptoi's `run.sh` would export the literal reference)
+- asked: 2026-10-12 (owner: after "remove original", my-service's `run.sh` would export the literal reference)
 - shipped: 022320ee
 
 ### R-vault-021 · shipped
@@ -151,7 +151,7 @@ A fetch nobody answers tells the program after 90 s that its card stays (R-vault
 
 ### R-vault-031 · shipped
 A reference that names no secret in the vault can be pointed, from its flag on "projects & credentials", at a secret that is (ranked suggestion with the reason, e.g. a label naming the same env key), or the person is taken to store a key under that id; the line changes only after one fingerprint card naming the exact file, line and both ids, and only if the line still reads what the card showed.
-- asked: 2026-10-12 (owner: "assign keys to projects that don't have one yet, e.g. the Tiptoi Gemini key also to the learning helper")
+- asked: 2026-10-12 (owner: "assign keys to projects that don't have one yet, e.g. the first service's Gemini key also to the tutor app")
 - shipped: 8eff44eb 8150e74f e7aa1fb1 23c0f64f e83c3881
 
 ### R-vault-032 · shipped
@@ -264,7 +264,7 @@ The vault's screens share one row grammar and the app's theme tokens: a fact is 
 
 ### R-vault-052 · shipped
 A standing grant: "until I revoke" is the last entry of every release card's picker (never the default), also reachable from the CLI and the project window. It has no end until revoked from the phone or CLI; only its scope (never a value) is kept on disk, so after a desktop restart it is dormant and ONE re-arm card re-arms every dormant grant with one fingerprint. Every scope is visible and removable on that card before the fingerprint; a declined re-arm goes quiet (15 min) and the next request asks with an ordinary card; "lock now" ends standing grants for good.
-- asked: 2026-10-18 (owner: the trading service rang the phone 22 times in one morning)
+- asked: 2026-10-18 (owner: the ledger-app service rang the phone 22 times in one morning)
 - plan: STANDING-GRANT-PLAN.md
 - shipped: 4d60c3f3 8b1eb9d9 a5d8ae71 6e69beb2 d3bd292a 6064f010
 
@@ -282,37 +282,37 @@ Boot unlock without the phone: per secret, opt-in, off by default, macOS only. A
 
 ### R-vault-055 · shipped
 A standing grant is armed per secret: at boot the boot-unlocked secrets of a dormant scope re-arm without the phone, the rest wait for the card, which lists only the waiting ones and says how many are already armed ("3 of 10 armed at boot"); one row, one fate — revoking any part ends the whole standing grant.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 1)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 1)
 - plan: FOLLOWUPS-PLAN.md §1
 - shipped: 695184f7 cb01edb3 9ad5cc3f fbc2a492
 
 ### R-vault-056 · shipped
 `npm run restart` does not drop armed standing grants: they cross it in memory through a short-lived, detached courier process (never a file, never the Keychain, never argv or the environment), taken by the new host once, ≤ 120 s, judged per secret against `standing.json`, and armed with no card and one decision row. A reboot, a crash, a missed window or `WP_VAULT_NO_HANDOFF=1` forgets them and the re-arm card asks; a refusal is said in words. Bounded grants and fetch leases are not handed over.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 2)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 2)
 - plan: FOLLOWUPS-PLAN.md §2
 - shipped: 695184f7 cb01edb3
 
 ### R-vault-057 · shipped
 A program started with `python -m X` is the program `X` (`uvicorn`, `backend`), not `__main__.py`: the vendored Python client (v2) reports the real module and the host names a `__main__.py` by its package directory. A stored `__main__.py` window entry is rewritten to its one reader's module name or dropped, said in words on the next card.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 3)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 3)
 - plan: FOLLOWUPS-PLAN.md §3
 - shipped: 2ae10fea 695184f7 cb01edb3
 
 ### R-vault-058 · shipped
 An ask a person started (`wp-secret grant`, boot unlock, re-arm, a login shown on the phone, and since 2026-10-25 every change typed at the desktop: store, remove, export, policy, assign, purge, restore, reset, practice) waits until answered or cancelled (24 h cap), not 90 s; its card says "waiting for you · since 10:12" with no countdown and how it ends; Ctrl-C in the CLI withdraws it as "cancelled from the desktop" and exits 130, and the CLI prints the host's "still waiting" lines. A program's ask keeps 90 s for the program (R-vault-080) and the backoff ladder.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 4)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 4)
 - plan: FOLLOWUPS-PLAN.md §4
 - shipped: eab7d1d3 db8b2e05 cb01edb3 fbc2a492
 
 ### R-vault-059 · shipped
 Once per host start, if a standing grant is still dormant after the hand-over and boot unlock, the host raises ONE re-arm card (a person wait, one notification) that says why it came (reboot, hand-over missed, partly armed); `wp-secret rearm` does it on request, joins a card already on the phone, and says "nothing is dormant" when there is none. Declined goes quiet as before.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 5)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 5)
 - plan: FOLLOWUPS-PLAN.md §5
 - shipped: db8b2e05 cb01edb3 fbc2a492
 
 ### R-vault-060 · shipped
 When the same secrets, project and program have asked three or more times in 24 h and the card offers "until I revoke", the card says so in one line with a verb that only picks that entry; nothing is ticked or approved by it. Known gap: the repo view's "asked N× today" line has no host field yet.
-- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 6)
+- asked: 2026-10-18 (owner: the ledger-app morning, follow-ups lesson 6)
 - plan: FOLLOWUPS-PLAN.md §6
 - shipped: cb01edb3 9ad5cc3f fbc2a492
 

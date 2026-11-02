@@ -38,7 +38,7 @@ import {
   a4Findings, applyAccepts, carryForward, exitCode, firstRunOff, installScriptReadings, mergeAdvisories, readLastRow, renderText, settingChanges, untilVersionProblem,
 } from "./exposure/core.mjs";
 import {
-  apkCertFinding, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings, npmAuditFindings,
+  apkCertFinding, codeScanningFindings, codeScanningUnavailable, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings, npmAuditFindings,
   npmPublishedFindings, npmVerifyFinding, osvFindings, osvQueries, parseGradleDeps, parsePyproject, parseLockfile,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
@@ -193,7 +193,7 @@ async function collectOther(dir, files, now) {
 /** B1-B7 from `gh api`. */
 async function collectGh(repoSlug, hasManifests, now) {
   const out = { findings: [], absent: [], settings: {} };
-  const gone = (why, unreachable) => { for (const m of ["B1", "B2", "B3", "B4", "B5", "B6"]) out.absent.push(absent(m, why, unreachable)); };
+  const gone = (why, unreachable) => { for (const m of ["B1", "B2", "B3", "B4", "B5", "B6", "B8"]) out.absent.push(absent(m, why, unreachable)); };
   const repo = src.ghApi(`repos/${repoSlug}`);
   if (!repo.ok) { gone(`gh api repos/${repoSlug}: ${repo.why}`, repo.unreachable); return out; }
   if (!repo.data) { gone(`repo ${repoSlug} not found or not visible to this token`, false); return out; }
@@ -236,6 +236,14 @@ async function collectGh(repoSlug, hasManifests, now) {
   const al = src.ghApi(`repos/${repoSlug}/dependabot/alerts?state=open&per_page=100`);
   if (al.ok) out.findings.push(...dependabotFindings(al.data ?? [], now));
   else out.absent.push(absent("B1", `Dependabot alerts: ${al.why}`, al.unreachable));
+  // B8: what code scanning found. No analysis yet (404) or no code scanning on this repo (403) is a
+  // SETTING, not a gap in the reading — a repo without CodeQL is not nagged here — and as a setting
+  // it alerts the day a repo that had code scanning stops having it.
+  const cs = src.ghApi(`repos/${repoSlug}/code-scanning/alerts?state=open&per_page=100`);
+  if (cs.ok && cs.data) { out.settings.B8 = "code scanning on"; out.findings.push(...codeScanningFindings(cs.data, now)); }
+  else if (cs.ok) out.settings.B8 = "no code scanning analysis on this repo";
+  else if (codeScanningUnavailable(cs.why)) out.settings.B8 = "code scanning is not enabled on this repo";
+  else out.absent.push(absent("B8", `code-scanning alerts: ${cs.why}`, cs.unreachable));
   if (/^scanning on/.test(out.settings.B2 ?? "")) {
     const ss = src.ghApi(`repos/${repoSlug}/secret-scanning/alerts?state=open&per_page=100`);
     if (ss.ok) out.findings.push(...secretScanningFindings(ss.data ?? []));
@@ -457,7 +465,7 @@ async function cmdRun(argv) {
   const hasManifests = files.some((f) => /(^|\/)(package\.json|build\.gradle(\.kts)?|pyproject\.toml)$/.test(f));
   let settings = wantB ? {} : { ...(prev?.readings?.settings ?? {}) }; // a run without B carries the last B/C1 baseline
   if (o.gh && wantB) { const g = await collectGh(o.gh, hasManifests, nowD); parts.push(g); settings = { ...g.settings }; }
-  else if (wantB) parts.push({ findings: [], absent: ["B1", "B2", "B3", "B4", "B5", "B6", "B7"].map((m) => absent(m, "no --gh given")) });
+  else if (wantB) parts.push({ findings: [], absent: ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"].map((m) => absent(m, "no --gh given")) });
   if (o.npm && want("C1")) { const c = collectNpmPublished(o.npm); parts.push(c); Object.assign(settings, c.readings); }
   if (o.vscode && want("C3")) parts.push(await collectMarketplace(dir, o.vscode, o["vscode-manifest"], nowD));
   if (o["release-repo"] && want("C2")) parts.push(collectRelease(o["release-repo"], o["apk-cert"]));

@@ -338,6 +338,24 @@ export function stripSessionIds(path, text) {
 }
 
 /**
+ * ESLint's bulk-suppressions file (`eslint-suppressions.json`, the ratchet over the regexp ReDoS
+ * rules) keyed by file path, cut to the paths the snapshot publishes. An entry for a file that is
+ * not there would not break the public lint (ESLint ignores it), but its KEY names a private file —
+ * the vault extension's among them. Returns the new text (ESLint's own 2-space format, no trailing
+ * newline) and the number of entries dropped.
+ */
+export function publicSuppressions(text, isPublic) {
+  const all = JSON.parse(text);
+  const kept = {};
+  let dropped = 0;
+  for (const [path, rules] of Object.entries(all)) {
+    if (isPublic(path)) kept[path] = rules;
+    else dropped++;
+  }
+  return { text: JSON.stringify(kept, null, 2), dropped };
+}
+
+/**
  * Re-point links at files published somewhere else (the videos: too big to carry in the
  * public repo's history). `host(repoPath)` answers the URL for a path that is hosted, else null.
  * Every `](target)` and `[ref]: target` outside fences and code spans is considered, resolved

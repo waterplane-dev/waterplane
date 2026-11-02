@@ -546,6 +546,52 @@ export function secretScanningFindings(alertsJson) {
   return out;
 }
 
+/**
+ * B8 findings from `GET /repos/{r}/code-scanning/alerts?state=open`: one per (tool, rule), because a
+ * rule that fires 13 times is one thing to fix, not 13. Only SECURITY results count — an alert whose
+ * rule carries `security_severity_level` — so a code-quality note never reaches the watch. Scorecard's
+ * own uploads are skipped: its checks are read as Scorecard scores already, and would arrive twice.
+ * Alert when high/critical or the oldest is open over 14 days (B1's line); else digest.
+ */
+export function codeScanningFindings(alertsJson, now = new Date()) {
+  const groups = new Map();
+  for (const a of Array.isArray(alertsJson) ? alertsJson : []) {
+    if (a.state && a.state !== "open") continue;
+    const tool = a.tool?.name ?? "code scanning";
+    const rule = a.rule?.id;
+    const severity = sev(a.rule?.security_severity_level);
+    if (!rule || !severity || /^scorecard$/i.test(tool)) continue;
+    const id = `${tool}:${rule}`;
+    const g = groups.get(id) ?? { tool, rule, severity, oldest: Infinity, where: [], count: 0, desc: a.rule?.description };
+    if (SEV_ORDER.indexOf(severity) > SEV_ORDER.indexOf(g.severity)) g.severity = severity;
+    const at = Date.parse(a.created_at ?? "");
+    if (Number.isFinite(at) && at < g.oldest) g.oldest = at;
+    const loc = a.most_recent_instance?.location;
+    if (loc?.path) g.where.push(`${loc.path}${loc.start_line ? `:${loc.start_line}` : ""}`);
+    g.count++;
+    groups.set(id, g);
+  }
+  return [...groups.values()].map((g) => {
+    const days = Number.isFinite(g.oldest) ? Math.floor((new Date(now) - g.oldest) / DAY) : 0;
+    const where = g.where.length ? ` at ${g.where.slice(0, 3).join(", ")}${g.where.length > 3 ? ` and ${g.where.length - 3} more` : ""}` : "";
+    return finding({
+      measure: "B8", subject: `${g.tool.toLowerCase()}:${g.rule}`, severity: g.severity,
+      level: isHigh(g.severity) || days > 14 ? "alert" : "digest",
+      text: `${g.tool} ${g.rule}${g.desc ? ` (${g.desc})` : ""}: ${g.count} open alert${g.count === 1 ? "" : "s"}${where}, ${g.severity}, oldest open ${days} day${days === 1 ? "" : "s"}.`,
+      sources: ["code scanning"],
+    });
+  });
+}
+
+/**
+ * Whether a failed code-scanning read means "this repo has no code scanning" rather than "the read
+ * broke": GitHub answers 403 when Advanced Security is off (a private repo on a free plan) or code
+ * scanning was never enabled. That is a setting, not a missing reading.
+ */
+export function codeScanningUnavailable(why) {
+  return /HTTP 403/.test(String(why ?? "")) && /Advanced Security|code scanning is not enabled|not enabled for this repository/i.test(String(why));
+}
+
 // ---- end of life ------------------------------------------------------------------------------
 
 /**

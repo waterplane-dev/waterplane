@@ -83,7 +83,7 @@ test("workflow run: line (#18) captures what the old regex captured", () => {
     assert.equal(runStepOf(line), re.exec(line)?.[1] ?? null, JSON.stringify(line));
   }
   fast(() => runStepOf("\t".repeat(BIG) + "x"), "leading");
-  fast(() => runStepOf("run: x" + "\t".repeat(BIG) + " "), "trailing");
+  fast(() => runStepOf("run: x" + "\t".repeat(BIG) + "\u2028"), "trailing");
 });
 
 test("script description (#19) captures what the old regex captured", () => {
@@ -107,4 +107,54 @@ test("CLI version (#22) is the first d.d.d, fast on a dotless run of digits", ()
 test("fixture grid row trim (#21) is trimEnd — the same class as \\s+$", () => {
   for (const r of ["a  ", "a\t 　", "  a", "a﻿", ""]) assert.equal(r.trimEnd(), r.replace(/\s+$/, ""));
   fast(() => maskGrid("\t".repeat(BIG) + "x", () => true), "maskGrid");
+});
+
+// Alerts 57–60: the spinner phrase, the tray stats row and the frontmatter key line.
+import { gerundPhrases, trayStats } from "../dist/working.js";
+import { keyLine } from "../dist/yamlfront.js";
+
+/** Seeded random strings over an alphabet that hits every branch of the old regexes. */
+function* randomStrings(alphabet, n, seed = 7) {
+  let x = seed;
+  const rnd = () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < n; i++) {
+    const len = Math.floor(rnd() * 24);
+    let s = "";
+    for (let j = 0; j < len; j++) s += alphabet[Math.floor(rnd() * alphabet.length)];
+    yield s;
+  }
+}
+
+test("gerundPhrases (#59 PHRASE_RE, #60 PHRASE_OBJ_RE) lists every match the old regexes did", () => {
+  const OLD = /([A-Za-z][A-Za-z'-]*ing)\s*(?:…|\.\.\.)/g;
+  const OLD_OBJ = /([A-Za-z][A-Za-z'-]*ing(?:\s+[A-Za-z][A-Za-z'-]*){1,3})\s*(?:…|\.\.\.)/g;
+  const old = (re, s) => [...s.matchAll(re)].map((m) => m[1]);
+  const alphabet = ["ing", "ing", "a", "B", "'", "-", " ", "\t", "…", ".", "...", "x", "(", "✻"];
+  const fixed = ["✽Bloviating…", "│ ✻ Vibing… (3s)", "Compacting conversation… (35s)", "-'Doing...x", "ing…", "Xing…Ying…",
+    "Saving is off — inherited CL…", "Reading a b c d…", "Reading a b c…", "Going  ...", "Going ..", "'-'ing…"];
+  for (const s of [...fixed, ...randomStrings(alphabet, 20000)]) {
+    assert.deepEqual(gerundPhrases(s), old(OLD, s), JSON.stringify(s));
+    assert.deepEqual(gerundPhrases(s, true), old(OLD_OBJ, s), JSON.stringify(s));
+  }
+  fast(() => gerundPhrases("A".repeat(BIG)), "gerundPhrases");
+  fast(() => gerundPhrases("Aing " + "A ".repeat(BIG), true), "gerundPhrases objects");
+});
+
+test("trayStats (#58) answers what TRAY_STATS_RE did", () => {
+  const OLD = /(?:^|\s)\d+(?:\.\d+)?\s*[smh](?:\s+\d+\s*[sm])*\s+·\s+[↓↑]\s*[\d.,]+\s*[km]?\s+tokens?\s*$/i;
+  const alphabet = ["1", "2.5", "h", "m", "s", "M", " ", "\t", "·", "↓", "↑", "159.4", "k", "tokens", "token", "x", ","];
+  const fixed = ["◯ general-purpose  Investigating… 11m 17s · ↓ 159.4k tokens", "11m 17s · ↓ 159.4k tokens", "1.5h · ↑ 3 tokens",
+    "x1.5m · ↓ 2 tokens", "2h 3h · ↓ 1 tokens", "3m · ↓ 1k · ↓ 2 tokens", "3m ·↓ 1 tokens", "3 M  ·  ↓ 1,200 K TOKENS  "];
+  for (const s of [...fixed, ...randomStrings(alphabet, 40000, 11)]) assert.equal(trayStats(s), OLD.test(s), JSON.stringify(s));
+  fast(() => trayStats("0h" + "\t0m\t".repeat(BIG)), "trayStats");
+});
+
+test("keyLine (#57) answers what KEY_LINE did, value read trimmed", () => {
+  const OLD = /^([A-Za-z0-9_][\w.-]*|"[^"]*"|'[^']*')[ \t]*:(?:[ \t]+(.*))?[ \t]*$/;
+  const old = (s) => { const m = OLD.exec(s); return m ? [m[1], (m[2] ?? "").trim()] : null; };
+  const now = (s) => { const m = keyLine(s); return m ? [m[0], m[1].trim()] : null; };
+  const alphabet = ["name", "0", "_", ".", "-", ":", " ", "\t", "\"", "'", "a b", "\r", "\u2028", "x", "#"];
+  const fixed = ["name: x", "name:", "name:x", "\"a: b\": c", "'q' :  v  ", "name: x\r", "name:\t\t", "-x: y", "name :\t"];
+  for (const s of [...fixed, ...randomStrings(alphabet, 30000, 5)]) assert.deepEqual(now(s), old(s), JSON.stringify(s));
+  fast(() => keyLine("0:" + "\t".repeat(BIG) + "\r"), "keyLine");
 });

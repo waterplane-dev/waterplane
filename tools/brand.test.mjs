@@ -90,6 +90,9 @@ const CURRENT_NAME_ALLOWED = [
   // modules under its cli/ dir): it cannot import the TS BRAND and finds the state dir by
   // the same rule as branddirs.ts. The vault's vendored Python client (cli/client/*.py) likewise.
   (p) => /^packages\/extensions\/[^/]+\/cli\/(?:[^/]+\/)*[^/]+\.(?:mjs|py)$/.test(p),
+  // The release train (private, kept out of the public snapshot): a shell script and a script
+  // run before anything is built, naming the public repo, the sibling clones and the state file.
+  (p) => p === "scripts/release/train.sh" || p === "scripts/release/train-bump.mjs",
   (p) => p.startsWith("packages/host/templates/"), // copied verbatim into a person's new repo; cannot import BRAND        // diagrams: prose drawn as a picture, cannot import BRAND
   // Test fixtures: a test pins a name as a person would type it or find it on
   // disk; one that derived its expectation from BRAND could not catch BRAND

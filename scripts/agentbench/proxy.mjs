@@ -19,6 +19,6 @@ http.createServer((req, res) => {
       res.writeHead(r.status, Object.fromEntries([...r.headers].filter(([k]) => !["content-encoding", "content-length", "transfer-encoding"].includes(k))));
       if (r.body) for await (const c of r.body) res.write(c);
       res.end();
-    } catch (e) { res.writeHead(502); res.end(String(e)); }
+    } catch (e) { console.error(e); res.writeHead(502, { "content-type": "text/plain" }); res.end("upstream request failed\n"); }
   });
 }).listen(PORT, "127.0.0.1");

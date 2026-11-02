@@ -83,3 +83,11 @@ The public OpenSSF Scorecard for waterplane shows no vulnerability finding: know
 - asked: 2026-10-30
 - shipped: 62ceb852, f90544c3
 
+
+### R-security-018 · shipped
+The exposure watch lists a repo's open code-scanning security alerts (CodeQL and other tools, never Scorecard's own uploads or code-quality notes) as one row per rule with its count and locations; high and critical, or one open over 14 days, are alerts, the rest are to consider. A repo with no code scanning is said as a setting, never as a gap, and a repo that loses code scanning is reported. The findings-only cut of the readings says how many rows to consider it hides.
+- asked: 2026-11-02
+
+### R-security-019 · shipped
+A regular expression that can backtrack super-linearly (the ReDoS class GitHub's CodeQL reports as polynomial-redos) fails lint at commit and push time, in private code too, before it reaches a release. The existing ones are a recorded baseline that may only shrink. The public copy of that baseline never names a private file.
+- asked: 2026-11-02

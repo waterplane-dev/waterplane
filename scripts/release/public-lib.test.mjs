@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
-  rewriteHostedLinks, stripSessionIds,
+  publicSuppressions, rewriteHostedLinks, stripSessionIds,
   isTargetGit, npmTarballProblems, parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
 } from "./public-lib.mjs";
 
@@ -303,4 +303,18 @@ test("isTargetGit: the root .git is the target's, as a clone's directory or a wo
   assert.equal(isTargetGit(".git"), true, "a linked worktree's .git FILE is never deleted");
   assert.equal(isTargetGit(".git/HEAD"), true);
   for (const p of [".gitignore", ".gitattributes", ".github/workflows/ci.yml", "a/.git", "a/.git/HEAD", ".gitx"]) assert.equal(isTargetGit(p), false, p);
+});
+
+test("publicSuppressions: keeps the published paths' entries untouched, drops the rest, ESLint's format", () => {
+  const all = {
+    "packages/shared/src/a.ts": { "regexp/no-super-linear-move": { count: 2 } },
+    "packages/extensions/vault/host/x.mts": { "regexp/no-super-linear-backtracking": { count: 1 } },
+    "scripts/reach-dashboard.mjs": { "regexp/no-super-linear-move": { count: 3 } },
+  };
+  const pub = new Set(["packages/shared/src/a.ts"]);
+  const r = publicSuppressions(JSON.stringify(all, null, 2), (p) => pub.has(p));
+  assert.equal(r.dropped, 2);
+  assert.deepEqual(JSON.parse(r.text), { "packages/shared/src/a.ts": all["packages/shared/src/a.ts"] });
+  assert.ok(!r.text.includes("vault"));
+  assert.equal(r.text, JSON.stringify(JSON.parse(r.text), null, 2));
 });

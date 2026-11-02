@@ -1,0 +1,601 @@
+{
+  "packages/extensions/desktop/web/words.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/extensions/scorecard/host/gitslug.mts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/extensions/scorecard/shared/logic.mts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 2
+    }
+  },
+  "packages/host/src/apkcheck.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 4
+    }
+  },
+  "packages/host/src/artifacts.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 2
+    },
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/assess/hassutil.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/backends/claude-endpoint.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/backends/claude-local.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/binguard.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/branddirs.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/capture/captureconfig.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/capture/capturehelpers.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/cli/windows.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 4
+    }
+  },
+  "packages/host/src/clifixtures.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/compliance.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/context.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 4
+    },
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/ctxlog/ctxcursor.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/dictate.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/discover.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/echo.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/exposurewatch.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/files.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/git.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 2
+    }
+  },
+  "packages/host/src/halt.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "packages/host/src/keyhints.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/localrt.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/localusage.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/naming.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/netlog.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/ocrlocal.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/onboard.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/optins.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/peers/serve.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/plugins/pluginapi.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/plugins/plugintoolkit/screen.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/prompt.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 4
+    }
+  },
+  "packages/host/src/promptbase.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "packages/host/src/promptnav.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/prompts.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/prpush.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/pushverdict.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/render.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/repohealthapproval.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    },
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/repohealthscopes.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/scaffold.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/screenlog.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/secrets.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/sessions/boxes.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/host/src/shelllinks.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 2
+    },
+    "regexp/no-super-linear-move": {
+      "count": 3
+    }
+  },
+  "packages/host/src/shells.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/sidecar/sidecarroute.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/signkey.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "packages/host/src/sysstat.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "packages/host/src/themeoverlay.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/tmuxreq.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/update.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 3
+    }
+  },
+  "packages/host/src/updates/apply.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/updates/catalog.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/host/src/updates/checker.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/host/src/updates/github.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/shared/src/buildscan.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/shared/src/healthindex/score.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/healthindex/words.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/itempaths.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/naming.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/slash.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/themeoverlay.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 4
+    }
+  },
+  "packages/shared/src/transcriptfold.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/urls.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/shared/src/working.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/web/src/Confirm.tsx": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/web/src/FanoutSheet.tsx": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/Markdown.tsx": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 6
+    },
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/web/src/RepoHealthRegion.tsx": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/Terminal.tsx": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/TextDumpLines.tsx": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/activity/activityTriage.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/budgetInput.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "packages/web/src/buildLogPrompt.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/core/compose/useCompose.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/core/launcher/model.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/web/src/demo/host/cli.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/demo/host/desk.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/deviceInfo.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 6
+    }
+  },
+  "packages/web/src/features/clipboard/logic.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/features/codeFolder/logic.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/features/demoTour/logic.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/web/src/features/peers/logic.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "packages/web/src/features/plugins/logic.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/fileRefs.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 10
+    }
+  },
+  "packages/web/src/hints.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/secretAsk.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "packages/web/src/useVoice.ts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/brand-assets.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/claude-stub-tui.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/gen-plugin-docs.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 3
+    }
+  },
+  "scripts/guards/guards.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/probe-claude-local.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/release/build.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "scripts/release/public-lib.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 5
+    }
+  },
+  "scripts/site/site-lib.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "tools/demo-scenario.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "tools/exposure.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "tools/exposure/parse.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    },
+    "regexp/no-super-linear-move": {
+      "count": 4
+    }
+  },
+  "tools/repohealth/html.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "tools/repohealth/judge.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 2
+    }
+  },
+  "tools/repohealth/packs/python.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "tools/repohealth/packs/typescript.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 2
+    }
+  },
+  "tools/repohealth/readings.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "tools/repohealth/scope.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "tools/screenfixtures.mjs": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
+  "tools/skillmap.mjs": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  }
+}

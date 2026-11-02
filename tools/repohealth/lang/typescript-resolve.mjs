@@ -253,7 +253,9 @@ function lookupMap(map, sub) {
     const post = k.slice(star + 1);
     if (sub.startsWith(pre) && sub.endsWith(post) && sub.length >= pre.length + post.length) {
       const t = targetOf(v);
-      if (t) return t.replace("*", sub.slice(pre.length, sub.length - post.length));
+      // Node fills EVERY `*` of the target, and a `$` in the subpath is text,
+      // not a replace() pattern — hence split/join.
+      if (t) return t.split("*").join(sub.slice(pre.length, sub.length - post.length));
     }
   }
   return null;
@@ -313,7 +315,7 @@ export function resolveSpecifier(spec, fromPath, ctx) {
       if (best) {
         const { a } = best;
         const middle = a.star ? spec.slice(a.prefix.length, spec.length - a.suffix.length) : "";
-        const candidates = a.targets.map((t) => normalise(a.star ? t.replace("*", middle) : t)).filter((t) => t !== null);
+        const candidates = a.targets.map((t) => normalise(a.star ? t.split("*").join(middle) : t)).filter((t) => t !== null);
         return { internal: true, candidates };
       }
     }

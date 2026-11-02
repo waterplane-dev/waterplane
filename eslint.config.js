@@ -6,6 +6,7 @@
 // What is here is the set of rules that catch things tsc cannot see.
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
+import regexp from "eslint-plugin-regexp";
 import local from "./tools/eslint/rules.js";
 
 /** Files that legitimately own a global the rest of the app must not touch. */
@@ -176,6 +177,25 @@ export default tseslint.config(
     },
     rules: {
       "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: false }],
+    },
+  },
+  // ReDoS before release. GitHub's CodeQL scans only the PUBLIC mirror, so a regex that backtracks
+  // badly is reported after it ships, and private-only code is never scanned (CodeQL's licence
+  // does not cover a local run over this private repo). These two rules catch the same class as
+  // CodeQL's js/polynomial-redos (4 of the mirror's alerts #53–#60), at commit and push time.
+  // Scope mirrors .github/workflows/codeql.yml's paths-ignore: tests and e2e scripts are out.
+  {
+    files: ["packages/**/*.{ts,tsx,mts,js,mjs}", "tools/**/*.{mjs,js}", "scripts/**/*.{mjs,js}"],
+    // ocr/assets is vendored, minified tesseract.
+    ignores: ["**/*.test.{mjs,mts,js}", "**/test/**", "**/fixtures/**", "scripts/e2e-*.mjs", "packages/extensions/ocr/assets/**"],
+    plugins: { regexp },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      "regexp/no-super-linear-backtracking": "error",
+      "regexp/no-super-linear-move": "error",
     },
   },
   // DemoHost's core is DOM-free and node-runnable (docs/analysis/demo-mode-plan.md

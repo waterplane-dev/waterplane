@@ -36,7 +36,7 @@ A script reports when screen fixtures are out of date with the CLI screens they 
 - shipped: 9156e413
 
 ### R-ci-cd-009 · shipped
-Public-tree code never names the private vault extension, so the pre-push check passes and the push goes through.
+Public-tree code never names the experimental vault extension (not shipped by default), so the pre-push check passes and the push goes through.
 - asked: 2026-10-16
 - shipped: 1ae14bba
 

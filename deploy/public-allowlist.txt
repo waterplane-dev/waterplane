@@ -60,6 +60,7 @@ site/**
 /package-lock.json
 /tsconfig.base.json
 /eslint.config.js
+/eslint-suppressions.json
 /.gitignore
 /.env.example
 /.editorconfig
@@ -96,6 +97,9 @@ deploy/release-pubkey.pem
 # Scripts that are this desktop's, not the project's: Bitwarden item names and
 # the key's path on this machine.
 !scripts/sync-gemini-key.sh
+# The release train button: names the signing wrapper and vault ids on this desktop.
+!scripts/release/train.sh
+!scripts/release/train-bump.mjs
 # The owner's reach stats (traffic archive + its dashboard): this desktop's numbers about its own
 # repos and apps, not the project's (owner decision, 2026-10-25). The note lives in docs/reach.md.
 !scripts/traffic-archive.mjs
@@ -115,6 +119,13 @@ deploy/release-pubkey.pem
 # 2026-10-05). The generic keystore bridge it uses (ShellKeystorePlugin.java,
 # nativeKeystore.ts) is public and names none of it (vault/publictree.json).
 !packages/extensions/vault/**
+# To flip the vault public: delete the `!packages/extensions/vault/**` line above, run
+# `node scripts/verify-public-tree.mjs --rev HEAD`, then `scripts/release/publish-public.mjs --dry-run`.
+# The carve-outs below stay AFTER the flip (last match wins, so they narrow whatever the include
+# lets through): build briefs with owner material, and the throwaway measurement code.
+!packages/extensions/vault/docs/*-PLAN.md
+!packages/extensions/vault/docs/FOLLOWUPS-REVIEW.md
+!packages/extensions/vault/spike/**
 # The disk-space extension (deletes caches, build output and models on this desktop)
 # stays PRIVATE (owner decision, 2026-10-07): a tool for this machine, not the project.
 # Public code names none of it (diskspace/publictree.json).

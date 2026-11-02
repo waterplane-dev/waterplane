@@ -920,7 +920,7 @@ ones, and a store file that is not a regular file stops it too — never a value
 in a message. `bundlePlayRelease` / `assemblePlayRelease` without any Play key
 stops with a message naming all of this — never an unsigned artifact.
 
-**Keys from the vault (`wp-secret`, the private vault extension).** No key or
+**Keys from the vault (`wp-secret`, the experimental vault extension, not shipped by default).** No key or
 password then sits on disk in clear: the keystore and its passwords are vaulted,
 and released per build with a fingerprint on the phone.
 

@@ -542,7 +542,10 @@ function readingLineOf(s: SeriesSubject): string | null {
  * because a list that silently shows a subset is a list claiming the rest does
  * not exist — and it carries the only way back out.
  */
-export function findingsCutWords(shown: number, all: number): string {
+export function findingsCutWords(shown: number, all: number, consider = 0): string {
+  // Rows to CONSIDER are open too, just not counted: "the rest of the checklist" read as
+  // "passing", and a medium advisory sat behind it unsaid. So the cut names them.
+  if (consider > 0) return `${shown} of ${all} — open findings only; ${consider} to consider and the rest of the checklist are hidden`;
   return `${shown} of ${all} — open findings only, the rest of the checklist is hidden`;
 }
 

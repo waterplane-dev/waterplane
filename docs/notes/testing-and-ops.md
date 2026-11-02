@@ -220,6 +220,19 @@ see:
   wrote and whatever a tool returned.
 - **`max-lines`** at 900, as a WARNING. The point is noticing growth, not blocking a module that is
   large because its problem is.
+- **`regexp/no-super-linear-backtracking` + `regexp/no-super-linear-move`** (`eslint-plugin-regexp`,
+  2026-11-02) — ReDoS, as a RATCHET. GitHub's CodeQL scans only the public mirror, so a regex that
+  backtracks badly is reported after it has shipped, and private-only code is never scanned. Running
+  CodeQL ourselves before the push was the obvious fix and is not allowed: its licence
+  (`github/codeql-cli-binaries` LICENSE.md) permits automated analysis only of a codebase released
+  under an OSI licence and hosted on GitHub.com, and names code in a private repo as what it does not
+  cover. These two rules found all four `js/polynomial-redos` sites of alerts #57–#60 in the
+  pre-fix code. The 372 hits already in the tree are ESLint bulk suppressions
+  (`eslint-suppressions.json`, counted per file and rule): a NEW hit fails lint, and so does a FIXED
+  one until `npx eslint . --prune-suppressions` lowers the count, so the number only goes down. Tests,
+  e2e scripts and fixtures are out of scope, as they are for the public CodeQL scan. The publisher
+  drops the private files' entries from the public copy (`publicSuppressions`, `public-lib.mjs`):
+  ESLint ignores an entry for a missing file, but the key would name it.
 
 A genuinely special case takes an inline `eslint-disable-next-line … -- reason`, never a file-level
 exemption, so the carve-out is visible where it is taken. There are five, all in `web/`: two object

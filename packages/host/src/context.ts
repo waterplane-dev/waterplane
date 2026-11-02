@@ -69,7 +69,16 @@ function onMeterRow(text: string, at: number): boolean {
  * Deliberately not built from `PCT_RES`/`RATIO_RE`: a gate derived from the
  * matchers it is meant to check on can never disagree with them.
  */
-const METER_GATE_RE = /[^\n]*\bcontext\b[^\n]*\b(?:left|remaining|free|window|used|auto-?compact)\b[^\n]*/gi;
+// Two anchored tests per row, never one `[^\n]*context[^\n]*\b(?:…)\b[^\n]*` sweep over the text:
+// that form is retried from every column of a row that fails it — cubic, ~1.3 s on one 4 KB row of
+// "context " words (found by packages/host/test/fuzz.test.js). Same rows pass: the word `context`,
+// then one of these words later on the same row.
+const METER_GATE_WORD_RE = /\bcontext\b/i;
+const METER_GATE_TAIL_RE = /\b(?:left|remaining|free|window|used|auto-?compact)\b/i;
+function onGateRow(line: string): boolean {
+  const m = METER_GATE_WORD_RE.exec(line);
+  return !!m && METER_GATE_TAIL_RE.test(line.slice(m.index + m[0].length));
+}
 
 /**
  * The words alone are not enough: the agent's own prose talks about "the
@@ -93,11 +102,11 @@ function isConversationRow(row: string): boolean {
 /** The last context-indicator row in the text, or null when there is none.
  *  Last, because a repaint-based TUI leaves older frames above the fresh one. */
 export function contextMeterRow(text: string): string | null {
-  const re = new RegExp(METER_GATE_RE.source, METER_GATE_RE.flags);
   let hit: string | null = null;
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    const row = m[0].trim();
-    if (row && METER_FIGURE_RE.test(row) && !isConversationRow(m[0])) hit = row;
+  for (const line of text.split("\n")) {
+    if (!onGateRow(line)) continue;
+    const row = line.trim();
+    if (row && METER_FIGURE_RE.test(row) && !isConversationRow(line)) hit = row;
   }
   return hit;
 }

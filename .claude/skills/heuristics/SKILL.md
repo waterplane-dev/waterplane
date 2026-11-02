@@ -149,7 +149,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   left until auto-compact: N%", "N% context left", "Context remaining: N%"), `RATIO_RE` ("123k/200k
   tokens"). **`leftPct` is percent FREE**, never percent used; `usedTok`/`totalTok`
   only when an absolute figure is printed; null when no shape matches. Its health gate
-  (`METER_GATE_RE`) is deliberately NOT built from the matchers it checks, so it can disagree with
+  (`onGateRow`, two anchored tests per row — the one-regex form was cubic) is deliberately NOT built from the matchers it checks, so it can disagree with
   them, and requires a figure on a non-conversation row. Pinned by e2e.
 - `packages/shared/src/claudeversion.ts` — `TESTED_CLAUDE_VERSION` (now `2.1.304`): the newest `claude`
   build a person last verified these heuristics against. **Bump it when you re-verify** (the owner's

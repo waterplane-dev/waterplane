@@ -33,7 +33,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
-  isTargetGit, parseAllowlist, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
+  isTargetGit, parseAllowlist, publicSuppressions, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
 } from "./public-lib.mjs";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -187,6 +187,15 @@ try {
     hostedLinks += b.n;
     if (b.text !== before) writeFileSync(abs, b.text);
   }
+  // The lint ratchet's suppressions are keyed by path: drop the private ones (publicSuppressions).
+  let suppressionsDropped = 0;
+  const supp = join(snapDir, "eslint-suppressions.json");
+  if (existsSync(supp)) {
+    const includedSet = new Set(included);
+    const s = publicSuppressions(readFileSync(supp, "utf8"), (p) => includedSet.has(p));
+    suppressionsDropped = s.dropped;
+    writeFileSync(supp, s.text);
+  }
 
   // 3. scans over the snapshot
   const emails = [
@@ -333,6 +342,7 @@ try {
 
   md.push("", "## Rewritten on the way out", "");
   md.push(`- Claude session ids: ${sessionIds} removed from ${sessionFiles.length} markdown file(s)`);
+  md.push(`- lint suppressions: ${suppressionsDropped} private file(s) dropped from eslint-suppressions.json`);
   if (!media) md.push("- hosted files: none (no deploy/public-media.json)");
   else {
     const bytes = [...hosted.values()].reduce((n, h) => n + h.size, 0);

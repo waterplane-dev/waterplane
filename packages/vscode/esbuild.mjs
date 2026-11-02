@@ -222,7 +222,20 @@ if (watch) {
   for (const c of configs) await (await context(c)).watch();
   console.log("watching…");
 } else {
-  const results = await Promise.allSettled(configs.map((c) => build(c)));
+  // WP_VSCODE_INPUTS=<file>: also write every source file the bundles read, one repo-relative path
+  // per line (node_modules left out). The release train reads it to tell whether the extension
+  // changed since the last release, since it bundles host/web/shared modules from source.
+  const inputs = process.env.WP_VSCODE_INPUTS;
+  const results = await Promise.allSettled(configs.map((c) => build(inputs ? { ...c, metafile: true } : c)));
   const failed = results.filter((r) => r.status === "rejected");
   if (failed.length) process.exit(1);
+  if (inputs) {
+    const repo = path.join(here, "..", "..");
+    const files = new Set();
+    for (const r of results) for (const f of Object.keys(r.value.metafile.inputs)) {
+      if (f.includes("node_modules") || f.includes(":")) continue;
+      files.add(path.relative(repo, path.join(process.cwd(), f)));
+    }
+    writeFileSync(inputs, [...files].sort().join("\n") + "\n");
+  }
 }

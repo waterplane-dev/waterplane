@@ -42,6 +42,7 @@ const SRC = /\.(?:[cm]?[jt]sx?|mts)$/;
  */
 const NAMED_OK = {
   "package-lock.json": "generated; base64 integrity hashes contain any two-letter prefix by chance",
+  "eslint-suppressions.json": "the lint baseline names files by path, private ones too; publish-public.mjs (publicSuppressions) drops every non-public entry from the snapshot",
   "tools/repohealth/fixture.json": "a recorded snapshot of this repository's own history (paths as they were), replayed by the repo-health tests",
 };
 
@@ -50,7 +51,9 @@ test("every private-extension carve-out is written the way the guards read it", 
   // `privateExtensions` and would silently drop out of every check below.
   for (const line of ALLOW.split("\n")) {
     const m = /^!packages\/extensions\/([^/\s]+)(\/.*)?$/.exec(line.trim());
-    if (m) assert.equal(m[2], "/**", `write the carve-out as \`!packages/extensions/${m[1]}/**\` so the guards read it`);
+    // A narrower carve-out INSIDE a folder (`!packages/extensions/x/docs/*-PLAN.md`: what stays private even
+    // after x goes public) is fine: a literal first segment and a deeper path. The folder-wide spelling is `/**`.
+    if (m && !/^\/[^*/\s]+\/.+/.test(m[2] ?? "")) assert.equal(m[2], "/**", `write the carve-out as \`!packages/extensions/${m[1]}/**\` so the guards read it`);
   }
 });
 

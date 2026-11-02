@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  ALLOW_LICENCES, apkCertFinding, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings,
+  ALLOW_LICENCES, apkCertFinding, codeScanningFindings, codeScanningUnavailable, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings,
   npmAuditFindings, npmPublishedFindings, osvFindings, osvQueries, parseGradleDeps, parseLockfile, parsePyproject,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
@@ -585,4 +585,43 @@ test("eraFindings: exit 0 nothing, 10 one alert per group, 2 unreachable, garbag
     const g = eraFindings(st, so, "");
     assert.deepEqual(g.findings, []); assert.equal(g.absent[0].measure, "D3"); assert.equal(g.absent[0].unreachable, true);
   }
+});
+
+const CS = (over = {}) => ({
+  number: 60, state: "open", created_at: "2026-10-24T00:00:00Z", tool: { name: "CodeQL" },
+  rule: { id: "js/polynomial-redos", description: "Polynomial regular expression used on uncontrolled data", security_severity_level: "high" },
+  most_recent_instance: { location: { path: "packages/shared/src/working.ts", start_line: 213 } },
+  ...over,
+});
+
+test("codeScanningFindings: one row per rule, security results only, Scorecard's uploads skipped", () => {
+  const rows = codeScanningFindings([
+    CS(), CS({ number: 59, most_recent_instance: { location: { path: "a.ts", start_line: 2 } } }),
+    CS({ number: 1, tool: { name: "Scorecard" }, rule: { id: "BranchProtectionID", security_severity_level: "high" } }),
+    CS({ number: 2, rule: { id: "js/unused-local-variable" } }), // a quality note: no security severity
+    CS({ number: 3, state: "dismissed" }),
+  ], NOW);
+  assert.equal(rows.length, 1);
+  const [f] = rows;
+  assert.equal(f.measure, "B8");
+  assert.equal(f.key, "B8:codeql:js/polynomial-redos");
+  assert.equal(f.level, "alert");
+  assert.match(f.text, /2 open alerts at packages\/shared\/src\/working\.ts:213, a\.ts:2, high/);
+  assert.deepEqual(codeScanningFindings({ message: "Not Found" }, NOW), [], "an error object is not a list");
+});
+
+test("codeScanningFindings: medium is digest while young, alert once the oldest is open over 14 days", () => {
+  const med = { id: "js/incomplete-sanitization", security_severity_level: "medium" };
+  const [young] = codeScanningFindings([CS({ rule: med })], NOW);
+  assert.equal(young.severity, "moderate");
+  assert.equal(young.level, "digest");
+  const [old] = codeScanningFindings([CS({ rule: med, created_at: "2026-10-01T00:00:00Z" }), CS({ rule: med })], NOW);
+  assert.equal(old.level, "alert");
+});
+
+test("codeScanningUnavailable: a repo without code scanning is a setting, any other failure is not", () => {
+  assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Advanced Security must be enabled for this repository to use code scanning."), true);
+  assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Code scanning is not enabled for this repository."), true);
+  assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Resource not accessible by personal access token"), false);
+  assert.equal(codeScanningUnavailable("gh api x: HTTP 502"), false);
 });
