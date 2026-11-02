@@ -472,3 +472,7 @@ The vault approval key also appears inside the session that needs approval, not 
 - asked: 2026-10-30
 - shipped: 0fd3168e
 
+### R-vault-093 · requested
+Secrets are stored only in the vault and do not appear in other places in the vault plugin.
+- asked: 2026-11-02
+

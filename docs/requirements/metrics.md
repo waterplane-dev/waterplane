@@ -222,3 +222,12 @@ Metrics such as page views have a refresh button that pulls fresh reach metrics 
 - asked: 2026-10-31
 - shipped: 26cf42c0
 
+### R-metrics-047 · shipped
+The phone runs a repo-health re-cut itself with a button, rather than requiring the desktop to do it.
+- asked: 2026-10-31
+- shipped: 6f82322f
+
+### R-metrics-048 · requested
+The BA3 web app counts usage in the same lightweight way as waterplane.dev, in addition to keeping Google Analytics.
+- asked: 2026-11-02
+

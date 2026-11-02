@@ -52,3 +52,13 @@ Changing the default level and thinking effort in the dialog applies only to the
 A feature's opt-in has a setup button in the opt-ins section, and that section is shown only when its opt-in is active.
 - asked: 2026-10-26
 
+### R-settings-012 · shipped
+Functionality that only a few people need is optional rather than shown to everyone.
+- asked: 2026-11-01
+- shipped: 817a950c, 61e88d21
+
+### R-settings-013 · shipped
+The app has a link to the auto setup management screen.
+- asked: 2026-10-31
+- shipped: ca20fc62
+

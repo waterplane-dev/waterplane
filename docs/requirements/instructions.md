@@ -48,3 +48,12 @@ The same list has a "this desktop" block: user CLAUDE.md, auto-memory, user and 
 VS Code's Always-on view shows the same repo rows and the "this desktop" block as the phone, with links to the session and all-sessions views.
 - asked: 2026-10-26
 - shipped: c6991a62, 8e6bee2a
+### R-instructions-011 · shipped
+Every agent backend (cloud Claude, Copilot, claude-local, opencode) receives the repo's project context: its instructions file, skills, and plugin text.
+- asked: 2026-10-31
+- shipped: 6e92af08, 2a7cbabf, eb84359b
+
+### R-instructions-012 · requested
+A repo can have a compact context file sized to a local model's context window, so local models get the project rules that fit.
+- asked: 2026-10-31
+

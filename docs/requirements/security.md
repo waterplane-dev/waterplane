@@ -91,3 +91,8 @@ The exposure watch lists a repo's open code-scanning security alerts (CodeQL and
 ### R-security-019 · shipped
 A regular expression that can backtrack super-linearly (the ReDoS class GitHub's CodeQL reports as polynomial-redos) fails lint at commit and push time, in private code too, before it reaches a release. The existing ones are a recorded baseline that may only shrink. The public copy of that baseline never names a private file.
 - asked: 2026-11-02
+### R-security-020 · shipped
+The Waterplane repo has no open CodeQL code-scanning or Dependabot alerts.
+- asked: 2026-11-02
+- shipped: a61a4b4a, 97a78c02
+

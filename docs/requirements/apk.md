@@ -100,6 +100,22 @@ In the sideloaded app, an app the person allowed to install itself updates with 
 The agent in a driven repo answers "does my app update itself" from waterplane's own chain (build button → auto-download → quiet install after the first; the install step lives on the Android apps extension's screen) and never from general Android knowledge, and can run the repo's build buttons itself so a build it makes reaches the phone like a tapped one.
 - asked: 2026-11-01
 
-### R-apk-021 · requested
-Getting a repo's Android app onto the phone and keeping it updated is one flow in one place with one set of words: a new user sees what is missing and fixes it from there, without having to find the build, download-rule, apps and setup screens separately.
+### R-apk-021 · shipped
+Getting a repo's Android app onto the phone and keeping it updated is one flow in one place with one set of words: a new user sees what is missing and fixes it from there. The auto-install control and the per-app Off state never contradict each other, so the user can tell at a glance whether a new build installs by itself or waits for a tap.
+- asked: 2026-11-01, 2026-11-01
+- shipped: fb82bd6c, c841e1cf
+
+### R-apk-022 · shipped
+The built APK carries the correct app name.
+- asked: 2026-10-31
+- shipped: dc16650e
+
+### R-apk-023 · shipped
+The feature is named for what it does: Android apps, automatic deploy and install of Android APKs, the only native app type supported right now, not a generic 'apps' feature.
 - asked: 2026-11-01
+- shipped: 297ef520
+
+### R-apk-024 · requested
+Each built APK carries a version identifier that increases with every build, so the installed version shows which build it is.
+- asked: 2026-11-01
+

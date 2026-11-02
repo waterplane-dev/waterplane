@@ -47,3 +47,8 @@ The README has a short, factual "Built with waterplane" section listing Little P
 - asked: 2026-10-30
 - shipped: 43f83eca
 
+### R-content-011 · shipped
+The OpenSSF best practices badge is shown on the Waterplane README.
+- asked: 2026-11-02
+- shipped: ca26b5fd
+

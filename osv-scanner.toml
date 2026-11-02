@@ -1,0 +1,10 @@
+# Read by osv-scanner (and so by OpenSSF Scorecard's Vulnerabilities check) for package-lock.json
+# next to it. One file per lockfile: osv-scanner only looks in the lockfile's own directory
+# (packages/app, packages/vscode and packages/app/android/gradle carry their own).
+# Ids, never a blanket package ignore, so a new advisory still surfaces. ignoreUntil makes the list
+# come back for review once upstream has had the chance to clear it.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31T00:00:00Z
+reason = "minimatch 3.1.5 (eslint 9) and 10.2.6 (@typescript-eslint/typescript-estree): dev-only lint tooling, not in the published package. The DoS needs an attacker-supplied glob; every pattern here comes from this repo's own eslint.config.js and tsconfig files. Clears when eslint and typescript-eslint move to minimatch >= 11.0.1 (an ESM-only major released 2026-10-27; no dependent has adopted it yet)"

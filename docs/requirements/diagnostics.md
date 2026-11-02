@@ -80,3 +80,8 @@ A CLI version with no fixture proof shows its screen signals as unverified rathe
 - asked: 2026-10-30
 - shipped: ba0afd09
 
+### R-diagnostics-018 · shipped
+The VS Code extension and the web app show the same repo-health data for a repo from one shared source, so the two never drift apart.
+- asked: 2026-11-02
+- shipped: 5065458f
+

@@ -61,3 +61,8 @@ An intent blocked for a reason the phone does not know shows a readable fallback
 - asked: 2026-10-30
 - shipped: 57c5dff7
 
+### R-reliability-015 · shipped
+Sessions stuck on errors (sign-in required, network send error, token limit) are handled by one generic recovery mechanism shared by all causes, and temporary technical errors retry automatically without user action.
+- asked: 2026-11-02
+- shipped: 0b84920e, a16bedbf, 59fead43
+

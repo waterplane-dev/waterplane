@@ -5,6 +5,12 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.17
+
+### Fixed
+
+- **A long build name no longer wraps one word per line in the build sheet.** The params line and the time line of a run row now sit under its name instead of beside it, so the name keeps the full row width.
+
 ## 0.1.16
 
 ### New

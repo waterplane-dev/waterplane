@@ -1,0 +1,10 @@
+# Read by osv-scanner (and so by OpenSSF Scorecard's Vulnerabilities check) for package-lock.json
+# next to it. The extension bundles its own modules with esbuild; this lockfile's dependencies are
+# the packaging tool (@vscode/vsce) and nothing from it lands in the .vsix.
+# Ids, never a blanket package ignore, so a new advisory still surfaces. ignoreUntil makes the list
+# come back for review once upstream has had the chance to clear it.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31T00:00:00Z
+reason = "minimatch 10.2.6 via @vscode/vsce: dev-only packaging tool, not in the .vsix. The DoS needs an attacker-supplied glob; vsce reads the patterns in this repo's own .vscodeignore. Clears when vsce moves to minimatch >= 11.0.1 (an ESM-only major released 2026-10-27; vsce 4.1.0 still pins ^10.2.6)"

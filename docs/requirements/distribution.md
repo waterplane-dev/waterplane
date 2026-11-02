@@ -214,3 +214,12 @@ Every build entry that produces an artifact lists the versions it produced in th
 FeedbackPlatform and realestatecalc are not made public; TalkingPictures is public.
 - asked: 2026-10-30
 
+### R-distribution-047 · shipped
+One wp build button runs the whole release train in order: next version and notes, media generation (an optional parameter, off by default, commits regenerated media with the release), tag, public mirror, GitHub release and APK, npm, VS Code extension, and site.
+- asked: 2026-11-02
+- shipped: 03d096ef, 353f8a66
+
+### R-distribution-048 · requested
+The release train also covers Google Play and the nom release.
+- asked: 2026-11-02
+

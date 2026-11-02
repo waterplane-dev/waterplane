@@ -39,5 +39,6 @@ The annotation toolbar wraps its buttons onto further lines or columns instead o
 - shipped: 4a5d043f
 
 ### R-toolbar-009 · shipped
-Every strip above the prompt bar (download progress, sign-in link, shell links, next prompt) has the same fold control in the same face; a folded strip is listed behind one counted button in the terminal's floating corner group, present only while something is folded, and a tap there brings it back.
+Every strip above the prompt bar (download progress, sign-in link, shell links, next prompt) has the same fold control in the same face; a folded strip is listed behind one counted button in the terminal's floating corner group, present only while something is folded, and a tap there brings it back. Closed or folded items can always be found and restored in one place.
 - asked: 2026-11-01
+

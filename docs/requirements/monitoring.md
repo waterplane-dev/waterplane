@@ -24,3 +24,8 @@ An agent's ordinary prose that mentions rate-limit or context-window wording, or
 - asked: 2026-10-30
 - shipped: af0f51d8, 0984ba89
 
+### R-monitoring-006 · shipped
+The phone's exposure watch shows CodeQL code-scanning findings alongside Dependabot ones.
+- asked: 2026-11-02
+- shipped: a7475671
+

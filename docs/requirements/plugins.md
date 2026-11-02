@@ -156,3 +156,8 @@ Codex works locally without any account sign-in.
 The GitHub Copilot plugin is published as a plugin marked as an unstable preview, and its repository becomes public once its audit is done, without further approval.
 - asked: 2026-10-23
 
+### R-plugins-034 · shipped
+Android apps are an optional feature, on only when the desktop has an Android repo unless the user explicitly chose on or off; users who do not build Android apps do not see it.
+- asked: 2026-11-01
+- shipped: 817a950c, 61e88d21
+

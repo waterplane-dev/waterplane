@@ -275,10 +275,15 @@ From the main view, one tap jumps straight to the session that is requesting app
 
 ### R-sessions-061 · shipped
 After a sign-out, one sign-in on the desktop is enough: the phone then ASKS to continue the stopped sessions ("continue all N") and nothing is typed into any of them before that tap. The offer appears only after the desktop confirms the account is signed in again; when it cannot tell, it says so and leaves the decision to the person. The sessions then continue one at a time, the first alone, never all at once.
-- asked: 2026-11-02 (owner)
+- asked: 2026-11-02 (owner), 2026-11-02
 - shipped: 55b4feb9, 59fead43
 
 ### R-sessions-062 · shipped
 No automatic recovery (usage-limit or spend-cap continue, network retry, sign-in continue) types over words a person has in the desktop composer: the continue waits, the session says so ("words in the composer at the desk"), and it is typed once the words are sent or cleared. A dim suggestion the composer proposes is not the person's words.
 - asked: 2026-11-02 (owner)
 - shipped: a16bedbf, 55b4feb9, b2981528
+### R-sessions-063 · shipped
+A session menu option copies the reference information for a coding session to the clipboard, optionally with the selected text.
+- asked: 2026-11-01
+- shipped: 505cf8ba
+

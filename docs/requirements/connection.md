@@ -147,3 +147,12 @@ When the user leaves a screen, its in-flight host request is cancelled so it doe
 A network outage retries as ONE wave per desktop: the first session whose retry is due types its continue alone, and the others wait without spending a try; once its reply comes back the rest follow a second apart, and if it fails they stay held until its next try. A held session says it is waiting for another session's retry (and who holds it), and work waiting on it reads as stalled while the holder's probe is stalled.
 - asked: 2026-11-02 (owner)
 - shipped: 59fead43
+### R-connection-028 · shipped
+Switching to a peer desktop that is on and reachable completes; after a switch the app works only against the new desktop and never claims to act on one that is off or unreachable. A failed switch says so in plain words and offers a way back.
+- asked: 2026-11-01, 2026-11-01
+- shipped: b57a7eef, 0d9cedcc
+
+### R-connection-029 · requested
+The desktop-switch banner names the desktop being switched to, not the one being left, and a slow repo load on the old desktop does not hold up the switch.
+- asked: 2026-11-01
+

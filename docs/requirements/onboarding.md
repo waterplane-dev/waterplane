@@ -142,3 +142,18 @@ The Opt-ins list remembers what the person already started in that repo: an offe
 A button in the app runs the full setup with AI.
 - asked: 2026-10-27
 
+### R-onboarding-025 · shipped
+Any repo waterplane drives can be made ready for Copilot and local models by a setup check and documented instructions: which context files to create and which model suits which task.
+- asked: 2026-10-31, 2026-10-31
+- shipped: 377d7daa, 5932c7d7
+
+### R-onboarding-026 · shipped
+New apps and new users get a clear setup journey for Android APK deploy, so they are not lost in the 'app' concept.
+- asked: 2026-11-01
+- shipped: fb82bd6c, ca20fc62
+
+### R-onboarding-027 · shipped
+A signed-out session tells a first-time user they can type /login in the text box and send it, with a one-tap sign-in button.
+- asked: 2026-11-02
+- shipped: 08e78c8f
+

@@ -56,3 +56,8 @@ Read mode does not scrape fragile slash commands like /btw; the reader shows a r
 The CLI / read mode toggle is visible on the backlog view.
 - asked: 2026-10-15
 
+### R-read-mode-013 · shipped
+Numbered lists in read mode show the correct sequential numbers, with nested bullets staying inside their item.
+- asked: 2026-11-01
+- shipped: 16c5ab8f
+

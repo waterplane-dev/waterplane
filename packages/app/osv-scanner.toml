@@ -1,0 +1,16 @@
+# Read by osv-scanner (and so by OpenSSF Scorecard's Vulnerabilities check) for package-lock.json
+# next to it. The Android shell's only dependencies are the Capacitor toolchain that runs on the
+# dev box; nothing in this lockfile ships in the APK (the APK is the Vite bundle plus Capacitor's
+# Java runtime, pinned in android/gradle/verification-metadata.xml, which has its own config).
+# Ids, never a blanket package ignore, so a new advisory still surfaces. ignoreUntil makes the list
+# come back for review once upstream has had the chance to clear it.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31T00:00:00Z
+reason = "minimatch 10.2.6 via @capacitor/cli > rimraf > glob: dev-only build tooling, not in the APK. The DoS needs an attacker-supplied glob; rimraf passes the CLI's own fixed paths. Clears when rimraf moves to glob >= 14 / minimatch >= 11.0.1 (ESM-only majors released 2026-10-27; rimraf 6.1.3 still pins glob ^13)"
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-01-31T00:00:00Z
+reason = "glob 13.0.6 via @capacitor/cli > rimraf: dev-only build tooling, not in the APK. The bypass needs a caller that cancels a glob walk with an AbortSignal; rimraf passes none. Clears when rimraf moves to glob >= 14.0.2 (ESM-only major released 2026-10-27; rimraf 6.1.3 still pins glob ^13)"

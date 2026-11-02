@@ -21,3 +21,7 @@ The machine utilization bar prominently highlights when no local model is loaded
 Small, predefined commands are handled by a small on-device model, and the local assistant runs with a memory footprint comparable to waterplane's for the same functionality.
 - asked: 2026-10-27
 
+### R-local-models-006 · requested
+On a Mac with no cloud Claude account, Copilot and local Ollama models do everyday coding well: a small UI change, an error investigation, or a small logic change with a test finishes correctly, because they get the project context they need and start with lean defaults.
+- asked: 2026-10-31, 2026-10-31
+

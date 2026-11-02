@@ -29,7 +29,11 @@
 /* A run row: its name on a line of its own (it was cut to "Public mirror
    (wat…" by the meta beside it), the fold chevron at the end, the meta under. */
 .build-runs .row-title { flex: 1 1 0; min-width: 0; white-space: normal; }
-.build-runs .row > .row-sub { order: 2; }
+/* `flex-basis: 100%` is what puts the meta UNDER the name: without it the
+   params line and the time line sat beside a `flex: 1 1 0` title and squeezed
+   a long name ("Release train (version + notes, …)") into one word per line. */
+.build-runs .row > .row-sub { order: 2; flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+.build-runs .row-title .tag { white-space: nowrap; }
 .build-run-fold { order: 1; flex: none; color: var(--muted); }
 /* The open run and its detail read as ONE block: same stripe down both. */
 .build-runs .row.active { background: var(--accent-wash); box-shadow: var(--stripe); }

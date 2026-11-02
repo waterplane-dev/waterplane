@@ -41,3 +41,8 @@ The new-files strip shows new and rewritten markdown files alongside images.
 - asked: 2026-10-12
 - shipped: 961b08e0
 
+### R-files-010 · shipped
+A folder added to the repo root folder appears in the main list of all repos; rescan picks it up, or names it as skipped for having no git and offers git init in one tap, showing the issue to the user.
+- asked: 2026-11-02, 2026-11-02
+- shipped: 938bdf6f
+

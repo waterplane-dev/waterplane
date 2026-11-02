@@ -78,3 +78,8 @@ Combined images keep their full resolution: each panel uploads at the chosen wid
 - asked: 2026-10-25
 - shipped: c8ffd794
 
+### R-images-017 · shipped
+On a desktop browser the web app offers a screenshot button that captures any window or the full screen, including windows outside the browser, and attaches the image as if Ctrl+V had been pressed. On Android the workflow may differ.
+- asked: 2026-11-02
+- shipped: 82e2fc32
+

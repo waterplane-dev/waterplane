@@ -541,3 +541,17 @@ Repo lists show whether they have been read yet: 'not read yet' and 'no repos fo
 - asked: 2026-10-30
 - shipped: ced613d9, 2b1aba68
 
+### R-ui-129 · requested
+When a feature does not apply, it is collapsed away with an explanation rather than hidden.
+- asked: 2026-10-31
+
+### R-ui-130 · shipped
+The "All backends" and "Open code" buttons in the VS Code extension open their pages instead of crashing into an empty page.
+- asked: 2026-11-02
+- shipped: 5bc643e1
+
+### R-ui-131 · shipped
+The context weight screen looks the same wherever it appears, with the three variants consolidated into one.
+- asked: 2026-11-02
+- shipped: f8521a12, 7b1dd405
+
