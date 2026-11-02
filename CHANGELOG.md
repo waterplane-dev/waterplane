@@ -5,6 +5,33 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.15
+
+### New
+
+- **Sessions blocked on something outside them are one list.** The launcher's *N at limit* chip is now *N blocked*: signed out, waiting on a network retry, out of credit or at the usage limit. The chip opens exactly the sessions it counted, and the sheet groups them sign-in, network, spend, usage limit, with each one's own controls. Backlog auto-fire, schedules and queued work no longer type into a signed-out session or one mid network retry.
+- **One sign-in brings the stopped sessions back, when you say so.** A signed-out account stops every session; the desktop now notices the sign-out, pushes *Signed out — N sessions stopped*, watches for the sign-in, and then asks *continue the N sessions that stopped?*. Nothing is typed until you tap. A session that a first-timer opens signed out says to send `/login`, with a one-tap button.
+- **A network outage retries as one wave.** When several sessions give up on the network together, the first retry goes alone and the rest follow once it gets through; the held ones show whose retry they wait behind.
+- **No recovery types over your words.** A usage-limit, network or sign-in continue never types into a desktop composer holding half-typed words; the row says it is held and why.
+- **Pick a window into the compose bar** (desktop browsers): any window or screen, attached like a pasted screenshot, through the browser's own picker.
+- **Android apps is an extension.** The Apps screen moved into the optional built-in `android-apps`, which switches itself on when this desktop has an Android repo; a phone talking to a desktop without one hears nothing about installing apps. One card per app: build, download, install.
+- **Rescan names folders it skipped** for having no git, with *git init* one tap away.
+- **Always-on file lists** in Repo readings and VS Code are drawn like the session's *what every turn carries*.
+- **Copilot and local models:** a setup row for skills Copilot cannot load, a *ready for Copilot & local models* preset, and a guide. `claude-local` sessions start without your settings file by default.
+- **Strips fold from one control**, and one corner button brings every folded strip back. *Copy reference* puts the session's address on the clipboard. A second Ctrl+E closes the tab list, and the chord works with the tab strip off.
+
+### Fixed
+
+- The CLI's dim proposal in the composer is no longer published as the agent's question.
+- A signed-out turn ends the turn instead of looking busy until the next hook.
+- A session stuck in a tool loop is flagged for follow-up, never stopped.
+- A trust box painted over typed words is answered and the words go again; a trust box is a wall unless the backend auto-accepts trust.
+- A plan with no 5-hour window collapses that figure and the session choices, and says why.
+- A weekly wall's bare clock time is kept as a lower bound; `/btw` counts as a turn that starts nothing.
+- A ledger in another extension's shape is a sentence in token stats, not a blank panel.
+- Nested bullets under a numbered item stay inside it in the reader; a templated Gradle `versionName` is not read as a version, and a build repeating an older version says so.
+- Twenty-eight regular expressions rewritten to run in linear time (CodeQL polynomial-ReDoS alerts), behaviour pinned by differential tests.
+
 ## 0.1.14
 
 0.1.13 and 0.1.12 were tagged but never released; their changes ship here.

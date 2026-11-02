@@ -241,6 +241,10 @@
 .check-icon { display: inline-flex; flex: 0 0 auto; }
 .check-label { flex: 1; font-weight: var(--fw-semibold); min-width: 0; }
 .check-detail { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); padding-left: var(--sp-24); word-break: break-word; }
+/* The Apps card's three steps (build, download, install), and their details nested inside a step: a card is
+   already a check row, so its steps are compact rows without their own bottom rule. */
+.app-steps > .check-row { padding: var(--sp-6) var(--sp-10); border-bottom: 0; }
+.app-steps .check-list .check-row { padding: var(--sp-4) var(--sp-10); border-bottom: 0; }
 .bl-row { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-12); border-bottom: 1px solid var(--line); }
 .bl-head { display: flex; align-items: flex-start; gap: var(--sp-8); }
 .bl-main { flex: 1; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
@@ -348,7 +352,7 @@ button.bl-check { cursor: pointer; }
 .bl-check-not_done, .bl-check-error { color: var(--dead); }
 .bl-check-checking { color: var(--muted); }
 /* One at-limit fact, one colour — the same `--limit` the launcher and the session header use. */
-.bl-check-limited, .bl-validate-limited { color: var(--limit); }
+.bl-check-limited, .bl-validate-limited, .bl-check-signedOut, .bl-validate-signedOut { color: var(--limit); }
 .bl-check-detail { margin-top: var(--sp-4); }
 /* A row's *its session once done* choice, and a slot-held row's *close one
    to make room* list. Keys WRAP (`flex: 0 1 auto; min-width: 0; white-space:

@@ -1,4 +1,5 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 import {
@@ -153,4 +154,118 @@ test("a plugin's search words are everything its section says: name, id, descrip
   assert.equal(pluginSearchWords(null), "");
   const both = pluginSearchWords([view(), view({ manifest: { ...manifest, id: "notary", name: "Notary" } })]);
   assert.ok(both.includes("Notary") && both.includes("Decision oracle"), "the row's words are every section's");
+});
+
+// ── PluginView.auto words, and the per-host plugin list cache ─────────────────────────────────
+import { autoLine, cacheLiveList, readCachedList, slimList } from "./logic.ts";
+import { LS, isDeviceKey } from "../../storage.ts";
+import { planHostSwitch } from "@waterplane/shared";
+import { createStore } from "../../sdk/store.ts";
+import { bindPluginList, enabledIn, isExtensionEnabled } from "../../sdk/extensions.ts";
+import { createLauncherItemTable } from "../../core/featureRun.ts";
+
+test("an autoOn extension's line is the desktop's sentence plus that a flip is final; no auto, no line", () => {
+  assert.equal(autoLine({}), null);
+  assert.equal(autoLine({ auto: { state: "on", why: "  " } }), null);
+  assert.equal(autoLine({ auto: { state: "on", why: "on automatically — a repo on this desktop is an Android app" } }),
+    "On automatically — a repo on this desktop is an Android app. Flipping the switch makes it your choice, and it stays that way.");
+  assert.match(autoLine({ auto: { state: "off", why: "off automatically — no repo here is an Android app; checked every 15 minutes" } }), /^Off automatically .* checked every 15 minutes\. Flipping/);
+});
+
+function fakeLocalStorage() {
+  const m = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k),
+    key: (i) => [...m.keys()][i] ?? null, get length() { return m.size; },
+  };
+  return m;
+}
+function switchHost(m, from, to) {
+  for (const op of planHostSwitch([...m.keys()], isDeviceKey, from, to)) {
+    if (op.op === "copy") m.set(op.to, m.get(op.from)); else m.delete(op.key);
+  }
+}
+const live = (id, enabled, state = enabled ? "active" : "off") => ({ manifest: { id, name: id, version: "1", apiVersion: 1 }, source: "/x", enabled, state, values: { secret: "never cached" } });
+
+test("plugin list cache: a cold start with no connection reads this host's last list, and draws its line", (t) => {
+  const m = fakeLocalStorage();
+  t.after(() => { delete globalThis.localStorage; });
+  assert.equal(readCachedList(), null, "a host that never listed ⇒ unknown ⇒ off, as before");
+  cacheLiveList([live("phoneapps", true), live("other", false)]);
+  assert.doesNotMatch(m.get(LS.pluginList), /never cached|source|values/, "only id, switch and state are kept");
+
+  // Cold start: the store `isExtensionEnabled` reads starts from the cache — no socket anywhere.
+  const on = createStore(readCachedList());
+  bindPluginList(on);
+  assert.equal(isExtensionEnabled("phoneapps"), true);
+  assert.equal(isExtensionEnabled("other"), false);
+  const icon = () => null;
+  const items = createLauncherItemTable([
+    { id: "phoneapps", hideWhen: () => !isExtensionEnabled("phoneapps"), launcherItems: [{ id: "main", label: "Apps", icon, open: () => {} }] },
+  ], () => ({ say: { toast: () => {}, track: () => {} } })).items();
+  assert.deepEqual(items.map((i) => i.key), ["phoneapps:main"], "the launcher line is drawn offline");
+
+  // The live list replaces the cache.
+  on.set(cacheLiveList([live("phoneapps", false)]));
+  assert.equal(isExtensionEnabled("phoneapps"), false);
+  assert.deepEqual(readCachedList(), slimList([live("phoneapps", false)]));
+});
+
+test("plugin list cache is per host: another desktop's list never leaks, and each comes back with its host", (t) => {
+  const m = fakeLocalStorage();
+  t.after(() => { delete globalThis.localStorage; });
+  cacheLiveList([live("phoneapps", true)]);
+  assert.equal(isDeviceKey(LS.pluginList), false, "a HOST key: parked on a switch");
+  switchHost(m, "hostA", "hostB");
+  assert.equal(readCachedList(), null, "host B was never listed here ⇒ off, not A's answer");
+  assert.equal(enabledIn(readCachedList(), "phoneapps"), false);
+  cacheLiveList([live("phoneapps", false)]);
+  switchHost(m, "hostB", "hostA");
+  assert.equal(enabledIn(readCachedList(), "phoneapps"), true, "A's own state at once");
+  switchHost(m, "hostA", "hostB");
+  assert.equal(enabledIn(readCachedList(), "phoneapps"), false, "B's own state at once");
+});
+
+test("an unreadable cache reads as no cache (off), never as a guess", (t) => {
+  const m = fakeLocalStorage();
+  t.after(() => { delete globalThis.localStorage; });
+  m.set(LS.pluginList, "{nope");
+  assert.equal(readCachedList(), null);
+  m.set(LS.pluginList, JSON.stringify([{ manifest: { id: "x" }, enabled: "yes", state: "active" }]));
+  assert.equal(readCachedList(), null);
+  m.set(LS.pluginList, JSON.stringify([{ manifest: { id: "x" }, enabled: true, state: "active" }]));
+  assert.deepEqual(readCachedList(), [{ manifest: { id: "x" }, enabled: true, state: "active" }]);
+});
+
+test("cacheLiveList: an unchanged list writes nothing and hands back the store's own array", (t) => {
+  const m = fakeLocalStorage();
+  t.after(() => { delete globalThis.localStorage; });
+  const first = cacheLiveList([live("phoneapps", true)]);
+  m.set(LS.pluginList, "sentinel");
+  assert.equal(cacheLiveList([live("phoneapps", true)], first), first, "same rows ⇒ same array");
+  assert.equal(m.get(LS.pluginList), "sentinel", "…and no write");
+  const next = cacheLiveList([live("phoneapps", false)], first);
+  assert.notEqual(next, first);
+  assert.notEqual(m.get(LS.pluginList), "sentinel", "a change writes");
+});
+
+test("the real wiring: the real store starts from this host's cache and applyLiveList feeds it; index.ts hands the handler to it", async (t) => {
+  const m = fakeLocalStorage();
+  t.after(() => { delete globalThis.localStorage; });
+  cacheLiveList([live("phoneapps", true)]);
+  // store.ts imports the SDK barrel (React, the whole core); only its createStore is needed here.
+  const { registerHooks } = await import("node:module");
+  const sdkStore = new URL("../../sdk/store.ts", import.meta.url).href;
+  const hooks = registerHooks({ resolve: (spec, ctx, next) => (
+    spec === "../../sdk" ? { url: sdkStore, shortCircuit: true } : spec === "./logic" ? next("./logic.ts", ctx) : next(spec, ctx)) });
+  t.after(() => hooks.deregister());
+  const store = await import(`./store.ts?wiring=${Date.now()}`);
+  assert.equal(enabledIn(store.pluginsOn.get(), "phoneapps"), true, "seeded from localStorage at module load (not createStore(null))");
+  assert.equal(store.pluginsLive.get(), false);
+  store.applyLiveList([live("phoneapps", false)]);
+  assert.equal(enabledIn(store.pluginsOn.get(), "phoneapps"), false, "the live list replaces it");
+  assert.equal(store.pluginsLive.get(), true);
+  assert.deepEqual(JSON.parse(m.get(LS.pluginList)).map((r) => r.enabled), [false], "and the cache");
+  const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(src, /"plugin\.list": \(msg\) => \{[^}]*applyLiveList\(msg\.plugins\)/, "the manifest's handler calls it");
 });

@@ -1,7 +1,7 @@
 /** The one wording of the host's retry after a transient API give-up (`netretry.ts`). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { netRetryLine, netRetryWait } from "../dist/index.js";
+import { NET_HELD_WHY, netRetryLine, netRetryWait, netRetryWhy, netStalledText } from "../dist/index.js";
 
 const base = { attempt: 1, max: 8, error: "Connection dropped (ECONNRESET)", at: 0 };
 
@@ -61,6 +61,21 @@ test("a DISMISSED gave-up and a stall PROBE are still stalls; the note says when
   assert.equal(netStalledText({ ...g, nextAt: now + 23 * 60_000 - 5000 }, now), "Stalled — API unreachable, 8 retries used · next try in 23m");
   assert.equal(netStalledText({ ...g, nextAt: now + 23 * 60_000 }), "Stalled — API unreachable, 8 retries used", "no clock ⇒ no guessed wait");
   assert.equal(netStalledText(p, now), "Stalled — API unreachable, 9 retries used · trying again now");
+  // Held behind another session's stalled probe: it says why it waits, never "trying again now".
+  const held = { ...base, state: "waiting", attempt: 2, nextAt: now + 23 * 60_000 - 5000, probe: true, why: "waiting for another session's retry to get through first" };
+  assert.equal(netStalledText(held, now), "Stalled — API unreachable, 2 retries used · waiting for another session's retry to get through first · next try in 23m");
+  assert.equal(netStalledText({ ...held, nextAt: null }, now), "Stalled — API unreachable, 2 retries used · waiting for another session's retry to get through first");
   assert.equal(netRetryLine(p, now), "Network error — tried once more (try 9), waiting for the reply");
   assert.match(netRetryLine({ ...g, nextAt: now + 30 * 60_000 }, now), /stopped retrying: after 8 tries; one more try in 30m\. Type to try again\.$/);
+});
+
+test("a held retry is a FIELD (heldBy): the line follows it, with or without the old why", () => {
+  const w = { ...base, state: "waiting", nextAt: 40_000 };
+  const line = "Network error — retrying in 40s (2/8) · waiting for another session's retry to get through first";
+  assert.equal(NET_HELD_WHY, "waiting for another session's retry to get through first");
+  assert.equal(netRetryLine({ ...w, heldBy: "n1" }, 0), line, "heldBy alone (a newer host that dropped why)");
+  assert.equal(netRetryLine({ ...w, why: NET_HELD_WHY }, 0), line, "an older host's why alone");
+  assert.equal(netRetryLine({ ...w, heldBy: null }, 0), "Network error — retrying in 40s (2/8)", "null = not held");
+  assert.equal(netRetryWhy({ ...w, heldBy: "n1", why: "x" }), NET_HELD_WHY, "the field wins");
+  assert.match(netStalledText({ ...w, probe: true, heldBy: "n1" }, 0), /· waiting for another session's retry to get through first · next try in 40s$/);
 });

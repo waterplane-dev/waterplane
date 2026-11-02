@@ -5,6 +5,7 @@
 import { core } from "../../sdk";
 import { LS, lsSet } from "../../storage";
 import { openSettingsAt } from "../../settingsFocus";
+import { openExternal } from "../../openExternal";
 import type { FeedSource } from "../../feedSlot";
 import type { Door } from "./logic";
 import { normVersion } from "./logic";
@@ -41,6 +42,7 @@ export function openDoor(d: Door, feed: FeedSource | null): void {
     case "feedCut": if (feed) feed.openCut(d.ids); else c.nav.open("notifications"); return;
     case "automationCut": c.nav.openScheduleCut(d.ids, d.label); return;
     case "git": c.nav.openGit(d.repoId); return;
+    case "url": if (!openExternal(d.href)) c.say.toast("could not open that page on this phone."); return;
     case "build": {
       const repo = c.world.repos.find((r) => r.id === d.repoId);
       if (repo) c.nav.openBuild(repo);

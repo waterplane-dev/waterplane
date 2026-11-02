@@ -121,7 +121,8 @@ You need:
   and something for it to run on: a **paid Claude plan** (Pro, Max, Team) or an **Anthropic API
   key** — run `claude` once and sign in — or, with no account, a **local model through Ollama**.
   GitHub Copilot works too, as a [plugin](https://github.com/waterplane-dev/waterplane-plugin-copilot)
-  (`install.sh --with copilot`).
+  (`install.sh --with copilot`). Making a repo work well for Copilot and local models:
+  [guide](docs/guide-other-agents.md).
 - **A way for the phone to reach the desktop.** Recommended: **[Tailscale](https://tailscale.com)**
   on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS
   gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a

@@ -31,9 +31,9 @@ import { healthScope, noteContextHealth, noteFor, noteLogHealth } from "./sessio
 import { CtxSlice } from "./sessions/ctxseries.js";
 import { BudgetSlice } from "./sessions/budgetwatch.js"; import { ChannelSlice, type SendHold } from "./sessions/sidechannel.js";
 import { RosterSlice } from "./sessions/roster.js";
-import { WallSlice } from "./sessions/wall.js"; import { NetRetrySlice } from "./sessions/apiretry.js"; import { hasAccountLimit } from "./usagesources.js";
+import { WallSlice } from "./sessions/wall.js"; import { NetRetrySlice } from "./sessions/apiretry.js"; import { SignInSlice } from "./sessions/signinwait.js"; import { hasAccountLimit } from "./usagesources.js";
 import { ResumeSlice } from "./sessions/resume.js";
-import * as turn from "./sessions/turn.js"; import * as askwatch from "./sessions/askwatch.js"; import * as agentpoll from "./sessions/agentpoll.js"; import * as idle from "./sessions/idlewatch.js";
+import * as turn from "./sessions/turn.js"; import * as askwatch from "./sessions/askwatch.js"; import * as agentpoll from "./sessions/agentpoll.js"; import * as loopwatch from "./sessions/loopwatch.js"; import * as idle from "./sessions/idlewatch.js";
 import * as boxes from "./sessions/boxes.js"; import * as boxread from "./sessions/boxread.js";
 import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
@@ -54,6 +54,7 @@ const PRIVATE_MODE_RE = /\x1b\[\?([0-9;]+)([hl])/g;
  *  - 'history'(id, HistoryEntry[]) when the prompt/output history changes
  *  - 'limit'  (id, info, phase)    usage-limit lifecycle: "blocked" | "scheduled" | "attempt" | "resumed" | "gaveup"
  *  - 'limitQueue'()                the resume queue's host-wide state changed (who is resuming, hold-off)
+ *  - 'signIn'(SignInEvent)         the account's sign-in episode moved: signedOut | signedIn | ended (`signinwait.ts`)
  *  - 'updateBanner'(latest?)       the CLI printed its "Update available!" nag on screen
  *  - 'created'(info)               a session was registered (spawned, forked or re-attached)
  *  - 'awaiting'(id)                a dialog is on screen that no detector could parse (ON edge only)
@@ -70,7 +71,7 @@ export class SessionManager extends EventEmitter {
   /** The resume queue and resurrection: the resume* state and the revived pairings (`sessions/resume.ts`). */
   private resume: ResumeSlice;
   private budget: BudgetSlice; private channel: ChannelSlice; // own budget (sessions/budgetwatch.ts); the backend side channel (sessions/sidechannel.ts)
-  private net: NetRetrySlice; // the retry after a transient API give-up (sessions/apiretry.ts)
+  private net: NetRetrySlice; private signIn: SignInSlice; // the retry after a transient API give-up (sessions/apiretry.ts); the sign-in episode (sessions/signinwait.ts)
 
   /** The one `SessionCore` the slices under `sessions/` are handed. Private —
    *  the class's public surface does not change — and built in the constructor,
@@ -99,7 +100,7 @@ export class SessionManager extends EventEmitter {
       backendField: (b) => backendField(b),
       // tmux.ts
       spawnBackend: (id, cwd, cols, rows, args, backend, launchEnv, dropEnv) => spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv),
-      reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
+      reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); this.signIn.restored(m.id, m.signInSince); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
       deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
       detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid) => adoptClaudeId(this.core, s, cid),
@@ -117,13 +118,14 @@ export class SessionManager extends EventEmitter {
       rememberRecent: (s) => this.roster.rememberRecent(s), applyStar: (info) => this.roster.applyStar(info),
       applyPromptLabels: (s) => this.roster.applyPromptLabels(s),
       pushClosed: (entry) => this.roster.pushClosed(entry), publishClosed: () => this.roster.publishClosed(), closedRowOf: (s, alive, exit) => this.roster.closedRowOf(s, alive, exit),
-      closedRow: (id) => this.roster.closedRow(id), dropClosed: (id) => this.roster.dropClosed(id),
+      closedRow: (id) => this.roster.closedRow(id), dropClosed: (id) => this.roster.dropClosed(id), followUpOf: (id) => this.roster.followUpOf(id), setFollowUp: (id, f) => this.roster.setFollowUp(id, f),
       isWatched: (id) => this.roster.isWatched(id),
       // wall.ts
       newLimitState: () => this.wall.newLimitState(), limitAuto: (s) => this.wall.limitAuto(s),
-      limitRetry: (s, now, resetAt) => this.wall.limitRetry(s, now, resetAt), limitLog: (s) => this.wall.limitLog(s),
+      limitRetry: (s, now, resetAt, daily) => this.wall.limitRetry(s, now, resetAt, daily), limitLog: (s) => this.wall.limitLog(s),
       checkLimit: (s) => this.wall.checkLimit(s),
       netTurnEnded: (s) => this.net.turnEnded(s), netTurnStarted: (s) => this.net.turnStarted(s), netTyped: (s) => this.net.typed(s), // apiretry.ts
+      signInSignedOut: (s) => this.signIn.signedOut(s), signInTurnStarted: (s) => this.signIn.turnStarted(s), signInServed: (s) => this.signIn.served(s), signInLoginRetired: (s, ok) => this.signIn.loginRetired(s, ok), // signinwait.ts
       markLimitBlocked: (s, resetAt, weekly, sample, dated) => this.wall.markLimitBlocked(s, resetAt, weekly, sample, dated),
       scheduleLimitAttempt: (s, atOverride) => this.wall.scheduleLimitAttempt(s, atOverride),
       doLimitContinue: (s) => this.wall.doLimitContinue(s), clearLimitTimer: (s) => this.clearLimitTimer(s),
@@ -140,7 +142,7 @@ export class SessionManager extends EventEmitter {
       // turn.ts
       setTurn: (s, active, opts) => turn.setTurn(this.core, s, active, opts), checkIdle: (s) => turn.checkIdle(this.core, s),
       armTurnWatch: (s, seqAt) => turn.armTurnWatch(this.core, s, seqAt), setAsking: (s, ask) => askwatch.setAsking(this.core, s, ask), setCliSuggestion: (s, text) => askwatch.setCliSuggestion(this.core, s, text), checkAsking: (s) => askwatch.checkAsking(this.core, s), checkCliSuggestion: (s) => askwatch.checkCliSuggestion(this.core, s),
-      checkAgents: (s) => agentpoll.checkAgents(this.core, s), retireAgentPoll: (s) => agentpoll.retireAgentPoll(s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
+      checkAgents: (s) => agentpoll.checkAgents(this.core, s), checkToolLoop: (s) => loopwatch.checkToolLoop(this.core, s), retireAgentPoll: (s) => agentpoll.retireAgentPoll(s), clearStopVerify: (s) => turn.clearStopVerify(s), sourceTurn: (s, e, f) => turn.sourceTurn(this.core, s, e, f), sourceIdentified: (s, id) => turn.sourceIdentified(this.core, s, id),
       // boxes.ts
       scheduleChecks: (s) => boxread.scheduleChecks(this.core, s), armPromptCheck: (s, delayMs) => boxread.armPromptCheck(this.core, s, delayMs), setAwaiting: (s, on) => boxread.setAwaiting(this.core, s, on),
       applyPrompt: (s, prompt) => boxread.applyPrompt(this.core, s, prompt), armLinksCheck: (s) => links.armLinksCheck(this.core, s), // + links.ts
@@ -160,7 +162,7 @@ export class SessionManager extends EventEmitter {
     // Reads the revived pairings — after pins, before the limit config, as before the split.
     this.resume = new ResumeSlice(this.core);
     // Reads the limit config — LAST among the file reads, as before the split.
-    this.wall = new WallSlice(this.core); this.net = new NetRetrySlice(this.core);
+    this.wall = new WallSlice(this.core); this.net = new NetRetrySlice(this.core); this.signIn = new SignInSlice(this.core);
     // Limit detection is otherwise data-driven (checks run on PTY output), but
     // a blocked session is SILENT — a block that predates a host restart, or a
     // missed event, would never be noticed until a client attaches (the resize
@@ -312,7 +314,7 @@ export class SessionManager extends EventEmitter {
       naming: false,
       privateModes: new Set(), detaching: false, copyMode: false, scrollChain: Promise.resolve(),
       claudeIdTimer: null, storeIdTimer: null, createdRecord: createsRecord, spawnedAt: Date.now(),
-      limitTimer: null, limitGaveUp: false, stopVerifyTimer: null, stopPending: false, turnFromScreen: false,
+      limitTimer: null, gaveUp: {}, stopVerifyTimer: null, stopPending: false, turnFromScreen: false,
       hooksActive: false, turnHookSeen: false, turnActive: false, stopCount: 0, submits: [],
       resurrectTimer: null, killed: false,
     };
@@ -511,7 +513,8 @@ export class SessionManager extends EventEmitter {
   setSessionLimitOverride(id: string, override: boolean | null): void { this.wall.setSessionLimitOverride(id, override); }
   private newLimitState(): SessionLimit { return this.wall.newLimitState(); }
   private checkLimit(s: Session): void { this.wall.checkLimit(s); }
-  private clearLimitTimer(s: Session): void { this.wall.clearLimitTimer(s); this.net.clear(s); } // …and a pending network retry (sessions/apiretry.ts) goes with the session
+  private clearLimitTimer(s: Session): void { this.wall.clearLimitTimer(s); this.net.clear(s); this.signIn.clear(s); } // …and a pending network retry (sessions/apiretry.ts) and its sign-in wait (sessions/signinwait.ts) go with the session
+  signInContinue(ids: readonly string[]): { taken: string[]; ignored: string[] } { return this.signIn.continueIds(ids); } // the phone's continue after a sign-in (`signin.continue`)
   netRetryCancel(id: string): void { this.net.cancelById(id); } netRetryNow(id: string): void { this.net.retryNow(id); } netRetrySwitched(on: boolean): void { this.net.switched(on); } // the phone's Cancel / Retry now on `SessionInfo.netRetry`; the switch
 
   // ── The resume queue: `sessions/resume.ts` ───────────────────────────

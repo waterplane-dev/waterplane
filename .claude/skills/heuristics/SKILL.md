@@ -1,6 +1,6 @@
 ---
 name: heuristics
-description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, keyhints.ts, turn boundaries (Stop/StopFailure hooks, /compact), netlog.ts, claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number.
+description: "waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, keyhints.ts, turn boundaries (Stop/StopFailure hooks, /compact), netlog.ts, claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number."
 ---
 
 # waterplane heuristics over the TUI
@@ -27,9 +27,10 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   `stopCount`, capture seal, ping, `turnEnded`). **Records no health observation** — the hook was
   answered, not broken. `e2e-stophook.mjs`.
 - **An API error ends the turn with `StopFailure`, never `Stop`.** For `server_error`/`overloaded`
-  `backends/claude-sources.ts` routes it into the same `settleStop` path and `turn.ts` counts it as a
+  and `authentication_failed` `backends/claude-sources.ts` routes it into the same `settleStop` path and `turn.ts` counts it as a
   turn hook (436ef33c). Drop it and a give-up turn never settles, so `sessions/apiretry.ts` never
-  retries; a stub simulating a give-up turn must send `StopFailure`, not `Stop`.
+  retries; a stub simulating a give-up turn must send `StopFailure`, not `Stop`. A signed-out end
+  carries `TurnEndNet` `signedOut` (nothing ran: no ping, the waiting work stays running) and never asks the net retry.
 - **`/compact` announces NOTHING** (no `UserPromptSubmit`, no `Stop`) while grinding for minutes, and
   the same watch covers any work that announces nothing: armed on OUTPUT for a hooked session with no
   turn believed, a working line publishes one (`setTurn(…, {fromScreen:true})`), retired when the
@@ -181,14 +182,18 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   [Why](../../../docs/notes/testing-and-ops.md#harvested-screen-fixtures-clifixturests-toolsharvestfixturesmjs).
 - `limit.ts` — usage-limit banner + reset parsing → auto-continue, plus the **resume queue**
   (`sessions/resume.ts`, `releaseResume`): a limit is an ACCOUNT fact, so sessions block as a group
-  on one reset instant. UI is `LimitSheet.tsx`. `LimitResumeMode` = `one` / `repo` / `all`, and **in
+  on one reset instant. UI is `features/limits/BlockedSheet.tsx`. `LimitResumeMode` = `one` / `repo` / `all`, and **in
   every mode the first resume of a wave goes alone**. `detectHeadlessLimit` reads the block out of a
   `claude -p` ENVELOPE, `limitNote` is the one sentence every headless caller says, and `limited` is
   not `error`.
 - `limitretry.ts` — the retry cadence is pure (`nextLimitAttempt`, `LADDER_MS`): a DATED reset is
-  trusted, weekly or not; with no dated reset the delay WIDENS instead of a flat cadence.
+  trusted, weekly or not; with no reset at all the delay WIDENS instead of a flat cadence. **A weekly
+  wall's bare clock time (screen, no date) is KEPT** as its next occurrence — the earliest possible
+  reset (owner, 10-31) — and waited for `daily`: still blocked there ⇒ re-armed at the same time
+  tomorrow, never a loop; a log-dated instant wins over it for the whole block (`limitResetKind`).
+  `weeklybare.test.mjs`.
 - **Spend walls** (`limit.ts`'s `spend`, `limitlog.ts`'s API-error rows, `spendwall.ts`): an API-key/cloud account out of credit or over a spend limit is a wall with NO ladder - one attempt at the printed instant or a configured usd calendar period's reset (`periodBounds`), else `noteGaveUp` (`sessions/wall.ts`; needs the person). Never a guessed clock. Messages are built from halves in tests too. `spendlimit.test.mjs`.
-- `netlog.ts` — the CLI GAVE UP on a transient API error: the NEWEST assistant row is `<synthetic>`, `isApiErrorMessage`, `error: "server_error"` AND its text a known transient shape (errno, can't reach, connection lost/dropped/refused, no response, 5xx/529). A spend wall (`detectSpendText`) or a `quotaLimits` row is never one; an unknown shape is no retry. Feeds `sessions/apiretry.ts`'s ladder (`netRetryDelay`); out of retries the work is STALLED, never failed (e337d014). `netlog.test.mjs`.
+- `netlog.ts` — the CLI GAVE UP on a transient API error: the NEWEST assistant row is `<synthetic>`, `isApiErrorMessage`, `error: "server_error"` AND its text a known transient shape (errno, can't reach, connection lost/dropped/refused, response stopped arriving, no response, 5xx/529; a 529's LOG row says `server_error` even though its hook says `overloaded`). A spend wall (`detectSpendText`) or a `quotaLimits` row is never one; an unknown shape is no retry. Feeds `sessions/apiretry.ts`'s ladder (`netRetryDelay`); out of retries the work is STALLED, never failed (e337d014). `netlog.test.mjs`.
 - `limitlog.ts` — the same question asked of the CLI's own log, which is DATED. **The log OUTRANKS
   the screen in both directions**; **`unknown` when there is nothing to read** — an absent log is
   never a verdict.

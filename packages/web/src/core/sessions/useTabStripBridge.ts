@@ -21,7 +21,6 @@ onSettingsChange(refreshTabs, [LS.tabOrderShared, LS.tabOpensShared]);
 watchSaverForTabs();
 
 interface UseTabStripBridgeCtx {
-  tabsOn: boolean;
   sessions: SessionInfo[];
   sessionRepoName: (s: SessionInfo) => string;
   activeId: string | null;
@@ -37,7 +36,7 @@ interface UseTabStripBridgeCtx {
  * verbatim and in their order.
  */
 export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
-  const { tabsOn, sessions, sessionRepoName, activeId, repos, attach, closeSession, backends } = ctx;
+  const { sessions, sessionRepoName, activeId, repos, attach, closeSession, backends } = ctx;
   /**
    * **The session-tab strip, published.**
    *
@@ -50,9 +49,12 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
    *
    * The label is `tabLabel`'s decision, not this component's: the host's ≤3-word
    * `tabTitle` when it has derived one, the session's own title otherwise.
+   *
+   * Published with the strip switched OFF too: Ctrl+E's list reads this same
+   * store, and an empty one made the chord a silent no-op there. The strip's
+   * own height is gated on `enabled` (`tabStripHeight`), not on this.
    */
   useEffect(() => {
-    if (!tabsOn) return;
     noteSessionTabs(
       sessions.map((s) => {
         const repo = sessionRepoName(s);
@@ -70,8 +72,8 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
       }),
       activeId,
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`; re-run is driven by sessions, activeId, repos, backends and tabsOn
-  }, [sessions, activeId, repos, backends, tabsOn]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`; re-run is driven by sessions, activeId, repos and backends
+  }, [sessions, activeId, repos, backends]);
   /**
    * What a tab's tap does. Two verbs, and they are the launcher's own — the
    * strip decides nothing: `attach` is the same function a session row calls,

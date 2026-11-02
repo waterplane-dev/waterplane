@@ -123,6 +123,29 @@ function copyTemplate(id: TemplateId, dir: string, vars: Record<string, string>)
   return written;
 }
 
+/**
+ * `git init` in a folder that already exists under the root and has no `.git` —
+ * the launcher's answer to a folder rescan skipped (`repos.ts` `plainFolders`).
+ * Touches nothing but `.git`: no seed files, no commit, the person's files stay
+ * untracked. The caller checks the path is one `plainFolders` listed; this
+ * re-checks containment and that it is still not a repo.
+ */
+export async function initFolder(root: string, path: string): Promise<{ path: string; branch: string } | { error: string }> {
+  const dir = inRoot(root, path);
+  if (!dir) return { error: "path escapes root" };
+  try { if (!statSync(dir).isDirectory()) return { error: "not a folder" }; } catch { return { error: "no such folder" }; }
+  if (existsSync(join(dir, ".git"))) return { error: "already a git repo" };
+  try {
+    await pexec("git", ["init", "-b", DEFAULT_BRANCH], { cwd: dir }).catch(async () => {
+      await pexec("git", ["init"], { cwd: dir });
+      await pexec("git", ["symbolic-ref", "HEAD", `refs/heads/${DEFAULT_BRANCH}`], { cwd: dir }).catch(() => {});
+    });
+  } catch (err) {
+    return { error: `git init failed: ${String(err)}` };
+  }
+  return { path: dir, branch: DEFAULT_BRANCH };
+}
+
 export interface NewRepoResult {
   path: string;
   branch: string;

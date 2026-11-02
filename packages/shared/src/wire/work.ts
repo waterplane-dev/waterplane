@@ -267,15 +267,17 @@ export interface BacklogItem {
  * "limited" is deliberately NOT "error": the reviewer never ran, so nothing was
  * judged. Reported as an error it reads as a broken install (and as a claim
  * about the work), when the true fact is a quota that lifts by itself.
+ * "signedOut" is the same class: the reviewer never ran because the CLI is
+ * signed out; one sign-in clears it, and a re-run is the person's tap.
  */
-export type BacklogCheckStatus = "checking" | "done" | "partial" | "questions" | "not_done" | "error" | "limited";
+export type BacklogCheckStatus = "checking" | "done" | "partial" | "questions" | "not_done" | "error" | "limited" | "signedOut";
 
 /**
  * Verdict of a deep outcome validation (CLI self-reports structured JSON).
  * "validating" = in flight; achieved/likely/unlikely/unclear grade how well the
  * user's expected outcome appears to be met.
  */
-export type BacklogValidateStatus = "validating" | "achieved" | "likely" | "unlikely" | "unclear" | "error" | "limited";
+export type BacklogValidateStatus = "validating" | "achieved" | "likely" | "unlikely" | "unclear" | "error" | "limited" | "signedOut";
 
 /** A proposed next step from validation: a short button label + the full instruction to send. */
 export interface BacklogNextStep {

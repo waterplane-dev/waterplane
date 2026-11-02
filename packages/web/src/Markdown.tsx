@@ -417,7 +417,12 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
     const lines = part.split("\n");
     let para: string[] = [];
     let paraAt = 0;
-    let list: { ordered: boolean; items: string[]; at: number[]; to: number[] } | null = null;
+    // One level of nesting: an item indented past its list's own marker is a
+    // sub-item of the item above, never a list of its own — Claude writes
+    // `1.` items with `   -` bullets under them, and splitting there restarted
+    // every `<ol>` at 1. `start` keeps the written number when a list resumes.
+    type Sub = { ordered: boolean; start: number; items: string[] };
+    let list: { ordered: boolean; start: number; indent: number; items: string[]; subs: Sub[][]; at: number[]; to: number[] } | null = null;
     const flushPara = (k: string) => {
       if (!para.length) return;
       const text = para.join("\n");
@@ -427,8 +432,21 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
     const flushList = (k: string) => {
       if (!list) return;
       const L = list;
-      const items = L.items.map((it, i) => <li {...(lineTag ? tag(start + L.at[i], start + L.to[i], "") : {})} key={i}>{inlineDoc(it, q, `${k}i${i}`, files)}</li>);
-      nodes.push(L.ordered ? <ol className="tr-list" key={k}>{items}</ol> : <ul className="tr-list" key={k}>{items}</ul>);
+      const subList = (S: Sub, key: string) => {
+        const lis = S.items.map((it, j) => <li key={j}>{inlineDoc(it, q, `${key}-${j}`, files)}</li>);
+        return S.ordered
+          ? <ol className="tr-list tr-sub" start={S.start === 1 ? undefined : S.start} key={key}>{lis}</ol>
+          : <ul className="tr-list tr-sub" key={key}>{lis}</ul>;
+      };
+      const items = L.items.map((it, i) => (
+        <li {...(lineTag ? tag(start + L.at[i], start + L.to[i], "") : {})} key={i}>
+          {inlineDoc(it, q, `${k}i${i}`, files)}
+          {L.subs[i].map((S, si) => subList(S, `${k}i${i}s${si}`))}
+        </li>
+      ));
+      nodes.push(L.ordered
+        ? <ol className="tr-list" start={L.start === 1 ? undefined : L.start} key={k}>{items}</ol>
+        : <ul className="tr-list" key={k}>{items}</ul>);
       list = null;
     };
     for (let li = 0; li < lines.length; li++) {
@@ -466,6 +484,8 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
       const head = /^(#{1,6})\s+(.*)$/.exec(line);
       const bullet = /^\s*[-*+]\s+(.*)$/.exec(line);
       const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+      const num = /^\s*(\d+)[.)]/.exec(line);
+      const indent = /^\s*/.exec(line)![0].length;
       const quote = /^>\s?(.*)$/.exec(line);
       if (head) {
         flushPara(`p${k}`); flushList(`l${k}`);
@@ -474,9 +494,20 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         flushPara(`p${k}`);
         const isOrdered = !!ordered;
         const item = (bullet ?? ordered)![1];
+        const n0 = num ? Number(num[1]) : 1;
+        if (list && list.items.length && indent > list.indent) {
+          const n = list.items.length - 1;
+          const subs = list.subs[n];
+          const last = subs[subs.length - 1];
+          if (last && last.ordered === isOrdered) last.items.push(item);
+          else subs.push({ ordered: isOrdered, start: n0, items: [item] });
+          list.to[n] = li;
+          continue;
+        }
         if (list && list.ordered !== isOrdered) flushList(`l${k}`);
-        list ??= { ordered: isOrdered, items: [], at: [], to: [] };
+        list ??= { ordered: isOrdered, start: n0, indent, items: [], subs: [], at: [], to: [] };
         list.items.push(item);
+        list.subs.push([]);
         list.at.push(li);
         list.to.push(li);
       } else if (quote) {
@@ -499,7 +530,10 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         // An indented line straight under an item continues it — a README
         // hard-wraps its bullets, and a new paragraph there broke each one in two.
         const n = list.items.length - 1;
-        list.items[n] += "\n" + line.trim();
+        const subs = list.subs[n];
+        const last = subs[subs.length - 1];
+        if (last) last.items[last.items.length - 1] += "\n" + line.trim();
+        else list.items[n] += "\n" + line.trim();
         list.to[n] = li;
       } else {
         flushList(`l${k}`);

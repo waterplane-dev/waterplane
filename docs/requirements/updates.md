@@ -65,3 +65,8 @@ An Android app installed from a GitHub release shows in the updates view when a 
 After the desktop updates itself, the receipt says the phone picks up the new UI next; the phone's UI keeps following the desktop it is connected to over the air.
 - asked: 2026-10-23
 - shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+### R-updates-015 · shipped
+The Android shell and the web bundle each show their own build identifier inside the app, on separate labelled lines in the app-update screen, so the user can compare them with the build list; the web bundle's over-the-air identity is unchanged.
+- asked: 2026-10-27, 2026-10-27
+- shipped: d902a098
+

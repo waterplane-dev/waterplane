@@ -278,6 +278,18 @@ test("readCliRecord: the same match, plus the pid shells.ts needs to find its wr
   assert.equal(readCliRecord("s3", "myapp_s3", "other"), null);
 });
 
+test("readCliRecord: carries the CLI's peer name, and only a plain one", () => {
+  const home = mkdtempSync(join(tmpdir(), "waterplane-clirec-name-"));
+  process.env.WATERPLANE_CLAUDE_HOME = home;
+  const dir = join(home, ".claude", "sessions");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${process.pid}.json`);
+  writeFileSync(file, JSON.stringify({ pid: process.pid, tmux: "myapp_n1:@3.%3", status: "idle", name: "talking-sandwatch-0c" }));
+  assert.deepEqual(readCliRecord("n1", "myapp_n1", undefined), { status: "idle", pid: process.pid, name: "talking-sandwatch-0c" });
+  writeFileSync(file, JSON.stringify({ pid: process.pid, tmux: "myapp_n1:@3.%3", status: "idle", name: "two words\nand a line" }));
+  assert.deepEqual(readCliRecord("n1", "myapp_n1", undefined), { status: "idle", pid: process.pid }, "odd name ⇒ absent");
+});
+
 test("readCliRecord: with no tmux target, the cache never bypasses the 'exactly one live record' guard", () => {
   const home = mkdtempSync(join(tmpdir(), "waterplane-clirec-dup-"));
   process.env.WATERPLANE_CLAUDE_HOME = home;

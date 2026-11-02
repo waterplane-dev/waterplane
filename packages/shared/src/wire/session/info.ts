@@ -3,7 +3,7 @@ import type { AnswerSuggestion, PluginBadge } from "../../plugin.js";
 import type { SessionBudgetInfo } from "../../sessionbudget.js";
 import type { ChannelHealth, SourceSessionSpend } from "../../backendsources.js";
 import type { StandingRule, DetectedPrompt } from "./promptbox.js";
-import type { Effort, PermissionMode, SessionLimit, SessionNetRetry, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
+import type { Effort, PermissionMode, SessionLimit, SessionNetRetry, SessionSignInWait, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
 import type { ContextSpark } from "./contextspark.js";
 import type { KeyHint } from "../../keyhint.js";
 import type { Bookmark } from "./archive.js";
@@ -88,6 +88,21 @@ export interface SessionInfo {
    * Cleared by the first hook. Absent = not in setup, or cannot tell (older host, other backend).
    */
   cliSetup?: boolean;
+  /**
+   * The last turn ended because the CLI is not signed in (claude's `StopFailure` hook with
+   * `error: "authentication_failed"` — a structured kind, never the printed words). The phone
+   * says what to do: send `/login`. Cleared by the next turn boundary or a sign-in link on
+   * screen. Absent = signed in, or cannot tell (older host, other backend).
+   */
+  signedOut?: boolean;
+  /**
+   * This session's turn STOPPED because the account was signed out, and nothing has continued it
+   * since — it is one of the account's sign-in episode (host `recover/authgate.ts`). Kept past the
+   * `signedOut`/`login` flags, which the `/login` flow clears on screen, because the stopped turn
+   * still needs a `continue` after the sign-in. Absent/null = not stopped by a sign-out (or an
+   * older host, or a backend with no claude.ai sign-in). Memory only on the host: a restart drops it.
+   */
+  signInWait?: SessionSignInWait | null;
   /**
    * Links a SHELL session wants opened (`ShellLink`), newest last. Absent/null
    * on every claude-shaped session and whenever none is live — never an empty
@@ -315,6 +330,14 @@ export interface SessionInfo {
    */
   claudeSessionId?: string;
   /**
+   * The CLI's own name for this process as other Claude sessions on the
+   * desktop address it (`name` in `~/.claude/sessions/<pid>.json`, e.g.
+   * `talking-sandwatch-0c`) — what a peer's `SendMessage` takes. Read off the
+   * record `readCliRecord` matches; absent when no record matches or it has
+   * no name, never a guessed one. The phone's "copy reference" quotes it.
+   */
+  cliName?: string;
+  /**
    * The `claude` version this session's PROCESS runs — `--version` of the
    * binary at spawn, then the `version` its own log records carry from this
    * process on. Compared against `UpdateInfo.current` to offer a restart onto
@@ -415,15 +438,18 @@ export interface SessionInfo {
  * - `launch` — the person ticked "flag for follow up when done" on the work that
  *              opened this session, and it finished.
  * - `agent`  — the session's own agent raised it, with a one-line `reason`.
+ * - `host`   — this desktop's own watch saw something a person should read (a
+ *              tool loop, `sessions/loopwatch.ts`), with a one-line `reason`.
+ *              Additive: an older phone drops the flag (absent), never misreads it.
  */
-export type FollowUpBy = "hand" | "launch" | "agent";
+export type FollowUpBy = "hand" | "launch" | "agent" | "host";
 
 /** A follow-up flag on a conversation. See `SessionInfo.followUp`. */
 export interface FollowUp {
   by: FollowUpBy;
   /** When it was set (host clock, ms). */
   at: number;
-  /** `agent`: the agent's own one line on what to read; clipped (`FOLLOWUP_REASON_CAP`). */
+  /** `agent`/`host`: the one line on what to read; clipped (`FOLLOWUP_REASON_CAP`). */
   reason?: string;
   /** `launch`: the label of the item that asked for it, so the row can say which. */
   item?: string;

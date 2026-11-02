@@ -1,6 +1,6 @@
 ---
 name: host-work
-description: waterplane host — durable work that outlives a session (packages/host/src): `intents/` (`manager.ts`, `adapters.ts`, the tick and the rung ladder; store schema 3), `backlog.ts` and the per-item sessions it opens, `agentintents.ts` + `agentfollowup.ts` (what an agent may post), `routes/work/`, `fanout.ts`, `weekburn.ts`, `archive.ts`, `convfork.ts`, `peers/` (a job on another desktop). Load BEFORE changing how deferred work is stored, fired, requeued, chained, held or capped, before touching schedules, launches, the automatic-session slots or the agent routes, and before reading, deleting or forking an archived conversation. At-most-once by intent id, forever.
+description: "waterplane host — durable work that outlives a session (packages/host/src): `intents/` (`manager.ts`, `adapters.ts`, the tick and the rung ladder; store schema 3), `backlog.ts` and the per-item sessions it opens, `agentintents.ts` + `agentfollowup.ts` (what an agent may post), `routes/work/`, `fanout.ts`, `weekburn.ts`, `archive.ts`, `convfork.ts`, `peers/` (a job on another desktop). Load BEFORE changing how deferred work is stored, fired, requeued, chained, held or capped, before touching schedules, launches, the automatic-session slots or the agent routes, and before reading, deleting or forking an archived conversation. At-most-once by intent id, forever."
 ---
 
 # waterplane host — durable work that outlives a session

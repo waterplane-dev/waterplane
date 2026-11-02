@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, TextCursorInput, Trash2, User, WifiOff } from "lucide-react";
+import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, LogIn, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, TextCursorInput, Trash2, User, Wallet, WifiOff } from "lucide-react";
 import type { SentCommand, SentSource } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { ConfirmButton } from "./Confirm";
@@ -36,7 +36,9 @@ const SOURCE: Record<SentSource, { label: string; Icon: typeof Bot }> = {
   // Rows written before the oracle became a plugin keep their own word.
   oracle: { label: "oracle auto-answer (legacy)", Icon: Bot },
   limit: { label: "usage-limit auto-continue", Icon: Hourglass },
+  spend: { label: "spend-cap auto-continue", Icon: Wallet },
   netretry: { label: "network-error retry", Icon: WifiOff },
+  signin: { label: "continue after sign-in (you tapped)", Icon: LogIn },
 };
 
 /**

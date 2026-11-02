@@ -128,6 +128,14 @@ export interface BackendInfo {
     commands?: true;
     /** How the core's repo instructions reach this backend by default (the session's actual: `SessionInfo.told`). */
     told?: "plugin-dir" | "env-file" | "config" | "flag" | "none";
+    /**
+     * Delivery answers this backend's folder-trust box itself (the claude family:
+     * `delivery.autoAcceptsTrust` on the host). Sent only as `false` — a backend whose trust
+     * box (Copilot's, published by its plugin) waits for a person's tap. ABSENT INHERITS what
+     * every host meant before the field existed: auto-accepted, so an old host and the claude
+     * frame read exactly as they did. Read through `LaneSessionState.trustAutoAccepted`.
+     */
+    autoAcceptsTrust?: false;
   };
   /**
    * The CLI versions a plugin backend's screen and store readers were MEASURED on

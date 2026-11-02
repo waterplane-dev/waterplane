@@ -46,6 +46,7 @@ export * from "./stream.js";
 export * from "./wire/telemetry.js";
 /** Usage readings per source: claude's adapter, the chip's one cut, the long-press words. */
 export * from "./usagesources.js";
+export * from "./sessionwindow.js";
 /** What an arbitrary span cost, by hour, repo and conversation — `GET /api/costwindow`. */
 export * from "./wire/costwindow.js";
 
@@ -192,6 +193,10 @@ export * from "./launch.js";
 export * from "./netretry.js";
 export * from "./netretrycfg.js";
 
+/** Why a session is blocked on something outside it (signed out, spend wall,
+ *  usage limit, network retry) — `blockOf`, the one derivation both ends ask. */
+export * from "./block.js";
+
 /** Several pictures as ONE picture — the arrangement, so a mark can span the
  *  screens it is about. Pure geometry; the canvas half lives in web. */
 export * from "./collage.js";
@@ -235,6 +240,8 @@ export * from "./sessioncost.js";
 export * from "./contextweight.js";
 /** Every agent-instruction file in a folder, who reads it (Claude Code, Copilot) and when; the repeats between them. */
 export * from "./agentfiles.js";
+/** Whether a SKILL.md's frontmatter is strict YAML — Copilot CLI skips a skill whose unquoted description holds ": ". */
+export * from "./yamlfront.js";
 /** What this desktop adds to every session, whatever the repo; and the always-on rows and sentences both ends word alike. */
 export * from "./desktopfiles.js";
 export * from "./alwaysonwords.js";
@@ -304,9 +311,9 @@ export * from "./wire/slash.js";
  *  a turn on it. */
 export * from "./buildscan.js";
 
-/** Cleaning, merging and wording the install log — the half that must not lose
- *  or duplicate a history when a phone re-reports everything on every connect. */
-export * from "./installlog.js";
+/** The row-level half of the APK self-install rules: the shell's `InstallCaps`, the
+ *  Play build's refusals and every sentence about one downloaded row. */
+export * from "./installrow.js";
 
 /** What a build leaves behind and what it is called: the collect-into-the-outbox
  *  policy, the versioned name, `familyKey` ("which artifact IS this"), the fold
@@ -418,3 +425,6 @@ export * from "./prview.js";
 /** `wordOf(table, k, fallback)`: a table's word for a wire value this build
  *  may not know (`local/total-wire-words`). */
 export * from "./wordof.js";
+
+/** `trimEndChars(s, "/")`: the linear `s.replace(/\/+$/, "")` (no polynomial ReDoS). */
+export * from "./lineartrim.js";

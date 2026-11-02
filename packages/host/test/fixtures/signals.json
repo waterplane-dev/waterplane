@@ -41,7 +41,7 @@
       { "path": "screens/harvest-slash.local-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
       { "path": "screens/harvest-slash.local-2.1.306.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" },
       { "path": "screens/harvest-slash.local-2.1.308.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.308" },
-      { "path": "screens/harvest-slash.local-2.1.310.txt", "role": "guard", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.310" }
+      { "path": "screens/harvest-slash.local-2.1.310.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.310" }
     ],
     "limit.reset": [
       { "path": "screens/slash-usage-*.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },

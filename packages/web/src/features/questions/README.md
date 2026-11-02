@@ -10,10 +10,14 @@ App on every update) and the send queue — so the sheet paints identically onli
 how old what it shows is (`SNAP_AT_KEY`). `actions.ts`: `ackAsking` (retire a prose question
 without typing anything).
 
-**Sheet**: `questions` (not persisted). **Messages**: none. Opened by App's launcher chip and the
-toolbar (`setOverlay("questions")`), unchanged.
+**Sheet**: `questions` (not persisted). **Messages**: none. Opened by the launcher's "N waiting" chip
+and the toolbar (`setOverlay("questions")`). **Who is listed is not this sheet's call**: its rows are
+`attentionCut(…, "wait", …)` (`src/attention.ts`) over every session and the launcher's visibility rule
+— the call that chip counts with — so the chip's number and the cards are one array; `waitShapes`
+only partitions them into the three card shapes. When it hides some (hidden or unfocused repos) it
+says "n of N" above the cards, with *show all*.
 
-**Reads from core**: `world.sessions`, `useQueueEntries()` (so an already-answered question says so
+**Reads from core**: `world.sessions`, `world.backends`, `world.cwdVisible`, `useQueueEntries()` (so an already-answered question says so
 rather than inviting a duplicate keystroke), `queue.answerPrompt`, `conn.status/liveSend`,
 `nav.attach/close`.
 
@@ -24,5 +28,5 @@ screen nobody is looking at any more.
 
 **Exports for App**: none — the manifest only.
 
-**Tests**: pure logic lives in `QuestionsSheet`/`PromptAnswer`; e2e: `scripts/e2e-answer.mjs`,
+**Tests**: `src/attention.test.mjs` (the bucket and the cut the chip and this sheet share); e2e: `scripts/e2e-answer.mjs`,
 `scripts/e2e-askbox.mjs`.

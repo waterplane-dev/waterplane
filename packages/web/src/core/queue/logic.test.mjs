@@ -7,8 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACK_TIMEOUT_MS, OP_ACK_TIMEOUT_MS, SUBMIT_ACK_TIMEOUT_MS, PENDING_PREFIX, ackWindow, goneLanesOf, isLaterId, isPendingId, laterId,
-  budgetHeldLaneSet, budgetReleased, entryFrame, laneFor, laneLabelOf, markAttempt, pendingLaneId, requeue, sendingLabel, serialStates, unpark, whichWords,
+  budgetHeldLaneSet, budgetReleased, entryFrame, laneFor, laneLabelOf, markAttempt, pendingLaneId, requeue, sendingLabel, serialStates, laneStateOf, unpark, whichWords,
 } from "./logic.ts";
+import { laneBusy, sessionWall } from "@waterplane/shared";
 
 const row = (o = {}) => ({ ackId: "a", sessionId: "s1", cwd: "/r/myapp", text: "hello", ts: 1000, status: "queued", ...o });
 
@@ -175,4 +176,23 @@ test("a typed answer rides the answer's own frame as promptText — one entry, o
   assert.equal(reason.promptText, "use the other file");
   const plain = at({ answer: { fingerprint: "fp", label: "Yes", question: "q?" } });
   assert.equal("promptText" in plain, false, "absent when nobody typed — an older host never sees the field");
+});
+
+test("laneStateOf: a trust box is a wall only where the host says delivery does not answer it", () => {
+  const caps = (o = {}) => ({ contextMeter: true, usageLimits: true, transcript: true, slash: true, promptBoxes: true, hooks: true, effort: true, remoteControl: true, ...o });
+  const backends = [
+    { id: "claude", label: "Claude Code", caps: caps() },
+    { id: "copilot", label: "GitHub Copilot", caps: caps({ autoAcceptsTrust: false }) },
+  ];
+  const trust = { kind: "trust", question: "Do you trust this folder?", options: [] };
+  const claudeS = { id: "a", cwd: "/r", running: true, prompt: trust };
+  const copilotS = { id: "b", cwd: "/r", running: true, backend: "copilot", prompt: trust };
+  assert.equal(sessionWall(laneStateOf(claudeS, backends)), null);
+  assert.equal(sessionWall(laneStateOf(copilotS, backends)), "awaitingAnswer");
+  // No backend list yet (or an old host that never sent the cap): today's behaviour.
+  assert.equal(sessionWall(laneStateOf(copilotS)), null);
+  assert.equal(sessionWall(laneStateOf(copilotS, null)), null);
+  // The serial flattening reads the same fact.
+  assert.equal(laneBusy(serialStates([copilotS], backends)[0]), true);
+  assert.equal(laneBusy(serialStates([copilotS])[0]), false);
 });

@@ -1,5 +1,5 @@
 /** What a decision is called, and the clock chips it is chosen from. Split from `sendIntent.ts` (docs/notes/send-architecture.md); pure, no React. */
-import { DEFAULT_GRACE_MIN } from "@waterplane/shared";
+import { DEFAULT_GRACE_MIN, type ScheduleRule } from "@waterplane/shared";
 import { type SendWhen } from "./sendTypes.ts";
 
 // ── What a decision is called ────────────────────────────────────────
@@ -137,6 +137,10 @@ export const onceIn = (ms: number): SendWhen =>
  *  `oneShot` defaults on, same as the clock anchor's blank state (`onceIn`) —
  *  "once" is the default for either anchor, and repeating is the thing you
  *  opt into, not the thing you have to opt out of. */
-export const windowIn = (): SendWhen =>
-  ({ kind: "at", rule: { kind: "window", window: "session", edge: "before", offsetMin: -60, oneShot: true }, graceMin: DEFAULT_GRACE_MIN });
+export const windowIn = (noSess = false): SendWhen =>
+  ({ kind: "at", rule: { kind: "window", window: noSess ? "weekly" : "session", edge: "before", offsetMin: -60, oneShot: true }, graceMin: DEFAULT_GRACE_MIN });
 
+/** A NEW window rule on a plan with no 5-hour window starts weekly (`sessionGoneSince`). Only where a rule is CREATED — a saved one is never re-anchored. */
+export const weeklyIfNoSession = (rule: ScheduleRule, noSess: boolean): ScheduleRule =>
+  !noSess || rule.kind !== "window" || rule.periodId || rule.window === "weekly" ? rule
+    : { ...rule, window: "weekly", guardWindow: rule.guardWindow === "weekly" ? undefined : rule.guardWindow };

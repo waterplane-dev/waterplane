@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { execFileP } from "../proc.js";
 import { rmSync } from "node:fs";
 import type { ClosedBy, SessionInfo, SessionShell, SessionShellDetail } from "@waterplane/shared";
-import { ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
+import { blockWallOf, ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
 import { namesStoreReader } from "../backends/index.js";
 import { trustRule } from "../backends/derive.js";
 import { readCliRecord } from "../agents.js";
@@ -330,8 +330,11 @@ export function autoFireBlocker(core: SessionCore, id: string, quietMs: number):
     limitBlocked: s.info.limit?.blocked,
     awaitingInput: s.info.awaitingInput,
     promptKind: s.info.prompt?.kind,   // claude's trust box is fine — delivery accepts it
+    block: blockWallOf(s.info),      // signed out, or the host's net retry holds it
   });
   if (wall === "limit") return "the session is blocked on a usage limit";  // the item would bounce
+  if (wall === "auth") return "the session is signed out — it needs a sign-in (/login)";
+  if (wall === "net") return "the session is retrying a network error";
   if (wall === "awaitingAnswer") return "the session is waiting for an answer";
   // …and ONLY claude's (`derive.ts`'s `trustRule`): another CLI's trust box is a person's call,
   // never walked into by auto-fire (delivery would refuse it anyway, but nothing should try).

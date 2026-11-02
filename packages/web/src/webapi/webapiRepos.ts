@@ -11,6 +11,10 @@ export const reposApi = {
       "/api/repo",
       { parent, name, setup: opts.setup !== false, description: opts.description },
     ),
+  /** Folders straight under the root that rescan skipped for having no `.git` (`host/repos.ts` plainFolders). */
+  plainFolders: () => jget<{ folders: { name: string; path: string }[] }>("/api/plainfolders"),
+  /** `git init` in one of those folders — the host refuses any path it did not just list. */
+  initPlainFolder: (path: string) => jpost<{ path?: string; branch?: string; error?: string }>("/api/plainfolders/init", { path }),
   /** `git clone` into a new folder under `parent`; the host refuses any URL but https/ssh, in words. */
   cloneRepo: (parent: string, url: string, name?: string) =>
     jpost<{ path?: string; branch?: string; warning?: string; error?: string }>("/api/clone", { parent, url, name: name || undefined }),

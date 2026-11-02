@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { useBacklog } from "../../features/backlog";
 import type { Connection } from "../conn/useConnection";
@@ -23,7 +23,7 @@ export interface UseRepoRefreshCtx {
 /**
  * Re-list the repos on a connect and when the open session's turn ends, and
  * follow a manual fire to the session it used (docs/notes/app-architecture.md).
- * Three of App's effects, verbatim and in their order.
+ * App's effects, in their order, plus a re-list when a sheet closes onto the launcher.
  */
 export function useRepoRefresh(ctx: UseRepoRefreshCtx) {
   const { status, refreshRepos, activeId, active, wantNavRef, firedIdRef, bl, sessions, attach, repos, overlay } = ctx;
@@ -38,6 +38,17 @@ export function useRepoRefresh(ctx: UseRepoRefreshCtx) {
   // re-read where it is looked at rather than left at the last session's turn.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-list on reaching the launcher only; `refreshRepos` is not guaranteed stable
   useEffect(() => { if (!activeId) refreshRepos(); }, [activeId]);
+  // …and on closing a sheet back onto it. A sheet can move what a row's chips
+  // say — a repo-health refresh or re-cut moves `Health N`, a setup fix the
+  // issue count — and the launcher under it kept the list it had before the
+  // sheet opened, so the chip and the sheet read two numbers for one repo.
+  const prevOverlay = useRef(overlay);
+  useEffect(() => {
+    const was = prevOverlay.current;
+    prevOverlay.current = overlay;
+    if (was && !overlay && !activeId) refreshRepos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-list on a sheet closing only; `refreshRepos` is not guaranteed stable
+  }, [overlay]);
   useGitBusyRefresh({ refreshRepos, activeId, repos, overlay });
   useEffect(() => {
     if (activeId) return;

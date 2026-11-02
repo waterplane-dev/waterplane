@@ -101,3 +101,7 @@ The first prompt into a new repo answers claude's workspace-trust box with Yes a
 A command the agent asks the person to run (`! cmd`, or a shell code block) carries a "shell" button in the reader that puts the command — without the `!` — into the session's companion shell's prompt box, opening that shell when there is none; it is never run without the person's Send.
 - asked: 2026-10-27
 - shipped: 0562059d
+### R-shell-016 · requested
+The integrated shell offers a copy-paste convenience so text can be copied to and from it.
+- asked: 2026-10-27
+

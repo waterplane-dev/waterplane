@@ -412,6 +412,35 @@ export function composerHeld(rawRows: readonly string[], a: ComposerAnchors): st
   return held;
 }
 
+/** A backend's composer anchors off its delivery facts; null when it declares neither. */
+export function composerAnchorsFor(d: {
+  readonly composerCursorRe: RegExp | null;
+  readonly composerRuleRe: RegExp | null;
+  readonly composerPlaceholderRe?: RegExp | null;
+}): ComposerAnchors | null {
+  if (!d.composerCursorRe && !d.composerRuleRe) return null;
+  return { cursor: d.composerCursorRe, rule: d.composerRuleRe, placeholder: d.composerPlaceholderRe ?? null };
+}
+
+/**
+ * The live composer read twice off one grid: `held` is the plain render (a dim
+ * hint reads as words there), `typed` the same box with dim cells blanked — what
+ * a person actually typed (`""` when the box holds only a hint or nothing; null
+ * when the blanked read places no box). The whole reading is null when the plain
+ * read places no box: no opinion. The one rule `deliverscreen.ts`'s
+ * `composerHoldsOnlyHint` and the recovery writer's draft rung
+ * (`recover/recoverwrite.ts`) both ask — never two copies of the dim edge.
+ */
+export function composerReading(
+  cells: readonly { text: string; undimmed: string }[],
+  a: ComposerAnchors,
+): { held: string; typed: string | null } | null {
+  const held = composerHeld(cells.map((r) => r.text), a);
+  if (held === null) return null;
+  if (!held) return { held, typed: "" };
+  return { held, typed: composerHeld(cells.map((r) => r.undimmed), a) };
+}
+
 /**
  * Is THIS text what the LIVE composer is holding — asked before typing?
  *

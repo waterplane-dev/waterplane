@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createFeatureRunner, createRepoActionTable, createRepoChipList, createSettingsRowTable, createSheetTable, createToolbarItemTable, setupRowDefs,
-  availabilityText, countedN, createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createSessionViewTable, menuBadgeTotal, menuItemCatalog,
+  availabilityText, countedN, createHideCheck, createLauncherItemTable, createRepoChipTable, createMenuItemTable, createSecretFillerTable, createSessionViewTable, headerKeyed, menuBadgeTotal, menuItemCatalog,
 } from "./featureRun.ts";
 
 function fakeCore() {
@@ -326,6 +326,22 @@ test("a counted launcher item's tap opens what it counted (openCount), contained
   assert.equal(toasts.length, 1);
 });
 
+test("headerKey: false keeps a counted item off the header row, but on its ☰ line and in the ☰ total", () => {
+  const { core } = fakeCore();
+  const icon = () => null;
+  const useCount = () => ({ n: 3, title: "3" });
+  const items = createLauncherItemTable([
+    { id: "v", launcherItems: [{ id: "vault", label: "Vault", icon, open: () => {}, useCount }] },
+    { id: "a", launcherItems: [{ id: "apps", label: "Apps", icon, open: () => {}, useCount, headerKey: false }] },
+    { id: "d", launcherItems: [{ id: "desk", label: "Desktop", icon, open: () => {}, headerKey: false }] },
+  ], () => core).items();
+  assert.deepEqual(headerKeyed(items).map((i) => i.key), ["v:vault"], "default (the vault) is unchanged: lifted");
+  const opted = items.find((i) => i.key === "a:apps");
+  assert.equal(opted.useCount, useCount, "the line badge still reads the count");
+  assert.equal(menuBadgeTotal(1, items.filter((i) => i.useCount).map((i) => i.useCount())), 7, "both shares stay in the ☰ total");
+  assert.equal(items.find((i) => i.key === "d:desk").headerKey, undefined, "ignored without useCount");
+});
+
 test("one reading of a count: the item's badge and the ☰ sum agree, and nothing waiting is 0", () => {
   assert.equal(countedN(null), 0);
   assert.equal(countedN(undefined), 0);
@@ -407,4 +423,93 @@ test("secret fillers: labelFor words the button for this ask, null drops it, a t
   let items;
   quietly(() => { items = t.items(ctx); });
   assert.deepEqual(items.map((e) => [e.key, e.label]), [["x:named", "for Password:"], ["x:plain", "plain"]]);
+});
+
+// ── hideWhen: a line that would only lead to "not here" is not drawn ──────────────────────────
+
+/** The shape of the Android apps extension's manifest (docs/notes/android-apps-architecture.md §3):
+ *  hidden unless its extension is on AND the phone has an installer. `links` declares nothing. */
+function appsLike(env) {
+  const icon = () => null;
+  return [
+    { id: "links", launcherItems: [{ id: "links", label: "Links", icon, open: () => {} }] },
+    {
+      id: "phoneapps",
+      hideWhen: () => !env.on || !env.shell,
+      launcherItems: [{ id: "main", label: "Apps", icon, open: () => {}, useCount: () => ({ n: 2, title: "2 waiting" }), openCount: () => {} }],
+      menuItems: [{ id: "m", label: "Apps", icon, open: () => {} }],
+      repoActions: [{ id: "a", icon, label: () => "apps", run: () => {} }],
+      repoChips: [{ id: "c", useCount: () => null }],
+    },
+  ];
+}
+
+test("hideWhen: a browser PWA (no shell) draws no line and no badge term; shell+off none; shell+on one", () => {
+  const { core } = fakeCore();
+  const env = { on: true, shell: false };
+  const features = appsLike(env);
+  const launcher = createLauncherItemTable(features, () => core);
+  const menu = createMenuItemTable(features, () => core);
+  const actions = createRepoActionTable(features, () => core);
+  const chips = createRepoChipTable(features, () => core);
+  const badge = () => menuBadgeTotal(0, launcher.items().filter((i) => i.useCount).map((i) => i.useCount()));
+  const keys = () => launcher.items().map((i) => i.key);
+
+  // Browser: the extension may well be on, but nothing can install here.
+  assert.deepEqual(keys(), ["links:links"], "links is drawn exactly as before");
+  assert.equal(badge(), 0, "no badge term");
+  assert.deepEqual(menu.items({ id: "s" }).map((i) => i.key), []);
+  assert.deepEqual(actions.actions({ id: "r" }).map((a) => a.key), []);
+  assert.deepEqual(chips.chips().map((c) => c.key), []);
+
+  // The Android shell with the extension off.
+  env.shell = true; env.on = false;
+  assert.deepEqual(keys(), ["links:links"]);
+  assert.equal(badge(), 0);
+
+  // On: one line, its badge term, and the rest of its contributions.
+  env.on = true;
+  assert.deepEqual(keys(), ["links:links", "phoneapps:main"]);
+  assert.equal(badge(), 2);
+  assert.equal(menuBadgeTotal(1, launcher.items().filter((i) => i.useCount).map((i) => i.useCount())), 3, "the core's base is unchanged");
+  assert.deepEqual(menu.items({ id: "s" }).map((i) => i.key), ["phoneapps:m"]);
+  assert.deepEqual(actions.actions({ id: "r" }).map((a) => a.key), ["phoneapps:a"]);
+  assert.deepEqual(chips.chips().map((c) => c.key), ["phoneapps:c"]);
+});
+
+test("hideWhen that throws hides its feature and is said once; a registry without one hides nothing", async () => {
+  const { core, toasts } = fakeCore();
+  const icon = () => null;
+  const t = createLauncherItemTable([
+    { id: "bad", hideWhen: () => { throw new Error("boom"); }, launcherItems: [{ id: "x", label: "X", icon, open: () => {} }] },
+    { id: "ok", launcherItems: [{ id: "y", label: "Y", icon, open: () => {} }] },
+  ], () => core);
+  let keys;
+  assert.equal(quietly(() => { keys = t.items().map((i) => i.key); t.items(); }), 2, "logged each pass");
+  assert.deepEqual(keys, ["ok:y"]);
+  await tick();
+  assert.equal(toasts.length, 1, "said once");
+  assert.doesNotMatch(toasts[0], /hideWhen/, "no field name in a person's toast");
+  assert.equal(createHideCheck([{ id: "a" }, { id: "b" }])(core).size, 0);
+});
+
+test("one shared hide check: a throwing hideWhen is said once for the feature across every table; the ☰ catalog honours it", async () => {
+  const { core, toasts } = fakeCore();
+  const icon = () => null;
+  const features = [
+    { id: "bad", hideWhen: () => { throw new Error("boom"); }, launcherItems: [{ id: "x", label: "X", icon, open: () => {} }],
+      menuItems: [{ id: "m", label: "M", icon, open: () => {} }], repoActions: [{ id: "a", icon, label: () => "a", run: () => {} }] },
+    { id: "ok", menuItems: [{ id: "n", label: "N", icon, open: () => {} }] },
+  ];
+  const check = createHideCheck(features);
+  const launcher = createLauncherItemTable(features, () => core, check);
+  const menu = createMenuItemTable(features, () => core, check);
+  const actions = createRepoActionTable(features, () => core, check);
+  quietly(() => {
+    launcher.items(); menu.items({ id: "s" }); actions.actions({ id: "r" });
+    assert.deepEqual(menuItemCatalog(features, () => core, check).map((r) => r.id), ["ok:n"]);
+  });
+  await tick();
+  assert.equal(toasts.length, 1, "said once, not once per table");
+  assert.deepEqual(menuItemCatalog(features).map((r) => r.id), ["bad:m", "ok:n"], "no core: unchanged");
 });

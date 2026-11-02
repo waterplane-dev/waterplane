@@ -11,7 +11,10 @@
  *
  * Two facts together make a row transient here, and both are needed:
  *  - `error === "server_error"` — a stub's `400` carries `unknown`, and nothing
- *    but the CLI's own classification is trusted for which side failed;
+ *    but the CLI's own classification is trusted for which side failed. A 529
+ *    is `server_error` in the LOG too (real logs, 2026-11-02: every
+ *    "529 Overloaded" row) even though its `StopFailure` hook says `overloaded`;
+ *    an auth failure's row is `authentication_failed` and is never ours;
  *  - the TEXT has a known transient shape (`transientApiError`): a network errno,
  *    can't reach, connection lost/dropped/refused, no response, 5xx/529.
  * A spend wall is an API-error row too: `detectSpendText` claims it first, because
@@ -24,6 +27,7 @@
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { stamp } from "./convlog.js";
 import { detectSpendText } from "./limit.js";
+import { opensTurn } from "./transcript/transcriptlog.js";
 
 /** A give-up is the last row of its turn, so the answer is always near the end. */
 const MAX_READ = 256 * 1024;
@@ -37,6 +41,7 @@ const TRANSIENT: readonly RegExp[] = [
   /\b(?:ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|ENETUNREACH|ENETDOWN|EHOSTUNREACH|EPIPE|UND_ERR_[A-Z_]+)\b/,
   /\bcan(?:'|’)?t reach the API\b|\bcannot reach the API\b|\bunable to (?:connect|reach)\b/i,
   /\bconnection (?:lost|dropped|refused|reset|error|closed|timed out)\b/i,
+  /\bthe response stopped arriving\b/i,
   /\bno response from (?:the )?API\b/i,
   /\brequest timed out\b|\btimed out waiting\b/i,
   /^(?:5\d\d)\b/,
@@ -93,6 +98,22 @@ export function netRowVerdict(row: Record<string, unknown>): NetLogVerdict | nul
 
 /** What the conversation log says about the NEWEST assistant row. */
 export function readNetLog(path: string): NetLogVerdict {
+  return scanNetLog(path, false);
+}
+
+/**
+ * A give-up still STANDING: the newest assistant row is transient AND no prompt
+ * or command was logged after it — nobody has typed since the CLI gave up. Asked
+ * when the host finds a session it has no turn end for (a restart, or a give-up
+ * from before the host listened for `StopFailure`), so no freshness stamp can
+ * say the error is this turn's. A prompt after it ⇒ `clear`: someone took over,
+ * and typing `continue` there would answer a prompt nobody is waiting on.
+ */
+export function readStandingGiveUp(path: string): NetLogVerdict {
+  return scanNetLog(path, true);
+}
+
+function scanNetLog(path: string, standing: boolean): NetLogVerdict {
   let st;
   try { st = statSync(path); } catch { return UNKNOWN; }
   const start = Math.max(0, st.size - MAX_READ);
@@ -104,13 +125,18 @@ export function readNetLog(path: string): NetLogVerdict {
   try { readSync(fd, buf, 0, len, start); } catch { return UNKNOWN; } finally { closeSync(fd); }
   const lines = buf.toString("utf8").split("\n");
   if (start > 0) lines.shift(); // a tail read starts mid-record
+  let typedAfter = false;
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
-    if (!line || line.charCodeAt(0) !== 123 /* { */ || !line.includes('"assistant"')) continue;
+    if (!line || line.charCodeAt(0) !== 123 /* { */) continue;
+    const isAssistant = line.includes('"assistant"');
+    if (!isAssistant && !(standing && line.includes('"user"'))) continue;
     let row: Record<string, unknown>;
     try { row = JSON.parse(line); } catch { continue; }
+    if (standing && opensTurn(row)) { typedAfter = true; continue; }
+    if (!isAssistant) continue;
     const v = netRowVerdict(row);
-    if (v) return v;
+    if (v) return typedAfter && v.state === "transient" ? CLEAR : v;
   }
   return UNKNOWN;
 }

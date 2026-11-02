@@ -79,3 +79,8 @@ On desktop, after pasting an image and sending it with Ctrl+Return, the caret is
 - asked: 2026-10-24
 - shipped: 81cd5434
 
+### R-input-018 · shipped
+With a physical keyboard, Ctrl+E opens the jump dialog in the browser as in VS Code, even when the tab strip is off. The dialog has a text filter, focused automatically on desktop but not on phones, and arrow keys move through the list with Return jumping to the selection. Pressing Ctrl+E again while the dialog is up closes it.
+- asked: 2026-10-26
+- shipped: f658fc8e
+

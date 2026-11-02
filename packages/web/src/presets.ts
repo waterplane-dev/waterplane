@@ -135,6 +135,21 @@ STEP 4 — check .gitignore. If .claude/ is ignored, the skills will not survive
 STEP 5 — verify and report. Confirm every rule that was in CLAUDE.md before is still somewhere (file, skill or docs), then write to ${OUT}/claudemd.md: the before and after sizes, what moved where, and anything you deliberately left in place. Do not commit.`,
   },
   {
+    id: "other-agents",
+    title: "ready for Copilot & local models",
+    text: `Make this repo work as well for GitHub Copilot CLI and local models (Ollama) as it does for Claude. Measure first and change only what is wrong.
+
+1. SKILLS COPILOT CAN LOAD. Copilot reads .claude/skills, .github/skills and .agents/skills but parses their frontmatter as strict YAML, and silently skips a skill whose unquoted description contains ": ". If \`copilot\` is installed, run \`copilot skill list\` — it names every skill it failed to load. Rewrite each failing description as ONE double-quoted line (escape \\" and \\\\). Change no other word.
+
+2. ONE SET OF INSTRUCTIONS. Claude Code and Copilot both read CLAUDE.md on every request; Copilot also reads AGENTS.md and .github/copilot-instructions.md, and other agents read AGENTS.md (some fall back to CLAUDE.md only when there is no AGENTS.md). Never copy CLAUDE.md into a second file — Copilot would carry both. If another agent needs an AGENTS.md, make it one line pointing at CLAUDE.md.
+
+3. A MAP FOR SMALL MODELS. A local model fails by guessing paths and by not knowing how to check its work. Make sure the TOP of CLAUDE.md says, in at most ~15 lines: what each top-level directory holds (where UI components and their styles live, where the logic and its tests live), the one command that runs the tests for a single file, and the build step a test needs first. Add only what is missing; move nothing else.
+
+4. SIZE. Count the characters of CLAUDE.md plus every skill description (the always-on part). A local model with a 32k–64k window should spend under ~16,000 chars (~4k tokens) on it. If it is larger, say which sections are reference that could move into a skill — do not move them in this pass.
+
+5. Write ${OUT}/agents.md: which skills you fixed, what you added to CLAUDE.md, the always-on size before and after, and anything you deliberately left. Do not commit.`,
+  },
+  {
     id: "commit",
     title: "commit WIP",
     text: "Review the uncommitted changes here. If they are coherent and safe, stage and commit them with a clear message — do not push. If they are unrelated pieces of work, split them into separate commits. If anything looks accidental or half-finished, leave it alone and say why.",
@@ -156,6 +171,7 @@ STEP 5 — verify and report. Confirm every rule that was in CLAUDE.md before is
  */
 export const CHECK_REMEDY: Record<string, string> = {
   "context-weight": "claudemd-groom",
+  "skill-frontmatter": "other-agents",
 };
 
 /** The preset a check's remedy points at, if it is still in the user's list. */

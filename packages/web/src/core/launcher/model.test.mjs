@@ -69,9 +69,9 @@ test("a repo's roll-up buckets sum to its row count, and the total is the sum ov
   const sorted = [ses("a1", "/r/a", 1, { st: "wait" }), ses("a2", "/r/a", 2, { st: "coding" }), ses("b1", "/r/b", 3, { st: "wait" })];
   const m = rollupByRepo(sorted, (s) => s.st, repoOf);
   const a = m.get("a");
-  assert.equal(a.wait + a.limit + a.coding + a.done + a.exited, 2);
+  assert.equal(a.wait + a.blocked + a.coding + a.done + a.exited, 2);
   assert.equal(rollupTotal(m, "wait"), 2);
-  assert.equal(rollupTotal(m, "limit"), 0);
+  assert.equal(rollupTotal(m, "blocked"), 0);
 });
 
 test("stars are their own count, never a roll-up bucket", () => {

@@ -301,7 +301,7 @@ public class ShellPullService extends Service {
             // Absent means nobody recorded which way it went, and the desktop's
             // log must be able to tell that from a tap — `false` would be
             // printed as the positive claim "installed on a tap"
-            // (`shared/installlog.ts`).
+            // (the android-apps extension's `shared/wire.mts`).
             if (installAutoKnown) o.put("installAuto", installAuto);
             if (snoozeUntil > 0) o.put("installSnoozedUntil", snoozeUntil);
             if (cleanedAt > 0) {

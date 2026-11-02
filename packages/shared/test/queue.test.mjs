@@ -23,6 +23,7 @@ import {
   queueIdleReason,
   canRetarget,
   laneBusy,
+  sessionWall,
   moveInLane,
   retargetEntry,
   retryDelay,
@@ -67,6 +68,19 @@ test("laneBusy covers the three quiet-but-unable states, and not a trust box", (
   // Delivery auto-accepts a trust prompt, so it is not a reason to hold.
   assert.equal(laneBusy({ promptKind: "trust" }), false);
   assert.equal(laneBusy({ promptKind: null }), false);
+});
+
+test("a trust box is a wall unless the session's backend auto-accepts trust", () => {
+  // claude / claude-local: delivery answers it, so the session is free.
+  assert.equal(sessionWall({ promptKind: "trust", trustAutoAccepted: true }), null);
+  // Absent = an older host or phone that never said: today's claude behaviour.
+  assert.equal(sessionWall({ promptKind: "trust" }), null);
+  // Copilot's folder-trust box waits for a person's tap: a question like any other.
+  assert.equal(sessionWall({ promptKind: "trust", trustAutoAccepted: false }), "awaitingAnswer");
+  assert.equal(laneBusy({ promptKind: "trust", trustAutoAccepted: false }), true);
+  // The fact is about TRUST only — it never frees another box, and the limit still wins.
+  assert.equal(sessionWall({ promptKind: "select", trustAutoAccepted: true }), "awaitingAnswer");
+  assert.equal(sessionWall({ promptKind: "trust", trustAutoAccepted: false, limitBlocked: true }), "limit");
 });
 
 test("answerInsertAt puts an answer ahead of queued text, behind other answers", () => {

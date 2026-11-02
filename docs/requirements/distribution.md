@@ -178,8 +178,8 @@ Waterplane Game, TalkingPictures and Little Painter are published on Google Play
 - asked: 2026-10-21, 2026-10-22, 2026-10-23
 
 ### R-distribution-039 · requested
-The Waterplane AAB is on the internal testing track assigned to the owner's account, not published to production.
-- asked: 2026-10-21
+The Waterplane AAB is on the internal testing track assigned to the owner's account, not published to production; the Android app is distributed through Google Play private/internal testing, not a public listing.
+- asked: 2026-10-21, 2026-10-26
 
 ### R-distribution-040 · requested
 The Waterplane Game does not ship a PC form factor.
@@ -204,4 +204,13 @@ The release preflight stops a release only for an open, unaccepted high or criti
 Release assets carry a build provenance attestation.
 - asked: 2026-10-26
 - shipped: 15c0ea03
+
+### R-distribution-045 · shipped
+Every build entry that produces an artifact lists the versions it produced in that project's build-tools list, whether triggered from the phone or by an agent.
+- asked: 2026-10-27
+- shipped: 672ca6cc
+
+### R-distribution-046 · requested
+FeedbackPlatform and realestatecalc are not made public; TalkingPictures is public.
+- asked: 2026-10-30
 

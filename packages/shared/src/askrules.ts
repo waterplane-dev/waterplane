@@ -11,6 +11,7 @@
  * Honest reach: it stops the accident, not the adversary — a wrapper script, an alias or a
  * subprocess running the same command is not seen by the rule.
  */
+import { trimEndChars } from "./lineartrim.js";
 
 export interface AskRule {
   /** Stable id the phone toggles by. */
@@ -134,7 +135,7 @@ export function askRuleId(rule: string): string {
 
 /** A repo path with its trailing slashes off (`/` stays `/`). */
 export function trimPathSlash(p: string): string {
-  const t = p.replace(/\/+$/, "");
+  const t = trimEndChars(p, "/");
   return t || "/";
 }
 

@@ -80,3 +80,13 @@ The session context view, the repo readings (set-up) sheet and the all-sessions 
 Two discovered repos with the same folder name never read alike: every place a repo is picked or named (launcher groups, repo picker, send and schedule sheets, activity, the week-end burn pick) adds the shortest parent path that tells them apart ("ciqkit · garmin/" vs "ciqkit · out-ciqkit/"), worded by one shared function on host and phone.
 - asked: 2026-10-29 (after the 2026-10-28 week-end burn went to a rewrite leftover)
 - shipped: 3b67271c
+### R-navigation-018 · shipped
+The "more" note in the VS Code sessions list opens the All sessions view.
+- asked: 2026-10-27
+- shipped: b671ad38
+
+### R-navigation-019 · shipped
+Screens can tell a real close apart from being covered by another screen, so onLeave fires with the right reason.
+- asked: 2026-10-30
+- shipped: c3d30037
+

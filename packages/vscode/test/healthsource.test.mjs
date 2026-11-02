@@ -47,38 +47,38 @@ const put = (dir, name, text) => { mkdirSync(dir, { recursive: true }); writeFil
 /** Every file under `dir` with its size and mtime: equal before and after = nothing was written. */
 const snapshot = (dir) => readdirSync(dir, { recursive: true }).sort().map((n) => { const s = statSync(join(dir, n)); return `${n}:${s.size}:${s.mtimeMs}`; });
 
-test("chooseSource: the folder's series unless ours has a strictly newer last row; ours when the folder has none", () => {
+test("chooseSource: one source — the folder's series whenever it has one, whatever our copy holds; ours only when it has none", () => {
   const f = tmp("hsrc-choose");
   const own = put(tmp("hsrc-own"), "repohealth.jsonl", row(100) + row(300));
   assert.deepEqual(data.chooseSource(f, own, null), { kind: "own", file: own, dir: null, scope: null }, "no folder series");
   const dir = join(f, ".waterplane");
   const theirs = put(dir, "repohealth.jsonl", row(100) + row(200));
-  assert.equal(data.chooseSource(f, own, null).kind, "own", "ours is newer");
-  put(dir, "repohealth.jsonl", row(300));
-  assert.deepEqual(data.chooseSource(f, own, null), { kind: "repo", file: theirs, dir, scope: null }, "a tie goes to the folder's");
-  put(dir, "repohealth.jsonl", row(900));
-  assert.equal(data.chooseSource(f, own, null).kind, "repo", "theirs is newer");
+  assert.deepEqual(data.chooseSource(f, own, null), { kind: "repo", file: theirs, dir, scope: null }, "ours newer: still the folder's — never a second answer");
   put(dir, "repohealth.jsonl", '{"sha":"x","ts":5}\n{"torn');
   assert.equal(data.chooseSource(f, own, null).kind, "repo", "an unreadable last row never demotes the folder's series");
+  const sized = (ts, value) => JSON.stringify({ sha: "a".repeat(40), ts, size: { value } }) + "\n";
+  put(dir, "repohealth.jsonl", sized(100, { max: 9 }));
+  put(own.slice(0, -"/repohealth.jsonl".length), "repohealth.jsonl", sized(900, { max: 9, lineMean: 4 }));
+  assert.equal(data.chooseSource(f, own, null).kind, "repo", "an older engine's folder series is still the one shown: re-cut it on the desktop");
   put(dir, "repohealth.jsonl", "");
   assert.equal(data.chooseSource(f, own, null).kind, "own", "an empty folder series is no series");
   assert.equal(data.chooseSource(f, join(tmp("hsrc-none"), "repohealth.jsonl"), null).kind, "own", "neither exists: ours, to be measured");
 });
 
-test("chooseSource: a folder series an older engine wrote yields to ours, even at the same or a newer commit", () => {
-  const sized = (ts, value) => JSON.stringify({ sha: "a".repeat(40), ts, size: { value } }) + "\n";
-  const f = tmp("hsrc-stale");
-  const dir = join(f, ".waterplane");
-  put(dir, "repohealth.jsonl", sized(300, { max: 9 }));
-  const own = put(tmp("hsrc-stale-own"), "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
-  assert.equal(data.chooseSource(f, own, null).kind, "own", "same commit: theirs scores nothing");
-  put(dir, "repohealth.jsonl", sized(900, { max: 9 }));
-  assert.equal(data.chooseSource(f, own, null).kind, "own", "theirs newer but stale");
-  put(own.slice(0, -"/repohealth.jsonl".length), "repohealth.jsonl", sized(300, { max: 9 }));
-  assert.equal(data.chooseSource(f, own, null).kind, "repo", "both stale: the ts rule decides");
-  put(dir, "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
-  put(own.slice(0, -"/repohealth.jsonl".length), "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
-  assert.equal(data.chooseSource(f, own, null).kind, "repo", "both current: a tie still goes to the folder's");
+test("gitRootOf: the nearest ancestor with a .git dir or file; null above every repo", () => {
+  const top = tmp("hsrc-root");
+  const repo = join(top, "app");
+  mkdirSync(join(repo, ".git"), { recursive: true });
+  mkdirSync(join(repo, "packages", "web", "src"), { recursive: true });
+  const file = join(repo, "packages", "web", "src", "a.ts");
+  writeFileSync(file, "x\n");
+  assert.equal(data.gitRootOf(file), repo, "a file deep inside");
+  assert.equal(data.gitRootOf(join(repo, "packages")), repo, "a folder below the root reads the repo");
+  assert.equal(data.gitRootOf(join(repo, "packages", "gone.ts")), repo, "a path that does not exist yet");
+  const wt = join(top, "wt");
+  mkdirSync(wt);
+  writeFileSync(join(wt, ".git"), "gitdir: /elsewhere\n");
+  assert.equal(data.gitRootOf(join(wt)), wt, "a linked worktree's .git is a file");
 });
 
 test("chooseSource: a scope is only ever the folder's, and falls back to the whole repo without a series", () => {
@@ -147,20 +147,19 @@ test("the folder's series is read, never written: status and plot only, no mend,
   await run.setScope(r, "not-a-scope");
   assert.equal(run.state(r).doc.scope, null, "an unlisted scope is the whole repo");
 
-  // A new commit makes the folder's series behind; a measure appends to OUR file only.
+  // A new commit makes the folder's series behind; a refresh only reads it again — no second copy.
   writeFileSync(join(r, "sub", "b.ts"), "export const b = 1;\n");
   git(r, ["add", "."]);
   git(r, ["commit", "-q", "-m", "c4"], { GIT_AUTHOR_DATE: "2026-04-04T10:00:00Z", GIT_COMMITTER_DATE: "2026-04-04T10:00:00Z" });
   await run.refresh(r);
-  assert.equal(statSync(file).size, intact.length, "the folder's file did not grow");
   assert.equal(readFileSync(file, "utf8"), intact);
-  assert.deepEqual(snapshot(state), before, "update never touched the folder's state dir");
-  const mine = run.seriesFile(r);
-  assert.equal(readFileSync(mine, "utf8").split("\n").filter(Boolean).length, 4, "the measure went to our storage, whole history");
+  assert.deepEqual(snapshot(state), before, "a refresh never touched the folder's state dir");
+  assert.deepEqual(readdirSync(ours, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()), [], "and grew no series of ours beside it");
   doc = run.state(r).doc;
-  assert.equal(doc.source, "own", "ours has the newer last row now");
-  assert.equal(doc.series.rows, 4);
-  assert.equal(doc.repoFile, file, "and the folder's is still named as the other source");
+  assert.equal(doc.source, "repo", "the folder's series is still the one shown");
+  assert.equal(doc.series.rows, 3, "as the desktop left it");
+  assert.equal(doc.behind, 1, "and says it is one commit behind");
+  assert.equal(doc.last, null, "no update ran");
   assert.deepEqual(doc.scopes, ["sub"], "scopes stay offered");
   run.dispose();
 });
@@ -192,9 +191,9 @@ test("the source and measure sentences name where the series is and that the ext
   assert.match(repo, /Read from this folder's \.waterplane\/repohealth\.jsonl, the series measured by the waterplane desktop app \(last row 2026-10-01\)\. The extension never writes it\./);
   assert.match(data.sourceWords({ ...base, source: "repo", scope: "packages/web", seriesFile: "/f/.waterplane/repohealth.packages-web-1a2b.jsonl" }), /the series for packages\/web/);
   assert.match(data.sourceWords({ ...base, source: "own" }), /kept in this extension's own storage, at \/g\/health/);
-  assert.match(data.sourceWords({ ...base, source: "own", repoFile: "/f/.waterplane/repohealth.jsonl" }), /only reads, never writes/);
-  assert.equal(data.measureWords({ repoFile: null }), null);
-  assert.match(data.measureWords({ repoFile: "/f/.waterplane/repohealth.jsonl" }), /writes only this extension's own copy/);
+  assert.match(data.sourceWords({ ...base, source: "own" }), /has not measured this folder/);
+  assert.equal(data.measureWords({ source: "own" }), null);
+  assert.match(data.measureWords({ source: "repo" }), /the same one the phone shows/);
 });
 
 test("repoMixedWords: names the versions, points at the desktop app, never prints a command or promises a refusal", () => {

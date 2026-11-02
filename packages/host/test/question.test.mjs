@@ -117,3 +117,22 @@ test("a question WRAPPED over grid rows is read back whole, with its spaces", ()
   assert.equal(askLine(grid, 400),
     "The UI is still wrong here. \"Outbox is empty\" is false: it's filtered to 0 of 126. Want me to fix it so it reads something like \"0 of 126 in the last 4h, show all\"?");
 });
+
+test("the composer's proposal is never the agent's question, whatever the footer holds", () => {
+  const rule = "─".repeat(60);
+  const grid = [
+    "⏺ D1b done (headless sign-out detected, backlog rows held not failed); wiring hunk",
+    "  handed to D1a. Waiting on D1a.",
+    "",
+    rule,
+    "❯ how far along are we?",
+    rule,
+    "  myrepo · opus-5-5 · 219k ctx",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · 1 local agent",
+  ].join("\n");
+  assert.equal(looksLikeQuestion(grid), false);
+  // A real question above the box still counts.
+  const asked = grid.replace("Waiting on D1a.", "Run D1a now?");
+  assert.equal(looksLikeQuestion(asked), true);
+  assert.equal(askLine(asked).endsWith("Run D1a now?"), true);
+});

@@ -408,6 +408,9 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
     // is re-armed by the slice (`NetRetrySlice.restored`, after this returns).
     re.info.netRetry = { state: "gaveup", attempt: ng.attempt, max: ng.max, nextAt: typeof ng.nextAt === "number" ? ng.nextAt : null, error: ng.error, at: ng.at, ...(typeof ng.why === "string" ? { why: ng.why } : {}), ...(ng.dismissed === true ? { dismissed: true } : {}) };
   }
+  // …and a sign-out (the auth wall and the hold behind it); the episode membership
+  // (`signInSince`) is re-formed by the slice (`SignInSlice.restored`, after this returns).
+  if (re && m.signedOut === true) re.info.signedOut = true;
   // The record carries the LAUNCH model — often an alias ("opus") — and the
   // hooks that read the running one back only fire on the next turn. Every
   // idle session came back from a restart wearing the alias beside siblings
@@ -460,6 +463,7 @@ export function persistLive(core: SessionCore, m: LiveMeta): void {
   // checks before it believes a listing that lacks the name.
   const rec: LiveMeta = live
     ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, netGaveUp: netGaveUpOf(live.info.netRetry), tmuxSocket: TMUX_SOCKET_ID,
+      signedOut: live.info.signedOut ? true : undefined, signInSince: live.info.signInWait?.since,
       // …and the launch's own answers, which those writers do not name either.
       told: live.info.told, askRulesVia: live.info.askRulesVia, askRules: live.info.askRulesVia === "gate" ? (m.askRules ?? heldAskRules(m.id)) : undefined }
     : { ...m, tmuxSocket: TMUX_SOCKET_ID };

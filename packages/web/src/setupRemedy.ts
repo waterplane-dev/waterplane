@@ -62,9 +62,10 @@ const GUIDANCE: Record<string, string> = {
     "`.claude/settings.local.json`, say so and change nothing — those are the person's own settings, not this " +
     "repo's. Otherwise set `\"autoCompactWindow\": \"400k\"` in `.claude/settings.json`, keeping every other key.",
   "apk-install":
-    "Make the Android build leave its APK in `.claude/outbox/` with a dated or commit-stamped name (a copy task " +
-    `at the end of the build, or the build command in \`${sharedRel("builds.json")}\`), and keep one signing key for every ` +
-    "build of the app. If targetSdk is flagged, raise it and say what the raise needs (API changes, permissions). " +
+    `Make sure a build button in \`${sharedRel("builds.json")}\` builds the APK — a button run copies its APK into ` +
+    "`.claude/outbox/` by itself, so never add a hand copy — then run it once (`POST /api/agent/builds/run`), " +
+    "and keep one signing key for every build of the app. If targetSdk is flagged, raise it and say what the " +
+    "raise needs (API changes, permissions). " +
     `The phone half — first install through ${BRAND.displayName} — is the person's to do; say so rather than attempting it.`,
   "builds-configured":
     `Read the repo's own manifests and CI, then write \`${sharedRel("builds.json")}\` as a JSON list of ` +

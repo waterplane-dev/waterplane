@@ -1,7 +1,7 @@
 /**
  * Every `sessions.on(…)` main.ts registers, the plugin events they fire
  * (`plugins.firePrompt`/`fireQuestion`), and the usage-limit event log
- * (`logLimitEvent`, `fmtClock`, `fmtDur`).
+ * (`logLimitEvent`; the words are `recover/blockpush.ts`'s `wallEventWords`).
  *
  * Moved verbatim out of `main.ts` (M5 of the host split, see
  * docs/notes/host-architecture.md). Every main-scope name is read as
@@ -43,6 +43,7 @@ import { createBudgetCalibrator } from "../sessionbudget.js";
 import { backendInfos, onBackendsChanged, primeNewBackendModels } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
 import { noteOptInSends } from "../optins.js";
+import { fmtClock, signInWords, wallEventWords, SIGNIN_KEY, type SignInEvent, type WallPhase } from "../recover/blockpush.js";
 
 export function wireSessionEvents(ctx: ServerCtx) {
   // A closed row says how its item SETTLED (`roster.ts`'s `closedRowOf`) —
@@ -211,11 +212,6 @@ export function wireSessionEvents(ctx: ServerCtx) {
       }
     } catch { /* logging must never break the host */ }
   }
-  const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const fmtDur = (ms: number) => {
-    const m = Math.max(0, Math.round(ms / 60000));
-    return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
-  };
 
   // The resume queue's host-wide half (who is resuming, the hold-off after a
   // failed resume) is not a property of any one session, so it rides on
@@ -224,7 +220,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.broadcast({ t: "limit.config", enabled: ctx.sessions.getAutoContinue(), ...ctx.sessions.resumeState() });
   });
 
-  ctx.sessions.on("limit", (id: string, info: SessionInfo, phase: "blocked" | "scheduled" | "attempt" | "resumed" | "gaveup") => {
+  ctx.sessions.on("limit", (id: string, info: SessionInfo, phase: WallPhase) => {
     const lim = info.limit;
     const when = lim?.resetAt ? fmtClock(lim.resetAt) : null;
     const next = lim?.nextAttemptAt ? fmtClock(lim.nextAttemptAt) : null;
@@ -234,52 +230,26 @@ export function wireSessionEvents(ctx: ServerCtx) {
     );
     logLimitEvent({ ts: Date.now(), phase, sessionId: id, title: info.title, cwd: info.cwd, attempts: lim?.attempts ?? 0, resetAt: lim?.resetAt ?? null, nextAttemptAt: lim?.nextAttemptAt ?? null, autoContinue: lim?.autoContinue ?? null });
 
-    // Auto-continue plan, phrased once for the notification, log entry and card.
-    // (Wording deliberately dodges the detection regexes in limit.ts — this file
-    // printed inside a session must not trip them.)
-    const retryMin = Math.max(1, Math.round(Number(env("LIMIT_RETRY_MS") || 600000) / 60000));
-    // A source wall nobody can date (`SessionLimit.needsYou`) schedules nothing: say so, in the
-    // backend's own words, never "will retry".
-    const plan = lim?.needsYou
-      ? `nothing is retried by itself — it needs you: ${lim.needsYou}`
-      : lim?.autoContinue
-      ? (when ? `auto-continue after the reset (~${when})` : `auto-continue will retry every ${retryMin} min`)
-      : "auto-continue is off — resume manually";
-    const dur = lim?.blockedSince ? fmtDur(Date.now() - lim.blockedSince) : "";
-    const att = lim?.attempts ?? 0;
-
-    // Activity-log entry ("scheduled" ticks stay out — they'd drown the log).
-    if (phase !== "scheduled") {
-      const question =
-        phase === "blocked" ? (lim?.needsYou ? "Session stopped: its CLI reports a wall with no time it lifts." : "Session stopped at the Claude usage limit.")
-        : phase === "attempt" ? `Auto-continue attempt ${att} — typing "continue" into the session.`
-        : phase === "resumed" ? "Usage limit lifted — session resumed."
-        : `Auto-continue gave up after ${att} attempt${att === 1 ? "" : "s"}.`;
-      const rationale =
-        phase === "blocked" ? plan.charAt(0).toUpperCase() + plan.slice(1) + "."
-        : phase === "attempt" ? (next ? `If still blocked, next retry ~${next}.` : "")
-        : phase === "resumed" ? `${att} attempt${att === 1 ? "" : "s"}${dur ? ` · blocked ${dur}` : ""}`
-        : "Still blocked — resume manually.";
+    // The words, per kind (usage limit / spend wall), from ONE place
+    // (`recover/blockpush.ts`) — "scheduled" ticks get none, they'd drown the log.
+    const words = wallEventWords(phase, id, info);
+    if (phase !== "scheduled" && words.log) {
       ctx.decisionLog.add({
         id: randomUUID().slice(0, 8), ts: Date.now(), sessionId: id, sessionTitle: info.title,
-        source: "limit", phase, question, options: [], choice: null, rationale, outcome: "limit",
+        source: "limit", phase, question: words.log.question, options: [], choice: null, rationale: words.log.rationale, outcome: "limit",
       });
     }
+    if (words.push) ctx.notify("limit", words.push);
+    if (words.resolve) ctx.resolveAttention(words.resolve.key, words.resolve.why);
+  });
 
-    if (phase === "blocked") {
-      ctx.notify("limit", { title: `${lim?.needsYou ? "Needs you" : "Usage limit"} · ${info.title}`, body: plan, sessionId: id, tag: `limit-${id}` });
-    } else if (phase === "attempt") {
-      ctx.notify("limit", {
-        title: `Auto-continue sent · ${info.title}`,
-        body: `attempt ${lim?.attempts ?? "?"} — "continue" typed; still blocked → retry${next ? ` ~${next}` : " later"}`,
-        sessionId: id, tag: `limit-${id}`, // replaces the "blocked" push (state update, not a new thread)
-      });
-    } else if (phase === "resumed") {
-      ctx.notify("limit", { title: `Session resumed · ${info.title}`, body: `usage limit lifted after ${att} attempt${att === 1 ? "" : "s"}${dur ? ` · blocked ${dur}` : ""} — work continues`, sessionId: id, tag: `limit-${id}-done`, outcome: "ok" });
-      ctx.resolveAttention(`limit:${id}`, "session resumed");
-    } else if (phase === "gaveup") {
-      ctx.notify("limit", { title: `Auto-continue gave up · ${info.title}`, body: `still limit-blocked after ${att} attempts — resume manually`, sessionId: id, tag: `limit-${id}-done`, outcome: "failed", key: `limit:${id}` });
-    }
+  // The account's sign-in episode (`sessions/signinwait.ts`): ONE push per
+  // transition, never per session, opening the blocked sheet; the episode
+  // emptying resolves the standing item. Nothing here types anything.
+  ctx.sessions.on("signIn", (e: SignInEvent) => {
+    const words = signInWords(e.transition, e.n);
+    if (words.push) ctx.notify("signin", { ...words.push, level: "attention", open: { to: "blocked" } });
+    if (words.resolve) ctx.resolveAttention(SIGNIN_KEY, words.resolve);
   });
 
   ctx.sessions.on("idle", (id: string, info: SessionInfo) => {

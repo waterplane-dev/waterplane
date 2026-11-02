@@ -108,6 +108,16 @@ export function backendInfo(list: BackendList, id?: string): BackendInfo | null 
 }
 
 /**
+ * `false` when delivery does NOT answer this backend's folder-trust box (the host says so with
+ * `caps.autoAcceptsTrust: false` — Copilot's box waits for a person's tap), else undefined:
+ * absent INHERITS auto-accepted, and so does a list that never arrived. Feeds
+ * `LaneSessionState.trustAutoAccepted`, so `sessionWall` calls that box a question.
+ */
+export function trustAutoAccepted(list: BackendList, id?: string): false | undefined {
+  return backendInfo(list, id)?.caps.autoAcceptsTrust === false ? false : undefined;
+}
+
+/**
  * Is this backend a plain shell — a PTY with no conversation, no turns, no
  * models? Read off `BackendInfo.kind` when the host described it, and off the id
  * when it did not (a shell session outliving a `backends` frame is still one).

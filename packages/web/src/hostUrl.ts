@@ -24,7 +24,7 @@
  *    ones that never pass through a transport: strings handed to `<img src>`
  *    and to Background Fetch.
  */
-import { normalizeHostBase, resolveHostUrl, wsUrlFor } from "@waterplane/shared";
+import { normalizeHostBase, parseHostList, resolveHostUrl, wsUrlFor } from "@waterplane/shared";
 import { LS, lsGet } from "./storage.ts";
 import { bearerFor, deviceToken, noteBearerRejected } from "./deviceToken.ts";
 import { DEMO_WS_URL, isDemo } from "./demo/mode.ts";
@@ -50,12 +50,24 @@ let cached: string | null | undefined;
 /** The route override (`setRouteBase`): the same host reached another way. */
 let route: string | null = null;
 
+/**
+ * The address of the host the LIST names active (`hosts` + `hostActive`),
+ * else the stored `hostBase` (no list yet: first run, an older build). Read off
+ * the list first because the header and the switch key name the host from the
+ * list: if `hostBase` lagged — a boot that threw before writing it — the page
+ * ran on the old desktop under the new desktop's name (2026-11-01).
+ */
+export function pickSavedBase(hostsRaw: string | null, activeId: string | null, hostBaseRaw: string | null): string | null {
+  const row = activeId ? parseHostList(hostsRaw)?.find((h) => h.id === activeId) : undefined;
+  return (row && normalizeHostBase(row.base)) || normalizeHostBase(hostBaseRaw || "");
+}
+
 /** The SAVED address of the active host — the tailnet route, as stored. */
 export function savedHostBase(): string | null {
   if (cached !== undefined) return cached;
   cached = null;
   if (isNativeShell()) {
-    cached = normalizeHostBase(lsGet(KEY) || "");
+    cached = pickSavedBase(lsGet(LS.hosts), lsGet(LS.hostActive), lsGet(KEY));
   }
   return cached;
 }

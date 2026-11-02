@@ -8,7 +8,7 @@
  * them says the same thing in words, and every verb stays on the cards below.
  */
 import { CalendarClock, Gauge } from "lucide-react";
-import type { ScheduleEntry, WindowResets } from "@waterplane/shared";
+import { sessionWindowGoneText, type ScheduleEntry, type WindowResets } from "@waterplane/shared";
 import { fmtWhen, inWords } from "./sendIntent";
 import { Explain } from "./Explain";
 import { anchorWords, weekBar, type BarWindow } from "./scheduleWeekPlot";
@@ -49,6 +49,12 @@ export function ScheduleWeekBar({ entries, usage, title, now = Date.now() }: {
       <div className="swb-title"><Gauge size={13} /> The next 7 days against your usage windows</div>
       <Lane w={bar.weekly} name="Weekly window" cls="weekly" />
       <Lane w={bar.session} name="Session window" cls="session" />
+      {/* No 5-hour window on this plan: the lane folds to one line that says so. */}
+      {bar.noSession && !bar.session && (
+        <div className="swb-note">
+          <Explain of="the session window" label="Session window · not on this plan">{sessionWindowGoneText()}</Explain>
+        </div>
+      )}
       <div className="swb-pins" style={{ height: bar.lanes * PIN_ROW + 4 }}>
         {/* The resets carry down through the pins, so a rule anchored to one
             visibly sits on (or just before) its line. */}
@@ -93,6 +99,13 @@ export function ScheduleWeekBar({ entries, usage, title, now = Date.now() }: {
         <div className="swb-note">
           {bar.unread.length === 1 ? "One window rule is" : `${bar.unread.length} window rules are`} not armed —
           the window it tracks has not been read yet.
+        </div>
+      )}
+      {bar.sessionless.length > 0 && (
+        <div className="swb-note">
+          {bar.sessionless.length === 1 ? "One rule is" : `${bar.sessionless.length} rules are`} anchored to the session
+          window, which this plan does not have, so {bar.sessionless.length === 1 ? "it never arms" : "they never arm"}.
+          Open {bar.sessionless.length === 1 ? "it" : "each"} and pick weekly window.
         </div>
       )}
       {bar.later.length > 0 && (

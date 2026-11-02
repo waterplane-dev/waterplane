@@ -67,11 +67,11 @@ Sharing many pictures to the app can drop them straight into a repo's inbox with
 - shipped: 83c50bcf
 
 ### R-apk-014 · shipped
-An opt-in, per-phone switch on the Apps screen deletes a build's APK once it has installed: the copy inside the app, the copy the app saved to Downloads, and older builds of the same app. The row then says the clean-up took it and how much it freed, and a Downloads copy it could not remove is named, not dropped.
+An opt-in, per-phone switch on the Apps screen (the Android apps extension's, on when the desktop has an Android repo) deletes a build's APK once it has installed: the copy inside the app, the copy the app saved to Downloads, and older builds of the same app. The row then says the clean-up took it and how much it freed, and a Downloads copy it could not remove is named, not dropped.
 - asked: 2026-10-11
 - shipped: (this commit — needs a new APK)
 ### R-apk-015 · shipped
-The Apps screen shows, per repo, whether its artifacts and build scripts are ready for automatic install and why not when they are not.
+The Apps screen (the Android apps extension's, on when the desktop has an Android repo) shows, per repo, whether its artifacts and build scripts are ready for automatic install and why not when they are not.
 - asked: 2026-10-09
 - shipped: 4a59f3a8
 
@@ -90,3 +90,16 @@ An Android APK of the app is produced and available alongside the releases.
 - asked: 2026-10-19
 - shipped: 6598946
 
+
+### R-apk-019 · shipped
+In the sideloaded app, an app the person allowed to install itself updates with no dialog after its first install; only the first install of each app shows Android's confirm, and a refused quiet update falls back to that confirm instead of failing.
+- asked: 2026-09-21
+- shipped: ddf77a55
+
+### R-apk-020 · shipped
+The agent in a driven repo answers "does my app update itself" from waterplane's own chain (build button → auto-download → quiet install after the first; the install step lives on the Android apps extension's screen) and never from general Android knowledge, and can run the repo's build buttons itself so a build it makes reaches the phone like a tapped one.
+- asked: 2026-11-01
+
+### R-apk-021 · requested
+Getting a repo's Android app onto the phone and keeping it updated is one flow in one place with one set of words: a new user sees what is missing and fixes it from there, without having to find the build, download-rule, apps and setup screens separately.
+- asked: 2026-11-01

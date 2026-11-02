@@ -11,17 +11,21 @@
  * — the host types `continue` the way its automatic retry does) and the host's
  * auto-retry switch (`NetRetrySwitch`, the Settings row's own component, the
  * same setting). The row completes the ordinary way on the next real turn end.
+ * A row whose session is SIGNED OUT wears `SIGNED_OUT_STALL_TEXT` instead
+ * (`signedOutStall.ts`): words, no verb.
+ *
  * The note says when the host's next stall probe runs ("next try in 23m"), on
  * the phone's clock, ticking once a minute.
  */
 import type { ReactNode } from "react";
-import { PlugZap, WifiOff } from "lucide-react";
+import { KeyRound, PlugZap, WifiOff } from "lucide-react";
 import { NET_RETRY_NOW_NOTE, netStalledOf, netStalledText, type SessionInfo, type SessionNetRetry } from "@waterplane/shared";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { NetRetrySwitch } from "./NetRetrySwitch";
 import { netRetryNow } from "./netRetryCfg";
 import { useNow } from "./useNow";
+import { signedOutStallText } from "./signedOutStall";
 
 export function NetStalled({ state, sessionId, sessions }: {
   state: string;
@@ -29,8 +33,16 @@ export function NetStalled({ state, sessionId, sessions }: {
   sessions: readonly SessionInfo[];
 }): ReactNode {
   const n = netStalledOf({ state, sessionId }, sessions);
-  if (!n || !sessionId) return null;
-  return <StalledNote n={n} sessionId={sessionId} />;
+  if (n && sessionId) return <StalledNote n={n} sessionId={sessionId} />;
+  // The other hold on a running row: its session is signed out (`signedOutStall.ts`).
+  // Words only — the way on is the Blocked sheet's sign-in card, not a button per row.
+  const signed = signedOutStallText({ state, sessionId }, sessions);
+  if (!signed) return null;
+  return (
+    <div className="net-stalled" role="status">
+      <span className="netretry-line"><KeyRound size={14} aria-hidden="true" /> {signed}</span>
+    </div>
+  );
 }
 
 function StalledNote({ n, sessionId }: { n: SessionNetRetry; sessionId: string }): ReactNode {

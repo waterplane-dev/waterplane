@@ -106,6 +106,15 @@ export function chromeSpans(id: string): RegExp | undefined {
   return id === "deliver.echo" ? CHIT_RE : undefined;
 }
 
+/** An IANA zone name (`Europe/Berlin`, `America/Argentina/Buenos_Aires`): where the owner lives. */
+const ZONE_RE = /\b(?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc)\/[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)?/g;
+
+/** Mask every zone name to `UTC`, which the reset reader still parses. Chrome
+ *  rows are kept verbatim, so the notice's zone would otherwise survive. */
+export function maskZones(text: string): string {
+  return text.replace(ZONE_RE, "UTC");
+}
+
 export class FixtureShelf {
   /** Asked but not yet written — so two good observations a tick apart run one source. */
   private pending = new Set<string>();
@@ -134,7 +143,8 @@ export class FixtureShelf {
     Promise.resolve()
       .then(source)
       .then((raw) => {
-        const kept = raw ? fixtureSample(id, raw, chromeRow(id), chromeSpans(id)) : null;
+        // zones go BEFORE the sample is cut: a notice is stored ROT13'd, past any later match
+        const kept = raw ? fixtureSample(id, maskZones(raw), chromeRow(id), chromeSpans(id)) : null;
         if (!kept) return;
         mkdirSync(dirname(file), { recursive: true });
         writeTextAtomic(file, kept);

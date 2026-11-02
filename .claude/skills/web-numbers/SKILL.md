@@ -1,6 +1,6 @@
 ---
 name: web-numbers
-description: waterplane phone client — context, tokens, cost and health as screens (packages/web/src and packages/extensions/token-stats/web): ContextLimits.tsx (the threshold form), ContextSheet.tsx + ContextGraph.tsx + contextPlot.ts, TokenComposition.tsx, the session-cost reminder (costNotice.ts), TurnCostCard.tsx, BudgetField.tsx, TokenStatsSheet.tsx + usageCut.ts, RepoHealthTiles.tsx + repoHealthPlot.ts, HealthIndexChart.tsx. Load BEFORE drawing or wording any token, context-window, usage, dollar or health figure on the phone, changing a chart's axis, palette or control grammar, or touching the context-weight threshold form. A total is never printed without its split, and a readout refuses nothing.
+description: "waterplane phone client — context, tokens, cost and health as screens (packages/web/src and packages/extensions/token-stats/web): ContextLimits.tsx (the threshold form), ContextSheet.tsx + ContextGraph.tsx + contextPlot.ts, TokenComposition.tsx, the session-cost reminder (costNotice.ts), TurnCostCard.tsx, BudgetField.tsx, TokenStatsSheet.tsx + usageCut.ts, RepoHealthTiles.tsx + repoHealthPlot.ts, HealthIndexChart.tsx. Load BEFORE drawing or wording any token, context-window, usage, dollar or health figure on the phone, changing a chart's axis, palette or control grammar, or touching the context-weight threshold form. A total is never printed without its split, and a readout refuses nothing."
 ---
 
 # web — the numbers screens

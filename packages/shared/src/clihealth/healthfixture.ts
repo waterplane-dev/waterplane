@@ -84,7 +84,7 @@ export function maskRow(row: string, protect?: RegExp): string {
  * already recognise — so it is handed in.
  */
 export function maskGrid(text: string, keep: (row: string) => boolean, protect?: RegExp): string {
-  const rows = text.replace(/\r/g, "").split("\n").map((r) => r.replace(/\s+$/, ""));
+  const rows = text.replace(/\r/g, "").split("\n").map((r) => r.trimEnd()); // = /\s+$/ (same class), linear
   while (rows.length && !rows[rows.length - 1]) rows.pop();
   return rows.slice(-FIXTURE_ROWS)
     .map((r) => (r.length > ROW_CAP ? r.slice(0, ROW_CAP) : r))

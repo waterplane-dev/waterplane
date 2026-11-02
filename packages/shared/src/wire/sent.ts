@@ -134,6 +134,13 @@ export type SentSource =
    *  rows on disk still type-check and render. */
   | "oracle"
   | "limit"
+  /** The host's `continue` after a SPEND wall (an API-key or cloud account's cap the person
+   *  raised), typed by the same wall writer as `limit` (`recover/recoverwrite.ts`). Rows written
+   *  before this value say `limit`; an older phone that has no label for it shows the raw word. */
+  | "spend"
   /** The host's retry of a turn the CLI gave up on a transient API error (`sessions/netretry.ts`). */
-  | "netretry";
+  | "netretry"
+  /** The host's `continue` into a session a sign-out stopped, typed only after the person tapped
+   *  continue (`signin.continue`, host `sessions/signinwait.ts`); `actor` is `user`. */
+  | "signin";
 

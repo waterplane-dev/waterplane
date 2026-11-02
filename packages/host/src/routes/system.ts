@@ -162,10 +162,6 @@ const onHello: Route<"hello"> = (a) => {
     // them costs a round trip on the link this app spends its life
     // apologising for.
     a.c.send(a.ws, { t: "settings.all", doc: a.c.settings.all() });
-    // What has installed itself, on every phone this desktop has heard from.
-    // Unprompted for the reason the log exists at all: this device cannot see
-    // the other one, and the answer is already sitting in memory here.
-    a.c.send(a.ws, { t: "install.log", doc: a.c.installLog.doc() });
     // The CLI's own health, unprompted. It rides on hello for the same reason
     // the budget does: the phone renders the launcher's mark from the ROLLUP,
     // and a mark that only appears once somebody opens a sheet is the readout
@@ -382,39 +378,6 @@ const onSettingsSet: Route<"settings.set"> = (a) => {
     }
 };
 
-// ── The install log ──
-
-/**
- * "What has installed itself, on which phone?"
- *
- * A READ, in the `clihealth.get` / `budget.get` class: not durable, no
- * `contain`, nothing spawned and no directory named — so there is nothing an
- * ackId would protect. Also pushed unprompted on `hello`, because the whole
- * point of the log is the fleet a single device cannot see.
- */
-const onInstallGet: Route<"install.get"> = (a) => {
-    a.c.send(a.ws, { t: "install.log", doc: a.c.installLog.doc() });
-};
-
-/**
- * "Here is every install this phone still has a record of."
- *
- * Idempotent by construction (`mergeInstallLog` keys each entry), which is what
- * lets a phone re-state its whole history on every connect — and it must, since
- * the install worth logging is the one that happened with the tunnel down and
- * nobody watching.
- *
- * **Quiet when nothing changed.** A reconnect that re-states what the host
- * already holds broadcasts nothing: the common case is every handshake, and the
- * alternative is shipping the whole log to every socket for no news. When
- * something IS new every socket hears it, because a second phone watching this
- * screen should see the first one update itself.
- */
-const onInstallReport: Route<"install.report"> = (a) => {
-    const changed = a.c.installLog.report(a.msg.device ?? { id: "" }, a.msg.entries ?? []);
-    if (changed.added || changed.updated) a.c.broadcast({ t: "install.log", doc: a.c.installLog.doc() });
-};
-
 /** The phone's HTTP stalls — over the socket, because the HTTP pool is the
  *  thing that is stuck (`shared/netstall.ts`). A record: nothing is sent back. */
 const onNetStalls: Route<"net.stalls"> = (a) => {
@@ -569,8 +532,6 @@ export const systemRoutes: RouteTable = {
   "decisions.archiveAll": onDecisionsArchiveAll,
   "sent.get": onSentGet,
   "sent.clear": onSentClear,
-  "install.get": onInstallGet,
-  "install.report": onInstallReport,
   "net.stalls": onNetStalls,
   "settings.get": onSettingsGet,
   "settings.set": onSettingsSet,

@@ -1,6 +1,6 @@
 ---
 name: web-files
-description: waterplane phone client — bytes between phone and desktop (packages/web/src): pull.ts (code in pull/), download.ts + DownloadButton.tsx, installPolicy.ts + AppsSheet.tsx (the APK that installs itself), shellLink.ts, the annotator (annNote.ts, annClip.ts, annMove.ts; code in annotator/), pasteImages.ts, Gallery.tsx, FilesSheet.tsx, FileReview.tsx, StorageSheet.tsx, SweepSheet.tsx, idb.ts/offlineCache.ts, persist.ts. Load BEFORE touching a download or pull, an annotated or pasted image, the APK self-install and background link, the gallery and viewer, remarks on a text file, what the phone stores, the offline caches, or the outbox/inbox sweep.
+description: "waterplane phone client — bytes between phone and desktop (packages/web/src): pull.ts (code in pull/), download.ts + DownloadButton.tsx, installPolicy.ts + nativeInstall.ts (the APK that installs itself; its Apps screen and install log are the android-apps extension's, packages/extensions/android-apps), shellLink.ts, the annotator (annNote.ts, annClip.ts, annMove.ts; code in annotator/), pasteImages.ts, Gallery.tsx, FilesSheet.tsx, FileReview.tsx, StorageSheet.tsx, SweepSheet.tsx, idb.ts/offlineCache.ts, persist.ts. Load BEFORE touching a download or pull, an annotated or pasted image, the APK self-install and background link, the gallery and viewer, remarks on a text file, what the phone stores, the offline caches, or the outbox/inbox sweep."
 ---
 
 # waterplane web — files between phone and desktop
@@ -38,8 +38,9 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   The width cap scales with the column count, CARRIED IN THE FILE NAME (`combined-N-screens-Kacross.jpg`;
   writer and reader in `collageName.ts`, `collageName.test.mjs`) — renaming the file silently re-caps it.
   **Falling back is REPORTED, never silent.**
-- `installLog.ts` + the Apps sheet's `installed` pane (started by `startInstallLog` at boot, not by an App branch) —
-  **which version of what is on which phone.** One host, MANY clients: the install happens on a phone with the app closed, so the log lives on the desktop (`host/installlog.ts`). **The report is a RE-STATEMENT** — the whole history on every `welcome`, merged on a reproducible key, never queued and no ackId. **The phone's own clock or nothing** (`installedAt` off the shell; absent ⇒ the row says *reported*); merge rules are `shared`'s `installlog.ts`. **The device NAME must never sync** — its job is to differ per phone.
+- **Moved (android-apps extension, docs/notes/android-apps-architecture.md):** the Apps screen (`AppsSheet`, `AppsHistory`, `appReady`, `appSteps`, `appsPane`) and the web install log (`installLog.ts`) now live in `packages/extensions/android-apps/web`; the extension owns the log over plugin methods, core only has the `appsDoor`. The two bullets below carry those files' rules, now the extension's (paths under `packages/extensions/android-apps/web`).
+- **The install log** (the extension's `installLog.ts` + the Apps sheet's `installed` pane, started by the extension's `boot`, not by an App branch) —
+  **which version of what is on which phone.** One host, MANY clients: the install happens on a phone with the app closed, so the log lives on the desktop (the extension's `host/installlog.mts`). **The report is a RE-STATEMENT** — the whole history on every `welcome`, merged on a reproducible key, never queued and no ackId. **The phone's own clock or nothing** (`installedAt` off the shell; absent ⇒ the row says *reported*); merge rules are the extension's `shared/wire.mts`. **The device NAME must never sync** — its job is to differ per phone.
 - `pull.ts` / `PullSheet.tsx` —
   download queue with three engines (code: `pull/` — `pullManager`/`pullQueue`/`pullRange`/`pullBgFetch`/`pullNative`/`pullSave`; `pull.ts` is a facade, `dropOne` is bound in `pull/pullManager.ts` to `pullDropOne` (body in `pull/pullRange.ts`); architecture [pulllink-architecture.md](../../../docs/notes/pulllink-architecture.md)): Background Fetch, the **native
   engine** (APK), and the chunked Range loop. Saving out is `nativeSave.ts`.
@@ -47,7 +48,7 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   ASKS once (`browserPullAsk` → `PullBrowserAsk` under the strip; Android, not the shell, auto on, an
   automatic row on its way). With the switch off, the strip and the menu chip count only what moves
   or was tapped (`stripRows`) — a file waiting for a tap is the sheet's, not a standing bar.
-- `installPolicy.ts` + `nativeInstall.ts` + `AppsSheet.tsx` — **the APK that installs itself.** **One dialog per
+- `installPolicy.ts` + `nativeInstall.ts` (the Apps screen is the extension's) — **the APK that installs itself.** **One dialog per
   app, EVER**: the FIRST install of any package always shows the system installer (no flag removes
   it, and the row SAYS so in advance rather than promising silence), and every later build is quiet. **A refused silence is not a
   failure** — the row reads *waiting for you to confirm*, never *failed*. **The list is
@@ -57,7 +58,7 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   the install runs where the document is frozen. **The automatic path is narrower than a tap**:
   access granted, package on the list, AND already installed — an unattended first install is only a
   notification asking for a tap nobody asked for. A browser is told NOTHING; every platform refusal is a SENTENCE with the Settings button beside it, never a dimmed
-  control. Pure half node-tested (`installPolicy.test.mjs`). **`AppsSheet.tsx` is the LIST and its
+  control. Pure half node-tested (`installPolicy.test.mjs`). **The extension's `AppsSheet.tsx` is the LIST and its
   own screen** — a switch reachable only from the download that brought the file cannot be SURVEYED (**a count on a control is a
   filter**). `appRows` is the UNION of the list and the builds still here: an allowed package with
   nothing downloaded is a row (that is the app you want to switch OFF), several builds of one package
@@ -69,13 +70,22 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   `Installs.source`): ownership is granted on a package's FIRST install only, so an app first installed
   by a file manager or Android Studio asks on EVERY update whatever waterplane requests — the row says so
   (`quietOwnerText`, with the uninstall-once remedy and its data cost). Unknown (old shell, not
-  installed) is ABSENT, never "not ours". `QUIET_INSTALL_RULES` is the whole list, said once on the
-  sheet; the repo half is the setup row `apk-install` (`host/apkcheck.ts`, advisory).
-  **The `setup` pane (`AppsSetupPane.tsx` over `appReady.ts`, pure, node-tested) is the whole chain per
-  app**: the desktop's facts (`GET /api/apps/readiness`, `host/appready.ts` → `apkRepoFacts`) joined
-  on the package — a flavor's `applicationIdSuffix` included — with this phone's half; the first `no`
-  is the BLOCKER, `unknown` blocks nothing, the last attempt is THIS phone's (another's success says
-  nothing about this one). Its two chips are one `readinessCut`.
+  installed) is ABSENT, never "not ours". The repo half is also the setup row `apk-install` (`host/apkcheck.ts`, advisory).
+  **The Android apps screen (its name says the scope: only APKs install, 2026-11-01) is ONE CARD PER APP, three steps — build, download, install** (R-apk-021; the owner
+  could not read the old four tabs, 2026-11-01). `appReady.ts` (pure) joins the desktop's facts (the extension's host half, fed by core's `appready.ts` → `apkRepoFacts` through `api.repoApps()`; no core route) with this phone's half on the package — a
+  flavor's `applicationIdSuffix` included; the first `no` is the BLOCKER, `unknown` blocks nothing, the
+  last attempt is THIS phone's. `appSteps.ts` (pure, node-tested) words those checks as the three
+  steps, the headline (*updates by itself* / *stops at <step>: …*) and the ONE fix button for the
+  blocker (`fixFor`: Build sheet, repo setup, turn the repo's download rule on, install access, the
+  switch — words only where nothing on the phone can fix it). **A fix button is a VERB** (*turn on install by itself*), never the *setting: on* form — that form is a switch's CURRENT state, and beside a step saying "off" it read as a contradiction (owner, 2026-11-01). **One vocabulary**: build, download,
+  install, "by itself" — never *auto-install*, *ready*, *setup tab*. The card's body tap opens the
+  details and flips NOTHING (the switch is its own button). Turning *install by itself* ON also turns
+  the repo's download rule on when it is known off (`switchAlsoEnablesPull`), and the toast says both;
+  turning the rule on KEEPS the person's rule (`AppsListSheet` merges onto the rule it read with
+  `pull.get` and refuses to write defaults over an unread one). Tabs: *apps* and *history*
+  (`AppsHistory.tsx`); *waiting to install · N* is a filter chip whose number and rows are one
+  `appsCut`. The Build sheet's APK run says *get it on this phone* → that repo's cards (`openAppsFor`).
+  Native reads (`installStatus`, `installSources`) live in `useInstallCaps.ts`, never in a file that calls the host.
   **All of that is the `dev` flavor.** The `play` shell (Google Play) answers `distribution:"play"` +
   `self` in `ShellInstall.status()` (`shellDistribution`; ABSENT ⇒ inherit dev): it never installs
   itself (`isPlaySelf` ⇒ `PLAY_SELF_TEXT`, refused natively in `Installs.refusal` too), has no

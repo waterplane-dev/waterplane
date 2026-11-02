@@ -8,6 +8,7 @@
  * fact and tokens per part are an estimate, always worded `~`/"about"; an unsized row is NAMED,
  * never counted as 0; nothing here refuses or applies anything.
  */
+import { trimEndChars } from "./lineartrim.js";
 import { countedByThreshold, claudeWeightInput, MCP_UNSIZED } from "./agentfiles.js";
 import type { InstructionFile, InstructionReader } from "./agentfiles.js";
 import { CHARS_PER_TOKEN, weighContext } from "./contextweight.js";
@@ -117,7 +118,7 @@ export const DEFAULT_CONFIG_DIR_WORDS = "~/.claude";
 export function desktopPathWords(p: string, configDirWords: string = DEFAULT_CONFIG_DIR_WORDS): string {
   if (!p) return "not on disk";
   if (p.startsWith("~") || p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("\\\\")) return p;
-  return `${configDirWords.replace(/[\\/]+$/, "")}/${p}`;
+  return `${trimEndChars(configDirWords, "\\/")}/${p}`;
 }
 
 /** Whether an unsized row is an MCP server whose schemas arrive at connect time (the When column says "every request" only for those). */
@@ -163,6 +164,23 @@ function carriedLabel(p: CarriedPart): string {
 }
 
 const charsWords = (chars: number, fmt: Fmt) => `~${fmt(tokOf(chars))} tokens · ${fmt(chars)} chars`;
+
+/**
+ * One always-on row's figures in the carried list's grammar, so a repo's file list and a session's
+ * "what every turn carries" read the same: `num` is what the row puts in every turn, right-aligned
+ * like a carried part; `rest` is what joins only when a matching file is touched or the skill is
+ * used. An unsized row has no `num` and its reason as `rest` (never a 0); a sized row that puts
+ * nothing in every turn says so in `num`.
+ */
+export function alwaysOnRowFigures(r: AlwaysOnRow, fmt: Fmt = fmtCount): { num: string | null; rest: string | null } {
+  if (r.unsized) return { num: null, rest: r.unsized };
+  const always = r.always ?? 0, scoped = r.scoped ?? 0, onDemand = r.onDemand ?? 0;
+  const rest = [
+    scoped ? `+ ${charsWords(scoped, fmt)} when a matching file is touched` : null,
+    onDemand ? `+ ${charsWords(onDemand, fmt)} only when used` : null,
+  ].filter(Boolean).join("; ");
+  return { num: always ? charsWords(always, fmt) : "nothing every turn", rest: rest || null };
+}
 
 const partsTok = (c: SessionCarried) => Math.round(c.parts.reduce((n, p) => n + p.chars, 0) / CHARS_PER_TOKEN);
 

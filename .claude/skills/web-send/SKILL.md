@@ -1,6 +1,6 @@
 ---
 name: web-send
-description: waterplane phone client — typed words to a confirmed delivery (packages/web/src): ws.ts, the send queue (core/queue: send.ts the ONE flusher; outbox.ts beside it in src/, the persistence and the pad), sendConfirm.ts, attachments.ts, PadSheet.tsx, RepoPicker.tsx, PromptComposer.tsx + useCompose.ts, dictation (useVoice.ts, dictateHold.ts, dictateQueue.ts), composeSend.ts + NextPrompt.tsx, SendSheet.tsx + sendIntent.ts, QueueSheet.tsx. Load BEFORE changing how a prompt is composed, queued, retried, targeted, scheduled, dictated or confirmed — most rules here exist because words ran twice or were silently deleted.
+description: "waterplane phone client — typed words to a confirmed delivery (packages/web/src): ws.ts, the send queue (core/queue: send.ts the ONE flusher; outbox.ts beside it in src/, the persistence and the pad), sendConfirm.ts, attachments.ts, PadSheet.tsx, RepoPicker.tsx, PromptComposer.tsx + useCompose.ts, dictation (useVoice.ts, dictateHold.ts, dictateQueue.ts), composeSend.ts + NextPrompt.tsx, SendSheet.tsx + sendIntent.ts, QueueSheet.tsx. Load BEFORE changing how a prompt is composed, queued, retried, targeted, scheduled, dictated or confirmed — most rules here exist because words ran twice or were silently deleted."
 ---
 
 # waterplane web — typed words to a confirmed send

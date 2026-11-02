@@ -14,7 +14,7 @@ import type { FollowUp, FollowUpBy } from "./wire/session.js";
 /** An agent's reason, and a launch flag's item label, are one line of at most this. */
 export const FOLLOWUP_REASON_CAP = 160;
 
-const BY: ReadonlySet<string> = new Set<FollowUpBy>(["hand", "launch", "agent"]);
+const BY: ReadonlySet<string> = new Set<FollowUpBy>(["hand", "launch", "agent", "host"]);
 
 /** One line, collapsed whitespace, clipped with an ellipsis; empty ⇒ undefined. */
 export function clipFollowUpText(v: unknown): string | undefined {
@@ -28,7 +28,7 @@ export function clipFollowUpText(v: unknown): string | undefined {
  * A flag read off disk or the wire. An unknown `by` or a missing `at` drops the
  * WHOLE flag (`null`) — a flag that cannot say who set it cannot be coloured,
  * and rounding it to `hand` would claim the person did. `reason` is kept only
- * on an `agent` flag, `item` only on a `launch` one.
+ * on an `agent` or `host` flag, `item` only on a `launch` one.
  */
 export function cleanFollowUp(raw: unknown): FollowUp | null {
   if (!raw || typeof raw !== "object") return null;
@@ -37,7 +37,7 @@ export function cleanFollowUp(raw: unknown): FollowUp | null {
   if (typeof r.at !== "number" || !Number.isFinite(r.at) || r.at <= 0) return null;
   const by = r.by as FollowUpBy;
   const out: FollowUp = { by, at: r.at };
-  const reason = by === "agent" ? clipFollowUpText(r.reason) : undefined;
+  const reason = by === "agent" || by === "host" ? clipFollowUpText(r.reason) : undefined;
   const item = by === "launch" ? clipFollowUpText(r.item) : undefined;
   if (reason) out.reason = reason;
   if (item) out.item = item;
@@ -48,6 +48,7 @@ export function cleanFollowUp(raw: unknown): FollowUp | null {
 export function followUpByText(by: FollowUpBy): string {
   return by === "hand" ? "flagged by you"
     : by === "launch" ? "flagged when done, as you asked"
+    : by === "host" ? "flagged by the desktop"
     : "flagged by the session";
 }
 
@@ -57,7 +58,7 @@ export function followUpByText(by: FollowUpBy): string {
  */
 export function followUpText(f: FollowUp): string {
   const head = followUpByText(f.by);
-  if (f.by === "agent" && f.reason) return `${head}: ${f.reason}`;
+  if ((f.by === "agent" || f.by === "host") && f.reason) return `${head}: ${f.reason}`;
   if (f.by === "launch" && f.item) return `${head} (${f.item})`;
   return head;
 }
@@ -71,6 +72,7 @@ export function followUpPushText(f: FollowUp, title: string): { title: string; b
   return {
     title: `Follow up: ${title}`,
     body: f.by === "agent" ? (f.reason ?? "The session says there is something for you to read.")
+      : f.by === "host" ? (f.reason ?? "The desktop saw something in this session for you to read.")
       : `Finished${f.item ? ` — ${f.item}` : ""}. Flagged for follow up, as you asked.`,
   };
 }

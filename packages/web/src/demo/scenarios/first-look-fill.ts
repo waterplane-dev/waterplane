@@ -186,21 +186,6 @@ export function workFill(now: number, p: FillPaths): Partial<DemoModel> {
       pullItem("pu1", p.sorted, 31628, ago(4 * HOUR)),
       pullItem("pu2", p.before, 31174, ago(5 * HOUR)),
     ],
-    install: {
-      entries: [
-        { key: "dev-pixel:pu-apk3:1", deviceId: "dev-pixel", deviceName: "Pixel 8", deviceModel: "Pixel 8", reportedAt: ago(26 * HOUR) + 4_000,
-          pullId: "pu-apk3", pkg: "app.todogarden.debug", label: "todo-garden", version: "0.4.1", code: 42, file: "todo-garden-debug.apk",
-          repo: "todo-garden", outcome: "installed", auto: true, at: ago(26 * HOUR) },
-        { key: "dev-pixel:pu-apk2:1", deviceId: "dev-pixel", deviceName: "Pixel 8", deviceModel: "Pixel 8", reportedAt: ago(3 * DAY) + 4_000,
-          pullId: "pu-apk2", pkg: "app.todogarden.debug", label: "todo-garden", version: "0.4.0", code: 41, file: "todo-garden-debug.apk",
-          repo: "todo-garden", outcome: "failed", error: "Not enough storage on the device", auto: false, at: ago(3 * DAY) },
-        { key: "dev-pixel:pu-apk1:1", deviceId: "dev-pixel", deviceName: "Pixel 8", deviceModel: "Pixel 8", reportedAt: ago(3 * DAY - 10 * MIN) + 4_000,
-          pullId: "pu-apk1", pkg: "app.todogarden.debug", label: "todo-garden", version: "0.4.0", code: 41, file: "todo-garden-debug.apk",
-          repo: "todo-garden", outcome: "installed", auto: false, at: ago(3 * DAY - 10 * MIN) },
-      ],
-      devices: [{ id: "dev-pixel", name: "Pixel 8", model: "Pixel 8", lastAt: ago(26 * HOUR), installs: 2, failures: 1 }],
-      total: 3,
-    },
     inbox: {
       r1: [{ name: "swipe-sketch.png", relPath: p.sketch, size: p.sketchSize, mtime: ago(2 * HOUR), ctime: ago(2 * HOUR) }],
     },

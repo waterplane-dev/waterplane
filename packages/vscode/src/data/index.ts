@@ -71,7 +71,7 @@ export { splitLongest, explainRising, risingSeries, definitionOf } from "../heal
 export { DEFAULT_HEALTH_SECONDS, HealthRun, workerEnv } from "../health/healthrun.js";
 export { mendSeriesTail, TORN_TAIL_NOTE } from "../health/seriestail.js";
 export type { HealthRunDeps, HealthStep } from "../health/healthrun.js";
-export { chooseSource, lastRowTs, readScopes, repoSeriesDir, seriesName } from "../health/healthsource.js";
+export { chooseSource, gitRootOf, readScopes, repoSeriesDir, seriesName } from "../health/healthsource.js";
 export type { HealthSource } from "../health/healthsource.js";
 export { knownReadErrorWords, measureWords, notRunHere, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../health/sourcewords.js";
 export { NO_RUN } from "../shims/healthnorun.js";

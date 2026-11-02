@@ -1,6 +1,6 @@
 /**
  * What the phone knows about installed plugins and the decision log. Each
- * store has ONE writer: `plugins` — the `plugin.list` handler; `results` — the
+ * store has ONE writer: `plugins` and `pluginsOn` — the `plugin.list` handler; `results` — the
  * `plugin.actionResult` handler and `runPluginAction` (in flight); `errors` —
  * the `plugin.error` handler and `setPluginValue`/`enablePlugin` (clearing the
  * last refusal before a new try); `decisions` — the `decisions.log` handler;
@@ -8,9 +8,26 @@
  */
 import type { DecisionLogEntry, PluginView, UpdatesRestart, UpdatesStatus, UpdatesTarget } from "@waterplane/shared";
 import { createStore, useStore } from "../../sdk";
+import { cacheLiveList, readCachedList, type CachedPlugin } from "./logic";
 
 /** Every installed plugin as the host last listed it; null until it has said. */
 export const plugins = createStore<PluginView[] | null>(null);
+
+/** What "is it on" reads (bound into the SDK's `isExtensionEnabled` by core): STARTS from this host's
+ *  cached last list, so a cold start with no connection reads the desktop's last word; the live list
+ *  replaces it (`cacheLiveList`). Null = this host never listed its plugins to this phone (off). */
+export const pluginsOn = createStore<readonly CachedPlugin[] | null>(readCachedList());
+
+/** False until this host's LIVE list has landed once this run (the value above may be the cache's).
+ *  `watchExtensionEnabled` fires again when it turns true. Same ONE writer as `pluginsOn`. */
+export const pluginsLive = createStore(false);
+
+/** The `plugin.list` handler's cache half: the live list replaces `pluginsOn` (and the host's cached
+ *  copy, only if it differs), THEN marks the list live so a watcher woken by it reads the live value. */
+export function applyLiveList(list: readonly Pick<PluginView, "manifest" | "enabled" | "state">[]): void {
+  pluginsOn.set(cacheLiveList(list, pluginsOn.get()));
+  pluginsLive.set(true);
+}
 
 /** One action tap's answer, by `actionKey` — `pending` until the host replies. */
 export type ActionResult = { reqId: string; pending: true } | { reqId: string; pending: false; ok: boolean; message: string };

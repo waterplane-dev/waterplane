@@ -7,9 +7,11 @@
  * **A fact not read is null, and a null fact draws no state line** — never a
  * guess: the row then shows its title, its line and its default door.
  */
-import { gitVerbWords, isRepoChipKey, parseAttentionKey, type WeekBurnStatus } from "@waterplane/shared";
+import { BRAND, gitVerbWords, isRepoChipKey, parseAttentionKey, type WeekBurnStatus } from "@waterplane/shared";
 import type { SheetId } from "../../sdk";
-import { APK_0_1_8, apkNeedWords, apkOk, cmpVersion, versionParts } from "../../apkGate.ts";
+import {
+  APK_0_1_8, apkNeedWords, apkOk, cmpVersion, shellApkUrl, shellApkWhere, shellApkWords, versionParts, type ApkOnPhone,
+} from "../../apkGate.ts";
 import { SHEET } from "../../sheetNames.ts";
 import { plural } from "../../format.ts";
 
@@ -23,7 +25,9 @@ export type Door =
   | { kind: "feedCut"; ids: string[] }
   | { kind: "automationCut"; ids: string[]; label: string }
   | { kind: "git"; repoId: string }
-  | { kind: "build"; repoId: string };
+  | { kind: "build"; repoId: string }
+  /** A page off the phone (Google Play, the release page) — the APK gate's door when the files tab holds no APK. */
+  | { kind: "url"; href: string };
 
 /** One failed pull, push or build still on a repo — a feed item the repo's red chip stands for. */
 export interface Failure { id: string; repoId: string; repoName: string; verb: string; kind: "git" | "build" }
@@ -47,6 +51,12 @@ export interface HubFacts {
   native: boolean;
   /** The shell's `versionName`; null = not read yet (or no shell). */
   apk: string | null;
+  /**
+   * Where a newer shell APK can come from (`shellApkWhere`'s inputs: the shell's distribution and
+   * package, and the finished downloads). null = the shell's caps not read yet: the gate then says
+   * its sentence with no door, never one to a pane that may hold no APK.
+   */
+  shellApk: { distribution?: string; self?: string; apks: readonly ApkOnPhone[] } | null;
 }
 
 export interface RowState { text: string; door?: Door | null; verb?: string }
@@ -76,7 +86,13 @@ export function rowView(t: NewThing, f: HubFacts): RowView {
   if (t.needsApk) {
     if (!f.native) return { text: "app only", door: null, verb: null };
     if (f.apk !== null && !apkOk(t.needsApk, f.apk)) {
-      return { text: apkNeedWords(t.needsApk, f.apk), door: { kind: "sheet", id: "apps" }, verb: "get the APK" };
+      const text = apkNeedWords(t.needsApk, f.apk);
+      if (!f.shellApk) return { text, door: null, verb: null };
+      // Per distribution (`apkGate.ts`, the Downloads sheet's words too): the files tab only when a
+      // download there passes this row's gate; else Play's page or the release page.
+      const where = shellApkWhere(f.shellApk.distribution, f.shellApk.self, f.shellApk.apks, t.needsApk);
+      const href = shellApkUrl(where, f.shellApk.self ?? BRAND.appId, BRAND.githubOrg, BRAND.slug);
+      return { text, door: href ? { kind: "url", href } : { kind: "sheet", id: "pull" }, verb: shellApkWords(where).verb };
     }
     if (f.apk === null) return { text: null, door: t.door, verb: t.verb };
   }

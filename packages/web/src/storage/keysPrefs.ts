@@ -80,14 +80,11 @@ export const LS_PREFS = {
    */
   deviceName: lsKey("deviceName"),
   /**
-   * The last install log this desktop sent, cached.
-   *
-   * Read-side only, and cached for the reason `localState.ts` caches the build
-   * and schedule lists: **an empty list is a CLAIM.** Without it, opening the
-   * log after a cold start with the tunnel down says "nothing has installed
-   * itself yet" about a fleet this phone has simply not been told about.
+   * The last `plugin.list` this desktop sent, cut to what "is it on" reads (id, switch, state).
+   * A cache of a host document, parked with its host: a cold start with the tunnel down reads the
+   * desktop's last word instead of "every optional extension is off" (`features/plugins/logic.ts`).
    */
-  installLog: lsKey("installLog"),
+  pluginList: lsKey("pluginList"),
   /**
    * The ACTIVE host's address — what the request shim and the socket dial.
    * Rewritten from `hosts` + `hostActive` at every boot (`hosts.ts`), so it is
@@ -105,6 +102,12 @@ export const LS_PREFS = {
    * whose pagehide flushes would land in the new host's namespace.
    */
   hostSwitch: lsKey("hostSwitch"),
+  /**
+   * A host switch that ran out of localStorage room at boot (`hosts.ts`
+   * `settleFullSwitch`): `{stage, from, to, at}`. Read once and deleted by the
+   * hosts feature's boot, which says it in words.
+   */
+  hostSwitchFailed: lsKey("hostSwitchFailed"),
   /**
    * Hosts removed from the list whose parked keys are still on this phone.
    * Re-adding the same address reuses the id, which is what brings the

@@ -1,13 +1,10 @@
-import type { AutoPullConfig } from "@waterplane/shared";
-import { core, mapWith } from "../../sdk";
+import { core } from "../../sdk";
 import { pulls } from "../../pull";
 import { OPEN_DOWNLOADS_EVENT } from "../../download";
 import { setPullRuleSource } from "../../automationSlot";
 import { cfgs, records, rulesFor } from "./store";
 
-export function putCfg(repoDir: string, config: AutoPullConfig): void {
-  cfgs.set((prev) => mapWith(prev, repoDir, config));
-}
+export { putCfg } from "../../pullRules";
 
 /** Open Downloads on the RULES pane for this repo. */
 export function openPullRules(repoDir: string): void {

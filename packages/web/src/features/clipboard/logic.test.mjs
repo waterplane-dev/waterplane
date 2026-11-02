@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { emptyDumpText, quoteBlock } from "./logic.ts";
+import { emptyDumpText, quoteBlock, sessionReference } from "./logic.ts";
 
 test("a quote is every line prefixed, with its lead-in and a blank line after", () => {
   assert.equal(quoteBlock("  one\ntwo  "), "Quote from your last response:\n> one\n> two\n\n");
@@ -54,4 +54,12 @@ test("the block names each answer by number and label and skips the blank", () =
   assert.equal(decisionBlock(items, ["both", " ", "after it"]),
     "My decisions:\n4. Example scope: both\n6. Claude Code plugin: after it\n");
   assert.equal(decisionBlock(items, []), null);
+});
+
+test("sessionReference: names what it knows, leaves out what it does not, quotes the picked text", () => {
+  const full = sessionReference({ title: "t", tabTitle: "Timer app", cwd: "/x/app", cliName: "app-0c", claudeSessionId: "u-1" }, " a\nb ");
+  assert.equal(full, "Coding session: Timer app\nPeer session name (SendMessage to): app-0c\nFolder: /x/app\nConversation id: u-1 (claude --resume u-1)\n\nQuoted from that session:\n> a\n> b\n");
+  const bare = sessionReference({ title: "t", cwd: "/x/app" });
+  assert.equal(bare, "Coding session: t\nFolder: /x/app\n");
+  assert.doesNotMatch(bare, /Peer|Conversation|Quoted/);
 });

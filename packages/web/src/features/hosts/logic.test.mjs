@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   codeLeftText, countHostWords, deviceRouteText, devicesEmptyText, hostAddress, hostRows, qrPath, removeLines, revokeLines, seenAgo,
-  nextHostId, shortHostName, showHostName, wordsText,
+  nextHostId, shortHostName, showHostName, switchFailText, wordsText,
 } from "./logic.ts";
 
 const KEYS = {
@@ -102,4 +102,13 @@ test("nextHostId: two flip, three go round, one or none is no toggle", () => {
   assert.equal(nextHostId([h("a"), h("b")], "demo"), "a");
   assert.equal(nextHostId([h("a")], "a"), null);
   assert.equal(nextHostId([], null), null);
+});
+
+test("a switch that ran out of room names where the phone still is", () => {
+  const hosts = [{ id: "mac", name: "MacStudio", base: "http://100.64.0.5:8770" }, { id: "zen", name: "zenbookJ", base: "http://100.64.0.9:8770" }];
+  const park = switchFailText({ stage: "park", from: "mac", to: "zen" }, hosts);
+  assert.match(park, /Could not switch to zenbookJ: this phone's storage is full\. Still on MacStudio/);
+  assert.match(park, /Storage on this phone/);
+  assert.match(switchFailText({ stage: "restore", from: "mac", to: "zen" }, hosts), /^On zenbookJ, but .* kept/);
+  assert.match(switchFailText({ stage: "park", from: "mac", to: "gone" }, hosts), /switch to the other desktop/);
 });

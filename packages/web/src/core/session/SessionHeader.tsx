@@ -51,7 +51,6 @@ import { PeerSessionFacts } from "../../features/peers";
 import { ToolbarMenu, renderToolbarItem, type ToolbarCtx } from "./ToolbarMenu";
 import type { SessionChrome } from "./useSessionChrome";
 import type { Connection } from "../conn/useConnection";
-import { StowTray } from "../../Stowable";
 import { ToldNotice } from "./ToldNotice";
 import { AskRulesNotice } from "./AskRulesNotice";
 import { useSpendWarn } from "../sessions/spendWarn";
@@ -378,7 +377,6 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             : status === "open" ? "queued" : "queued — waiting for the link"}
           </>}
         </RowSub>
-        <StowTray />
       </div>
       )}
       {!pending && (
@@ -536,9 +534,6 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         {budgetTag(active, () => openSessionBudget(null))}
         {/* Peer jobs: the cost split by desktop and one line per job it sent (or, on the peer, why it exists). */}
         <PeerSessionFacts s={active} />
-        {/* Strips folded off the screen (`Stowable.tsx`): a line that is here
-            anyway, so a fold gives the terminal its height back for nothing. */}
-        <StowTray />
       </div>
       )}
     </ChromeFrame>

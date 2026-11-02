@@ -179,6 +179,22 @@
 // session counts as `hooked` — the tests that want the silence fallback leave it
 // off. It never sends UserPromptSubmit/Stop: those come from real turns.
 //
+// STUB_AUTH_FILE=<path> — the account's sign-in, read on every use so one booted host can
+// be signed out and back in (e2e-authretry.mjs): the file holding `out` makes `auth status`
+// say `loggedIn: false` and every turn end `StopFailure` `authentication_failed` (the real
+// CLI's signed-out turn); anything else (or no file) is signed in, as before.
+//
+// STUB_COMPOSER=frame — the DEFAULT paint's composer drawn as the real CLI draws it (a `❯`
+// row between two full-width rules, a footer under it) instead of a bare `> `, and an
+// EMPTY box shows claude's dim (SGR 2) `Try "…"` hint — what the recovery writer's draft
+// rung (`recover/recoverwrite.ts`, `composer.ts`'s `composerReading`) must read as empty.
+// Works with any mode that uses the default paint (`answer` included: e2e-netdraft.mjs);
+// it draws none of that paint's trailing working-line churn.
+// STUB_DRAFT_FILE=<path> — words a PERSON typed at the desk, polled every 150 ms: the
+// file's text (trimmed) sits in the composer ahead of whatever the host types, drawn as
+// ordinary (not dim) text; an empty or missing file clears it. Only the screen changes —
+// no byte reaches $STUB_LOG, so the host's own keystrokes stay countable.
+//
 // Every byte received is appended to $STUB_LOG so the test can count copies.
 //
 // Only the INTERACTIVE session's bytes, though. `<ENV>_CLAUDE_BIN` is also what
@@ -188,7 +204,7 @@
 // screen, `\x1b[H\x1b[2J` included. Logged, that read as "an Esc reached the
 // session" and "the instruction was typed twice" when no keystroke was sent.
 // The log is the keystrokes typed INTO the session; a headless run is not one.
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -211,8 +227,14 @@ const out = (s) => process.stdout.write(s);
 // `claude auth status`, asked by the host on request paths (the onboarding plan, a peer's hello):
 // answered like the CLI in every mode, as scripts/claude-stub.sh does. As a TUI it would paint and
 // wait for keys until the host's timeout.
+/** STUB_AUTH_FILE says `out`: this account is signed out right now. */
+function stubSignedOut() {
+  const f = process.env.STUB_AUTH_FILE;
+  if (!f) return false;
+  try { return readFileSync(f, "utf8").trim() === "out"; } catch { return false; }
+}
 if (process.argv[2] === "auth" && process.argv[3] === "status") {
-  out(JSON.stringify({ loggedIn: true, authMethod: "stub" }) + "\n");
+  out(JSON.stringify(stubSignedOut() ? { loggedIn: false } : { loggedIn: true, authMethod: "stub" }) + "\n");
   process.exit(0);
 }
 
@@ -252,6 +274,11 @@ if (process.env.STUB_HOOKS === "1") {
 }
 
 let buf = "";
+/** STUB_COMPOSER=frame: the real composer frame in the default paint. */
+const FRAME = process.env.STUB_COMPOSER === "frame";
+/** STUB_DRAFT_FILE: words typed at the desk (polled), drawn ahead of `buf`. */
+const DRAFT_FILE = HEADLESS ? undefined : process.env.STUB_DRAFT_FILE;
+let deskDraft = "";
 let spinner = null;
 let view = false;   // menu mode: a full-screen command view is up
 
@@ -269,8 +296,8 @@ const NOTE = new Set(["/btw"]);
 
 /** One lifecycle event, best-effort, exactly like the real curl hooks. */
 function hook(hook_event_name, extra = {}) {
-  if (process.env.STUB_HOOKS !== "1") return;
-  fetch(HOOK_URL, {
+  if (process.env.STUB_HOOKS !== "1") return Promise.resolve();
+  return fetch(HOOK_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ hook_event_name, cwd: process.cwd(), ...HOOK_SID, ...extra }),
@@ -290,9 +317,11 @@ function hook(hook_event_name, extra = {}) {
  * rule they exist to cover was never exercised.
  */
 function hookTurn(prompt, failed = false) {
-  hook("UserPromptSubmit", typeof prompt === "string" && prompt ? { prompt } : {});
+  const started = hook("UserPromptSubmit", typeof prompt === "string" && prompt ? { prompt } : {});
   // The real CLI fires `StopFailure` INSTEAD of `Stop` when an API error ends the turn.
-  if (failed) hook("StopFailure", { error: "server_error" }); else hook("Stop");
+  // Signed out: the refusal is posted only once the start has landed — the edge order is the subject.
+  if (stubSignedOut()) void started.then(() => hook("StopFailure", { error: "authentication_failed" }));
+  else if (failed) hook("StopFailure", { error: "server_error" }); else hook("Stop");
   if (typeof prompt === "string" && prompt) EXT?.submit?.(prompt);
 }
 
@@ -901,8 +930,18 @@ function paint() {
   if (MODE === "permmode") return paintPermMode();
   let frame = "\x1b[H\x1b[2J";
   for (let i = 0; i < 40; i++) frame += `\x1b[38;5;${i % 255}m  transcript line ${i} ${"lorem ipsum ".repeat(3)}\x1b[0m\r\n`;
-  if (!BLIND) frame += `> ${buf}\r\n`;
+  if (BLIND) { /* nothing drawn */ }
+  else if (FRAME) {
+    const words = deskDraft + buf;
+    frame += `${STREAM_RULE}\r\n`;
+    frame += words ? `❯ ${words}\r\n` : `❯ \x1b[2mTry "refactor the parser module"\x1b[0m\r\n`;
+    frame += `${STREAM_RULE}\r\n`;
+    frame += "  ? for shortcuts\r\n";
+  } else frame += `> ${buf}\r\n`;
   out(frame);
+  // The frame draws no churn: a working line after a repaint nobody typed for (a
+  // draft appearing) reads as a turn starting, which no person's typing is.
+  if (FRAME) { clearInterval(spinner); return; }
   // Trailing churn: the spinner keeps rewriting the LAST line (\r, no newline),
   // so the composer stays visible while several KB pile up behind it.
   clearInterval(spinner);
@@ -1073,3 +1112,11 @@ process.stdin.on("data", (d) => {
 
 if (MODE !== "logo" && MODE !== "welcome") out("stub tui ready\r\n");
 paint();
+// STUB_DRAFT_FILE: a person's words at the desk, appearing and clearing on their own.
+if (DRAFT_FILE) {
+  setInterval(() => {
+    let t = "";
+    try { t = readFileSync(DRAFT_FILE, "utf8").trim(); } catch { /* no file = no words */ }
+    if (t !== deskDraft) { deskDraft = t; paint(); }
+  }, 150);
+}

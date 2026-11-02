@@ -19,9 +19,9 @@ import { bucketOf } from "../../activity/activityBucket.ts";
 import { isFlagged } from "../sessions/followUpFacts.ts";
 import type { ListRead } from "../../listRead.ts";
 
-/** A session's status bucket — `sessionFacts.tsx`'s `sessionStatus` values. */
-export type StatusBucket = "wait" | "limit" | "coding" | "done" | "exited";
-export interface RepoStatusRollup { wait: number; limit: number; coding: number; done: number; exited: number }
+/** A session's status bucket — `attention.ts`'s `sessionStatus` values. */
+export type StatusBucket = "wait" | "blocked" | "coding" | "done" | "exited";
+export interface RepoStatusRollup { wait: number; blocked: number; coding: number; done: number; exited: number }
 /**
  * Status FILTER on the live list: which rows the launcher is showing. Set by
  * tapping any status badge — a row's own, or a repo header's roll-up chip, which
@@ -178,7 +178,7 @@ export function rollupByRepo(sorted: readonly SessionInfo[], statusOf: (s: Sessi
   const m = new Map<string, RepoStatusRollup>();
   for (const s of sorted) {
     const n = repoName(s);
-    const cur = m.get(n) ?? { wait: 0, limit: 0, coding: 0, done: 0, exited: 0 };
+    const cur = m.get(n) ?? { wait: 0, blocked: 0, coding: 0, done: 0, exited: 0 };
     cur[statusOf(s)]++;
     m.set(n, cur);
   }

@@ -34,7 +34,7 @@ test("passiveAllows: default deny — every other route is refused", () => {
   for (const [m, p] of [
     ["GET", "/api/repos"], ["GET", "/api/devices"], ["POST", "/api/devices/revoke"], ["POST", "/api/pair/mint"],
     ["GET", "/api/transcript"], ["POST", "/api/shell/open"], ["GET", "/api/lan/identity"], ["GET", "/api/peer/job"],
-    ["GET", "/api/apps/readiness"], ["GET", "/api/repos/r1/artifacts/x"], ["GET", "/api/health/extra"], ["GET", "/api/something-new"],
+    ["GET", "/api/repos/r1/artifacts/x"], ["GET", "/api/health/extra"], ["GET", "/api/something-new"],
   ]) assert.equal(passiveAllows(m, p, q(), () => true), false, `${m} ${p}`);
 });
 

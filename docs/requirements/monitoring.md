@@ -19,3 +19,8 @@ The owner-private exposure watch reports the Play target-API deadline (read from
 A crash or exposure finding can be marked seen, investigating or fixed (with the version that carries the fix) by the person from the phone or by an agent working in that repo; a crash reported from an app version older than the fix stops counting; one from the fix's version or newer returns as a regression. An agent cannot clear a mark.
 - asked: 2026-10-27
 - shipped: 9de4f460
+### R-monitoring-005 · shipped
+An agent's ordinary prose that mentions rate-limit or context-window wording, or shows a quoted meter figure, never triggers the limit, context or other chrome detectors.
+- asked: 2026-10-30
+- shipped: af0f51d8, 0984ba89
+

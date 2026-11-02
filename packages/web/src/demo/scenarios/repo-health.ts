@@ -23,6 +23,8 @@ export const SHELF = "~/dev/photo-shelf";
 export function repoHealth(now: number): DemoScenario {
   const ago = (ms: number) => now - ms;
   const s1 = "demo-p1";
+  const n1 = "demo-n3";
+  const t1 = "demo-t2";
   const model: DemoModel = {
     repos: [
       ...repos({ healthIndex: now }),
@@ -37,6 +39,19 @@ export function repoHealth(now: number): DemoScenario {
         idle: true, idleSince: ago(18 * MIN), createdAt: ago(80 * MIN), claudeSessionId: "c-shelf-1", contextLeft: 44, starred: false,
         firstPrompt: "uploads of big albums stall at 80%, make them retry", lastPrompt: "uploads of big albums stall at 80%, make them retry",
       },
+      // Two sessions behind walls OUTSIDE them, so the launcher's "2 blocked" chip and its sheet's
+      // Sign-in and Network groups have rows in the demo (the usage-limit group is limit-and-budget's).
+      {
+        id: n1, cwd: NOTES, title: "pocket-notes · main", tabTitle: "Export to PDF", remoteControl: true, running: true,
+        idle: true, idleSince: ago(25 * MIN), createdAt: ago(2 * HOUR), claudeSessionId: "c-notes-3", contextLeft: 71, starred: false,
+        firstPrompt: "add an export to PDF", lastPrompt: "add an export to PDF", signedOut: true,
+      },
+      {
+        id: t1, cwd: TRAIL, title: "trail-log · main", tabTitle: "Offline maps", remoteControl: true, running: true,
+        idle: true, idleSince: ago(9 * MIN), createdAt: ago(1 * HOUR), claudeSessionId: "c-trail-2", contextLeft: 58, starred: false,
+        firstPrompt: "cache map tiles for offline hikes", lastPrompt: "cache map tiles for offline hikes",
+        netRetry: { state: "gaveup", attempt: 8, max: 8, nextAt: null, error: "Connection error.", at: ago(9 * MIN), why: "8 tries did not get through" },
+      },
     ],
     screens: {
       [s1]: screen(
@@ -47,6 +62,8 @@ export function repoHealth(now: number): DemoScenario {
           bullet("Done. A chunk that times out is retried three times before the album is marked failed.") +
           "\r\n",
       ),
+      [n1]: screen(`${claudeBanner(NOTES)}> add an export to PDF\r\n` + bullet("Not signed in · Please run /login") + "\r\n"),
+      [t1]: screen(`${claudeBanner(TRAIL)}> cache map tiles for offline hikes\r\n` + bullet("API Error: Connection error.") + "\r\n"),
     },
     history: {
       [s1]: [
@@ -55,6 +72,8 @@ export function repoHealth(now: number): DemoScenario {
           output: "Done. A chunk that times out is retried three times before the album is marked failed.",
         },
       ],
+      [n1]: [],
+      [t1]: [],
     },
     recent: [
       { cwd: SHELF, title: "photo-shelf", lastActive: ago(18 * MIN), claudeSessionId: "c-shelf-1", launch: {} },

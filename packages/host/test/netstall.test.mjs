@@ -5,7 +5,7 @@
 // stands. Driven on the slice with a fake core: no PTY, no log.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,6 +14,8 @@ process.env.WATERPLANE_ROOT = root;
 process.env.WATERPLANE_NET_RETRY_STALL_MS = "150"; // read at import (`sessions/knobs.ts`)
 const { NetRetrySlice } = await import("../dist/sessions/apiretry.js");
 const { netRetryStalls, netStalledText } = await import("@waterplane/shared");
+const { claudeProjectDir } = await import("../dist/claudeconfig.js");
+const { resolveBackend } = await import("../dist/backends/index.js");
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Poll, never a fixed sleep: a timing claim must survive a loaded machine. */
@@ -107,6 +109,47 @@ test("the switch off stops the probing and KEEPS the stall; a cancelled probe do
   assert.equal(s.info.netRetry.state, "gaveup");
   assert.equal(s.info.netRetry.nextAt, null);
   assert.deepEqual(writes, []);
+});
+
+test("on re-attach, a log still ending on a give-up nobody typed after is ADOPTED as a stall and probed", async (t) => {
+  process.env.CLAUDE_CONFIG_DIR = join(root, "claude");
+  t.after(() => { delete process.env.CLAUDE_CONFIG_DIR; });
+  const conv = "72f9ac92-95e2-4c3c-99ee-d973eadec749";
+  const dir = claudeProjectDir(root);
+  mkdirSync(dir, { recursive: true });
+  const at = Date.parse("2026-10-28T19:05:58Z");
+  const E = "API " + "Error: ";
+  const rows = [
+    { type: "user", timestamp: new Date(at - 5000).toISOString(), message: { role: "user", content: "fix the thing" } },
+    { type: "assistant", timestamp: new Date(at).toISOString(), isApiErrorMessage: true, error: "server_error",
+      message: { model: "<synthetic>", role: "assistant", content: [{ type: "text", text: E + "Can't reach the API server — check your internet or DNS (ENOTFOUND)" }] } },
+  ];
+  writeFileSync(join(dir, conv + ".jsonl"), rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+
+  const { slice, s, writes } = rig();
+  t.after(() => slice.clear(s));
+  s.backend = resolveBackend();
+  s.info.claudeSessionId = conv;
+  slice.restored("s1");
+  const n = s.info.netRetry;
+  assert.equal(n?.state, "gaveup", "adopted as a stall");
+  assert.equal(n.at, at);
+  assert.match(n.why, /found stuck when the host started/);
+  assert.ok(n.nextAt != null, "a probe is armed");
+  await until(() => writes.length >= 2, "the probe's continue + Return");
+  assert.deepEqual(writes, ["continue", "\r"]);
+  assert.equal(s.info.netRetry.probe, true);
+
+  // Someone typed after the give-up: nothing adopted, nothing typed.
+  writeFileSync(join(dir, conv + ".jsonl"), [...rows, { type: "user", timestamp: new Date(at + 60_000).toISOString(), message: { role: "user", content: "hello?" } }].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const b = rig();
+  t.after(() => b.slice.clear(b.s));
+  b.s.backend = resolveBackend();
+  b.s.info.claudeSessionId = conv;
+  b.slice.restored("s1");
+  assert.equal(b.s.info.netRetry, null);
+  await wait(250);
+  assert.deepEqual(b.writes, []);
 });
 
 test.after(() => rmSync(root, { recursive: true, force: true }));

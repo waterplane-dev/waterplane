@@ -52,3 +52,17 @@ test("past the seven days a fire is listed, not drawn; paused rules are neither;
   assert.equal(b.lanes, 2);
   assert.equal(anchorWords(b.fires[0], b), "on the clock");
 });
+
+test("no 5-hour window on the plan: a session-anchored rule is 'never', not 'unread'", () => {
+  const now = 1_800_000_000_000;
+  const u = { sessionPct: null, sessionResetAt: null, weeklyPct: 18, weeklyResetAt: now + 3 * 86_400_000, sessionGoneSince: now - 3600_000 };
+  const s = entry("s", { kind: "window", edge: "before", offsetMin: -60 }, { nextAt: null });
+  const bar = weekBar([s], u, now);
+  assert.equal(bar.noSession, true);
+  assert.deepEqual(bar.sessionless, ["s"]);
+  assert.deepEqual(bar.unread, []);
+  // a bare null session figure (no stamp) is still 'unread'
+  const plain = weekBar([s], { ...u, sessionGoneSince: undefined }, now);
+  assert.deepEqual(plain.unread, ["s"]);
+  assert.deepEqual(plain.sessionless, []);
+});

@@ -3,10 +3,11 @@ import {
   type Lifecycle,
   type SendBlockReason,
   intentReasonText,
+  sessionWall,
 } from "@waterplane/shared";
 import { CONFIRMING_WHY } from "../sendConfirm.ts";
 import { isFailedPhase, isUnconfirmed, rowPhase } from "../core/queue/phase.ts";
-import { serialTextFor } from "../core/queue/serialStates.ts";
+import { laneStateOf, serialTextFor } from "../core/queue/serialStates.ts";
 import type { OutboxEntry } from "../outbox";
 import {
   act,
@@ -148,19 +149,17 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
         detail = inWords ? `${lead} — trying again in ${inWords}` : `${lead} — trying again in a moment`;
       }
       if (blocked === "held") {
-        // `held` COLLAPSES three different situations, because `laneBusy()`
-        // deliberately answers one question ("can this lane take text?") with
-        // one boolean: mid-turn, parked on a question, or blocked on a usage
-        // limit. Naming which of the three it is here is not a second decision
-        // — the ladder's verdict stands, and these are the same three facts it
-        // read. It matters because two of them will never clear on their own:
-        // "held until the agent finishes this turn" printed over a session
-        // that is sitting on an unanswered question box is a sentence that
-        // sends a person away to wait for something that is waiting for them.
+        // `held` COLLAPSES several situations, because `laneBusy()` answers one
+        // question ("can this lane take text?") with one boolean: mid-turn, a
+        // question, a usage limit, signed out, the host's net retry. Naming which
+        // is not a second decision — these are the facts it read (`sessionWall`).
+        // It matters because most never clear on their own: "held until the
+        // agent finishes this turn" over an unanswered box sends a person away
+        // to wait for something that is waiting for them.
         const s = input.sessions?.find((x) => x.id === e.sessionId);
-        if (s?.limit?.blocked) {
-          reason = "limit";
-          detail = undefined;
+        const wall = s ? sessionWall({ ...laneStateOf(s), turnActive: undefined }) : null;
+        if (wall === "limit" || wall === "auth" || wall === "net") {
+          reason = wall; detail = undefined;
         } else if (s?.awaitingInput || (s?.prompt && s.prompt.kind !== "trust")) {
           reason = "awaitingAnswer";
           detail = s.prompt

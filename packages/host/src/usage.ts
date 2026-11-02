@@ -8,7 +8,7 @@
  * field is best-effort and `ok:false` when parsing fails, so callers fail safe.
  */
 import * as pty from "node-pty";
-import type { UsageInfo, UsageSample } from "@waterplane/shared";
+import { sessionWindowGoneSince, type UsageInfo, type UsageSample } from "@waterplane/shared";
 import { parseResetTime } from "./limit.js";
 import { renderCapture } from "./render.js";
 import { readNavBox, trustKeys } from "./prompt.js";
@@ -217,7 +217,8 @@ export class UsageChecker {
   /** When the last probe failed, 0 = never (or since recovered). */
   private failedAt = 0;
 
-  constructor(private cwd: string, private onUpdate: (u: UsageInfo) => void) {}
+  /** `history` is the kept log (`usagelog.ts`), read after every reading for `stampSessionGone`. */
+  constructor(private cwd: string, private onUpdate: (u: UsageInfo) => void, private history?: () => readonly UsageSample[]) {}
 
   get(): UsageInfo {
     return usageAfterResets(this.cache);
@@ -234,6 +235,32 @@ export class UsageChecker {
     if (this.cache.checkedAt) return;
     const u = rememberedUsage(sample);
     if (u) this.cache = u;
+    this.stampSessionGone();
+  }
+
+  /**
+   * Stamp (or clear) "this account has no 5-hour window" on the cached reading,
+   * from the kept history (`sessionWindowGoneSince`, shared). Only on a reading
+   * that itself shows no session figure and no session reset — a reading with
+   * one is the window coming back, and that wins over any history.
+   */
+  private stampSessionGone(): void {
+    if (!this.history) return;
+    const rows = this.history();
+    const u = this.cache;
+    const last = rows[rows.length - 1];
+    // The reading in hand is not in the log yet (onUpdate notes it), so it is folded in here.
+    const now: UsageSample | null = u.ok && !u.remembered && (!last || u.checkedAt > last.t)
+      ? { t: u.checkedAt, s: u.sessionPct, w: u.weeklyPct, sr: u.sessionResetAt, wr: u.weeklyResetAt } : null;
+    this.markSessionGone(sessionWindowGoneSince(now ? [...rows, now] : rows));
+  }
+
+  markSessionGone(since: number | null): void {
+    const u = this.cache;
+    const gone = since != null && u.sessionPct == null && u.sessionResetAt == null && u.weeklyPct != null;
+    if (gone ? u.sessionGoneSince === since : u.sessionGoneSince == null) return;
+    const { sessionGoneSince: _drop, ...rest } = u;
+    this.cache = gone ? { ...rest, sessionGoneSince: since! } : rest;
   }
 
   /** Cached value if fresh, else refresh. */
@@ -298,8 +325,10 @@ export class UsageChecker {
         try { proc.kill(); } catch { /* gone */ }
         if (u.ok && !u.remembered) this.failedAt = 0;
         this.cache = u;
-        this.onUpdate(u);
-        resolve(u);
+        // Stamped BEFORE onUpdate, which publishes: the phone must never see one frame without it.
+        this.stampSessionGone();
+        this.onUpdate(this.cache);
+        resolve(this.cache);
       };
       proc.onData((d) => (buf += d));
 

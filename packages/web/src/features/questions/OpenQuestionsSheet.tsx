@@ -1,11 +1,17 @@
 /**
  * The `questions` overlay: `QuestionsSheet.tsx` wired to the core — the prop
  * list `App.tsx`'s `overlayViews.questions` used to spell out.
+ *
+ * Its rows are `attentionCut`'s `wait` bucket over every session and the
+ * launcher's visibility rule — the call the "N waiting" chip counts with — so
+ * the chip's number and these cards are one array. "show all" widens to every
+ * waiting session and the sheet says so ("n of N").
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useCore, useQueueEntries } from "../../sdk";
 import { QuestionsSheet } from "../../QuestionsSheet";
 import { SNAP_AT_KEY, loadSnap } from "../../localState";
+import { attentionCut, cutWords } from "../../attention";
 import { ackAsking } from "./actions";
 
 export function OpenQuestionsSheet() {
@@ -16,9 +22,15 @@ export function OpenQuestionsSheet() {
   // sheet's own memos.
   const outbox = useMemo(() => [...entries], [entries]);
   const sessions = c.world.sessions;
+  const [showAll, setShowAll] = useState(false);
+  const cut = attentionCut(sessions, "wait", c.world.backends, c.world.cwdVisible);
+  const words = cutWords("wait", cut);
+  const showingAll = showAll && words != null;
   return (
     <QuestionsSheet
-      sessions={sessions} outbox={outbox} online={c.conn.status === "open"}
+      sessions={showingAll ? cut.all : cut.shown}
+      cut={{ words, showingAll, total: cut.all.length, onToggleAll: () => setShowAll((v) => !v) }}
+      outbox={outbox} online={c.conn.status === "open"}
       seenAt={loadSnap<number | null>(SNAP_AT_KEY, null)}
       // The same durable path the reader's card uses — there is deliberately
       // no second way to answer a question, so the fingerprint guard and the

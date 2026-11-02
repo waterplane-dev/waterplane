@@ -54,3 +54,32 @@ Tapping the Scorecard badge shows exactly the failing checks (a count acts as a 
 Owner-specific identifiers, owner config and app ids never appear in the public repository tree or mirror.
 - asked: 2026-10-26, 2026-10-26
 
+### R-security-012 · shipped
+The exposure watch can be switched on for a repo from an opt-in card, and the empty watch tab links to that card.
+- asked: 2026-10-26
+- shipped: 41b4a401
+
+### R-security-013 · shipped
+The project runs on a supported Node.js release (not end-of-life Node 20), with the critical Capacitor advisory and the @azure/msal-node advisory fixed by upgrades.
+- asked: 2026-10-26, 2026-10-26
+- shipped: 9da77f95, 6e9e21ff, 061e5051
+
+### R-security-014 · shipped
+The project has no known vulnerable dependencies; any advisory that cannot apply is documented with a reason in an osv-scanner config.
+- asked: 2026-10-29
+- shipped: 62ceb852, f90544c3
+
+### R-security-015 · requested
+The project has an OpenSSF best-practices entry that the maintainer creates and fills in, so the CII-Best-Practices check can pass.
+- asked: 2026-10-29
+
+### R-security-016 · shipped
+Artifact listing never follows a symlink that escapes the repository, and every artifact walk applies the same containment rule.
+- asked: 2026-10-30
+- shipped: de6ad2be
+
+### R-security-017 · shipped
+The public OpenSSF Scorecard for waterplane shows no vulnerability finding: known advisories in dependencies are fixed, or documented with a reason in an osv-scanner config where they cannot apply.
+- asked: 2026-10-30
+- shipped: 62ceb852, f90544c3
+

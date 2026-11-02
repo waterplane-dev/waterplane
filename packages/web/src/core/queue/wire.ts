@@ -61,6 +61,10 @@ export function wireFns(c: QueueCtx): WireFns {
     // A tracked fire's receipt (`fireFate.ts`) is recorded BEFORE its row is
     // retired, so no render sees "row gone, no receipt" and calls it dropped.
     noteFireAck(msg.ackId, msg.ok, msg.runId, msg.reason);
+    // The person's continue after a sign-in has no row that changes under the
+    // tap until the next session snapshot, so the host's own sentence IS the
+    // receipt — ok or refused, and naming any id that was not waiting.
+    if (entry?.op?.t === "signin.continue") showToast(msg.reason || (msg.ok ? "continuing after the sign-in" : "nothing was continued"));
     if (msg.ok) {
       writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
       // A create names the session it made: every prompt queued behind it

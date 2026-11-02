@@ -5,8 +5,8 @@
  * the sign-in card, the next prompt) and each one takes its height FROM the
  * terminal. Once read, most of them are only in the way, but they are not
  * finished — the link is still the link, the code still the code — so closing
- * one must be a FOLD, never a delete: it shrinks to a chip in the session's
- * status line and a tap there brings it back.
+ * one must be a FOLD, never a delete: it is listed behind one button in the
+ * terminal's floating corner group, and a tap there brings it back.
  *
  * Two keys per fold. The SLOT says which strip ("shell-links"); the CONTENT key
  * says which state of it was folded (the link and code it showed). A fold holds
@@ -107,7 +107,7 @@ export function isStowed(slot: string, key: string): boolean {
 }
 
 /** First fold on this device says where the strip went; later ones are a receipt by sight. */
-export const STOW_TOLD = "folded into the line under the session's title — tap its chip there to open it again";
+export const STOW_TOLD = "folded away — the arrow button with a count in the terminal's corner brings it back";
 
 export function stow(slot: string, key: string): void {
   marks = pruneStowed({ ...load(), [stowMark(slot, key)]: Date.now() }, Date.now());

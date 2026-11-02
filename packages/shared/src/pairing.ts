@@ -16,6 +16,7 @@
 import { normalizeHostBase } from "./hosturl.js";
 import { BRAND, LEGACY } from "./brand.js";
 import { randomFromAlphabet, defaultRandomBytes, type RandomBytes } from "./hosts.js";
+import { trimEndChars } from "./lineartrim.js";
 
 /** 32 characters (a power of two: uniform from a byte), no 0, O, 1 or I. */
 export const PAIR_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -57,7 +58,7 @@ export function pairDeepLink(base: string, code: string): string {
 }
 
 export function pairLandingUrl(base: string, code: string): string {
-  return `${base.replace(/\/+$/, "")}/pair/${code}`;
+  return `${trimEndChars(base, "/")}/pair/${code}`;
 }
 
 /** Parse `<scheme>://pair?u=<base>&c=<code>` (current or a legacy scheme), or `null`. */

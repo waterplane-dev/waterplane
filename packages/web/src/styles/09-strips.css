@@ -249,7 +249,7 @@
 .stab-row .stab-led { width: 10px; height: 10px; }
 .stab-row[data-state="done"] .stab-led { background: var(--dim); }
 .stab-row[data-state="wait"] .stab-led { background: var(--dead); }
-.stab-row[data-state="limit"] .stab-led { background: var(--limit); }
+.stab-row[data-state="blocked"] .stab-led { background: var(--limit); }
 .stab-row[data-state="exited"] .stab-led { background: var(--dead); }
 .stab-row[data-state="exited"] .stab-row-label { font-style: italic; }
 .stab-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -326,7 +326,7 @@
 .stab-led { width: 6px; height: 6px; margin: 0 var(--sp-2); border-radius: var(--r-round); flex: 0 0 auto; background: var(--muted); }
 .stab[data-state="done"] .stab-led { background: var(--dim); }
 .stab[data-state="wait"] .stab-led { background: var(--dead); }
-.stab[data-state="limit"] .stab-led { background: var(--limit); }
+.stab[data-state="blocked"] .stab-led { background: var(--limit); }
 .stab[data-state="exited"] .stab-led { background: var(--dead); }
 /* …and a turn that is actually running SPINS, in the same `Loader` the badge
    beside the word "coding" uses. The dot said which state a session was in;

@@ -257,3 +257,28 @@ A session still on an older Claude binary than the installed one can be restarte
 Sessions can be found again later, so a session with a pending next step can be located.
 - asked: 2026-10-26
 
+### R-sessions-058 · shipped
+A plugin-backend session that stops at a dated usage wall resumes at the reset time as Claude sessions do; a wall with no reset time schedules nothing.
+- asked: 2026-10-28
+- shipped: 20307bfd
+
+### R-sessions-059 · shipped
+Creating a session returns without running repository compliance inspection, so it is not blocked by git scans.
+- asked: 2026-10-30
+- shipped: c050de92
+
+### R-sessions-060 · shipped
+From the main view, one tap jumps straight to the session that is requesting approval.
+- asked: 2026-10-30
+- shipped: 4acf842d
+
+
+### R-sessions-061 · shipped
+After a sign-out, one sign-in on the desktop is enough: the phone then ASKS to continue the stopped sessions ("continue all N") and nothing is typed into any of them before that tap. The offer appears only after the desktop confirms the account is signed in again; when it cannot tell, it says so and leaves the decision to the person. The sessions then continue one at a time, the first alone, never all at once.
+- asked: 2026-11-02 (owner)
+- shipped: 55b4feb9, 59fead43
+
+### R-sessions-062 · shipped
+No automatic recovery (usage-limit or spend-cap continue, network retry, sign-in continue) types over words a person has in the desktop composer: the continue waits, the session says so ("words in the composer at the desk"), and it is typed once the words are sent or cleared. A dim suggestion the composer proposes is not the person's words.
+- asked: 2026-11-02 (owner)
+- shipped: a16bedbf, 55b4feb9, b2981528

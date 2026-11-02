@@ -1,6 +1,7 @@
 /**
  * The name slice of `sidecar.ts` — see that file's header for the seam's rules.
  */
+import { detectHeadlessSignedOut, SIGNED_OUT_NOTE } from "../headlessauth.js";
 import { detectHeadlessLimit, limitNote } from "../limit.js";
 import { sayOnce, sidecarPlan } from "./sidecarroute.js";
 import type { SidecarTask } from "./sidecarroute.js";
@@ -35,6 +36,9 @@ export interface NameRun {
   readonly failed: boolean;
   /** The ACCOUNT is out of quota — not an error, and a different sentence. */
   readonly limited: boolean;
+  /** The CLI is SIGNED OUT — `failed` too, but `detail` is the one signed-out
+   *  sentence and a pass should stop rather than spend the next batch. */
+  readonly signedOut?: boolean;
   /** What went wrong, in words, when anybody knew. */
   readonly detail?: string;
   /** Read from the envelope when it carried one; absent otherwise. Never derived. */
@@ -191,6 +195,10 @@ async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun
     // The verb is the TASK's, because this sentence is shown to a person and
     // "nothing was titled" is not true of a commit message that was not written.
     return { text: "", failed: false, limited: true, detail: limitNote(limit, task === "name" ? "titled" : "written"), usage, usd, durationMs: since() };
+  }
+
+  if (detectHeadlessSignedOut(run.stdout, run.stderr)) {
+    return { text: "", failed: true, limited: false, signedOut: true, detail: SIGNED_OUT_NOTE, usage, usd, durationMs: since() };
   }
 
   let text = run.stdout;

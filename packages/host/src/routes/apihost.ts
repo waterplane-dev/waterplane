@@ -7,13 +7,14 @@
  * routes as tables").
  */
 import { statSync } from "node:fs";
+import { dirname } from "node:path";
 import { ASK_RULE_BACKENDS, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesReply, DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS, envName, type HostSetupFixResult, type HostSetupReport, type RootInfo, type RootPostReply } from "@waterplane/shared";
-import { discoverTargets, findTarget, listTargets } from "../repos.js";
+import { discoverTargets, findTarget, listTargets, plainFolders } from "../repos.js";
 import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
 import { dictateStatusLive, transcribe } from "../dictate.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
-import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
+import { cloneRepo, initFolder, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
 import { changedCountsWithin, gitRunningIn } from "../git.js";
 import { buildFailedFor, gitFailuresFor } from "../attentionstore.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
@@ -233,14 +234,6 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
 
-  // Every Android app's repo half of "installs itself", across every repo — the Apps
-  // screen's checklist joins it with the phone's half. A pure read, so GET.
-  route("GET", "/api/apps/readiness", async ({ res }, ctx) => {
-    if (!ctx.appReadiness) return false;
-    json(res, await ctx.appReadiness());
-    return true;
-  }),
-
   route("GET", "/api/storage/host", ({ res }, ctx) => {
     json(res, hostStoreReport(ctx.root));
     return true;
@@ -428,6 +421,24 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       // A template id is checked against `TEMPLATES` inside `newRepo` (unknown = refused in words).
       ...(typeof template === "string" && template ? { template: template as TemplateId } : {}),
     });
+    json(res, r, "error" in r ? 400 : 200);
+    return true;
+  }),
+  // Folders under the root that rescan skipped for having no `.git` — asked by the
+  // launcher's rescan button so a folder dragged in is not silently missing.
+  route("GET", "/api/plainfolders", async ({ res }, ctx) => {
+    const folders = await plainFolders(ctx.root, await listTargets(ctx.root));
+    json(res, { folders });
+    return true;
+  }),
+  // `git init` in one of THOSE folders, and nothing else: the path must be one
+  // `plainFolders` lists right now (a direct child of a root, no repo in it).
+  route("POST", "/api/plainfolders/init", async ({ req, res }, ctx) => {
+    const { path } = await readJson(req);
+    const want = String(path || "");
+    const listed = (await plainFolders(ctx.root, await discoverTargets(ctx.root))).find((f) => f.path === want);
+    if (!listed) return json(res, { error: "not a folder without git under the root" }, 400), true;
+    const r = await initFolder(dirname(listed.path), listed.path);
     json(res, r, "error" in r ? 400 : 200);
     return true;
   }),

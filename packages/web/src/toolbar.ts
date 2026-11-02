@@ -14,7 +14,7 @@
  * reason in reverse — a stale pin from an older build must not render an empty
  * slot in the header.
  */
-import { BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
+import { AtSign, BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
@@ -106,6 +106,10 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: "shot", name: "shot", Icon: Monitor },
   { id: "clip", name: "to host clip", Icon: ClipboardPaste },
   { id: "select", name: "select", Icon: Copy },
+  // This session's reference (peer name, folder, conversation id) to the
+  // phone's clipboard — to point another session at this one. Picked text
+  // goes with it from the pick bar and the text sheet (features/clipboard).
+  { id: "copyref", name: "copy reference", Icon: AtSign },
   { id: "decide", name: "answer list", Icon: MessageSquareReply },
   { id: "teleport", name: "teleport", Icon: Waypoints },
   { id: "remote", name: "remote", Icon: Radio },

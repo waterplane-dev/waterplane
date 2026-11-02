@@ -14,13 +14,14 @@ import { UpdatesAutoRow, UpdatesDoor } from "./UpdatesSettings";
 import { UpdatesSheet } from "./UpdatesSheet";
 import { onResult, onStatus } from "./updatesActions";
 import { PluginsToolbar } from "./PluginsToolbar";
-import { decisions, plugins } from "./store";
+import { applyLiveList, decisions, plugins } from "./store";
 
 export { openDecisions } from "./actions";
 export { PluginBadges } from "./PluginsToolbar";
 export { usePlugins } from "./store";
-/** The host's plugin list, read-only outside this feature: bound into the SDK's `isExtensionEnabled` by core. */
-export { plugins as pluginList } from "./store";
+/** The host's plugin list as "is it on" reads it (cached per host), read-only outside this feature:
+ *  bound into the SDK's `isExtensionEnabled` by core. */
+export { pluginsLive, pluginsOn } from "./store";
 export { openUpdates } from "./updatesActions";
 export { useUpdatesStatus } from "./store";
 export { bannerView } from "./logic";
@@ -34,6 +35,7 @@ export const manifest: FeatureManifest = {
   messages: {
     "plugin.list": (msg) => {
       plugins.set(msg.plugins);
+      applyLiveList(msg.plugins);
       setRowWords("plugins", pluginSearchWords(msg.plugins));
     },
     "plugin.actionResult": (msg) => onActionResult(msg),

@@ -10,8 +10,9 @@ import assert from "node:assert/strict";
 import { BRAND, HOST_PARK_PREFIX, bareKeyFor, lsKey, parkedKeyFor } from "@waterplane/shared";
 
 import {
-  addHost, allKeys, bootHosts, dropInactiveHost, finishSwitch, planRemove, readGone, readHosts, updateHost, writeSwitch,
+  addHost, allKeys, bootHosts, dropInactiveHost, finishSwitch, planRemove, readGone, readHosts, stallTail, takeSwitchFailure, updateHost, writeSwitch,
 } from "./hosts.ts";
+import { pickSavedBase } from "./hostUrl.ts";
 import { LS } from "./storage.ts";
 
 /** `Storage`'s shape over a Map — insertion-ordered like the real one. */
@@ -343,4 +344,112 @@ test("the redo after the bare keys are gone does not mirror-delete the park (the
   for (const k of Object.keys(A_WORDS)) { kv.setItem(parkedKeyFor(k, a), kv.getItem(k)); kv.removeItem(k); }
   bootHosts(kv);
   assertSwitchedIntact(kv, a, b, "bare already cleared, no parked mark");
+});
+
+// ── A FULL store: the throw that repeats on every boot ──────────────────
+//
+// 2026-11-01, the owner's phone: a tap on the switch key, a reload, and the
+// launcher back on the SAME desktop with nothing said; earlier the header had
+// named the other desktop while every request still went to the old one. A
+// park COPIES every host key before it removes any, so it needs as much free
+// room again as the host's words take. A WebView over its localStorage quota
+// throws at the same copy on every boot, `bootHosts` swallowed it, the marker
+// stayed, and the redo failed identically forever — and the same throw skipped
+// the migration that aligns `hostBase` with the active host.
+
+/** A shim whose setItem throws QuotaExceededError past `cap` UTF-16 units. */
+function full(kv, cap) {
+  const used = () => [...kv.m.entries()].reduce((n, [k, v]) => n + k.length + v.length, 0);
+  return {
+    m: kv.m,
+    getItem: kv.getItem,
+    setItem: (k, v) => {
+      const before = kv.m.has(k) ? k.length + kv.m.get(k).length : 0;
+      if (used() - before + k.length + String(v).length > cap) {
+        const e = new Error("The quota has been exceeded."); e.name = "QuotaExceededError"; throw e;
+      }
+      kv.setItem(k, v);
+    },
+    removeItem: kv.removeItem,
+    key: kv.key,
+    get length() { return kv.m.size; },
+  };
+}
+const sizeOf = (kv) => [...kv.m.entries()].reduce((n, [k, v]) => n + k.length + v.length, 0);
+
+test("a switch that cannot park for lack of room is abandoned and SAID, not retried silently every boot", () => {
+  const { kv, a, b } = armed();
+  const before = snapshot(kv);
+  const tight = full(kv, sizeOf(kv) + 200); // room for the note, not for A's park
+  bootHosts(tight);
+  assert.equal(hostOf(kv), a, "still on A");
+  assert.equal(kv.getItem(LS.hostSwitch), null, "marker dropped: no silent retry on the next boot");
+  // Nothing lost, and no half-written park copy left to fill the store further.
+  for (const [k, v] of Object.entries(A_WORDS)) {
+    assert.equal(kv.getItem(k), v, `A's ${k} still bare`);
+    assert.equal(kv.getItem(parkedKeyFor(k, a)), null, `A's ${k}: half-park copy left behind`);
+  }
+  const note = takeSwitchFailure(kv);
+  assert.deepEqual({ ...note, at: 0 }, { stage: "park", from: a, to: b, at: 0 });
+  assert.equal(takeSwitchFailure(kv), null, "said once");
+  const settled = snapshot(kv);
+  bootHosts(tight);
+  assert.deepEqual(snapshot(kv), settled, "a second boot moves nothing");
+  const { [LS.hostSwitch]: _marker, ...beforeNoMarker } = before;
+  assert.deepEqual(settled, beforeNoMarker, "the store is as before the tap, minus the marker");
+  // Room again: the next tap switches as usual.
+  writeSwitch(kv, { from: a, to: b });
+  bootHosts(kv);
+  assertSwitchedIntact(kv, a, b, "after room was freed");
+});
+
+test("an ordinary throw (the process dying) still keeps the marker for the redo", () => {
+  const { kv, a, b } = armed();
+  const c = crashing(kv);
+  c.box.budget = 3;
+  bootHosts(c.kv);
+  assert.notEqual(kv.getItem(LS.hostSwitch), null);
+  assert.equal(takeSwitchFailure(kv), null, "a crash is not reported as a full store");
+  bootHosts(kv);
+  assertSwitchedIntact(kv, a, b, "redo");
+});
+
+test("the address the page dials is the active row's, even when hostBase lagged behind a throw", () => {
+  const { kv, b } = armed();
+  const hosts = kv.getItem(LS.hosts);
+  // The 11:07 screen: hostActive already on B, hostBase still A's.
+  assert.equal(pickSavedBase(hosts, b, "http://100.64.0.5:8770"), "http://100.64.0.9:8770");
+  // No list (first run, an older build): the stored hostBase as before.
+  assert.equal(pickSavedBase(null, null, "100.64.0.5"), "http://100.64.0.5:8770");
+  assert.equal(pickSavedBase(hosts, "gone-id", "http://100.64.0.5:8770"), "http://100.64.0.5:8770");
+  assert.equal(pickSavedBase(null, null, null), null);
+});
+
+test("the stall chip names the desktop the requests went to, once there are two", () => {
+  const hosts = [{ id: "mac", name: "MacStudio", base: "http://100.64.0.5:8770" }, { id: "zen", name: "zenbookJ", base: "http://100.64.0.9:8770" }];
+  assert.equal(stallTail(hosts, "mac"), " — MacStudio is not answering");
+  assert.equal(stallTail(hosts.slice(0, 1), "mac"), " — the connection may be down", "one desktop: no name");
+});
+
+test("a switch that commits but cannot restore for lack of room dials the NEW desktop, never the old one under the new name", () => {
+  // The owner's 11:07 screen: header "zenbookJ", every request to the Mac.
+  // Both desktops used before, so A's park only overwrites its earlier copies
+  // (no growth) and lands; B's restore needs B's size again and throws.
+  const { kv, a, b } = armed();
+  for (const k of Object.keys(A_WORDS)) kv.setItem(parkedKeyFor(k, a), kv.getItem(k));
+  const big = "x".repeat(4000);
+  kv.setItem(parkedKeyFor(LS.backlogDraft, b), big);
+  const tight = full(kv, sizeOf(kv) + 400);
+  bootHosts(tight);
+  assert.equal(hostOf(kv), b, "committed: the list says B");
+  const dialled = pickSavedBase(kv.getItem(LS.hosts), kv.getItem(LS.hostActive), kv.getItem(LS.hostBase));
+  assert.equal(dialled, "http://100.64.0.9:8770", "the page dials B — the desktop its header names");
+  assert.notEqual(kv.getItem(LS.hostSwitch), null, "marker kept: the restore is retried");
+  assert.equal(kv.getItem(parkedKeyFor(LS.backlogDraft, b)), big, "B's words safe in the park");
+  assert.equal(takeSwitchFailure(kv)?.stage, "restore", "and the page says so");
+  // Room again: the next boot finishes the restore.
+  bootHosts(kv);
+  assert.equal(kv.getItem(LS.hostSwitch), null);
+  assert.equal(kv.getItem(LS.backlogDraft), big);
+  assert.equal(kv.getItem(LS.hostBase), "http://100.64.0.9:8770");
 });

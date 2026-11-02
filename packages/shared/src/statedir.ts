@@ -13,10 +13,11 @@
  */
 import { BRAND } from "./brand.js";
 import { resolveEnv } from "./envresolve.js";
+import { trimEndChars } from "./lineartrim.js";
 
 export type StateDirSource = "env" | "xdg" | "default";
 
-const stripSlash = (p: string): string => (p.length > 1 ? p.replace(/[\\/]+$/, "") : p);
+const stripSlash = (p: string): string => (p.length > 1 ? trimEndChars(p, "\\/") : p);
 
 /** The code root when nothing names one: `<home>/dev`. The ONE spelling of that default. */
 export function defaultRootOf(home: string): string {

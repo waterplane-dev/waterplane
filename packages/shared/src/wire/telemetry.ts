@@ -89,6 +89,13 @@ export interface UsageInfo {
   /** Epoch ms of the scrape. */
   checkedAt: number;
   /**
+   * Present when this account has NO 5-hour window: `/usage` has printed the
+   * week and no "Current session" row since this instant (`sessionWindowGoneSince`,
+   * `sessionwindow.ts`). Only ever set beside `sessionPct: null`. Absent = it has
+   * one, or nobody can say — never read a bare null as "none".
+   */
+  sessionGoneSince?: number;
+  /**
    * True when this reading was not probed by THIS process — it was re-offered
    * at boot out of `usagelog.ts`, because the daemon restarting is not a fact
    * about the account's limits and blanking the phone's gauge every time the

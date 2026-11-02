@@ -160,7 +160,7 @@ export function requeue(x: OutboxEntry, wasted: boolean, now = Date.now()): Outb
 
 // `serialStates` and `serialTextFor` live in `./serialStates.ts` (pure, no
 // barrel imports) so the activity rows can read them without a cycle.
-export { serialStates, serialTextFor } from "./serialStates.ts";
+export { laneStateOf, serialStates, serialTextFor } from "./serialStates.ts";
 
 /** Drop an entry's park on an explicit send — keeping it only for the one
  *  entry whose park is not a wait it is serving now (see `flushOutbox`). */

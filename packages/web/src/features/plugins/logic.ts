@@ -7,6 +7,7 @@
  */
 import { BRAND, cleanPluginValue, pluginMaturity, updatesDue } from "@waterplane/shared";
 import { agoText } from "../../format.ts";
+import { LS, lsJson, lsSetJson } from "../../storage.ts";
 import type {
   CatalogEntry, InstalledPlugin, SelfUpdateInfo, UpdateDue, UpdatesRestart, UpdatesStatus, UpdatesTarget,
   DecisionLogEntry, PluginActionDef, PluginBadge, PluginField, PluginToggleDef, PluginValue, PluginView, SessionInfo,
@@ -478,4 +479,66 @@ export const PENDING_MS = 3 * 60_000;
 
 export function applyRunning(a: { pending: boolean; at?: number } | undefined, now: number): boolean {
   return !!a && a.pending && now - (a.at ?? 0) < PENDING_MS;
+}
+
+/**
+ * The line under an `autoOn` extension's switch while nobody has chosen (`PluginView.auto`): the
+ * desktop's own sentence, verbatim, and that a flip is final — after it the line is gone, because
+ * the host stops sending `auto` once a choice is stored. Null = the switch alone decides.
+ */
+export function autoLine(p: Pick<PluginView, "auto">): string | null {
+  const why = p.auto?.why?.trim();
+  if (!why) return null;
+  return `${why[0]!.toUpperCase()}${why.slice(1)}. Flipping the switch makes it your choice, and it stays that way.`;
+}
+
+// ── the plugin list cache ──────────────────────────────────────────────────
+/**
+ * The last `plugin.list` per host, cut to what "is this extension on" reads (`sdk/extensions.ts`
+ * `enabledIn`: id, switch, state) — never a field value, a status line or an env name.
+ *
+ * Why: unlisted reads as OFF, and installing an already-downloaded APK is phone-local. With
+ * `hideWhen` the only door to an extension's screen would vanish whenever the tunnel is down at
+ * launch. So the store `isExtensionEnabled` reads STARTS from this cache: a cached list is
+ * authoritative until the live one lands, and a host with no cache reads exactly as before
+ * (unknown ⇒ off). `LS.pluginList` is a HOST key (`storage.ts` `KEY_SCOPE`): a host switch parks
+ * it with its desktop, so each desktop shows its own state at once and never another's.
+ */
+
+/** One cached row (`sdk/extensions.ts`'s `PluginOn`, spelled here: a feature reads the SDK by its index). */
+export type CachedPlugin = { manifest: { id: string }; enabled: boolean; state: PluginView["state"] };
+
+const STATES: readonly string[] = ["active", "error", "off"];
+
+/** Pure: the slim rows a live list caches. */
+export function slimList(list: readonly Pick<PluginView, "manifest" | "enabled" | "state">[]): CachedPlugin[] {
+  return list.map((p) => ({ manifest: { id: p.manifest.id }, enabled: p.enabled, state: p.state }));
+}
+
+/** This host's cached list, or null when it never sent one to this phone (or the copy is unreadable). */
+export function readCachedList(): CachedPlugin[] | null {
+  const v = lsJson<unknown>(LS.pluginList, null);
+  if (!Array.isArray(v)) return null;
+  const out: CachedPlugin[] = [];
+  for (const r of v) {
+    const id = r?.manifest?.id;
+    if (typeof id !== "string" || !id || typeof r.enabled !== "boolean" || !STATES.includes(r.state)) return null;
+    out.push({ manifest: { id }, enabled: r.enabled, state: r.state });
+  }
+  return out;
+}
+
+/** Pure: the same rows in the same order. */
+export function sameList(a: readonly CachedPlugin[] | null, b: readonly CachedPlugin[]): boolean {
+  return !!a && a.length === b.length && a.every((x, i) => x.manifest.id === b[i]!.manifest.id && x.enabled === b[i]!.enabled && x.state === b[i]!.state);
+}
+
+/** The live list landed: it replaces the cache (and is what the caller's store now holds). When it
+ *  says what `prev` (the store's value) already says, `prev` comes back and nothing is written — the
+ *  host re-sends the list on every change of anything in it. */
+export function cacheLiveList(list: readonly Pick<PluginView, "manifest" | "enabled" | "state">[], prev: readonly CachedPlugin[] | null = null): readonly CachedPlugin[] {
+  const slim = slimList(list);
+  if (prev && sameList(prev, slim)) return prev;
+  lsSetJson(LS.pluginList, slim);
+  return slim;
 }

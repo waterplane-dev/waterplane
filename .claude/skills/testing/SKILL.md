@@ -1,6 +1,6 @@
 ---
 name: testing
-description: waterplane's test layers and how to add to them: node --test over packages/shared, packages/web, packages/extensions/*/web and tools/ (pure logic and repo shape, no host), packages/host/test (the regex heuristics, no daemon), the scripts/e2e-*.mjs suite that needs a real host, plus test:contract, test:ui (Playwright journeys) and test:vscode. Load BEFORE writing or changing a test, deciding which layer a new rule belongs in, or adding a tools/*.test.mjs guard (it needs a tier in scripts/guards/guards.mjs); includes what every e2e script must pin and the stub TUI modes.
+description: "waterplane's test layers and how to add to them: node --test over packages/shared, packages/web, packages/extensions/*/web and tools/ (pure logic and repo shape, no host), packages/host/test (the regex heuristics, no daemon), the scripts/e2e-*.mjs suite that needs a real host, plus test:contract, test:ui (Playwright journeys) and test:vscode. Load BEFORE writing or changing a test, deciding which layer a new rule belongs in, or adding a tools/*.test.mjs guard (it needs a tier in scripts/guards/guards.mjs); includes what every e2e script must pin and the stub TUI modes."
 ---
 
 # waterplane testing

@@ -3,8 +3,22 @@
 When the account hits a usage limit the desktop parks every blocked session and resumes them once
 the window resets (`limit.ts` / `limitlog.ts` on the host; the rules are in the `heuristics`
 skill). This folder holds what the phone knows and decides about that queue: the host-wide config,
-the `limits` sheet (the flat `LimitSheet.tsx`, wrapped by `LimitQueueSheet.tsx`) and the session
-toolbar's `limit` toggle (`LimitToggle.tsx`).
+the `limits` sheet and the session toolbar's `limit` toggle (`LimitToggle.tsx`).
+
+The `limits` sheet is the **blocked sheet** (`BlockedSheet.tsx`, wired by `OpenBlockedSheet.tsx`): every
+session behind a wall outside it, grouped Sign-in → Network → Spend → Usage limit, reached from the
+launcher's "N blocked" chip. Its rows are `attentionCut(…, "blocked", …)` (`src/attention.ts`) — the
+call that chip counts with — so the number and the rows are one array, and when the list hides some
+(hidden or unfocused repos) it says "n of N" above the rows with *show all*. The sign-in card is one
+act for the account (`signInPlan` in `logic.ts`: open the newest printed link, else `/login` through
+the send queue into a free signed-out session, else say why); once the host confirms a sign-in
+(`SessionInfo.signInWait.signedInAt`) the card turns into *Signed in again* with *continue all N* and each
+such row gets its own *continue* — ASKED, never typed by itself. `signInSplit` (`logic.ts`) is the one
+partition (ready / already tapped / still signed out) that feeds the count, the ids sent, the rows and the
+headline. The tap is `signin.continue`, DURABLE (`continueSignedIn` in `actions.ts` → `queueOp`, lane
+`signin`): offline it is kept and sent on reconnect, and the host types only into sessions still waiting.
+The receipt is the host's own sentence, toasted by `onOpAck`. Network rows use `netRetryNow` /
+`netRetryCancel` (`netRetryCfg.ts`), the session retry bar's own messages.
 
 **Owns** (`store.ts`, one writer — `onLimitConfig` in `actions.ts`, called by the `limit.config`
 handler): `limitCfg` = `{ auto, mode, hold }` — the global auto-continue switch (starts `true` until
@@ -23,10 +37,11 @@ this feature re-exports them and keeps the one writer.
 **Sheet**: `limits` (not persisted). **Messages**: `limit.config`, `netretry.config`. **Toolbar item**: `limit` (the id,
 label and icon stay in `toolbar.ts`; `null` when the session has no limit state).
 
-**Reads from core**: `world.sessions`, `conn.status/send/liveSend`, `nav.attach/close`,
-`say.toast`. No storage keys of its own (`SNAP_AT_KEY` is read for the sheet's age line).
+**Reads from core**: `world.sessions`, `world.backends`, `world.cwdVisible`, `conn.status/send/liveSend`,
+`queue.submitInput` (the sign-in card's `/login`), `nav.attach/close`, `say.toast/track`. No storage keys of its own (`SNAP_AT_KEY` is read for the sheet's age line).
 
-**Rules that apply**: every control is LIVE-ONLY, never queued — a limit decision replayed an hour
+**Rules that apply**: every queue and retry control is LIVE-ONLY, never queued (the sign-in card's
+link needs no desktop, and its `/login` is a typed command, so it rides the send queue) — a limit decision replayed an hour
 later is about a situation that has moved on; `liveSend` says so in words when there is no link.
 No usage-limit banner phrase appears in any string here (the detector would read it off the
 screen).
@@ -40,4 +55,4 @@ shows the SAVED value ("saved on") and the shared sentence, never a greyed switc
 it (`budget`, `budget-session`, `budget-weekly`) — the host's `world.budget`, sent back as
 `budget.set`; a slider drag is a local draft until the host echoes the saved value.
 
-**Tests**: `logic.test.mjs`. e2e: `scripts/e2e-limit.mjs`, `scripts/e2e-limitreset.mjs`.
+**Tests**: `logic.test.mjs`, `src/attention.test.mjs` (the bucket, the cut, the groups). e2e: `scripts/e2e-limit.mjs`, `scripts/e2e-limitreset.mjs`.

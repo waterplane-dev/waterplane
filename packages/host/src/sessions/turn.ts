@@ -12,7 +12,7 @@
  * functions taking `core` first (docs/notes/host-architecture.md). Moved
  * verbatim from `sessions.ts`; `this.<another slice>` became `core.<hub>`.
  */
-import type { TurnFacts } from "@waterplane/shared";
+import type { TurnEndNet, TurnFacts } from "@waterplane/shared";
 import { workingLine } from "@waterplane/shared";
 import { claudeHookWatched, postClaudeHook, type ClaudeHookPayload } from "../backends/claude-sources.js";
 import { derive } from "../backends/derive.js";
@@ -55,6 +55,7 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   // ask, because either can change what is running underneath.
   if (active) core.checkAgents(s);
   if (active) core.netTurnStarted(s); // anyone's turn but our `continue` ends a network retry
+  if (active) core.signInTurnStarted(s); // …and takes a session a sign-out stopped out of its episode (ours excepted)
   // A turn running is the answer to "is this session still waiting on you":
   // whatever it asked at the end of the last one has been answered, or
   // overtaken. Cleared here rather than only on our own write, so a reply
@@ -226,6 +227,26 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   } else if (ev === "UserPromptSubmit" || ev === "Stop" || ev === "StopFailure" || ev === "SessionStart") {
     s.askHook = null;
   }
+  // A turn the CLI ended because it is not signed in: the phone offers `/login`.
+  // The hook's error KIND, never the screen's words (`limit.ts`'s reason).
+  // Only a hook that PROVES the API was reached clears it (a turn starting or
+  // ending some other way, a fresh session). `Notification` (idle_prompt fires
+  // ~60 s after the prompt) and `PreToolUse` say nothing about sign-in: clearing
+  // on them dropped the `auth` wall while the CLI was still signed out, and
+  // automatic work typed into it once a minute.
+  const signedOut = ev === "StopFailure" && payload.error === "authentication_failed";
+  const reachedApi = ev === "UserPromptSubmit" || ev === "Stop" || ev === "StopFailure" || ev === "SessionStart";
+  if (signedOut ? !s.info.signedOut : (reachedApi && s.info.signedOut)) {
+    if (signedOut) s.info.signedOut = true; else delete s.info.signedOut;
+    core.emit("updated", s.info);
+    // Survives a restart (`LiveMeta.signedOut`): the wall and the hold behind it stay up.
+    const m = core.loadLive(s.info.id);
+    if (m) core.persistLive(m);
+  }
+  // The account's sign-in episode (`signinwait.ts`): every refusal joins it (or
+  // answers a continue in flight), and a served turn is evidence of a sign-in.
+  if (signedOut) core.signInSignedOut(s);
+  else if (ev === "Stop") core.signInServed(s);
   // What the hook MEANS is the source's: the pipe going live (once), then the
   // edge — through the side channel slice into `sourceTurn` below.
   postClaudeHook(s.info.id, payload);
@@ -337,10 +358,14 @@ function settleStop(core: SessionCore, s: Session): void {
   s.stopPending = false;
   setTurn(core, s, false);
   s.stopCount += 1;
-  // Being retried after a transient API give-up (`apiretry.ts`)? Then not done:
-  // no ping — and the event says so, so the work waiting on this turn waits too.
-  const net = core.netTurnEnded(s);
-  markIdle(core, s, net?.net !== "retrying");   // seal capture + turn-finished ping
+  // Ended because the CLI is signed out (`StopFailure authentication_failed`,
+  // marked above in the hook router)? Then nothing ran: no ping, and the work
+  // waiting on this turn stays waiting. The net retry is NOT asked — its log
+  // read could answer `checking`, whose late verdict would complete that work.
+  // Being retried after a transient API give-up (`apiretry.ts`)? Then not done
+  // either: no ping — and the event says so, so the work waiting on it waits too.
+  const net: TurnEndNet | null = s.info.signedOut ? { net: "signedOut" } : core.netTurnEnded(s);
+  markIdle(core, s, net?.net !== "retrying" && net?.net !== "signedOut");   // seal capture + turn-finished ping
   core.emit("turnEnded", s.info.id, s.stopCount, net ?? undefined);
 }
 

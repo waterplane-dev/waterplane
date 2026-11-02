@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
 import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceTriageRequest, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
-import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, frontmatterYamlProblem, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
@@ -313,6 +313,37 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
         // them. Absent when Claude Code reads nothing here.
         ...(claude ? { alwaysOnChars: w.alwaysOnChars } : {}),
       });
+    }
+  }
+
+  // 2b'. Skills another agent can load. Claude Code reads a SKILL.md's frontmatter leniently;
+  // GitHub Copilot CLI parses it as strict YAML and silently skips a skill whose unquoted
+  // description holds ": " (`@waterplane/shared`'s `yamlfront.ts`). A WARN, never a fix: the
+  // rewrite is the author's words, so the row names the `other-agents` preset instead.
+  {
+    const wfs = worktreeFs(worktree);
+    const bad: { name: string; why: string }[] = [];
+    let total = 0;
+    for (const dir of [".claude/skills", ".github/skills", ".agents/skills"]) {
+      for (const e of wfs.list(dir)) {
+        if (!e.dir) continue;
+        const text = wfs.read(`${dir}/${e.name}/SKILL.md`);
+        if (text == null) continue;
+        total++;
+        const why = frontmatterYamlProblem(text);
+        if (why) bad.push({ name: e.name, why });
+      }
+    }
+    if (total) {
+      const named = bad.slice(0, 5).map((b) => b.name).join(", ") + (bad.length > 5 ? ` and ${bad.length - 5} more` : "");
+      checks.push(bad.length
+        ? { id: "skill-frontmatter", label: "Skills other agents can load", status: "warn",
+            detail: `Copilot CLI skips ${bad.length === 1 ? "1 skill" : `${bad.length} skills`} whose frontmatter is not strict YAML: ${named}. ` +
+              `${bad[0].name}: ${bad[0].why} Claude Code reads them anyway.`,
+            fix: null }
+        : { id: "skill-frontmatter", label: "Skills other agents can load", status: "pass",
+            detail: `${total === 1 ? "The skill's frontmatter is" : `All ${total} skills' frontmatter is`} strict YAML, so Copilot CLI can load ${total === 1 ? "it" : "them"} too.`,
+            fix: null });
     }
   }
 

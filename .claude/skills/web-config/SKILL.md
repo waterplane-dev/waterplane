@@ -1,6 +1,6 @@
 ---
 name: web-config
-description: waterplane phone client — settings, hosts, models and sign-in (packages/web/src): SettingsKit.tsx + settingsIndex.ts and the steps for adding a setting (prefs.ts), settings.ts/settingsPush.ts sync and adopt, hosts.ts + hostBoot.ts (several desktops; pairing: pqKem.ts), lanLink.ts, LoginBar.tsx, ShellLinksBar.tsx, LocalRtBar.tsx, ModelField.tsx + LaunchAskSheet.tsx, backendCaps.ts, BillingSettings.tsx, askRules.ts. Load BEFORE adding a setting, changing how preferences sync, switching or pairing a desktop, touching sign-in, the local runner strip, the model picker, billing caps, ask rules or a backend capability — an optional cap on the wire means INHERIT, never off.
+description: "waterplane phone client — settings, hosts, models and sign-in (packages/web/src): SettingsKit.tsx + settingsIndex.ts and the steps for adding a setting (prefs.ts), settings.ts/settingsPush.ts sync and adopt, hosts.ts + hostBoot.ts (several desktops; pairing: pqKem.ts), lanLink.ts, LinkActions.tsx, ShellLinksBar.tsx, LocalRtBar.tsx, ModelField.tsx + LaunchAskSheet.tsx, backendCaps.ts, BillingSettings.tsx, askRules.ts. Load BEFORE adding a setting, changing how preferences sync, switching or pairing a desktop, touching sign-in, the local runner strip, the model picker, billing caps, ask rules or a backend capability — an optional cap on the wire means INHERIT, never off."
 ---
 
 # waterplane web — settings, models and backends
@@ -9,7 +9,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
 
 - `features/cliHealth/CliHealthChip.tsx` + `features/cliHealth/CliHealthSettings.tsx` + `src/CliHealthSheet.tsx` — the health board's readout: one row per signal, and **nothing is
   re-derived** — verdict, sentence, order and prose all come from `@waterplane/shared`. **The unprompted
-  mark is the feature**: an amber/red chip in the launcher TOPBAR (not beside "N at limit", whose
+  mark is the feature**: an amber/red chip in the launcher TOPBAR (not beside "N blocked", whose
   section is absent exactly when a broken heuristic matters), plus one toast when an arriving rollup
   is WORSE than the last seen. `healthy` and `unknown` render nothing.
 - `PluginsSettings.tsx` (`features/plugins`, with its session-menu group and the decision log; manager and updates: `features/plugins/README.md` — the `updates` overlay opens on exactly the due rows, "n of N") —
@@ -75,14 +75,15 @@ How this app is configured and what it is allowed to launch: the Settings screen
   renders **nothing** for an id with no entry — never a dead tap. `scripts/e2e-hints.mjs` scans
   `<HintChip id="…">` and the `hint="…"` prop components hand down to one, because a bare
   `data-hint={id}` tells that scan nothing.
-- `LoginBar.tsx` + `openExternal.ts` — signing in from a phone: *open*, *copy*, *paste code*, plus a
-  disclosure holding the URL in one piece. **The code goes in on the RAW, undurable path** (a login
+- `LinkActions.tsx` + `openExternal.ts` — signing in from a phone: *open*, *copy*, *paste code*, plus a
+  disclosure holding the URL in one piece; ONE widget for claude's sign-in card (`core/session/BlockBar.tsx`, which also
+  holds the `/login` card and the net-retry line, picked by `blockOf` kind) and a shell's links. **The code goes in on the RAW, undurable path** (a login
   starts no turn, so the verified path would press Return into whatever came next).
   **Non-`http(s)` is refused** — screen-scraped text is not a link.
-- `ShellLinksBar.tsx` + `shellLinks.ts` + `features/shellLogins/` — **a shell session's `LoginBar`**
-  (`LoginBar` stays claude's). **A link with a `user@` part is never offered to open** — it can disguise the real site — only copy, with the sentence why (`shellLinks.ts` `SUSPICIOUS_LINK`). Links the host read off the screen or a `$BROWSER` call
+- `ShellLinksBar.tsx` + `shellLinks.ts` + `features/shellLogins/` — **a shell session's sign-in card**
+  (`BlockBar`'s auth card stays claude's; both draw `LinkActions`). **A link with a `user@` part is never offered to open** — it can disguise the real site — only copy, with the sentence why (`shellLinks.ts` `SUSPICIOUS_LINK`). Links the host read off the screen or a `$BROWSER` call
   (`SessionInfo.links`): *open*, *copy*, a *copy code* button, *paste code* only while `awaitingCode`
-  (RAW path, as `LoginBar`). A `local` link is a SENTENCE, never an Open button. `shellLinks.ts` is
+  (RAW path, as the claude card). A `local` link is a SENTENCE, never an Open button. `shellLinks.ts` is
   the pure wording. NOT `shellLink.ts` (the Android background link, `web-files`). The logins sheet
   inserts a command into compose, never sends it, and flags flows that redirect to localhost.
 - `LocalRtBar.tsx` + `localRt.ts` + `sysStat.ts` —

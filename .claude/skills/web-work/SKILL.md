@@ -1,6 +1,6 @@
 ---
 name: web-work
-description: waterplane phone client — a repo's waiting work and the sheets acting on it (packages/web/src): Backlog.tsx + backlogFilter.ts (code in backlog/), BuildSheet.tsx + buildPrompt.ts, ScheduleSheet.tsx + clockDirectory.tsx, ActivitySheet.tsx, SetupSheet.tsx + RepoHealthRegion.tsx (Repo readings: four regions), AssessSheet.tsx + assessRows.ts, FanoutSheet.tsx, GitView.tsx. Load BEFORE touching a backlog row or its filters, a schedule or its clock, a build form, the repo-readings sheet, an assessment a person approves, a fan-out, or the commit screen — and before putting a count on any control here: a count is a filter and nothing applies itself.
+description: "waterplane phone client — a repo's waiting work and the sheets acting on it (packages/web/src): Backlog.tsx + backlogFilter.ts (code in backlog/), BuildSheet.tsx + buildPrompt.ts, ScheduleSheet.tsx + clockDirectory.tsx, ActivitySheet.tsx, SetupSheet.tsx + RepoHealthRegion.tsx (Repo readings: four regions), AssessSheet.tsx + assessRows.ts, FanoutSheet.tsx, GitView.tsx. Load BEFORE touching a backlog row or its filters, a schedule or its clock, a build form, the repo-readings sheet, an assessment a person approves, a fan-out, or the commit screen — and before putting a count on any control here: a count is a filter and nothing applies itself."
 ---
 
 # web — a repo's waiting work
@@ -153,8 +153,11 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   alert colour + icon + words. A series row's verb is *ask the agent about this…* →
   `seriesRemedyPrompt`: **quotes the tool's rank sentence and `detail` VERBATIM**, asks for an
   explanation and a proposal, **never a change**; nothing is sent by the tap. Behind-ness is in
-  COMMITS, never days. **A refusal prints as the TOOL'S OWN paragraph** (200, `ok: false`): it ends
-  in a command that DELETES the series and nothing here runs it. Every sentence is
+  COMMITS, never days. **A refusal prints as the TOOL'S OWN paragraph** (200, `ok: false`); under
+  it (and under the mixed-definition prediction) a `ConfirmButton` *re-cut* sends `recut: true` —
+  bundled engine only — and the engine MOVES the old series to a `.bak` (never deletes), and only
+  when the definitions really differ. A sheet closing onto the launcher re-lists the repos
+  (`useRepoRefresh`), so a row's chip never reads an older number than the sheet. Every sentence is
   `repoHealthWords.ts`'s, the charts are `web-numbers`'.
 - `OptInRegion.tsx` + `optInSeed.ts` — region 3, **Opt-ins**: offers, not readings (the shared opt-in
   catalog, `optins.ts`, and its header are the design). **Counted in NOTHING** — no stripe, no status hue, never

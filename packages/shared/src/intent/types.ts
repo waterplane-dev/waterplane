@@ -55,6 +55,12 @@ export type BlockReason =
   | "awaitingAnswer"
   /** The target session is parked on a usage limit, waiting for the reset. */
   | "limit"
+  /** The target session is signed out (`blockOf` kind `auth`): nothing runs
+   *  there until a person signs in. */
+  | "auth"
+  /** The host is retrying a turn the target gave up on a transient API error,
+   *  or that turn is stalled (`blockOf` kind `net`). */
+  | "net"
   /** The `files` trigger's paths are not all on disk yet. */
   | "filesMissing"
   /** The `at` trigger's instant has not arrived. */

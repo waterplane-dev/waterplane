@@ -56,3 +56,8 @@ waterplane keeps running on the Mac and comes back up on its own after a crash.
 - asked: 2026-10-15
 - shipped: 009dff3
 
+### R-reliability-014 · shipped
+An intent blocked for a reason the phone does not know shows a readable fallback sentence, never the word 'undefined'.
+- asked: 2026-10-30
+- shipped: 57c5dff7
+

@@ -475,6 +475,10 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       reg.deps.push(id, event, data ?? null);
       return null;
     },
+    repoApps: async () => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      return reg.repoApps(); // one walk shared by concurrent callers; rejects in words without the seam
+    },
     handToAgent: async (repoId, prompt, opts = {}): Promise<HandToAgentResult> => {
       if (!live()) return { ok: false, reason: `${e.manifest.name} is not running` };
       if (typeof prompt !== "string" || !prompt.trim()) return { ok: false, reason: "nothing to hand over — the prompt is empty" };

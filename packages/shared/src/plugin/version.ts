@@ -42,8 +42,12 @@
  * figure). 2.2 plugins load as-is; an older host ignores both.
  * **2.4** (additive, `docs/notes/plugins.md`, "Which session asked"): `HostPluginApi.sessionOf` — the
  * live session a requesting process belongs to (pane + ppid walk, scratchpad, cwd). 2.3 plugins load as-is.
+ * **2.5** (additive, `docs/notes/android-apps-architecture.md` P1): `HostPluginApi.repoApps` (core's
+ * read-only Android app facts), the manifest field `autoOn` (an in-repo optional extension's default
+ * narrowed per desktop by a host probe; a non-string is refused, an unknown name ignored) and
+ * `PluginView.auto` (that default and its sentence). 2.4 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "2.4.0";
+export const PLUGIN_API_VERSION = "2.5.0";
 
 /** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
 export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";

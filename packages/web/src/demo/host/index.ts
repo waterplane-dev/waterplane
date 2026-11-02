@@ -10,7 +10,7 @@ import { fireDue, nextDue, openBox, runStep, schedule, updateSession } from "./d
 import { demoUsage, HANDLERS, helloFrames } from "./handlers.ts";
 import { demoHttp, healthCounts } from "./demohttp.ts";
 import { modelOf } from "./model.ts";
-import type { Desk } from "./model.ts";
+import type { Desk, Frame } from "./model.ts";
 import type { Handler, HandlerCtx } from "./handlers.ts";
 import type { DemoFaultMatch, DemoFaultRule } from "./faults.ts";
 import type { DemoScenario } from "./scenario.ts";
@@ -33,8 +33,13 @@ export { NOT_IN_DEMO, refuse, receiptFor, RECEIPTS, DURABLE_OPS } from "./verdic
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** A fresh demo seeded from `scenario`. */
-export function createDemoHost(scenario: DemoScenario, clock: DemoClock): DemoHost {
-  return build(scenario, clock, {
+/** What the transport hands in that the host may not import itself (`DemoHost imports only its own folder`):
+ *  `plugins` = the demo desktop's plugin list for a scenario that names none (the registered demo
+ *  fixtures' `listed` rows, `sdk/demoListed.ts`). */
+export interface DemoHostDefaults { plugins?: Frame<"plugin.list">["plugins"] }
+
+export function createDemoHost(scenario: DemoScenario, clock: DemoClock, defaults: DemoHostDefaults = {}): DemoHost {
+  return build(scenario, clock, defaults, {
     v: SNAPSHOT_V,
     protocol: PROTOCOL_VERSION,
     scenario: scenario.meta.id,
@@ -50,12 +55,12 @@ export function createDemoHost(scenario: DemoScenario, clock: DemoClock): DemoHo
 
 /** The demo as `raw` left it — or fresh, when `raw` is not a snapshot of this
  *  scenario at this protocol (all or nothing; see snapshot.ts). */
-export function restoreDemoHost(scenario: DemoScenario, clock: DemoClock, raw: unknown): DemoHost {
+export function restoreDemoHost(scenario: DemoScenario, clock: DemoClock, raw: unknown, defaults: DemoHostDefaults = {}): DemoHost {
   const snap = readSnapshot(raw, { scenario: scenario.meta.id, stamp: scenario.meta.stamp, protocol: PROTOCOL_VERSION });
-  return snap ? build(scenario, clock, plain(snap)) : createDemoHost(scenario, clock);
+  return snap ? build(scenario, clock, defaults, plain(snap)) : createDemoHost(scenario, clock, defaults);
 }
 
-function build(scenario: DemoScenario, clock: DemoClock, s: DemoSnapshot): DemoHost {
+function build(scenario: DemoScenario, clock: DemoClock, defaults: DemoHostDefaults, s: DemoSnapshot): DemoHost {
   if (scenario.meta.protocol !== PROTOCOL_VERSION) {
     throw new Error(`demo scenario "${scenario.meta.id}" was recorded at protocol ${scenario.meta.protocol}, this build speaks ${PROTOCOL_VERSION}`);
   }
@@ -63,6 +68,7 @@ function build(scenario: DemoScenario, clock: DemoClock, s: DemoSnapshot): DemoH
   // the state so the snapshot, a reload and the `usage.*` handlers all see the one reading.
   const held = modelOf(s.state);
   if (held && !held.numbers?.usage) (held.numbers ??= {}).usage = demoUsage(s.startedAt);
+  if (held && !held.plugins && defaults.plugins?.length) held.plugins = defaults.plugins;
   const sinks = new Set<DemoSink>();
   /** Per socket: the sessions it is attached to. Transient like the socket —
    *  a reconnecting client re-attaches, as it does against the real host. */

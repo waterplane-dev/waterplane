@@ -43,6 +43,8 @@ export class WatchSlice {
    * session's `netRetry`, and the row completes the ordinary way on the next
    * real turn end — "Retry now"'s reply, the person typing, a later reply.
    * `sweepRunning` does not fail it for its silence meanwhile.
+   * `signedOut` (`sessions/turn.ts`): the turn ended on the CLI's sign-in
+   * failure — nothing ran, so the row waits the same way for a real turn end.
    */
   onTurnEnded(sessionId: string, stopCount: number, net?: TurnEndNet): void {
     if (net) return;
@@ -108,6 +110,11 @@ export class WatchSlice {
       // person's Retry now or typing, not a lost Stop and not an idle ending.
       // Neither the ceiling below nor the idle guess may settle it.
       if (this.core.deps.sessionNetStalled?.(sid)) continue;
+      // SIGNED OUT (`onTurnEnded`'s `signedOut`): nothing ran, the session is
+      // silent because it waits for a sign-in. Held the same way — never failed
+      // with "no turn-end signal arrived", which is not what happened; the row
+      // wears `SIGNED_OUT_STALL_TEXT` and the next real turn end completes it.
+      if (this.core.deps.sessionSignedOut?.(sid)) continue;
       const hooked = this.core.deps.isHooked(sid);
       // ── The backstop: a Stop that was lost ─────────────────────────────────
       //

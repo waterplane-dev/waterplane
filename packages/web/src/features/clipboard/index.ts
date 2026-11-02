@@ -7,9 +7,9 @@ import type { FeatureManifest } from "../../sdk";
 import { ClipSheet } from "./ClipSheet";
 import { DecisionsSheet } from "./DecisionsSheet";
 import { TextSheet } from "./TextSheet";
-import { openClipSheet, openDecisions, openTextDump } from "./actions";
+import { copySessionRef, openClipSheet, openDecisions, openTextDump } from "./actions";
 
-export { copyCode, copyLink, openClipSheet, openDecisions, openLink, openTextDump, quoteIntoCompose } from "./actions";
+export { copyCode, copyLink, copySessionRef, openClipSheet, openDecisions, openLink, openTextDump, quoteIntoCompose } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "clipboard",
@@ -22,5 +22,6 @@ export const manifest: FeatureManifest = {
     { id: "clip", run: () => openClipSheet() },
     { id: "select", run: () => { void openTextDump(); } },
     { id: "decide", run: () => { void openDecisions(); } },
+    { id: "copyref", run: () => { void copySessionRef(); } },
   ],
 };

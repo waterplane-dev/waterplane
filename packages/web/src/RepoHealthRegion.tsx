@@ -30,6 +30,7 @@ import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { HealthIndexSection } from "./HealthIndexSection";
 import { Button } from "./kit/Button";
+import { ConfirmButton } from "./Confirm";
 import { FilterChip } from "./kit/FilterChip";
 import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
@@ -45,7 +46,7 @@ import { OwnReadings } from "./RepoHealthOwn";
 import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
   SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
-  mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeRepeatsReadError, outcomeWords,
+  mixedPlotWords, mixedVersionWords, RECUT_CONFIRM, RECUT_LABEL, narrativeWrittenWords, notPlottedWords, outcomeRepeatsReadError, outcomeWords,
   rankSentence, readFailedWords, refreshBusyLabel,
   approveRunLabel, refreshFailedWords, refreshLabel, runningWords, skipOwnLabel, seriesHeadWords,
   scopeChoiceHeadWords, scopeEmptyWords, scopeHeadWords, scopePickWords,
@@ -173,7 +174,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     }
   }
 
-  async function refresh(approveEngine = false) {
+  async function refresh(approveEngine = false, recut = false) {
     if (busy || !repo) return;
     track("action:repohealth.refresh");
     setBusy(true);
@@ -184,7 +185,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
       // 200 s on the phone against the host's 180 s cap — see `api.ts`. The
       // route answers 200 even when the tool refuses, so there is nothing to
       // read off the status: the outcome is in the body.
-      const next = await api.repoHealthRefresh(repo.id, scope, approveEngine, approveEngine ? view?.engine?.approveToken : undefined);
+      const next = await api.repoHealthRefresh(repo.id, scope, approveEngine, approveEngine ? view?.engine?.approveToken : undefined, recut);
       // A refused approval answers with a sentence and no reading: show it, keep the view.
       const refusal = (next as { error?: unknown }).error;
       if (typeof refusal === "string" && !next.engine) setApprovalRefusal(refusal);
@@ -209,8 +210,12 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   // The re-cut line is the ENGINE's, for the root it measured. The constant
   // this replaced named `tools/repohealth.mjs` relative to a repo most repos
   // are not, and began with `rm`.
+  // The re-cut is a tap only through the BUNDLED engine: it is the one that
+  // knows `--recut`. A repo's own copy may predate the flag — it would ignore
+  // it and refuse again — so there the desktop line stays the remedy.
+  const recutOffered = !!repo && view?.engine?.kind === "bundled" && view?.engine?.needsApproval !== true;
   const mixed = mixedVersionWords(
-    series?.versions, measure?.engineVersion ?? series?.preregVersion, recutCommandOf(measure));
+    series?.versions, measure?.engineVersion ?? series?.preregVersion, recutCommandOf(measure), recutOffered);
   const engineLine = engineLineWords({
     kind: view?.engine?.kind ?? null,
     ownSkipped: view?.engine?.ownSkipped,
@@ -226,6 +231,9 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   const staleRows = staleRowsWords(series?.staleRows);
   const running = runningWords(view?.run, now);
   const last = view?.last && !outcomeRepeatsReadError(view.last, view.readError, !!view.series) ? view.last : null;
+  // Drawn under the prediction AND under a refusal (exit 3 is only ever the
+  // two-definitions refusal), so the remedy sits where it is read.
+  const recutShown = recutOffered && (!!mixed || !!last?.refused);
   const narrative = view?.narrative ?? null;
   const sizeWords = seriesSizeWords(series);
   const warnings = warningsWords(last?.warnings);
@@ -466,6 +474,14 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
 
       {staleRows ? <div className="section section-hint">{staleRows}</div> : null}
       {running ? <div className="section section-hint">{running}</div> : null}
+
+      {recutShown ? (
+        <div className="section">
+          <ConfirmButton className="key rh-verb" confirm={RECUT_CONFIRM} onConfirm={() => void refresh(false, true)}>
+            <RefreshCw size={12} aria-hidden /> {busy ? refreshBusyLabel(series, now - startedAt) : RECUT_LABEL}
+          </ConfirmButton>
+        </div>
+      ) : null}
 
       {last ? (
         <div className="section section-hint">

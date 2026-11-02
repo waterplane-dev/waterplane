@@ -54,8 +54,11 @@ export const BUDGET_UNITS: readonly {
  * except the unit a cap was ALREADY set in, which stays so it is never
  * silently swapped for another.
  */
-export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit, spendUnit?: string): typeof BUDGET_UNITS {
-  const base = windowsOff ? BUDGET_UNITS.filter((u) => !isPctUnit(u.unit) || u.unit === keep) : BUDGET_UNITS;
+export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit, spendUnit?: string, noSess = false): typeof BUDGET_UNITS {
+  // `noSess`: the plan has no 5-hour window (`UsageInfo.sessionGoneSince`), so "% of 5h" could never
+  // trip and is collapsed away like the windowsOff case — the unit a cap is ALREADY in stays.
+  const base = BUDGET_UNITS.filter((u) => windowsOff ? !isPctUnit(u.unit) || u.unit === keep
+    : !(noSess && u.unit === "sessionPct" && keep !== "sessionPct"));
   // The backend's own unit: offered where it NAMES one, or where a cap is already set in it
   // (never silently swapped). Without a name the kept cap still shows, under a generic label.
   const label = spendUnit?.trim() || (keep === "native" ? "native unit" : "");

@@ -58,3 +58,12 @@ The composer's backlog button shows waiting and failed as two numbers at once; d
 - asked: 2026-10-24
 - shipped: 2fb5b5a0
 
+
+### R-status-014 · requested
+The launcher has two cross-session chips, "N waiting" (a question to answer) and "N blocked" (signed out, network retry, out of credit or at a usage limit — replacing "N at limit"), each with a per-repo twin; a tap opens exactly the N sessions counted, and a sheet that lists fewer than all of them says "n of N" with a way to show all. The blocked sheet groups its rows by reason — sign-in first, with one account-level sign-in action, then network, spend and the usage-limit resume queue.
+- asked: 2026-11-02
+
+### R-status-015 · shipped
+Everything outside a session that stops it (signed out, network retry, out of credit, a usage limit) is ONE "blocked" chip, never one chip per reason; the number on the chip is the number of rows in the list it opens, because both are cut by the same derivation. A reason a session shows in its own bar is the same reason the sheet groups it under.
+- asked: 2026-11-02 (owner)
+- shipped: 0b84920e, 181980cb, 2c16cc67

@@ -274,18 +274,33 @@ html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
   html[data-layout="wide"] .compose textarea { min-height: 40px; padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
 }
 
-/* Folding a strip (`Stowable.tsx`). The control sits at the end of the strip's
-   head; the chip it leaves behind rides the session status line at that
-   line's own 12px, with its touch target grown past the drawn pill so a
-   compact line does not mean a 20px tap. */
-.login-head .stow-btn { flex: none; padding: var(--sp-6) var(--sp-10); display: inline-flex; align-items: center; gap: var(--sp-4); }
-.nextp .stow-btn { flex: none; }
-.sess-status button.stow-chip {
-  position: relative; display: inline-flex; align-items: center; gap: var(--sp-4);
-  background: transparent; border: 1px solid var(--line); border-radius: var(--r-pill);
-  padding: 1px var(--sp-8); margin: 0; font-family: inherit; color: var(--fg); cursor: pointer;
+/* Folding a strip (`Stowable.tsx`). ONE face for the fold control on every
+   strip — no per-strip variants (owner, 2026-11-01). The strips it folds come
+   back from `.stow-corner`, a button in the terminal's floating corner group,
+   whose list drops below the group. */
+.stow-btn {
+  flex: none; display: inline-flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-10); border-radius: var(--r-10);
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  font: inherit; font-size: var(--fs-12); cursor: pointer;
 }
-.sess-status button.stow-chip::after { content: ""; position: absolute; inset: -8px -2px; }
+.stow-corner { position: relative; display: inline-flex; }
+.stow-pop {
+  position: absolute; top: calc(100% + var(--sp-4)); left: 0; z-index: 6;
+  min-width: 220px; max-width: min(320px, 80vw);
+  display: flex; flex-direction: column; padding: var(--sp-4);
+  background: var(--panel); border: 1px solid var(--float-edge); border-radius: var(--r-10);
+  box-shadow: var(--elev-2);
+}
+.stow-pop-head { font-size: var(--fs-11); color: var(--muted); padding: var(--sp-4) var(--sp-8); }
+.stow-row {
+  display: flex; align-items: center; gap: var(--sp-8); min-height: 44px;
+  padding: 0 var(--sp-8); border: 0; border-radius: var(--r-8);
+  background: transparent; color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+}
+.stow-row-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stow-row-detail { color: var(--muted); font-size: var(--fs-12); }
+.stow-row-go { color: var(--accent); font-size: var(--fs-12); }
 /* "mark handled" beside the red "asked you" pill (`SessionHeader.tsx`): a
    real button face — raised fill, border, the fg colour — so it reads as a
    thing to press and not as one more status fact. Later than, and as specific

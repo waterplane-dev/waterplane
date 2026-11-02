@@ -77,3 +77,13 @@ test("the skill tells an agent what to do when the default branch takes only PRs
     assert.ok(SKILL.includes(needle), `the PR-mode paragraph lost "${needle}"`);
   }
 });
+
+// 2026-11-01: a driven repo's agent told the owner silent updates were impossible ("needs Shizuku") and that
+// only the phone's button could ship a build — the skill described the download and stopped. These are the
+// facts it must keep stating, or the next agent answers from general Android knowledge again.
+test("the skill says how an app reaches the phone and that its updates are quiet after the first install", () => {
+  assert.match(SKILL, /first install[\s\S]{0,80}always shows Android's dialog, once; every later update is\s+silent/);
+  assert.match(SKILL, /\/api\/agent\/builds\/run/, "the agent's way to run a build button");
+  assert.match(SKILL, /never from general Android\s+knowledge/);
+  assert.match(SKILL, /You cannot see the phone's half/);
+});

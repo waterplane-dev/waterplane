@@ -10,7 +10,7 @@
  */
 import { useEffect, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
+  AppWindow, ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
   Plus, Quote, SendHorizontal, Terminal as TerminalIcon, Trash2, Waypoints, X, Zap,
 } from "lucide-react";
 import { sessionPickLabel } from "@waterplane/shared";
@@ -35,7 +35,8 @@ import { useSnippets } from "../../features/snippets";
 import { openBacklogCut, openBacklogIn } from "../../features/backlog";
 import { takeBoxReturn, useBoxReturn } from "../../features/images";
 import type { ComposeApi } from "./useCompose";
-import { useFileDrop } from "./useFileDrop";
+import { attach, useFileDrop } from "./useFileDrop";
+import { canPickWindow, pickWindowShot } from "../../windowShot";
 import { isShellBackend } from "../../backendCaps";
 import { isLaterId, isPendingId } from "../queue/logic.ts";
 import { secretFillers } from "../extensionPoints";
@@ -476,6 +477,17 @@ export function ComposeBar(p: ComposeBarProps) {
               wired in `useCompose` — this bar dictates into `compose`. */}
           <VoiceButton voice={voice} onPointerDown={keepFocus} />
           <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickImageFor(activeRepoId) : showToast("not a known repo")} title="Send image to this repo"><Camera size={18} /></button>
+          {/* Desktop browsers only (macOS/Windows web app): any window or screen,
+              through the browser's own picker, attached exactly like a Cmd/Ctrl+V.
+              Not drawn where the browser cannot capture (phone, the APK). */}
+          {canPickWindow() && (
+            <button className="mic" onPointerDown={keepFocus}
+              onClick={() => activeRepoId ? void pickWindowShot().then((r) => {
+                if ("file" in r) attach([r.file], "window");
+                else if ("error" in r) showToast(r.error);
+              }) : showToast("not a known repo")}
+              title="Picture of a window or screen on this computer — opens in the annotator, then attached"><AppWindow size={18} /></button>
+          )}
           <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickFileFor(activeRepoId) : showToast("not a known repo")} title="Attach a file of any kind (PDF, doc, zip, audio…) to this repo — images open in the annotator"><Paperclip size={18} /></button>
           <button className={`mic ${snippetOpen ? "on" : ""}`} onPointerDown={keepFocus} onClick={() => setSnippetOpen((v) => !v)}
             title="Insert a saved snippet"><Quote size={18} /></button>

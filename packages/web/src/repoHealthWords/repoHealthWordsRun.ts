@@ -20,12 +20,17 @@ export function mixedVersionWords(
    *  a path right only in the engine's own checkout; the line starts with
    *  `rm`, which is why a wrong one may not be printed at all. */
   recut?: string | null,
+  /** The sheet draws the re-cut button under this sentence (`RECUT_LABEL`):
+   *  the remedy is then that tap, and the desktop line is only the fallback. */
+  button = false,
 ): string | null {
   const list = versions ?? [];
   const stale = list.length === 1 && !!current && list[0].version !== current;
   if (list.length < 2 && !stale) return null;
   const named = list.map((v) => `${v.version}${v.version === current ? " (current)" : ""}: ${v.rows} row${v.rows === 1 ? "" : "s"}`).join(", ");
-  const remedy = recut
+  const remedy = button
+    ? RECUT_NOTE
+    : recut
     ? `To re-cut the whole history under the current definition, run this at the desktop: ${recut}`
     : "To re-cut the whole history under the current definition, ask the desktop for the command — " +
       "this engine did not print one, and the line that re-cuts a repo deletes a file, so a guess " +
@@ -35,7 +40,7 @@ export function mixedVersionWords(
     : `the series holds rows measured under ${list.length} definitions of the same metric — ${named}`;
   return (
     `${what}. ` +
-    `A refresh will refuse rather than put them on one plot, and nothing here rewrites the file. ${remedy}`
+    `A refresh will refuse rather than put them on one plot, and nothing rewrites the file until you ask. ${remedy}`
   );
 }
 
@@ -111,3 +116,13 @@ export function drawnPageWords(written: boolean): string {
     : ".claude/outbox/repohealth.html is not written yet — a refresh draws it. It is the same cards " +
       "as above, laid out for a desktop; nothing on this screen is waiting on it.";
 }
+
+/** The verb that re-cuts a series measured under another definition. */
+export const RECUT_LABEL = "re-cut under the current definition";
+/** Its armed state: one more tap runs it. */
+export const RECUT_CONFIRM = "move the old series aside and re-cut?";
+/** What the tap does, said before it — it is the remedy the refusal names. */
+export const RECUT_NOTE =
+  "Re-cut moves the old series aside (kept beside it as a .bak file, not deleted) and measures the " +
+  "whole history again under the current definition. A long history may take more than one refresh — " +
+  "each carries on from what the last one wrote.";

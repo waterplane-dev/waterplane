@@ -19,17 +19,19 @@ export function sourceWords(d: SourceFields): string {
     const what = d.scope ? `the series for ${d.scope}` : "the series";
     return `Read from this folder's ${tail(d.seriesFile)}, ${what} measured by the ${BRAND.name} desktop app${last}. The extension never writes it.`;
   }
-  const own = `The series is kept in this extension's own storage, at ${d.seriesFile}. It grows with the history.`;
-  return d.repoFile
-    ? `${own} It is newer than this folder's ${tail(d.repoFile)}, which the ${BRAND.name} desktop app measures and the extension only reads, never writes.`
-    : own;
+  return `The series is kept in this extension's own storage, at ${d.seriesFile}, because the ${BRAND.name} desktop app has not measured this folder. Once it has, its series in the folder is the one shown here, the same one the phone shows.`;
 }
 
-/** Said beside the measure button when the folder has a series of its own: where a measure goes. */
-export function measureWords(d: Pick<HealthDoc, "repoFile">): string | null {
-  return d.repoFile
-    ? `Measure writes only this extension's own copy, never ${tail(d.repoFile)}. Whichever series has the newer last row is the one shown.`
+/** Said beside the refresh button when the folder's series is the one shown: why it only reads. */
+export function measureWords(d: Pick<HealthDoc, "source">): string | null {
+  return d.source === "repo"
+    ? `This is the one series for this repo, the same one the phone shows. The ${BRAND.name} desktop app measures it; this extension only reads it, so its refresh reads the file again and measures nothing beside it.`
     : null;
+}
+
+/** The refresh control's name: reading the folder's series again is not building one. */
+export function readAgainLabel(): string {
+  return "read it again";
 }
 
 /**
@@ -104,7 +106,7 @@ export const NOT_GIT = /not a git repository/i;
 /** A folder with no git history, said plainly instead of quoting the engine's exit: nothing was
  *  wrong with the engine, and no rebuild answers it — only `git init` (or opening the repo root) does. */
 export function notGitWords(): string {
-  return "This folder is not a git repository. Repo health reads git history, one row per first-parent commit, so there is nothing to measure here. Open the repository's root folder, or run git init, then build the series.";
+  return "This folder is not a git repository. Repo health reads git history, one row per first-parent commit, so there is nothing to measure here. Open a file that is inside a repository (the repository it belongs to is then the one read), open the repository's folder, or run git init.";
 }
 
 /** macOS's `/usr/bin/git` is a shim through Xcode; until Xcode's license is accepted it refuses every

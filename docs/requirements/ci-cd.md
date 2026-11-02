@@ -76,6 +76,21 @@ Public repos' GitHub Actions workflows default to read-only token permissions wi
 - shipped: 15c0ea03
 
 ### R-ci-cd-017 · requested
-Every workflow in the public repos pins each action to a commit SHA, and Dependabot keeps those pins current; public repos with dependency manifests have a Dependabot config.
-- asked: 2026-10-26
+Every workflow in the public repos pins each action to a commit SHA, every downloaded install script is pinned by hash, and Dependabot keeps those pins current; public repos with dependency manifests have a Dependabot config.
+- asked: 2026-10-26, 2026-10-29
+
+### R-ci-cd-018 · shipped
+The pre-push gate ends by listing the test files still flaky, so flaky tests that needed a retry stay visible without blocking the push.
+- asked: 2026-10-27
+- shipped: f9f6a7f0
+
+### R-ci-cd-019 · shipped
+The e2e smoke and LAN tests start their own host on a free port and pass reliably.
+- asked: 2026-10-28
+- shipped: f6734c55
+
+### R-ci-cd-020 · shipped
+The build sheet shows a fire's note before any run is listed, shows the desktop's refusal reason when a build is refused, never guesses a run, and a receipt naming no run says so instead of spinning.
+- asked: 2026-10-30
+- shipped: 4b9825e9, 4b90e29e, ab083add, e828f7aa
 

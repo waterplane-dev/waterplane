@@ -44,3 +44,15 @@ test("no accelerator, empty text, or garbage ⇒ null, never a guessed 0", () =>
     assert.equal(parseGpuIoreg(t), null);
   }
 });
+
+test("many unclosed PerformanceStatistics openers parse fast and still read as no block (CodeQL ReDoS #10)", () => {
+  // The old `[^}]*` re-scanned to the end from every opener when no `}` followed: quadratic.
+  const big = '"PerformanceStatistics"={'.repeat(20000);
+  const t0 = Date.now();
+  assert.equal(parseGpuIoreg(big), null);
+  assert.ok(Date.now() - t0 < 500, `took ${Date.now() - t0} ms`);
+  // An unclosed opener AFTER a closed block does not count as a second block.
+  assert.deepEqual(parseGpuIoreg(oneAccelerator(REAL_PERF) + '"PerformanceStatistics" = {"x"=1'), { pct: 37, memInUse: 46891352064 });
+  // Two closed blocks are still two (null), however they are spaced.
+  assert.equal(parseGpuIoreg(oneAccelerator(REAL_PERF) + oneAccelerator(REAL_PERF)), null);
+});

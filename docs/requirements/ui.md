@@ -304,7 +304,7 @@ A side panel on a desktop window can always be closed with a visible control: it
 - shipped: dda5ea2
 ### R-ui-076 · requested
 The UI never greys out a button; when an action is unavailable it explains why in text. Confirmations never use the browser's window.confirm, and icons are lucide-react icons only, with no emoji.
-- asked: 2026-10-04, 2026-10-06, 2026-10-25, 2026-10-25
+- asked: 2026-10-04, 2026-10-06, 2026-10-25, 2026-10-25, 2026-10-30
 
 ### R-ui-077 · shipped
 The All chip and the worktree chip have the same size and style.
@@ -531,4 +531,13 @@ Filters, search, bulk buttons and a marked element sit at the top of a list, abo
 When the user selects an item in a dialogue, the dialogue states clearly what that selection will do.
 - asked: 2026-10-26
 - shipped: 9dbda67f
+
+### R-ui-127 · requested
+Text in the UI has readable contrast.
+- asked: 2026-10-26
+
+### R-ui-128 · shipped
+Repo lists show whether they have been read yet: 'not read yet' and 'no repos found' are different states, and a host with zero repos does not leave the launcher waiting forever.
+- asked: 2026-10-30
+- shipped: ced613d9, 2b1aba68
 

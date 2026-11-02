@@ -110,3 +110,32 @@ export function decisionBlock(items: readonly DecisionItem[], answers: readonly 
   });
   return rows.length ? `My decisions:\n${rows.join("\n")}\n` : null;
 }
+
+/** What `sessionReference` reads off a session — the wire fields, narrowed so
+ *  the test can hand in a literal. */
+export interface RefSource {
+  title: string;
+  tabTitle?: string;
+  cwd: string;
+  cliName?: string;
+  claudeSessionId?: string;
+  backendSessionId?: string;
+}
+
+/**
+ * The "copy reference" text: what another coding session (or a person) needs
+ * to find THIS one — the name a peer Claude session addresses it by, its
+ * folder, its conversation id. A field the host does not know is left out,
+ * never filled with a guess: a wrong peer name sends words to someone else.
+ * `picked` (lines picked or selected on screen) follows as a quote.
+ */
+export function sessionReference(s: RefSource, picked?: string): string {
+  const lines = [`Coding session: ${s.tabTitle || s.title}`];
+  if (s.cliName) lines.push(`Peer session name (SendMessage to): ${s.cliName}`);
+  lines.push(`Folder: ${s.cwd}`);
+  if (s.claudeSessionId) lines.push(`Conversation id: ${s.claudeSessionId} (claude --resume ${s.claudeSessionId})`);
+  else if (s.backendSessionId) lines.push(`Conversation id: ${s.backendSessionId}`);
+  const t = picked?.trim();
+  if (t) lines.push("", "Quoted from that session:", ...t.split("\n").map((l) => `> ${l}`));
+  return lines.join("\n") + "\n";
+}

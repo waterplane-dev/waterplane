@@ -9,7 +9,6 @@ import type { LocalRuntimeSample } from "../localrt.js";
 import type { Intent } from "../../intent.js";
 import type { ScheduleEntry } from "../../schedule.js";
 import type { SettingsDoc } from "../../settings.js";
-import type { InstallLogDoc } from "../install.js";
 import type { NotificationItem, NotifyPrefs } from "../notify.js";
 import type { BuildParamAnswer } from "../../buildparams.js";
 import type { BuildCandidate } from "../../buildscan.js";
@@ -32,12 +31,6 @@ export type HostToolsMsg =
    * only when `ts` is newer than what it holds, so the round trip cannot loop.
    */
   | { t: "settings.update"; key: string; value: string; ts: number; device?: string }
-  /**
-   * The install log, whole. Sent on hello, on `install.get`, and broadcast to
-   * EVERY socket whenever a phone reports something new — so a second device
-   * watching the screen sees the first one update itself.
-   */
-  | { t: "install.log"; doc: InstallLogDoc }
   /** Transient status note for the client to surface as a toast. */
   | { t: "toast"; text: string }
   /** A new in-app notification (also fired as OS push when subscribed). */

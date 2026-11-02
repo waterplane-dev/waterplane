@@ -1,26 +1,17 @@
-import { CHARS_PER_TOKEN, READER_NAME as AGENT_NAME, alwaysOnTotalsWords, desktopPathWords, fmtCount, isUnsizedServer, overlapWords } from "@waterplane/shared";
+import { CHARS_PER_TOKEN, alwaysOnTotalsWords, fmtCount, overlapWords } from "@waterplane/shared";
 import type { AlwaysOnRow } from "@waterplane/shared";
 import type { PromptDef, ToExtension, WeightDoc } from "../src/protocol";
 import { useState } from "react";
-import { AO_SCOPES, AlwaysOnStrip, aoScopeChips } from "../../web/src/AlwaysOnRows";
+import { AO_SCOPES, AlwaysOnStrip, AoFileList, aoScopeChips } from "../../web/src/AlwaysOnRows";
+import { aoPlot } from "../../web/src/alwaysOnPlot";
+import type { AoPlot } from "../../web/src/alwaysOnPlot";
 import { FilterChip } from "../../web/src/kit/FilterChip";
 import { toggleChip } from "../../web/src/kit/chips";
 import { Absent } from "./Absent";
 import { PromptActions } from "./Actions";
 import { TabLinks } from "./TabLinks";
-import type { Agent, AgentTotals, InstructionFile, When } from "../src/protocol";
+import type { AgentTotals } from "../src/protocol";
 
-
-function readersWords(rs: Agent[], off: InstructionFile["off"]): string {
-  if (rs.length) return rs.map((a) => AGENT_NAME[a]).join(", ") + (off ? ` (Copilot: ${off} is off)` : "");
-  return off ? `nobody: ${off} is off` : "nobody";
-}
-
-function whenWords(w: When): string {
-  if (w.kind === "always") return "every request";
-  if (w.kind === "scoped") return `when a file matches ${w.globs.join(", ")}`;
-  return "on demand";
-}
 
 /** One agent's line: what it carries every request, then what joins when a file matches and on demand. */
 function AgentHead({ name, t }: { name: string; t: AgentTotals }) {
@@ -37,50 +28,16 @@ function AgentHead({ name, t }: { name: string; t: AgentTotals }) {
   );
 }
 
-/**
- * The rows of one file list. A row with no parts is UNSIZED (an MCP server, a plugin outside the
- * config dir, a source that could not be read): it says so in the Chars column, never a 0, and only
- * an MCP server — whose schemas do ride every request — says "every request" in When.
- * `pathWords` words a desktop row's path (shared `desktopPathWords`); repo rows print as they are.
- */
-function FileRows({ files, pathWords = (p: string) => p, onOpen }: {
-  files: InstructionFile[];
-  pathWords?: (p: string) => string;
-  /** Opens a repo row's file in the editor; desktop rows live outside the folder and get none. */
-  onOpen?: (relPath: string) => void;
-}) {
-  const name = (f: InstructionFile) => onOpen
-    ? <button type="button" className="link-btn wt-open" title={`Open ${f.path}`} onClick={() => onOpen(f.path)}>{pathWords(f.path)}</button>
-    : pathWords(f.path);
-  return (
-    <>
-      {files.flatMap((f) => f.parts.length === 0
-        ? [(
-          <tr key={`${f.path}#${f.kind}#unsized`}>
-            <th scope="row">{name(f)}<div className="ctx-note">{f.kind}</div></th>
-            <td>Claude Code</td>
-            <td>{isUnsizedServer(f) ? "every request" : "—"}</td>
-            <td className="num wt-unsized">{f.unsized ?? "not measured"}</td>
-          </tr>
-        )]
-        : f.parts.map((p, i) => (
-          <tr key={`${f.path}#${i}`}>
-            <th scope="row">{i === 0 ? <>{name(f)}<div className="ctx-note">{f.kind}</div></> : <span className="ctx-note">{pathWords(f.path)}, {p.when.kind === "always" ? "description" : "body"}</span>}</th>
-            <td>{readersWords(p.readers, f.off)}</td>
-            <td>{whenWords(p.when)}</td>
-            <td className="num">{fmtCount(p.chars)}</td>
-          </tr>
-        )))}
-    </>
-  );
-}
-
-const FILE_HEAD = (
-  <thead><tr><th scope="col">File</th><th scope="col">Read by</th><th scope="col">When</th><th scope="col" className="num">Chars</th></tr></thead>
-);
-
 /** This desktop's own files — user CLAUDE.md, auto-memory, user skills, plugins, user MCP — which every session here carries whatever the folder. */
-function DesktopBlock({ doc }: { doc: WeightDoc }) {
+function DesktopBlock({ doc, strip, plot, pick, onPick }: {
+  doc: WeightDoc;
+  /** Draw the strip over these rows — when the folder adds nothing, the top strip is not drawn. */
+  strip?: boolean;
+  /** The plot of the strip these rows' meters read on (the view's, or this block's own). */
+  plot: AoPlot;
+  pick: string | null;
+  onPick: (key: string | null) => void;
+}) {
   if (doc.desktop === undefined) return null;
   return (
     <>
@@ -90,7 +47,9 @@ function DesktopBlock({ doc }: { doc: WeightDoc }) {
       ) : (
         <>
           <div className="empty ctx-note">These ride along in every session on this machine, in whatever folder — as far as the files on disk show: plugin packs synced from claude.ai are not on disk, so a session’s measured skill listing (Session tab) is the truth. The threshold row above counts none of them.</div>
-          <table className="plain">{FILE_HEAD}<tbody><FileRows files={doc.desktop} pathWords={(p) => desktopPathWords(p, doc.configDir)} /></tbody></table>
+          {strip && <div className="wt-strip"><AlwaysOnStrip files={doc.desktop} scopes={["desktop"]} configDir={doc.configDir} pick={pick} onPick={onPick} /></div>}
+          <AoFileList rows={aoScopeChips(doc).bucket("desktop")} plot={plot} configDir={doc.configDir}
+            pick={pick} onPick={onPick} />
         </>
       )}
     </>
@@ -135,6 +94,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
   post: (m: ToExtension) => void;
 }) {
   const [cut, setCut] = useState<Scope | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
   if (!doc) return <Absent>{why ?? "No CLAUDE.md or skills were found in this folder."}</Absent>;
   const r = doc.reading;
   const skills = [...doc.skills].sort((a, b) => b.descChars - a.descChars);
@@ -144,7 +104,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
     return (
       <>
         <Absent>This folder has no CLAUDE.md, AGENTS.md, .github/copilot-instructions.md, instruction files, rules or skills, so neither Claude Code nor Copilot carries anything from it.</Absent>
-        <DesktopBlock doc={doc} />
+        <DesktopBlock doc={doc} strip plot={aoPlot(doc.desktop ?? [], ["desktop"])} pick={pick} onPick={setPick} />
         <TabLinks tabs={["session", "all"]} post={post} />
       </>
     );
@@ -152,6 +112,9 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
   const groom = prompts.find((p) => p.id === "groom-claudemd");
   const { rows, bucket, chips } = aoScopeChips(doc);
   const shown = cut ? [cut] : AO_SCOPES;
+  const all = [...doc.files, ...(doc.desktop ?? [])];
+  // ONE plot for the strip's segments and every row's meter and order.
+  const plot = aoPlot(all, shown);
   const openFile = (path: string) => post({ t: "openFile", folder: doc.folder, path });
   const shrink = prompts.find((p) => p.id === "shrink-skill-descs");
   const { claude, copilot } = doc.agents;
@@ -162,7 +125,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
       <AgentHead name="GitHub Copilot" t={copilot} />
       <div className="empty ctx-note">{alwaysOnTotalsWords([...doc.files, ...(doc.desktop ?? [])])}</div>
       <ScopeChips chips={chips} cut={cut} setCut={setCut} shownN={cut ? bucket(cut).length : rows.length} totalN={rows.length} />
-      <div className="wt-strip"><AlwaysOnStrip files={[...doc.files, ...(doc.desktop ?? [])]} scopes={shown} configDir={doc.configDir} /></div>
+      <div className="wt-strip"><AlwaysOnStrip files={all} scopes={shown} configDir={doc.configDir} pick={pick} onPick={setPick} /></div>
       <TabLinks tabs={["session", "all"]} post={post} />
 
       {doc.overlaps.map((o) => (
@@ -193,7 +156,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
       {cut !== "desktop" && (
         <>
           <div className="ctx-chart-title">Files</div>
-          <table className="plain">{FILE_HEAD}<tbody><FileRows files={doc.files} onOpen={openFile} /></tbody></table>
+          <AoFileList rows={bucket("repo")} plot={plot} onOpen={openFile} pick={pick} onPick={setPick} />
           <div className="empty ts-caveat">
         This table is the folder’s own files, CLAUDE.local.md, subagent descriptions and MCP servers included; the threshold above counts CLAUDE.md, its imports, rules and skill descriptions, and the rest are listed beside it. A row marked not measured is named, never counted as zero. This desktop’s user-level files are in the “This desktop” table; ~/.copilot/… and nested AGENTS.md files (off by default in VS Code) are not listed.
         Copilot’s readers follow VS Code’s instruction settings: one you turned off drops Copilot from that row.
@@ -202,7 +165,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
         </>
       )}
 
-      {cut !== "repo" && <DesktopBlock doc={doc} />}
+      {cut !== "repo" && <DesktopBlock doc={doc} plot={plot} pick={pick} onPick={setPick} />}
 
       <div className="ctx-chart-title">Skills</div>
       {skills.length === 0 ? <Absent>No skills in this folder.</Absent> : (

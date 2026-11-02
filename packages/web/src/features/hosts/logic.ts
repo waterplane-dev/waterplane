@@ -188,3 +188,23 @@ export function devicesEmptyText(passwordSet: boolean): string {
     ? "No phone has its own sign-in yet. Pair one with \"pair another phone\" — each gets a row here you can revoke."
     : "Set a host password to give each phone its own sign-in. Without one, this desktop keeps no per-phone sign-ins to list or revoke.";
 }
+
+/**
+ * The sentence for a host switch that ran out of room on this phone
+ * (`hosts.ts` `takeSwitchFailure`). `park`: nothing moved, so it says which
+ * desktop the phone is STILL on — the switch key showing that name is not a
+ * stuck tap. `restore`: the phone is on the new desktop and some of its parked
+ * words are not back yet; they are kept and come back once there is room.
+ * A host no longer in the list is "the other desktop", never an id.
+ */
+export function switchFailText(
+  f: { stage: "park" | "restore"; from: string | null; to: string | null },
+  hosts: readonly SavedHost[],
+): string {
+  const name = (id: string | null, fallback: string) => hosts.find((h) => h.id === id)?.name ?? fallback;
+  const to = name(f.to, "the other desktop");
+  if (f.stage === "park") {
+    return `Could not switch to ${to}: this phone's storage is full. Still on ${name(f.from, "the same desktop")} — free room under Storage on this phone, then switch again.`;
+  }
+  return `On ${to}, but this phone's storage is full: some of its saved drafts are not back yet. They are kept and return once there is room — see Storage on this phone.`;
+}

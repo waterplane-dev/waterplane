@@ -33,7 +33,7 @@ import type { QueueCtx, SendFns } from "./types.ts";
 import { noteFired } from "./fireFate.ts";
 
 export function sendFns(c: QueueCtx): SendFns {
-  const { connRef, sessionsRef, exitedRef, outboxRef, ackTimers, uploadsInFlight, uploadAborts, busyLanesRef, budgetHeldLanesRef,
+  const { connRef, sessionsRef, backendsRef, exitedRef, outboxRef, ackTimers, uploadsInFlight, uploadAborts, busyLanesRef, budgetHeldLanesRef,
     busySerialRef, serialWatchRef, budgetRef, autoSendRef, holdQueueRef, flushIdleReason, queueBlockedRef,
     readModeRef, serialSessionsRef, sessions } = c;
   const { inflightRef, upBytesRef } = c.up;
@@ -255,7 +255,7 @@ export function sendFns(c: QueueCtx): SendFns {
       // session-list effect so a flush fired by an ack sees the watch the ack
       // itself just added.
       busySerial: (() => {
-        const g = busySerialGroups(serialStates(sessionsRef.current), serialWatchRef.current, Date.now());
+        const g = busySerialGroups(serialStates(sessionsRef.current, backendsRef.current), serialWatchRef.current, Date.now());
         busySerialRef.current = g.busy;
         serialWatchRef.current = g.watches;
         return g.busy;
@@ -324,7 +324,7 @@ export function sendFns(c: QueueCtx): SendFns {
           serialText: (() => {
             const b = blocked.find((x) => x.reason === "serial");
             const e = b && outboxRef.current.find((x) => x.ackId === b.ackId);
-            return e?.serial ? serialTextFor(e.serial, sessionsRef.current) : undefined;
+            return e?.serial ? serialTextFor(e.serial, sessionsRef.current, backendsRef.current) : undefined;
           })(),
         });
     return sent;

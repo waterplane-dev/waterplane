@@ -34,6 +34,7 @@ export function endSession(core: SessionCore, session: Session, facts: EndFacts)
   session.info.asking = null; // nor waiting on an answer it can no longer read
   session.info.cliSuggestion = null; // nor proposing a prompt nobody can type
   session.info.login = null;
+  delete session.info.signedOut; // nothing left to send /login to
   delete session.info.links; // a shell's links (`sessions/links.ts`) die with it
   delete session.info.awaitingCode;
   // The recorder's VT is freed, not its archive: `lines()` still answers

@@ -1,5 +1,5 @@
 /**
- * `GET /api/apps/readiness` — the repo half of every app's quiet install, across every
+ * `api.repoApps()` (the android-apps extension's `readiness`) — the repo half of every app's quiet install, across every
  * PRIMARY checkout (an agent worktree is the same app twice). `apkcheck.ts` reads one repo;
  * this walks them, one at a time: each is a bounded async walk on the loop that pumps every
  * PTY. The build list and the auto-download rule are their managers' — passed in as readers.

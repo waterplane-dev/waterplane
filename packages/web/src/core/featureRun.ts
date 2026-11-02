@@ -181,6 +181,26 @@ export function createToolbarItemTable(features: readonly FeatureManifest[], get
   };
 }
 
+/** What `createHideCheck` returns: the ids hidden on this pass. ONE per registry (extensionPoints.ts hands it to every table), so a throwing predicate is said once per feature, not once per table. */
+export type HideCheck = (c: CoreApi) => ReadonlySet<string>;
+
+/**
+ * `FeatureManifest.hideWhen`, read for one render pass: the ids of the features whose lines are left
+ * out right now. A predicate that throws HIDES its feature (a line that may lead nowhere is worse
+ * than none) and is said once. Features without one are never in the set, so a registry where no
+ * manifest declares it costs one empty loop.
+ */
+export function createHideCheck(features: readonly FeatureManifest[], fail: Fail = createFailReporter(true)): HideCheck {
+  const preds = features.filter((f) => typeof f.hideWhen === "function").map((f) => ({ id: f.id, hideWhen: f.hideWhen! }));
+  return (c) => {
+    const out = new Set<string>();
+    for (const p of preds) {
+      try { if (p.hideWhen(c)) out.add(p.id); } catch (e) { out.add(p.id); fail(p.id, "showing its lines", e, c); }
+    }
+    return out;
+  };
+}
+
 /** One repo-menu line, resolved for one repo. */
 export interface RepoActionItem {
   key: string;
@@ -198,15 +218,18 @@ export interface RepoActionItem {
  * grey control); a `label`/`title` that throws drops that entry and is said once; a `run` that throws
  * is contained and said once.
  */
-export function createRepoActionTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+export function createRepoActionTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
   const defs = features.flatMap((f) => (f.repoActions ?? []).map((d) => ({ feature: f.id, d })));
   const fail = createFailReporter(true);
+  const hidden = check ?? createHideCheck(features, fail);
   return {
     actions(repo: RepoTarget): RepoActionItem[] {
       if (!defs.length) return [];
       const c = getCore();
+      const hide = hidden(c);
       const out: RepoActionItem[] = [];
       for (const { feature, d } of defs) {
+        if (hide.has(feature)) continue;
         try {
           const label = d.label(repo, c);
           if (label == null) continue;
@@ -227,6 +250,20 @@ export function createRepoChipList(features: readonly FeatureManifest[]): { key:
   return features.flatMap((f) => (f.repoChips ?? []).map((def) => ({ key: `${f.id}:${def.id}`, feature: f.id, def: def as RepoChipDef })));
 }
 
+/** The repo chips drawn on this pass: the list above minus the features `hideWhen` hides. Each chip
+ *  is its own component under its own key, so a chip leaving never shifts another's hooks. */
+export function createRepoChipTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
+  const all = createRepoChipList(features);
+  const hidden = check ?? createHideCheck(features);
+  return {
+    chips(): { key: string; feature: string; def: RepoChipDef }[] {
+      if (!all.length) return all;
+      const hide = hidden(getCore());
+      return hide.size ? all.filter((c) => !hide.has(c.feature)) : all;
+    },
+  };
+}
+
 /** Every feature's setup-row words, in registry order (`setupRowLookup` decides which are refused). */
 export function setupRowDefs(features: readonly FeatureManifest[]): SetupRowDef[] {
   return features.flatMap((f) => [...(f.setupRows ?? [])]);
@@ -244,6 +281,8 @@ export interface ContributedEntry {
   id: string;
   label: string;
   icon: ContributionIcon;
+  /** The resting explain text (`LauncherItemDef.title`); absent = "open <label>". */
+  title?: string;
   unavailable: string | null;
   /** Contained: a throw is said once, never takes the header down. */
   open(): void;
@@ -251,6 +290,13 @@ export interface ContributedEntry {
   useCount?(): LauncherItemCount | null;
   /** The tap while that count is above zero (`openCount`), contained like `open`. */
   openCount?(): void;
+  /** `false` = never a header key beside the bell (`LauncherItemDef.headerKey`); absent = lifted. */
+  headerKey?: false;
+}
+
+/** The counted entries that may be lifted into a header row as keys: a count hook, and no opt-out. */
+export function headerKeyed(items: readonly ContributedEntry[]): ContributedEntry[] {
+  return items.filter((it) => typeof it.useCount === "function" && it.headerKey !== false);
 }
 
 /** The ONE reading of a count hook's answer: the badge's number, 0 when nothing waits. Every badge
@@ -272,27 +318,31 @@ export function availabilityText(a: Availability | unknown, label: string): stri
   return `${label} is not available here`;
 }
 
-type Contributed = { id: string; label: string; icon: ContributionIcon; order?: number; available?(c: CoreApi): Availability };
+type Contributed = { id: string; label: string; icon: ContributionIcon; title?: string; order?: number; available?(c: CoreApi): Availability };
 
 function contributionTable<D extends Contributed, A extends unknown[]>(
   features: readonly FeatureManifest[], pick: (f: FeatureManifest) => readonly D[] | undefined, what: string,
-  getCore: () => CoreApi, run: (d: D, c: CoreApi, ...args: A) => void,
+  getCore: () => CoreApi, run: (d: D, c: CoreApi, ...args: A) => void, check?: HideCheck,
 ) {
   // `order` first, then registry order (`sort` is stable).
   const defs = features
     .flatMap((f) => (pick(f) ?? []).map((d) => ({ feature: f.id, d })))
     .sort((a, b) => (a.d.order ?? 0) - (b.d.order ?? 0));
   const fail = createFailReporter(true);
+  const hidden = check ?? createHideCheck(features, fail);
   return {
     entries(...args: A): ContributedEntry[] {
       if (!defs.length) return [];
       const c = getCore();
+      const hide = hidden(c);
       const out: ContributedEntry[] = [];
       for (const { feature, d } of defs) {
+        if (hide.has(feature)) continue;
         try {
           const unavailable = d.available ? availabilityText(d.available(c), d.label) : null;
           out.push({
             key: `${feature}:${d.id}`, feature, id: d.id, label: d.label, icon: d.icon, unavailable,
+            ...(typeof d.title === "string" ? { title: d.title } : {}),
             open: () => { const cc = getCore(); try { run(d, cc, ...args); } catch (e) { fail(feature, `${what} ${d.id}`, e, cc); } },
           });
         } catch (e) { fail(feature, `${what} ${d.id}`, e, c); }
@@ -304,20 +354,21 @@ function contributionTable<D extends Contributed, A extends unknown[]>(
 
 /** Session views for the header's segment, `order` then registry order. An `available` that throws
  *  drops that view (said once); an `open` that throws is contained and said once. */
-export function createSessionViewTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+export function createSessionViewTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
   const t = contributionTable<SessionViewDef, [string]>(features, (f) => f.sessionViews, "session view", getCore,
-    (d, c, sessionId) => d.open(c, { sessionId }));
+    (d, c, sessionId) => d.open(c, { sessionId }), check);
   return { views: (sessionId: string) => t.entries(sessionId) };
 }
 
 /** Launcher header items, `order` then registry order, under the same containment. */
-export function createLauncherItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
-  const t = contributionTable<LauncherItemDef, []>(features, (f) => f.launcherItems, "launcher item", getCore, (d, c) => d.open(c));
+export function createLauncherItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
+  const t = contributionTable<LauncherItemDef, []>(features, (f) => f.launcherItems, "launcher item", getCore, (d, c) => d.open(c), check);
   const counted = new Map<string, LauncherItemDef>();
   for (const f of features) for (const d of f.launcherItems ?? []) if (typeof d.useCount === "function") counted.set(`${f.id}:${d.id}`, d);
   const fail = createFailReporter(true);
   const withCount = (e: ContributedEntry, d: LauncherItemDef): ContributedEntry => ({
     ...e, useCount: d.useCount,
+    ...(d.headerKey === false ? { headerKey: false as const } : {}),
     ...(typeof d.openCount === "function" ? {
       openCount: () => { const c = getCore(); try { d.openCount!(c); } catch (err) { fail(e.feature, `launcher item ${d.id}`, err, c); } },
     } : {}),
@@ -328,9 +379,12 @@ export function createLauncherItemTable(features: readonly FeatureManifest[], ge
 /** A contributed menu line's catalog id: namespaced, so it can never take a core line's id. */
 export const menuItemKey = (feature: string, id: string) => `${feature}:${id}`;
 
-/** The contributed ☰ lines as catalog rows (`toolbar.ts`), `order` then registry order. */
-export function menuItemCatalog(features: readonly FeatureManifest[]): { id: string; name: string; Icon: ContributionIcon }[] {
+/** The contributed ☰ lines as catalog rows (`toolbar.ts`), `order` then registry order. A feature
+ *  `hideWhen` hides is not offered to pin (the toolbar would find no entry for it and draw nothing). */
+export function menuItemCatalog(features: readonly FeatureManifest[], getCore?: () => CoreApi, check?: HideCheck): { id: string; name: string; Icon: ContributionIcon }[] {
+  const hide = getCore ? (check ?? createHideCheck(features))(getCore()) : new Set<string>();
   return features
+    .filter((f) => !hide.has(f.id))
     .flatMap((f) => (f.menuItems ?? []).map((d) => ({ feature: f.id, d })))
     .sort((a, b) => (a.d.order ?? 0) - (b.d.order ?? 0))
     .map(({ feature, d }) => ({ id: menuItemKey(feature, d.id), name: d.label, Icon: d.icon }));
@@ -338,8 +392,8 @@ export function menuItemCatalog(features: readonly FeatureManifest[]): { id: str
 
 /** Contributed ☰ lines for one session, under the same containment as the launcher's items. The
  *  entry's `key` is its catalog id. */
-export function createMenuItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
-  const t = contributionTable<MenuItemDef, [SessionInfo]>(features, (f) => f.menuItems, "menu item", getCore, (d, c, active) => d.open(c, { active }));
+export function createMenuItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
+  const t = contributionTable<MenuItemDef, [SessionInfo]>(features, (f) => f.menuItems, "menu item", getCore, (d, c, active) => d.open(c, { active }), check);
   const counted = new Map<string, MenuItemDef>();
   for (const f of features) for (const d of f.menuItems ?? []) if (typeof d.useCount === "function") counted.set(menuItemKey(f.id, d.id), d);
   const fail = createFailReporter(true);
@@ -356,8 +410,8 @@ export function createMenuItemTable(features: readonly FeatureManifest[], getCor
 }
 
 /** Contributed buttons for the masked password field, under the same containment. */
-export function createSecretFillerTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
-  const t = contributionTable<SecretFillerDef, [SecretFillContext]>(features, (f) => f.secretFillers, "secret filler", getCore, (d, c, ctx) => d.open(c, ctx));
+export function createSecretFillerTable(features: readonly FeatureManifest[], getCore: () => CoreApi, check?: HideCheck) {
+  const t = contributionTable<SecretFillerDef, [SecretFillContext]>(features, (f) => f.secretFillers, "secret filler", getCore, (d, c, ctx) => d.open(c, ctx), check);
   const defs = new Map<string, SecretFillerDef>();
   for (const f of features) for (const d of f.secretFillers ?? []) defs.set(`${f.id}:${d.id}`, d);
   const fail = createFailReporter(true);

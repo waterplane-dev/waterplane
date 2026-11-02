@@ -106,6 +106,7 @@ rather than chasing the sketch's guess.
 | `http.ts` | `createHttp(ctx)`: `MIME`, auth endpoints, `serveStatic`, the per-bind request handler, `listenWithRetry` | 267 |
 | `shutdown.ts` | `installShutdown(ctx)`: the SIGTERM/SIGINT flush (order pinned) and the two process-error handlers | 74 |
 | `firstapp.ts` | `createFirstApp(ctx)`: the first-app job (`onboard.ts`) over this host's builds, store and sessions; resumed after `intents.start()`, never under `DOCTOR` | 37 |
+| `plugins.ts` | `createPlugins(ctx, ptyHeld)`: the plugin registry over this host's sessions, backlog add, decision log, meter, notify, usage, socket, `autoOn` probes and `api.repoApps()`; `hostAppReadiness(ctx)`, the ONE wiring of `appready.ts`. `main.ts` keeps the boot order | 47 |
 
 ## The layers, and what may import what
 

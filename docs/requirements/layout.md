@@ -90,3 +90,18 @@ The two buttons sit at the top-right of the section above the terminal/reader ou
 - asked: 2026-10-21
 - shipped: 1d999d11
 
+### R-layout-023 · shipped
+Every sheet scrolls when its content exceeds the viewport, so content is never cut off.
+- asked: 2026-10-28
+- shipped: 9d4eed95
+
+### R-layout-024 · shipped
+A failed build reads "failed" inline beside the hammer in the repo header instead of wrapping onto its own line.
+- asked: 2026-10-28
+- shipped: f7c01c82
+
+### R-layout-025 · shipped
+The usage week navigation buttons are neatly placed at the chart's edges and not cramped against it.
+- asked: 2026-10-30
+- shipped: 1aea1986
+

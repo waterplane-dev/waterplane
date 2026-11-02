@@ -45,6 +45,7 @@
  * `test/buildscan.test.mjs` with no filesystem.
  */
 
+import { trimEndChars } from "./lineartrim.js";
 import { BRAND, legacyStateDirNames } from "./brand.js";
 
 import type { BuildConfig } from "./wire/work.js";
@@ -146,8 +147,11 @@ function fromGradle(f: ScannedFile, hasWrapper: boolean): BuildCandidate[] {
   // The Android application plugin is what registers assemble*/bundle*. A
   // library module has assemble but no bundle, and a plain JVM project has
   // neither — so the plugin line is read, not assumed.
-  const app = /com\.android\.application|id\s*\(?\s*["']com\.android\.application/.test(f.text);
-  const lib = /com\.android\.library|id\s*\(?\s*["']com\.android\.library/.test(f.text);
+  // The plugin id alone decides: `id("com.android.application")` contains it, so the former
+  // `|id\s*\(?\s*["']…` alternative could never change the answer — and its two `\s*` around an
+  // optional `(` were quadratic on a long run of whitespace after `id`.
+  const app = f.text.includes("com.android.application");
+  const lib = f.text.includes("com.android.library");
   if (app) tasks.push("assembleDebug", "assembleRelease", "bundleRelease");
   else if (lib) tasks.push("assembleDebug", "assembleRelease");
   // `build` and `test` come from the base plugin and exist in every gradle
@@ -215,6 +219,54 @@ function fromCMake(f: ScannedFile): BuildCandidate[] {
   }];
 }
 
+const isSpace = (c: string): boolean => /\s/.test(c);
+const isLineEnd = (c: string): boolean => c === "\n" || c === "\r" || c === "\u2028" || c === "\u2029";
+
+/**
+ * What `/^\s*-?\s*run:\s*(?!\||>)(\S.*?)\s*$/.exec(line)?.[1]` captures, by a scan: that regex is
+ * quadratic on a long whitespace run (two `\s*` around an optional `-`, a lazy `.*?` against a
+ * trailing `\s*$`). Every `\s*` there must take its whole run — the next token is never a space —
+ * so the capture is the first non-space after `run:` to the line's end, trailing space trimmed;
+ * and since `.` crosses no line terminator, one left inside that capture means no match.
+ */
+export function runStepOf(line: string): string | null {
+  let i = 0;
+  while (i < line.length && isSpace(line[i])) i++;
+  if (line[i] === "-") { i++; while (i < line.length && isSpace(line[i])) i++; }
+  if (!line.startsWith("run:", i)) return null;
+  i += 4;
+  while (i < line.length && isSpace(line[i])) i++;
+  if (i >= line.length || line[i] === "|" || line[i] === ">") return null;
+  const body = line.slice(i).trimEnd(); // trimEnd strips exactly `\s`
+  for (let k = 0; k < body.length; k++) if (isLineEnd(body[k])) return null;
+  return body;
+}
+
+/**
+ * What `/^#!.*\n(?:#\s*(.+)\n)/.exec(text)?.[1]` captures, by a scan: the `\s*(.+)` pair is
+ * quadratic on a long whitespace run with no newline after it. The shebang line holds no line
+ * terminator before its `\n`; then `#`; then the regex tries every `\s*` length k, longest
+ * first, and `(.+)` succeeds for k iff the first line terminator at or after `#`+k is a `\n` past
+ * that point. Walking k downward keeps that terminator in one variable, so the scan is linear.
+ */
+export function scriptDescOf(text: string): string | undefined {
+  if (!text.startsWith("#!")) return undefined;
+  let t = 2;
+  while (t < text.length && !isLineEnd(text[t])) t++;
+  if (text[t] !== "\n" || text[t + 1] !== "#") return undefined;
+  const p = t + 2;
+  let K = 0;
+  while (p + K < text.length && isSpace(text[p + K])) K++;
+  let end = p + K; // first line terminator at or after p+K (text.length if none)
+  while (end < text.length && !isLineEnd(text[end])) end++;
+  for (let k = K; k >= 0; k--) {
+    const q = p + k;
+    if (k < K && isLineEnd(text[q])) end = q;
+    if (end > q && text[end] === "\n") return text.slice(q, end);
+  }
+  return undefined;
+}
+
 /**
  * CI is the most honest source in the repo: it is the command set somebody
  * proved works on a clean machine.
@@ -228,9 +280,9 @@ function fromWorkflow(f: ScannedFile): BuildCandidate[] {
   const out: BuildCandidate[] = [];
   const seen = new Set<string>();
   for (const line of f.text.split("\n")) {
-    const m = /^\s*-?\s*run:\s*(?!\||>)(\S.*?)\s*$/.exec(line);
-    if (!m) continue;
-    let cmd = m[1].trim();
+    const step = runStepOf(line);
+    if (step === null) continue;
+    let cmd = step.trim();
     if (/^["'].*["']$/.test(cmd)) cmd = cmd.slice(1, -1);
     if (!cmd || cmd.includes("${{") || cmd.includes("$GITHUB_")) continue;
     // `npm test` and `npm run test` are one script under two spellings, and CI
@@ -261,7 +313,7 @@ function fromWorkflow(f: ScannedFile): BuildCandidate[] {
 function fromScript(f: ScannedFile): BuildCandidate[] {
   const base = f.path.split("/").pop() ?? f.path;
   const stem = base.replace(/\.(sh|bash|zsh)$/, "");
-  const desc = /^#!.*\n(?:#\s*(.+)\n)/.exec(f.text)?.[1]?.trim();
+  const desc = scriptDescOf(f.text)?.trim();
   const name = desc && desc.length <= 40 ? desc : stem;
   return [{
     name,
@@ -322,7 +374,7 @@ export function scanCandidates(
     if (base === "gradlew") wrappers.add(dirOf(f.path) ?? "");
   }
 
-  const key = (cmd: string, dir?: string) => `${(dir ?? "").replace(/\/+$/, "")} ${cmd.trim()}`;
+  const key = (cmd: string, dir?: string) => `${trimEndChars(dir ?? "", "/")} ${cmd.trim()}`;
   const have = new Set(existing.map((b) => key(b.cmd, b.dir)));
 
   const byKey = new Map<string, BuildCandidate>();

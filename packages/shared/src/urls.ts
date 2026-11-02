@@ -85,7 +85,7 @@ function indentOf(line: string): number {
 export function findUrls(lines: string[]): FoundUrl[] {
   const out: FoundUrl[] = [];
   const seen = new Set<string>();
-  const rows = lines.map((l) => l.replace(/\s+$/, ""));
+  const rows = lines.map((l) => l.trimEnd());
 
   for (let i = 0; i < rows.length; i++) {
     SCHEME.lastIndex = 0;

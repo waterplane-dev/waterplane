@@ -17,6 +17,7 @@
 import { classifySkill, MCP_UNSIZED } from "./agentfiles.js";
 import type { AgentFilesFs, InstructionFile } from "./agentfiles.js";
 import { skillDescChars } from "./contextweight.js";
+import { trimEndChars } from "./lineartrim.js";
 
 export interface DesktopInventoryInput {
   /** Rooted at the CLI config dir (`claudeConfigDirOf`). */
@@ -91,7 +92,7 @@ export function desktopInventory(i: DesktopInventoryInput): InstructionFile[] {
     out.push({ path: "plugins/installed_plugins.json", kind: DESKTOP_KINDS.pluginSkills, parts: [], unsized: "installed_plugins.json could not be read", ...D });
   } else {
     for (const p of i.plugins) {
-      for (const s of skillsUnder(i.fs, `${p.rel.replace(/\/+$/, "")}/skills`)) {
+      for (const s of skillsUnder(i.fs, `${trimEndChars(p.rel, "/")}/skills`)) {
         out.push({ path: s.path, kind: skillKind(`${DESKTOP_KINDS.pluginSkill} (${p.name})`, s.text), parts: classifySkill(s.text, ["claude"]), ...D });
       }
     }

@@ -434,7 +434,7 @@ export interface ComplianceCheck {
 
 /** The checks that are a thing to consider rather than a finding, and the only
  *  ones a person may ignore per repo. One list, read by both ends. */
-export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compact", "apk-install", "exposure"];
+export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compact", "apk-install", "exposure", "skill-frontmatter"];
 
 /**
  * Whether one check is a FINDING — the predicate behind every setup number.

@@ -11,9 +11,9 @@
  */
 import { useEffect, useState } from "react";
 import { AlertTriangle, Gauge, Hourglass } from "lucide-react";
-import { budgetReasonText, hasScrapedWindows, type UsageBudget } from "@waterplane/shared";
+import { budgetReasonText, hasScrapedWindows, sessionWindowGoneText, type UsageBudget } from "@waterplane/shared";
 import { useCore } from "../../sdk";
-import { SetSlider, SetSwitch, SetWarn } from "../../SettingsKit";
+import { SetCustom, SetSlider, SetSwitch, SetWarn } from "../../SettingsKit";
 import { hhmm } from "../../format";
 import { track } from "../../usage";
 import { setGlobalAuto } from "./actions";
@@ -26,6 +26,7 @@ export function LimitSettings() {
   // (features/tokens BillingSettings), so the percent rows are ABSENT there, not shown against nothing.
   const windows = hasScrapedWindows(c.world.billing?.profile);
   const held = c.world.budget;
+  const noSess = c.world.usage?.sessionGoneSince != null;
   // What the slider shows while a drag is in flight; dropped the moment the
   // host says what it saved.
   const [draft, setDraft] = useState<UsageBudget | null>(null);
@@ -53,7 +54,7 @@ export function LimitSettings() {
           track("action:budget.toggle");
           c.conn.liveSend({ t: "budget.set", budget: { ...budget.budget, enabled: !budget.budget.enabled } }, `usage budget ${budget.budget.enabled ? "off" : "on"}`);
         }}
-        note={windows ? "Pause queued sends and automatic backlog starts once the 5-hour window is this far used." : "Pause queued sends and automatic backlog starts once a dollar period reaches its cap."}
+        note={windows ? (noSess ? "Pause queued sends and automatic backlog starts once the weekly ceiling below is reached." : "Pause queued sends and automatic backlog starts once the 5-hour window is this far used.") : "Pause queued sends and automatic backlog starts once a dollar period reaches its cap."}
         more={<p>It starts again by itself when the window resets — nothing is lost, the queue just waits. An explicit <strong>send now</strong>, an answer to a question box, and file uploads are never held back.</p>}
       >
         {/* What it says RIGHT NOW, in the host's own words — the same
@@ -71,7 +72,13 @@ export function LimitSettings() {
       {/* Whole numbers, coarse steps: this is a reserve, not a dial —
           and a slider is the one control that works with a thumb on a
           phone without a keyboard opening over the sheet. */}
-      {budget && windows && (
+      {/* No 5-hour window on this plan: the ceiling has nothing to cap, so the row
+          collapses to one line that says so instead of a slider that never trips. */}
+      {budget && windows && noSess && (
+        <SetCustom id="budget-session" label="session ceiling" icon={Gauge}
+          note="not on this plan" more={<p>{sessionWindowGoneText()}</p>} />
+      )}
+      {budget && windows && !noSess && (
         <SetSlider
           id="budget-session" label="session ceiling"
           min={50} max={100} step={5} value={budget.budget.sessionMax}

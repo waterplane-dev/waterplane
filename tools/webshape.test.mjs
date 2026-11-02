@@ -808,7 +808,7 @@ const APP_SPLIT_FILES = {
   "core/sessions/useHostState.ts": 80,
   "core/settings/useSettingsAdoption.ts": 70,
   "core/queue/useQueueSignals.ts": 70,
-  "core/launcher/useRepoRefresh.ts": 60,
+  "core/launcher/useRepoRefresh.ts": 72, // +re-list when a sheet closes onto the launcher
   "core/settings/useInstallOffer.ts": 50,
 };
 
@@ -1010,8 +1010,8 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiGit.ts": 90, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 107, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run
-  "webapi/webapiRepos.ts": 50,
+  "webapi/webapiRepoOps.ts": 110, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut
+  "webapi/webapiRepos.ts": 54, // +plainFolders/initPlainFolder, rescan names a folder with no git
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
   "webapi/webapiStats.ts": 85,
@@ -1041,7 +1041,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "repoHealthWords/repoHealthWordsPlot.ts": 155,
   "repoHealthWords/repoHealthWordsRank.ts": 130, // +KPI_MEANING for the two import-graph tiles
   "repoHealthWords/repoHealthWordsRegion.ts": 195, // +notesSummaryWords, plotAxisModeWords (weeks | commits)
-  "repoHealthWords/repoHealthWordsRun.ts": 115, // +outcomeRepeatsReadError, a failed read said once
+  "repoHealthWords/repoHealthWordsRun.ts": 130, // +outcomeRepeatsReadError, a failed read said once; +the re-cut button's words
   "repoHealthWords/repoHealthWordsScope.ts": 60,
   "repoHealthWords/repoHealthWordsStale.ts": 130, // +seriesStatusWords, the one line over the series charts
 };

@@ -18,6 +18,7 @@
 import { BRAND } from "./brand.js";
 import { fmtUsd, normalizeModel } from "./pricing.js";
 import type { SessionInfo } from "./wire/session.js";
+import { trimEndChars } from "./lineartrim.js";
 
 export const PEER_API_VERSION = 1;
 /** The header every peer call carries its API version in. */
@@ -239,7 +240,7 @@ export function remoteKey(url: string): string | null {
     host = sc[1];
     path = sc[2];
   }
-  path = path.split(/[?#]/)[0].replace(/\/+$/, "").replace(/\.git$/i, "").replace(/\/+$/, "").replace(/^\/+/, "");
+  path = trimEndChars(trimEndChars(path.split(/[?#]/)[0], "/").replace(/\.git$/i, ""), "/").replace(/^\/+/, "");
   host = host.toLowerCase();
   if (!host || !path || path.split("/").some((p) => !p || p === "." || p === "..")) return null;
   return `${host}/${path.toLowerCase()}`;

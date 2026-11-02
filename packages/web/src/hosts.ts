@@ -171,12 +171,91 @@ export function bootHosts(kv: KV | null): void {
   if (!kv) return;
   try {
     finishSwitch(kv);
+  } catch (e) {
+    try { if (isQuotaError(e)) settleFullSwitch(kv); } catch { /* storage refuses even the cleanup */ }
+  }
+  // Its own try, so a switch that threw still gets `hostBase` aligned to the
+  // host the list says is active: one throw used to skip this too, and the
+  // page then ran on the old desktop under the new desktop's name.
+  try {
     repairDemoHost(kv);
     const m = planHostMigration({ hosts: kv.getItem(LS.hosts), active: kv.getItem(LS.hostActive), hostBase: kv.getItem(LS.hostBase) });
     if (m.writes.hosts !== undefined) kv.setItem(LS.hosts, m.writes.hosts);
     if (m.writes.active !== undefined) kv.setItem(LS.hostActive, m.writes.active);
     if (m.writes.hostBase !== undefined) kv.setItem(LS.hostBase, m.writes.hostBase);
   } catch { /* quota / blocked storage: the app starts on whatever is there */ }
+}
+
+/** `setItem` over the WebView's localStorage quota. Every other throw is
+ *  treated as the process dying there — the marker stays and the next boot
+ *  redoes the switch (`finishSwitch` is interrupt-safe). A full store is not
+ *  that: it throws at the same copy on EVERY boot, so the redo never lands. */
+export function isQuotaError(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const o = e as { name?: unknown; code?: unknown };
+  return o.name === "QuotaExceededError" || o.name === "NS_ERROR_DOM_QUOTA_REACHED" || o.code === 22 || o.code === 1014;
+}
+
+/**
+ * The stall chip's tail (`NetActivity.tsx`). With two or more desktops saved
+ * it names the one the requests went to, so "loading repos · 12s" is never
+ * read as the desktop just tapped in the switch key when it is the one in use.
+ * With one desktop the name is no fact, and the sentence stays as it was.
+ */
+export function stallTail(hosts: readonly SavedHost[], activeId: string | null): string {
+  const name = hosts.length > 1 ? hosts.find((h) => h.id === activeId)?.name : undefined;
+  return name ? ` — ${name} is not answering` : " — the connection may be down";
+}
+
+/** What a switch that ran out of room left for the page to say (`LS.hostSwitchFailed`). */
+export interface SwitchFailure {
+  /** `park`: nothing moved, the phone is still on `from`. `restore`: on `to`,
+   *  some of its parked words not back yet (kept, retried each boot). */
+  stage: "park" | "restore";
+  from: string | null;
+  to: string | null;
+  at: number;
+}
+
+/**
+ * A switch threw `QuotaExceededError`. Before the commit and before any bare
+ * key went, it is ABANDONED: the marker dropped (a silent retry on every boot
+ * was the "the switch never happens" of 2026-11-01) and the half-written park
+ * copies removed — each is a duplicate of a bare key still here, and leaving
+ * them would only fill the store further. After the commit the marker stays:
+ * the restore is the only copy back of the target's words and must be retried.
+ */
+function settleFullSwitch(kv: KV): void {
+  const sw = parseSwitch(kv.getItem(LS.hostSwitch));
+  if (!sw) return;
+  const current = kv.getItem(LS.hostActive);
+  let stage: SwitchFailure["stage"];
+  if (sw.from !== null && current === sw.from && !sw.parked) {
+    for (const k of allKeys(kv)) {
+      const b = bareKeyFor(k, sw.from);
+      if (b && kv.getItem(b) !== null) kv.removeItem(k);
+    }
+    kv.removeItem(LS.hostSwitch);
+    stage = "park";
+  } else if (sw.to !== null && current === sw.to) {
+    stage = "restore";
+  } else return;
+  const note: SwitchFailure = { stage, from: sw.from, to: sw.to, at: Date.now() };
+  kv.setItem(LS.hostSwitchFailed, JSON.stringify(note));
+}
+
+/** Read and forget the note `settleFullSwitch` left (once per boot that has one). */
+export function takeSwitchFailure(kv: KV | null): SwitchFailure | null {
+  if (!kv) return null;
+  const raw = kv.getItem(LS.hostSwitchFailed);
+  if (raw === null) return null;
+  try { kv.removeItem(LS.hostSwitchFailed); } catch { /* shown again next boot */ }
+  try {
+    const v = JSON.parse(raw) as Partial<SwitchFailure>;
+    if (v.stage !== "park" && v.stage !== "restore") return null;
+    const id = (x: unknown) => (isHostId(x) ? x : null);
+    return { stage: v.stage, from: id(v.from), to: id(v.to), at: typeof v.at === "number" ? v.at : 0 };
+  } catch { return null; }
 }
 
 // ── The list ──────────────────────────────────────────────────────────

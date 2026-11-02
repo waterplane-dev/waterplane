@@ -16,7 +16,7 @@
 import { detectPrompt } from "../dist/prompt.js";
 import { navToSubmit } from "../dist/promptnav.js";
 import { detectContext } from "../dist/context.js";
-import { isLocalCommand, startsNoTurn } from "../dist/slash.js";
+import { startsNoTurn } from "../dist/slash.js";
 import { composerEcho } from "../dist/composer.js";
 import { detectLimitText } from "../dist/limit.js";
 import { ECHO_SPLIT, decodeFixture } from "@waterplane/shared";
@@ -46,7 +46,9 @@ export const READERS = {
   "context.meter": (t) => { const c = detectContext(t); return c.leftPct != null || c.usedTok != null; },
   "slash.local": (t) => {
     const [cmd, ...rest] = t.split("\n");
-    return isLocalCommand(cmd) && startsNoTurn(cmd) && detectPrompt(rest.join("\n")) == null;
+    // startsNoTurn is the host's own question (deliverreturn.ts's no-turn branch); it covers
+    // /btw, which is deliberately NOT in isLocalCommand (the phone would hold it until idle).
+    return startsNoTurn(cmd) && detectPrompt(rest.join("\n")) == null;
   },
   "askbox.enrich": (t) => askRecord(json(t)),
   // `claude-sources.ts` switches on `hook_event_name` and reads `session_id` / `transcript_path`.

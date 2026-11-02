@@ -26,6 +26,7 @@ import {
 } from "./data/index.js";
 import type { HeadlineSummary } from "./data/index.js";
 import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
+import { gitRootOf } from "./health/healthsource.js";
 import { InstructionLens } from "./codelens.js";
 import { Panel } from "./panel.js";
 import { NavTree, PICK, PICK_FOLDER, QUOTA, SHOW } from "./navtree.js";
@@ -97,6 +98,9 @@ class Ext implements vscode.Disposable {
   private watch: LogWatch;
   private rescanTimer: NodeJS.Timeout | null = null;
   private activeFolder: string | null = null;
+  /** The git root of the last file edited in a folder: a workspace like ~/dev holds many repos, and
+   *  repo health reads the one that file belongs to. Kept while the panel or a terminal has focus. */
+  private editorRoot: { folder: string; root: string } | null = null;
   private pinned = new Map<string, string>();
   private ledger = new SessionLedger();
   private sessions: SessionRow[] = [];
@@ -138,14 +142,15 @@ class Ext implements vscode.Disposable {
     this.tree = new NavTree(() => this.navState(), (v) => {
       if (!v) return;
       void this.refreshSession();
-      if (this.activeFolder) void this.health.read(this.activeFolder);
+      if (this.activeFolder) void this.health.read(this.healthRoot(this.activeFolder));
     }, ctx.workspaceState);
     this.health = new HealthRun({
       workerFile: path.join(ctx.extensionUri.fsPath, "dist", "healthworker.mjs"),
       storageDir: path.join(ctx.globalStorageUri.fsPath, "health"),
       stepMs: () => Math.max(10, vscode.workspace.getConfiguration(BRAND.slug).get<number>("healthSeconds", DEFAULT_HEALTH_SECONDS)) * 1000,
       extraPath: () => this.gitDir(),
-      onChange: (folder) => this.postHealth(folder),
+      // Keyed by the repo root read; the panel and tree are keyed by the workspace folder.
+      onChange: (root) => { if (this.activeFolder && this.healthRoot(this.activeFolder) === root) this.postHealth(this.activeFolder); },
     });
     this.watch = new LogWatch(
       { sessionMoved: () => void this.refreshSession(), projectChanged: () => void this.refreshSession() },
@@ -180,6 +185,7 @@ class Ext implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((e) => this.onConfig(e)),
     );
     this.activeFolder = this.editorFolder() ?? this.folders()[0] ?? null;
+    this.noteEditorRoot(this.editorFolder());
     void this.refreshSession();
   }
 
@@ -201,12 +207,43 @@ class Ext implements vscode.Disposable {
   private onEditor(force = false): void {
     const all = this.folders();
     const ed = this.editorFolder();
+    const rootMoved = this.noteEditorRoot(ed);
     const kept = this.activeFolder && all.includes(this.activeFolder) ? this.activeFolder : null;
     const f = ed ?? kept ?? all[0] ?? null;
-    if (!force && f === this.activeFolder) return;
+    if (!force && f === this.activeFolder) {
+      // Same workspace folder, another repo inside it: the health reading follows the file.
+      if (rootMoved && f) {
+        this.postHealth(f);
+        if (this.panel.current === "health") void this.health.read(this.healthRoot(f));
+        this.tree.refresh();
+      }
+      return;
+    }
     this.activeFolder = f;
     this.sendFolders();
     void this.refreshSession();
+  }
+
+  /** Remember the git root of the active file (`editorRoot`); true when it changed. */
+  private noteEditorRoot(folder: string | null): boolean {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    if (!folder || !uri || uri.scheme !== "file") return false;
+    const root = gitRootOf(uri.fsPath);
+    if (!root) return false;
+    const was = this.editorRoot;
+    this.editorRoot = { folder, root };
+    return !was || was.folder !== folder || was.root !== root;
+  }
+
+  /**
+   * The repo whose health a workspace folder shows: the git root of the last file edited in it, else
+   * the folder's own git root (a folder below a repo's root reads the repo), else the folder itself
+   * (which says it is not a repository). The series read is then that repo's `.waterplane` one —
+   * the file the phone reads — not a copy keyed by whichever folder VS Code happened to open.
+   */
+  private healthRoot(folder: string): string {
+    if (this.editorRoot?.folder === folder) return this.editorRoot.root;
+    return gitRootOf(folder) ?? folder;
   }
 
   private configDir(): string {
@@ -502,7 +539,7 @@ class Ext implements vscode.Disposable {
   private navState(): NavState {
     const folder = this.activeFolder;
     const mine = !!folder && this.rows.folder === folder;
-    const h = folder ? this.health.state(folder) : null;
+    const h = folder ? this.health.state(this.healthRoot(folder)) : null;
     return {
       folders: this.folders(),
       folder,
@@ -537,8 +574,9 @@ class Ext implements vscode.Disposable {
 
   private postHealth(folder: string, to?: Origin): void {
     if (this.disposed) return;
-    const st = this.health.state(folder);
-    this.post({ t: "health", folder, doc: this.withSpend(folder, st.doc), ...(st.why ? { why: st.why } : {}), run: st.run }, to);
+    const root = this.healthRoot(folder);
+    const st = this.health.state(root);
+    this.post({ t: "health", folder, doc: this.withSpend(root, st.doc), ...(st.why ? { why: st.why } : {}), run: st.run }, to);
   }
 
   /**
@@ -595,7 +633,7 @@ class Ext implements vscode.Disposable {
     const folder = this.activeFolder;
     this.showTab("health");
     if (!folder) { void vscode.window.showInformationMessage("Open a folder to measure its repo health."); return; }
-    void this.health.refresh(folder);
+    void this.health.refresh(this.healthRoot(folder));
   }
 
   /** Open a file the plot named, only if it really lives inside the folder (symlinks resolved). */
@@ -702,11 +740,11 @@ class Ext implements vscode.Disposable {
           this.post({ t: "receipt", text, ...(m.tap != null ? { tap: m.tap } : {}) }, from);
           break;
         }
-        case "healthRead": if (this.known(m.folder)) { this.postHealth(m.folder, from); void this.health.read(m.folder); } break;
-        case "healthScope": if (this.known(m.folder)) void this.health.setScope(m.folder, typeof m.scope === "string" ? m.scope : null); break;
-        case "healthRefresh": if (this.known(m.folder)) void this.health.refresh(m.folder); break;
-        case "healthForget": if (this.known(m.folder)) void this.health.forget(m.folder); break;
-        case "healthCancel": if (this.known(m.folder)) this.health.cancel(m.folder); break;
+        case "healthRead": if (this.known(m.folder)) { this.postHealth(m.folder, from); void this.health.read(this.healthRoot(m.folder)); } break;
+        case "healthScope": if (this.known(m.folder)) void this.health.setScope(this.healthRoot(m.folder), typeof m.scope === "string" ? m.scope : null); break;
+        case "healthRefresh": if (this.known(m.folder)) void this.health.refresh(this.healthRoot(m.folder)); break;
+        case "healthForget": if (this.known(m.folder)) void this.health.forget(this.healthRoot(m.folder)); break;
+        case "healthCancel": if (this.known(m.folder)) this.health.cancel(this.healthRoot(m.folder)); break;
         case "openFile": if (this.known(m.folder)) await this.openFile(m.folder, m.path); break;
         case "openPanel": this.showTab(m.tab); break;
         case "open": {
@@ -723,7 +761,7 @@ class Ext implements vscode.Disposable {
 
   /** Build the prompt in the form `how` needs (one line for a terminal) and deliver it; the sentence says what happened. */
   private async runPrompt(id: PromptId, how: "copy" | "terminal", turn?: number): Promise<string> {
-    const r = render(id, { session: this.session.doc, weight: this.weight.doc, turn, health: this.activeFolder ? this.health.state(this.activeFolder).doc : null }, how);
+    const r = render(id, { session: this.session.doc, weight: this.weight.doc, turn, health: this.activeFolder ? this.health.state(this.healthRoot(this.activeFolder)).doc : null }, how);
     if (!r.ok) return r.why;
     try {
       return (await deliver(r.text, how)).message;

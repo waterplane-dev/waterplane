@@ -75,3 +75,8 @@ Repo health readings work after install and show measured results instead of a m
 When a connection problem happens, logs are kept ready so the cause can be investigated.
 - asked: 2026-10-24
 
+### R-diagnostics-017 · shipped
+A CLI version with no fixture proof shows its screen signals as unverified rather than behind, and harvest debt is its own figure that does not reset the per-commit health series on every CLI release.
+- asked: 2026-10-30
+- shipped: ba0afd09
+

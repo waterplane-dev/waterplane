@@ -40,7 +40,6 @@ import type { PluginRegistry } from "../plugins/pluginregistry.js";
 import type { DecisionLog } from "../decisionlog.js";
 import type { SentLog } from "../sentlog.js";
 import type { SettingsStore } from "../settings.js";
-import type { InstallLogStore } from "../installlog.js";
 import type { NotifyPrefsStore } from "../notifyprefs.js";
 import type { AuthManager } from "../auth.js";
 import type { Meter } from "../meter.js";
@@ -133,8 +132,6 @@ export interface HostCtx {
   /** Limit auto-continues + plugin decisions; a change broadcasts `decisions.log`. */
   readonly decisionLog: DecisionLog;
   readonly sentLogStore: SentLog;
-  /** What the phones installed, and when, and which phone. */
-  readonly installLog: InstallLogStore;
   readonly settings: SettingsStore;
   readonly notifyPrefs: NotifyPrefsStore;
   readonly auth: AuthManager;

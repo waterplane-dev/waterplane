@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { freshGiveUp, netRetryDelay, NET_LADDER_MS, NET_MAX_ATTEMPTS, readNetLog, transientApiError } from "../dist/netlog.js";
+import { freshGiveUp, netRetryDelay, NET_LADDER_MS, NET_MAX_ATTEMPTS, readNetLog, readStandingGiveUp, transientApiError } from "../dist/netlog.js";
 
 const DIR = mkdtempSync(join(tmpdir(), "waterplane-netlog-"));
 let n = 0;
@@ -24,6 +24,7 @@ const REAL = {
   refused: E + "Connection refused — a firewall or proxy may be blocking it (ECONNREFUSED)",
   reset: E + "Connection dropped (ECONNRESET)",
   noResponse: E + "No response from API (waited 3m). If a proxy or gateway on your network holds responses, raise its timeout.",
+  stopped: E + "The response stopped arriving. The response above may be incomplete.",
 };
 
 const apiErr = (at, text, error = "server_error", extra = {}) => JSON.stringify({
@@ -41,6 +42,7 @@ test("every real transient give-up reads as transient, with a short line", () =>
   assert.equal(transientApiError(REAL.refused), "Connection refused — a firewall or proxy may be blocking it (ECONNREFUSED)");
   assert.equal(transientApiError(REAL.reset), "Connection dropped (ECONNRESET)");
   assert.equal(transientApiError(REAL.noResponse), "No response from API (waited 3m).");
+  assert.equal(transientApiError(REAL.stopped), "The response stopped arriving.");
 });
 
 test("not transient: a stub's 400, an unknown shape, no API-error prefix, a spend wall", () => {
@@ -81,6 +83,20 @@ test("no log, an empty log, or no assistant row is unknown — never a verdict",
   assert.equal(readNetLog(log(user(Date.now()))).state, "unknown");
 });
 
+test("a STANDING give-up: newest row transient and nobody typed after it — at any age", () => {
+  const at = Date.parse("2026-10-28T19:05:58Z");
+  const meta = JSON.stringify({ type: "user", isMeta: true, timestamp: iso(at + 1000), message: { role: "user", content: "<local-command-caveat>x</local-command-caveat>" } });
+  const standing = readStandingGiveUp(log(user(at - 5000), apiErr(at, REAL.dns), meta));
+  assert.equal(standing.state, "transient", "a meta row after it is not typing");
+  assert.equal(standing.at, at);
+  // Someone typed after the give-up and the reply never came: not ours to continue.
+  const typed = log(user(at - 5000), apiErr(at, REAL.dns), user(at + 60_000));
+  assert.equal(readStandingGiveUp(typed).state, "clear");
+  assert.equal(readNetLog(typed).state, "transient", "readNetLog still reads only the assistant row");
+  assert.equal(readStandingGiveUp(log(apiErr(at, REAL.dns), user(at + 1), reply(at + 2))).state, "clear");
+  assert.equal(readStandingGiveUp(join(DIR, "absent.jsonl")).state, "unknown");
+});
+
 test("fresh means stamped inside the turn that just ended", () => {
   const at = 1_000_000;
   const v = { state: "transient", at, error: "x" };
@@ -100,4 +116,16 @@ test("the ladder widens, repeats its last rung, and stops at the cap", () => {
   assert.equal(netRetryDelay(0, 0), null, "a cap of 0 retries nothing");
   assert.equal(netRetryDelay(1, 3, [5, 7]), 7);
   assert.equal(netRetryDelay(5, 8, []), 900_000, "an empty ladder is the default");
+});
+
+test("an auth failure's row is never a net give-up (its StopFailure ends the turn, signed out)", () => {
+  const at = Date.parse("2026-11-02T10:00:00Z");
+  // The CLI's own wording, from a real log; built from halves.
+  const row = JSON.stringify({
+    type: "assistant", timestamp: iso(at), isApiErrorMessage: true, error: "authentication_failed",
+    message: { model: "<synthetic>", role: "assistant", content: [{ type: "text", text: "Login expired · " + "Please run /login" }] },
+  });
+  assert.equal(readNetLog(log(user(at - 1000), row)).state, "clear");
+  // Even with a transient-looking text, only `server_error` is ours.
+  assert.equal(readNetLog(log(apiErr(at, REAL.dns, "authentication_failed"))).state, "clear");
 });

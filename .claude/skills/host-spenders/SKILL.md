@@ -1,6 +1,6 @@
 ---
 name: host-spenders
-description: waterplane host — every place this daemon buys a model call of its own, unattended (packages/host/src): `sidecar.ts` (the one engine seam; code in `sidecar/`), `review.ts`, `assess.ts` (code in `assess/`), `commitmsg.ts`, `changebrief.ts`, `naming.ts`, `prompts.ts` (a fork's own wording) and the halt gate every spender honours. Load BEFORE adding or changing any headless `claude -p` or sidecar call — its flags, prompt, timeout, engine route or apply path: this is the seam CLAUDE.md's rule about justifying every dropped flag guards, and where *nothing applies itself* is argued out.
+description: "waterplane host — every place this daemon buys a model call of its own, unattended (packages/host/src): `sidecar.ts` (the one engine seam; code in `sidecar/`), `review.ts`, `assess.ts` (code in `assess/`), `commitmsg.ts`, `changebrief.ts`, `naming.ts`, `prompts.ts` (a fork's own wording) and the halt gate every spender honours. Load BEFORE adding or changing any headless `claude -p` or sidecar call — its flags, prompt, timeout, engine route or apply path: this is the seam CLAUDE.md's rule about justifying every dropped flag guards, and where *nothing applies itself* is argued out."
 ---
 
 # waterplane host — the unattended spenders

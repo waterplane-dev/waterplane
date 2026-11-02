@@ -45,7 +45,7 @@ export function repoClaudePluginFiles(): Record<string, string> {
     }, null, 2) + "\n",
     [`skills/${BRAND.skillName}/SKILL.md`]: `---
 name: ${BRAND.skillName}
-description: ${DESCRIPTION}
+description: ${JSON.stringify(DESCRIPTION)}
 ---
 ${repoSkillBody()}`,
   };

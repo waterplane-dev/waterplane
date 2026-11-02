@@ -30,6 +30,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { descriptionModules, headModules, mapLines, ownership } from "./skillmap.mjs";
+import { frontmatterYamlProblem } from "../packages/shared/dist/index.js";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const MD = readFileSync(join(ROOT, "CLAUDE.md"), "utf8");
@@ -166,6 +167,17 @@ test("every skill declares a name and a description that can find it", () => {
     else if (desc[1].trim().length < 120) bad.push(`${s.name}: description is ${desc[1].trim().length} chars — too vague to be found`);
   }
   assert.deepEqual(bad, [], `A skill is chosen from its description alone. Say what it covers AND when to load it.`);
+});
+
+test("every skill's frontmatter is strict YAML, so other agents can load it", () => {
+  // Claude Code reads an unquoted `description:` holding ": " anyway; GitHub Copilot CLI parses
+  // the same block as strict YAML and skips the skill ("Skill not found: web", measured on 1.0.98).
+  const bad = [];
+  for (const s of skills()) {
+    const why = frontmatterYamlProblem(s.text);
+    if (why) bad.push(`${s.name}: ${why}`);
+  }
+  assert.deepEqual(bad, [], "Copilot CLI skips a skill whose frontmatter is not strict YAML. Write the description as ONE double-quoted line (escape \\\" and \\\\).");
 });
 
 /**

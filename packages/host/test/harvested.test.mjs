@@ -107,7 +107,8 @@ test("no harvested fixture carries a home path, an address or an opaque run", ()
 // guards, so before this the detector had never been held to the CLI's own
 // drawing. The whole answer, not just "blocked": the instant it would resume at
 // is the thing the signal measures, and the bare clock time is read in the
-// zone the notice names (19:00 Berlin summer time = 17:00 UTC).
+// zone the notice names (a kept capture names none but UTC: the owner's zone
+// was masked, so a bare 7pm reads as 19:00 UTC).
 test("the real 2.1.308 block notice reads as a weekly wall with its printed reset", async () => {
   const { detectLimitText } = await import("../dist/limit.js");
   const text = decodeFixture("limit.reset", read("screens/harvest-limit.reset-2.1.308.txt"));
@@ -115,5 +116,5 @@ test("the real 2.1.308 block notice reads as a weekly wall with its printed rese
   assert.equal(d.blocked, true);
   assert.equal(d.weekly, true);
   assert.equal(d.spend, false);
-  assert.equal(d.resetAt, Date.UTC(2026, 9, 20, 17));
+  assert.equal(d.resetAt, Date.UTC(2026, 9, 20, 19));
 });

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FixtureShelf } from "../dist/clifixtures.js";
+import { FixtureShelf, maskZones } from "../dist/clifixtures.js";
 
 const settle = () => new Promise((r) => setTimeout(r, 20));
 
@@ -62,4 +62,17 @@ test("wants: true until a capture is kept or being taken, for that version only"
   assert.equal(shelf.wants("deliver.echo", "2.1.304"), false, "kept");
   assert.ok(existsSync(join(dir, "2.1.304", "deliver.echo.txt")));
   assert.equal(shelf.wants("deliver.echo", "2.1.305"), true);
+});
+
+test("an IANA zone name never reaches a kept capture, chrome rows included", async (t) => {
+  assert.equal(maskZones("resets 7pm (Europe/Berlin) or (America/Argentina/Buenos_Aires)"), "resets 7pm (UTC) or (UTC)");
+  assert.equal(maskZones("a/b and Europe only"), "a/b and Europe only");
+  const dir = mkdtempSync(join(tmpdir(), "shelf-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const shelf = new FixtureShelf(dir);
+  shelf.offer("slash.local", "2.1.303", () => "Claude Code v2.1.303 (Europe/Berlin)\n/usage");
+  await settle();
+  const kept = readFileSync(join(dir, "2.1.303", "slash.local.txt"), "utf8");
+  assert.match(kept, /Claude Code v2\.1\.303 \(UTC\)/);
+  assert.doesNotMatch(kept, /Berlin/);
 });

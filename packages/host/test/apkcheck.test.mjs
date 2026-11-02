@@ -38,7 +38,8 @@ test("an APK in the outbox and a recent target: pass, naming the package and the
     assert.equal(c.id, "apk-install");
     assert.equal(c.status, "pass");
     assert.match(c.detail, /^de\.hoh\.tiptoi: 1 APK in the outbox/);
-    assert.match(c.detail, /FIRST install of the app must come from waterplane/);
+    assert.match(c.detail, /FIRST install must come from waterplane/);
+    assert.match(c.detail, /the app's own card shows the rest/);
     assert.match(c.detail, /debug key/);
   } finally { rmSync(d, { recursive: true }); }
 });

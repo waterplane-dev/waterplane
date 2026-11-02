@@ -8,6 +8,7 @@ import { LOCAL_MOVE_POLLS, LOCAL_SUBMIT_TRIES, UNANNOUNCED_POLLS, UNANNOUNCED_TR
 import type { DeliveryResult, DeliveryRun } from "./delivertypes.js";
 import { resolveBackend } from "../backends/index.js";
 import { trustRule, type TrustRule } from "../backends/derive.js";
+import { readNavBox, trustKeys } from "../prompt.js";
 
 /** Does this session's backend have TURNS? A shell does not (`caps.turns`).
  *  Unknown backend / no lookup on a test double ⇒ true, today's behaviour. */
@@ -19,6 +20,43 @@ export function hasTurns(run: Pick<DeliveryRun, "sessions" | "sessionId">): bool
  *  default, and every test double's); an id this host cannot resolve ⇒ never answered. */
 export function trustRuleFor(id: string | undefined): TrustRule {
   try { return trustRule(resolveBackend(id)); } catch { return trustRule(null); }
+}
+
+/** A numbered trust box's Yes row (claude before 2.1.293): the one place `1⏎` is not a guess. */
+const NUMBERED_YES = /(^|\s)1\.\s*Yes\b/m;
+/** How long a half-painted trust box is re-read for its rows before delivery refuses. */
+const TRUST_PAINT_MS = 3000;
+
+/**
+ * The keys that answer claude's trust box with Yes, or "" when they cannot be placed (`nav`: the
+ * box was read as a navigable one). The box PAINTS in pieces — its question can be on screen a
+ * beat before its rows, and a box without its rows reads as no box — so it is re-read until the
+ * rows are there; `1⏎` (`trustKeys(null)`) only beside a drawn "1. Yes", because on today's
+ * unnumbered box that Return lands on "No, exit" (docs/notes/host.md, `deliver.ts`).
+ */
+export async function trustAnswerKeys(read: () => Promise<string>): Promise<{ keys: string; nav: boolean }> {
+  let nav = readNavBox(await read());
+  for (let t = Date.now(); !nav && !NUMBERED_YES.test(await read()) && Date.now() - t < TRUST_PAINT_MS; await sleep(150)) {
+    nav = readNavBox(await read());
+  }
+  if (nav) return { keys: trustKeys(nav), nav: true };
+  return { keys: NUMBERED_YES.test(await read()) ? "1\r" : "", nav: false };
+}
+
+/**
+ * Claude's trust box painted AFTER the words were typed (claude went quiet before painting it, so
+ * delivery thought it ready). The words reached no composer — the box is up and claude has not
+ * booted past it, so nothing can have run — and neither a Return nor an Esc may reach the box
+ * (its cursor rests on "No, exit"; Esc is cancel). Answer Yes and say `retry`: the queue sends the
+ * words again into the composer claude boots to. Unplaceable keys ⇒ nothing typed, `retry` in
+ * words. Before (2026-10-31): the blind Return quit claude; with only the Return withheld, the
+ * session hung, since `settle.ts` can never call a delivery `absent` without a conversation log.
+ */
+export async function answerLateTrust(read: () => Promise<string>, write: (keys: string) => void): Promise<{ result: DeliveryResult; detail: string }> {
+  const { keys } = await trustAnswerKeys(read);
+  if (!keys) return { result: "retry", detail: "claude is asking whether to trust this folder and this app could not read the box — answer it in the terminal" };
+  write(keys);
+  return { result: "retry", detail: "claude asked whether to trust this folder after the words were typed — answered Yes, and the words go again" };
 }
 
 export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: DeliveryResult; detail?: string }> {

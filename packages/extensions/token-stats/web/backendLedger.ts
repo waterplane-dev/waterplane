@@ -52,9 +52,19 @@ export function unitHero(doc: AvailableLedger): { name: string; total: number; d
 }
 
 /** The sentence for a ledger that cannot be shown. Never empty, never a zero. */
+/** The generic shape every reader below assumes: `totals.kinds` a record and `days` a list of `{kinds}`. */
+function isGenericLedger(doc: AvailableLedger): boolean {
+  const isRec = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
+  return isRec(doc.totals) && isRec(doc.totals.kinds) && Array.isArray(doc.days) && doc.days.every((d) => isRec(d) && isRec(d.kinds));
+}
+
 export function ledgerAbsent(label: string, doc: BackendTokensDoc | null): string | null {
   if (!doc) return null;
   if (doc.available === false) return doc.reason?.trim() || `${label} has no token ledger on this desktop.`;
+  // A backend whose extension contributes its own ledger view keeps its document in its own shape
+  // (opencode's `totals.input`, no `kinds`). Where that view is not loaded (the VS Code panel) the
+  // generic tab is all there is: say so rather than read a field that is not there.
+  if (!isGenericLedger(doc)) return `${label} keeps its ledger in its own shape, which this screen does not draw.`;
   if (!ledgerHero(doc) && !unitHero(doc)) return `${label} has a ledger but nothing is counted in it yet.`;
   return null;
 }

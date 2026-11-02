@@ -18,6 +18,13 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
 - **The demo is a row** (`hosts.ts` `DEMO_HOST_ID`, `demoEntry.ts`): entering parks the real host's keys like any switch and leaving
   gives them back; the switcher draws it as "Demo · in use / leave" and a "Try the demo" button when it is absent. Never listed,
   edited or removed like a desktop. Settings has one row: `demo`.
+- **A switch that runs out of room says so.** A park copies every host key before removing any, so
+  it needs the host's words' size again in free localStorage. A `QuotaExceededError` before the
+  commit abandons the switch at boot (`hosts.ts` `settleFullSwitch`: marker dropped, half-written
+  park copies removed) and the manifest's `boot` toasts `switchFailText` — "Still on <old>" — once.
+  Any other throw keeps the marker for the redo. The page dials the ACTIVE ROW's address
+  (`hostUrl.ts` `pickSavedBase`), never a `hostBase` a throw left behind, so the header can never
+  name one desktop while the requests go to another (2026-11-01).
 - `HostMenuItem.tsx` — the launcher menu's host row in the shell: host name (+ route once set),
   a tap opens the switcher. Not in the topbar: a long name took the whole bar.
 - `HostSwitchKey.tsx` — the launcher bar's SPLIT host key, last on the bar, only with two or more

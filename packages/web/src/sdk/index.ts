@@ -20,7 +20,7 @@ export { mapWith, mapWithout, useCore, useLatest, useQueueEntries } from "./hook
 export { useBackStep } from "../backStep.ts";
 /** This device's preferences (`core/prefs.ts`) — read-only from a feature; the
  *  Settings sheet is their writer. */
-export { useConnStatus } from "./connStatus.ts";
+export { useConnStatus, watchConnStatus } from "./connStatus.ts";
 export { setPref, usePref, type DevicePrefs, type PrefKey } from "../core/prefs.ts";
 export type { CachedListStore, CachedLists } from "./cached.ts";
 export { repoRunStore, type RepoRunStore, type RunLike } from "./repoRun.ts";
@@ -32,6 +32,17 @@ export { extStorage, type ExtStorage } from "./extStorage.ts";
 /** Is an extension switched on (`useExtensionEnabled`/`isExtensionEnabled`, by its manifest id),
  *  and where its downloaded assets are cached and served (`extAssetCacheName`, `extAssetUrl`). */
 export { EXT_CACHE_PREFIX, extAssetCacheName, extAssetUrl, isExtensionEnabled, useExtensionEnabled, watchExtensionEnabled } from "./extensions.ts";
+/** How core opens the screen an extension owns for this phone's own apps (`FeatureManifest.appsDoor`) without importing it:
+ *  `useAppsDoor()` answers null while no such extension is on — the caller's off state. */
+export { useAppsDoor, type OpenAppsDoor } from "./extensions.ts";
+export type { AppsDoor, AppsDoorCut } from "./appsDoor.ts";
+/** The Android shell's installer (`shellInstall`, `useInstallCaps`, `useInstallSources`, the allow-list). */
+export { setInstallAllow, shellInstall, useInstallAllow, useInstallCaps, useInstallSources, type InstallCaps, type InstallSources } from "./install.ts";
+/** This phone's download records (read-only) and the per-repo auto-download rules. */
+export { enableBuilds, pullRules, usePullRecords, watchPullRecords, type PullRecord } from "./downloads.ts";
+/** This phone's stable id (the one the desktop's install log and link log name it by). */
+export { deviceId } from "../link/linkLog.ts";
+export { deviceModel, deviceName, setDeviceName } from "../deviceInfo.ts";
 /** An extension's downloaded engine files, kept in IndexedDB for offline use (works in the APK and on plain http). */
 export { extAssets, type ExtAssets } from "./extAssets.ts";
 export type { PluginCallResult, PluginMethods } from "@waterplane/shared";

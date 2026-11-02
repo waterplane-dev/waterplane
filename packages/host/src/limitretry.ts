@@ -32,7 +32,18 @@
  *     and says nothing about how long a wall may last; `giveUpMs` is the bound
  *     that means what "stop waiting" should mean. A session may now wait out a
  *     weekly window and still stop rather than retrying for ever.
+ *
+ * A fourth came later (owner, 2026-10-31): **a weekly wall's bare clock time is
+ * a LOWER BOUND, re-armed daily** (`daily`). A weekly notice that prints only
+ * "7pm" names the earliest moment the window can lift; the day is unknown. It
+ * used to be thrown away, leaving only the blind ladder. It is now waited for
+ * as the next occurrence of that time, and an attempt there that finds the wall
+ * still standing re-arms at the SAME time the next day: one attempt per day at
+ * the earliest possible reset, never a loop.
  */
+
+/** A bare clock time recurs once a day (`daily`). */
+const DAY_MS = 86_400_000;
 
 /**
  * The widening delay, by attempt index, when nobody has dated the reset.
@@ -59,11 +70,22 @@ export interface LimitRetryInput {
   /**
    * The reset as an INSTANT, or null when nobody could date one.
    *
-   * Null is the honest value for a screen-scraped weekly banner: its bare time
-   * resolves to today, which is the wrong day. A dated instant from the CLI's
-   * own log belongs here whether the window is weekly or five-hourly.
+   * A dated instant from the CLI's own log belongs here whether the window is
+   * weekly or five-hourly. A weekly notice's bare clock time belongs here too,
+   * resolved by the detector to its next occurrence — but only with `daily`,
+   * because on its own it is a lower bound, not the reset.
    */
   resetAt: number | null;
+  /**
+   * `resetAt` is a weekly wall's BARE clock time (no date) — the earliest the
+   * window can lift, on an unknown day. Treated as a daily recurring instant:
+   * a `resetAt` already past rolls forward by whole days to its next
+   * occurrence, and after the first probe every attempt lands ON that
+   * occurrence — no ladder underneath, so a wall that is still up at 7pm costs
+   * one attempt and is asked again at 7pm tomorrow. The patience clock, the
+   * attempts cap and the host-wide hold-off apply exactly as elsewhere.
+   */
+  daily?: boolean;
   /** When this block started (`SessionLimit.blockedSince`). */
   blockedSince: number;
   now: number;
@@ -154,6 +176,16 @@ export function nextLimitAttempt(i: LimitRetryInput): LimitRetry {
   // reset parsed a day late — would otherwise never be noticed. The attempt
   // still lands exactly on the reset once it comes inside the horizon.
   const horizon = ladder[ladder.length - 1];
+  if (i.daily && target != null) {
+    // The next occurrence of the bare time, strictly after now: the attempt that
+    // fired at today's 7pm and came back still blocked is re-asked here a moment
+    // later and gets TOMORROW's 7pm, never a past instant that would fire at once.
+    const next = target > i.now ? target : target + Math.ceil((i.now - target + 1) / DAY_MS) * DAY_MS;
+    // Attempt 0 keeps its one cheap probe when the reset is beyond the horizon
+    // (an upgraded plan serves at once); every later attempt sits the wait out.
+    const probe = i.attempts === 0 && next - i.now > horizon && rungAt < next;
+    return { kind: "at", at: Math.max(floor, probe ? rungAt : next), why: probe ? "probe" : "reset" };
+  }
   const useReset = target != null && target > i.now && (target <= rungAt || target - i.now <= horizon);
   const at = Math.max(floor, useReset ? (target as number) : rungAt);
   return { kind: "at", at, why: useReset ? "reset" : i.attempts === 0 ? "probe" : "backoff" };

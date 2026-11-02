@@ -20,7 +20,8 @@
  */
 import { RadioRows } from "./kit";
 import { useId, useState } from "react";
-import type { SessionBudget, SessionBudgetCal, SessionBudgetSpark, SessionBudgetUnit } from "@waterplane/shared";
+import { sessionWindowGoneText, type SessionBudget, type SessionBudgetCal, type SessionBudgetSpark, type SessionBudgetUnit } from "@waterplane/shared";
+import { useCore } from "./sdk";
 import { SetNote, SetSwitch } from "./SettingsKit";
 import {
   BUDGET_MODES, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, budgetUnitsFor, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
@@ -58,7 +59,8 @@ export function BudgetField({ initial, cal, onChange, onEdit, calFor, spark, win
   // A cap already set in a native unit keeps ITS unit's name: the number was typed in that unit
   // and is never silently re-united to the backend's (a switch clears it first: `budgetAcrossBackend`).
   const nativeLabel = (initial?.unit === "native" && initial.nativeUnit?.trim()) || spendUnit?.trim() || initial?.nativeUnit;
-  const units = budgetUnitsFor(!!windowsOff, initial?.unit, nativeLabel);
+  const noSess = useCore().world.usage?.sessionGoneSince != null;
+  const units = budgetUnitsFor(!!windowsOff, initial?.unit, nativeLabel, noSess);
   const parsed = text.trim() ? parseBudgetInput(unit, text) : null;
   // Only the person's own handlers call this, so it is where their edit is said — first, parsed or not.
   const emit = (u: SessionBudgetUnit, t: string, i: boolean, m: BudgetMode = mode) => {
@@ -85,6 +87,7 @@ export function BudgetField({ initial, cal, onChange, onEdit, calFor, spark, win
           onChange={(u) => { setUnit(u); emit(u, text, interrupt); }} />
       </div>
       {windowsOff && <SetNote>{windowsOff}</SetNote>}
+      {!windowsOff && noSess && <SetNote more={<p>{sessionWindowGoneText()}</p>}>no “% of 5h window” on this plan</SetNote>}
       {spent && <div className="budget-spent"><span className="budget-k">spent</span> {spent}</div>}
       <div className="set-item">
         <label className="set-lead" htmlFor={id}><span className="set-lbl">cap</span></label>

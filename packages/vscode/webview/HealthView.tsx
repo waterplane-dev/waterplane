@@ -22,7 +22,7 @@ import {
   staleRowsWords, stalenessWords, warningsWords,
 } from "../../web/src/repoHealthWords";
 import { SCOPE_ALL_LABEL, scopeHeadWords } from "../../web/src/repoHealthWords/repoHealthWordsScope";
-import { NOT_GIT, XCODE_LICENSE, knownReadErrorWords, measureWords, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../src/health/sourcewords";
+import { NOT_GIT, XCODE_LICENSE, knownReadErrorWords, measureWords, notRunWords, ownAddNoteWords, ownMixedWords, readAgainLabel, repoMixedWords, sourceWords } from "../src/health/sourcewords";
 import { Absent } from "./Absent";
 import { loadHealthAxis, saveHealthAxis } from "./host";
 import "../../web/src/repohealth.css";
@@ -81,7 +81,9 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   const stop = () => post({ t: "healthCancel", folder });
 
   const series = doc?.series ?? null;
-  const repoName = folder.split(/[\\/]/).filter(Boolean).pop() ?? folder;
+  // The repo read can sit below the workspace folder (a file of ~/dev/app open in ~/dev): name the repo.
+  const root = doc?.folder ?? folder;
+  const repoName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
   const plot = doc?.plot ?? null;
   const measure = doc?.measure ?? null;
   // With no series, a failed run's line repeats the read error word for word; the read error says it once.
@@ -102,7 +104,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
       <Button type="button" className="rh-nav-refresh" onClick={stop}><Square size={14} aria-hidden /> stop</Button>
     </>
   ) : (
-    <RefreshKey busy={false} label={refreshLabel(series)} onClick={refresh} />
+    <RefreshKey busy={false} label={doc?.source === "repo" ? readAgainLabel() : refreshLabel(series)} onClick={refresh} />
   );
 
   if (!doc) {

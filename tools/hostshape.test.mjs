@@ -53,7 +53,9 @@ const MAX_LINES = {
   // 684 → 686 (2026-10-02, first-app WP6): a new subsystem's import + its one `ctx` line; the job
   // itself lives in `onboard.ts` and its wiring in `server/firstapp.ts`. Still under the 700 end state.
   // 686 → 690 (2026-10-09, burn-rate push): the watcher's import + construction + one observe line; the rule lives in burnwatch.ts / shared burn.ts.
-  "main.ts":             690,
+  // 690 → 686 (2026-11-01, Android apps P1): the plugin registry's construction moved to
+  // `server/plugins.ts` (`createPlugins`), paying for `startAuto`'s own boot-order line.
+  "main.ts":             686,
   // The ledger readers' barrels (docs/notes/host-architecture.md, "Ledger readers as landed"):
   // they only re-export, so they only shrink.
   "ctxlog.ts":           60,

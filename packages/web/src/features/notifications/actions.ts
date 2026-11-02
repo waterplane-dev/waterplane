@@ -176,6 +176,9 @@ export function openNotif(n: NotificationItem): void {
     case "weekburn":
       c.nav.open("weekburn");
       return;
+    case "blocked":
+      c.nav.open("limits");
+      return;
   }
 }
 

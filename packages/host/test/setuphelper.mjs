@@ -18,7 +18,7 @@ export async function loadSetupForTest() {
   // A builtin may hold a socket open (vault's), which keeps the test process alive.
   after(() => { reg.shutdownAll(); rmSync(root, { recursive: true, force: true }); });
   await reg.loadBuiltins();
-  const broken = reg.entries.filter((e) => e.state !== "active");
+  const broken = reg.entries.filter((e) => e.state === "error" || (e.state === "off" && !e.auto)); // an `autoOn` extension is legitimately OFF here
   if (broken.length) throw new Error(`extensions did not load: ${broken.map((e) => `${e.manifest.id}: ${e.error}`).join("; ")}`);
   return reg;
 }

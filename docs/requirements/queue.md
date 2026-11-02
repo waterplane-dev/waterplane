@@ -67,3 +67,17 @@ The send/queue choice shown before sending matches what actually happens; if Cla
 The repo backlog is never lost; backlog items persist.
 - asked: 2026-10-24, 2026-10-24
 
+### R-queue-016 · shipped
+The backlog lists the most recently added entry at the top by default, with run order one tap away, and opens on the new entry whenever an item is added.
+- asked: 2026-10-27, 2026-10-29
+- shipped: 12680a47, 8aecff3b
+
+### R-queue-017 · shipped
+A draft withdrawn by its agent or a row called off shows as settled, not failed, and offers no verb the host refuses.
+- asked: 2026-10-28
+- shipped: 77e292f3, 2f5bc2aa
+
+### R-queue-018 · requested
+Bug-hunt backlog items are filed in each public OSS repo's lead repository, never in its public mirror.
+- asked: 2026-10-29
+

@@ -10,10 +10,17 @@ import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { FilterBar } from "./kit/FilterBar";
+import { waitShapes } from "./attention";
 
 interface Props {
-  /** Every live session — the ones with a question are what this lists. */
+  /** EXACTLY the sessions to list — the `wait` bucket of `attentionCut`, the
+   *  call the launcher's "N waiting" chip counts with. This sheet never decides
+   *  membership; it only sorts what it was handed into its three card shapes. */
   sessions: SessionInfo[];
+  /** "2 of 5 waiting — …" when the list hides some (`cutWords`), null when it
+   *  hides nothing; `onToggleAll` widens to all N or narrows back. */
+  cut: { words: string | null; showingAll: boolean; total: number; onToggleAll: () => void };
   /** The send queue, so an already-answered question says so instead of
    *  inviting a second tap that would queue a duplicate keystroke. */
   outbox: OutboxEntry[];
@@ -67,16 +74,16 @@ interface Props {
  * only difference offline is the age of what it is showing, which is said out
  * loud rather than left to be inferred from stale-looking text.
  */
-export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onOpen, onAck, onSendSuggestion, onClose }: Props) {
+export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer, onOpen, onAck, onSendSuggestion, onClose }: Props) {
+  // A PARTITION of what was handed in, never a filter: every session lands in
+  // exactly one group, so the cards drawn are the sessions the chip counted.
   // Parsed questions first (they are answerable here), then the dialogs
   // `prompt.ts` could not read into options — those can only be pointed at.
-  const asked = sessions.filter((s) => s.running && s.prompt);
-  const unreadable = sessions.filter((s) => s.running && !s.prompt && s.awaitingInput);
   // …and the ones that asked in PROSE and then went quiet. No box, so nothing
   // to tap — but it is the same sentence this sheet exists for ("something is
   // waiting on you"), and the row that carried it was badged `done`.
-  const inProse = sessions.filter((s) => s.running && !s.prompt && !s.awaitingInput && s.asking);
-  const total = asked.length + unreadable.length + inProse.length;
+  const { asked, unreadable, inProse } = waitShapes(sessions);
+  const total = sessions.length;
 
   /** The answers already queued for THIS exact question — matched on the
    *  fingerprint, not the session: one left over from a box that has since been
@@ -103,10 +110,22 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
         </Hint>
       )}
 
+      {/* What this list is NOT showing, above it (a count is a filter). */}
+      {cut.words && !cut.showingAll && (
+        <FilterBar section onClear={cut.onToggleAll} clearLabel="show all" clearTitle="list every waiting session, hidden and unfocused repos included">
+          {cut.words}
+        </FilterBar>
+      )}
+      {cut.showingAll && (
+        <FilterBar section onClear={cut.onToggleAll} clearLabel="only these in view" clearTitle="back to the sessions the launcher's chip counted">
+          all {cut.total} waiting, hidden and unfocused repos included
+        </FilterBar>
+      )}
+
       {total === 0 && (
         <Empty>
           <HelpCircle size={20} />
-          <div>Nothing is waiting on you.</div>
+          <div>{cut.words ? "Nothing in view is waiting on you." : "Nothing is waiting on you."}</div>
           <div className="muted">
             {online
               ? "A session parked on a choice shows up here."
@@ -175,7 +194,7 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
                 "Turn finished" ping threw away. No one-tap answer because there
                 is no keystroke that means anything here — the reply is prose,
                 so the only honest control is the one that opens the composer. */}
-            <div className="approve-q">{s.asking!.text}</div>
+            <div className="approve-q">{s.asking?.text ?? "the session is waiting for your reply"}</div>
             <div className="approve-hint">the turn ended on this — the CLI is idle, waiting for your reply</div>
             {/* Two ways this stops being a question, and only one of them is a
                 reply. The other is the one the badge had no word for: the

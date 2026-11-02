@@ -25,11 +25,11 @@ import type { OutboxEntry } from "../../outbox.ts";
 import { convoStart, inactiveMs, inactivityKnown } from "../../format.ts";
 
 // ── State (`sessionStatus`'s own buckets, handed in) ────────────────────────
-export type CloseState = "coding" | "wait" | "done" | "limit" | "exited";
-export const CLOSE_STATE_OPTIONS: readonly CloseState[] = ["wait", "limit", "coding", "done", "exited"];
+export type CloseState = "coding" | "wait" | "done" | "blocked" | "exited";
+export const CLOSE_STATE_OPTIONS: readonly CloseState[] = ["wait", "blocked", "coding", "done", "exited"];
 // closed: the close facets are in-memory filter picks from this build's option lists
 export const CLOSE_STATE_LABEL: Record<CloseState, string> = {
-  coding: "working", wait: "waiting for your answer", done: "idle", limit: "at the usage limit", exited: "exited",
+  coding: "working", wait: "waiting for your answer", done: "idle", blocked: "blocked", exited: "exited",
 };
 
 // ── Idle-for / open-for (same edges, two different clocks) ──────────────────

@@ -211,7 +211,11 @@ export function askedRef(s: string): { date: string | null; session: string | nu
   // Only "session X" names a session: the build always writes `DATE (session X)`, so a BARE 8-hex is
   // not one — it is kept as written (a note) and drawn bare, never labelled.
   const sess = /session ([0-9a-f]{8})/.exec(t)?.[1] ?? null;
-  const paren = /\(([^)]*)\)/.exec(t)?.[1]?.trim() ?? null;
+  // `/\(([^)]*)\)/` spelled with indexOf: the first `(` and the first `)` after it (linear; the regex
+  // retried every `(` to the end of a line with no `)`).
+  const open = t.indexOf("(");
+  const close = open < 0 ? -1 : t.indexOf(")", open + 1);
+  const paren = close < 0 ? null : t.slice(open + 1, close).trim();
   const note = paren && !sess ? paren : (!date && /^[0-9a-f]{8}$/.test(t) ? t : null);
   return { date, session: sess, note };
 }

@@ -51,7 +51,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] | null {
   if (i.canInstall !== null) {
     steps.push({
       id: "install", label: "install apps", done: i.canInstall,
-      why: "lets a downloaded build install from its notification or the Apps list",
+      why: "lets a downloaded build install from its notification or from Downloads",
     });
   }
   return steps;

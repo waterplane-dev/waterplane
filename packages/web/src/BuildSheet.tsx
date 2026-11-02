@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarClock, CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, Smartphone, ChevronDown, ChevronUp } from "lucide-react";
 import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRecord, BuildRun, RepoTarget, ScheduleEntry, WindowResets } from "@waterplane/shared";
 import { branchLabel } from "@waterplane/shared";
 import { SETUP_PROMPT, oneBuildPrompt, paramsRowNote, type BuildDraftSeed } from "./buildPrompt";
@@ -113,6 +113,9 @@ interface Props {
   scheduleEdit?: { build: BuildConfig; entry: ScheduleEntry } | null;
   /** A run to open on arrival (a build rule's card *last run*). */
   focusRun?: string | null;
+  /** An APK run's link: the Apps screen on its `setup` pane — whether each app
+   *  installs itself, desktop half and phone half. Absent draws no link. */
+  onOpenAppsSetup?: () => void;
 }
 
 /* `SETUP_PROMPT` and the editor's one-entry wand live in `buildPrompt.ts`: they
@@ -126,7 +129,7 @@ interface Props {
  * claude session (works when you're rate-limited), watch live output, and
  * download the produced artifact (APK/zip/…).
  */
-export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, versions, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit, focusRun }: Props) {
+export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, versions, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit, focusRun, onOpenAppsSetup }: Props) {
   const [editing, setEditing] = useState<BuildConfig | null>(null);
   // The one entry whose earlier builds are unfolded, if any.
   const [history, setHistory] = useState<string | null>(null);
@@ -418,6 +421,15 @@ export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick
                           <ArtifactRow key={a.relPath} a={a} repoDir={repo.worktreePath} repoName={repo.repoName} onDownload={onDownload} />
                         ))}
                       </div>
+                    )}
+                    {/* An APK leads on to the rest of its way onto the phone —
+                        download and install — on this repo's app card in Apps. */}
+                    {onOpenAppsSetup && r.artifacts?.some((a) => /\.apk$/i.test(a.name)) && (
+                      <Hint>
+                        <Button onClick={() => { track("action:build.appsFor"); onOpenAppsSetup(); }}>
+                          <Smartphone size={14} /> get it on this phone
+                        </Button>
+                      </Hint>
                     )}
                     {r.status === "done" && !r.artifacts?.length && (
                       <Empty>Build finished, no downloadable file found (nothing matching apk/aab/zip/… in the repo).</Empty>

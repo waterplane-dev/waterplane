@@ -5,7 +5,7 @@ import { repoLabel, attachBlockers, attachmentsReady, composeRule, describeRule,
 import { intentTitle } from "../activityRows";
 import { loadSheetDraft, saveSheetDraft } from "../outbox";
 import { track } from "../usage";
-import { DEVICE_TZ, chainCandidates, inboxRefs, onceIn, previewOf, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
+import { DEVICE_TZ, chainCandidates, inboxRefs, onceIn, previewOf, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, weeklyIfNoSession, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
 import { usePref } from "../core/prefs";
 import type { SendSheetProps } from "./sendSheetTypes";
 import { defaultTarget } from "./sendTargets";
@@ -70,7 +70,7 @@ export function useSendSheet(props: SendSheetProps) {
     more, setMore, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw,
     leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, ruleMemo,
     patchRule, replaceRule, switchAnchor, rule, days, anchor, recurs, anchorW, guardW,
-  } = useRuleFields(when, setWhen);
+  } = useRuleFields(when, setWhen, usage?.sessionGoneSince != null);
   // The global *close automatic sessions when done* — what the per-item
   // choice's default (inherit) means today.
   const closeGlobal = usePref("closeWhenDone");
@@ -232,10 +232,10 @@ export function useSendSheet(props: SendSheetProps) {
       const back = atMemo.current;
       if (back && back.kind === "at") {
         const remembered = ruleAnchor(back.rule) === next ? back.rule : ruleMemo.current[next];
-        setWhen({ ...back, rule: remembered ?? composeRule(next, false, back.rule, Date.now(), DEVICE_TZ) });
+        setWhen({ ...back, rule: remembered ?? weeklyIfNoSession(composeRule(next, false, back.rule, Date.now(), DEVICE_TZ), usage?.sessionGoneSince != null) });
         return;
       }
-      setWhen(next === "window" ? windowIn() : onceIn(3600e3));
+      setWhen(next === "window" ? windowIn(usage?.sessionGoneSince != null) : onceIn(3600e3));
       return;
     }
     switchAnchor(next);

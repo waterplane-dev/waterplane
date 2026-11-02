@@ -33,7 +33,7 @@ Three workspaces; `app` is deliberately not one:
   Java/manifest/icon changes need a new APK. See `packages/app/README.md`.
 
 Also: **`packages/vscode`** (bundles host ledger + web chart modules from source; `npm run
-test:vscode` after touching those) and **`packages/extensions/*`** (in-repo extensions: copilot-usage
+test:vscode` after touching those) and **`packages/extensions/*`** (in-repo extensions: android-apps copilot-usage
 desktop diskspace links ocr opencode permissions requirements scorecard token-stats vault; `local/extension-boundary`).
 
 Demo mode + fake host: `docs/notes/testing-and-ops.md`.

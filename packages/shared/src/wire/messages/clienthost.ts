@@ -1,7 +1,6 @@
 // Client → host: updates, usage, plugins, decision log, sent log, settings, auth, limits, notifications, budgets, health. A member list of `ClientMessage` (`../messages.ts`).
 
 import type { UsageBudget } from "../../budget.js";
-import type { InstallReportEntry, InstallReporter } from "../install.js";
 import type { NotifyPrefs } from "../notify.js";
 import type { StallReport } from "../../netstall.js";
 import type { PluginValue } from "../../plugin.js";
@@ -66,29 +65,11 @@ export type ClientHostMsg =
    * wins, so a client whose clock is behind loses rather than corrupts.
    */
   | { t: "settings.set"; key: string; value: string; ts: number; device?: string }
-  // ── The install log (installlog.ts) ──
-  /**
-   * Ask for the whole install log. Also sent unprompted on `hello`, because the
-   * question it answers — *which version of what is on which phone* — is the
-   * one thing a single device cannot work out for itself.
-   */
-  | { t: "install.get" }
-  /**
-   * "Here is every install this phone still has a record of."
-   *
-   * A RE-STATEMENT, not an event: the install worth reporting is usually the
-   * one that happened at 3 a.m. with the tunnel down, so a phone re-sends its
-   * whole history on every connect and the host merges on each entry's key.
-   * Not durable and never queued offline for that exact reason — an ackId would
-   * protect a delivery that is already idempotent, and a queued copy would only
-   * repeat what the next `hello` says anyway.
-   */
-  | { t: "install.report"; device: InstallReporter; entries: InstallReportEntry[] }
   /**
    * The phone's HTTP stalls (`shared/netstall.ts`): the evidence for WHY a
    * request hung while this socket stayed healthy. Over the socket, never a
    * POST, because the thing being measured is the HTTP pool being stuck. A
-   * RE-STATEMENT like `install.report` — the whole ring each time, merged on
+   * RE-STATEMENT — the whole ring each time, merged on
    * each event's key — so not durable and never queued. Additive: an older
    * host ignores the unknown `t`.
    */

@@ -499,7 +499,7 @@ public class ShellLinkService extends Service {
     /** Kinds a person must act on: heads-up channel, and PRIORITY_HIGH before Android 8. */
     private static boolean isUrgent(String kind) {
         return "prompt".equals(kind) || "approval".equals(kind) || "limit".equals(kind)
-                || "cli".equals(kind) || "undelivered".equals(kind);
+                || "signin".equals(kind) || "cli".equals(kind) || "undelivered".equals(kind);
     }
 
     /** Human names for the host's `NOTIFICATION_KINDS`. An unknown kind — a host
@@ -510,6 +510,7 @@ public class ShellLinkService extends Service {
             case "prompt": return "Waiting questions";
             case "approval": return "Approval requests";
             case "limit": return "Usage limits";
+            case "signin": return "Signed out";
             case "burn": return "Usage burn";
             case "plugin": return "Plugins";
             case "cli": return "CLI health";

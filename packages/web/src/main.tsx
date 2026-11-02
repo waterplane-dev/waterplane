@@ -3,6 +3,8 @@
 import "./hostBoot";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import type { PairTarget } from "@waterplane/shared";
+import { legacyLsKeys, lsKey } from "@waterplane/shared";
+import { lsDel } from "./storage";
 import { createRoot } from "react-dom/client";
 import { installUiScale } from "./uiScale";
 import { App } from "./App";
@@ -10,7 +12,6 @@ import { NetPulseBar } from "./NetPulseBar";
 import { LocalRtBar } from "./LocalRtBar";
 import { SessionTabsBar } from "./SessionTabsBar";
 import { startLocalRtWatch } from "./localRt";
-import { startInstallLog } from "./installLog";
 import { startNetStalls } from "./link/linkStalls";
 import { HintLayer } from "./HintLayer";
 import { ToastLayer } from "./ToastLayer";
@@ -160,6 +161,11 @@ installDictations();
 // the document frozen, which is exactly when a bridge call would not be
 // answered. No-op in a browser.
 syncInstallAllow();
+// RETIRED: the install log core used to cache per host. The extension that owns it now caches under
+// its own extStorage key, so core's old bytes are dropped on every load — a parked host's copy goes the first load after
+// that host is active again (the park mirrors the bare key). The pre-rename spellings
+// (`legacyLsKeys`) go too: nothing reads them since the key moved, and they are just as dead.
+for (const k of [lsKey("installLog"), ...legacyLsKeys("installLog")]) lsDel(k);
 
 // Delegated long-press / explain-mode handling for every button in the app.
 // Installed here rather than in a component so it covers the pairing screen and
@@ -400,11 +406,6 @@ function PulseProbe() {
     // Idempotent, and it costs nothing until something asks for a lease — with
     // the strip off and no picker open, nothing is ever sent.
     try { startLocalRtWatch(makeConnection()); } catch { /* no host paired — nothing to watch */ }
-    // The install log's client half, on the same socket and for the same
-    // reason it is here rather than in `App.tsx`: it has to report on every
-    // `welcome`, and an overlay that returns early must not be able to switch
-    // that off. One host, many phones — see `installLog.ts`.
-    try { startInstallLog(makeConnection()); } catch { /* no host paired — nothing to report to */ }
     // HTTP stall diagnostics, over the same socket (`shared/netstall.ts`).
     try { startNetStalls(makeConnection(), deviceId); } catch { /* no host paired — nothing to report to */ }
     // The LAN route (APK) / the route chip (browser), on the same socket: it

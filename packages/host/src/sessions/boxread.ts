@@ -15,7 +15,7 @@ import { detectPrompt, dialogStillUp, dialogEvidence, hasDialogFooter, isDialogF
 import { asksFromCall, descFor, pendingAskQuestions, pendingAskRecord, pickAsk, recoverHead, type AskQuestion } from "../askbox.js";
 import { isPlanBox, planPathFor, readPlan } from "../planbox.js";
 import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
-import { detectLogin, loginCandidate, sameLogin, type DetectedLogin } from "../login.js";
+import { detectLogin, loginCandidate, loginSucceeded, sameLogin, type DetectedLogin } from "../login.js";
 import { logMtime, transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
 import type { Session, SessionCore } from "./core.js";
@@ -167,7 +167,7 @@ function checkPrompt(core: SessionCore, s: Session): void {
       // The sign-in link rides on THIS render rather than paying for one of
       // its own: the gate above opens on the link's shape (`loginCandidate`),
       // so the replay is bought every time there is a link to find.
-      applyLogin(core, s, detectLogin(screen, s.scrollback));
+      applyLogin(core, s, detectLogin(screen, s.scrollback), screen);
       const parsed = detectPrompt(screen);
       if (parsed) {
         s.promptMisses = 0;
@@ -520,13 +520,18 @@ export function setAwaiting(core: SessionCore, s: Session, on: boolean, screen?:
  * "how old is this" is the difference between a page that signs you in and a
  * page that refuses.
  */
-function applyLogin(core: SessionCore, s: Session, login: DetectedLogin | null): void {
+function applyLogin(core: SessionCore, s: Session, login: DetectedLogin | null, screen: string): void {
   const had = s.info.login ?? null;
   if (sameLogin(had, login)) return;
   if (!login) {
     s.info.login = null;
+    // The link left: the `/login` flow finished — or was closed, scrolled or resized away,
+    // so only the CLI's own post-login row makes it strong evidence (`login.ts`'s `loginSucceeded`).
+    if (had) core.signInLoginRetired(s, loginSucceeded(screen));
   } else {
     s.info.login = { ...login, at: had && had.url === login.url ? had.at : Date.now() };
+    // `/login` is under way: the sign-in card takes over from the "send /login" one.
+    delete s.info.signedOut;
   }
   core.emit("updated", s.info);
 }

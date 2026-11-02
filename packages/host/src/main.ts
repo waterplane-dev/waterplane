@@ -27,7 +27,6 @@ import { OpenDeliveries, setOpenDeliveries } from "./opendeliveries.js";
 import { CliHealthStore, setCliHealth } from "./clihealth.js";
 import { TokenStatsStore } from "./tokenstats.js";
 import { SentLog, setSentLog } from "./sentlog.js";
-import { InstallLogStore } from "./installlog.js";
 import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
@@ -37,7 +36,7 @@ import { UpdateChecker } from "./update.js"; import { createPluginUpdates, creat
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
 import { DecisionLog } from "./decisionlog.js";
-import { PluginRegistry } from "./plugins/pluginregistry.js";
+import { createPlugins } from "./server/plugins.js";
 import { hostSecretDir } from "./secrets.js"; import { createPeerStore } from "./peers/store.js"; import { startPeerJobs } from "./peers/agentpeer.js"; import { setPeerServe, setPeerSelfAddr } from "./peers/routes.js"; import { createPeerServe } from "./peers/serve.js";
 import { Meter } from "./meter.js";
 import { UiStats } from "./uistats.js";
@@ -369,13 +368,6 @@ const sentLogStore = new SentLog(
 setSentLog(sentLogStore);
 ctx.sentLogStore = sentLogStore;
 /**
- * What the phones installed. One host, many devices — see `installlog.ts`: the
- * installs happen on the phones with the app closed, so the only place the
- * whole fleet's history can exist is the desktop that produced the builds.
- */
-const installLog = new InstallLogStore(ROOT);
-ctx.installLog = installLog;
-/**
  * The settings that follow the USER rather than the browser — prompt
  * templates, presets, header commands, the pad, the toolbar layout. Opaque
  * values, last-write-wins on the client's timestamp; the allow-list of keys
@@ -414,7 +406,7 @@ const usage = new UsageChecker(ROOT, (u) => {
   // A fresh reading can flip the budget either way (over, or back under after a
   // reset): publishing it HERE makes the phone's queue rows explain themselves unasked.
   ctx.publishBudget();
-});
+}, () => usageLog.read().samples); // the kept history: "no 5-hour window on this plan" is read off it (usage.ts `stampSessionGone`)
 const sourceBurn = createSourceBurnWatch({ history: (s) => usageSources.history(s)?.samples ?? null, notify, stateDir: hostStateDir(ROOT) }); /* the burn push per non-claude source, on each fresh reading */ const usageSources = createUsageSources(ROOT, () => usage.get(), broadcast, (r) => { if (notifyEnabled(notifyPrefs.get(), "burn")) void sourceBurn.observe(r); }); ctx.usageLog = usageLog; ctx.usage = usage; ctx.usageSources = usageSources;
 /**
  * The usage budget's gate. Reads the checker's cache — never triggers a scrape
@@ -462,12 +454,7 @@ ctx.syncUsagePolling = syncUsagePolling;
  * Plugins (docs/notes/plugins.md): discovered in the config dir, activated
  * after boot, never in a doctor run — a plugin may start timers or spend.
  */
-const plugins = new PluginRegistry({
-  root: ROOT, configDir: hostSecretDir(), sessions, host: ctx, // `host`: handToAgent's backlog add
-  decision: (row) => decisionLog.add(row), meter: (e) => meter.record(e),
-  notify, usage: () => usage.get(), push: (plugin, event, data) => broadcast({ t: "plugin.push", plugin, event, data }),
-  changed: () => broadcast({ t: "plugin.list", plugins: plugins.views() }), hookPort: PORT, streamSink: () => ({ sendJson: (ws, msg) => send(ws as WebSocket, msg), ptyHeld: (ws) => ptyFanout.ptyHeld(ws as WebSocket) }), usageProbe: (_plugin, def) => usageSources.register(def), // `api.stream`, `api.usageProbe`
-});
+const plugins = createPlugins(ctx, (ws) => ptyFanout.ptyHeld(ws)); // its deps: server/plugins.ts
 ctx.plugins = plugins;
 ctx.pluginUpdates = createPluginUpdates({ root: ROOT, plugins, settings, broadcast });
 ctx.updateApplier = createUpdateApplier({ configDir: hostSecretDir(), plugins, checker: ctx.pluginUpdates });
@@ -669,6 +656,7 @@ async function main(): Promise<void> {
     http.listenWithRetry(httpServer, host, PORT);
   }
   console.log(`${logTag} open the Tailscale URL on your phone; localhost works on this machine.`);
+  if (!DOCTOR) plugins.startAuto(); // `autoOn`: after listen, never awaited
 
   // Preflight, after we're listening and never blocking it: most first-run
   // breakage (logged-out claude, no tailnet, no node-pty) is otherwise silent.

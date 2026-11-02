@@ -135,6 +135,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   prompt: { name: "Needs you", note: "A session is parked on a question and cannot continue without an answer." },
   approval: { name: "Approvals", note: "A plugin asked for something you must approve now, such as a vault fingerprint. Loud on purpose." },
   limit: { name: "Usage limit", note: "A session hit the account limit, and whether auto-continue got it running again." },
+  signin: { name: "Signed out", note: "The CLI was signed out and sessions stopped behind it, and again when you are signed back in and can continue them. One push per change; nothing is typed until you tap continue." },
   burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
   weekburn: { name: "Week-end burn", note: "Once a week, if you are on pace to leave budget unused: pick repos to spend it on." },
   disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this phone off. Words only; nothing is deleted." },
@@ -174,6 +175,8 @@ export type NotifTarget =
   | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
   | { to: "setup"; repoId: string }
+  /** The blocked-sessions sheet (`signin`'s `open: { to: "blocked" }`; overlay id `limits`). */
+  | { to: "blocked" }
   | { to: "row" };
 
 export function notifTarget(n: {
@@ -188,6 +191,7 @@ export function notifTarget(n: {
   const o = n.open;
   if (o?.to === "repohealth" && o.repoId) return { to: "repohealth", repoId: o.repoId };
   if (o?.to === "tokens") return { to: "tokens" };
+  if (o?.to === "blocked") return { to: "blocked" };
   if (o?.to === "git" && o.repoId) {
     if (o.verb === "explain") return { to: "git", repoId: o.repoId, explain: true };
     // A failure (its key names a git verb) opens on itself; a receipt opens the view as is.

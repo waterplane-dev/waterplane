@@ -51,7 +51,7 @@ export const THEME_TOKENS: readonly string[] = [
   "--bg", "--panel", "--sub", "--raise", "--well", "--line", "--pipe-bg",
   "--fg", "--muted", "--dim", "--ring",
   "--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair",
-  "--purple", "--sched", "--defer", "--ctx-low", "--fu-hand", "--fu-launch", "--fu-agent",
+  "--purple", "--sched", "--defer", "--ctx-low", "--fu-hand", "--fu-launch", "--fu-agent", "--fu-host",
   "--on-accent", "--on-accent-strong", "--on-accent-line", "--on-dead", "--on-ok", "--on-limit", "--on-star", "--on-media",
   "--accent-wash", "--accent-tint", "--accent-tint-hi", "--accent-edge", "--accent-edge-hi",
   "--ok-wash", "--ok-edge", "--pick-fill", "--pick-edge",

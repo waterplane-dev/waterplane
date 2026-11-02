@@ -245,6 +245,9 @@ export interface WindowResets {
   /** 0..100 USED, as the CLI reports it. */
   sessionPct?: number | null;
   weeklyPct?: number | null;
+  /** `UsageInfo.sessionGoneSince`: present = this plan has NO 5-hour window, so a
+   *  rule on the session window can never be placed (`sessionwindow.ts`). */
+  sessionGoneSince?: number | null;
   /** Reset instants of the configured periods by id (`periodBounds(...).resetAt`,
    *  computed by the caller). Read when a rule carries a `periodId`. */
   periodResetAt?: Record<string, number | null | undefined>;

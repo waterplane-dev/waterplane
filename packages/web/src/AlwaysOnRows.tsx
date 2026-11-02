@@ -4,7 +4,7 @@
  * matching file is touched, and on demand.
  *
  * Rules it holds (CLAUDE.md, skills `web-numbers`, `web-work`, `ux`):
- * - **Every word is shared's** (`alwaysOnRows`, `alwaysOnTotalsWords`, `instructionFileWeightWords`),
+ * - **Every word is shared's** (`alwaysOnRows`, `alwaysOnTotalsWords`, `alwaysOnRowFigures`),
  *   so the phone and the VS Code Always-on view say the same sentence. Chars are the fact; tokens are
  *   `~chars/4` and always worded `~`.
  * - **The total never stands without its split** — the lead says what the threshold row counts and
@@ -29,10 +29,10 @@
 import { useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BarChart3, Coins, FileText } from "lucide-react";
-import { alwaysOnRows, alwaysOnTotalsWords, desktopPathWords, fmtCount, instructionFileWeightWords } from "@waterplane/shared";
+import { alwaysOnRowFigures, alwaysOnRows, alwaysOnTotalsWords, desktopPathWords, fmtCount } from "@waterplane/shared";
 import type { AlwaysOnRow, InstructionFile, RepoInstructionsDoc } from "@waterplane/shared";
 import { AO_BAND_NAME, AO_SLOT, aoBandFigure, aoHeadWords, aoLeftOutWords, aoMarkerFold, aoPick, aoPlot, aoSegWords } from "./alwaysOnPlot";
-import type { AoScope, AoSeg } from "./alwaysOnPlot";
+import type { AoPlot, AoScope, AoSeg } from "./alwaysOnPlot";
 import { SLOT } from "./kit/chart/TokenComposition";
 import { ScrubHint } from "./kit/chart/ScrubHint";
 import { chipRows, toggleChip } from "./kit/chips";
@@ -56,14 +56,6 @@ export interface SessionDoor { id: string; title: string; open: () => void }
 /** How many session doors are drawn before the rest are counted in a sentence. */
 const DOORS_CAP = 3;
 
-/** The weight words for one row: shared's sentence for a sized row, the reason for an unsized one. */
-function weightWords(r: AlwaysOnRow): string {
-  if (r.unsized) return r.unsized;
-  const always = r.always ?? 0, scoped = r.scoped ?? 0, onDemand = r.onDemand ?? 0;
-  return instructionFileWeightWords({ kind: r.kind, chars: always + scoped + onDemand, always, scoped, onDemand }, fmtCount);
-}
-
-
 /**
  * The scope chips' ONE bucketing: the rows, the per-scope cut and the chip texts, from the same
  * call, so a chip's number and the list it cuts to cannot differ. VS Code's Always-on view uses it
@@ -82,9 +74,18 @@ export function aoScopeChips(doc: { files: InstructionFile[]; desktop?: Instruct
  * Exported for VS Code's Always-on view. A mouse also reads by hovering (the line returns to the
  * pick when it leaves); touch never hovers, so the phone's tap grammar is unchanged.
  */
-export function AlwaysOnStrip({ files, scopes, configDir }: { files: InstructionFile[]; scopes: readonly AoScope[]; configDir?: string }) {
+export function AlwaysOnStrip({ files, scopes, configDir, pick: pickIn, onPick }: {
+  files: InstructionFile[];
+  scopes: readonly AoScope[];
+  configDir?: string;
+  /** The picked row, shared with `AoFileList` beside it (a row tap picks here); own state when absent. */
+  pick?: string | null;
+  onPick?: (key: string | null) => void;
+}) {
   const p = aoPlot(files, scopes);
-  const [pick, setPick] = useState<string | null>(null);
+  const [pickOwn, setPickOwn] = useState<string | null>(null);
+  const pick = onPick ? (pickIn ?? null) : pickOwn;
+  const setPick = onPick ?? setPickOwn;
   const [hover, setHover] = useState<string | null>(null);
   const lit = hover ?? pick;
   const picked = p.segs.find((s) => s.key === lit) ?? null;
@@ -103,7 +104,9 @@ export function AlwaysOnStrip({ files, scopes, configDir }: { files: Instruction
       {!p.segs.length && <div className="ao-strip-head">{aoHeadWords(p, fmtCount)}</div>}
       {p.segs.length > 0 && (
         <>
-          <div className="ts-bar ao-bar" role="group" aria-label="where the every-turn characters go; the line under it reads the picked file"
+          {/* The carried strip's frame (`.carried-bar`/`.carried-seg`), so this and a session's
+              "what every turn carries" are one bar; the hue is the threshold band, not ink. */}
+          <div className="carried-bar" role="group" aria-label="where the every-turn characters go; the line under it reads the picked file"
             onPointerDown={(e) => { const k = at(e); const clear = k != null && k === pick; setPick(clear ? null : k); if (e.pointerType === "mouse") setHover(null); }}
             onPointerMove={(e) => {
               if (e.buttons) { const k = at(e); if (k != null) setPick(k); if (e.pointerType === "mouse") setHover(null); }
@@ -111,11 +114,11 @@ export function AlwaysOnStrip({ files, scopes, configDir }: { files: Instruction
             }}
             onPointerLeave={(e) => { if (e.pointerType === "mouse") setHover(null); }}>
             {p.segs.map((s) => (
-              <span key={s.key} className={`ts-seg${s.seam ? " ao-seam" : ""}${s.key === lit ? " ao-on" : ""}`}
+              <span key={s.key} className={`carried-seg${s.key === lit ? " carried-on" : ""}`}
                 style={{ left: `${s.x}%`, width: `${s.w}%`, background: SLOT[AO_SLOT[s.band]] }} />
             ))}
           </div>
-          <div className="ao-readout">{picked ? aoSegWords(picked, p.total, pathWords, fmtCount) : <ScrubHint />}</div>
+          <div className="ctx-readout carried-readout">{picked ? aoSegWords(picked, p.total, pathWords, fmtCount) : <ScrubHint />}</div>
           <div className="ts-legend">
             {p.bands.map((b) => (
               <span key={b.band} className="ts-leg">
@@ -139,6 +142,81 @@ export function AlwaysOnStrip({ files, scopes, configDir }: { files: Instruction
   );
 }
 
+/**
+ * One scope's rows, drawn as a session's "what every turn carries" list (`CarriedSection`'s
+ * `.carried-*` row: label left, figure right, a meter on the strip's scale), so the repo's file list,
+ * this desktop's and VS Code's Always-on view read as one screen. Every word is shared's
+ * (`alwaysOnRowFigures`). The rows follow the strip's order (largest first inside a band); a row the
+ * strip does not draw (unsized, or nothing every turn) follows without a meter. A row's head picks
+ * its segment on the strip (`pick`/`onPick`, shared with `AlwaysOnStrip`); a repo row opens its file
+ * by its own `open` verb, a desktop row lives outside the repo and has none.
+ */
+export function AoFileList({ rows, plot, configDir, onOpen, pick = null, onPick }: {
+  rows: AlwaysOnRow[];
+  /** `aoPlot` over the same files and scopes as the strip above, for the meters and the order. */
+  plot: AoPlot;
+  configDir?: string;
+  onOpen?: (path: string) => void;
+  pick?: string | null;
+  onPick?: (key: string | null) => void;
+}) {
+  const keyOf = (r: AlwaysOnRow) => `${r.scope}:${r.path}:${r.kind}`;
+  const at = new Map(plot.segs.map((g, i) => [g.key, i]));
+  const sorted = rows.map((r, i) => ({ r, i, o: at.get(keyOf(r)) ?? Infinity })).sort((x, y) => x.o - y.o || x.i - y.i).map((x) => x.r);
+  const toggle = (k: string) => onPick?.(pick === k ? null : k);
+  return (
+    <ul className="carried-list ao-list">
+      {sorted.map((r) => {
+        const key = keyOf(r);
+        const seg = plot.segs.find((g) => g.key === key);
+        const fig = alwaysOnRowFigures(r, fmtCount);
+        const path = r.scope === "desktop" ? desktopPathWords(r.path, configDir) : r.path;
+        const who = [r.readers.length > 0 && !r.unsized ? `read by ${r.readers.join(", ")}` : null, r.off ?? null].filter(Boolean).join(" · ");
+        const listedOnly = r.scope === "repo" && !r.counted && !r.unsized && r.readers.includes("claude");
+        const head = (
+          <>
+            <div className="carried-head">
+              <RowTitle className="carried-label">
+                <span className="carried-path">{path}</span> <Tag className="carried-type">{r.kind}</Tag>
+              </RowTitle>
+              {fig.num && <RowSub className="carried-num">{fig.num}</RowSub>}
+            </div>
+            {seg && (
+              <span className="carried-meter" aria-hidden>
+                <span className="carried-fill" style={{ width: `max(1px, ${seg.w}%)`, background: SLOT[AO_SLOT[seg.band]] }} />
+              </span>
+            )}
+          </>
+        );
+        return (
+          <li key={key} className={seg && pick === key ? "carried-picked" : undefined}>
+            <Row>
+              {seg && onPick ? (
+                <div className="carried-pick" role="button" tabIndex={0} aria-pressed={pick === key}
+                  title="read this file on the strip above" onClick={() => toggle(key)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key); } }}>
+                  {head}
+                </div>
+              ) : <div className="carried-pick ao-still">{head}</div>}
+              {(who || listedOnly) && (
+                <RowSub as="div">{who}{listedOnly && <>{who ? " " : ""}<Tag>not under the threshold</Tag></>}</RowSub>
+              )}
+              {fig.rest && <RowSub as="div" className={r.unsized ? "ao-unsized" : undefined}>{fig.rest}</RowSub>}
+              {onOpen && (
+                // Raw link-btn, not kit `Button`: a text verb inside a list row, the way
+                // `CarriedSection`'s name folds sit in theirs, not a boxed control.
+                <button type="button" className="link-btn ao-open" onClick={() => onOpen(r.path)}>
+                  <FileText size={12} /> open
+                </button>
+              )}
+            </Row>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessions }: {
   /** `ComplianceReport.instructions`; absent from an older host. */
   doc: RepoInstructionsDoc | undefined;
@@ -152,6 +230,7 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
   onAllSessions?: () => void;
 }) {
   const [cut, setCut] = useState<Scope | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
   const doors = sessionDoors ?? [];
   const doorRow = (onAllSessions || sessionDoors) ? (
     <>
@@ -193,6 +272,9 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
   // ONE bucketing function feeds the chip numbers AND the cut below.
   const { rows, bucket, chips } = aoScopeChips(doc);
   const shown = cut ? [cut] : SCOPES;
+  const all = [...doc.files, ...(doc.desktop ?? [])];
+  // ONE plot for the strip's segments and the rows' meters and order.
+  const plot = aoPlot(all, shown);
   const listedOnly = rows.some((r) => r.scope === "repo" && !r.counted && !r.unsized && r.readers.includes("claude"));
 
   return (
@@ -207,7 +289,7 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
         ))}
       </div>
       {cut && <Hint>{`${bucket(cut).length} of ${rows.length} rows — tap the lit chip to show all.`}</Hint>}
-      <AlwaysOnStrip files={[...doc.files, ...(doc.desktop ?? [])]} scopes={shown} configDir={doc.configDir} />
+      <AlwaysOnStrip files={all} scopes={shown} configDir={doc.configDir} pick={pick} onPick={setPick} />
       {listedOnly && (!cut || cut === "repo") && (
         <Hint>Rows tagged “not under the threshold” are listed beside the threshold row, not counted by it.</Hint>
       )}
@@ -228,34 +310,8 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
             {s === "desktop" && (
               <Hint>These live outside the repo, so they do not open from here. They are what this desktop's files show; plugin packs synced from claude.ai are not on disk — a session's own sheet (below) lists the skills it actually carried.</Hint>
             )}
-            <ul className="ao-list">
-              {list.map((r) => {
-                const path = s === "desktop" ? desktopPathWords(r.path, doc.configDir) : r.path;
-                const body = (
-                  <>
-                    <RowTitle className="ao-row-path">
-                      {s === "repo" && onOpenFile && <FileText size={12} />} {path}
-                    </RowTitle>
-                    <RowSub as="div">
-                      {r.kind}
-                      {r.readers.length > 0 && !r.unsized ? ` · read by ${r.readers.join(", ")}` : ""}
-                      {r.off ? ` · ${r.off}` : ""}
-                      {s === "repo" && !r.counted && !r.unsized && r.readers.includes("claude") && (
-                        <> <Tag>not under the threshold</Tag></>
-                      )}
-                    </RowSub>
-                    <RowSub as="div" className={r.unsized ? "ao-unsized" : undefined}>{weightWords(r)}</RowSub>
-                  </>
-                );
-                return (
-                  <li key={`${s}:${r.path}:${r.kind}`}>
-                    {s === "repo" && onOpenFile
-                      ? <Row as="button" onClick={() => onOpenFile(repoId, r.path)}>{body}</Row>
-                      : <Row>{body}</Row>}
-                  </li>
-                );
-              })}
-            </ul>
+            <AoFileList rows={list} plot={plot} configDir={doc.configDir} pick={pick} onPick={setPick}
+              onOpen={s === "repo" && onOpenFile ? (p) => onOpenFile(repoId, p) : undefined} />
           </div>
         );
       })}

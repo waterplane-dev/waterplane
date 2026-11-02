@@ -46,6 +46,9 @@ export interface LauncherProps {
     hiddenRepos: RepoTarget[];
     hiddenRepoPaths: ReadonlySet<string>;
     cwdInFocus: (cwd: string) => boolean;
+    /** The launcher's visibility rule (`core.world.cwdVisible`, the same function): the two
+     *  global chips and their sheets cut with it (`attentionCut`). */
+    cwdVisible: (cwd: string) => boolean;
     toggleHideRepo: (id: string) => void;
     /** In-flight opens per directory, off the queue's own creates (`useLaunch` reads it too). */
     openingCwds: ReadonlyMap<string, { status: OutboxStatus; n: number }>;

@@ -143,7 +143,6 @@ export interface DemoModel {
   decisions?: Frame<"decisions.log">["entries"];
   sent?: Frame<"sent.log">["entries"];
   pulls?: Frame<"pull.list">["items"];
-  install?: Frame<"install.log">["doc"];
   /** Every number is optional; absent means its frame is not sent — except `usage`: the app asks for it
    *  on every screen change and shows "?" in its header without it, so the host seeds a default one
    *  (`demoUsage`) when the scenario carries none. */

@@ -6,7 +6,7 @@
  * Quiet installs have two halves. The PHONE half (install access, the app's
  * auto-install switch, and waterplane having done the app's FIRST install — update
  * ownership is granted then and only then) is read on the phone, on the Apps
- * screen (`web/installPolicy.ts`, `QUIET_INSTALL_RULES`). This is the half the
+ * screen (each app's card, `web/appSteps.ts`). This is the half the
  * desktop can read off the repo: is there a build in the outbox for the phone
  * to download at all, which key signs it, and does it target a recent enough
  * Android. It learned its shape from a real case: an app first installed from
@@ -177,9 +177,9 @@ export function apkInstallCheck(worktree: string, modules?: string[]): Complianc
     : "Signed with this desktop's debug key (~/.android/debug.keystore) — a build from another machine cannot " +
       "update the app the phone has.");
 
-  const phone = `On the phone: the FIRST install of the app must come from ${BRAND.name} (Apps screen; one dialog), and its ` +
-    "auto-install on — an app first installed from a file manager, a browser or Android Studio asks on every " +
-    `update until it is uninstalled once and installed from ${BRAND.name}.`;
+  const phone = `On the phone, the app's own card shows the rest — download and install — and fixes it: ` +
+    `the FIRST install must come from ${BRAND.name} (one dialog), and its "install by itself" on. An app first installed ` +
+    `from a file manager, a browser or Android Studio asks on every update until it is uninstalled once and installed from ${BRAND.name}.`;
 
   return {
     id: "apk-install",
@@ -204,7 +204,7 @@ export function looksLikeApkBuild(b: Pick<BuildConfig, "name" | "cmd">): boolean
 
 /**
  * The structured half of `apkInstallCheck`, one per app module, for the phone's Apps screen
- * (`GET /api/apps/readiness`). Facts only — the phone words them beside its own half. The
+ * (`api.repoApps()`, via `appready.ts`). Facts only — the phone words them beside its own half. The
  * build list and the auto-download rule are passed in: they belong to their managers.
  */
 export async function apkRepoFacts(

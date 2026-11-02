@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo } from "react";
 import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
-import { useCore, useStore } from "../../sdk";
+import { useAppsDoor, useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
 import { useNow } from "../../useNow";
 import { buildLogSeed } from "../../buildLogPrompt";
@@ -15,6 +15,7 @@ import { askOptions, cancelBuild, openBuildScheduleCut, runBuild, saveBuildSched
 
 export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
   const core = useCore();
+  const door = useAppsDoor();
   // `opened` is the snapshot taken at the tap; the failure the sheet shows is the LIVE listing's.
   const repo = core.world.repos.find((r) => r.id === opened.id) ?? opened;
   const dir = repo.worktreePath;
@@ -87,6 +88,8 @@ export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
       usage={core.world.usage}
       scheduleEdit={scheduleEdit}
       focusRun={focusRun}
+      // Omitted (undefined, never a no-op) while no extension owns the apps screen: the Hint stays out.
+      onOpenAppsSetup={door ? () => door.open({ kind: "repo", repo: repo.repoName }) : undefined}
     />
   );
 }

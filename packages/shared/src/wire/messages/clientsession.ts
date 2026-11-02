@@ -309,6 +309,17 @@ export type ClientSessionMsg =
    * retry delivered an hour late types into a session that has moved on.
    */
   | { t: "session.netRetryNow"; id: string }
+  /**
+   * The person's "continue" on sessions a sign-out stopped (`SessionInfo.signInWait`, host
+   * `sessions/signinwait.ts`). The host never types it unasked: the phone offers it once
+   * `signInWait.signedInAt` is set, and the host takes it even before (the person may know
+   * better). Ids that are not waiting in a sign-in episode are ignored and named in the ack's
+   * `reason`. The continues go through the account's wave gate: the FIRST alone, the rest only
+   * once its turn got through; one still signed out puts the episode back to "signed out" and
+   * the rest wait for the next sign-in and the next tap. `ok` = at least one id was taken.
+   * Durable (at-most-once per ackId): a late delivery types only into sessions still waiting.
+   */
+  | ({ t: "signin.continue"; ids: string[]; ackId?: string } & SendStamp)
   /** Record a prompt the client just submitted, so it lands in the session history. */
   | { t: "session.record"; id: string; text: string; kind: "prompt" | "command" }
   /** Request the full history for a session. */

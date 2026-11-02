@@ -25,6 +25,8 @@
  * "waiting for your answer" card.
  */
 
+import { composerFrame } from "./permmode.js";
+
 /**
  * Lines of the CLI's chrome (the composer, the key legend, the status footer)
  * that sit BELOW the agent's last message in scrollback. Stripped so the
@@ -46,7 +48,14 @@ const SENTENCE_END = /[.?!:…"'”’)]$/;
  * one does not open a list item; a blank row always separates.
  */
 function contentLines(tail: string): string[] {
-  const rows = tail.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split("\n").map((l) => l.trim());
+  let rows = tail.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split("\n").map((l) => l.trim());
+  // Nothing from the live composer down is the agent's: the box holds the
+  // CLI's dim PROPOSAL for the next prompt ("❯ how far along are we?") and the
+  // footer may carry a status line or an agent count that is not chrome-shaped,
+  // which stopped the trailing strip short and published the proposal as the
+  // agent's question.
+  const frame = composerFrame(rows);
+  if (frame) rows = rows.slice(0, frame.top);
   let end = rows.length;
   while (end > 0 && (!rows[end - 1] || TUI_CHROME.test(rows[end - 1]))) end--;
   const out: string[] = [];

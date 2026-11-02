@@ -34,7 +34,6 @@ import { contained } from "../paths.js";
 import { WEB_DIST } from "../webbundle.js";
 import { brandIndexHtml, brandManifest, iconUrlsTag, themeIconFile, themeIconUrls, themeOverlayState, THEME_ICON_PREFIX } from "../themeoverlay.js";
 import type { ServerCtx } from "./ctx.js";
-import { appReadinessReport } from "../appready.js";
 import { backendInfos } from "../backends/index.js";
 
 // ── HTTP: API router, then static web app ────────────────────────────
@@ -367,7 +366,6 @@ export function createHttp(ctx: ServerCtx) {
           budget: ctx.budget.get(), periods: ctx.budget.periods(), backends: backendInfos(),
         }),
         intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
-        appReadiness: () => appReadinessReport(ctx.ROOT, (d) => ctx.builds.list(d), (d) => ctx.autopull.config(d)),
         pluginHook: (id, payload) => ctx.plugins.hook(id, payload),
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
         pluginAsset: (id, file) => ctx.plugins.assetFile(id, file),

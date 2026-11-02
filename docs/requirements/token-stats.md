@@ -36,3 +36,13 @@ Token stats pages look and behave identically in the web app, APK and VS Code, b
 ### R-token-stats-008 · shipped
 The VS Code panel's All sessions shows token statistics on a machine with GitHub Copilot and no Claude Code: a Copilot Chat tab counts Copilot's own prompt and output tokens per day and model off VS Code's chat logs, with no waterplane desktop needed, and the view opens on it when Claude's logs hold nothing.
 - asked: 2026-10-23
+### R-token-stats-009 · shipped
+The token-stats grid never shows every box as refused when the host sends an undated count; it says one sentence for the run of affected windows and each other box keeps the count for its window.
+- asked: 2026-10-30
+- shipped: 71280ff6, 1ddfc68a
+
+### R-token-stats-010 · shipped
+Token and context usage totals agree across every reader: synthetic rows are skipped and a first output-only assistant row does not change the anchor.
+- asked: 2026-10-30
+- shipped: 04e4c0b3, 47f47902, 7115cbfa
+

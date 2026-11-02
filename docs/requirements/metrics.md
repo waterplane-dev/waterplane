@@ -195,3 +195,30 @@ When the score rises, its sentence names the cap lifting as its own part, splits
 The repo-health engine reads the import graph between a repo's own modules and plots two tiles that the health index does not read: files in import cycles (the largest cycle named by its files) and imports per file at the p95 (the file with the most named). Imports through tsconfig `paths` aliases and workspace package names are followed; if fewer than 90% of a repo's own imports resolve, both tiles show no number and name the imports that could not be followed, never a lower one. TypeScript/JavaScript only for now; other languages read as absent. Kill criterion: removed if after about four weeks the cycles tile has not pointed at something someone fixed.
 - asked: 2026-10-30
 - shipped: dce27e9b
+### R-metrics-041 · shipped
+The owner sees how many people, and how many unique visitors, visit waterplane.dev, from a built-in counter on the owner's own Google Cloud account that costs effectively nothing, uses no third-party analytics service, no script and no cookies, reads nothing from the visitor's device (no consent banner needed), never logs or stores raw IPs (unique visitors are salted daily hashes that expire within about a day), and is GDPR compliant for EU visitors.
+- asked: 2026-10-30
+- shipped: 80eff9f9, 62de4d8b, 69b5ef27
+
+### R-metrics-042 · requested
+Repo health series keep recording after a definition change instead of refusing to append to the existing series.
+- asked: 2026-10-30
+
+### R-metrics-043 · shipped
+The reach page on the tailnet shows the waterplane.dev visit counts and the unique visitor count beside the page views.
+- asked: 2026-10-30
+- shipped: 69b5ef27, 8aa8d73f, 2b3262d0
+
+### R-metrics-044 · requested
+On the reach page, unique visitors are drawn as a second line in the same graph as page views.
+- asked: 2026-10-30
+
+### R-metrics-045 · requested
+The repo-health charts for the usmc repo draw again, with the repo running the desktop's current repohealth engine, and the measured series in .waterplane/repohealth.jsonl is kept intact.
+- asked: 2026-10-30
+
+### R-metrics-046 · shipped
+Metrics such as page views have a refresh button that pulls fresh reach metrics on demand.
+- asked: 2026-10-31
+- shipped: 26cf42c0
+

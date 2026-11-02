@@ -12,7 +12,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectLogin, hyperlinkTargets, loginCandidate, sameLogin } from "../dist/login.js";
+import { detectLogin, hyperlinkTargets, loginCandidate, loginSucceeded, sameLogin } from "../dist/login.js";
 
 const URL =
   "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e" +
@@ -132,4 +132,18 @@ test("the link's own shape opens the render gate, footer or not", () => {
 test("an ordinary busy tail does not buy a render", () => {
   const raw = "\x1b[2K✻ Crunching… (12s · esc to interrupt)\r\n\x1b]8;;https://example.com/docs\x07docs\x1b]8;;\x07\r\n";
   assert.equal(loginCandidate(raw, strip(raw)), false);
+});
+
+test("loginSucceeded: the CLI's own post-login row, anchored to a whole row near the bottom — anything else is false", () => {
+  // Built from halves, as the detector is (measured in the claude 2.1.x binary, 2026-11-02).
+  const ok = ["Login", "successful."].join(" ");
+  const grid = (...tail) => ["● earlier output", "", ...tail].join("\n");
+  assert.equal(loginSucceeded(grid(`${ok} Press Enter to continue…`)), true, "the interactive flow");
+  assert.equal(loginSucceeded(grid(`  ${ok}`)), true, "the bare row");
+  assert.equal(loginSucceeded(grid(`✓ ${ok}`)), true, "behind a tick");
+  assert.equal(loginSucceeded(grid("")), false, "an Esc out of /login leaves no such row");
+  assert.equal(loginSucceeded(grid(`the docs say "${ok}" appears after a sign-in`)), false, "quoted mid-row is not the row");
+  assert.equal(loginSucceeded(grid(`${ok} Press Enter to continue… and then some prose`)), false);
+  const far = [`${ok}`, ...Array.from({ length: 20 }, (_, i) => `row ${i}`)].join("\n");
+  assert.equal(loginSucceeded(far), false, "scrolled far above the bottom: an old sign-in, not this one");
 });

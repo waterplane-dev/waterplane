@@ -12,9 +12,9 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { RuleAnchor, ScheduleRule, WindowResets } from "@waterplane/shared";
 import { composeRule, ruleAnchor, ruleRecurs } from "@waterplane/shared";
 import { LS, lsGet } from "../storage";
-import { DEVICE_TZ, anchorWindowOf, guardWindowOf, leadLabel, leadOk, pctOk, type SendWhen } from "../sendIntent";
+import { DEVICE_TZ, anchorWindowOf, guardWindowOf, leadLabel, leadOk, pctOk, weeklyIfNoSession, type SendWhen } from "../sendIntent";
 
-export function useRuleFields(when: SendWhen, setWhen: Dispatch<SetStateAction<SendWhen>>) {
+export function useRuleFields(when: SendWhen, setWhen: Dispatch<SetStateAction<SendWhen>>, noSess = false) {
   /** The `at` editor's rarely-touched half (repeat, lead, grace, name). */
   const [more, setMore] = useState(false);
   /** Which quick chip set the instant, so it can stay lit. Compared by identity,
@@ -70,7 +70,7 @@ export function useRuleFields(when: SendWhen, setWhen: Dispatch<SetStateAction<S
     const prevAnchor = ruleAnchor(when.rule);
     if (prevAnchor !== next) ruleMemo.current[prevAnchor] = when.rule;
     const remembered = ruleMemo.current[next];
-    replaceRule(remembered ?? composeRule(next, false, when.rule, Date.now(), DEVICE_TZ));
+    replaceRule(remembered ?? weeklyIfNoSession(composeRule(next, false, when.rule, Date.now(), DEVICE_TZ), noSess));
   }
 
   const rule = when.kind === "at" ? when.rule : null;

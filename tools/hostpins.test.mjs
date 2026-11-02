@@ -152,19 +152,28 @@ const PINS = [
     // +1 main.ts (2026-10-21): the MagicDNS name is re-read until known (origin fallback, S1).
     // +1 sessions/sidechannel.ts (2026-10-22): a source turn's end re-asks for a fresh context sample (≤1.5 s).
     // +1 gitnotify.ts (2026-10-30): the minute tick asking git about each open push failure (a terminal push is no host-run outcome); idle while none is open, stopped in shutdown.ts.
+    // +1 plugins/pluginregistry.ts (2026-11-01): `autoOn`'s 15-minute re-probe (unref'd, armed only when an entry has `autoOn`, cleared in shutdownAll).
     today: {
       "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 2, "opendeliveries.ts": 1,
-      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "gitnotify.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "gitnotify.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1, "plugins/pluginregistry.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },
   {
     name: "timeouts in the three files and their slices (setTimeout)",
     re: /\bsetTimeout\(/g,
-    scope: (f) => BIG3(f) || f.startsWith("sessions/") || f.startsWith("server/") || INTENTS(f),
+    scope: (f) => BIG3(f) || f.startsWith("sessions/") || f.startsWith("server/") || f.startsWith("recover/") || INTENTS(f),
+    // MOVED (2026-11-02, blocked-sessions C2): the resume queue's settle guard and gap/hold-off timer
+    // (resume.ts 3 → 1) are the wave gate's two (recover/wavegate.ts 0 → 2) — the same two timers, one
+    // gate per scope (the account wall's, and the net retry's host-wide one).
+    // MOVED (2026-11-02, blocked-sessions C1): the wall's menu settle and Text/Return gap (wall.ts 3 → 1) and
+    // the net's Text/Return gap (apiretry.ts 3 → 2) are the one `sleep` of the one continue writer
+    // (recover/recoverwrite.ts 0 → 1) — two copies became one, so the total drops by two.
+    // recover/authgate.ts + sessions/signinwait.ts (2026-11-02, blocked-sessions D1a): the sign-in
+    // poll and the signed-out announcement's short gather; a busy member's look-again — new facts.
     // sessions/apiretry.ts (2026-10-27, R-connection-024): the retry rung, the one log re-read after a Stop, the Text/Return gap — a new fact.
     // server/clients.ts: the one-second grace before a distrusted socket is `terminate()`d (2026-10-22 security pass).
-    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxread.ts": 2, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 3, "sessions/resume.ts": 3, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 3 },
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxread.ts": 2, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 2, "sessions/resume.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 1, "sessions/signinwait.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -211,6 +220,10 @@ const PINS = [
   },
   {
     name: "sessions emits",
+    // signinwait.ts 0 → 2 (2026-11-02, blocked-sessions D1a): `SessionInfo.signInWait`'s one
+    // `updated` and the account-level `signIn` transition — new facts, each with its one emit.
+    // wall.ts 18 → 17 (2026-11-02, blocked-sessions C1, bug 4): the max-attempts branch's own `limit`
+    // `gaveup` emit went — it gives up through `noteGaveUp`'s latch, the one give-up emit there is.
     // sessions.ts 9 → 7, endsession.ts 0 → 2 (2026-10-29): MOVED — the exit teardown's `updated` + `exit`, unchanged.
     // apiretry.ts 1 → 3 (2026-10-28, R-connection-024): `netTurnSettled`, the late verdict on a
     // `checking` turn end and the halt stopping a rung — the work waiting on the turn is told.
@@ -222,7 +235,7 @@ const PINS = [
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 5, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/signinwait.ts": 2, "sessions/turn.ts": 6, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 17 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
@@ -231,7 +244,7 @@ const PINS = [
   {
     name: "main's subscriptions (sessions.on)",
     re: /\bsessions\.on\(\s*"/g, scope: MAIN,
-    today: { "server/sessionEvents.ts": 23 }, // +1 (2026-10-28): `netTurnSettled` → intents; +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
+    today: { "server/sessionEvents.ts": 24 }, // +1 (2026-11-02, blocked-sessions D1a): `signIn` → the sign-in pushes; +1 (2026-10-28): `netTurnSettled` → intents; +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
     why: "a listener registered twice runs twice",
   },
   {
@@ -257,7 +270,12 @@ const PINS = [
     // +2 (2026-10-08): a store whose writes stopped reaching the disk is TOLD — the ack
     // ledger's `onWriteError` (main.ts) and the intent store's (server/intentDeps.ts).
     // −1 (2026-10-16): the smart pick's *Backlog groomed* alert (main.ts) went with it.
-    today: { "main.ts": 5, "server/billingwire.ts": 1, "server/deliveries.ts": 4, "server/intentDeps.ts": 1, "server/intentEvents.ts": 8, "server/scan.ts": 3, "server/sessionEvents.ts": 14 },
+    // +1 server/plugins.ts (2026-11-01): the registry's `notify` dep, a late-bound forwarder (main.ts
+    // passed the function itself); plugins.ts raises no notification of its own.
+    // sessionEvents.ts 11 → 12 (2026-11-02, blocked-sessions D1a): the sign-in episode's push, once per transition.
+    // sessionEvents.ts 14 → 11 (2026-11-02, blocked-sessions C1): the limit event's four phase pushes are
+    // ONE call over `recover/blockpush.ts`'s words — same pushes, worded per kind in one place.
+    today: { "main.ts": 5, "server/billingwire.ts": 1, "server/deliveries.ts": 4, "server/intentDeps.ts": 1, "server/intentEvents.ts": 8, "server/plugins.ts": 1, "server/scan.ts": 3, "server/sessionEvents.ts": 12 },
   },
   {
     name: "singleton registrations",
@@ -318,7 +336,7 @@ const ORDERED = [
     name: "sessions.on registration order (server/sessionEvents.ts)",
     file: "server/sessionEvents.ts", re: /\bsessions\.on\(\s*"(\w+)"/g,
     // `netTurnSettled` (2026-10-28) sits beside `turnEnded`: the late half of the same completion.
-    today: ["turnEnded", "netTurnSettled", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
+    today: ["turnEnded", "netTurnSettled", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "signIn", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
   },
   {
     name: "intents.on registration order (server/intentEvents.ts)",
@@ -328,7 +346,7 @@ const ORDERED = [
   {
     name: "SIGTERM/SIGINT flush order (server/shutdown.ts)",
     file: "server/shutdown.ts", re: /\bctx\.(\w+)\.flush\w*\(/g,
-    today: ["acks", "cliHealthStore", "sentLogStore", "installLog", "netstats", "sessions", "tokenStats", "usageLog", "usageSources", "settings", "openDeliveries", "intents"],
+    today: ["acks", "cliHealthStore", "sentLogStore", "netstats", "sessions", "tokenStats", "usageLog", "usageSources", "settings", "openDeliveries", "intents"],
   },
 ];
 

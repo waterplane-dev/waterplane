@@ -189,8 +189,28 @@ function observe() {
 /** One sha256 per observation: the full golden is 17 MB, a digest of each is 10 KB and says WHICH moved. */
 const digest = (v) => createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16);
 
+/**
+ * The one machine-dependent input: a marked-done verdict prints its time with
+ * `new Date(at).toLocaleString()` (the reader's own locale and zone, on
+ * purpose). The golden was recorded on an en-US / Europe/Berlin desktop, so a
+ * CI runner on UTC (or a German locale) moved exactly the rows carrying that
+ * sentence. Pin both defaults for the observation only; an explicit argument
+ * still wins, so nothing the builders choose for themselves is overridden.
+ */
+function withRecordedLocale(fn) {
+  const orig = Date.prototype.toLocaleString;
+  Date.prototype.toLocaleString = function (locales, options) {
+    return orig.call(this, locales ?? "en-US", { timeZone: "Europe/Berlin", ...options });
+  };
+  try {
+    return fn();
+  } finally {
+    Date.prototype.toLocaleString = orig;
+  }
+}
+
 test("the row builders still produce the recorded golden over the matrix", () => {
-  const got = observe();
+  const got = withRecordedLocale(observe);
   assert.ok(Object.keys(got).length > 80, "the matrix shrank");
   assert.ok(got["rows:on+x"].length > 150, "too few rows to mean anything");
   const digests = Object.fromEntries(Object.entries(got).map(([k, v]) => [k, digest(v)]));

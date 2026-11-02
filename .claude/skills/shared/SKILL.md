@@ -1,6 +1,6 @@
 ---
 name: shared
-description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs (a new message goes in its `wire/messages/` slice, never the barrel) and the pure logic both ends must agree on. Load BEFORE adding or changing a wire message or field, and before touching the send queue transport, the intent model and its verdict ladder, token/context/budget/cost maths, schedules, assessments, the health index, or any rule that the host and the phone must not word two different ways. Build it before type-checking host or web.
+description: "waterplane @waterplane/shared (packages/shared/src): the wire DTOs (a new message goes in its `wire/messages/` slice, never the barrel) and the pure logic both ends must agree on. Load BEFORE adding or changing a wire message or field, and before touching the send queue transport, the intent model and its verdict ladder, token/context/budget/cost maths, schedules, assessments, the health index, or any rule that the host and the phone must not word two different ways. Build it before type-checking host or web."
 ---
 
 # waterplane shared package
@@ -49,7 +49,8 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   counts there, the INTENT ladder's `intentSerialHolders` only sessions opened for queued work),
   `goneLanes`.
   **`sessionWall` (`queue/queuelane`) is the ONE answer to "can this session take a prompt right
-  now"** — limit, then an open dialog parsed or not, then a live turn; `laneBusy` is it as a boolean,
+  now"** — limit, then signed out (`auth`) and the host's net retry (`net`) off `LaneSessionState.block`
+  (`blockOf(info)?.kind`; absent = neither), then an open dialog parsed or not, then a live turn; `laneBusy` is it as a boolean,
   and `intent/target.ts`'s `sessionBlocker` and the host's `autoFireBlocker` are it plus their own
   rungs — never a fifth hand-written copy. **THERE IS NO AGE-BASED EXPIRY IN THIS MODULE** — no
   TTLs; `maxAttempts` (ANDed with `MIN_TRY_MS`, 60 s) ends a ROUND, which is retried after
@@ -93,7 +94,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   clip. Two levers: whisper's `--prompt` and corrections after the fact. Re-casing touches only
   identifier-shaped terms (≥3 chars, digit or inner capital); a prompt handed back on silence is
   refused as no speech (`isPromptEcho`). The browser engine gets corrections only.
-- `installlog.ts` — **what an install log may claim.** Keyed, idempotent merging (a phone re-states its
+- **The install log's rules (moved to the android-apps extension's `shared/wire.mts`; core's copy is gone) — what an install log may claim.** Keyed, idempotent merging (a phone re-states its
   whole history on every connect), `at` ABSENT where the shell could not stamp it, devices DERIVED from
   the entries, a repeat FILLS IN and never blanks, and `installReportFrom` refusing every non-terminal
   outcome.
@@ -250,6 +251,9 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   switch. **A stalled row is DERIVED (`netStalledOf`/`netStalledText`), never a state or an intent
   field**: out of retries the work is stalled, never failed and never re-fired. `WATERPLANE_NET_RETRY=0`
   is a hard override the host reports as `envOff`, so the phone prints a sentence, not a dead switch.
+- `block.ts` — **why a session is blocked on something outside it**: `blockOf` is the ONE derivation
+  (auth > spend > limit > net; phase waiting/retrying/needsYou/gaveUp) off today's wire fields; a
+  net stall probe is never `gaveUp`, a dismissed net retry is still a block. No `running` filter.
 - `ledgerspan.ts` — a second backend's own ledger cut to a claude card's span: **cut on the ledger's
   HOURS, never its days**, ABSENT with the sentence why wherever it cannot be exact, shown BESIDE
   claude's figure and never summed into it or converted.

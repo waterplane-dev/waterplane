@@ -5,6 +5,16 @@
  */
 import type { SessionNetRetry } from "./wire/session.js";
 
+/** What a HELD net retry (`SessionNetRetry.heldBy`) says it waits for. The host also
+ *  writes it to `why`, for a phone that predates the field. */
+export const NET_HELD_WHY = "waiting for another session's retry to get through first";
+
+/** The reason a `waiting` retry gives, if any: the field (`heldBy`) first, then the
+ *  host's own sentence (`why`, an older host's way of saying the same). */
+export function netRetryWhy(n: SessionNetRetry): string | undefined {
+  return n.heldBy ? NET_HELD_WHY : n.why || undefined;
+}
+
 /** "40s", "2m", "1m 30s" — whole seconds, never negative. */
 export function netRetryWait(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -24,7 +34,7 @@ export function netRetryLine(n: SessionNetRetry | null | undefined, now: number)
   if (!n) return null;
   if (n.state === "waiting") {
     const when = n.nextAt != null ? `retrying in ${netRetryWait(n.nextAt - now)}` : "retry waiting";
-    return `Network error — ${when} (${n.attempt + 1}/${n.max})${n.why ? ` · ${n.why}` : ""}`;
+    return `Network error — ${when} (${n.attempt + 1}/${n.max})${netRetryWhy(n) ? ` · ${netRetryWhy(n)}` : ""}`;
   }
   if (n.state === "sent") {
     return n.probe
@@ -63,12 +73,17 @@ export function netRetryStalls(n: SessionNetRetry | null | undefined): boolean {
  *  - `gaveup`: the API stayed unreachable and the retries ran out (or the halt
  *    stopped them) — the work is STALLED: it stays `running` (never failed,
  *    never re-fired) until a real turn end; `detail` is the sentence for it.
+ *  - `signedOut`: the turn ended because the CLI is not signed in (claude's
+ *    `StopFailure authentication_failed`) — nothing ran, so the work waiting on
+ *    it stays `running` exactly like `gaveup`, until a real turn end after a
+ *    sign-in. Not a net give-up: the net retry is not asked about this turn.
  * Absent = an ordinary turn end.
  */
 export type TurnEndNet =
   | { net: "retrying" }
   | { net: "checking" }
-  | { net: "gaveup"; detail: string };
+  | { net: "gaveup"; detail: string }
+  | { net: "signedOut" };
 
 /** What became of the turn when the retries ran out, as one sentence (carried on
  *  `TurnEndNet.detail`; the work waiting on it is stalled, not failed by it). */
@@ -98,18 +113,30 @@ export function netStalledOf(
 /**
  * The note a stalled row wears: "Stalled — API unreachable, 8 retries used ·
  * next try in 23m" (the stall probe, `nextAt` on a `gaveup`), or "… · trying
- * again now" while a probe runs. `now` is the caller's clock; without it the
- * probe clause is left out rather than guessed.
+ * again now" while a probe runs. A `waiting` record that says WHY it waits
+ * (held behind another session's stalled probe, `SessionNetRetry.why`) says
+ * that instead, with the clock it waits for when there is one. `now` is the
+ * caller's clock; without it the probe clause is left out rather than guessed.
  */
 export function netStalledText(n: SessionNetRetry, now?: number): string {
   const used = n.attempt === 1 ? "1 retry used" : `${n.attempt} retries used`;
   // `why` opens with the count ("after 8 tries") the note already says; only
   // what follows it (the halt, the switch being off) is worth a clause.
   const rest = n.state === "gaveup" ? (n.why ?? "").replace(/^after \d+ tr(?:y|ies)(?: — )?/, "").trim() : "";
-  const probe = n.state !== "gaveup" ? " · trying again now"
-    : n.nextAt != null && now != null ? ` · next try in ${netStallWait(n.nextAt - now)}` : "";
+  const next = n.nextAt != null && now != null ? ` · next try in ${netStallWait(n.nextAt - now)}` : "";
+  const probe = n.state === "gaveup" ? next
+    : n.state === "waiting" && netRetryWhy(n) ? ` · ${netRetryWhy(n)}${next}`
+    : " · trying again now";
   return `Stalled — API unreachable, ${used}${rest ? ` (${rest})` : ""}${probe}`;
 }
+
+/**
+ * The note work wears while its session is SIGNED OUT (`TurnEndNet` `signedOut`,
+ * `blockOf(s)?.kind === "auth"`): the row stays `running` — held exactly like a
+ * net stall, never failed for its silence (`intents/watch.ts`) — and says why.
+ * One sentence for every reader; "continue" is the person's tap after signing in.
+ */
+export const SIGNED_OUT_STALL_TEXT = "stopped: the CLI is signed out — sign in, then continue";
 
 /** What "Retry now" does, as the line beside it and its receipt. */
 export const NET_RETRY_NOW_NOTE = "Retry now types “continue” into that session, the way the automatic retry does; the work completes on the next real reply.";

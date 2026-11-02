@@ -49,6 +49,7 @@ import type { SessionManager } from "./sessions.js";
 import type { IntentManager } from "./intents/manager.js";
 import type { ReviewSidecar } from "./intents/adapters.js";
 import { gitReviewDiff } from "./git.js";
+import { detectHeadlessSignedOut, SIGNED_OUT_NOTE } from "./headlessauth.js";
 import { detectHeadlessLimit, detectLimitText, limitNote } from "./limit.js";
 import { runToolTask } from "./sidecar.js";
 import { hostStateDir } from "./branddirs.js";
@@ -162,7 +163,7 @@ export class ReviewManager {
       let res = await this.runReviewer(dir, selfReportPrompt(task), true);
       // A quota block is not a reason to try the fallback: the second run is
       // refused by the same account, and two refusals are one fact.
-      if (res.status === "limited") { this.setCheck(id, res.status, res.note, res.detail); return; }
+      if (res.status === "limited" || res.signedOut) { this.setCheck(id, res.status, res.note, res.detail); return; }
       if (res.status === "error") {
         const { diff, untracked, empty } = await gitReviewDiff(dir);
         if (empty) { this.setCheck(id, "not_done", "No code changes found."); return; }
@@ -194,7 +195,7 @@ export class ReviewManager {
     this.setValidate(id, "validating", "Validating outcome…");
     try {
       let res = await this.runValidator(dir, validatePrompt(task), true);
-      if (res.status === "limited") { this.setValidate(id, res.status, res.note, res.detail, []); return; }
+      if (res.status === "limited" || res.signedOut) { this.setValidate(id, res.status, res.note, res.detail, []); return; }
       if (res.status === "error") {
         const { diff, untracked, empty } = await gitReviewDiff(dir);
         if (empty) { this.setValidate(id, "unlikely", "No code changes found.", undefined, []); return; }
@@ -263,7 +264,7 @@ export class ReviewManager {
    * Run a one-shot headless `claude -p` (optionally `--continue` to resume the
    * dir's conversation) and parse the structured JSON verdict it emits.
    */
-  private async runReviewer(cwd: string, prompt: string, resume: boolean): Promise<{ status: BacklogCheckStatus; note: string; detail?: string }> {
+  private async runReviewer(cwd: string, prompt: string, resume: boolean): Promise<{ status: BacklogCheckStatus; note: string; detail?: string; signedOut?: true }> {
     const args = ["-p", "--output-format", "json"];
     if (resume) args.push("--continue");
     // Through `sidecar.ts` — the engine axis for every unattended call. A
@@ -278,11 +279,12 @@ export class ReviewManager {
     if (verdict) return { ...verdict, detail };
     const limit = detectHeadlessLimit(run.stdout, run.stderr);
     if (limit.blocked) return { status: "limited", note: limitNote(limit, "checked"), detail };
+    if (detectHeadlessSignedOut(run.stdout, run.stderr)) return { status: "signedOut", note: SIGNED_OUT_NOTE, detail: SIGNED_OUT_NOTE, signedOut: true };
     return { status: "error", note: (run.stderr || (run.err && String(run.err)) || "no verdict").toString().trim().slice(0, 200), detail: detail ?? (run.stderr.trim().slice(0, 8000) || undefined) };
   }
 
   /** The richer verdict: status + note + reasoning + next steps. */
-  private async runValidator(cwd: string, prompt: string, resume: boolean): Promise<{ status: BacklogValidateStatus; note: string; detail?: string; steps: BacklogNextStep[] }> {
+  private async runValidator(cwd: string, prompt: string, resume: boolean): Promise<{ status: BacklogValidateStatus; note: string; detail?: string; steps: BacklogNextStep[]; signedOut?: true }> {
     const args = ["-p", "--output-format", "json"];
     if (resume) args.push("--continue");
     const run = await runToolTask("review", { cwd, args, prompt, timeoutMs: 240_000, maxBuffer: 8 * 1024 * 1024 });
@@ -294,6 +296,7 @@ export class ReviewManager {
       const detail = stripVerdictJson(resultText(run.stdout)).slice(0, 8000) || undefined;
       return { status: "limited", note: limitNote(limit, "validated"), detail, steps: [] };
     }
+    if (detectHeadlessSignedOut(run.stdout, run.stderr)) return { status: "signedOut", note: SIGNED_OUT_NOTE, detail: SIGNED_OUT_NOTE, steps: [], signedOut: true };
     return { status: "error", note: (run.stderr || (run.err && String(run.err)) || "no verdict").toString().trim().slice(0, 200), steps: [] };
   }
 }

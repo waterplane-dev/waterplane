@@ -1,11 +1,12 @@
 /**
  * The usage-limit resume queue's client half: the host-wide config, the
- * `limits` sheet and the per-session toolbar toggle. README.md says what this
+ * `limits` sheet (every blocked session — sign-in, network, spend, the queue)
+ * and the per-session toolbar toggle. README.md says what this
  * owns and which rules apply.
  */
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
-import { LimitQueueSheet } from "./LimitQueueSheet";
+import { OpenBlockedSheet } from "./OpenBlockedSheet";
 import { LimitToggle } from "./LimitToggle";
 import { onLimitConfig, onNetRetryConfig } from "./actions";
 import { LimitSettings } from "./LimitSettings";
@@ -17,7 +18,7 @@ export { setGlobalAuto } from "./actions";
 export const manifest: FeatureManifest = {
   id: "limits",
   sheets: [
-    { id: "limits", persisted: false, render: () => createElement(LimitQueueSheet) },
+    { id: "limits", persisted: false, render: () => createElement(OpenBlockedSheet) },
   ],
   toolbarItems: [
     { id: "limit", render: (_c, ctx) => createElement(LimitToggle, { active: ctx.active, label: ctx.label, dismiss: ctx.dismiss }) },

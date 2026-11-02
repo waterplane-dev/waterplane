@@ -202,9 +202,9 @@ export const HINTS: Record<string, HintDef> = {
   "toolbar:model": { title: "Model", what: "Relaunches this session on a different model, resuming the same conversation." },
   // ── The resume queue (several sessions blocked on the same limit) ──
   "limit.open": {
-    title: "Sessions at the usage limit",
-    what: "Lists every session blocked on a usage limit, in the order the host will resume them — one at a time, not all at once.",
-    when: "A plan limit is an account fact, so sessions hit it as a group and all read the same reset time. This is where you say which one matters.",
+    title: "Blocked sessions",
+    what: "Lists every session stuck on something outside it — signed out, a network retry, out of credit, or the usage limit — grouped by reason, sign-in first.",
+    when: "These walls hit sessions as a group (an account or a link fails for all of them). One sign-in clears the first group; the usage-limit group is where you say which session resumes first.",
   },
   // ── Scheduled prompts ─────────────────────────────────────────────
   "compose.later": {
@@ -294,6 +294,7 @@ export const HINTS: Record<string, HintDef> = {
   "term.fullscreen": { title: "Full screen", what: "Hides the header, the status line and the toolbar and gives those rows to whatever you are reading — the same layout typing room gives you, without the keyboard taking half the screen. The Esc/Tab/arrow row stays, because with no keyboard it is the only way to answer the CLI. Tap again, or the menu button in the corner, to come back." },
   "hdr.pair": { title: "Claude · Shell", what: "The session and its companion shell, as two tabs: the lit one is on screen, a tap on the other switches. They appear once the menu's \"companion shell\" has opened one in this session's folder — temporary, it closes when the session does. Gone in full screen and while typing, with the rest of the header." },
   "term.read": { title: "Reader / terminal", what: "Swaps the whole view: the live CLI screen, or the scrollable, searchable transcript of the conversation. It sits here rather than on the header because full screen hides the header — and this is the control you want most in the layout you read a long turn in." },
+  "term.folded": { title: "Folded strips", what: "Brings back a strip you folded away above the prompt bar — downloads, a sign-in link, the next prompt and the like. The number is how many are folded; a tap lists exactly those, and a row opens its strip again. The button is only here while something is folded, and it lives in this corner so typing room and full screen keep it." },
   "term.grip": { title: "Move these buttons", what: "Drag the grip to move the whole group of terminal buttons anywhere inside the terminal, off a line it is hiding. The terminal itself is not resized, so the CLI does not redraw. Double-tap the grip to put the group back in its corner. Where you put it is remembered on this phone only." },
   "term.modelwheel": { title: "Model · effort wheel", what: "Picks model and effort on one wheel: a spoke per model, effort from low at the centre to max at the rim. A tap only selects — the sentence above the wheel says what Apply will do, and only a change the CLI cannot make live relaunches the session. The prompt cache belongs to one model, so a switch makes the next turn re-write the context; the line under the wheel prices it. The chips below choose which models are spokes." },
   "term.zoom": { title: "Zoom this screen", what: "How big the terminal — or, in the reader, the conversation — is drawn, on top of the app's text size. In the terminal, smaller is a BIGGER grid: the desktop resizes the session to the new columns and rows, so more of what the CLI prints fits on the phone. The two surfaces remember their own zoom. At either end of the range that button is simply not there, and the readout says which end." },

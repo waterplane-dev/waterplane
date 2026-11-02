@@ -113,6 +113,7 @@
   --fu-agent: rgb(var(--fu-agent-rgb));
   --fu-hand: var(--accent);
   --fu-launch: var(--sched);
+  --fu-host: var(--warn);
   --defer: #e3b341;          /* a plugin left a box for you */
   --ctx-low: #e06c5a;        /* the context window is nearly full */
 
@@ -294,6 +295,7 @@
   --fu-agent-rgb: 0 112 120;     /* #007078 */
   --fu-hand: var(--accent);
   --fu-launch: var(--sched);
+  --fu-host: var(--warn);
   --defer: #7d5900;
   --ctx-low: #a83c28;
 

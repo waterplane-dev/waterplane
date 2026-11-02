@@ -15,65 +15,26 @@
  * `statusTags`/`contextTag` are the wrappers; `SessionFacts` is the plain one.
  */
 import type { ReactNode } from "react";
-import { Bot, Brain, CircleDot, Clock, Hourglass, Link2, Loader, Terminal, TrendingUp } from "lucide-react";
+import { Bot, Brain, CircleDot, Clock, Hourglass, Link2, Loader, LogIn, Terminal, TrendingUp, WifiOff } from "lucide-react";
 import type { RepoTarget, SessionCostReading, SessionInfo } from "@waterplane/shared";
 import { PromptPair } from "./PromptPair";
-import { repoLabel, peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf, shellsSummary } from "@waterplane/shared";
+import { netRetryLine, repoLabel, peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf } from "@waterplane/shared";
 import { ago, dur, hhmm } from "./format";
 import { isShellBackend, type BackendList } from "./backendCaps";
 import { isFlagged } from "./core/sessions/followUpFacts.ts";
 import { liveLaunch } from "./liveLaunch";
+import { BLOCK_WORD, listedBlockOf, sessionStatus, type SessionStatus } from "./attention";
 import { RowSub } from "./kit/Row";
 import { Tag } from "./kit/Tag";
 
 /**
- * The ONE definition of "what is this session doing" — the row badge
- * (`statusTags`), the per-repo header roll-up and the status FILTER all read
- * it, so the three can never disagree. Buckets are mutually exclusive and
- * ordered exited > limit > waiting > done > coding: a session lands in exactly
- * one, so the header's counts sum to its row count and tapping a count always
- * yields that many rows. Three independent copies of this ladder drifted the
- * moment a state was added, and a header that disagrees with the rows it stands
- * for is worse than no header badge at all.
+ * The ONE definition of "what is this session doing" lives in `attention.ts`
+ * (pure, node-tested): the row badge (`statusTags`), the per-repo roll-up, the
+ * status FILTER, the tab strip and the launcher's two cross-session chips with
+ * their sheets all read it, so none of them can disagree. Re-exported here for
+ * the callers that always imported it from this file.
  */
-export type SessionStatus = "exited" | "limit" | "wait" | "done" | "coding";
-
-export function sessionStatus(s: SessionInfo, backends: BackendList = null): SessionStatus {
-  if (!s.running) return "exited";
-  if (s.limit?.blocked) return "limit";
-  // A dialog we could not parse into options is still blocked on you.
-  // …and so is a turn that ENDED on a question: the CLI takes typing, but the
-  // work does not move until you answer, and `done` said the opposite.
-  if (s.prompt || s.awaitingInput || s.asking) return "wait";
-  // A shell has no turns, so nothing ever marks it idle — and "no idle yet" is
-  // what reads as "coding". A turnless session is never working.
-  if (isShellBackend(backends, s.backend)) return "done";
-  // A quiet MAIN loop is not a quiet session: a background agent outlives the
-  // turn that launched it, so a session waiting on two of them is working, and
-  // `done` (the row, the roll-up count and the filter, all three) said the work
-  // had finished while the terminal counted "2 agents · ↓ 73.4k tokens". The
-  // fact is read off the CLI's own logs (host `agents.ts`), so it is absent
-  // rather than wrong when nothing can be read.
-  // Background shells (a `run_in_background` Bash, a Monitor) are the same
-  // fact by another route — the CLI's own session record (host `readCliStatus`).
-  // `shellList` (host `shells.ts`) is the newer, richer reading: a shell that
-  // is only WAITING in a loop (`workers === 0`) or gone QUIET is not "still
-  // coding" the way a real worker is — but it is not nothing either, so it
-  // stays visible with a chip (`statusPill`) rather than counting toward the
-  // working spinner. An older host (no `shellList`, only the boolean `shells`)
-  // keeps reading `coding`, exactly as it always has.
-  if (s.idle) {
-    if (s.agents?.length) return "coding";
-    if (s.shellList) {
-      // Only a shell with real workers under it is work. A `waiting` one is a
-      // poll loop that only sleeps between checks — counting it read "coding"
-      // on a session sitting at an empty prompt with nothing running.
-      return shellsSummary(s.shellList, Date.now()).working > 0 ? "coding" : "done";
-    }
-    return s.shells ? "coding" : "done";
-  }
-  return "coding";
-}
+export { sessionStatus, type SessionStatus } from "./attention";
 
 /**
  * What the live list can be filtered DOWN to. Every `SessionStatus`, plus
@@ -101,7 +62,7 @@ export type SessionFilter = SessionStatus | "starred" | "followup" | "shells" | 
 
 /** Words for a filter, used by the filter bar and every chip title. */
 export const STATUS_LABEL: Record<SessionFilter, string> = {
-  exited: "exited", limit: "at the usage limit", wait: "waiting for your answer", done: "idle", coding: "working",
+  exited: "exited", blocked: "blocked", wait: "waiting for your answer", done: "idle", coding: "working",
   starred: "starred", followup: "flagged for follow up", shells: "running background shells", worktrees: "worktrees",
 };
 
@@ -148,17 +109,46 @@ export interface Pill { cls: string; title: string; body: ReactNode }
 export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
   const st = sessionStatus(s, backends);
   if (st === "exited") return { cls: "dead", title: "", body: "exited" };
+  const block = st === "blocked" ? listedBlockOf(s) : null;
+  if (block?.kind === "auth") {
+    // Nothing runs until a person signs in — the one wall no clock clears.
+    return {
+      cls: "limit-manual",
+      title: `${BLOCK_WORD.auth} — nothing runs here until you sign in: send /login in the session, or tap the blocked chip on the launcher`,
+      body: <><LogIn size={12} /> {BLOCK_WORD.auth}</>,
+    };
+  }
+  if (block?.kind === "net" && s.netRetry) {
+    // The host retrying a turn the CLI gave up on a transient API error. The
+    // line is shared's `netRetryLine` (the session's own retry bar says it too);
+    // filled once nothing more is scheduled, the way a manual limit row is.
+    const line = netRetryLine(s.netRetry, Date.now());
+    return {
+      cls: block.phase === "gaveUp" ? "limit-manual" : "limit-auto",
+      title: `${line ?? BLOCK_WORD.net}${s.netRetry.error ? ` — ${s.netRetry.error}` : ""}`,
+      body: <><WifiOff size={12} /> {BLOCK_WORD.net}{block.nextAt ? ` · ${hhmm(block.nextAt)}` : ""}</>,
+    };
+  }
   const lim = s.limit;
-  if (st === "limit" && lim?.needsYou && !lim.nextAttemptAt) {
+  if (block && lim?.needsYou && !lim.nextAttemptAt) {
     // A wall the backend's own channel reported with no time it lifts (Gemini's credit wall): the
     // host schedules nothing, so the row says it is the person's, in the backend's words.
     return {
       cls: "limit-manual",
       title: `blocked — it needs you: ${lim.needsYou}; resume it once that is sorted`,
-      body: <><Hourglass size={12} /> blocked · needs you</>,
+      body: <><Hourglass size={12} /> {BLOCK_WORD[block.kind]} · needs you</>,
     };
   }
-  if (st === "limit" && lim?.spend) {
+  if ((block?.kind === "spend" || block?.kind === "limit") && lim?.held && lim.autoContinue) {
+    // The host's continue is HELD on words a person typed at the desk: its re-armed
+    // time is only the next look, so the row says the reason instead of "auto HH:MM".
+    return {
+      cls: "limit-auto",
+      title: `${block.kind === "spend" ? "at a spend limit" : "at the usage limit"} — held: ${lim.held}`,
+      body: <><Hourglass size={12} /> {BLOCK_WORD[block.kind]} · held: words at the desk</>,
+    };
+  }
+  if (block?.kind === "spend" && lim) {
     // An API account out of credit or over a spend limit: not a plan window, so no "usage" and no
     // invented clock. A time is worded only where the host has one (a printed reset or the period's).
     const at = lim.nextAttemptAt ?? lim.resetAt;
@@ -167,10 +157,10 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
       title: at
         ? `at a spend limit — resumes ~${hhmm(at)}${lim.attempts ? ` · attempt ${lim.attempts}` : ""}`
         : "at a spend limit — it needs you: add credit or raise the limit, then resume",
-      body: <><Hourglass size={12} /> {at ? `spend · resumes ${hhmm(at)}` : "spend limit · needs you"}</>,
+      body: <><Hourglass size={12} /> {BLOCK_WORD.spend} · {at ? `resumes ${hhmm(at)}` : "needs you"}</>,
     };
   }
-  if (st === "limit" && lim) {
+  if (block?.kind === "limit" && lim) {
     // Wording dodges the limit.ts detection regexes (this file printed inside
     // a session must not trip them).
     const title = lim.autoContinue
@@ -188,9 +178,10 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
     return {
       cls: lim.autoContinue ? "limit-auto" : "limit-manual",
       title: title + (lim.queuePos ? ` · #${lim.queuePos} in the resume queue (they resume one at a time)` : ""),
-      body: <><Hourglass size={12} /> limit{lim.autoContinue ? (lim.nextAttemptAt ? ` · auto ${hhmm(lim.nextAttemptAt)}` : " · auto") : " · manual"}{place}</>,
+      body: <><Hourglass size={12} /> {BLOCK_WORD.limit}{lim.autoContinue ? (lim.nextAttemptAt ? ` · auto ${hhmm(lim.nextAttemptAt)}` : " · auto") : " · manual"}{place}</>,
     };
   }
+  if (block) return { cls: "limit-manual", title: "", body: <><Hourglass size={12} /> {BLOCK_WORD[block.kind]}</> };
   if (st === "wait") {
     // Three shapes of waiting, one pill: a parsed box (the buttons say the
     // rest), an unparsable dialog, and a turn that ended on a question in

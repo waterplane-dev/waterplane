@@ -2,10 +2,11 @@
  * The resume queue and resurrection — slice S7 of `sessions.ts`
  * (docs/notes/host-architecture.md).
  *
- * Owns every `resume*` field except `resumeMode` (wall's: `writeLimitCfg`
- * persists it beside the switch, so it is read and written here through
- * `core.resumeMode()`/`core.assignResumeMode()`), the two manager-level timers
- * (`resumeGuards`, `resumeGapTimer`) and the revived pairings with their file.
+ * Owns the account-scope wave gate (`recover/wavegate.ts`: waiting, in flight,
+ * proven, the hold-off, its gap and settle timers) with the limit's policy over
+ * it, `resumeFirst`, and the revived pairings with their file — never
+ * `resumeMode` (wall's: `writeLimitCfg` persists it beside the switch, so it is
+ * read and written here through `core.resumeMode()`/`core.assignResumeMode()`).
  * Every call into another slice goes through `core`.
  */
 import { existsSync, mkdirSync } from "node:fs";
@@ -20,6 +21,7 @@ import { LIMIT_RESUME_GAP_MS, LIMIT_RESUME_SETTLE_MS, LIMIT_RETRY_MS, LIMIT_RESE
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { derive } from "../backends/derive.js";
+import { WaveGate, type WavePolicy, type WaveVerdict } from "../recover/wavegate.js";
 
 export class ResumeSlice {
   /**
@@ -60,35 +62,25 @@ export class ResumeSlice {
   private static readonly REVIVED_MAX = 200;
 
   // ── resume queue (see LIMIT_RESUME_* above) ──
-  /** The sessions being resumed right now (their continue was typed; we are
-   *  waiting to see whether it took). More than one only once the wave has been
-   *  PROVEN and the mode allows it — see `canResumeAlongside`. */
-  private resumingIds = new Set<string>();
-  /** A resume in the current wave provably started a turn, i.e. the limit has
-   *  actually lifted. Until then every mode resumes ONE session — the probe —
-   *  because the reason for serializing is evidence about the account, and a
-   *  fresh block or a still-blocked verdict makes it unproven again. */
-  private resumeProven = false;
-  /** Ids whose resume is DUE and waiting for their turn in the queue. */
-  private resumeWaiting: string[] = [];
-  /** Ids the user asked to resume by hand — they ignore the hold-off and the
-   *  gap, because an explicit tap is a decision the clock should not overrule. */
-  private resumeForced = new Set<string>();
-  /** Per-resume watchdog for an outcome that never becomes observable. */
-  private resumeGuards = new Map<string, NodeJS.Timeout>();
-  /** Breath between two resumes, and the re-pump after a hold-off expires. */
-  private resumeGapTimer: NodeJS.Timeout | null = null;
+  /**
+   * The wave gate (`recover/wavegate.ts`) — the ACCOUNT-scope one: what is
+   * waiting, what is in flight, whether the wave is proven, the hold-off, the
+   * gap and the settle guard. Its rule is "the first of a wave goes alone"; the
+   * limit's POLICY is this slice's (`limitWave`): who is in line and in which
+   * order, the release mode, resume-or-resurrect, and the hold-off after a
+   * resume that came back still blocked (`LIMIT_RETRY_MS`) — the limit provably
+   * has not reset, so no other session may spend an attempt learning that.
+   */
+  private gate: WaveGate;
   /** id → the instant the user pushed it to the front (older stamp wins, so two
    *  "go first" taps keep the order they were made in). */
   private resumeFirst = new Map<string, number>();
-  /** Host-wide hold-off: a resume came back STILL BLOCKED, so the limit provably
-   *  has not reset and no other session may spend an attempt learning that. */
-  private resumeHoldUntil = 0;
   /** Last broadcast host-wide queue state, so publishQueue only speaks up on a
    *  real transition (it is called from every scan of every blocked session). */
   private lastQueueSig = "";
 
   constructor(private readonly core: SessionCore) {
+    this.gate = new WaveGate(this.limitWave());
     this.revivedPath = join(hostStateDir(core.root), "revived.json");
     try {
       if (existsSync(this.revivedPath)) {
@@ -103,13 +95,13 @@ export class ResumeSlice {
   }
 
   // ── the hub's accessors (`SessionCore`'s resume.ts group) ──
-  /** `resumingIds.has(id)`. */
-  isResuming(id: string): boolean { return this.resumingIds.has(id); }
-  /** `resumeWaiting` — reassigned, so asked each time. */
-  queue(): readonly string[] { return this.resumeWaiting; }
-  holdUntil(): number { return this.resumeHoldUntil; }
-  proven(): boolean { return this.resumeProven; }
-  setProven(proven: boolean): void { this.resumeProven = proven; }
+  /** The gate's in-flight set has `id`. */
+  isResuming(id: string): boolean { return this.gate.isInFlight(id); }
+  /** The gate's waiting ids — reassigned, so asked each time. */
+  queue(): readonly string[] { return this.gate.waiting(); }
+  holdUntil(): number { return this.gate.holdUntil(); }
+  proven(): boolean { return this.gate.proven(); }
+  setProven(proven: boolean): void { this.gate.setProven(proven); }
   firstAt(id: string): number | undefined { return this.resumeFirst.get(id); }
   dropFirst(id: string): boolean { return this.resumeFirst.delete(id); }
 
@@ -129,7 +121,7 @@ export class ResumeSlice {
       // Its evidence is the banner in the tail, NOT the blocked flag: the CLI
       // often quits before an idle scan ever ran, so requiring the flag here
       // would drop exactly the sessions resurrection exists for.
-      const requested = this.resumeWaiting.includes(s.info.id) || this.resumingIds.has(s.info.id);
+      const requested = this.gate.isWaiting(s.info.id) || this.gate.isInFlight(s.info.id);
       if (!lim.blocked && !requested) return false;
       // Out of line when there is no next attempt to make — the same verdict
       // the scheduler acts on, asked once so a session cannot be in the queue
@@ -160,7 +152,7 @@ export class ResumeSlice {
       const lim = s.info.limit;
       if (!lim) continue;
       const queuePos = pos.get(s.info.id) ?? null;
-      const resuming = this.resumingIds.has(s.info.id);
+      const resuming = this.gate.isInFlight(s.info.id);
       const first = this.resumeFirst.has(s.info.id);
       if (lim.queuePos === queuePos && lim.resuming === resuming && lim.first === first) continue;
       lim.queuePos = queuePos; lim.resuming = resuming; lim.first = first;
@@ -169,7 +161,8 @@ export class ResumeSlice {
     // Broadcast the host-wide half only on a real transition. This runs on every
     // scan of a blocked session, and a socket message per scan would be noise
     // that hides the transitions that matter.
-    const sig = `${[...this.resumingIds].sort().join(",")}|${this.core.resumeMode()}|${this.resumeHoldUntil > Date.now() ? this.resumeHoldUntil : 0}`;
+    const hold = this.gate.holdUntil();
+    const sig = `${[...this.gate.inFlight()].sort().join(",")}|${this.core.resumeMode()}|${hold > Date.now() ? hold : 0}`;
     if (sig !== this.lastQueueSig) { this.lastQueueSig = sig; this.core.emit("limitQueue"); }
   }
 
@@ -177,11 +170,12 @@ export class ResumeSlice {
    *  is kept beside the set: it is the older field, and a client that only knows
    *  it must still read something true rather than nothing. */
   resumeState(): { resumingId: string | null; resumingIds: string[]; holdUntil: number | null; mode: LimitResumeMode } {
-    const ids = [...this.resumingIds];
+    const ids = [...this.gate.inFlight()];
+    const hold = this.gate.holdUntil();
     return {
       resumingId: ids[0] ?? null,
       resumingIds: ids,
-      holdUntil: this.resumeHoldUntil > Date.now() ? this.resumeHoldUntil : null,
+      holdUntil: hold > Date.now() ? hold : null,
       mode: this.core.resumeMode(),
     };
   }
@@ -203,7 +197,7 @@ export class ResumeSlice {
     this.core.assignResumeMode(mode);
     this.core.writeLimitCfg();
     this.publishQueue();
-    this.pumpResume();
+    this.gate.pump();
   }
 
   /** Push a session to the front of the queue (`on: false` clears it). */
@@ -212,7 +206,7 @@ export class ResumeSlice {
     if (on) { if (!this.resumeFirst.has(id)) this.resumeFirst.set(id, Date.now()); }
     else this.resumeFirst.delete(id);
     this.publishQueue();
-    this.pumpResume();
+    this.gate.pump();
   }
 
   /**
@@ -225,100 +219,21 @@ export class ResumeSlice {
     const targets = this.resumeOrder().filter((s) => !id || s.info.id === id);
     // An explicit tap must not sit behind the gap/hold-off timer the queue is
     // already counting down — that timer is exactly what the user is overruling.
-    if (targets.length && this.resumeGapTimer) { clearTimeout(this.resumeGapTimer); this.resumeGapTimer = null; }
+    if (targets.length) this.gate.skipGap();
     for (const s of targets) {
       this.core.clearLimitTimer(s);
       this.clearResurrectTimer(s);
-      this.resumeForced.add(s.info.id);
-      this.requestResume(s);
+      this.gate.request(s.info.id, { forced: true });
     }
   }
 
   /** A session's scheduled moment arrived: get in line (it may go immediately). */
   requestResume(s: Session): void {
-    const id = s.info.id;
-    if (this.resumingIds.has(id)) return;
-    if (!this.resumeWaiting.includes(id)) this.resumeWaiting.push(id);
-    if (s.info.limit) s.info.limit.nextAttemptAt = null;
-    this.publishQueue();
-    this.pumpResume();
-  }
-
-  /**
-   * May `s` be resumed alongside the resumes already in flight?
-   *
-   * Empty queue ⇒ yes. Otherwise the FIRST resume of a wave is always alone: it
-   * is the probe, and until it has provably started a turn the account is the
-   * open question, not the throughput. Past that the mode decides — and `repo`
-   * asks the send queue's question (`serialGroup`), because two agents in one
-   * checkout is a different problem from two agents on one plan.
-   */
-  private canResumeAlongside(s: Session): boolean {
-    if (!this.resumingIds.size) return true;
-    if (!this.resumeProven) return false;
-    if (this.core.resumeMode() === "one") return false;
-    if (this.core.resumeMode() === "all") return true;
-    const group = serialGroup(s.info.cwd);
-    for (const id of this.resumingIds) {
-      const other = this.core.sessions.get(id);
-      if (other && serialGroup(other.info.cwd) === group) return false;
-    }
-    return true;
+    this.gate.request(s.info.id);
   }
 
   pumpResume(): void {
-    if (this.resumeGapTimer) return;
-    const order = this.resumeOrder();
-    const inLine = new Set(order.map((s) => s.info.id));
-    // Drop requests that stopped being eligible (auto switched off, attempts
-    // spent, session gone) — else the queue waits forever on a session that is
-    // never going to run, which looks exactly like the bug it fixes.
-    if (this.resumeWaiting.some((id) => !inLine.has(id))) {
-      this.resumeWaiting = this.resumeWaiting.filter((id) => inLine.has(id));
-      for (const id of [...this.resumeForced]) if (!inLine.has(id)) this.resumeForced.delete(id);
-    }
-    if (!this.resumeWaiting.length) return;
-    const forced = this.resumeWaiting.some((id) => this.resumeForced.has(id));
-    const now = Date.now();
-    if (!forced && this.resumeHoldUntil > now) {
-      // Hold-off still running. Come back when it lifts rather than dropping the
-      // request — nothing else would raise it again before the retry cadence.
-      this.armResumeGap(this.resumeHoldUntil - now);
-      return;
-    }
-    // In `repo` mode the head of the line can be held by its own worktree while
-    // a session further down is free to go, so this picks the first CANDIDATE,
-    // not the first entry. With no capacity at all `find` returns nothing and
-    // the pump stops: capacity only ever opens in releaseResume() or
-    // setResumeMode(), and both pump again.
-    const next = order.find((s) => this.resumeWaiting.includes(s.info.id) && this.canResumeAlongside(s));
-    if (!next) return;
-    const id = next.info.id;
-    this.resumeWaiting = this.resumeWaiting.filter((x) => x !== id);
-    this.resumeForced.delete(id);
-    this.resumingIds.add(id);
-    this.publishQueue();
-    this.armResumeGuard(id);
-    if (next.info.running) void this.core.doLimitContinue(next);
-    else void this.doResurrect(next).catch((e) => console.error(`[resume] could not reopen ${id}: ${(e as Error)?.message ?? e}`)); // the resume guard releases the slot
-    // The gap is a RATE limit, not a concurrency one: even in `all` mode the
-    // resumes are spaced, so a mis-set mode cannot type "continue" into eleven
-    // sessions inside one second. The re-pump after it is what starts the next.
-    this.armResumeGap(LIMIT_RESUME_GAP_MS);
-  }
-
-  private armResumeGuard(id: string): void {
-    const prev = this.resumeGuards.get(id);
-    if (prev) clearTimeout(prev);
-    const t = setTimeout(() => this.releaseResume(id, "timeout"), LIMIT_RESUME_SETTLE_MS);
-    t.unref?.();
-    this.resumeGuards.set(id, t);
-  }
-
-  private armResumeGap(ms: number): void {
-    if (this.resumeGapTimer) clearTimeout(this.resumeGapTimer);
-    this.resumeGapTimer = setTimeout(() => { this.resumeGapTimer = null; this.pumpResume(); }, Math.max(50, ms));
-    this.resumeGapTimer.unref?.();
+    this.gate.pump();
   }
 
   /**
@@ -327,30 +242,47 @@ export class ResumeSlice {
    * reset, and the entire point of serializing is that the others must not each
    * spend one of their bounded attempts rediscovering that.
    */
-  releaseResume(id: string, why: "resumed" | "blocked" | "gone" | "timeout"): void {
-    if (!this.resumingIds.has(id)) return;
-    const guard = this.resumeGuards.get(id);
-    if (guard) { clearTimeout(guard); this.resumeGuards.delete(id); }
-    this.resumingIds.delete(id);
-    // A verdict is evidence about the ACCOUNT, so it moves the wave's proof
-    // either way: one session that really started a turn is what licenses the
-    // parallel modes, and one that came back blocked withdraws that licence for
-    // everybody — the next resume probes alone again.
-    if (why === "resumed") this.resumeProven = true;
-    if (why === "blocked") {
-      this.resumeProven = false;
-      this.resumeHoldUntil = Date.now() + LIMIT_RETRY_MS;
-      // Re-schedule anything already parked on an earlier time. The queue would
-      // hold it anyway, but a countdown the phone shows must be one the attempt
-      // will actually fire at — "auto 12:02" that silently doesn't is the exact
-      // ambiguity this whole feature exists to remove.
-      for (const s of this.core.sessions.values()) {
-        const l = s.info.limit;
-        if (l?.blocked && l.nextAttemptAt != null && l.nextAttemptAt < this.resumeHoldUntil) this.core.scheduleLimitAttempt(s);
-      }
-    }
-    this.publishQueue();
-    this.armResumeGap(why === "resumed" ? LIMIT_RESUME_GAP_MS : 500);
+  releaseResume(id: string, why: WaveVerdict): void {
+    this.gate.release(id, why);
+  }
+
+  /**
+   * The limit's policy over the account-scope gate — today's resume queue,
+   * unchanged: the line is `resumeOrder`, the mode is the person's
+   * `LimitResumeMode`, `repo` asks `serialGroup`, the dispatch resumes a
+   * running session in place and reopens one that exited, a request clears the
+   * booked `nextAttemptAt` (the queue owns the moment from here), and a
+   * still-blocked verdict holds the rest for `LIMIT_RETRY_MS` and re-books every
+   * attempt that would fall inside it — "auto 12:02" that silently does not
+   * fire is the ambiguity the queue exists to remove.
+   */
+  private limitWave(): WavePolicy {
+    return {
+      order: () => this.resumeOrder().map((s) => s.info.id),
+      mode: () => this.core.resumeMode(),
+      group: (id) => { const s = this.core.sessions.get(id); return s ? serialGroup(s.info.cwd) : undefined; },
+      requested: (id) => { const l = this.core.sessions.get(id)?.info.limit; if (l) l.nextAttemptAt = null; },
+      dispatch: (id) => {
+        const next = this.core.sessions.get(id)!;
+        if (next.info.running) void this.core.doLimitContinue(next);
+        else void this.doResurrect(next).catch((e) => console.error(`[resume] could not reopen ${id}: ${(e as Error)?.message ?? e}`)); // the settle guard releases the slot
+      },
+      holdFor: () => ({ until: Date.now() + LIMIT_RETRY_MS }),
+      afterHold: () => {
+        const hold = this.gate.holdUntil();
+        for (const s of this.core.sessions.values()) {
+          const l = s.info.limit;
+          if (l?.blocked && l.nextAttemptAt != null && l.nextAttemptAt < hold) this.core.scheduleLimitAttempt(s);
+        }
+      },
+      publish: () => this.publishQueue(),
+      // The gap is a RATE limit, not a concurrency one: even in `all` mode the
+      // resumes are spaced, so a mis-set mode cannot type "continue" into eleven
+      // sessions inside one second.
+      gapMs: LIMIT_RESUME_GAP_MS,
+      releaseGapMs: (why) => (why === "resumed" ? LIMIT_RESUME_GAP_MS : 500),
+      settleMs: LIMIT_RESUME_SETTLE_MS,
+    };
   }
 
   // ── Resurrect a session that EXITED at the usage limit ──────────────
@@ -465,7 +397,7 @@ export class ResumeSlice {
     // If this was the session the queue let through, its verdict is in: it EXITED
     // rather than resuming. Treat a limit exit as evidence about the account (so
     // the rest of the queue holds off), anything else as merely gone.
-    if (this.resumingIds.has(s.info.id)) {
+    if (this.gate.isInFlight(s.info.id)) {
       const stillLimited = s.info.limit?.blocked || detectLimitText(stripAnsi(s.scrollback.slice(-6000))).blocked;
       this.releaseResume(s.info.id, stillLimited && (s.info.limit?.attempts ?? 0) > 0 ? "blocked" : "gone");
     }
@@ -489,20 +421,24 @@ export class ResumeSlice {
     // ── WHICH reset instant, and whether there is one at all ─────────────────
     //
     // The log's is an instant the CLI recorded and is trusted whatever the
-    // window is; the screen's is a bare clock time resolved against TODAY,
-    // which on a weekly banner is the wrong day — so it is dropped rather than
-    // waited for, and the backoff carries the wait instead. That split is the
-    // whole fix: the old line threw away the LOG's dated weekly reset along
-    // with the screen's guess, and then reopened the conversation every five
-    // seconds until the attempts ran out — minutes into a wall lasting days.
+    // window is (an old line threw it away with the screen's guess, and then
+    // reopened the conversation every five seconds until the attempts ran out).
+    // The screen's weekly notice prints a bare clock time with no date, resolved
+    // to its next occurrence: the EARLIEST the window can lift (owner,
+    // 2026-10-31), so it is waited for as a DAILY lower bound — a reopen there
+    // that dies on the same wall is re-armed at that time tomorrow
+    // (`limitretry.ts`'s `daily`), never in a loop. The same rule the in-place
+    // path follows (`markLimitBlocked`'s `limitResetKind`).
     const weekly = log.rejectedAt != null ? log.weekly : det.weekly;
-    const resetAt = log.resetAt ?? (weekly ? null : s.info.limit?.resetAt ?? det.resetAt);
+    const resetAt = log.resetAt ?? s.info.limit?.resetAt ?? det.resetAt;
+    const daily = log.resetAt == null && resetAt != null
+      && (s.limitResetKind ? s.limitResetKind === "daily" : weekly);
     // A SPEND wall has no ladder: one attempt at a reset somebody can name (the
     // message's own, or a configured dollar period's), else the person is told.
     const spend = log.rejectedAt != null ? log.spend : det.spend;
     const next = spend
       ? spendRetry(now, resetAt ?? spendRetry(now).resetAt, s.info.limit?.attempts ?? 0, LIMIT_RESET_BUFFER_MS)
-      : this.core.limitRetry(s, now, resetAt);
+      : this.core.limitRetry(s, now, resetAt, daily);
     if (next.kind === "giveup") {
       this.core.noteGaveUp(s, next.why);
       return;
@@ -523,7 +459,7 @@ export class ResumeSlice {
    *  cap, on the last verdict the source gave (`sourceWallExit`) — never a screen or a claude log. */
   private maybeScheduleSourceResurrect(s: Session): void {
     if (!s.info.limit) return; // no account limit (no `limits`, or no wall to ask) ⇒ an exit
-    if (this.resumingIds.has(s.info.id)) {
+    if (this.gate.isInFlight(s.info.id)) {
       this.releaseResume(s.info.id, s.info.limit.blocked && s.info.limit.attempts > 0 ? "blocked" : "gone");
     }
     if (s.killed || s.detaching) return;
@@ -578,14 +514,9 @@ export class ResumeSlice {
     // The resume moved to a NEW session id — hand the queue slot over rather than
     // releasing, so the next session waits for THIS conversation's verdict (it
     // re-blocks, or starts a turn) instead of piling on behind a dead id.
-    if (this.resumingIds.has(id)) {
+    if (this.gate.isInFlight(id)) {
       if (this.resumeFirst.delete(id)) this.resumeFirst.set(created.id, Date.now() - 1);
-      this.resumingIds.delete(id);
-      const guard = this.resumeGuards.get(id);
-      if (guard) { clearTimeout(guard); this.resumeGuards.delete(id); }
-      this.resumingIds.add(created.id);
-      this.armResumeGuard(created.id);
-      this.publishQueue();
+      this.gate.handOver(id, created.id);
     }
   }
 

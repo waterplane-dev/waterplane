@@ -8,13 +8,13 @@
  * or as this phone just saved them. `rulesFor` is which repo's rules the sheet
  * should open on. Each is written only by `actions.ts`.
  */
-import type { AutoPullConfig } from "@waterplane/shared";
 import { createStore, useStore } from "../../sdk";
 import type { PullRecord } from "../../pull";
 
 export const records = createStore<PullRecord[]>([]);
-/** Per-repo rules, keyed by worktree path (filled in as the host answers). */
-export const cfgs = createStore<Map<string, AutoPullConfig>>(new Map());
+/** Per-repo rules, keyed by worktree path (filled in as the host answers) —
+ *  held top-level in `pullRules.ts`, re-exported here. */
+export { cfgs } from "../../pullRules";
 /**
  * Repo whose auto-download RULES the Downloads sheet should open on — set by
  * the repo row's `⋯` menu, which is where "what does this repo fetch by

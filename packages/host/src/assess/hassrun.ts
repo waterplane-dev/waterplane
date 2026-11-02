@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { AssessInput, AssessNote, AssessProgress, AssessProposal, AssessScope, Intent } from "@waterplane/shared";
 import { ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE, assessCounts, cleanAssessment } from "@waterplane/shared";
+import { detectHeadlessSignedOut, SIGNED_OUT_NOTE } from "../headlessauth.js";
 import { detectHeadlessLimit, limitNote } from "../limit.js";
 import { runToolTask } from "../sidecar.js";
 import { assessPrompt, buildAssessInput } from "./hassinput.js";
@@ -88,7 +89,7 @@ export async function runAssessment(
   } catch {
     return {
       ok: false,
-      detail: env.refused ?? env.limitNote ?? `the assessment wrote no ${ASSESS_OUT_FILE}${env.failed ? " and the run did not finish cleanly" : ""}`,
+      detail: env.refused ?? env.limitNote ?? (env.signedOut ? SIGNED_OUT_NOTE : undefined) ?? `the assessment wrote no ${ASSESS_OUT_FILE}${env.failed ? " and the run did not finish cleanly" : ""}`,
       envelope: env.text || undefined,
       input,
       planWritten,
@@ -165,7 +166,7 @@ async function runClaude(
   cwd: string,
   prompt: string,
   onProgress?: (p: AssessProgress) => void,
-): Promise<{ text: string; failed: boolean; limited: boolean; limitNote?: string; refused?: string; progress?: AssessProgress }> {
+): Promise<{ text: string; failed: boolean; limited: boolean; limitNote?: string; signedOut?: boolean; refused?: string; progress?: AssessProgress }> {
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"];
   let progress = assessProgressInit();
   /** The reading nothing has happened in yet, kept so "did anything arrive?"
@@ -275,6 +276,8 @@ async function runClaude(
     failed: run.failed,
     limited: limit.blocked,
     limitNote: limit.blocked ? limitNote(limit, "assessed") : undefined,
+    // Asked of the raw stream only: `res.text` is the assistant's prose.
+    signedOut: !limit.blocked && detectHeadlessSignedOut(run.stdout, run.stderr),
     // Anything that was folded, not just steps: a run that got as far as
     // naming its model and no further published that live, and settling with
     // `undefined` here would take it off the screen the reader is looking at.

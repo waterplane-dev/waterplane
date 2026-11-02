@@ -57,9 +57,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 import { PREREG } from "./repohealth/constants.mjs";
 import { configure } from "./repohealth/census.mjs";
@@ -985,14 +986,40 @@ test("two scopes never share a series file, however they are spelled", () => {
   assert.match(slugFor("apps/ba3-web"), /^apps-ba3-web-[0-9a-f]{4}$/);
 });
 
-test("a scoped history holds only the commits that touched the subtree", () => {
-  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
+test("a scoped history holds only the commits that touched the subtree", (t) => {
+  // A throwaway repo with a history built for the question, not this repo's:
+  // the public mirror's CI checks out ONE snapshot commit (fetch-depth 1), and
+  // there every commit touches tools/, so "fewer than all" cannot be asked.
+  const repo = mkdtempSync(join(tmpdir(), "rh-scope-"));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const run = (args) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args], {
+      cwd: repo,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  const commit = (files, msg) => {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(join(repo, dirname(p)), { recursive: true });
+      writeFileSync(join(repo, p), text);
+    }
+    run(["add", "--", ...Object.keys(files)]);
+    run(["commit", "-q", "-m", msg]);
+    return run(["rev-parse", "HEAD"]).toString().trim();
+  };
+  run(["init", "-q"]);
+  const both = commit({ "tools/a.mjs": "a\n", "docs/x.md": "x\n" }, "both");
+  const outside = commit({ "docs/x.md": "x\ny\n" }, "outside");
+  const inside = commit({ "tools/sub/b.mjs": "b\n" }, "inside");
+  // Shares the scope's letters but not its directory: a prefix match without
+  // the slash would keep it.
+  const lookalike = commit({ "toolsish/c.mjs": "c\n" }, "lookalike");
+
+  const history = { ...git.readHistory(repo, CFG), hunks: git.readHunks(repo) };
+  assert.deepEqual(history.commits.map((c) => c.sha), [both, outside, inside, lookalike]);
   const scoped = scopeHistory(history, "tools", CFG);
-  assert.ok(scoped.commits.length > 0, "this repo has commits under tools/");
-  assert.ok(
-    scoped.commits.length < history.commits.length,
-    "and not every commit touched it — otherwise this assertion proves nothing",
-  );
+  assert.deepEqual(scoped.commits.map((c) => c.sha), [both, inside], "exactly the commits under tools/");
+  assert.deepEqual(scoped.commits.map((c) => c.filesTouched), [["a.mjs"], ["sub/b.mjs"]]);
+  assert.deepEqual([...scoped.hunks.get(both).keys()], ["a.mjs"], "line ranges are cut and re-rooted too");
   for (const c of scoped.commits) {
     assert.ok(c.filesTouched.length, "a commit with nothing in scope is dropped, never kept empty");
     for (const p of c.filesTouched) {
@@ -1316,4 +1343,48 @@ test("git.listCommits: only git's own 'not a git repository' is called that; any
   run(refused, ["config", "extensions.bogusext", "true"]);
   assert.throws(() => git.listCommits(refused), (e) =>
     /^git refused to read .*unknown repository extension/.test(e.message) && !/not a git repository/.test(e.message));
+});
+
+test("update --recut moves a series of another definition aside, keeps it, and measures afresh", (t) => {
+  // The phone's re-cut button. A refusal used to end in `rm <series> && …`
+  // typed at the desktop; the tap instead MOVES the old file beside the new
+  // one, and only when the definitions really differ.
+  const repo = mkdtempSync(join(tmpdir(), "rh-recut-"));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const git1 = (args) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args], {
+      cwd: repo,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  git1(["init", "-q"]);
+  writeFileSync(join(repo, "a.mjs"), "export const a = 1;\n");
+  git1(["add", "a.mjs"]);
+  git1(["commit", "-q", "-m", "a"]);
+  const dir = join(repo, ".waterplane");
+  mkdirSync(dir, { recursive: true });
+  const series = join(dir, "repohealth.jsonl");
+  writeFileSync(series, JSON.stringify({ sha: "0".repeat(40), prereg: "1999-01-01a" }) + "\n");
+  const run = (extra) => {
+    try {
+      return { code: 0, err: execFileSync(process.execPath, [CLI, "update", `--root=${repo}`, "--no-own", ...extra], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+    } catch (e) {
+      return { code: e.status, err: String(e.stderr) };
+    }
+  };
+
+  const refused = run([]);
+  assert.equal(refused.code, 3, "without the flag it still refuses");
+  assert.match(readFileSync(series, "utf8"), /1999-01-01a/, "…and leaves the file alone");
+
+  const recut = run(["--recut"]);
+  assert.equal(recut.code, 0, recut.err);
+  const kept = join(dir, "repohealth.jsonl.1999-01-01a.bak");
+  assert.ok(existsSync(kept), "the old series is kept, named by its definition");
+  assert.match(readFileSync(kept, "utf8"), /1999-01-01a/);
+  assert.doesNotMatch(readFileSync(series, "utf8"), /1999-01-01a/, "the live series is the new definition only");
+
+  const again = run(["--recut"]);
+  assert.equal(again.code, 0, again.err);
+  assert.deepEqual(readdirSync(dir).filter((f) => f.endsWith(".bak")), ["repohealth.jsonl.1999-01-01a.bak"],
+    "on a series that is not mixed the flag does nothing — a stray tap never discards a good series");
 });

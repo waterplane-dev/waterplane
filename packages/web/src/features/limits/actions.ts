@@ -5,7 +5,7 @@
  */
 import type { LimitResumeMode, NetRetryConfig } from "@waterplane/shared";
 import { core } from "../../sdk";
-import { modeToast, overrideToast } from "./logic";
+import { continueQueueLabel, continueQueuedToast, modeToast, overrideToast } from "./logic";
 import { limitCfg, netRetryCfg } from "./store";
 
 /** `limit.config`: the switch and the hold always; the mode only when sent (an
@@ -44,6 +44,21 @@ export function resumeNow(id?: string): void {
   const c = core();
   c.conn.send({ t: "limit.resume", id });
   c.say.toast(id ? "resuming that session…" : "starting the queue…");
+}
+
+/**
+ * The person's *continue* after a sign-in (`signin.continue`): the DURABLE path
+ * (`queueOp`, an ackId), like every op the host must take at most once — the
+ * host de-dupes on the ackId and, delivered late, types only into sessions still
+ * waiting, so the tap is safe to keep through a dead tunnel. One lane for the
+ * account. Online the receipt is the host's own sentence (`onOpAck` toasts it,
+ * naming any id that was not waiting); offline the toast says it was kept.
+ */
+export function continueSignedIn(ids: readonly string[]): void {
+  if (!ids.length) return;
+  const c = core();
+  const offline = c.queue.queueOp({ t: "signin.continue", ids: [...ids] }, "signin", continueQueueLabel(ids.length));
+  if (offline) c.say.toast(continueQueuedToast(ids.length));
 }
 
 /** `netretry.config`: the host's saved switch and whether its environment overrides it. */

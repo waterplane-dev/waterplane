@@ -6,18 +6,20 @@ import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
 import { readLimitLog, type LimitLogVerdict } from "../limitlog.js";
 import { spendRetry } from "../spendwall.js";
 import { logMtime, transcriptPath } from "../transcript.js";
-import { recordSent } from "../sentlog.js";
 import { adoptCarriedBlock, nextLimitAttempt } from "../limitretry.js";
 import type { Session, SessionCore } from "./core.js";
 import {
   IDLE_PING_MS, LIMIT_RESET_BUFFER_MS, LIMIT_LOG_UNKNOWN, LIMIT_MAX_ATTEMPTS, LIMIT_GIVEUP_MS,
   LIMIT_CARRY_MS, LIMIT_PROBE_MS, LIMIT_LADDER_MS, SERVING_TURN_MS,
 } from "./knobs.js";
-import { logTag } from "@waterplane/shared";
+import { LIMIT_HELD_DRAFT, logTag } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { derive } from "../backends/derive.js";
 import { liveSourceFor } from "../livesources.js";
+import { continueBlockerNow, draftReader, ownMenuOption, writeContinue } from "../recover/recoverwrite.js";
+import { haltRefusal } from "../halt.js";
+import { endGiveUp, giveUpOnce } from "../recover/giveuplatch.js";
 import type { Provider } from "@waterplane/shared";
 
 /** The gate for a `SessionLimit` existing at all; in `usagesources.ts` because `tmux.ts` asks it
@@ -350,25 +352,37 @@ export class WallSlice {
     const lim = s.info.limit;
     if (!lim) return;
     const was = lim.blocked;
-    // Read BEFORE the weekly override below nulls it: the question this signal
-    // asks is whether the parser got an instant out of the CLI's own notice, and
-    // a weekly block declining to USE the instant (its bare time lands on the
-    // wrong day) is a decision of ours, not a parse that failed.
+    // Read BEFORE the dated-wins rule below may set `resetAt` aside: the question
+    // this signal asks is whether the parser got an instant out of the CLI's own
+    // notice, and keeping an earlier dated instant instead is a decision of ours,
+    // not a parse that failed.
     const parsedReset = resetAt != null;
     lim.blocked = true;
     lim.weekly = weekly;
     if (spend) lim.spend = true; else delete lim.spend;
-    // A weekly banner's bare time lands on the wrong DAY — don't surface it as a
-    // countdown, and don't wait for it; the backoff carries that wait instead
-    // (`limitretry.ts`).
+    // A new wall is a new question about where its instant came from.
+    if (!was) s.limitResetKind = undefined;
+    // WHERE the instant came from decides how it is waited for.
     //
-    // `dated` is the exception, and it is the half that was missing: the CLI's
-    // own log records the reset as an INSTANT (`limitlog.ts`'s `resetsAt`),
-    // which is as true of a weekly window as of a five-hourly one. Dropping it
-    // with the screen's guess is what left every weekly wall with nothing to
-    // wait for, and therefore on a cadence that ran out of attempts the same
-    // afternoon.
-    if (weekly && !dated) resetAt = null;
+    // `dated`: the CLI's own log (or a backend's channel) recorded the reset as
+    // an INSTANT (`limitlog.ts`'s `resetsAt`), as true of a weekly window as of
+    // a five-hourly one — trusted, and it keeps winning for the rest of this
+    // block over anything the screen says later.
+    //
+    // A weekly notice read off the SCREEN prints a bare clock time ("resets
+    // 7pm") with no date; the detector resolves it to that time's next
+    // occurrence (`parseResetTime`). The day is unknown, so that instant may be
+    // days early. It used to be dropped, leaving only the blind ladder. The
+    // owner chose (2026-10-31) to keep it as the EARLIEST POSSIBLE reset: it is
+    // shown and waited for, and an attempt there that finds the wall still up
+    // re-arms at the same time the next day (`limitretry.ts`'s `daily`) — one
+    // attempt a day until the real reset, never a tight loop, with the attempts
+    // cap and the patience clock bounding it as for any wall.
+    if (dated && resetAt != null) s.limitResetKind = "dated";
+    else if (weekly && !dated && resetAt != null) {
+      if (s.limitResetKind === "dated" && lim.resetAt != null) resetAt = null;   // the dated instant stands
+      else s.limitResetKind = "daily";
+    }
     // A session hitting the wall for the first time is fresh evidence that the
     // limit is ON — whatever an earlier resume proved, it did not prove this.
     if (!was) {
@@ -383,7 +397,7 @@ export class WallSlice {
       this.core.setResumeProven(false);
       // A new wall is a new wait: whatever this session gave up on last time is
       // not what it is waiting for now.
-      s.limitGaveUp = false;
+      endGiveUp(s, "wall");
       // A block BEGINNING is the edge — a block is a state that lasts hours and
       // is re-scanned throughout, so this is recorded once per wall hit rather
       // than once per sweep. Without an instant the session has nothing to
@@ -428,11 +442,13 @@ export class WallSlice {
     this.clearLimitTimer(s);
     lim.blocked = false;
     delete lim.needsYou;
-    s.limitGaveUp = false;
+    endGiveUp(s, "wall");
     // Served again ⇒ whatever wall this session was carrying is over.
     s.limitCarried = undefined;
+    s.limitResetKind = undefined;
     lim.resetAt = null;
     lim.nextAttemptAt = null;
+    lim.held = null;
     this.core.dropResumeFirst(s.info.id);   // the tap was about THIS block
     this.core.emit("updated", s.info);
     this.core.emit("limit", s.info.id, s.info, "resumed");
@@ -451,15 +467,18 @@ export class WallSlice {
    * since: the resurrect copy reopened a weekly-blocked conversation every five
    * seconds until the attempts ran out, minutes into a wall lasting days.
    *
-   * `resetAt` is whatever this session was told, which is null for a weekly
-   * banner read off a SCREEN (`markLimitBlocked` refuses to date a bare time)
-   * and an instant when the CLI's own log recorded one.
+   * `resetAt` is whatever this session was told: an instant when the CLI's own
+   * log recorded one, and for a weekly notice read off a SCREEN the next
+   * occurrence of its bare clock time — a lower bound, waited for with `daily`
+   * (`markLimitBlocked` records which in `limitResetKind`). A caller passing its
+   * own `resetAt` says whether it is daily; otherwise the block's own kind does.
    */
-  limitRetry(s: Session, now: number, resetAt?: number | null) {
+  limitRetry(s: Session, now: number, resetAt?: number | null, daily?: boolean) {
     const lim = s.info.limit;
     return nextLimitAttempt({
       attempts: lim?.attempts ?? 0,
       resetAt: resetAt !== undefined ? resetAt : lim?.resetAt ?? null,
+      daily: resetAt !== undefined ? !!daily : s.limitResetKind === "daily",
       blockedSince: lim?.blockedSince ?? 0,
       now,
       holdUntil: this.core.resumeHoldUntil(),
@@ -478,13 +497,14 @@ export class WallSlice {
    * Both callers are re-asked while a session stays blocked (the minute sweep
    * re-enters `scheduleLimitAttempt`; an exited session is re-examined on every
    * scan), so emitting from them directly pushed one notification a minute for
-   * as long as the wall stood.
+   * as long as the wall stood. The latch is the one every recovery shares
+   * (`recover/giveuplatch.ts`, lane `wall`): usage limit and spend are one wait.
    */
   noteGaveUp(s: Session, why: string): void {
-    if (s.limitGaveUp) return;
-    s.limitGaveUp = true;
-    console.log(`${logTag} limit gave up · ${s.info.title} (${s.info.id}) · ${why}`);
-    this.core.emit("limit", s.info.id, s.info, "gaveup");
+    giveUpOnce(s, "wall", () => {
+      console.log(`${logTag} limit gave up · ${s.info.title} (${s.info.id}) · ${why}`);
+      this.core.emit("limit", s.info.id, s.info, "gaveup");
+    });
   }
 
   /** Schedule the next continue attempt (a probe, the dated reset, or a
@@ -496,7 +516,12 @@ export class WallSlice {
     // Auto-continue off — or a SOURCE wall nobody can date (`needsYou`, set by `applySourceWall`):
     // no probe, no ladder, no `atOverride`. Each `continue` there would be a prompt nobody sent,
     // and the first one after the person adds credit would spend it; only `resumeNow` types.
-    if (!this.limitAuto(s) || lim.needsYou != null) {
+    // The halt latch likewise: it can stand for hours, and a countdown re-armed each
+    // minute behind it would promise a try that never comes. The minute sweep re-arms
+    // within `LIMIT_SWEEP_MS` once the halt lifts.
+    if (!this.limitAuto(s) || lim.needsYou != null || haltRefusal() != null) {
+      // No look scheduled ⇒ nothing is held either: the reason would outlive its wait.
+      lim.held = null;
       if (lim.nextAttemptAt != null) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); }
       return;
     }
@@ -525,6 +550,7 @@ export class WallSlice {
       // the person, and `noteGaveUp` says so.
       const next = lim.spend ? spendRetry(now, lim.resetAt, lim.attempts, LIMIT_RESET_BUFFER_MS) : this.limitRetry(s, now);
       if (next.kind === "giveup") {
+        lim.held = null;
         if (lim.nextAttemptAt != null) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); }
         this.noteGaveUp(s, next.why);
         return;
@@ -552,54 +578,71 @@ export class WallSlice {
     const lim = s.info.limit;
     if (!lim || !lim.blocked || !s.info.running || this.core.sessions.get(id) !== s) { this.core.releaseResume(id, "gone"); return; }
     if (!this.limitAuto(s)) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); this.core.releaseResume(id, "gone"); return; }
-    // Busy session (it may have resumed on its own) or a non-limit prompt up →
-    // don't type into it; look again shortly. Quiet threshold never exceeds the
-    // idle threshold (which e2e shrinks via env). Release without a hold-off:
-    // this says nothing about the account, so the next in line should go now.
-    const nonLimitPrompt = s.info.prompt && !s.info.prompt.options.some((o) => STOP_WAIT_RE.test(o.label));
-    if (Date.now() - s.lastDataAt < Math.min(3000, IDLE_PING_MS) || nonLimitPrompt) {
+    // Busy session (it may have resumed on its own), a non-limit prompt up, or
+    // the halt latch on → don't type into it; look again shortly. Quiet
+    // threshold never exceeds the idle threshold (which e2e shrinks via env).
+    // Release without a hold-off: this says nothing about the account, so the
+    // next in line should go now. No turn question: a wall-rejected turn can
+    // leave the hook flag up (`recover/recoverwrite.ts`'s `turnBlocks`).
+    // Words a person typed in the composer (`draft`) are the busy path too:
+    // never typed over, looked at again in a minute.
+    const draft = draftReader(s.backend?.delivery, (n) => this.core.screenCells(id, n));
+    const blocker = await continueBlockerNow(s,
+      () => s.info.running && this.core.sessions.get(id) === s && !!s.info.limit?.blocked,
+      { quietMs: Math.min(3000, IDLE_PING_MS), ownMenu: STOP_WAIT_RE }, draft);
+    if (blocker === "gone") { this.core.releaseResume(id, "gone"); return; }
+    // HELD on a draft says so on the phone (`SessionLimit.held`): the re-armed
+    // `nextAttemptAt` is only the next look, and a countdown that lapses every
+    // minute without a try is what `scheduleLimitAttempt` exists not to show.
+    // Any other outcome ends the hold; the next `updated` carries it.
+    lim.held = blocker === "draft" ? LIMIT_HELD_DRAFT : null;
+    if (blocker) {
+      if (blocker === "draft") console.log(`${logTag} limit continue parked: words in the composer · ${s.info.title} (${id})`);
       this.core.releaseResume(id, "gone");
-      this.scheduleLimitAttempt(s, Date.now() + 60_000);
+      // Halted: no countdown (`scheduleLimitAttempt` clears it while the latch stands).
+      this.scheduleLimitAttempt(s, blocker === "halted" ? undefined : Date.now() + 60_000);
       return;
     }
     if (lim.attempts >= LIMIT_MAX_ATTEMPTS) {
       lim.nextAttemptAt = null;
       this.core.emit("updated", s.info);
-      this.core.emit("limit", s.info.id, s.info, "gaveup");
+      // The same latch as every other give-up: said once per block.
+      this.noteGaveUp(s, `${LIMIT_MAX_ATTEMPTS} attempts spent`);
       this.core.releaseResume(id, "gone");
       return;
     }
     lim.attempts += 1;
     lim.nextAttemptAt = null;
     this.core.emit("updated", s.info);
-    this.core.emit("limit", s.info.id, s.info, "attempt");
     // If the limit menu is still up, take its stop-and-wait option first so the
-    // composer is free to type into.
-    const stopWait = s.info.prompt?.options.find((o) => STOP_WAIT_RE.test(o.label));
-    if (stopWait) {
-      s.proc.write(String(stopWait.index) + "\r");
-      recordSent({
-        sessionId: s.info.id, actor: "auto", source: "limit", kind: "answer",
-        text: String(stopWait.index), result: "written",
-        detail: `cleared the usage-limit menu before continuing`,
-      });
-      await new Promise((r) => setTimeout(r, 1200));
-      if (!s.info.running || this.core.sessions.get(s.info.id) !== s) { this.core.releaseResume(id, "gone"); return; }
-    }
-    // Split text/Return (one chunk can be read as a paste, not a submit).
-    this.core.write(s.info.id, "continue");
-    await new Promise((r) => setTimeout(r, 250));
-    this.core.write(s.info.id, "\r");
-    this.core.recordPrompt(s.info.id, "continue (auto, usage limit reset)", "backlog");
-    // `written`, not `ok`: this path presses Return blind (there is no echo
-    // check here), and the outcome only lands on the next idle scan.
-    recordSent({
-      sessionId: s.info.id, actor: "auto", source: "limit", kind: "prompt",
-      text: "continue", result: "written",
-      detail: `auto-continue after a usage limit (attempt ${lim.attempts})`,
-    });
-    // Outcome lands on the next idle scan: banner below the echo → still
+    // composer is free to type into. Then the one continue writer
+    // (`recover/recoverwrite.ts`): text and Return as two writes, pressed blind —
+    // the outcome lands on the next idle scan: banner below the echo → still
     // blocked → retry cadence; gone → "resumed".
+    const menu = ownMenuOption(s.info.prompt, STOP_WAIT_RE);
+    const res = await writeContinue({
+      sessionId: id,
+      kind: lim.spend ? "spend" : "limit",
+      detail: `auto-continue after a usage limit (attempt ${lim.attempts})`,
+      stillOurs: () => s.info.running && this.core.sessions.get(id) === s,
+      write: (data) => { this.core.write(id, data); },
+      recordPrompt: (text) => { this.core.recordPrompt(id, text, "backlog"); },
+      menu: menu == null ? null : { index: menu, press: (data) => { s.proc.write(data); } },
+      draft,
+    });
+    // The attempt is ANNOUNCED only once `continue` + Return went out: a menu
+    // answered over a draft (or a session gone mid-write) typed no continue.
+    if (res === "written") this.core.emit("limit", s.info.id, s.info, "attempt");
+    if (res === "gone") this.core.releaseResume(id, "gone");
+    if (res === "draft") {
+      // The menu was answered, `continue` was not typed: no attempt spent, the
+      // busy path's re-arm, and the hold said on the phone like the rung above.
+      console.log(`${logTag} limit continue parked: words in the composer · ${s.info.title} (${id})`);
+      lim.attempts = Math.max(0, lim.attempts - 1);
+      lim.held = LIMIT_HELD_DRAFT;
+      this.core.releaseResume(id, "gone");
+      this.scheduleLimitAttempt(s, Date.now() + 60_000);
+    }
   }
 
   clearLimitTimer(s: Session): void {

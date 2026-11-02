@@ -4,7 +4,7 @@
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleDot, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
@@ -35,6 +35,7 @@ import { ExtBoundary } from "../ExtBoundary";
 import { shellBackend } from "../../backendCaps";
 import { repoActions, repoChips } from "../extensionPoints";
 import { ExtRepoChip } from "./ExtRepoChip";
+import { AttentionChip } from "./AttentionChip";
 import { LeftoverHead, LeftoverLine, LeftoverRemove, useLeftovers } from "./LeftoverWorktrees";
 import { flaggedChipTitle } from "../sessions/followUpFacts";
 import { RowTitle, RowSub } from "../../kit/Row";
@@ -65,7 +66,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   const orphans = wts.filter((t) => !t.ownerSessionId);
   const { readings: leftovers, recheck: recheckLeftovers } = useLeftovers(orphans.map((t) => t.id));
   const leftoverChanged = () => { refreshRepos(); recheckLeftovers(); };
-  const att = attentionByRepo.get(repoName) ?? { wait: 0, limit: 0, coding: 0, done: 0, exited: 0 };
+  const att = attentionByRepo.get(repoName) ?? { wait: 0, blocked: 0, coding: 0, done: 0, exited: 0 };
   // A filter is an explicit "show me these", so it wins over a collapsed
   // group: leaving the group collapsed would answer the tap by hiding
   // exactly the rows it counted.
@@ -308,21 +309,13 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             </button>
           ) : null;
         })()}
-        {att.limit > 0 && (
-          <button className={`repo-group-stat limit${statusFilterActive("limit", repoName) ? " on" : ""}`}
-            title={`${att.limit} session${att.limit > 1 ? "s" : ""} in ${repoName} blocked on a usage limit — tap to show only those`}
-            onClick={() => toggleStatusFilter("limit", repoName)}>
-            <Hourglass size={13} />{att.limit}
-          </button>
-        )}
-        {att.wait > 0 && (
-          <button className={`repo-group-wait${statusFilterActive("wait", repoName) ? " on" : ""}`}
-            title={`${att.wait} session${att.wait > 1 ? "s" : ""} in ${repoName} waiting for your answer${waitingRepliesByRepo.get(repoName) ? " — some already have a reply on a clock" : ""} — tap to show only those`}
-            onClick={() => toggleStatusFilter("wait", repoName)}>
-            <CircleDot size={13} />{att.wait} waiting
-            {waitingRepliesByRepo.get(repoName) && <CalendarClock size={11} className="wait-sched" />}
-          </button>
-        )}
+        {/* The per-repo twins of the launcher's attention chips — the same
+            component and the same `sessionStatus` buckets; here a tap is the
+            launcher's filter on this repo, so it shows exactly these rows. */}
+        <AttentionChip kind="blocked" n={att.blocked} repo={repoName} on={statusFilterActive("blocked", repoName)}
+          onClick={() => toggleStatusFilter("blocked", repoName)} />
+        <AttentionChip kind="wait" n={att.wait} repo={repoName} on={statusFilterActive("wait", repoName)}
+          replies={!!waitingRepliesByRepo.get(repoName)} onClick={() => toggleStatusFilter("wait", repoName)} />
         {att.coding > 0 && (
           <button className={`repo-group-stat coding${statusFilterActive("coding", repoName) ? " on" : ""}`}
             title={`${att.coding} session${att.coding > 1 ? "s" : ""} in ${repoName} working — tap to show only those`}

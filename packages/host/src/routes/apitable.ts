@@ -16,7 +16,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OnboardManager } from "../onboard.js";
 import type { SetupWatcher } from "../setupwatch.js";
 import type { PeerStore } from "../peers/store.js";
-import type { AppReadinessReport, PeerKind, RepoTarget } from "@waterplane/shared";
+import type { PeerKind, RepoTarget } from "@waterplane/shared";
 import type { IntentManager } from "../intents/manager.js";
 import type { BacklogManager } from "../backlog.js";
 import type { PushManager } from "../push.js";
@@ -45,8 +45,9 @@ export interface ApiCtx {
   /** Resolve an attention item whose cause the listing saw go away (a failed
    *  push since pushed another way) — `clients.ts`' resolver, which re-sends the feed. */
   resolveAttention?: (key: string, note: string) => number;
-  /** Build runs in flight — `/api/repos` marks a repo whose build is running. */
-  builds?: Pick<import("../builds.js").BuildManager, "runningIn">;
+  /** Build runs in flight — `/api/repos` marks a repo whose build is running —
+   *  and the agent's build-button route (`agentbuild.ts`: `list`, `run`). */
+  builds?: Pick<import("../builds.js").BuildManager, "runningIn" | "list" | "run">;
   /** Sessions parked until their files arrive. An inbox POST is the event that
    *  most often opens one, and waiting up to a tick for it would be latency
    *  nobody asked for — so the upload route kicks the gate directly. */
@@ -95,10 +96,6 @@ export interface ApiCtx {
   canManage?(kind: PeerKind): boolean;
   /** The first-app onboarding job (`onboard.ts`, `/api/onboard*`). */
   onboard?: OnboardManager;
-  /** Every Android app module across the repos, as facts (`apkcheck.ts`' `apkRepoFacts`) —
-   *  `GET /api/apps/readiness`. A closure because the build list and the auto-download rule
-   *  belong to their managers, which this table does not otherwise reach. */
-  appReadiness?(): Promise<AppReadinessReport>;
   /** A plugin's hook sink (`PluginRegistry.hook`): status + JSON body, possibly HELD. Never rejects. */
   pluginHook?(pluginId: string, payload: unknown): Promise<{ status: number; body: unknown }>;
   /** A plugin's own route (`api.route`, `PluginRegistry.route`): the runner, or null when nothing

@@ -205,6 +205,7 @@
 .tr-h3, .tr-h4, .tr-h5, .tr-h6 { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); }
 .tr-list { margin: var(--sp-6) 0; padding-left: var(--sp-20); }
 .tr-list li { margin: var(--sp-4) 0; }
+.tr-list.tr-sub { margin: var(--sp-2) 0; }
 .tr-quote { margin: var(--sp-8) 0; padding: var(--sp-2) var(--sp-10); color: var(--muted); border-left: 2px solid var(--line); }
 .tr-quote > :first-child { margin-top: 0; }
 .tr-quote > :last-child { margin-bottom: 0; }
@@ -443,7 +444,7 @@
 .hix-bar-axis { min-height: 18px; }
 .hix-axis-words { display: flex; justify-content: space-between; color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
 .hix-box { border-bottom: 1px solid var(--line); padding-bottom: var(--sp-8); }
-/* The launcher's "N at limit" chip. Same pill as "N waiting" but in the limit
+/* The launcher's "N blocked" chip. Same pill as "N waiting" but in the limit
    colour and NOT pulsing: a blocked session is not asking for you, it is telling
    you what it will do by itself — a pulse there is an alarm for a queue that is
    already handling it. */

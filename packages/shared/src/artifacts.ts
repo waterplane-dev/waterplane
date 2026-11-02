@@ -29,6 +29,8 @@
  * `host/artifacts.ts`.
  */
 
+import { trimEndChars, trimStartChars } from "./lineartrim.js";
+
 /**
  * What a repo does with what its builds produce. Stored per repo in
  * `<repoDir>/.waterplane/artifacts.json` — next to `builds.json` and
@@ -194,7 +196,10 @@ export interface ArtifactNaming {
 /** Only what a filename may hold, with the separators this module splits on
  *  preserved. Anything else becomes a `-`, and runs collapse. */
 function slug(s: string): string {
-  return s.replace(/[^A-Za-z0-9.+~_-]+/g, "-").replace(/-{2,}/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+  // The edge trim is two loops, not `/^[-.]+|[-.]+$/g`: that alternation retries
+  // a `-.-.` run from every offset (quadratic); the loops strip the same edges.
+  const t = s.replace(/[^A-Za-z0-9.+~_-]+/g, "-").replace(/-{2,}/g, "-");
+  return trimEndChars(trimStartChars(t, "-."), "-.");
 }
 
 /**

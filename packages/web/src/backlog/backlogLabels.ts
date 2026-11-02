@@ -6,7 +6,7 @@
  * `AssessSheet` import the verdict and kind tables from this file, so a verdict
  * reads the same on every screen. Shape: docs/notes/backlog-architecture.md.
  */
-import { Bug, Check, CircleDashed, CircleHelp, Hourglass, Lightbulb, Loader, TrendingUp, TriangleAlert, Wrench, X, type LucideIcon } from "lucide-react";
+import { Bug, Check, CircleDashed, CircleHelp, Hourglass, KeyRound, Lightbulb, Loader, TrendingUp, TriangleAlert, Wrench, X, type LucideIcon } from "lucide-react";
 import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCategory } from "@waterplane/shared";
 import { wordOf } from "@waterplane/shared";
 import { isFailedRow } from "../backlogFilter";
@@ -44,6 +44,8 @@ export const CHECK_LABEL: Record<BacklogCheckStatus, string> = {
   // Not a verdict about the work: the reviewer never ran. Worded as the quota
   // fact it is, so nobody reads it as "the check says no".
   limited: "not checked — usage limit",
+  // Likewise not a verdict: the reviewer never ran because the CLI is signed out.
+  signedOut: "not checked — signed out",
 };
 /** …and the icon each verdict wears, from `lucide-react` like every other icon
  *  in this app. Exported with the labels, because a verdict drawn with one
@@ -57,6 +59,7 @@ export const CHECK_ICON: Record<BacklogCheckStatus, LucideIcon> = {
   not_done: X,
   error: TriangleAlert,
   limited: Hourglass,
+  signedOut: KeyRound,
 };
 export const VALIDATE_LABEL: Record<BacklogValidateStatus, string> = {
   validating: "validating…",
@@ -66,6 +69,7 @@ export const VALIDATE_LABEL: Record<BacklogValidateStatus, string> = {
   unclear: "unclear",
   error: "validate failed",
   limited: "not validated — usage limit",
+  signedOut: "not validated — signed out",
 };
 export const VALIDATE_ICON: Record<BacklogValidateStatus, LucideIcon> = {
   validating: Loader,
@@ -75,6 +79,7 @@ export const VALIDATE_ICON: Record<BacklogValidateStatus, LucideIcon> = {
   unclear: CircleHelp,
   error: TriangleAlert,
   limited: Hourglass,
+  signedOut: KeyRound,
 };
 /**
  * A verdict as drawn: its words and its icon, read through `wordOf`. The

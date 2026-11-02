@@ -452,7 +452,7 @@ export class BuildManager extends EventEmitter {
    * synchronously, while there is still a socket to tell, rather than minutes
    * later inside an executor.
    */
-  run(repoDir: string, buildId: string, given?: Record<string, string>, opts?: { origin?: string }): BuildRun | { error: string } {
+  run(repoDir: string, buildId: string, given?: Record<string, string>, opts?: { origin?: string; id?: string }): BuildRun | { error: string } {
     const cfg = this.list(repoDir).find((b) => b.id === buildId);
     if (!cfg) return { error: "unknown build" };
 
@@ -487,7 +487,9 @@ export class BuildManager extends EventEmitter {
     }
 
     const cmd = applyParams(cfg.cmd, values);
-    const runId = "br_" + randomUUID().slice(0, 8);
+    // A caller-chosen id (`agentbuild.ts`: `agent-build-<key>`) makes a retried
+    // request the SAME run: `post` answers the existing row instead of a second.
+    const runId = opts?.id ?? "br_" + randomUUID().slice(0, 8);
     const posted = this.intents.post({
       id: runId,
       cwd: repoDir,

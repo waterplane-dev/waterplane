@@ -80,6 +80,7 @@ export function fakeHold(maxHoldMs = 8000) {
  * @param {string} [opts.sink]          `hookSink()` url
  * @param {{dialogKeysThenTyped?:boolean}|false} [opts.supports]  `api.supports` (false/absent: member missing, as on an older host)
  * @param {string[]} [opts.omit]        members to DELETE, to emulate an older host (e.g. ["ruleAllows","rules","forgetRules"])
+ * @param {object[]} [opts.repoApps]    what `repoApps()` answers (default [])
  */
 export function fakeApi(opts = {}) {
   const manifest = opts.manifest ?? null;
@@ -169,6 +170,7 @@ export function fakeApi(opts = {}) {
     onHook: (fn, o) => reg(calls.onHook, { fn, opts: o }),
     route: (method, pattern, fn) => reg(calls.route, { method, pattern, fn }),
     stream: (name, handlers) => reg(calls.stream, { name, handlers }),
+    repoApps: async () => (opts.repoApps ?? []).map((a) => ({ ...a })),
     offerFile: (file, o) => { calls.offerFile.push({ file, opts: o }); return { path: `/api/plugin-file/${id}/fake`, size: 0, expiresAt: Date.now() + 60_000, withdraw() {} }; },
     // ── test helpers, not part of the contract ──
     _calls: calls,

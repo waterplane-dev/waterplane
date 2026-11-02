@@ -374,6 +374,25 @@ export function copilotWeightWords(t: InstructionTotals, fmt: (n: number) => str
 /** One instruction file's weight as the file viewer states it: the whole, and the share that rides every turn. */
 export interface InstructionFileWeight { kind: string; chars: number; always: number; scoped: number; onDemand: number }
 
+/** `/(^|\/)\.claude\/<dir>\/.+\.md$/.test(p)` without the regex: CodeQL flags that shape as
+ *  quadratic (the `.+` re-scans from every `.claude/<dir>/` occurrence). `.` crosses no line
+ *  terminator, so only an occurrence after the LAST one can match; of those the earliest on a
+ *  segment boundary leaves the longest tail, and the tail must be one character plus `.md`. */
+function underClaudeDir(p: string, dir: string): boolean {
+  if (!p.endsWith(".md")) return false;
+  const seg = `.claude/${dir}/`;
+  let from = 0;
+  for (let i = p.length - 1; i >= 0; i--) {
+    const c = p[i];
+    if (c === "\n" || c === "\r" || c === "\u2028" || c === "\u2029") { from = i + 1; break; }
+  }
+  for (let at = p.indexOf(seg, from); at >= 0; at = p.indexOf(seg, at + 1)) {
+    if (at > 0 && p[at - 1] !== "/") continue;
+    return p.length - (at + seg.length) >= 4;
+  }
+  return false;
+}
+
 /**
  * The weight of ONE file opened on its own, recognised by its name and folder — the viewer has no
  * inventory, and a SKILL.md or CLAUDE.md is the same file under any root. Null for anything else.
@@ -390,9 +409,9 @@ export function instructionFileWeight(path: string, text: string): InstructionFi
     parts = [{ readers: [], when: { kind: "always" }, chars: text.length }];
   } else if (name === "SKILL.md") { kind = "skill"; parts = classifySkill(text, []); }
   else if (name.endsWith(".instructions.md")) { kind = "instructions"; parts = classifyInstructions(text, []); }
-  else if (/(^|\/)\.claude\/rules\/.+\.md$/.test(p)) { kind = "rule"; parts = classifyRule(text, []); }
+  else if (underClaudeDir(p, "rules")) { kind = "rule"; parts = classifyRule(text, []); }
   else if (/(^|\/)\.claude\/agents\/[^/]+\.md$/.test(p)) { kind = "subagent"; parts = classifySkill(text, []); }
-  else if (/(^|\/)\.claude\/commands\/.+\.md$/.test(p)) { kind = "command"; parts = classifySkill(text, []); }
+  else if (underClaudeDir(p, "commands")) { kind = "command"; parts = classifySkill(text, []); }
   else return null;
   const w: InstructionFileWeight = { kind, chars: text.length, always: 0, scoped: 0, onDemand: 0 };
   for (const part of parts) {

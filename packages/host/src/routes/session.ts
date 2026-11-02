@@ -713,6 +713,20 @@ const onSessionNetRetryNow: Route<"session.netRetryNow"> = (a) => {
     a.c.sessions.netRetryNow(a.msg.id);
 };
 
+// The person's continue after a sign-out (`sessions/signinwait.ts`): through the
+// account's wave gate, first alone. Durable — a late delivery types only into
+// sessions still waiting in the episode; the rest are named back, never typed into.
+const onSignInContinue: RouteSpec<"signin.continue"> = {
+  durable: true,
+  run: (a) => {
+    const ids = Array.isArray(a.msg.ids) ? a.msg.ids.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
+    const r = a.c.sessions.signInContinue(ids);
+    const n = r.taken.length;
+    const said = n ? `continuing ${n} session${n === 1 ? "" : "s"} — the first goes alone` : "no session here waits for a sign-in";
+    return { ok: n > 0, reason: r.ignored.length ? `${said}; not waiting for a sign-in: ${r.ignored.join(", ")}` : said };
+  },
+};
+
 const onSessionPin: Route<"session.pin"> = (a) => {
     a.c.sessions.pin(a.msg.id, a.msg.entryId);
 };
@@ -779,6 +793,7 @@ export const sessionRoutes: RouteTable = {
   "session.ackAsking": onSessionAckAsking,
   "session.netRetryCancel": onSessionNetRetryCancel,
   "session.netRetryNow": onSessionNetRetryNow,
+  "signin.continue": onSignInContinue,
   "session.pin": onSessionPin,
   "session.record": onSessionRecord,
   "session.history": onSessionHistory,

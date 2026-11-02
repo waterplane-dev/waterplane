@@ -63,7 +63,7 @@
 .rv-item-where { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 .rv-item-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .rv-compose-head .grow, .rv-item .grow { flex: 1; min-width: 0; }
-/* Shell links bar (ShellLinksBar.tsx) — LoginBar's amber card, one block per link. */
+/* Shell links bar (ShellLinksBar.tsx) — BlockBar's amber card, one block per link. */
 .shell-link + .shell-link { margin-top: var(--sp-10); padding-top: var(--sp-8); border-top: 1px solid var(--line); }
 .shell-code-btn { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .shell-code-big { margin-top: var(--sp-8); font-size: calc(26px * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .12em; text-align: center; user-select: all; color: var(--fg); }

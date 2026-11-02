@@ -271,7 +271,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     // left unread is still a body, and node answers and then destroys the
     // socket, which the NEXT request on that pooled connection fails on
     // ("other side closed") with nothing in this daemon's log to explain it.
-    const body = await readJson(req, { optional: true }) as { scope?: unknown; approveEngine?: unknown; approveToken?: unknown } | null;
+    const body = await readJson(req, { optional: true }) as { scope?: unknown; approveEngine?: unknown; approveToken?: unknown; recut?: unknown } | null;
     // The one tap that lets a repo's OWN committed code run on this desktop —
     // its engine, or the commands its health.json declares. Consent, so it goes
     // through the confirm gate: a browser Origin and the token the read minted.
@@ -292,7 +292,10 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     // Single-flight lives in `repohealth.ts`, not here: a second tap while a
     // run is in flight JOINS it. Two concurrent `update`s would both append
     // rows for the same shas to an append-only file, permanently.
-    const running = refreshRepoHealth(wt, {}, scope).then(
+    // `recut`: the person's tap on the refusal's remedy. The engine MOVES the
+    // old series aside (never deletes it) and only when it really holds a
+    // different definition — so a stray flag cannot discard a good series.
+    const running = refreshRepoHealth(wt, {}, scope, { recut: body?.recut === true }).then(
       (view) => ({ view, error: null as string | null }),
       (err: unknown) => ({ view: null, error: err instanceof Error ? err.message : String(err) }),
     );

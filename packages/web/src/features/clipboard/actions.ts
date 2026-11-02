@@ -2,7 +2,8 @@ import { transcriptText } from "@waterplane/shared";
 import { core } from "../../sdk";
 import { getTranscript } from "../../offlineCache";
 import { openExternal } from "../../openExternal";
-import { emptyDumpText, quoteBlock } from "./logic";
+import { copyText } from "../../api";
+import { emptyDumpText, quoteBlock, sessionReference } from "./logic";
 import { clipSeed, decide, dump } from "./store";
 
 /**
@@ -107,4 +108,19 @@ export function quoteIntoCompose(text: string): boolean {
   if (!block) return false;
   core().compose.insert(block);
   return true;
+}
+
+/**
+ * "copy reference": this session's reference — peer name, folder,
+ * conversation id — onto the phone's clipboard, with `picked` text quoted
+ * under it when there is some, so it can be pasted into another session.
+ */
+export async function copySessionRef(picked?: string): Promise<boolean> {
+  const c = core();
+  const active = c.world.active;
+  if (!active || c.world.pending) { c.say.toast("no session to reference yet — it has not opened on the desktop"); return false; }
+  const ok = await copyText(sessionReference(active, picked));
+  const what = picked?.trim() ? "reference + picked text" : "session reference";
+  c.say.toast(ok ? `${what} copied${active.cliName ? "" : " — no peer name yet (the desktop learns it after the first turn)"}` : "clipboard unavailable (needs https)");
+  return ok;
 }

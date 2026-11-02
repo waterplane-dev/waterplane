@@ -22,6 +22,7 @@ import { webBundleFile, webBundleManifest } from "../webbundle.js";
 import { claudeBin } from "../backends/index.js";
 import { handleAgentIntents } from "../agentintents.js";
 import { handleAgentFollowUp } from "../agentfollowup.js";
+import { handleAgentBuilds } from "../agentbuild.js";
 import { handlePeerRoutes } from "../peers/routes.js";
 import { PeerClient } from "../peers/client.js";
 import { handlePeerAgent } from "../peers/agentpeer.js";
@@ -258,6 +259,16 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
 
   // `POST /api/agent/followup` — an agent flags its OWN session for follow up; sets, never clears (`agentfollowup.ts`).
   mount("agentfollowup", ({ req, res, path }, ctx) => handleAgentFollowUp(req, res, path, { sessions: ctx.sessions, json, readJson: (r) => readJson(r) })),
+
+  // `GET /api/agent/builds?dir=` lists the repo's build buttons; `POST /api/agent/builds/run` runs one exactly as a
+  // tap would, so its outputs reach the outbox and the phone (`agentbuild.ts`). Buttons only, never a free command.
+  mount("agentbuild", async ({ req, res, path, url }, ctx) => !!ctx.builds && handleAgentBuilds(req, res, path, url, {
+    builds: ctx.builds,
+    containRepoDir: (d) => ctx.containRepoDir(d),
+    repoDir: async (id) => (await findTarget(ctx.root, id))?.worktreePath ?? null,
+    json,
+    readJson: (r) => readJson(r),
+  })),
 
   // `GET /api/agent/exposure?dir=` lists the repo's crash / exposure findings; `POST /api/agent/exposure/triage` marks one
   // seen / investigating / fixed. Marks only, never clears (`agentexposure.ts`).

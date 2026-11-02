@@ -31,7 +31,7 @@ but never counted into the badge.
 **Every tap lands on a page about what was tapped** — the feed row, the service worker's tap and the
 Android shell's tap all go through `openNotif`, whose ladder is `notifTarget` (`logic.ts`): file,
 plugin, image, session, backlog cut (`item.backlog`), then the host's `item.open` (`repohealth`,
-`tokens`, `plugin`), and the floor — the feed opened on the alert's own row (`notifFocus`, scrolled
+`tokens`, `plugin`, `blocked` → the blocked sheet), and the floor — the feed opened on the alert's own row (`notifFocus`, scrolled
 to and flashed). A target that is gone (closed session, unknown repo, unavailable plugin) also falls
 to the row, saying why. A tap from the shade (`openNotifFromOutside`) first waits up to 15 s for the
 list its target needs, so a cold start never reads "not loaded" as "gone". The APK hands back an

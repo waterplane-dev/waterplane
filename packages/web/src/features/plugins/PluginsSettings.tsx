@@ -16,7 +16,7 @@ import { useCore, useStore } from "../../sdk";
 import { ConfirmButton } from "../../Confirm";
 import { SetAction, SetChoice, SetCustom, SetNote, SetPick, SetSwitch, SetWarn, useNestedShown } from "../../SettingsKit";
 import { enablePlugin, openDecisions, refuseValue, runPluginAction, setPluginValue } from "./actions";
-import { actionKey, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine, pluginWords } from "./logic";
+import { actionKey, autoLine, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine, pluginWords } from "./logic";
 import { errors, plugins as pluginStore, results } from "./store";
 import { Button, RowSub, Tag } from "../../kit";
 import { AddByUrl, ApplyNote, AvailableList, CheckedLine, MaturityTag } from "./UpdatesParts";
@@ -104,7 +104,7 @@ function PluginSection({ p, row }: { p: PluginView; row: InstalledRow | undefine
       )}
       {err && <SetWarn icon={AlertTriangle}>{err}</SetWarn>}
       <SetSwitch label={`use ${m.name}`} icon={Puzzle} on={p.enabled} onChange={() => enablePlugin(p, !p.enabled)}
-        note={p.enabled ? undefined : "Off: the desktop does not activate it, and it sees nothing."} />
+        note={autoLine(p) ?? (p.enabled ? undefined : "Off: the desktop does not activate it, and it sees nothing.")} />
       {env.length > 0 && (
         <SetNote className="plugin-env">
           <KeyRound size={12} /> {env.map((e, i) => (

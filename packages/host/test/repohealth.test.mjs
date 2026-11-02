@@ -518,6 +518,12 @@ test("resolution and argv, unfaked: the rule itself", () => {
     repoHealthArgv(bundled, bare, "update"), [bundled.path, "update", `--root=${bare}`],
     "ONE token, so a parser that predates the flag ignores it instead of reading it as a subcommand",
   );
+  assert.deepEqual(
+    repoHealthArgv(bundled, bare, "update", null, false, true), [bundled.path, "update", `--root=${bare}`, "--recut"],
+    "a re-cut is the person's tap, carried as one flag on update",
+  );
+  assert.deepEqual(repoHealthArgv(bundled, bare, "narrate", null, false, true), [bundled.path, "narrate", `--root=${bare}`],
+    "and on update only — narrate and html never move a series");
 });
 
 test("a repo's own engine that cannot load its imports is passed over for the desktop's, and says why", () => {

@@ -143,7 +143,6 @@ export function App() {
    * without a reload.
    */
   useRepoColors();
-  const tabsOn = usePref("tabsOn");
   // Settings that follow the USER: the sync install and the adopt switch (`core/settings`).
   useSettingsAdoption({ connRef, setLaunch: (l) => setLaunch(l), setHiddenRepoIds: (ids) => setHiddenRepoIds(ids) });
   // Most-used-first toolbar order: the snapshot is taken here (features/toolbarCfg),
@@ -162,7 +161,7 @@ export function App() {
    * is minted (`queue.test.mjs`). App's call sites keep their names below.
    */
   const q = useQueue({
-    conn, sessions, repos, activeId, setActiveId, setLastVisitedId: (id) => setLastVisitedId(id),
+    conn, sessions, backends, repos, activeId, setActiveId, setLastVisitedId: (id) => setLastVisitedId(id),
     overlayRef, setOverlay, wantNavRef, buffers, readModeRef, exitedRef,
     composeTextRef: composeNow, setCompose, pushHistory,
     openSend: (seed) => openSend(seed), sendTargetFor: (sid, cwd) => sendTargetFor(sid, cwd),
@@ -279,7 +278,7 @@ export function App() {
   // Ship the connectivity roll-up (netlog.ts) — periodic + on hide.
   useEffect(() => { startLinkReporting(); }, []);
   // The tab strip: published, and its two taps heard (`core/sessions`).
-  useTabStripBridge({ tabsOn, sessions, sessionRepoName, activeId, repos, attach, closeSession, backends });
+  useTabStripBridge({ sessions, sessionRepoName, activeId, repos, attach, closeSession, backends });
 
   /**
    * Ask for the usage figure when a screen that shows it comes up.
@@ -378,7 +377,7 @@ export function App() {
     <LauncherScreen sessions={sessions} recent={recent} closed={closed} repos={repos} reposAt={reposAt} reposFailAt={reposFailAt} backends={backends}
       intents={intents} outbox={outbox} nowTick={nowTick} launch={launch} conn={conn}
       route={{ focusRepo, setFocusRepo, setOverlay, lastVisitedId }}
-      view={{ visibleRepos, hiddenRepos, hiddenRepoPaths, cwdInFocus, toggleHideRepo, openingCwds }}
+      view={{ visibleRepos, hiddenRepos, hiddenRepoPaths, cwdInFocus, cwdVisible, toggleHideRepo, openingCwds }}
       launchCore={launchCore} term={term} queue={q} openSend={openSend} verbs={verbs} openGitFor={openGitFor}
       banners={<>
         <QueueBars q={q} status={status} reconnectAsk={reconnectAsk} setReconnectAsk={setReconnectAsk}

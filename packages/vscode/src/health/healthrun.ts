@@ -9,8 +9,9 @@
  *
  * The steps are a closed union and the argv is `[step, "--root=" + folder]`, plus `--scope=` on a
  * read of a folder's scope. A series the waterplane desktop app already measured in the folder
- * (`healthsource.ts`) is READ by status/plot through `..._HEALTH_READ_FROM`; `update` and the tail
- * mend never see it. Our own series lives under `storageDir/<healthSlug(folder)>/` (the worker's `WATERPLANE_VSCODE_HEALTH_DIR`),
+ * (`healthsource.ts`) is READ by status/plot through `..._HEALTH_READ_FROM`, and it is then the
+ * ONLY series: `refresh` reads it again and runs no `update`, so no second copy grows beside the one
+ * the phone shows and the two can never drift. `update` and the tail mend never see it. Our own series lives under `storageDir/<healthSlug(folder)>/` (the worker's `WATERPLANE_VSCODE_HEALTH_DIR`),
  * never in the folder. A step past `stepMs()` is terminated; rows `update` had already appended
  * (every 25 commits) stay, and the next refresh carries on from them.
  */
@@ -243,6 +244,14 @@ export class HealthRun {
   private async refreshSteps(s: Slot, folder: string): Promise<void> {
     const e = await this.envFor(folder);
     if ("why" in e) return this.noGit(s);
+    // The folder's own series is the one source (`chooseSource`): the desktop app measures it. A
+    // measure here would grow a second copy nobody reads, so a refresh reads that file again instead.
+    if (repoSeriesDir(folder)) {
+      s.update = null;
+      s.tailNote = null;
+      await this.readWith(s, folder, e.env);
+      return;
+    }
     this.mendTail(s, folder);
     const startedAt = this.now();
     const u = await this.step(s, folder, "update", e.env);

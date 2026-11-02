@@ -47,9 +47,14 @@ let authInflight: Promise<"in" | "out" | null> | null = null;
  * Is claude signed in on this desktop, for a request path (the onboarding plan, a peer's hello).
  * Cached — each read spawns `claude`: a yes for 5 minutes, a no or an unreadable answer for 15 s,
  * so signing in shows up on the next look. Never throws; a failure is null.
+ *
+ * `maxAgeMs` caps the cache for one caller: the sign-in episode's poll (`recover/authgate.ts`)
+ * passes 0 — a five-minute-old "in" is exactly the answer it must not trust. A read already in
+ * flight is still joined.
  */
-export async function claudeSignInState(bin: string, now = Date.now()): Promise<"in" | "out" | null> {
-  if (authCache && authCache.bin === bin && now - authCache.at < (authCache.state === "in" ? 300_000 : 15_000)) return authCache.state;
+export async function claudeSignInState(bin: string, now = Date.now(), maxAgeMs?: number): Promise<"in" | "out" | null> {
+  const ttl = Math.min(authCache?.state === "in" ? 300_000 : 15_000, maxAgeMs ?? Infinity);
+  if (authCache && authCache.bin === bin && now - authCache.at < ttl) return authCache.state;
   authInflight ??= (async () => {
     try {
       const resolved = await which(bin);

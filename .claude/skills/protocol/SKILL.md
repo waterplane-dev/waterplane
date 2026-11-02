@@ -1,6 +1,6 @@
 ---
 name: protocol
-description: waterplane wire protocol and the invariants that hold it together: the single WebSocket, ackIds and at-most-once delivery, durable ops, session.input and its verdicts, prompt fingerprints, intents on the wire, the tmux substrate and its locale trap. Load BEFORE adding a message, changing an ack or retry path, touching PROTOCOL_VERSION, or changing how a send is delivered or confirmed. Several rules here exist because a prompt ran twice or never ran at all.
+description: "waterplane wire protocol and the invariants that hold it together: the single WebSocket, ackIds and at-most-once delivery, durable ops, session.input and its verdicts, prompt fingerprints, intents on the wire, the tmux substrate and its locale trap. Load BEFORE adding a message, changing an ack or retry path, touching PROTOCOL_VERSION, or changing how a send is delivered or confirmed. Several rules here exist because a prompt ran twice or never ran at all."
 ---
 
 # waterplane wire protocol and invariants

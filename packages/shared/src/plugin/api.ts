@@ -4,6 +4,7 @@ import type { PluginBackendDef, PluginScreenReader, PluginStoreReader, PluginHtt
 import type { PeerKind } from "../wire/messages.js";
 import type { PluginStreamHandlers } from "../stream.js";
 import type { ComplianceCheck } from "../wire/repo.js";
+import type { AppRepoFacts } from "../wire/install.js";
 import type { PluginThermalReader, PluginUsageProbe } from "../pluginreadings.js";
 import type { BindLook, BindVerdict } from "../bindconv.js";
 
@@ -343,4 +344,11 @@ export interface HostPluginApi {
   stream(name: string, handlers: PluginStreamHandlers): () => void;
   /** Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). */
   offerFile(file: string, opts: import("../pluginfile.js").PluginFileOfferOpts): import("../pluginfile.js").PluginFileOffer;
+  /** Since 2.5: facts about each Android app module in every PRIMARY checkout on this desktop (read-only, bounded async
+   *  walks, one repo at a time): package, targetSdk, key kind, the outbox APK, the build rows, the auto-download
+   *  rule and whether it would take the newest APK. [] when the desktop has none. Core's readiness facts
+   *  (`appready.ts`); rejects in words on a host that cannot read them, or once this plugin is switched off.
+   *  Concurrent calls share one walk. Any plugin may call it: the facts are paths and names, not secrets
+   *  (`docs/notes/plugins.md`, "Which apps a repo builds"). */
+  repoApps(): Promise<AppRepoFacts[]>;
 }

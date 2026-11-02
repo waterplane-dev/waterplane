@@ -1,10 +1,18 @@
 # Changelog
 
+## 0.9.0 - 2026-11-02
+
+0.8.0 and 0.7.0 were never published to the Marketplace; their changes ship here.
+
+- **Repo health shows one series, the phone's.** When the repository holds a series the waterplane desktop app measured (`.waterplane/repohealth.jsonl`), that file is the one shown, always, and the refresh button reads it again (`read it again`) instead of measuring a second copy beside it. The two can no longer show different numbers. The extension's own copy is used only for a repository the desktop app has never measured.
+- **Repo health reads the repository you are editing in.** A workspace opened on a parent folder (`~/dev`, holding many repositories) used to say "not a git repository". It now reads the repository that holds the active file, and a folder below a repository's root reads that repository. The panel's heading names it.
+
 ## 0.8.0 - 2026-10-30
 
 - **Which build is running.** The status-bar tooltip and the panel's footer name this build: version, commit and build time (`0.7.0 · a1b2c3d · 27 Oct 08:42`, with `+ edits` when it was built from uncommitted changes). The repo's build list shows the same line for the build it last installed or published.
 - **A cost window over undated records says so.** When part of Claude Code's log carries no date, a window it cannot place them in says how many it left out instead of printing a smaller total; every view words that count the same way.
 - **The tree highlights a session only while the panel shows it**, and the note about left-out sessions always opens All sessions.
+- **Always-on context lists files the way the phone does.** One row per file — path, then type and who reads it, then what it costs every request and on demand — instead of a four-column table that wrapped every path mid-word and split a skill into two rows. A folder with no instruction files of its own still draws the strip over this desktop's files.
 
 ## 0.7.0 - 2026-10-26
 

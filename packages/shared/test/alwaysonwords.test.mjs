@@ -4,7 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alwaysOnRows, alwaysOnTotalsWords, carriedRemainder, carriedRows, carriedWords, desktopInventory, desktopPathWords, instructionInventory } from "../dist/index.js";
+import { alwaysOnRowFigures, alwaysOnRows, alwaysOnTotalsWords, carriedRemainder, carriedRows, carriedWords, desktopInventory, desktopPathWords, instructionInventory } from "../dist/index.js";
 
 function fsOf(files) {
   return {
@@ -131,4 +131,16 @@ test("carried words: whole, the documented share as 'about', the snapshot, the r
 test("carried words before any answer say so, in chars", () => {
   assert.equal(carriedWords({ firstRequestTok: null, firstRequestAt: null, parts: [], laterDeltas: 0 }),
     "No request has been answered yet; these are the attachments the CLI has written so far (chars).");
+});
+
+test("an always-on row's figures read like a carried part: every turn on the right, the rest beside", () => {
+  const row = (o) => ({ path: "p", kind: "skill", scope: "repo", readers: ["claude"], always: 0, scoped: 0, onDemand: 0, counted: true, ...o });
+  assert.deepEqual(alwaysOnRowFigures(row({ always: 4000 })), { num: "~1k tokens · 4k chars", rest: null });
+  assert.deepEqual(alwaysOnRowFigures(row({ always: 400, onDemand: 8000 })),
+    { num: "~100 tokens · 400 chars", rest: "+ ~2k tokens · 8k chars only when used" });
+  assert.deepEqual(alwaysOnRowFigures(row({ scoped: 800 })),
+    { num: "nothing every turn", rest: "+ ~200 tokens · 800 chars when a matching file is touched" });
+  // Unsized: the reason, never a 0.
+  assert.deepEqual(alwaysOnRowFigures(row({ always: null, scoped: null, onDemand: null, unsized: "an MCP server" })),
+    { num: null, rest: "an MCP server" });
 });

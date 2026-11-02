@@ -19,8 +19,10 @@ import {
 import {
   FALLBACK_ROWS,
   ROW_WINDOW,
+  composerAnchorsFor,
   composerEcho,
   composerHeld,
+  composerReading,
   liveComposerEcho,
 } from "../composer.js";
 import { rivalTexts } from "../opendeliveries.js";
@@ -41,9 +43,7 @@ const QUOTE_MAX = 40;
  */
 export function composerAnchorsOf(sessions: SessionManager, sessionId: string): ComposerAnchors | null {
   try {
-    const d = resolveBackend(sessions.get(sessionId)?.backend).delivery;
-    if (!d.composerCursorRe && !d.composerRuleRe) return null;
-    return { cursor: d.composerCursorRe, rule: d.composerRuleRe, placeholder: d.composerPlaceholderRe ?? null };
+    return composerAnchorsFor(resolveBackend(sessions.get(sessionId)?.backend).delivery);
   } catch {
     return null;
   }
@@ -99,10 +99,8 @@ export async function foreignInComposer(
 export async function composerHoldsOnlyHint(sessions: SessionManager, sessionId: string): Promise<boolean> {
   const anchors = composerAnchorsOf(sessions, sessionId);
   if (!anchors || typeof sessions.screenCells !== "function") return false;
-  const cells = await sessions.screenCells(sessionId, ROW_WINDOW);
-  const plain = composerHeld(cells.map((r) => r.text), anchors);
-  if (!plain) return false;
-  return composerHeld(cells.map((r) => r.undimmed), anchors) === "";
+  const r = composerReading(await sessions.screenCells(sessionId, ROW_WINDOW), anchors);
+  return !!r && !!r.held && r.typed === "";
 }
 
 /**

@@ -58,13 +58,19 @@ export interface ClaudeHookPayload {
 }
 
 /**
- * `StopFailure` kinds that end a turn like a `Stop`: the transient give-ups the
- * host retries (`sessions/apiretry.ts`, which still reads the LOG for the
- * verdict). The CLI fires `StopFailure` INSTEAD of `Stop` on an API error, so
- * without this a give-up turn never ended and nothing retried it. Limits,
- * billing and auth stay with `wall.ts`'s screen + log readers, as before.
+ * `StopFailure` kinds that end a turn like a `Stop`. The CLI fires `StopFailure`
+ * INSTEAD of `Stop` on an API error, so without this the turn never ended for
+ * the host — the session read busy until the next hook, and nothing waited on
+ * it could move:
+ *  - `server_error` / `overloaded` — the transient give-ups the host retries
+ *    (`sessions/apiretry.ts`, which still reads the LOG for the verdict);
+ *  - `authentication_failed` — the CLI is signed out. `sessions/turn.ts` marks
+ *    `signedOut` off this same hook before it gets here, and its `settleStop`
+ *    tells the work waiting on the turn it did NOT run (`TurnEndNet`
+ *    `signedOut`), so the end is never read as a served reply or as a net give-up.
+ * Limits and billing stay with `wall.ts`'s screen + log readers, as before.
  */
-const TRANSIENT_STOP_FAILURE = new Set(["server_error", "overloaded"]);
+const TURN_ENDING_STOP_FAILURE = new Set(["server_error", "overloaded", "authentication_failed"]);
 
 export const claudeSources: BackendSources = {
   inBand: true,
@@ -122,7 +128,7 @@ export function postClaudeHook(hostSessionId: string, payload: ClaudeHookPayload
       on.ended(at, { reread: { logPath: payload.transcript_path } });
       break;
     case "StopFailure":
-      if (TRANSIENT_STOP_FAILURE.has(String(payload.error || ""))) on.ended(at, { reread: { logPath: payload.transcript_path } });
+      if (TURN_ENDING_STOP_FAILURE.has(String(payload.error || ""))) on.ended(at, { reread: { logPath: payload.transcript_path } });
       break;
     case "SessionEnd":
       on.ready();

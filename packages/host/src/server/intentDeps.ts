@@ -11,7 +11,7 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, blockOf, blockWallOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -32,6 +32,7 @@ import { readJsonGuardedDetail, writeTextAtomic } from "../jsonstore.js";
 import { discoverTargets } from "../repos.js";
 import { installLocalSlots, localModelHold, localSlotsDetail, localSlotsPass, localStartNotice } from "../localslot.js";
 import { ranVerdict } from "../settle.js";
+import { backendAutoAcceptsTrust } from "../backends/index.js";
 import { haltRefusal } from "../halt.js";
 import type { ServerCtx } from "./ctx.js";
 
@@ -107,6 +108,10 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
         id: s.id, cwd: s.cwd, running: s.running, turnStartedAt: s.turnStartedAt,
         turnActive: s.turnActive || (s.running && ctx.sessions.autoFireBlocker(s.id, ctx.backlog.idleMs) !== null) || undefined,
         limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind, awaitingInput: s.awaitingInput,
+        // Signed out, or the host's net retry holds it: `sessionWall`'s `auth`/`net`.
+        block: blockWallOf(s),
+        // Another CLI's trust box waits for a person: `sessionWall` names it a question.
+        ...(s.prompt?.kind === "trust" && !backendAutoAcceptsTrust(s.backend) ? { trustAutoAccepted: false } : {}),
         convId: s.claudeSessionId,
         // Opened for QUEUED work — the only kind of session the serial rung
         // lets hold a repo (`intentSerialHolders`). The origin is the fact; the
@@ -174,6 +179,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     idleWindowMs: () => ctx.backlog.idleMs,
     reapCeilingMs: () => REAP_CEILING_MS,
     sessionNetStalled: (id) => netRetryStalls(ctx.sessions.get(id)?.netRetry),
+    sessionSignedOut: (id) => { const s = ctx.sessions.get(id); return !!s && blockOf(s)?.kind === "auth"; },
     groupConcurrency: () => FANOUT_CONCURRENCY,
     knownDirs: knownRepoDirs,
     // The reset instants and percentages a `window` rule is measured against.

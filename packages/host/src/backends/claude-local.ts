@@ -8,8 +8,10 @@
  * Ollama, and the capabilities that are about an ACCOUNT (usage limits, the
  * usage report) switched off.
  *
- * **Absent beats borrowed.** The window comes from Ollama (`/api/show`'s
- * `num_ctx`, else the model's `context_length`); a 0 or a failure is ABSENT,
+ * **Absent beats borrowed.** The window comes from Ollama — a LOADED runner's
+ * `/api/ps` `context_length` first (what it really allocated: a Modelfile without
+ * `num_ctx` gets a memory-chosen default on Ollama 0.3x+), else `/api/show`'s
+ * `num_ctx`, else the model's `context_length`; a 0 or a failure is ABSENT,
  * never claude's table (`isClaudeModel` already refuses a non-claude id there).
  * Cost is absent because `pricing.ts` prices only `claude-*` ids. The CLI's own
  * gauge is OFF (`contextMeter:false`) unless the probe proved it prints the
@@ -40,8 +42,14 @@ import { ACCOUNTLESS_CLAUDE_FACTS, claudeBackend, CLAUDE_SPAWN_ENV } from "./cla
 import { measuredOverhead } from "./overhead.js";
 import type { CoreBackendDescriptor, BackendModels, LaunchPlan, LaunchRequest } from "./types.js";
 
-/** The built-in tools a lean launch keeps: enough to read, change and run a repo. */
-export const LEAN_TOOLS = "Read,Edit,Write,Bash,Grep,Glob";
+/**
+ * The built-in tools a lean launch keeps: enough to read, change and run a repo — and `Skill`,
+ * because a repo whose CLAUDE.md routes its rules into `.claude/skills` ("load `web` before
+ * editing packages/web") is otherwise told to load something it has no tool for, and the
+ * rules in those skills never reach the model. Measured 2026-10-31: +1.8k chars of schema and
+ * the skill listing (~6.8k chars here) — ~2.4k tokens, against the 27k the full set costs.
+ */
+export const LEAN_TOOLS = "Read,Edit,Write,Bash,Grep,Glob,Skill";
 
 /**
  * The argv a lean launch appends to claude's. Data, pinned byte for byte.
@@ -64,9 +72,26 @@ export function leanArgs(opts: { lean: boolean; tools?: string }): string[] {
   return ["--tools", tools, "--strict-mcp-config"];
 }
 
-/** The lean argv as this desktop is configured (`WATERPLANE_CLAUDE_LOCAL_LEAN`, default on; `_TOOLS`). */
+/**
+ * `--setting-sources project,local` unless the person keeps their USER settings for local
+ * sessions (`WATERPLANE_CLAUDE_LOCAL_USER_SETTINGS=1`; default since 2026-10-31: dropped, the owner's
+ * call after the benchmark below). Measured 2026-10-31: a
+ * user-level SessionStart/UserPromptSubmit hook that injects context ("respond terse…") on every
+ * prompt took a local 8B model over entirely — it answered the hook ("Mode active. Ready.") and
+ * never the task. Off, the user file's hooks, plugins, env AND permissions are all dropped
+ * (the host's own hooks ride `--settings` and stay). Claude Code cannot drop one hook alone, and
+ * `disableAllHooks` would silence the host's own, so the whole user file is the only lever.
+ */
+export function userSettingsArgs(keep: boolean): string[] {
+  return keep ? [] : ["--setting-sources", "project,local"];
+}
+
+/** The lean argv as this desktop is configured (`WATERPLANE_CLAUDE_LOCAL_LEAN`, default on; `_TOOLS`; `_USER_SETTINGS`). */
 export function claudeLocalLeanArgs(): string[] {
-  return leanArgs({ lean: env("CLAUDE_LOCAL_LEAN") !== "0", tools: env("CLAUDE_LOCAL_TOOLS") || "" });
+  return [
+    ...leanArgs({ lean: env("CLAUDE_LOCAL_LEAN") !== "0", tools: env("CLAUDE_LOCAL_TOOLS") || "" }),
+    ...userSettingsArgs(env("CLAUDE_LOCAL_USER_SETTINGS") === "1"),
+  ];
 }
 
 /**
@@ -112,10 +137,16 @@ function prepare(req: LaunchRequest): LaunchPlan {
     throw new Error(`Claude on a local model needs a model chosen first — pick one of the models Ollama has at ${claudeLocalUrl()}.`);
   }
   const base = claudeBackend.prepare(req);
+  const window = measuredWindow.get(req.launch.model);
+  // A model pulled or created after the host booted was never measured (the catalogue is asked
+  // at boot, and again only while it says unavailable): this launch goes without the variable —
+  // the CLI then assumes 200k and compacts too late for a 64k runner — so measure it now, for the
+  // next one. Never awaited: a core plan is decided synchronously.
+  if (!window) void measureDeps.measure(req.launch.model).catch(() => undefined);
   const keepAlive = claudeLocalKeepAlive();
   // Never awaited, never thrown: a launch does not wait on the runner.
   if (keepAlive) void Promise.resolve().then(() => warmDeps.warm(req.launch.model!, keepAlive)).catch(() => undefined);
-  return { ...base, args: [...base.args, ...claudeLocalLeanArgs()], env: claudeLocalEnv(measuredWindow.get(req.launch.model)) };
+  return { ...base, args: [...base.args, ...claudeLocalLeanArgs()], env: claudeLocalEnv(window) };
 }
 
 /**
@@ -144,11 +175,55 @@ export function windowFromShow(doc: unknown): number | null {
   return null;
 }
 
+/**
+ * The window a LOADED runner has, from an `/api/ps` document: its `context_length` for exactly
+ * this model name (`name` or `model`, with or without `:latest`). That is what the runner
+ * allocated — on Ollama 0.3x+ a Modelfile without `num_ctx` gets a default chosen by the
+ * machine's memory (4k on a small one, the model's whole window on a big one), so for a loaded
+ * model this beats both `num_ctx` and `context_length`. Not loaded, 0 or missing ⇒ null.
+ */
+export function windowFromPs(doc: unknown, model: string): number | null {
+  const list = (doc as { models?: unknown } | null)?.models;
+  if (!Array.isArray(list)) return null;
+  const bare = (n: unknown): string => (typeof n === "string" ? n.replace(/:latest$/, "") : "");
+  const want = bare(model);
+  for (const m of list as Array<{ name?: unknown; model?: unknown; context_length?: unknown }>) {
+    if (bare(m?.name) !== want && bare(m?.model) !== want) continue;
+    const n = m.context_length;
+    return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  }
+  return null;
+}
+
 async function getJson(url: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(3000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+
+/** `/api/show` for one model, or null — unmeasured is kept: the id stays, the window is absent. */
+async function showOf(url: string, name: string): Promise<unknown> {
+  try {
+    return await getJson(`${url}/api/show`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: name }),
+    });
+  } catch { return null; }
+}
+
+/** Measure ONE model's window into the launch cache (a model the boot-time catalogue never saw). */
+async function measureOne(model: string): Promise<number | null> {
+  const url = claudeLocalUrl();
+  const ps = await getJson(`${url}/api/ps`).catch(() => null);
+  const w = windowFromPs(ps, model) ?? windowFromShow(await showOf(url, model));
+  if (w) measuredWindow.set(model, w);
+  return w;
+}
+
+/** Replaceable so a test measures without a server. */
+export const measureDeps = { measure: (model: string): Promise<number | null> => measureOne(model) };
+
+/** The window the launch cache holds for a model (tests read it). */
+export const measuredWindowOf = (model: string): number | undefined => measuredWindow.get(model);
 
 async function models(): Promise<BackendModels> {
   const url = claudeLocalUrl();
@@ -160,17 +235,13 @@ async function models(): Promise<BackendModels> {
     return { aliases: [], ids: [], unavailable: `Ollama not reachable at ${url}` };
   }
   const kept = new Map<string, number | null>();
+  const ps = await getJson(`${url}/api/ps`).catch(() => null);
   await Promise.all(names.map(async (name) => {
-    let show: unknown = null;
-    try {
-      show = await getJson(`${url}/api/show`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: name }),
-      });
-    } catch { /* unmeasured is kept: the id stays, the window is absent */ }
+    const show = await showOf(url, name);
     const caps = (show as { capabilities?: unknown } | null)?.capabilities;
     // An embedding model cannot chat. Judged only on Ollama's OWN capability list; unmeasured is kept.
     if (Array.isArray(caps) && !caps.includes("completion")) return;
-    kept.set(name, windowFromShow(show));
+    kept.set(name, windowFromPs(ps, name) ?? windowFromShow(show));
   }));
   const ids = names.filter((n) => kept.has(n));
   const contextWindow: Record<string, number> = {};

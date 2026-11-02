@@ -181,7 +181,7 @@ export function serialHolders(
     if (s.running === false) continue;
     if (opts.automaticOnly && !s.automatic) continue;
     const wall = sessionWall(s) ?? (opts.automaticOnly && s.asking ? "awaitingAnswer" : null);
-    if (wall) add(serialGroup(s.cwd), { sessionId: s.id, wall: wall === "sessionBusy" && s.netStalled ? "netStalled" : wall, ...(s.name ? { name: s.name } : {}) });
+    if (wall) add(serialGroup(s.cwd), { sessionId: s.id, wall: (wall === "sessionBusy" || wall === "net") && s.netStalled ? "netStalled" : wall, ...(s.name ? { name: s.name } : {}) });
   }
   for (const o of occupied) {
     const s = o.sessionId ? sessions.find((x) => x.id === o.sessionId) : undefined;
@@ -198,16 +198,18 @@ export const SERIAL_WAIT_TEXT = "one at a time in this repo — waiting for the 
 const SERIAL_WALL_WORDS: Record<Exclude<SerialHolder["wall"], "awaitingAnswer" | "netStalled">, string> = {
   sessionBusy: "working",
   limit: "on a usage limit",
+  auth: "signed out",
+  net: "retrying a network error",
   starting: "starting a queued job",
 };
 
 /** How long a quoted session name may run in the sentence. */
 const SERIAL_NAME_MAX = 48;
 
-/** Lead order: an open question first (it is the one a PERSON can clear, and
+/** Lead order: an open question or a sign-in first (the ones a PERSON can clear, and
  *  the reason the owner asked for this hold), then any other session wall,
  *  then a `starting` claim. Stable within a rank. */
-const SERIAL_RANK: Record<SerialHolder["wall"], number> = { awaitingAnswer: 0, netStalled: 0, limit: 1, sessionBusy: 1, starting: 2 };
+const SERIAL_RANK: Record<SerialHolder["wall"], number> = { awaitingAnswer: 0, netStalled: 0, auth: 0, limit: 1, net: 1, sessionBusy: 1, starting: 2 };
 
 /**
  * The holder a serial sentence NAMES, and the one a row offers to open — one

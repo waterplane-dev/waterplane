@@ -107,14 +107,18 @@ export function projectVersion(repoDir: string): string | undefined {
   for (const g of ["app/build.gradle", "app/build.gradle.kts", "android/app/build.gradle", "android/app/build.gradle.kts", "build.gradle", "build.gradle.kts"]) {
     const text = read(g);
     if (!text) continue;
-    const name = text.match(/versionName\s*[=\s]\s*["']([^"']+)["']/)?.[1];
+    // A Kotlin/Groovy template (`"0.1.$commitCount"`) is computed at build
+    // time; read as text it is not a version, and `$` sanitised into a name
+    // gave `0.1.-commitCount`. Not an answer — fall through to the code/sha.
+    const raw = text.match(/versionName\s*[=\s]\s*["']([^"']+)["']/)?.[1];
+    const name = raw && !raw.includes("$") ? raw : undefined;
     const code = text.match(/versionCode\s*[=\s]\s*(\d+)/)?.[1];
     if (name) return code ? `${name}+${code}` : name;
     if (code) return code;
   }
   const cargo = read("Cargo.toml");
   const cv = cargo?.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
-  if (cv) return cv;
+  if (cv && !cv.includes("$")) return cv;
   return undefined;
 }
 

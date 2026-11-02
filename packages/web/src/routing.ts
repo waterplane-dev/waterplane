@@ -26,7 +26,7 @@ export function featureSheetId(feature: string, sheet: string): FeatureSheetId {
 }
 export const isFeatureSheetId = (o: unknown): o is FeatureSheetId => typeof o === "string" && FEATURE_SHEET_RE.test(o);
 
-export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "apps" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | FeatureSheetId;
+export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | FeatureSheetId;
 
 // Overlays worth putting in the URL (reload-stable; the transient ones —
 // "image"/"collage"/"slash"/"text" — need in-memory state, so they're never
@@ -65,14 +65,11 @@ export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "
 // host at all — and because the service worker's Background Fetch notification
 // has to be able to open it from a COLD start, which is exactly when the app
 // was closed and the transfer finished.
-// "apps" is in here for "repocolor"'s reason: it is a settings sheet over this
-// device's own stored answers (the allow-list) and this phone's own download
-// records, so a restored route paints the real rows with no host at all.
 // "repocolor" is in here for "toolbar"'s reason: it is a SETTINGS sheet over
 // this device's own stored answers, so a restored route paints the real rows
 // with no host at all — the repo list only decides which names are listed, and
 // the ring and every pinned colour are readable offline.
-// "storage" is in here for "apps"' reason, doubled: it measures THIS DEVICE's
+// "storage" is in here for "repocolor"'s reason, doubled: it measures THIS DEVICE's
 // own IndexedDB and download records and asks the host nothing, so a restored
 // route paints the real figures offline — and the moment it is opened in is a
 // phone that is out of space, which is also when a reload is most likely to be
@@ -87,7 +84,7 @@ export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "
 // session's budget under a chip that was tapped on another.
 // `feature:<id>/<sheet>` is never in here either, for "assess"'s reason: an extension's sheet is
 // scoped to state held in memory, and the hash carries the overlay name and not that state.
-export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "apps", "storage"]);
+export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "storage"]);
 
 /**
  * On a wide window (`core/layout`), which sheets take the MAIN pane instead of

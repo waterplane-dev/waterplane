@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import type { WeekBurnStatus } from "@waterplane/shared";
-import { createStore, useCore, useStore } from "../../sdk";
+import { createStore, useCore, useInstallCaps, usePullRecords, useStore } from "../../sdk";
 import { LS, lsGet } from "../../storage";
 import { api } from "../../api";
 import { useRemoteResource } from "../../useRemoteResource";
@@ -63,6 +63,10 @@ export function useHubFacts(): { facts: HubFacts; feed: FeedSource | null } {
   const c = useCore();
   const { facts: fd, src } = useFeedFacts();
   const shell = useShellFacts();
+  // The APK gate's door (`shellApkWhere`): the shell's own answer and the finished downloads, the
+  // same inputs the Downloads sheet's gate reads.
+  const { caps } = useInstallCaps();
+  const records = usePullRecords();
   const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
   const names = new Map(c.world.repos.map((r) => [r.id, r.repoName]));
   const sched = c.world.schedules;
@@ -76,6 +80,10 @@ export function useHubFacts(): { facts: HubFacts; feed: FeedSource | null } {
       : null,
     weekburn: burn.state === "fresh" ? burn.data ?? null : null,
     ...shell,
+    shellApk: caps ? {
+      distribution: caps.distribution, self: caps.self,
+      apks: records.filter((r) => r.state === "done" && !r.evicted).map((r) => ({ pkg: r.pkg, version: r.pkgVersion })),
+    } : null,
   };
   return { facts, feed: src };
 }

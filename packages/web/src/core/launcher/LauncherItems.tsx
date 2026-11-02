@@ -8,6 +8,8 @@
  * An item with something waiting (`useCount`, the vault's asks) carries the bell's counted badge on
  * its menu line, and `LauncherItemKeys` lifts it out of the hidden menu into the header row beside
  * the bell while the count is above zero — a fingerprint ask must not wait behind a ☰ nobody opened.
+ * An item whose count can sit for days opts out (`headerKey: false`): its line badge and its share of
+ * the ☰ total are the reading, never a third copy of the number in the header.
  * While counted, a tap goes to `openCount` (exactly what the badge counts — a count is a filter), and
  * every badge reads the number through ONE function (`countedN`; the ☰ sum is `menuBadgeTotal`).
  */
@@ -17,7 +19,8 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { ExtBoundary } from "../ExtBoundary";
 import { launcherItems } from "../extensionPoints";
-import { countedN, menuBadgeTotal, type ContributedEntry } from "../featureRun";
+import { usePluginList } from "../../sdk/extensions";
+import { countedN, headerKeyed, menuBadgeTotal, type ContributedEntry } from "../featureRun";
 import { Button } from "../../kit/Button";
 
 const noCount = () => null;
@@ -37,7 +40,7 @@ function LauncherItem({ it, size, onOpen }: { it: ContributedEntry; size: number
   const n = countedN(c);
   const Icon = it.icon;
   return (
-    <button className={`more-act${n ? " notif-btn" : ""}`} title={it.unavailable ?? (n ? c!.title : `open ${it.label}`)}
+    <button className={`more-act${n ? " notif-btn" : ""}`} title={it.unavailable ?? (n ? c!.title : it.title ?? `open ${it.label}`)}
       onClick={() => tap(it, "", n, onOpen)}>
       <Icon size={size} />{it.label}
       {n > 0 && <span className="notif-badge">{badgeText(n)}</span>}
@@ -46,6 +49,8 @@ function LauncherItem({ it, size, onOpen }: { it: ContributedEntry; size: number
 }
 
 export function LauncherItems({ size, onOpen }: { size: number; onOpen: () => void }): ReactNode {
+  // A switch flipped on the desktop redraws the lines an extension's `hideWhen` hides or brings back.
+  usePluginList();
   const items = launcherItems();
   if (!items.length) return null;
   return (
@@ -77,7 +82,8 @@ function CountedKey({ it, size, where }: { it: ContributedEntry; size: number; w
  * are the same key: same badge, same tap.
  */
 export function CountedKeys({ items, size, where }: { items: ContributedEntry[]; size: number; where: string }): ReactNode {
-  const counted = items.filter((it) => it.useCount);
+  // An item that opted out (`headerKey: false`) keeps its ☰ line badge and its share of the ☰ total.
+  const counted = headerKeyed(items);
   if (!counted.length) return null;
   return (
     <>
@@ -92,26 +98,29 @@ export function CountedKeys({ items, size, where }: { items: ContributedEntry[];
 
 /** The counted launcher items, as header keys beside the bell — drawn only while their count is above zero. */
 export function LauncherItemKeys({ size }: { size: number }): ReactNode {
+  usePluginList();
   return <CountedKeys items={launcherItems()} size={size} where="key." />;
 }
 
 function MenuCount({ items, base }: { items: ContributedEntry[]; base: number }) {
-  // One hook per counted entry, in a fixed order: the entry list is fixed per bundle.
+  // One hook per counted entry, in a fixed order: the caller keys this component on the entry list,
+  // so an item `hideWhen` drops or brings back remounts it rather than shifting the hooks.
   const n = menuBadgeTotal(base, items.map((it) => it.useCount!()));
   return n > 0 ? <span className="mic-badge">{badgeText(n)}</span> : null;
 }
 
 /**
  * The ☰ button's badge: everything inside the menu that is waiting, summed — the core's own counts
- * (`base`: activity, apps ready) plus every counted extension item. A badge that exists only while
+ * (`base`: the activity count) plus every counted extension item. A badge that exists only while
  * the menu is open is a badge nobody sees.
  */
 export function LauncherMenuBadge({ base }: { base: number }): ReactNode {
+  usePluginList();
   const items = launcherItems().filter((it) => it.useCount);
   if (!items.length) return base > 0 ? <span className="mic-badge">{badgeText(base)}</span> : null;
   return (
-    <ExtBoundary feature={items.map((it) => it.feature).join(", ")} what="the menu badge">
-      <MenuCount items={items} base={base} />
+    <ExtBoundary key={items.map((it) => it.key).join("|")} feature={items.map((it) => it.feature).join(", ")} what="the menu badge">
+      <MenuCount key={items.map((it) => it.key).join("|")} items={items} base={base} />
     </ExtBoundary>
   );
 }

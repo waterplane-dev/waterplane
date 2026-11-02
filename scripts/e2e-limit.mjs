@@ -67,8 +67,9 @@ assert(parseResetTime("resets soon", P10) == null, "no time → null");
 
 // Newer CLI copy: the weekly banner prints a BARE time with no date
 // ("You've hit your weekly limit · resets 7pm"). Detect the block AND flag it
-// weekly — the bare time lands on the wrong DAY, so auto-continue must attempt
-// promptly (upgraded plan continues now) instead of parking on it.
+// weekly — the bare time is the EARLIEST it can lift (its day is unknown), so
+// auto-continue waits for its next occurrence and re-arms daily
+// (`limitretry.ts`'s `daily`, pinned in packages/host/test/weeklybare.test.mjs).
 {
   const bare = detectLimitText("You've hit your weekly limit · resets 7pm (Europe/Berlin)", now);
   assert(bare.blocked, "bare-time weekly banner should block");

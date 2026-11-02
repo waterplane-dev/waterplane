@@ -17,3 +17,7 @@ The local runner bar is a machine utilization bar: CPU, GPU and memory available
 ### R-local-models-004 · requested
 The machine utilization bar prominently highlights when no local model is loaded.
 
+### R-local-models-005 · requested
+Small, predefined commands are handled by a small on-device model, and the local assistant runs with a memory footprint comparable to waterplane's for the same functionality.
+- asked: 2026-10-27
+

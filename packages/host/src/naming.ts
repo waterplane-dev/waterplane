@@ -464,6 +464,12 @@ export class NamingManager {
         out.unnamed += batch.rows.length;
         break;
       }
+      if (run.signedOut) {
+        // Every later batch is refused by the same sign-out.
+        detail = run.detail || "the CLI is signed out";
+        out.unnamed += batch.rows.length;
+        break;
+      }
       if (run.failed || !run.text) {
         detail = run.detail || "the model answered nothing";
         out.unnamed += batch.rows.length;

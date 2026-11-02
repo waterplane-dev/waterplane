@@ -99,6 +99,7 @@
     "POST /api/devices/revoke": "not reachable in demo: no paired devices ledger",
     "POST /api/clone": "not reachable in demo: runs git clone on a real desktop",
     "POST /api/folder": "not reachable in demo: creates a folder on a real desktop",
+    "POST /api/plainfolders/init": "not reachable in demo: the demo lists no folder without git, so there is nothing to init",
     "POST /api/host/clipboard": "not reachable in demo: writes the real desktop's clipboard",
     "POST /api/host/dictate": "not reachable in demo: dictation transcribes on the desktop",
     "GET /api/host/ocr": "not reachable in demo: on-device text reading runs on the desktop",

@@ -65,6 +65,10 @@ export function intentReasonText(reason: BlockReason, detail?: string): string {
       return "waiting — the session is waiting for an answer";
     case "limit":
       return "the session is blocked on a usage limit — waiting for it to reopen";
+    case "auth":
+      return "the session is signed out — send /login there to sign in, and this goes once it is";
+    case "net":
+      return "the session's last turn hit a network error — waiting for the host's retry to get through";
     case "filesMissing":
       return "waiting for its files to finish uploading";
     case "notYet":
@@ -194,10 +198,11 @@ export function localSlotOverText(f: LocalSlotFacts): string | undefined {
  * gate is one tap away; `budget` is the only reason here that is about the
  * ACCOUNT rather than one row's position, so when it is true it is the answer
  * for every row at once; `sessionGone` sits above the self-resolving waits
- * because it is the only one that never clears on its own.
+ * because it is the only one that never clears on its own — and `auth` right
+ * after it for the same reason (only a sign-in clears it).
  */
 export const INTENT_BLOCK_ORDER: readonly BlockReason[] = [
-  "offline", "gate", "budget", "sessionBudget", "sessionGone", "limit", "awaitingAnswer", "notYet", "filesMissing", "serial", "hostBusy", "localModel", "noSlot", "sessionBusy",
+  "offline", "gate", "budget", "sessionBudget", "sessionGone", "auth", "limit", "net", "awaitingAnswer", "notYet", "filesMissing", "serial", "hostBusy", "localModel", "noSlot", "sessionBusy",
 ];
 
 /**

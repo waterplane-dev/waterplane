@@ -1,4 +1,4 @@
-import type { AppReadinessReport, HostStoreOutcome, HostStoreReport, TransportSurvey, SweepAge, SweepResult, SweepScope, SweepTally } from "@waterplane/shared";
+import type { HostStoreOutcome, HostStoreReport, TransportSurvey, SweepAge, SweepResult, SweepScope, SweepTally } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import { abortXhr } from "../link/linkStalls";
 import type { FileEntry, ArtifactKind, SearchHit, UploadError } from "./webapiTypes";
@@ -135,9 +135,8 @@ export const filesApi = {
    */
   transportSurvey: () => nfetch("/api/storage/transport").then((r) => r.json() as Promise<TransportSurvey>),
 
-  /** Every Android app the desktop's repos build, as facts — the repo half of the
-   *  Apps screen's setup checklist (`appReady.ts`). */
-  appReadiness: () => nfetch("/api/apps/readiness").then((r) => r.json() as Promise<AppReadinessReport>),
+  /** Every Android app the desktop's repos build, as facts. No core caller since P4 (the extension
+   *  reads readiness over its own plugin call); P5 deletes this with the route. */
 
   /** What the daemon's own store holds, by owner and by bound. */
   hostStore: () => nfetch("/api/storage/host").then((r) => r.json() as Promise<HostStoreReport>),

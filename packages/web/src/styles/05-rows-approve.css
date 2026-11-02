@@ -483,6 +483,7 @@
 .fu-hand, .fu-btn.fu-hand, .repo-group-stat.fu-hand { color: var(--fu-hand); }
 .fu-launch, .fu-btn.fu-launch, .repo-group-stat.fu-launch { color: var(--fu-launch); }
 .fu-agent, .fu-btn.fu-agent, .repo-group-stat.fu-agent { color: var(--fu-agent); }
+.fu-host, .fu-btn.fu-host, .repo-group-stat.fu-host { color: var(--fu-host); }
 /* Flags from more than one setter in one count: none of the three colours
    would be true of all of them, so the chip says it in the text colour. */
 .repo-group-stat.fu-mixed { color: var(--fg); }

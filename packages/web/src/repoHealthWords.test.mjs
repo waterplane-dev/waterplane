@@ -26,7 +26,7 @@ import { KPI_MEANING, rankChipWords, kpiMeaning,
   emptySeriesWords,
   engineLineWords,
   lastCommitWords,
-  mixedVersionWords,
+  mixedVersionWords, RECUT_NOTE,
   msWords,
   narrativeWrittenWords,
   outcomeWords,
@@ -232,9 +232,16 @@ const RECUT = "rm /Users/me/dev/drive-coach/.myapp/repohealth.jsonl && "
 test("the band predicts the refusal and hands the remedy to the PERSON", () => {
   const s = mixedVersionWords(VERSIONS, "2026-09-21c", RECUT);
   assert.match(s, /refuse/, "said before the tap, not discovered by it");
-  assert.match(s, /nothing here rewrites the file/);
+  assert.match(s, /nothing rewrites the file until you ask/);
   assert.ok(s.includes("at the desktop"), "the remedy is run there, not by this sheet");
   assert.ok(s.includes(RECUT), "and it is the ENGINE's own command for this root, verbatim");
+});
+
+test("with the re-cut button drawn, the remedy is the tap and says it keeps the old series", () => {
+  const s = mixedVersionWords(VERSIONS, "2026-09-21c", RECUT, true);
+  assert.ok(s.includes(RECUT_NOTE), "the button's own sentence");
+  assert.doesNotMatch(s, /\brm\b/, "no delete line beside a button that does it safer");
+  assert.match(RECUT_NOTE, /not deleted/);
 });
 
 test("with no command on the wire, none is printed", () => {

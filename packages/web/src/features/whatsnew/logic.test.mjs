@@ -7,7 +7,7 @@ const NOW = 1_800_000_000_000;
 const H = 3_600_000;
 const facts = (over = {}) => ({
   now: NOW, needsYou: null, pushInfo: null, failures: null, clocks: null, weekburn: null,
-  dropCopy: null, native: true, apk: "0.1.8", ...over,
+  dropCopy: null, native: true, apk: "0.1.8", shellApk: { distribution: "dev", self: "dev.waterplane.app.dev", apks: [] }, ...over,
 });
 const R18 = RELEASES.find((r) => r.version === "0.1.8");
 const thing = (id) => R18.things.find((t) => t.id === id);
@@ -86,8 +86,19 @@ test("automation and build clocks: no list is no claim; a build count cuts to ex
 });
 
 test("an APK-gated row says why in words and offers the APK; a browser says app only", () => {
-  assert.deepEqual(view("downloads-once", { apk: "0.1.6", dropCopy: null }),
-    { text: "needs the 0.1.8 APK · yours is 0.1.6", door: { kind: "sheet", id: "apps" }, verb: "get the APK" });
+  const need = "needs the 0.1.8 APK · yours is 0.1.6";
+  const shellApk = (distribution, apks = []) => ({ distribution, self: "dev.waterplane.app", apks });
+  // A new enough shell build already downloaded: the files tab, where it is.
+  assert.deepEqual(view("downloads-once", { apk: "0.1.6", dropCopy: null, shellApk: shellApk("dev", [{ pkg: "dev.waterplane.app", version: "0.1.9" }]) }),
+    { text: need, door: { kind: "sheet", id: "pull" }, verb: "get the APK" });
+  // Only the same old build on the files tab: no claim of a newer one there — the release page.
+  assert.deepEqual(view("downloads-once", { apk: "0.1.6", dropCopy: null, shellApk: shellApk("dev", [{ pkg: "dev.waterplane.app", version: "0.1.6" }]) }),
+    { text: need, door: { kind: "url", href: "https://github.com/waterplane-dev/waterplane/releases/latest" }, verb: "open releases" });
+  // The Play build updates only from Play, whatever the files tab holds.
+  assert.deepEqual(view("downloads-once", { apk: "0.1.6", dropCopy: null, shellApk: shellApk("play", [{ pkg: "dev.waterplane.app", version: "0.2.0" }]) }),
+    { text: need, door: { kind: "url", href: "https://play.google.com/store/apps/details?id=dev.waterplane.app" }, verb: "open Play" });
+  // Caps not read yet: the sentence, no door at all.
+  assert.deepEqual(view("downloads-once", { apk: "0.1.6", dropCopy: null, shellApk: null }), { text: need, door: null, verb: null });
   assert.deepEqual(view("downloads-once", { native: false, apk: null }), { text: "app only", door: null, verb: null });
   assert.equal(view("downloads-once", { dropCopy: true }).text, "on");
   assert.equal(view("shade-taps", {}).text, "in this APK");

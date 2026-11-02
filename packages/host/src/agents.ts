@@ -394,7 +394,7 @@ export function agentsChanged(a: SessionAgent[] | undefined, b: SessionAgent[]):
  * records the same id, and picking one is a guess. No match ⇒ null, never a
  * status borrowed from another process.
  */
-export interface CliSessionRecord { pid?: number; sessionId?: string; tmux?: string; status?: string }
+export interface CliSessionRecord { pid?: number; sessionId?: string; tmux?: string; status?: string; name?: string }
 
 export function pickCliSession(
   recs: CliSessionRecord[], tmuxName: string | null, conversationId: string | undefined,
@@ -425,7 +425,7 @@ const cliFileCache = new Map<string, string>();
 /** `readCliStatus`'s status, plus the pid it was read off — `shells.ts` needs
  *  the pid to find the wrapper shells UNDER this CLI process, which the
  *  status string alone cannot name. */
-export interface CliRecord { status: string; pid: number }
+export interface CliRecord { status: string; pid: number; name?: string }
 
 export function readCliRecord(sessionId: string, tmuxName: string | null, conversationId: string | undefined): CliRecord | null {
   const dir = join(claudeConfigDir(), "sessions");
@@ -464,7 +464,11 @@ export function readCliRecord(sessionId: string, tmuxName: string | null, conver
 }
 
 function asCliRecord(r: CliSessionRecord): CliRecord | null {
-  return typeof r.status === "string" && typeof r.pid === "number" ? { status: r.status, pid: r.pid } : null;
+  if (typeof r.status !== "string" || typeof r.pid !== "number") return null;
+  // The name other sessions address this one by — only a plain one; anything
+  // odd stays absent rather than a reference nobody can send to.
+  const name = typeof r.name === "string" && /^[\w.-]{1,80}$/.test(r.name) ? r.name : undefined;
+  return { status: r.status, pid: r.pid, ...(name ? { name } : {}) };
 }
 
 /** Wrapper kept for its existing callers/tests: the status alone, with none of

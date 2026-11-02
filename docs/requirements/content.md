@@ -38,3 +38,12 @@ The website has an Impressum with the owner's name, postal address and email, an
 - asked: 2026-10-21
 - shipped: 719de2a2
 
+### R-content-009 · requested
+The site links every app published on the Play Store, including Talking Pictures and the waterplane game, and links all public GitHub repos.
+- asked: 2026-10-30
+
+### R-content-010 · shipped
+The README has a short, factual "Built with waterplane" section listing Little Painter, Talking Pictures and Waterplane Game as real-life examples, each linked to its Google Play listing, with no star count, hype or emoji.
+- asked: 2026-10-30
+- shipped: 43f83eca
+

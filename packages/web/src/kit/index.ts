@@ -20,13 +20,15 @@ export { Unavailable } from "../Unavailable";
 export { Explain } from "../Explain";
 export { ConfirmButton, askConfirm } from "../Confirm";
 export { useRemoteResource, type RemoteResource, type ResourceState } from "../useRemoteResource";
-export { ago, until } from "../format";
+export { ago, hhmm, until, when } from "../format";
 export { useNow } from "../useNow";
 /** A Settings row of the extension's own: declares its `id` (catalogued in its manifest's
  *  `SettingsRowsDef.rows`) so search counts it, finds it and hides it like a core row. */
 export { SetCustom } from "../SettingsKit";
 /** The note under an extension's own row (`as`/`className`/style pass through; never an `id`). */
 export { SetNote } from "../SettingsKit";
+/** The uncounted `.set-row` layout line inside a sheet (no id, never a catalogued row). */
+export { SetLine } from "../SettingsKit";
 /** THE prompt box (CLAUDE.md: never a second one). Lent so a sheet whose words go somewhere other
  *  than a session — the live desktop's typing — writes them in the same box with the same
  *  dictation, and owns only where they go (the composer never sends: its caller does). */

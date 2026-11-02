@@ -27,6 +27,25 @@ export function hostStat(): HostStat {
 export interface GpuStat { pct: number; memInUse: number }
 
 /**
+ * The bodies `/"PerformanceStatistics"\s*=\s*\{([^}]*)\}/g` would capture, without its `[^}]*`
+ * re-scanning to the end from every opener when no `}` follows (quadratic on a dump of
+ * unclosed openers). The head is matched alone; the body is the text up to the next `}`. With
+ * no `}` after one opener there is none after any later one either, so the scan stops there.
+ */
+function perfBlocks(text: string): string[] {
+  const head = /"PerformanceStatistics"\s*=\s*\{/g;
+  const out: string[] = [];
+  for (let m = head.exec(text); m; m = head.exec(text)) {
+    const start = m.index + m[0].length;
+    const close = text.indexOf("}", start);
+    if (close < 0) break;
+    out.push(text.slice(start, close));
+    head.lastIndex = close + 1;
+  }
+  return out;
+}
+
+/**
  * Parse `ioreg -r -d 1 -c IOAccelerator`'s text dump for the two
  * `PerformanceStatistics` fields this app draws.
  *
@@ -45,9 +64,9 @@ export interface GpuStat { pct: number; memInUse: number }
  * blocks is therefore `null`, the same as none.
  */
 export function parseGpuIoreg(text: string): GpuStat | null {
-  const blocks = [...text.matchAll(/"PerformanceStatistics"\s*=\s*\{([^}]*)\}/g)];
+  const blocks = perfBlocks(text);
   if (blocks.length !== 1) return null;
-  const body = blocks[0][1];
+  const body = blocks[0];
   const pct = /"Device Utilization %"=(\d+)/.exec(body);
   const mem = /"In use system memory"=(\d+)/.exec(body);
   if (!pct || !mem) return null;

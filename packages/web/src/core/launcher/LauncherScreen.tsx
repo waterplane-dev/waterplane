@@ -10,7 +10,7 @@
  */
 import { useLayoutEffect, useRef } from "react";
 import { useBackStep } from "../../backStep";
-import { Archive, ArrowDownUp, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
+import { Archive, ArrowDownUp, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, branchLabel, repoLabel } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
@@ -18,9 +18,8 @@ import { NetActivity } from "../../NetActivity";
 import { HintToggle } from "../../HintLayer";
 import { ago, baseName, repoAccentStyle } from "../../format";
 import { STATUS_LABEL } from "../../sessionFacts";
+import { listedBlockOf } from "../../attention";
 import { flaggedChipTitle } from "../sessions/followUpFacts";
-import { nativeInstallSupported } from "../../nativeInstall";
-import { openAppsOnReady } from "../../appsPane";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { RISKY_PERM_MODES } from "../settings/permModes";
@@ -47,9 +46,11 @@ import { noReposWords } from "./model";
 import { listRead } from "../../listRead";
 import { RepoGroup } from "./RepoGroup";
 import { ClosedRows } from "./ClosedRows";
+import { PlainFolders, scanPlainFolders } from "./PlainFolders";
 import { CloseSheet } from "./CloseSheet";
 import { LauncherItemKeys, LauncherItems, LauncherMenuBadge } from "./LauncherItems";
 import { Button } from "../../kit/Button";
+import { AttentionChip } from "./AttentionChip";
 import { Row, RowTitle, RowSub } from "../../kit/Row";
 import { Hint } from "../../kit/Hint";
 import { SHEET } from "../../sheetNames";
@@ -88,8 +89,8 @@ export function LauncherScreen(p: LauncherProps) {
   const { openCwd, refreshRepos } = p.launchCore;
   const { clearExited } = p.verbs;
   const {
-    tab, setTab, navMenu, setNavMenu, dl, appsReady, activityBadge, activityKeys, visibleSessions, visibleExternal, clearFocus, repoGroups,
-    sessionOrder, resetSessionOrder, waitingTotal, waitingRepliesTotal, limitTotal, codingTotal, starredTotal, flaggedTotal, shellsTotal,
+    tab, setTab, navMenu, setNavMenu, dl, activityBadge, activityKeys, visibleSessions, visibleExternal, clearFocus, repoGroups,
+    sessionOrder, resetSessionOrder, waitingTotal, waitingRepliesTotal, blockedTotal, codingTotal, starredTotal, flaggedTotal, shellsTotal,
     statusFilter, setStatusFilter, statusFilterActive, toggleStatusFilter, shownSessions, sortedSessions,
     textQuery, setTextQuery, textOn, noRepoCollapsed,
     allReposCollapsed, persistCollapsedRepos, scheduleWords, scheduleLead, scheduleTitle, setCloseAllPick,
@@ -193,9 +194,9 @@ export function LauncherScreen(p: LauncherProps) {
           )}
           {/* The counts follow their buttons in: a badge that only exists
               while the menu is open is a badge nobody sees. Summed over every
-              counted line inside (activity, apps ready, extension items); the
+              counted line inside (activity, extension items); the
               inventories (local/external, files on the phone) are not news. */}
-          <LauncherMenuBadge base={activityBadge + (nativeInstallSupported() ? appsReady : 0)} />
+          <LauncherMenuBadge base={activityBadge} />
         </Button>
         {navMenu && (
           <div className="row-more nav-more">
@@ -249,29 +250,6 @@ export function LauncherScreen(p: LauncherProps) {
                 rolled off "Recently closed". Lives here, not in that section's
                 header, because the section disappears once the shortlist empties —
                 which is exactly when the archive is the only way back. */}
-            {/* Your own apps, and which of them install themselves. Its own
-                entry rather than a switch inside Downloads: that sheet is
-                about transfers, and a setting reachable only from the
-                transfer that happened to bring the file is one you cannot
-                survey — which is how a downloaded build could turn a silent
-                installer on with nowhere to see the list afterwards. Drawn in
-                the Android shell only: a browser has no installer to offer,
-                and an entry that opens a screen saying "not here" is worse
-                than no entry. */}
-            {nativeInstallSupported() && (
-              <button className="more-act"
-                title={appsReady > 0
-                  ? `apps — ${appsReady} build${appsReady === 1 ? "" : "s"} ready to install`
-                  : "apps — builds from your repos, and which install themselves"}
-                onClick={() => {
-                  track("overlay:apps");
-                  // The count is a filter: `2 ready` opens exactly those two.
-                  if (appsReady > 0) openAppsOnReady();
-                  setNavMenu(false); setOverlay("apps");
-                }}>
-                <Boxes size={ICON} />apps{appsReady > 0 ? ` · ${appsReady} ready` : ""}
-              </button>
-            )}
             <button className="more-act" title="archive — every conversation this repo ever had, resumable"
               onClick={() => { track("overlay:archive"); setNavMenu(false); setOverlay("archive"); }}>
               <Archive size={ICON} />archive
@@ -397,40 +375,15 @@ export function LauncherScreen(p: LauncherProps) {
                   (.head-act), not text links: four 11.5px links wrapped this head
                   onto two rows on a phone and each was a sub-fingertip target. */}
               <span className="head-acts tight">
-              {waitingTotal > 0 && (
-                // A BUTTON, not a label: this count was the only place the
-                // launcher admitted a session was waiting, and the only way
-                // to act on it was to find the right row and open its
-                // terminal — which is exactly the trip you cannot make with
-                // no tunnel. It opens the questions sheet, where every
-                // pending question is answerable offline.
-                <button className="head-wait"
-                  title={`${waitingTotal} session${waitingTotal > 1 ? "s" : ""} waiting for your answer${waitingRepliesTotal ? " — some already have a reply on a clock" : ""} — tap to answer them here`}
-                  onClick={() => { track("overlay:questions"); setOverlay("questions"); }}>
-                  <CircleDot size={13} /> {waitingTotal} waiting
-                  {/* A DOT and not a second number: this chip is already a
-                      count and already the way into those sessions, so a
-                      count beside it would be a filter with no tap left to
-                      spend. It says only *some of these are already
-                      answered, on a clock* — the row chip carries which and
-                      when. */}
-                  {waitingRepliesTotal && <CalendarClock size={11} className="wait-sched" />}
-                </button>
-              )}
-              {limitTotal > 0 && (
-                // A BUTTON for the same reason the waiting count is one: these
-                // sessions all resume off the same reset, so the useful action
-                // is choosing between them, and that had no home. It also says
-                // out loud that they go one at a time — several rows reading
-                // "auto 12:02" otherwise look like a pile-on about to happen.
-                <button className="head-wait limit" data-hint="limit.open"
-                  title={limitTotal > 1
-                    ? `${limitTotal} sessions at the usage limit — they resume one at a time; tap to set the order`
-                    : "a session is at the usage limit — tap to steer when it resumes"}
-                  onClick={() => { track("overlay:limits"); setOverlay("limits"); }}>
-                  <Hourglass size={13} /> {limitTotal} at limit
-                </button>
-              )}
+              {/* The two attention chips: one component, and each number is
+                  `attentionCut`'s — the same call the sheet it opens lists
+                  with, so a tap shows exactly the sessions counted. The
+                  questions sheet answers offline; the blocked sheet groups
+                  sign-in, network, spend and the usage limit's resume queue. */}
+              <AttentionChip kind="wait" n={waitingTotal} replies={!!waitingRepliesTotal}
+                onClick={() => { track("overlay:questions"); setOverlay("questions"); }} />
+              <AttentionChip kind="blocked" n={blockedTotal} hint="limit.open"
+                onClick={() => { track("overlay:limits"); setOverlay("limits"); }} />
               {codingTotal > 0 && (
                 // Same filter as the group chips, unscoped: this count is over
                 // every repo, so the rows it shows are too.
@@ -505,8 +458,8 @@ export function LauncherScreen(p: LauncherProps) {
                 <CalendarClock size={ICON} />{scheduleWords && <span className="head-act-n">{scheduleWords}</span>}
               </button>
               <button className="head-act" aria-label="sync repos" title="sync repos — pull, push or sync every repo at once" onClick={() => { track("overlay:reposync"); setOverlay("reposync"); }}><ArrowDownUp size={ICON} /></button>
-              <button className="head-act" aria-label="rescan repos" title="rescan the host root for repos and worktrees" onClick={() => { refreshRepos(); showToast("repos rescanned"); }}><RotateCw size={ICON} /></button>
-              {visibleSessions.some((s) => !s.running) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
+              <button className="head-act" aria-label="rescan repos" title="rescan the host root for repos and worktrees" onClick={() => { refreshRepos(); void scanPlainFolders().then((n) => showToast(n ? `repos rescanned — ${n} folder${n === 1 ? "" : "s"} without git, see above the list` : "repos rescanned")); }}><RotateCw size={ICON} /></button>
+              {visibleSessions.some((s) => !s.running && !listedBlockOf(s)) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
               {visibleSessions.length > 0 && (
                 <button className="head-act danger" data-hint="session.close.all" aria-label="close sessions"
                   title={`close sessions — review the ${visibleSessions.length} listed, cut by state, idle time, what is still running underneath, or a repo`}
@@ -556,6 +509,7 @@ export function LauncherScreen(p: LauncherProps) {
                 onClick={() => setStatusFilter(null)}><X size={13} /> clear</button>
             </div>
           )}
+          <PlainFolders refreshRepos={refreshRepos} />
           {repoGroups.map(({ repoName, sessions: groupSessions }) => (
             <RepoGroup key={`g:${repoName}`} p={p} m={m} repoName={repoName} sessions={groupSessions} />
           ))}

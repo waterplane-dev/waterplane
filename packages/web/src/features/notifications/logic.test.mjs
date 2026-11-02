@@ -77,6 +77,19 @@ test("git and build opens route to their screens", () => {
   assert.deepEqual(notifTarget({ kind: "git", open: { to: "elsewhere" } }), { to: "row" });
 });
 
+test("a signin push opens the blocked sheet; a session or an unknown open beats or misses it", () => {
+  assert.deepEqual(notifTarget({ kind: "signin", open: { to: "blocked" } }), { to: "blocked" });
+  assert.deepEqual(notifTarget({ kind: "signin" }), { to: "row" }, "an older host sends no open: the row");
+  assert.deepEqual(notifTarget({ kind: "signin", sessionId: "s1", open: { to: "blocked" } }), { to: "session", sessionId: "s1" });
+});
+
+test("every notification kind the host can send has its words, and signin is one", async () => {
+  const { NOTIFICATION_KINDS } = await import("@waterplane/shared");
+  const { NOTIF_LABEL } = await import("./logic.ts");
+  assert.ok(NOTIFICATION_KINDS.includes("signin"));
+  assert.match(NOTIF_LABEL.signin.name, /Signed out/);
+});
+
 test("the badge says 9+ past nine", () => {
   assert.equal(badgeText(1), "1");
   assert.equal(badgeText(9), "9");

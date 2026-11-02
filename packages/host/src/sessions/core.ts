@@ -13,7 +13,7 @@
  */
 import type { IPty } from "node-pty";
 import type {
-  ClosedBy, ClosedSession, CliSignalId, DetectedPrompt, HealthOutcome, HistoryEntry, LaunchOpts, LimitResumeMode,
+  ClosedBy, ClosedSession, CliSignalId, FollowUp, DetectedPrompt, HealthOutcome, HistoryEntry, LaunchOpts, LimitResumeMode,
   RecentSession, SessionAsk, SessionBudget, SessionInfo, SessionLimit, SessionOrigin, SourceDialog, SourceHandle, SourceQuestion, TurnFacts,
 } from "@waterplane/shared";
 import type { AskQuestion } from "../askbox.js";
@@ -21,6 +21,7 @@ import type { HealthOpts } from "../clihealth.js";
 import type { FixtureSource } from "../clifixtures.js";
 import type { PendingPlan } from "../planbox.js";
 import type { PlanEntry } from "../sourceanswer.js";
+import type { GiveUpLatch } from "../recover/giveuplatch.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import type { PluginStoreReader, SessionNetRetry, TurnEndNet } from "@waterplane/shared";
 import type { AgentUsage, SeriesCursor } from "../ctxlog.js";
@@ -83,6 +84,15 @@ export interface LiveMeta {
    *  the session still reads stalled after a restart — and is not failed for
    *  its silence by the intents' watchdog. Only `state: "gaveup"` is restored. */
   netGaveUp?: SessionNetRetry;
+  /** The session's last turn ended signed out (`SessionInfo.signedOut`), kept so
+   *  the auth wall — and the hold automatic work keeps behind it — survives a
+   *  restart; the next turn that reaches the API clears it as before. */
+  signedOut?: boolean;
+  /** When a sign-out stopped this session's turn, while it waits in its
+   *  account's sign-in episode (`SessionInfo.signInWait.since`): the episode is
+   *  re-formed from these on re-attach (`sessions/signinwait.ts`'s `restored`),
+   *  with no push — a restart is not a transition. A tap is never restored. */
+  signInSince?: number;
   /** The tmux server the pane lives on (`knobs.ts`'s `TMUX_SOCKET_ID`), stamped
    *  by `persistLive` on every write. The boot reclaim (`staleLiveIds`) judges a
    *  record only against a listing of THIS server; absent on records written
@@ -325,14 +335,17 @@ export interface Session {
   netWriting?: boolean;
   netSentAt?: number;
   /**
-   * The `gaveup` notification has been sent for the block this session is in.
+   * The give-up latch, per recovery lane (`recover/giveuplatch.ts`): `wall` once
+   * the `gaveup` notification has been sent for the block this session is in,
+   * `net` once the net retry's episode has stalled.
    *
    * `scheduleLimitAttempt` is re-asked by the minute sweep for as long as a
    * session stays blocked, so without this the end of the waiting would push a
    * notification once a minute, for ever. Cleared where a block BEGINS and
    * where one is lifted — a new wall is a new wait, and is owed its own word.
+   * Absent = none held.
    */
-  limitGaveUp: boolean;
+  gaveUp?: GiveUpLatch;
   /**
    * **The block this session was BORN into**, when it was opened by
    * `doResurrect` to replace one that exited at a wall.
@@ -351,6 +364,15 @@ export interface Session {
    * `LIMIT_CARRY_MS` the carry is stale and dropped.
    */
   limitCarried?: { attempts: number; blockedSince: number; at: number };
+  /**
+   * Where THIS block's `limit.resetAt` came from, when it matters to the retry
+   * cadence: `dated` — an instant the CLI recorded (its log, or a backend's own
+   * channel); `daily` — a weekly notice's bare clock time read off the screen,
+   * a lower bound re-armed once a day (`limitretry.ts`'s `daily`). Absent for
+   * anything else. A `dated` instant is never overwritten by a `daily` one for
+   * the rest of the block. Reset where a block begins and where one lifts.
+   */
+  limitResetKind?: "dated" | "daily";
   /** Armed while a `Stop` hook is still being settled against the screen — see
    *  `STOP_VERIFY_MS`. Null when no Stop is in question. */
   stopVerifyTimer: NodeJS.Timeout | null;
@@ -653,13 +675,17 @@ export interface SessionCore {
   closedRow(id: string): ClosedRow | undefined;
   /** `recentlyClosed = recentlyClosed.filter((c) => c.id !== id)` — publishing is the caller's. */
   dropClosed(id: string): void;
+  /** The follow-up flag a session wears now (`roster.ts`'s `followUpOf`). */
+  followUpOf(id: string): FollowUp | undefined;
+  /** Set (`f`) or clear (`null`) the flag (`roster.ts`'s `setFollowUp`). */
+  setFollowUp(id: string, f: FollowUp | null): boolean;
   /** `watched.has(id)` — a client is attached to this session. */
   isWatched(id: string): boolean;
 
   // ── wall.ts (S6) ──
   newLimitState(): SessionLimit;
   limitAuto(s: Session): boolean;
-  limitRetry(s: Session, now: number, resetAt?: number | null): LimitRetry;
+  limitRetry(s: Session, now: number, resetAt?: number | null, daily?: boolean): LimitRetry;
   limitLog(s: Session): LimitLogVerdict;
   checkLimit(s: Session): void;
   // ── apiretry.ts ──
@@ -669,6 +695,16 @@ export interface SessionCore {
   netTurnStarted(s: Session): void;
   /** Something was typed into the session — anything but our own `continue` calls the retry off. */
   netTyped(s: Session): void;
+  // ── signinwait.ts ──
+  /** The hook router just marked `signedOut` (a turn ended `authentication_failed`): join the account's sign-in episode. */
+  signInSignedOut(s: Session): void;
+  /** A turn started: ours (the continue in flight) is noted; a person's takes the session out of the episode. */
+  signInTurnStarted(s: Session): void;
+  /** A `Stop` hook — the API served a turn: our continue got through, or evidence of a sign-in. */
+  signInServed(s: Session): void;
+  /** A sign-in link left the screen (`/login` finished or closed): look now. `loginOk` = the
+   *  CLI's post-login row is on screen (strong evidence); else weak (an Esc, a scroll, a resize). */
+  signInLoginRetired(s: Session, loginOk: boolean): void;
   markLimitBlocked(s: Session, resetAt: number | null, weekly?: boolean, sample?: string, dated?: boolean): void;
   scheduleLimitAttempt(s: Session, atOverride?: number): void;
   doLimitContinue(s: Session): Promise<void>;
@@ -681,9 +717,9 @@ export interface SessionCore {
   assignResumeMode(mode: LimitResumeMode): void;
 
   // ── resume.ts (S7) ──
-  /** `resumingIds.has(id)`. */
+  /** In flight in the account-scope wave gate (`recover/wavegate.ts`). */
   isResuming(id: string): boolean;
-  /** `resumeWaiting` — the ids whose resume is due, in order. Reassigned, so asked each time. */
+  /** The wave gate's waiting ids — the ids whose resume is due, in order. Reassigned, so asked each time. */
   resumeQueue(): readonly string[];
   resumeHoldUntil(): number;
   resumeProven(): boolean;
@@ -706,6 +742,8 @@ export interface SessionCore {
   setAsking(s: Session, ask: SessionAsk | null): void;
   setCliSuggestion(s: Session, text: string | null): void;
   checkAgents(s: Session): void;
+  /** Read the log on since the last tick for a tool loop (`loopwatch.ts`). */
+  checkToolLoop(s: Session): void;
   /** Retire the agent poll of a session that stops being the live one (detach, remove). */
   retireAgentPoll(s: Session): void;
   checkAsking(s: Session): void;

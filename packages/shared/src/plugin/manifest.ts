@@ -101,10 +101,27 @@ export interface PluginManifest {
    * so the switch can be reached.
    */
   optional?: boolean;
+  /**
+   * In-repo `optional` extensions only: the release default is narrowed PER DESKTOP by a
+   * host-supplied probe this names (`AUTO_ON_PROBES`, a closed list — a manifest cannot invent
+   * one, and core never runs extension code to decide whether the extension exists). Asked only
+   * while the person has made no choice; their switch always wins and is never overwritten. An
+   * unknown name is ignored (a newer manifest on an older daemon), so the extension reads as
+   * plain `optional`.
+   */
+  autoOn?: AutoOnProbe;
   /** Folder (inside the extension) of static files served at `GET|HEAD /api/plugin/<id>/asset/<file>`; gated like `/api/*`, 403 while off. */
   assets?: string;
   /** Labelled "experimental" wherever its backends are listed (`BackendInfo.experimental`). */
   experimental?: boolean;
+}
+
+/** The probes a manifest's `autoOn` may name — the host supplies each one. */
+export const AUTO_ON_PROBES = ["androidRepo"] as const;
+export type AutoOnProbe = typeof AUTO_ON_PROBES[number];
+/** The manifest's `autoOn` when this daemon knows the probe, else null. */
+export function autoOnProbe(m: { autoOn?: unknown }): AutoOnProbe | null {
+  return (AUTO_ON_PROBES as readonly unknown[]).includes(m.autoOn) ? m.autoOn as AutoOnProbe : null;
 }
 
 /** What the phone knows about one installed plugin. */
@@ -125,6 +142,10 @@ export interface PluginView {
   status?: PluginStatus | null;
   /** Declared env names → set or not. */
   env?: Record<string, boolean>;
+  /** An `autoOn` extension's default as this desktop decided it — present ONLY while the person has
+   *  made no choice (absent = their switch decides, or no probe applies). `why` is the sentence shown
+   *  under the switch. */
+  auto?: { state: "on" | "off"; why: string };
 }
 
 export interface PluginStatus {
@@ -159,6 +180,7 @@ export function manifestProblems(m: unknown): string[] {
   if (o.env !== undefined && (!Array.isArray(o.env) || o.env.some((e) => typeof e !== "string"))) out.push("env must be a list of names");
   if (o.web !== undefined && typeof o.web !== "string") out.push("web must be a path string");
   if (o.assets !== undefined && (typeof o.assets !== "string" || !o.assets || /^([\\/]|[A-Za-z]:)/.test(o.assets) || o.assets.split(/[\\/]/).includes(".."))) out.push("assets must be a folder path inside the extension (relative, no ..)");
+  if (o.autoOn !== undefined && typeof o.autoOn !== "string") out.push("autoOn must be the name of a probe");
   for (const k of ["optional", "experimental"]) if (o[k] !== undefined && typeof o[k] !== "boolean") out.push(`${k} must be true or false`);
   if (o.backends !== undefined) {
     if (!Array.isArray(o.backends)) out.push("backends must be a list of backend ids");

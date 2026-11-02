@@ -44,7 +44,8 @@ export function installShutdown(ctx: ServerCtx, stops: Array<(() => void) | unde
       // whose whole job is to notice a slow drift is the wrong seconds to lose.
       try { ctx.cliHealthStore.flush(); } catch { /* shutdown must never throw */ }
       try { ctx.sentLogStore.flush(); } catch { /* shutdown must never throw */ }
-      try { ctx.installLog.flush(); } catch { /* shutdown must never throw */ }
+      // Core's install log is NOT flushed here: the android-apps extension is installs.json's one writer since P4 and
+      // flushes its own debounce in `deactivate`/`shutdown` below. Core's copy is a boot-time read.
       try { ctx.netstats.flush(); } catch { /* shutdown must never throw */ }
       // The per-model context-window marks. Debounced ~3 s, and losing the one
       // that just moved means every context graph for that model draws on the

@@ -96,3 +96,18 @@ The VS Code extension shows the last seven days' cost the moment VS Code opens, 
 ### R-cost-019 · shipped
 The VS Code extension's All sessions view is the phone's token-usage screen, the same screen rather than a lookalike: the same spans, switches, cards, charts and sentences, over the logs on this machine. With a waterplane desktop running on the same machine and its reading switched on (off by default; only a loopback address is ever read), it also shows the live five-hour and weekly limit windows, the week since the reset, the dollar period, the past-window grids and the other backends' ledgers; without one those are absent and a line says why, with the switch.
 - asked: 2026-10-22 (owner: "a more exact replica with more single source code … test on the mac studio")
+### R-cost-020 · shipped
+Spend from plugin backends appears beside period spend, burnwatch and the cost window, each in its own unit; it is never summed with Claude's dollars.
+- asked: 2026-10-28
+- shipped: 6c3e778e, 392fe069
+
+### R-cost-021 · shipped
+Each plugin backend can have a budget set in its native unit, matched by name and never converted.
+- asked: 2026-10-28
+- shipped: 392fe069
+
+### R-cost-022 · shipped
+Plugin spend whose day cannot be placed in the period's time zone is shown as absent, never misattributed to another day.
+- asked: 2026-10-28
+- shipped: 23ad4de7
+

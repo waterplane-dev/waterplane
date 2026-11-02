@@ -27,7 +27,7 @@ Downloaded APK builds automatically install themselves on the phone without requ
 - shipped: 5f4411a
 
 ### R-downloads-007 · shipped
-Automatic app-installation feature has its own dedicated screen, separate from Downloads.
+Automatic app-installation feature has its own dedicated screen, separate from Downloads (the Android apps extension's, on when the desktop has an Android repo).
 - asked: 2026-09-21
 - shipped: 94d1325
 
@@ -37,7 +37,7 @@ Downloads screen is redesigned with findable auto-download settings, and per-rep
 - shipped: f0078f0
 
 ### R-downloads-009 · shipped
-An installation log lists every automatic app install with version, package name, timestamp, and target device.
+An installation log lists every automatic app install with version, package name, timestamp, and target device (kept by the Android apps extension).
 - asked: 2026-09-21
 - shipped: c3471ea, e38c44a
 

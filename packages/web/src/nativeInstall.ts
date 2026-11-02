@@ -151,6 +151,24 @@ export function readInstallAllow(): string[] {
 export function writeInstallAllow(packages: string[]): void {
   lsSetJson(LS.installAllow, packages);
   void pushInstallAllow(packages);
+  for (const fn of [...allowListeners]) fn();
+}
+
+/**
+ * Every change to the stored allow-list, wherever it came from: a write on this phone
+ * (`writeInstallAllow` — Pull's row switches, onboarding, the extension's sheet) and a copy
+ * ADOPTED from another phone (the settings event). A reader that stays mounted for the page's life
+ * (the launcher's count) hears both, rather than re-reading only when it next mounts.
+ */
+const allowListeners = new Set<() => void>();
+let adoptHeard = false;
+export function onInstallAllowChange(fn: () => void): () => void {
+  if (!adoptHeard && typeof window !== "undefined") {
+    adoptHeard = true;
+    onSettingsChange(() => { for (const f of [...allowListeners]) f(); }, [LS.installAllow]);
+  }
+  allowListeners.add(fn);
+  return () => { allowListeners.delete(fn); };
 }
 
 /** Push whatever is stored at the shell at boot, and again whenever the synced

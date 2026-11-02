@@ -9,9 +9,9 @@
  * mode, and so does Back.
  */
 import { useEffect, useRef } from "react";
-import { Copy, ListChecks, MessageSquareReply, Quote, TextSelect, X } from "lucide-react";
+import { AtSign, Copy, ListChecks, MessageSquareReply, Quote, TextSelect, X } from "lucide-react";
 import { useBackStep } from "../../backStep";
-import { openDecisions, quoteIntoCompose } from "../../features/clipboard";
+import { copySessionRef, openDecisions, quoteIntoCompose } from "../../features/clipboard";
 import { showToast } from "../../toast";
 import { Button } from "../../kit/Button";
 
@@ -70,6 +70,7 @@ export function PickBar({ count, off, hint, lines, onStop }: {
       {count > 0 && <>
         <Button onClick={() => { if (quotePicked(lines())) onStop(); }}><Quote size={ICON} /> quote</Button>
         <Button onClick={() => void copyPicked(lines())}><Copy size={ICON} /> copy</Button>
+        <Button title="copy with this session's reference — to paste into another session" onClick={() => void copySessionRef(lines().join("\n"))}><AtSign size={ICON} /> copy + ref</Button>
         <Button onClick={() => { const l = lines(); onStop(); void openDecisions(l); }}><MessageSquareReply size={ICON} /> answer</Button>
       </>}
       <Button onClick={onStop}><X size={ICON} /> {count ? "cancel" : "done"}</Button>

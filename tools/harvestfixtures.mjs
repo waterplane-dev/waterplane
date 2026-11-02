@@ -80,6 +80,7 @@ export function leaks(text) {
   const out = [];
   if (/\/(?:Users|home)\/[^/\s~<]/.test(text)) out.push("a home directory path");
   if (/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/.test(text)) out.push("an email address");
+  if (/\b(?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/[A-Z][A-Za-z_]+/.test(text)) out.push("a timezone name (where the owner lives)");
   if (opaqueRun(text)) out.push("a long opaque run (a key or token?)");
   return out;
 }

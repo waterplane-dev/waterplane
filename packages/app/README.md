@@ -611,6 +611,9 @@ row the user is already looking at is noise.
   fingerprint) is HIGH on its own id `kind.approval.high`, because channel importance
   is immutable and an older APK would have created `kind.approval` at DEFAULT; an alert
   with a `plugin` and no session opens that plugin via `shellOpen("plugin:<id>")`.
+  `signin` ("Signed out", HIGH — a session stopped by a sign-out asks you to continue) has
+  its own named channel since 2026-11-02: **needs a new APK**; until one is installed the
+  alert still lands, on a channel named `signin` at DEFAULT importance.
 - **Replacement is by tag.** `NotificationItem` carries no `tag` field yet (that
   is a separate, additive host+`shared` change), so one is derived here —
   `kind|sessionId`, falling back to the item id — and `item.tag` is preferred the

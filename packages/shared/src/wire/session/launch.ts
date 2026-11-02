@@ -85,9 +85,10 @@ export interface SessionLimit {
   nextAttemptAt: number | null;
   /** Continue attempts sent since this block started. */
   attempts: number;
-  /** The block is a WEEKLY limit — its banner prints a bare time with no date,
-   *  so the reset lands days off; auto-continue attempts promptly instead of
-   *  parking on the unreliable parsed reset (an upgraded plan continues now). */
+  /** The block is a WEEKLY limit. Read off the screen its notice prints a bare
+   *  time with no date, so `resetAt` is that time's next occurrence — the
+   *  EARLIEST it can lift, possibly days early; auto-continue tries there and,
+   *  still blocked, again at the same time each following day. */
   weekly: boolean;
   /**
    * The wall is a SPEND wall (API-key / cloud account out of credit, or a spend
@@ -124,6 +125,42 @@ export interface SessionLimit {
   resuming: boolean;
   /** True when the user pushed this session to the front of the resume queue. */
   first: boolean;
+  /**
+   * Why the host's continue is HELD rather than typed, as a sentence: today only
+   * `LIMIT_HELD_DRAFT` — a person's words sit in the desk's composer, and typing
+   * `continue` + Return there would send their draft with it. Set while parked on
+   * that; cleared on the next attempt, another blocker, or the block clearing.
+   * `nextAttemptAt` is then only the next LOOK, never a promise of a try, so a
+   * reader says this instead of a countdown. Absent/null = not held (an older
+   * host never sends it). Additive (2026-11-02).
+   */
+  held?: string | null;
+}
+
+
+/**
+ * A session whose turn stopped on a sign-out, waiting in its account's sign-in
+ * episode (host `recover/authgate.ts`). After a sign-in the host ASKS — it never
+ * types a `continue` until the person taps (owner, 2026-11-02).
+ */
+export interface SessionSignInWait {
+  /** Epoch ms the sign-out stopped this session's turn. */
+  since: number;
+  /** Epoch ms the host confirmed the account is signed in again (`claude auth
+   *  status` after a sign-out was seen, a sign-in link that finished, or another
+   *  session's served turn). Absent = still signed out as far as the host knows. */
+  signedInAt?: number;
+  /** The person tapped continue and this session is in line behind the first
+   *  one, which goes alone (`signin.continue`). */
+  queued?: boolean;
+  /** The host's `continue` for this session is typed and its verdict owed. */
+  continuing?: boolean;
+  /** The host CANNOT TELL whether the account signed in again: `claude auth
+   *  status` keeps reading "in" while this episode never read "out" (a stale
+   *  local credential, or the sign-in done elsewhere), so no confirmation will
+   *  come. The phone offers continue — "continue if you have signed in". Only
+   *  while `signedInAt` is absent. Additive (2026-11-02). */
+  unsure?: boolean;
 }
 
 /**
@@ -153,6 +190,12 @@ export interface SessionNetRetry {
   at: number;
   /** For `gaveup` (or a `waiting` that is parked): the host's sentence why. */
   why?: string;
+  /** This `waiting` is HELD: another session's retry is the open question on this
+   *  desktop (`recover/wavegate.ts`) and nothing is typed here until it gets
+   *  through. The holder's session id (the probe in flight when nobody holds yet).
+   *  The field is the fact; `why` carries the same sentence for an older phone.
+   *  Absent = not held. */
+  heldBy?: string | null;
   /** This `waiting`/`sent` is a STALL PROBE: the ladder ran out and the host
    *  is trying once more on the slow cadence. The work waiting on the session
    *  is still stalled meanwhile (`netRetryStalls`). Absent = the ladder. */

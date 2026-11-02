@@ -304,9 +304,16 @@ export function isAndroidRepo(root: string, d: Pick<AndroidEnvDeps, "readdir" | 
 /** `isAndroidRepo` on the real disk without holding the event loop — the same walk, rules and
  *  budget, every call awaited. For the unattended setup sweep (`compliance.ts`' `inspectRepoAsync`). */
 export async function isAndroidRepoAsync(root: string): Promise<boolean> {
+  return (await androidRepoVerdict(root)) === true;
+}
+
+/** `isAndroidRepoAsync`'s walk, honest about its budget: `null` when the 400 directories ran out
+ *  before a hit — "did not look everywhere", never "no". The auto-on probe's input. */
+export async function androidRepoVerdict(root: string): Promise<boolean | null> {
   let budget = 400;
+  let exhausted = false;
   const walk = async (dir: string, depth: number): Promise<boolean> => {
-    if (budget-- <= 0) return false;
+    if (budget-- <= 0) { exhausted = true; return false; }
     let ents: import("node:fs").Dirent[];
     try { ents = await readdirAsync(dir, { withFileTypes: true }); } catch { ents = []; }
     for (const e of ents) {
@@ -327,5 +334,23 @@ export async function isAndroidRepoAsync(root: string): Promise<boolean> {
     }
     return false;
   };
-  return walk(root, 0);
+  return (await walk(root, 0)) ? true : exhausted ? null : false;
+}
+
+/**
+ * The `androidRepo` auto-on probe (`plugins/pluginauto.ts`): is ANY of these checkouts an Android app?
+ * One repo at a time, each the bounded async walk. `true` on the first hit; `null` when no repo hit
+ * and at least one ran out of budget (unknown changes nothing); `false` only when every repo was
+ * walked whole. A listing that throws is unknown too.
+ */
+export async function androidReposProbe(roots: () => Promise<string[]>): Promise<boolean | null> {
+  let dirs: string[];
+  try { dirs = await roots(); } catch { return null; }
+  let unknown = false;
+  for (const d of dirs) {
+    const v = await androidRepoVerdict(d);
+    if (v === true) return true;
+    if (v === null) unknown = true;
+  }
+  return unknown ? null : false;
 }

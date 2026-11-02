@@ -457,3 +457,12 @@ test("a percent unit refused for undated records names that cause under its fiel
   const spark = { usageTok: 1000, costUsd: 0.5 };
   assert.match(budgetSpentLine("weeklyPct", spark, c, NOW), /4 records it could not date/);
 });
+
+test("budgetUnitsFor: no 5-hour window drops '% of 5h' unless a cap is already in it", async () => {
+  const { budgetUnitsFor } = await import("./budgetInput.ts");
+  const ids = (l) => l.map((u) => u.unit);
+  assert.ok(ids(budgetUnitsFor(false)).includes("sessionPct"));
+  assert.ok(!ids(budgetUnitsFor(false, undefined, undefined, true)).includes("sessionPct"));
+  assert.ok(ids(budgetUnitsFor(false, undefined, undefined, true)).includes("weeklyPct"));
+  assert.ok(ids(budgetUnitsFor(false, "sessionPct", undefined, true)).includes("sessionPct"), "never silently swapped");
+});

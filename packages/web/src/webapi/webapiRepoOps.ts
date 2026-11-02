@@ -100,8 +100,10 @@ export const repoOpsApi = {
    * running and saying no, not a transport failure. Read `ok` and `last.refused`
    * off the body — an HTTP error here means the host, not the tool.
    */
-  repoHealthRefresh: (repoId: string, scope?: string | null, approveEngine?: boolean, approveToken?: string) =>
+  // `recut`: the person's confirmed tap on the refusal's remedy — the engine
+  // moves the old series aside (a `.bak`, never deleted) and re-measures.
+  repoHealthRefresh: (repoId: string, scope?: string | null, approveEngine?: boolean, approveToken?: string, recut?: boolean) =>
     jpost<RepoHealthView & { ok: boolean }>(
-      `/api/repos/${repoId}/repohealth/refresh`, { ...(scope ? { scope } : {}), ...(approveEngine ? { approveEngine: true, ...(approveToken ? { approveToken } : {}) } : {}) }, 200_000,
+      `/api/repos/${repoId}/repohealth/refresh`, { ...(scope ? { scope } : {}), ...(approveEngine ? { approveEngine: true, ...(approveToken ? { approveToken } : {}) } : {}), ...(recut ? { recut: true } : {}) }, 200_000,
     ),
 };

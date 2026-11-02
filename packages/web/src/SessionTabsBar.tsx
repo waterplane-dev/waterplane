@@ -136,9 +136,8 @@ export function SessionTabsBar() {
   const [listOpen, setListOpen] = useState(false);
   useBackStep(listOpen, () => setListOpen(false));
   // How the list was opened (a keyboard press focuses its filter even where no
-  // keyboard was known yet), and each further press while it is up.
+  // keyboard was known yet).
   const [viaKey, setViaKey] = useState(false);
-  const [kick, setKick] = useState(0);
   const anyRef = useRef(any);
   anyRef.current = any;
   // The last tab closed under the open list: shut it, or its Back step stays.
@@ -158,14 +157,15 @@ export function SessionTabsBar() {
       if (!isTabsListPress(e) || !free()) return;
       e.preventDefault();
       e.stopPropagation();
-      if (openRef.current) { setKick((k) => k + 1); return; }
+      // A second press closes it again: the chord is a toggle.
+      if (openRef.current) { setListOpen(false); return; }
       setViaKey(true);
       setListOpen(true);
     };
     window.addEventListener("keydown", onKey, true);
     const off = registerShortcut({
       id: "tabs.list", mods: ["ctrl"], key: "E",
-      what: () => (openRef.current ? "next tab in the list" : "find an open tab"),
+      what: () => (openRef.current ? "close the tab list" : "find an open tab"),
       when: free,
     });
     return () => { window.removeEventListener("keydown", onKey, true); off(); };
@@ -174,7 +174,7 @@ export function SessionTabsBar() {
   return (
     <>
       {show && <Strip listOpen={listOpen} onList={() => { setViaKey(false); setListOpen((o) => !o); }} />}
-      {listOpen && <ListLayer viaKey={viaKey} kick={kick} onClose={() => setListOpen(false)} />}
+      {listOpen && <ListLayer viaKey={viaKey} onClose={() => setListOpen(false)} />}
     </>
   );
 }
@@ -241,7 +241,7 @@ function Strip({ listOpen, onList }: { listOpen: boolean; onList: () => void }) 
 }
 
 /** The list with its own subscription — it opens with the strip off too. */
-function ListLayer(p: { viaKey: boolean; kick: number; onClose: () => void }) {
+function ListLayer(p: { viaKey: boolean; onClose: () => void }) {
   const s = useSessionTabs<TabsSnapshot>((x) => x);
   useRepoColors();
   const fileOn = !!s.fileActive && s.files.some((f) => fileTabKey(f) === s.fileActive);
@@ -261,8 +261,8 @@ function ListLayer(p: { viaKey: boolean; kick: number; onClose: () => void }) {
  * Ctrl+E that opened it — because focus on a touch phone is a soft keyboard
  * over half the list nobody asked to type into.
  */
-function TabsList({ s, fileOn, viaKey, kick, onClose }: {
-  s: TabsSnapshot; fileOn: boolean; viaKey: boolean; kick: number; onClose: () => void;
+function TabsList({ s, fileOn, viaKey, onClose }: {
+  s: TabsSnapshot; fileOn: boolean; viaKey: boolean; onClose: () => void;
 }) {
   const keyboard = useHasKeyboard();
   const [query, setQuery] = useState("");
@@ -279,10 +279,8 @@ function TabsList({ s, fileOn, viaKey, kick, onClose }: {
   // The highlighted tab closed: the row now drawn becomes the identity.
   useLayoutEffect(() => { const k = reanchor(keys, hl, lastAt.current); if (k !== hl) setHl(k); });
   const listRef = useRef<HTMLUListElement | null>(null);
-  const kicked = useRef(kick);
 
   const step = (d: number) => setHl(stepHighlight(keys, hl, lastAt.current, d));
-  useEffect(() => { if (kick !== kicked.current) { kicked.current = kick; step(1); } });
   useEffect(() => { if (query) { lastAt.current = 0; setHl(null); } }, [query]);
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${at}"]`)?.scrollIntoView({ block: "nearest" });

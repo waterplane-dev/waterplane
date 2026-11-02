@@ -54,8 +54,8 @@ export function checkAgents(core: SessionCore, s: Session): void {
   const gen = (agentGen.get(s) ?? 0) + 1;
   agentGen.set(s, gen);
   if (!s.info.running) {
-    if (s.info.agents || s.info.shells || s.info.shellList) {
-      s.info.agents = undefined; s.info.shells = undefined; s.info.shellList = undefined; s.shellsFp = undefined;
+    if (s.info.agents || s.info.shells || s.info.shellList || s.info.cliName) {
+      s.info.agents = undefined; s.info.shells = undefined; s.info.shellList = undefined; s.shellsFp = undefined; s.info.cliName = undefined;
       core.emit("updated", s.info);
     }
     return;
@@ -70,6 +70,7 @@ export function checkAgents(core: SessionCore, s: Session): void {
   let rows: SessionAgent[] = [];
   if (derive(s.backend).keepsClaudeLog) {
     try { rows = readRunningAgents(s.info.cwd, s.info.claudeSessionId); } catch { rows = []; }
+    try { core.checkToolLoop(s); } catch { /* a signal, never a reason to stop polling */ }
   } else {
     let read: SessionAgent[] | null = null;
     try { read = readAgents(s.backend, agentsSourceSession(s)); } catch { read = null; }
@@ -79,8 +80,14 @@ export function checkAgents(core: SessionCore, s: Session): void {
   // Background SHELLS are the same fact by another route (a `run_in_background`
   // Bash or a Monitor outlives its turn too), and no log records them — the
   // CLI's own session record does (`agents.ts`'s `readCliRecord`).
-  let record: { status: string; pid: number } | null = null;
+  let record: { status: string; pid: number; name?: string } | null = null;
   try { record = readCliRecord(s.info.id, tmuxName(s.info.id), s.info.claudeSessionId); } catch { record = null; }
+  // The peer name rides the same read. Only a matched record moves it: no
+  // match keeps the last name seen (a running process keeps its name until
+  // a /rename); a stopped session drops it with the agents above.
+  const cliName = record ? record.name : s.info.cliName;
+  // Set and broadcast by `publishAgents`'s one emit, so a superseded async
+  // tick can never set it without telling the phone.
   const cli = record?.status ?? null;
   const shells = cli === "shell" ? true : undefined;
   // The RICH list, read only while the CLI's own record says there is
@@ -98,11 +105,11 @@ export function checkAgents(core: SessionCore, s: Session): void {
       .catch((): SessionShell[] | undefined => undefined)
       .then((shellList) => {
         if (agentGen.get(s) !== gen || core.sessions.get(s.info.id) !== s) return;               // a newer tick owns the result and the timer
-        publishAgents(core, s, rows, shells, cli, shellList);
+        publishAgents(core, s, rows, shells, cli, shellList, cliName);
       });
     return;
   }
-  publishAgents(core, s, rows, shells, cli, undefined);
+  publishAgents(core, s, rows, shells, cli, undefined, cliName);
 }
 
 /** Per-session generation of the latest `checkAgents` call — see there. */
@@ -124,14 +131,16 @@ export function retireAgentPoll(s: Session): void {
 /** The second half of `checkAgents`: compare, broadcast on a change, re-arm. */
 function publishAgents(
   core: SessionCore, s: Session, rows: SessionAgent[], shells: true | undefined, cli: string | null,
-  shellList: SessionShell[] | undefined,
+  shellList: SessionShell[] | undefined, cliName: string | undefined,
 ): void {
   const shellsFp = shellsFingerprint(shellList, Date.now());
-  const changed = agentsChanged(s.info.agents, rows) || shells !== s.info.shells || shellsFp !== s.shellsFp;
+  const nameMoved = cliName !== s.info.cliName;
+  const changed = nameMoved || agentsChanged(s.info.agents, rows) || shells !== s.info.shells || shellsFp !== s.shellsFp;
   if (changed) {
     s.info.agents = rows.length ? rows : undefined;
     s.info.shells = shells;
     s.info.shellList = shellList;
+    s.info.cliName = cliName;
     s.shellsFp = shellsFp;
     core.emit("updated", s.info);
   }

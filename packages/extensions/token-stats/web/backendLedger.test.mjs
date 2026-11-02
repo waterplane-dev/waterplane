@@ -28,6 +28,12 @@ test("absent says why: the host's sentence, or an honest default, never a zero",
   assert.equal(ledgerAbsent("X", null), null);
 });
 
+test("a ledger in its own extension's shape (another backend's) is a sentence, never a crash", () => {
+  const own = { available: true, totals: { input: 5, output: 1, reasoning: 0, cacheRead: 9, cacheWrite: 0, turns: 2 }, days: [{ day: "2026-10-01", input: 5 }] };
+  assert.match(ledgerAbsent("Other", own), /its own shape/);
+  assert.match(ledgerAbsent("X", doc({ days: [{ day: "2026-10-01", turns: 1 }] })), /its own shape/);
+});
+
 test("a unit ledger sums its per-day map and names the unit", () => {
   const u = unitHero(doc({ unit: { name: "premium requests", perDay: { "2026-09-30": 3, "2026-09-29": 2 } } }));
   assert.equal(u.total, 5);

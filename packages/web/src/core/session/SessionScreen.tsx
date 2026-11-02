@@ -14,6 +14,7 @@
  * reaches the reader, the search sheet and the socket, and falls through to a
  * feature's own command.
  */
+import { StowHome } from "../../Stowable";
 import type { ReactNode } from "react";
 import type { BackendInfo, BacklogItem, Intent, RepoTarget, SessionInfo, UpdateInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
@@ -114,6 +115,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
     active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, setOverlay, runToolbar, backends,
   };
   return (
+    <StowHome>
     <div className={`screen${chromeHidden ? " typing" : ""}${fullMode ? " fullscreen" : ""}${readerShown ? " reading" : ""}`}>
       <SessionHeader active={active} sessions={sessions} pending={pending} pendingEntry={pendingEntry} status={status} liveSend={liveSend}
         backends={backends} sessionCan={launch.sessionCan} sessionRepoName={sessionRepoName} repoForCwd={repoForCwd}
@@ -146,5 +148,6 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
 
       <NetActivity />
     </div>
+    </StowHome>
   );
 }

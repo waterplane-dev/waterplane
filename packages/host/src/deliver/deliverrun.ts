@@ -8,14 +8,13 @@ import type { SessionManager } from "../sessions.js";
 import type { DeliveryShape, HistoryEntry } from "@waterplane/shared";
 import { fixtureWanted, noteHealth } from "../clihealth.js";
 import { asksYesNo } from "../shelllinks.js";
-import { readNavBox, trustKeys } from "../prompt.js";
 import { ROW_WINDOW, composerFramesAmbiguous } from "../composer.js";
 import { deliveryCommandFacts, worksUnannounced } from "../slash.js";
 import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS, sleep } from "./deliverknobs.js";
 import type { DeliverOpts, DeliveryResult } from "./delivertypes.js";
 import { composerHoldsOnlyHint, foreignInComposer, makeScreenReader } from "./deliverscreen.js";
 import { makeLogProof, makeSubmitProof } from "./deliverproof.js";
-import { hasTurns, submitAndConfirm, trustRuleFor } from "./deliverreturn.js";
+import { answerLateTrust, hasTurns, submitAndConfirm, trustAnswerKeys, trustRuleFor } from "./deliverreturn.js";
 
 /**
  * The delivery itself. Returns the verdict AND, where the verdict needs one, the
@@ -214,10 +213,9 @@ export async function runDelivery(
     }
   }
 
-  // A never-trusted dir → claude shows its folder-trust box. Auto-accept so the
-  // instruction doesn't land in the trust dialog. After accepting, claude
-  // redraws the whole TUI — so we must wait for it to settle.
-  // Never in a shell: those words on a shell's screen are output, and `1⏎` a command.
+  // A never-trusted dir → claude shows its folder-trust box. Auto-accept so the instruction doesn't
+  // land in it; claude then redraws the whole TUI, so wait for it to settle. (Painted LATE, over the
+  // typed words: `answerLateTrust` below.) Never in a shell: there `1⏎` is a command.
   //
   // The keys are `trustKeys`', never a bare `1⏎`: since 2.1.293 the box is UNNUMBERED with the
   // cursor on "No, exit", so the digit typed nothing and the Return chose "No, exit" — every first
@@ -228,8 +226,7 @@ export async function runDelivery(
   const trust = trustRuleFor(live?.backend);
   if (!shell && trust.asks(await screen())) {
     if (!trust.autoAccept) return { result: "retry", detail: trust.refusal };
-    const nav = readNavBox(await sessions.screenText(sessionId, 60));
-    const keys = trustKeys(nav);
+    const { keys, nav } = await trustAnswerKeys(() => sessions.screenText(sessionId, 60));
     if (!keys || (!nav && /noexit/.test(await screen()))) {
       return { result: "retry", detail: "claude is asking whether to trust this folder and this app could not read the box — answer it in the terminal" };
     }
@@ -389,7 +386,9 @@ export async function runDelivery(
        * about a prompt that ran.
        */
       let mixedUp: string | null = null;
-      if (!noTurn && (sessions.isHooked(sessionId) || proof.deliverySrc)) {
+      const trustUp = !shell && trust.asks(await screen()); // a box painted over the words: cursor on "No, exit"
+      if (trustUp && trust.autoAccept) return answerLateTrust(() => sessions.screenText(sessionId, 60), (k) => sessions.write(sessionId, k));
+      if (!noTurn && !trustUp && (sessions.isHooked(sessionId) || proof.deliverySrc)) {
         const pressedAt = Date.now();
         armSourceProof();
         sessions.write(sessionId, "\r");
@@ -470,7 +469,7 @@ export async function runDelivery(
         // unchanged, because the alternative is guessing from silence and the
         // guess that skips the sweep leaves a stale composer for the re-fire.
         const midTurn = sessions.isHooked(sessionId) && sessions.get(sessionId)?.turnActive === true;
-        if (!midTurn) await clearComposer(!local);
+        if (!midTurn && !trustUp) await clearComposer(!local); // Esc at a trust box is cancel = exit
         return {
           result: "unconfirmed",
           // Only when the CLI actually said so. `mixedUp` is a submitted prompt

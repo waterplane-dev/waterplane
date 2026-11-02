@@ -118,6 +118,9 @@ async function run() {
   });
 
   await check("waterplane.healthRefresh measures the folder's git history", async () => {
+    // With the desktop app's series in the folder, a refresh only reads it again (one source,
+    // `chooseSource`). Take it away so the extension has to measure its own series.
+    fs.rmSync(path.join(folder, ".waterplane", "repohealth.jsonl"), { force: true });
     await vscode.commands.executeCommand("waterplane.healthRefresh");
     const dir = path.join(storage, "health");
     const series = () => {

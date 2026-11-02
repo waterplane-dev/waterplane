@@ -102,3 +102,8 @@ Tapping any notification opens a page about that exact notification, ending at i
 A new open exposure alert on a watched repo is pushed once, forever: one push per finding (more than three at once in a repo are one push naming the count), never repeated for the same finding, and silent for findings the phone already showed when the repo joined the watch. Critical and high are *needs you* and clear when the finding is no longer open; the rest are information. A tap opens that repo's readings on the exposure watch.
 - asked: 2026-10-26
 - shipped: f61832c0
+### R-notifications-022 · shipped
+PR notices are keyed through the shared notification-key builder like every other notification.
+- asked: 2026-10-30
+- shipped: 06b49e7a
+

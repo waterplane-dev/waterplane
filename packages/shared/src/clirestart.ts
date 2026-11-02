@@ -37,7 +37,28 @@ export function cmpCliVersion(a: string | undefined, b: string | undefined): num
 
 /** Pull `2.1.283` out of `2.1.283 (Claude Code)` or a log record's field. */
 export function parseCliVersion(s: string | undefined | null): string | undefined {
-  return (s && /(\d+\.\d+\.\d+)/.exec(s)?.[1]) || undefined;
+  return (s && firstTripleOf(s)) || undefined;
+}
+
+const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9";
+
+/** The first match of `/\d+\.\d+\.\d+/`, by a scan rather than the regex: on a long run of
+ *  digits with no dot the regex retries from every digit (quadratic). The leftmost match always
+ *  starts at the START of a digit run (a later start in the same run has the same continuation),
+ *  and each `\d+` must take its whole run (the next character has to be a `.`), so checking run
+ *  starts only is the same answer. */
+function firstTripleOf(s: string): string | undefined {
+  const runEnd = (i: number): number => { while (isDigit(s[i])) i++; return i; };
+  for (let i = 0; i < s.length; i++) {
+    if (!isDigit(s[i])) continue;
+    const a = runEnd(i);
+    if (s[a] === "." && isDigit(s[a + 1])) {
+      const b = runEnd(a + 1);
+      if (s[b] === "." && isDigit(s[b + 1])) return s.slice(i, runEnd(b + 1));
+    }
+    i = a; // the next candidate starts after this run (s[a] is not a digit)
+  }
+  return undefined;
 }
 
 export interface CliRestartDue {

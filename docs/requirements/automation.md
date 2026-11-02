@@ -354,3 +354,8 @@ The week-end burn sheet says how it works in numbered steps (when sessions start
 The week-end burn and a repo's backlog link both ways: a row the burn wrote says "from the week-end burn" and opens the burn; the repo's backlog says what the burn is doing there, counts the burn's rows (the count opens exactly those) and opens the burn sheet; each repo row in the burn sheet opens that repo's backlog cut to the burn's rows.
 - asked: 2026-10-29
 - shipped: 1bded5d7
+### R-automation-077 · shipped
+The daily update runs at 06:00 instead of 10:00.
+- asked: 2026-10-30
+- shipped: 679a36b8
+

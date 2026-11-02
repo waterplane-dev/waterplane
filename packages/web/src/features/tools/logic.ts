@@ -21,20 +21,22 @@ export const OVERLAY_IDS = [
   // `context`, `queue` and `tokens` are tracked at their call sites but were
   // never listed here, so the usage sheet could not show them at zero uses —
   // which is the one reading a usage sheet exists for. Listed with `sweep`.
-  "sweep", "context", "queue", "tokens", "apps", "repohealth", "storage",
+  "sweep", "context", "queue", "tokens", "repohealth", "storage",
 ];
 export const ACTION_IDS = [
   "compose.send", "voice", "snippet.insert", "snippet.save",
   // `session.read` is the launcher's own way in: straight to the reader with the
   // outline up, tracked apart from `session.attach` because "opened to LOOK" and
   // "opened to WORK" are different uses of the same list.
-  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.limit", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
+  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.blocked", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
   "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.clone", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.capture", "repo.hide", "repo.inbox", "repo.git",
   // A box answered by tapping, from the READER's card (`PromptAnswer.tsx`).
   // The approve bar's size counters (`prompt.mini`/`expand`/`hide`/`show`,
   // `prompt.detail`) are gone with the bar: they were measuring how often the
   // card had to be got out of the way, which is not a question any more.
   "prompt.answer", "prompt.esc", "prompt.submit",
+  // The blocked sheet's per-kind actions (`features/limits/BlockedSheet.tsx`).
+  "blocked.net.now", "blocked.net.cancel", "blocked.net.session", "blocked.auth.session", "blocked.auth.link", "blocked.auth.login", "blocked.auth.continueAll",
   // The questions sheet — the same card, off the session and answerable with no
   // link at all. Tracked apart from `prompt.*` on purpose: "answered from the
   // sheet" vs "answered in the session" is what says whether the offline route

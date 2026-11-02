@@ -5,16 +5,14 @@
  * `repohealth-scopes.json`). The folder's files are READ, never written: only `status` and `plot`
  * ever see them (`healthstate.ts` shim, `READ_FROM`), `update` and `mendTail` stay on our own file.
  *
- * The rule: when both exist, the one whose last row is the newer commit wins (`ts`); a tie or a
- * last row that cannot be read goes to the folder's, which the host keeps fresh. One exception
- * comes first: a folder series an older engine wrote (no line-weighted mean, `isStaleEngineSeries`)
- * scores nothing, so ours wins whenever ours is not — else measuring again here could never take
- * its place (a repo's own older `tools/repohealth.mjs` keeps writing such rows on the desktop). A scope has no
- * series of our own, so it is only ever read from the folder.
+ * The rule is ONE source, never a merge: when the folder has a series of its own, that file is the
+ * one shown, always — it is the file the phone reads, so the two can never show different numbers.
+ * The extension's own copy is used only for a folder the desktop app has never measured, and an
+ * update is never run beside the folder's series (`healthrun.ts`). A scope has no series of our
+ * own, so it is only ever read from the folder.
  */
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { isStaleEngineSeries, type HealthSeriesRow } from "@waterplane/shared";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { STATE_DIRS } from "../shims/healthstate.js";
 // @ts-expect-error -- plain JS with no declarations; esbuild bundles it (as healthworker.ts does the engine).
 import { normalizeScope, slugFor } from "../../../../tools/repohealth/scope.mjs";
@@ -31,7 +29,6 @@ export interface HealthSource {
 }
 
 const MAX_SCOPES = 8;
-const TAIL_CAP = 4 * 1024 * 1024;
 
 const nonEmpty = (f: string): boolean => {
   try { return statSync(f).size > 0; } catch { return false; }
@@ -75,50 +72,10 @@ export function readScopes(folder: string): string[] {
   return [];
 }
 
-/** The file's last whole row, parsed, or null. Reads the tail only. */
-function lastRow(file: string): Record<string, unknown> | null {
-  let fd: number;
-  try { fd = openSync(file, "r"); } catch { return null; }
-  try {
-    const size = fstatSync(fd).size;
-    let want = 64 * 1024;
-    for (;;) {
-      const len = Math.min(size, want);
-      const buf = Buffer.alloc(len);
-      readSync(fd, buf, 0, len, size - len);
-      const lines = buf.toString("utf8").split("\n");
-      // The first segment may be cut by the window; trust it only when the window is the whole file.
-      const usable = len === size ? lines : lines.slice(1);
-      const last = usable.map((l) => l.trim()).filter(Boolean).pop();
-      if (last !== undefined) {
-        try {
-          const r: unknown = JSON.parse(last);
-          return r && typeof r === "object" && !Array.isArray(r) ? r as Record<string, unknown> : null;
-        } catch { return null; }
-      }
-      if (len === size || want >= TAIL_CAP) return null;
-      want *= 4;
-    }
-  } finally {
-    closeSync(fd);
-  }
-}
-
-/** `ts` (unix seconds) of the file's last whole row, or null. Reads the tail only. */
-export function lastRowTs(file: string): number | null {
-  const ts = lastRow(file)?.ts;
-  return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
-}
-
-/** Whether the file's last row is an older engine's (measured size, no line-weighted mean); null = unreadable. */
-function staleTail(file: string): boolean | null {
-  const r = lastRow(file);
-  return r ? isStaleEngineSeries([r as unknown as HealthSeriesRow]) : null;
-}
-
 /**
  * Where a read of `folder` (and `scope`) comes from. `ownFile` is our global-storage series for the
- * folder. A scope the folder has no series for falls back to the whole repo.
+ * folder, read only when the folder holds no series of its own. A scope the folder has no series
+ * for falls back to the whole repo.
  */
 export function chooseSource(folder: string, ownFile: string, scope: string | null): HealthSource {
   if (scope) {
@@ -126,14 +83,23 @@ export function chooseSource(folder: string, ownFile: string, scope: string | nu
     if (dir) return { kind: "repo", file: join(dir, seriesName(scope)), dir, scope };
   }
   const dir = repoSeriesDir(folder);
-  if (dir) {
-    const file = join(dir, seriesName(null));
-    if (nonEmpty(ownFile)) {
-      if (staleTail(file) === true && staleTail(ownFile) === false) return { kind: "own", file: ownFile, dir: null, scope: null };
-      const theirs = lastRowTs(file), mine = lastRowTs(ownFile);
-      if (theirs !== null && mine !== null && mine > theirs) return { kind: "own", file: ownFile, dir: null, scope: null };
-    }
-    return { kind: "repo", file, dir, scope: null };
-  }
+  if (dir) return { kind: "repo", file: join(dir, seriesName(null)), dir, scope: null };
   return { kind: "own", file: ownFile, dir: null, scope: null };
+}
+
+/**
+ * The root of the git work tree holding `start` (a file or a directory): the nearest ancestor with a
+ * `.git` entry — a directory, or the file a linked worktree or submodule has. Null when there is
+ * none up to the filesystem root. A filesystem walk, not `git rev-parse`: the extension itself
+ * starts no process.
+ */
+export function gitRootOf(start: string): string | null {
+  let dir = resolve(start);
+  try { if (!statSync(dir).isDirectory()) dir = dirname(dir); } catch { dir = dirname(dir); }
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
 }

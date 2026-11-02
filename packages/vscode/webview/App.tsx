@@ -39,7 +39,7 @@ export function App() {
 
   return (
     <div className="app">
-      <ViewHead tab={tab} folder={folder} following={session?.following ?? true} scannedAt={corpus?.doc?.scannedAt ?? null} post={post}
+      <ViewHead tab={tab} folder={tab === "health" ? health[folder ?? ""]?.doc?.folder ?? folder : folder} following={session?.following ?? true} scannedAt={corpus?.doc?.scannedAt ?? null} post={post}
         row={sessions && sessions.folder === folder ? sessions.rows.find((r) => r.id === (session?.doc?.id ?? sessions.selected)) ?? null : null} />
 
       <main id={`panel-${tab}`} tabIndex={-1}>

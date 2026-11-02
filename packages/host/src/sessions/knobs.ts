@@ -273,13 +273,25 @@ export const LIMIT_SWEEP_MS = Number(env("LIMIT_SWEEP_MS") || 60_000);
 export const NET_RETRY_LADDER_MS: number[] = (env("NET_RETRY_LADDER_MS") || "")
   .split(",").map((n) => Number(n.trim())).filter((n) => Number.isFinite(n) && n > 0);
 export const NET_RETRY_MAX = Number(env("NET_RETRY_MAX") || 8);
+/** How long a busy net retry is parked before it looks again (an open box, a person's
+ *  words in the composer) — default 30 s. Words in the composer double it per park in
+ *  a row, to 5 min (`apiretry.ts`'s `draftPark`). */
+export const NET_RETRY_PARK_MS = ((v) => (Number.isFinite(v) && v > 0 ? v : 30_000))(Number(env("NET_RETRY_PARK_MS") || 30_000));
 /** Past the cap, while work is STALLED on the session and the switch is on: one
  *  `continue` this often, no cap (default 30 min); `0` = no stall probe. */
 export const NET_RETRY_STALL_MS = ((v) => (v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : 1_800_000))(env("NET_RETRY_STALL_MS") ?? "");
+/** The sign-in episode (`sessions/signinwait.ts`, `recover/authgate.ts`): how often `claude auth
+ *  status` is read while a sign-out has stopped a session and the account is not yet confirmed
+ *  signed in again (default 30 s, floored at 1 s). No such session ⇒ no read at all. */
+export const SIGNIN_POLL_MS = Math.max(1000, Number(env("SIGNIN_POLL_MS") || 30_000) || 30_000);
 /** How often the running-agent list is re-read while any agent is running. A
  *  readdir plus a stat per agent, and armed only while there is something to
  *  re-read — see `checkAgents`. */
 export const AGENT_POLL_MS = Number(env("AGENT_POLL_MS") || 5000);
+/** A tool loop is told (`sessions/loopwatch.ts`) once this many completed tool calls
+ *  in a row share name, input and result. Default 20 (real logs top out at 2);
+ *  `0` = off. Ridden on the agent poll, so it is read at that cadence. */
+export const TOOL_LOOP_AT = ((v) => (v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor(Number(v)) : 20))(env("TOOL_LOOP_AT") ?? "");
 /** How many submitted prompts a session remembers. A delivery asks about the
  *  seconds it has just been waiting through, and a turn takes minutes — this is
  *  a short queue against a race, not a history (the transcript is that). */

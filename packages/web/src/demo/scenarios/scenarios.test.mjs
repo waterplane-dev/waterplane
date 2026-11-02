@@ -271,7 +271,7 @@ test("first-look: no headline screen is empty, and its numbers agree with each o
   assert.equal(f("clihealth").rollup.verdict, "healthy");
   h.conn.receive({ t: "sent.get" });
   h.conn.receive({ t: "decisions.get" });
-  for (const t of ["notification.list", "decisions.log", "sent.log", "pull.list", "install.log"]) {
+  for (const t of ["notification.list", "decisions.log", "sent.log", "pull.list"]) {
     const m = f(t);
     assert.ok(m, `${t} arrives on hello`);
     assert.ok((m.items ?? m.entries ?? m.doc?.entries ?? []).length > 0, `${t} has rows`);

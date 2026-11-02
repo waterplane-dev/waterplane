@@ -21,6 +21,7 @@ import { prefRef, setPref } from "../prefs";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { noteSessionClosing } from "../../features/shells";
+import { listedBlockOf } from "../../attention";
 
 type CloseCheck = Extract<HostMessage, { t: "session.closecheck" }>;
 
@@ -73,7 +74,9 @@ export function useSessionVerbs(conn: Connection, getSessions: () => SessionInfo
     liveSend({ t: "session.remove", id: s.id }, archivedToast(s.title), "no connection — the desktop didn't get that, the session is still listed");
   }
   function clearExited() {
-    const gone = getSessions().filter((s) => !s.running);
+    // An exited session the host still holds in its resume queue is not
+    // "exited" (`attention.ts`): it reopens at the reset, so it is kept.
+    const gone = getSessions().filter((s) => !s.running && !listedBlockOf(s));
     if (!gone.length) return;
     if (connRef.current.status !== "open") { showToast("no connection — the desktop didn't get that, the sessions are still listed"); return; }
     for (const s of gone) send({ t: "session.remove", id: s.id });

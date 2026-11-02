@@ -11,7 +11,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseUsage, rememberedUsage, usageAfterResets } from "../dist/usage.js";
+import { UsageChecker, parseUsage, rememberedUsage, usageAfterResets } from "../dist/usage.js";
 
 /** The rendered `/usage` screen, verbatim. */
 const SCREEN = `
@@ -144,4 +144,30 @@ test("a live reading loses a window the moment that window resets", () => {
   assert.equal(usageAfterResets(open, T0), open);
   // Both gone ⇒ an honest `?`, never a number.
   assert.equal(usageAfterResets({ ...live, weeklyResetAt: T0 - 1 }, T0).ok, false);
+});
+
+test("markSessionGone: stamped only on a week-only reading, cleared when the window is back", () => {
+  const c = new UsageChecker("/nonexistent", () => {});
+  const T = 1_800_000_000_000;
+  const weekOnly = { ok: true, sessionPct: null, weeklyPct: 18, sessionResetAt: null, weeklyResetAt: T + 86_400_000, checkedAt: T };
+  c.cache = weekOnly;
+  c.markSessionGone(T - 60_000);
+  assert.equal(c.get().sessionGoneSince, T - 60_000);
+  // history says "no run" (null) ⇒ the stamp comes off
+  c.markSessionGone(null);
+  assert.equal(c.get().sessionGoneSince, undefined);
+  // a reading WITH a session figure is never stamped, whatever the history says
+  c.cache = { ...weekOnly, sessionPct: 5, sessionResetAt: T + 3600_000 };
+  c.markSessionGone(T - 60_000);
+  assert.equal(c.get().sessionGoneSince, undefined);
+});
+
+test("seed: a boot over a week-only history comes up already collapsed", () => {
+  const now = Date.now();
+  const row = (t) => ({ t, s: null, w: 18, sr: null, wr: now + 86_400_000 });
+  const rows = [row(now - 40 * 60_000), row(now - 5 * 60_000)];
+  const c = new UsageChecker("/nonexistent", () => {}, () => rows);
+  c.seed(rows[1]);
+  assert.equal(c.get().weeklyPct, 18);
+  assert.equal(c.get().sessionGoneSince, rows[0].t);
 });

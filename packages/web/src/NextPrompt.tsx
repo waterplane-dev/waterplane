@@ -169,7 +169,7 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
         <Button onPointerDown={keepFocus} title="the whole queue for every session"
           onClick={onOpenQueue}><ListOrdered size={ICON} /> queue</Button>
       )}
-      <StowButton className="key" />
+      <StowButton />
     </div>
     </Stowable>
   );

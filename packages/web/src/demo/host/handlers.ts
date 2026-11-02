@@ -78,6 +78,10 @@ const RUNS = because("The demo keeps your waiting work but does not start it —
 const DESKTOP = because("A live desktop streams your own screen, and the demo has no desktop to show.");
 const STORE = because("The demo keeps no records on disk to change — this needs your own desktop.");
 
+/** The demo desktop's plugin list. A scenario naming none gets the rows the demo fixtures ask to be
+ *  listed, filled in at build time (`index.ts` `defaults.plugins`); nothing plugin-specific lives here. */
+const pluginsOf = (md: DemoModel) => md.plugins ?? [];
+
 const m = (c: { desk: Desk }): DemoModel => c.desk.m;
 const bl = (md: DemoModel) => (md.backlog ??= {}).items ??= [];
 const intents = (md: DemoModel): Intent[] => (md.intents ??= []);
@@ -132,7 +136,7 @@ export function helloFrames(md: DemoModel): HostMessage[] {
     { t: "closed.list", closed: md.closed ?? [] },
     backlogFrame(md),
     n.update ? { t: "update.status", info: n.update } : null,
-    { t: "plugin.list", plugins: md.plugins ?? [] },
+    { t: "plugin.list", plugins: pluginsOf(md) },
     { t: "decisions.log", entries: (md.decisions ?? []).slice(0, 100) },
     n.usage ? { t: "usage.status", usage: n.usage } : null,
     n.meter ? { t: "meter.status", summary: n.meter } : null,
@@ -151,7 +155,6 @@ export function helloFrames(md: DemoModel): HostMessage[] {
     { t: "intent.list", intents: md.intents ?? [] },
     { t: "delivery.list", items: md.deliveries ?? [] },
     { t: "settings.all", doc: md.settings ?? {} },
-    md.install ? { t: "install.log", doc: md.install } : null,
     n.clihealth ? { t: "clihealth", health: n.clihealth.health, rollup: n.clihealth.rollup } : null,
   ];
   return out.filter((f): f is HostMessage => !!f);
@@ -364,9 +367,8 @@ export const HANDLERS = {
     },
   },
   "pull.list": { tier: "A", run: (c) => { c.reply({ t: "pull.list", items: m(c).pulls ?? [] }); } },
-  "plugin.list": { tier: "A", run: (c) => { c.reply({ t: "plugin.list", plugins: m(c).plugins ?? [] }); } },
+  "plugin.list": { tier: "A", run: (c) => { c.reply({ t: "plugin.list", plugins: pluginsOf(m(c)) }); } },
   "auth.get": { tier: "A", run: (c) => { c.reply({ t: "auth.state", auth: { enabled: false, gateTailscale: false, canManage: false } }); } },
-  "install.get": { tier: "A", run: (c) => { const doc = m(c).install; if (doc) c.reply({ t: "install.log", doc }); } },
   "decisions.get": {
     tier: "A",
     run: (c) => {
@@ -416,6 +418,7 @@ export const HANDLERS = {
   "session.ackAsking": B,
   "session.netRetryCancel": B,
   "session.netRetryNow": B,
+  "signin.continue": B,
   "input.settle": B,
   "shell.kill": because("The demo runs no background shells to stop."),
   "backlog.archive": STORE,
@@ -455,9 +458,6 @@ export const HANDLERS = {
   "decisions.archive": STORE,
   "decisions.archiveAll": STORE,
   "decisions.delete": STORE,
-  // A device's own install log, reported at boot: nothing to keep in a demo, and
-  // a toast for it would greet every first look.
-  "install.report": { tier: "A", run: () => {} },
   // The HTTP stall record: nothing to keep in a demo.
   "net.stalls": { tier: "A", run: () => {} },
   "intent.cancel": RUNS,

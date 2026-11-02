@@ -885,3 +885,17 @@ test("guardWords names a guard window this build does not know", () => {
   const text = guardWordsOf({ window: "session", guardWindow: "someFutureWindow", minPctLeft: 20, edge: "before" });
   assert.doesNotMatch(text, /undefined/);
 });
+
+test("weeklyIfNoSession: a NEW window rule on a plan with no 5-hour window starts weekly", async () => {
+  const { weeklyIfNoSession, windowIn } = await import("./sendIntent.ts");
+  const r = { kind: "window", window: "session", edge: "before", offsetMin: -60 };
+  assert.equal(weeklyIfNoSession(r, false), r);
+  assert.equal(weeklyIfNoSession(r, true).window, "weekly");
+  assert.equal(weeklyIfNoSession({ kind: "window", edge: "before", offsetMin: -60 }, true).window, "weekly", "undefined is the session window");
+  assert.equal(weeklyIfNoSession({ ...r, guardWindow: "weekly" }, true).guardWindow, undefined, "a guard naming the new anchor is not a guard");
+  assert.equal(weeklyIfNoSession({ ...r, periodId: "p1" }, true).window, "session", "a period rule is not touched");
+  const clock = { kind: "once", at: 1, offsetMin: 0 };
+  assert.equal(weeklyIfNoSession(clock, true), clock);
+  assert.equal(windowIn().rule.window, "session");
+  assert.equal(windowIn(true).rule.window, "weekly");
+});

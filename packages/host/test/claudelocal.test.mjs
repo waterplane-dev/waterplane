@@ -12,7 +12,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  claudeLocalBackend, claudeLocalEnv, claudeLocalKeepAlive, claudeLocalLeanArgs, leanArgs, LEAN_TOOLS, warmDeps, windowFromShow,
+  claudeLocalBackend, claudeLocalEnv, claudeLocalKeepAlive, claudeLocalLeanArgs, leanArgs, LEAN_TOOLS, measureDeps, userSettingsArgs, warmDeps,
+  windowFromPs, windowFromShow,
 } from "../dist/backends/claude-local.js";
 import { firstRequestOf, measuredOverhead } from "../dist/backends/overhead.js";
 import { backendContextWindow, backendInfos, derive, primeBackendModels, resolveBackend } from "../dist/backends/index.js";
@@ -24,6 +25,9 @@ const req = (launch, over = {}) => ({ launch, hookPort: 8770, ...over });
 // Never load a real model from a unit test: every warm ping is recorded instead.
 const warmed = [];
 warmDeps.warm = async (model, keepAlive) => { warmed.push([model, keepAlive]); };
+// Nor ask a real Ollama for a window: every launch-time measurement is recorded instead.
+const measured = [];
+measureDeps.measure = async (model) => { measured.push(model); return null; };
 // Never scan the real ~/.claude for overheads.
 process.env.WATERPLANE_CLAUDE_HOME = mkdtempSync(join(tmpdir(), "cl-home-"));
 
@@ -35,7 +39,7 @@ test("argv is claude's plus --model, and the env points the CLI at Ollama", () =
   // a shared config dir that a parallel test file can race (absent ⇒ no flag).
   const strip = (a) => a.filter((x, i, all) => !["--session-id", "--plugin-dir"].includes(all[i - 1]) && x !== "--session-id" && x !== "--plugin-dir");
   // claude's argv, then the lean tail — on by default, for this backend only
-  assert.deepEqual(strip(plan.args), [...strip(claude.args), "--tools", "Read,Edit,Write,Bash,Grep,Glob", "--strict-mcp-config"]);
+  assert.deepEqual(strip(plan.args), [...strip(claude.args), "--tools", "Read,Edit,Write,Bash,Grep,Glob,Skill", "--strict-mcp-config", "--setting-sources", "project,local"]);
   assert.equal(claude.args.includes("--tools"), false, "plain claude is never made lean");
   assert.equal(plan.args[plan.args.indexOf("--model") + 1], "qwen3-coder:30b-64k");
   assert.deepEqual(plan.env, {
@@ -109,17 +113,20 @@ test("models come from /api/tags, windows from /api/show, embedders are left out
     "chat:64k": { parameters: "num_ctx 65536", model_info: { "a.context_length": 262144 }, capabilities: ["completion", "tools"] },
     "chat:zero": { model_info: { "a.context_length": 0 }, capabilities: ["completion"] },
     "embed": { model_info: { "b.context_length": 8192 }, capabilities: ["embedding"] },
+    "chat:loaded": { model_info: { "c.context_length": 262144 }, capabilities: ["completion"] },
   };
+  // chat:loaded states no num_ctx, but it is LOADED: the runner's allocation (not its 262k maximum) is the window.
   const srv = await stubOllama((url, body) => url === "/api/tags"
     ? { models: Object.keys(shows).map((name) => ({ name })) }
+    : url === "/api/ps" ? { models: [{ name: "chat:loaded", model: "chat:loaded", context_length: 32768 }] }
     : shows[body.model]);
   process.env.WATERPLANE_OLLAMA_URL = `http://127.0.0.1:${srv.address().port}`;
   try {
     const m = await claudeLocalBackend.models();
-    assert.deepEqual(m.ids, ["chat:64k", "chat:zero"]);
-    assert.deepEqual(m.contextWindow, { "chat:64k": 65536 });
+    assert.deepEqual(m.ids, ["chat:64k", "chat:zero", "chat:loaded"]);
+    assert.deepEqual(m.contextWindow, { "chat:64k": 65536, "chat:loaded": 32768 });
     assert.equal(m.where["chat:64k"], "local");
-    assert.deepEqual(m.zeroCost, ["chat:64k", "chat:zero"]);
+    assert.deepEqual(m.zeroCost, ["chat:64k", "chat:zero", "chat:loaded"]);
     assert.equal(m.unavailable, undefined);
     // the registry cache serves the same window, and absent for the 0 one
     await primeBackendModels();
@@ -158,20 +165,22 @@ test("unreachable Ollama: the backend is LISTED, with the sentence", async () =>
 });
 
 test("lean argv: pinned byte for byte, a custom list, and off", () => {
-  assert.equal(LEAN_TOOLS, "Read,Edit,Write,Bash,Grep,Glob");
-  assert.deepEqual(leanArgs({ lean: true }), ["--tools", "Read,Edit,Write,Bash,Grep,Glob", "--strict-mcp-config"]);
+  // Skill stays: a repo's CLAUDE.md routes its rules into skills, and without the tool they never load.
+  assert.equal(LEAN_TOOLS, "Read,Edit,Write,Bash,Grep,Glob,Skill");
+  assert.deepEqual(leanArgs({ lean: true }), ["--tools", "Read,Edit,Write,Bash,Grep,Glob,Skill", "--strict-mcp-config"]);
   assert.deepEqual(leanArgs({ lean: true, tools: " Read, Bash  Glob " }), ["--tools", "Read,Bash,Glob", "--strict-mcp-config"]);
   assert.deepEqual(leanArgs({ lean: true, tools: " , " }), ["--tools", LEAN_TOOLS, "--strict-mcp-config"]);
   assert.deepEqual(leanArgs({ lean: false, tools: "Read" }), []);
   delete process.env.WATERPLANE_CLAUDE_LOCAL_LEAN;
-  assert.deepEqual(claudeLocalLeanArgs(), ["--tools", LEAN_TOOLS, "--strict-mcp-config"], "default ON");
+  const US = ["--setting-sources", "project,local"]; // the user-settings default rides the same tail
+  assert.deepEqual(claudeLocalLeanArgs(), ["--tools", LEAN_TOOLS, "--strict-mcp-config", ...US], "default ON");
   process.env.WATERPLANE_CLAUDE_LOCAL_LEAN = "0";
   try {
-    assert.deepEqual(claudeLocalLeanArgs(), []);
+    assert.deepEqual(claudeLocalLeanArgs(), US);
     assert.equal(claudeLocalBackend.prepare(req({ model: "m" })).args.includes("--tools"), false, "the knob turns the lean tail off");
   } finally { delete process.env.WATERPLANE_CLAUDE_LOCAL_LEAN; }
   process.env.WATERPLANE_CLAUDE_LOCAL_TOOLS = "Read,Bash";
-  try { assert.deepEqual(claudeLocalLeanArgs(), ["--tools", "Read,Bash", "--strict-mcp-config"]); }
+  try { assert.deepEqual(claudeLocalLeanArgs(), ["--tools", "Read,Bash", "--strict-mcp-config", ...US]); }
   finally { delete process.env.WATERPLANE_CLAUDE_LOCAL_TOOLS; }
 });
 
@@ -254,6 +263,7 @@ test("the catalogue carries the measured overhead and the window onto the wire",
   writeFileSync(join(dir, "c.jsonl"), JSON.stringify({ type: "assistant", message: { model: "chat:64k", usage: { input_tokens: 33689 } } }) + "\n");
   const srv = await stubOllama((url, body) => url === "/api/tags"
     ? { models: [{ name: "chat:64k" }, { name: "fresh" }] }
+    : url === "/api/ps" ? { models: [] }
     : { parameters: body.model === "chat:64k" ? "num_ctx 65536" : "", capabilities: ["completion"] });
   const before = process.env.WATERPLANE_CLAUDE_HOME;
   process.env.WATERPLANE_CLAUDE_HOME = home;
@@ -271,4 +281,44 @@ test("the catalogue carries the measured overhead and the window onto the wire",
     process.env.WATERPLANE_CLAUDE_HOME = before;
     process.env.WATERPLANE_OLLAMA_URL = "http://127.0.0.1:11434";
   }
+});
+
+test("a loaded runner's window: /api/ps context_length for exactly that model, else null", () => {
+  const ps = { models: [
+    { name: "qwen3-vl-64k:latest", model: "qwen3-vl-64k:latest", context_length: 65536 },
+    { name: "gemma4:latest", model: "gemma4:latest", context_length: 262144 },
+    { name: "broken:latest", context_length: 0 },
+  ] };
+  assert.equal(windowFromPs(ps, "qwen3-vl-64k"), 65536, "a bare name matches its :latest");
+  assert.equal(windowFromPs(ps, "qwen3-vl-64k:latest"), 65536);
+  assert.equal(windowFromPs(ps, "gemma4:latest"), 262144);
+  assert.equal(windowFromPs(ps, "qwen3-vl"), null, "a prefix is another model");
+  assert.equal(windowFromPs(ps, "broken"), null, "0 is not a window");
+  assert.equal(windowFromPs({ models: [] }, "x"), null, "not loaded ⇒ unknown here");
+  assert.equal(windowFromPs(null, "x"), null);
+  assert.equal(windowFromPs({ models: "no" }, "x"), null);
+});
+
+test("a model the catalogue never measured: the launch goes bare and measures it for the next one", async () => {
+  measured.length = 0;
+  const plan = claudeLocalBackend.prepare(req({ model: "made-after-boot:latest" }));
+  assert.equal(plan.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, undefined, "never a guessed window");
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(measured, ["made-after-boot:latest"]);
+  const recorder = measureDeps.measure;
+  measureDeps.measure = async () => { throw new Error("runner down"); };
+  try { assert.doesNotThrow(() => claudeLocalBackend.prepare(req({ model: "m2" })), "a failed measure never fails a launch"); }
+  finally { measureDeps.measure = recorder; }
+});
+
+test("the person's user settings: dropped by default for local sessions, kept by their own knob", () => {
+  assert.deepEqual(userSettingsArgs(true), []);
+  assert.deepEqual(userSettingsArgs(false), ["--setting-sources", "project,local"]);
+  delete process.env.WATERPLANE_CLAUDE_LOCAL_USER_SETTINGS;
+  assert.deepEqual(claudeLocalLeanArgs().slice(-2), ["--setting-sources", "project,local"], "default: the user file is skipped");
+  process.env.WATERPLANE_CLAUDE_LOCAL_USER_SETTINGS = "1";
+  try {
+    assert.equal(claudeLocalLeanArgs().includes("--setting-sources"), false, "1: the user file is read");
+    assert.equal(claudeBackend.prepare(req({ model: "m" })).args.includes("--setting-sources"), false, "plain claude never");
+  } finally { delete process.env.WATERPLANE_CLAUDE_LOCAL_USER_SETTINGS; }
 });

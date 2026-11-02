@@ -478,11 +478,16 @@ async function preflight({ admin, tools = [], clt = false, brewWritable = true }
   const dir = mkdtempSync(join(tmpdir(), "inst-pre-"));
   const bin = join(dir, "bin");
   mkdirSync(bin);
-  for (const t of ["stat", "uname"]) {
+  for (const t of ["uname"]) {
     const real = execFileSync("/bin/sh", ["-c", `command -v ${t}`], { encoding: "utf8" }).trim();
     writeFileSync(join(bin, t), `#!/bin/sh\nexec ${real} "$@"\n`, { mode: 0o755 });
   }
   const stub = (name, body = "exit 0") => writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  // The Mac's BSD stat, answering only the owner query the installer makes. GNU stat on a Linux
+  // runner reads `-f` as "filesystem" and prints a block of fs statistics instead of a name; the
+  // stub keeps this test describing the Mac on any OS, and still pins the BSD spelling (any other
+  // argv fails, and the message falls back to "another account").
+  stub("stat", `[ "$1" = -f ] && [ "$2" = %Su ] && [ "$3" = '${join(dir, "homebrew")}' ] && echo brewowner && exit 0; exit 1`);
   for (const t of ["tar", "gzip", "shasum", "curl", "git", ...tools]) stub(t);
   stub("id", `case "$1" in -Gn) echo "staff everyone${admin ? " admin" : ""}" ;; -un) echo kid ;; esac`);
   stub("xcode-select", clt ? "echo /Library/Developer/CommandLineTools" : "exit 2");
@@ -507,7 +512,7 @@ test("preflight: a non-admin Mac hears every missing piece at once, what to ask 
   assert.equal(r.code, 1);
   assert.match(r.out, /missing on this machine: claude \(Claude Code\), tmux, the Xcode Command Line Tools \(git\), Tailscale\./);
   assert.match(r.out, /this account \(kid\) is not an administrator of this Mac.*Ask whoever administers it for: tmux, the Xcode Command Line Tools, Tailscale\./);
-  assert.match(r.out, /Homebrew is here but belongs to .*, so brew install tmux would fail/);
+  assert.match(r.out, /Homebrew is here but belongs to brewowner, so brew install tmux would fail/);
   assert.match(r.out, /xcode-select --install/, "the git stand-in is named, not trusted");
   assert.ok(!/Install it, then re-run this/.test(r.out), "tmux stops it before the claude question");
   assert.ok(!/REACHED/.test(r.out));

@@ -49,6 +49,7 @@ const SESSION_SURFACE = [
   "SessionInfo:type",
   "SessionLimit:type",
   "SessionNetRetry:type",
+  "SessionSignInWait:type",
   "SessionLogin:type",
   "SessionOrigin:type",
   "SessionOriginKind:type",
@@ -128,8 +129,6 @@ const CLIENT_T = [
   "hello",
   "host.halt",
   "input.settle",
-  "install.get",
-  "install.report",
   "intent.cancel",
   "intent.dismiss",
   "intent.list",
@@ -202,6 +201,7 @@ const CLIENT_T = [
   "session.name",
   "session.netRetryCancel",
   "session.netRetryNow",
+  "signin.continue",
   "session.pin",
   "session.record",
   "session.remoteControl",
@@ -253,7 +253,6 @@ const HOST_T = [
   "host.restarting",
   "input.ack",
   "input.settled",
-  "install.log",
   "intent.changed",
   "intent.list",
   "launch.list",
@@ -342,11 +341,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 149, "a member was added or merged"); // 148 → 149: session.netRetryNow (Retry now, R-connection-024)
+  assert.equal(members, 148, "a member was added or merged"); // 147 → 148: signin.continue (blocked sessions D1a); 148 → 149: session.netRetryNow (Retry now, R-connection-024); 149 → 147: install.get/report (android-apps P5)
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 83, "a member was added or merged");
+  assert.equal(members, 82, "a member was added or merged"); // 83 → 82: install.log (android-apps P5)
 });

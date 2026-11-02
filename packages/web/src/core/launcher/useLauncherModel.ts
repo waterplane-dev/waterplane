@@ -16,6 +16,7 @@ import { HORIZON_LABEL, horizonLead, horizonWords, repoLabel } from "@waterplane
 import { createStore, useStore, type Store } from "../../sdk";
 import { COLLAPSED_REPOS_KEY, SESSION_DRAG_MS, SESSION_ORDER_KEY, loadCollapsedRepos, loadSessionOrder } from "../../localState";
 import { matchesFilterKind, resumeIdOf, sessionStatus, type SessionFilter } from "../../sessionFacts";
+import { attentionCut } from "../../attention";
 import { anyScheduledReply, scheduledRepliesBySession } from "../../scheduledReply";
 import { clocksByRepo } from "../../clockCuts";
 import { baseName } from "../../format";
@@ -29,7 +30,6 @@ import { useActivityConfirmedDone, useActivityFiled } from "../../features/activ
 import { pullSummary, usePullRecords } from "../../features/pull";
 import { autoPull } from "../../pull";
 import { stripRows } from "../../downloadState";
-import { appRows, buildsOf, NO_INSTALL, readyApps } from "../../installPolicy";
 import type { LauncherProps } from "./types";
 import {
   type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, activityOpenKeys, repoGroupsOf,
@@ -162,7 +162,13 @@ export function useLauncherModel(p: LauncherProps) {
   // badge and the status filter make — so the header counts always add up to the
   // row count and can never disagree with the badge a row shows.
   const attentionByRepo = useMemo(() => rollupByRepo(sortedSessions, (s) => sessionStatus(s, p.backends), sessionRepoName), [sortedSessions, repos, p.backends]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
-  const waitingTotal = useMemo(() => rollupTotal(attentionByRepo, "wait"), [attentionByRepo]);
+  // The two GLOBAL chips count with `attentionCut` — the very call their sheets
+  // list with (questions, blocked), over the same input: every session and the
+  // launcher's visibility rule. So "2 waiting" opens exactly those two, and a
+  // sheet that holds more says "n of N" rather than quietly listing them.
+  const waitingCut = useMemo(() => attentionCut(sessions, "wait", p.backends, p.view.cwdVisible), [sessions, p.backends, p.view.cwdVisible]);
+  const blockedCut = useMemo(() => attentionCut(sessions, "blocked", p.backends, p.view.cwdVisible), [sessions, p.backends, p.view.cwdVisible]);
+  const waitingTotal = waitingCut.shown.length;
   /**
    * **Which sessions already have words on a clock aimed at them.**
    *
@@ -189,11 +195,11 @@ export function useLauncherModel(p: LauncherProps) {
     () => anyScheduledReply(sortedSessions.filter((s) => sessionStatus(s, p.backends) === "wait").map((s) => s.id), repliesBySession),
     [sortedSessions, repliesBySession, p.backends],
   );
-  // Sessions blocked on a usage limit. They arrive as a GROUP (the limit is an
-  // account fact), which is the whole reason the resume queue and its sheet
-  // exist — so the launcher offers one way in rather than making you find the
-  // rows and open each session's toolbar.
-  const limitTotal = useMemo(() => rollupTotal(attentionByRepo, "limit"), [attentionByRepo]);
+  // Sessions blocked outside themselves — signed out, out of credit, a usage
+  // window, the host's network retry. They arrive as a GROUP (an account or a
+  // link fails for every session at once), which is why the blocked sheet
+  // exists — one way in, rather than finding the rows one toolbar at a time.
+  const blockedTotal = blockedCut.shown.length;
   const codingTotal = useMemo(() => rollupTotal(attentionByRepo, "coding"), [attentionByRepo]);
   // Starred sessions per repo — deliberately its OWN map rather than a sixth
   // bucket in `attentionByRepo`: that rollup's whole guarantee is that its
@@ -513,9 +519,6 @@ export function useLauncherModel(p: LauncherProps) {
   // The strip's cut: rows waiting for a tap with auto-download off here are
   // in the sheet, not in the menu's progress (`stripRows`).
   const dl = pullSummary(stripRows(pullRecords, autoPull()));
-  /** Apps with a build here that has not gone on — the apps screen's `ready`
-   *  pane, through the same function, so the count opens exactly its rows. */
-  const appsReady = readyApps(appRows(buildsOf(pullRecords), [], NO_INSTALL)).length;
 
   const liveCwds = new Set(sessions.map((s) => s.cwd));
   // Both id fields, through the one reader (`resumeIdOf`): a live opencode
@@ -549,11 +552,11 @@ export function useLauncherModel(p: LauncherProps) {
     repoForCwd, sessionRepo, sessionRepoName, sessionRepoLabel, sessionRowBranch, sessionRowTitle,
     // the list
     visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf,
-    attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, limitTotal, codingTotal,
+    attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, blockedTotal, codingTotal,
     starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,
     // chips
-    scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, activityKeys, dl, appsReady,
+    scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, activityKeys, dl,
     // the other lists
     visibleRecent, hiddenRecent, reopenable, hiddenCount,
   };

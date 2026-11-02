@@ -4,13 +4,22 @@
  * in `demo/`: the transport replays the pushes of whatever is registered. Outside the demo this registry is
  * never read.
  */
+import type { PluginView } from "@waterplane/shared";
 import { isDemo } from "../demo/mode.ts";
+import { setDemoListed } from "./demoListed.ts";
 
 export interface DemoPlugin {
   /** `method` → the answer a real host would give (a value, or a thrown/returned `{ ok:false }` is up to the fixture: return the whole `PluginCallResult`). */
   calls: Record<string, (args: unknown) => unknown>;
   /** The pushes to replay when the fake socket opens: `[pushName, payload]` pairs. */
   pushes: () => Array<[string, unknown]>;
+  /** Answer `calls` in EVERY demo, not only under `?demoPlugins` — for an extension the demo's default
+   *  plugin list (`demo/host`'s `plugins`) shows switched on, whose screen would otherwise print the
+   *  fake host's refusal. Its pushes still replay only under `?demoPlugins`. */
+  always?: boolean;
+  /** The demo desktop's `plugin.list` row for this plugin when a scenario lists none (`demo/host`):
+   *  a builtin a real desktop has on. Absent = not listed (the default, every other demo unchanged). */
+  listed?: PluginView;
 }
 
 const registry = new Map<string, DemoPlugin>();
@@ -18,6 +27,7 @@ const registry = new Map<string, DemoPlugin>();
 /** Register (or replace) a plugin's demo fixture. Cheap and pure: call it at module load. */
 export function registerDemoPlugin(id: string, plugin: DemoPlugin): void {
   registry.set(id, plugin);
+  setDemoListed(id, plugin.listed);
 }
 
 /** The pushes a registered plugin replays for the demo, or [] when none is registered. */
@@ -43,8 +53,10 @@ export function demoPluginReplay(): Array<{ plugin: string; event: string; data:
  * the plugin/method is not registered (the real path then runs — in the demo that is the fake host's refusal).
  */
 export function demoPluginCall(id: string, method: string, args: unknown): unknown {
-  if (!isDemo() || !demoPluginsOn()) return undefined;
-  const fn = registry.get(id)?.calls[method];
+  if (!isDemo()) return undefined;
+  const p = registry.get(id);
+  if (!p?.always && !demoPluginsOn()) return undefined;
+  const fn = p?.calls[method];
   return fn ? fn(args) : undefined;
 }
 

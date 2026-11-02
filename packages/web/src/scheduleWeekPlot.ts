@@ -53,6 +53,10 @@ export interface WeekBar {
   later: { id: string; at: number }[];
   /** Window-anchored rules with no next fire because the window was never read. */
   unread: string[];
+  /** The plan has no 5-hour window (`WindowResets.sessionGoneSince`): the session lane is drawn
+   *  folded, and `sessionless` are the session-anchored rules that can never arm here. */
+  noSession: boolean;
+  sessionless: string[];
   lanes: number;
 }
 
@@ -99,15 +103,19 @@ export function weekBar(entries: readonly ScheduleEntry[], usage: WindowResets |
     if (lane < 0) { lane = laneEnd.length; laneEnd.push(x); } else laneEnd[lane] = x;
     fires.push({ id: e.id, at, x, n: fires.length + 1, anchor: anchorOf(e.rule), lane });
   }
-  const unread = entries
+  const noSession = usage?.sessionGoneSince != null;
+  const idle = entries
     .filter((e) => e.enabled !== false && e.rule.kind === "window" && e.nextAt == null
-      && windowResetAt(e.rule, usage ?? undefined) == null)
-    .map((e) => e.id);
+      && windowResetAt(e.rule, usage ?? undefined) == null);
+  // One predicate splits them: on a plan with no session window, a rule on it is not "unread", it is never.
+  const never = (e: ScheduleEntry) => noSession && !e.rule.periodId && anchorOf(e.rule) === "session";
+  const unread = idle.filter((e) => !never(e)).map((e) => e.id);
+  const sessionless = idle.filter(never).map((e) => e.id);
   return {
     from, to, days,
     session: windowOf("session", usage, now, from, span),
     weekly: windowOf("weekly", usage, now, from, span),
-    fires, later, unread, lanes: Math.max(1, laneEnd.length),
+    fires, later, unread, noSession, sessionless, lanes: Math.max(1, laneEnd.length),
   };
 }
 

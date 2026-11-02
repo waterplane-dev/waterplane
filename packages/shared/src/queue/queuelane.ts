@@ -1,5 +1,6 @@
 // Cut from queue.ts (move only): lane state and walls
 // The one door stays `./queue.js`; this slice imports its siblings directly, never the barrel.
+import type { BlockKind } from "../block.js";
 
 /**
  * The facts about a session that decide whether a `holdUntilIdle` entry may go
@@ -15,6 +16,21 @@ export interface LaneSessionState {
   promptKind?: string | null;
   /** A dialog is up that could NOT be parsed into options. */
   awaitingInput?: boolean;
+  /**
+   * Delivery answers this session's folder-trust box itself (claude, claude-local:
+   * `BackendInfo.caps.autoAcceptsTrust` absent; the host's `trustRule().autoAccept`).
+   * `false` = a backend whose trust box waits for a person (Copilot), so it is a wall like
+   * any other question. ABSENT = today's behaviour, auto-accepted: an older host or phone
+   * that never said is claude.
+   */
+  trustAutoAccepted?: boolean;
+  /**
+   * `blockOf(info)?.kind` (`shared/block.ts`) — what outside the session holds it.
+   * Only `auth` (signed out) and `net` (the host's net retry is waiting, running or
+   * stalled) add a wall of their own; `limit`/`spend` are `limitBlocked`'s. ABSENT =
+   * today's behaviour: an older host or phone that never said is not blocked here.
+   */
+  block?: BlockKind | null;
 }
 
 /**
@@ -34,6 +50,11 @@ export interface LaneSessionState {
  *   • an unparsable dialog (`awaitingInput`) — same thing, minus the options.
  *   • blocked on a usage limit — the session is waiting out a reset, and a
  *     prompt delivered into it is typed at a menu.
+ *   • signed out (`auth`) — nothing runs until a person signs in; a prompt
+ *     typed there fails the same way the turn before it did.
+ *   • the host's net retry holds it (`net`) — a `continue` is due, running or
+ *     stalled; typing over it calls the retry off and the turn that gave up
+ *     never finishes.
  *
  * This is the client-side twin of the host's `sessions.autoFireBlocker()`, which
  * gates backlog auto-fire on the same three facts. The backlog has refused to
@@ -50,7 +71,7 @@ export function laneBusy(s: LaneSessionState): boolean {
 }
 
 /**
- * WHICH of the three walls a session is behind, or null when it is ready.
+ * WHICH wall a session is behind, or null when it is ready.
  *
  * `laneBusy` collapses this to a boolean, which is all a lane needs; every
  * other caller wants the reason, and each of them used to re-derive it from the
@@ -68,13 +89,20 @@ export function laneBusy(s: LaneSessionState): boolean {
  * The names are `BlockReason` values on purpose, so a caller can hand one
  * straight to `intentReasonText` rather than writing a fourth set of sentences.
  */
-export type SessionWall = "limit" | "awaitingAnswer" | "sessionBusy";
+export type SessionWall = "limit" | "auth" | "net" | "awaitingAnswer" | "sessionBusy";
 
 export function sessionWall(s: LaneSessionState): SessionWall | null {
   if (s.limitBlocked) return "limit";
+  // A person's own send is not asked this (an explicit tap types into any of
+  // these); only parked and automatic work is. A spend wall is `limitBlocked`.
+  if (s.block === "auth") return "auth";
+  if (s.block === "net") return "net";
   // An unparsable dialog is the same trap as a parsed one, minus the options.
-  // A trust prompt is not a question in this sense — delivery auto-accepts it.
-  if (s.awaitingInput || (s.promptKind && s.promptKind !== "trust")) return "awaitingAnswer";
+  // A trust prompt is not a question in this sense ONLY where delivery answers it
+  // itself (the claude family). Another CLI's trust box (Copilot's, via its plugin)
+  // waits for a person's tap exactly like any other box, so there it is a wall.
+  const trustAnswered = s.promptKind === "trust" && s.trustAutoAccepted !== false;
+  if (s.awaitingInput || (s.promptKind && !trustAnswered)) return "awaitingAnswer";
   if (s.turnActive) return "sessionBusy";
   return null;
 }

@@ -10,26 +10,41 @@
  * The plugin list is the host's (`plugin.list`, `features/plugins`' store). sdk/ never imports
  * a feature, so `core/extensionPoints.ts` BINDS that store here once (`bindPluginList`) and this
  * module mirrors it. Unbound, not yet listed, or not in the list ⇒ OFF: an optional extension
- * that cannot show it is on stays off — never a guess that it is.
+ * that cannot show it is on stays off — never a guess that it is. The bound store starts from the
+ * host's LAST list as this phone cached it (`features/plugins/logic.ts`, per host), so a cold
+ * start with the tunnel down reads what the desktop last said rather than "off"; a desktop this
+ * phone was never told about still reads off.
  */
+import { logTag } from "@waterplane/shared";
 import { useMemo, useSyncExternalStore } from "react";
 import type { PluginView } from "@waterplane/shared";
+import { core } from "../core/api.ts";
 import { createStore, type Store } from "./store.ts";
+import type { AppsDoorCut } from "./appsDoor.ts";
 import type { FeatureManifest, ImageTextReader } from "./types.ts";
 
+/** What "is it on" reads of a listed plugin — all a cached list keeps (`features/plugins/logic.ts`). */
+export type PluginOn = { manifest: { id: string } } & Pick<PluginView, "enabled" | "state">;
+
 /** The mirror; its ONE writer is the binding below. */
-const list = createStore<readonly PluginView[] | null>(null);
+const list = createStore<readonly PluginOn[] | null>(null);
+/** True once the LIVE list has landed (the mirror may hold the cache's until then). */
+const liveSeen = createStore(false);
 let unbind: (() => void) | null = null;
 
-/** `core/extensionPoints.ts`'s, once: the host's plugin list this module reads. */
-export function bindPluginList(source: Pick<Store<readonly PluginView[] | null>, "get" | "subscribe">): void {
+/** `core/extensionPoints.ts`'s, once: the host's plugin list this module reads, and (optionally) the
+ *  flag that its live list has landed. Without the flag the list is treated as live. */
+export function bindPluginList(source: Pick<Store<readonly PluginOn[] | null>, "get" | "subscribe">, live?: Pick<Store<boolean>, "get" | "subscribe">): void {
   unbind?.();
   list.set(source.get());
-  unbind = source.subscribe(() => list.set(source.get()));
+  liveSeen.set(live ? live.get() : true);
+  const offs = [source.subscribe(() => list.set(source.get()))];
+  if (live) offs.push(live.subscribe(() => liveSeen.set(live.get())));
+  unbind = () => offs.forEach((o) => o());
 }
 
 /** Pure: on iff the host listed `id`, its switch is on and it is active. */
-export function enabledIn(plugins: readonly PluginView[] | null, id: string): boolean {
+export function enabledIn(plugins: readonly PluginOn[] | null, id: string): boolean {
   const p = plugins?.find((x) => x.manifest.id === id);
   return !!p && p.enabled && p.state === "active";
 }
@@ -42,6 +57,36 @@ export function pickImageTextReader(features: readonly FeatureManifest[], enable
 }
 
 let features: () => readonly FeatureManifest[] = () => [];
+
+/** Pure: the first manifest declaring `appsDoor` whose extension is on, with its id; null when none. */
+export function pickAppsDoor(fs: readonly FeatureManifest[], enabled: (id: string) => boolean): { feature: string; door: NonNullable<FeatureManifest["appsDoor"]> } | null {
+  for (const f of fs) if (f.appsDoor && enabled(f.id)) return { feature: f.id, door: f.appsDoor };
+  return null;
+}
+
+/** The door core opens that screen through, bound to the core: `open(cut)`. */
+export interface OpenAppsDoor {
+  open(cut: AppsDoorCut): void;
+}
+
+function bindDoor(p: ReturnType<typeof pickAppsDoor>): OpenAppsDoor | null {
+  if (!p) return null;
+  return {
+    open: (cut) => {
+      const c = core();
+      try { p.door.open(c, cut); } catch (e) {
+        console.error(`${logTag} feature ${p.feature} failed opening its door`, e);
+        c.say.toast(`${p.feature} could not open that screen`);
+      }
+    },
+  };
+}
+
+/** The same as a hook: re-renders when the extension is switched on or off. */
+export function useAppsDoor(): OpenAppsDoor | null {
+  const l = usePluginList();
+  return useMemo(() => bindDoor(pickAppsDoor(features(), (id) => enabledIn(l, id))), [l]);
+}
 
 /** `core/extensionPoints.ts`'s, once: the registry `imageTextReader()` picks from. Bound, not
  *  imported — the annotator reads this module, and the registry imports the annotator. */
@@ -61,25 +106,37 @@ export function useImageTextReader(): ImageTextReader | null {
   return useMemo(() => pickImageTextReader(features(), (id) => enabledIn(l, id)), [l]);
 }
 
-/** Whether extension `id` is switched on right now (false until the host has listed it). */
+/** Whether extension `id` is switched on right now: the host's last word (this phone's cached copy
+ *  until the live list lands); false for a host that never listed it to this phone. */
 export function isExtensionEnabled(id: string): boolean {
   return enabledIn(list.get(), id);
 }
 
 /** Call `cb(on)` whenever extension `id` is switched on or off (not on every list change). Fires
- *  once at once with the current state. Returns the unsubscribe. For an extension's `boot` —
- *  downloading its engine when the person ENABLES it is not a render's job. */
+ *  once at once with the current state, and once more when the first LIVE list lands even if it
+ *  changed nothing: the first call may have read a cached "on" the desktop no longer says, or failed
+ *  on it. Returns the unsubscribe. For an extension's `boot` — downloading its engine when the person
+ *  ENABLES it is not a render's job. */
 export function watchExtensionEnabled(id: string, cb: (on: boolean) => void): () => void {
   let last = isExtensionEnabled(id);
+  let told = false; // a change already delivered the live value
   cb(last);
-  return list.subscribe(() => {
+  const offList = list.subscribe(() => {
     const now = isExtensionEnabled(id);
-    if (now !== last) { last = now; cb(now); }
+    if (now !== last) { last = now; told = true; cb(now); }
   });
+  const offLive = liveSeen.subscribe(() => {
+    if (!liveSeen.get()) return;
+    if (!told) cb(last = isExtensionEnabled(id));
+    told = false;
+  });
+  return () => { offList(); offLive(); };
 }
 
-/** The host's plugin list as last mirrored, re-rendering on change — core's, not in the SDK index. */
-export function usePluginList(): readonly PluginView[] | null {
+/** The host's plugin list as last mirrored, re-rendering on change — core's, not in the SDK index.
+ *  Core's contribution tables read `hideWhen` per render; their components call this so a switch
+ *  flipped on the desktop redraws the lines it hides. */
+export function usePluginList(): readonly PluginOn[] | null {
   return useSyncExternalStore(list.subscribe, list.get, list.get);
 }
 

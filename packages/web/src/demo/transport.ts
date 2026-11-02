@@ -41,6 +41,7 @@ import { DEMO_SCENARIOS } from "./scenarios/index.ts";
 import { demoScenarioId, setDemoActive } from "./mode.ts";
 import { rememberDemoUpload } from "./media.ts";
 import { demoPluginReplay, demoPluginsOn } from "../sdk/demoPlugin.ts";
+import { demoPluginViews } from "../sdk/demoListed.ts";
 export { DEMO_WS_URL } from "./mode.ts";
 
 /** How often the scenario script is asked whether anything is due. */
@@ -306,7 +307,9 @@ export function createDemoTransport(cfg: DemoTransportConfig): DemoTransport {
   const href = () => cfg.href;
   const id = scenario.meta.id;
   const saved = readSaved(store, id);
-  const host = saved === undefined ? createDemoHost(scenario, clock) : restoreDemoHost(scenario, clock, saved);
+  // A scenario naming no plugins lists the builtins the demo fixtures ask for (android-apps: on).
+  const defaults = { plugins: demoPluginViews() };
+  const host = saved === undefined ? createDemoHost(scenario, clock, defaults) : restoreDemoHost(scenario, clock, saved, defaults);
 
   // A scenario's `clock` step moved the demo ahead: the page's clock follows,
   // so "resets in 4h 58m" is counted from the instant the desktop is at. Only

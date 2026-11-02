@@ -133,3 +133,24 @@ export function sameLogin(a: DetectedLogin | null | undefined, b: DetectedLogin 
   if (!a || !b) return !a === !b;
   return a.url === b.url && a.awaitingCode === b.awaitingCode;
 }
+
+/**
+ * The CLI's own row after a finished `/login`, the only PROSE this module reads
+ * — and only at the moment a sign-in link left that screen (`boxread.ts`'s
+ * `applyLogin`), to tell a finished sign-in from an Esc, a scroll or a resize,
+ * which retire the link too. Measured in the claude 2.1.x binary (2026-11-02):
+ * the interactive flow draws `Login successful. Press <key> to continue…`, the
+ * headless one `Login successful.` alone. Anchored to a WHOLE row (an optional
+ * tick or tree glyph in front), built from halves for the reason the header
+ * gives, and asked of the screen's last `LOGIN_OK_ROWS` non-blank rows only —
+ * where the flow's panel sits. Absent ⇒ false: the weaker evidence path.
+ */
+const LOGIN_OK_RE = new RegExp(
+  String.raw`^\s*(?:[✓✔⎿●]\s*)?` + "Login" + String.raw` successful\.(?:\s+Press\s+\S+\s+to\s+continue\S*)?\s*$`,
+);
+const LOGIN_OK_ROWS = 12;
+
+export function loginSucceeded(screen: string): boolean {
+  const rows = screen.split("\n").filter((r) => r.trim()).slice(-LOGIN_OK_ROWS);
+  return rows.some((r) => LOGIN_OK_RE.test(r));
+}

@@ -39,7 +39,7 @@ import { prefRef } from "../prefs.ts";
 import type { UploadApi } from "../../sdk/types.ts";
 import { blockedStore, outboxStore, seedOutbox } from "./store.ts";
 import {
-  FLUSH_SWEEP_MS, PENDING_PREFIX, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates,
+  FLUSH_SWEEP_MS, PENDING_PREFIX, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates, laneStateOf,
   budgetHeldLaneSet, budgetReleased,
 } from "./logic.ts";
 import { usePendingState, pendingFns } from "./pending.ts";
@@ -102,6 +102,7 @@ export function useQueue(input: QueueDeps): QueueApi {
   const { status, connRef, reconnectAsk, setReconnectAsk } = conn;
   const { sessions } = given;
   const sessionsRef = useLatest(sessions);
+  const backendsRef = useLatest(given.backends);
   const activeIdRef = useLatest(given.activeId);
   const confirmQueueRef = prefRef("confirmQueue");
   /**
@@ -210,7 +211,7 @@ export function useQueue(input: QueueDeps): QueueApi {
 
   // ── The environment every file of the core reads (`QueueEnv`) ──
   const env = {
-    ...given, connRef, status, reconnectAsk, setReconnectAsk, sessionsRef, activeIdRef,
+    ...given, connRef, status, reconnectAsk, setReconnectAsk, sessionsRef, backendsRef, activeIdRef,
     getActive: () => sessions.find((s) => s.id === given.activeId) ?? pendingSession,
     budgetRef, setBudget, launchesRef, setLaunches,
     serialSessionsRef: prefRef("serialSessions"), confirmQueueRef, autoSendRef: prefRef("autoSend"),
@@ -254,10 +255,11 @@ export function useQueue(input: QueueDeps): QueueApi {
     // of the ladder. `sessionBusy` is deliberately dropped: a busy TURN is not
     // a wall here — an explicit send types into one, which is the whole point
     // of "send now" beating the park.
-    const wall = sessionWall({
-      limitBlocked: s.limit?.blocked, awaitingInput: s.awaitingInput, promptKind: s.prompt?.kind,
-    });
+    // `turnActive` dropped on purpose (above); `laneStateOf` carries whether a trust box waits for a person.
+    const wall = sessionWall({ ...laneStateOf(s, backendsRef.current), turnActive: undefined });
     if (wall === "limit") return "blocked on a usage limit — it goes out at the reset";
+    if (wall === "auth") return "that session is signed out — it goes out once you sign in there";
+    if (wall === "net") return "the desktop is retrying that session's last turn after a network error — it goes out once that gets through";
     if (wall === "awaitingAnswer") {
       return s.awaitingInput
         ? "a dialog is open in that session — answer it first"
@@ -660,12 +662,7 @@ export function useQueue(input: QueueDeps): QueueApi {
   // session.updated frames, and flushing on each would be a flush-storm that
   // buys nothing: the parked entry is not eligible until the lane actually frees.
   useEffect(() => {
-    const busyNow = (s: SessionInfo) => laneBusy({
-      turnActive: s.turnActive,
-      limitBlocked: s.limit?.blocked,
-      promptKind: s.prompt?.kind,
-      awaitingInput: s.awaitingInput,
-    });
+    const busyNow = (s: SessionInfo) => laneBusy(laneStateOf(s, backendsRef.current));
     busyLanesRef.current = new Set(sessions.filter(busyNow).map((s) => s.id));
     // The session's own budget: held lanes now, and whether any lane was
     // released since the last pass (the over → ok edge flushes, like busy → free).
@@ -678,7 +675,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     // just been created has run no turn yet, so the repo reads idle for the few
     // seconds it takes the CLI to come up and be typed into.
     {
-      const g = busySerialGroups(serialStates(sessions), serialWatchRef.current, Date.now());
+      const g = busySerialGroups(serialStates(sessions, backendsRef.current), serialWatchRef.current, Date.now());
       busySerialRef.current = g.busy;
       serialWatchRef.current = g.watches;
     }
@@ -693,8 +690,8 @@ export function useQueue(input: QueueDeps): QueueApi {
     const live = new Set(sessions.map((s) => s.id));
     for (const id of prev.keys()) if (!live.has(id)) prev.delete(id);
     if (finished || released) flushOutbox();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a session-list change only; `flushOutbox` and the lane sets are refs
-  }, [sessions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a session-list (or backend-list) change only; `flushOutbox` and the lane sets are refs
+  }, [sessions, given.backends]);
   /**
    * The strip's other half of the same question: how much this phone is still
    * holding that the desktop has not got.

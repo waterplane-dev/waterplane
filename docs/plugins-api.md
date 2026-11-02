@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.4.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.5.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -66,6 +66,9 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PLUGIN_PATHS_FILE`](#plugin_paths_file) — const
 - [`LEGACY_PLUGIN_PATHS_FILE`](#legacy_plugin_paths_file) — const
 - [`PluginManifest`](#pluginmanifest) — interface
+- [`AUTO_ON_PROBES`](#auto_on_probes) — const
+- [`AutoOnProbe`](#autoonprobe) — type
+- [`autoOnProbe`](#autoonprobe) — function
 - [`PluginView`](#pluginview) — interface
 - [`PluginStatus`](#pluginstatus) — interface
 - [`manifestProblems`](#manifestproblems) — function
@@ -166,9 +169,13 @@ unit) and `BackendTokensDoc.hourly` (a ledger cut to a period or week window, be
 figure). 2.2 plugins load as-is; an older host ignores both.
 **2.4** (additive, `docs/notes/plugins.md`, "Which session asked"): `HostPluginApi.sessionOf` — the
 live session a requesting process belongs to (pane + ppid walk, scratchpad, cwd). 2.3 plugins load as-is.
+**2.5** (additive, `docs/notes/android-apps-architecture.md` P1): `HostPluginApi.repoApps` (core's
+read-only Android app facts), the manifest field `autoOn` (an in-repo optional extension's default
+narrowed per desktop by a host probe; a non-string is refused, an unknown name ignored) and
+`PluginView.auto` (that default and its sentence). 2.4 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.4.0";
+export const PLUGIN_API_VERSION = "2.5.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -464,8 +471,39 @@ export interface PluginManifest { … }
 | `web` | `web?: string` | In-repo extensions only: the web half's source module, relative to the extension dir (`web/index.ts`). Compiled into the phone bundle, never loaded from outside the repo. |
 | `backends` | `backends?: string[]` | The backend ids this plugin will register with `api.backend()`. An id not listed here is refused at registration, so what a plugin may add to the launcher is readable from its manifest before it runs. |
 | `optional` | `optional?: boolean` | In-repo extensions only: the person may switch this one OFF (an ordinary builtin is always on). Its default comes from the install's `release.json` (`builtins`, written from `deploy/ship.json`), else on. Listed on the phone so the switch can be reached. |
+| `autoOn` | `autoOn?: AutoOnProbe` | In-repo `optional` extensions only: the release default is narrowed PER DESKTOP by a host-supplied probe this names (`AUTO_ON_PROBES`, a closed list — a manifest cannot invent one, and core never runs extension code to decide whether the extension exists). Asked only while the person has made no choice; their switch always wins and is never overwritten. An unknown name is ignored (a newer manifest on an older daemon), so the extension reads as plain `optional`. |
 | `assets` | `assets?: string` | Folder (inside the extension) of static files served at `GET\|HEAD /api/plugin/<id>/asset/<file>`; gated like `/api/*`, 403 while off. |
 | `experimental` | `experimental?: boolean` | Labelled "experimental" wherever its backends are listed (`BackendInfo.experimental`). |
+
+## AUTO_ON_PROBES
+
+*const*
+
+The probes a manifest's `autoOn` may name — the host supplies each one.
+
+```ts
+export const AUTO_ON_PROBES = ["androidRepo"] as const;
+```
+
+## AutoOnProbe
+
+*type*
+
+```ts
+export type AutoOnProbe = typeof AUTO_ON_PROBES[number];
+```
+
+## autoOnProbe
+
+*function*
+
+The manifest's `autoOn` when this daemon knows the probe, else null.
+
+```ts
+export function autoOnProbe(m: {
+    autoOn?: unknown;
+}): AutoOnProbe | null;
+```
 
 ## PluginView
 
@@ -487,6 +525,7 @@ export interface PluginView { … }
 | `values` | `values: Record<string, PluginValue>` | Current settings, defaults filled in. |
 | `status` | `status?: PluginStatus \| null` | One line the plugin sets about itself ("no GEMINI_API_KEY — set it via the secret sheet"). |
 | `env` | `env?: Record<string, boolean>` | Declared env names → set or not. |
+| `auto` | `auto?: { state: "on" \| "off"; why: string; }` | An `autoOn` extension's default as this desktop decided it — present ONLY while the person has made no choice (absent = their switch decides, or no probe applies). `why` is the sentence shown under the switch. |
 
 ## PluginStatus
 
@@ -771,6 +810,7 @@ export interface HostPluginApi { … }
 | `route` | `route(method: PluginHttpMethod, pattern: string, fn: (req: PluginHttpRequest) => PluginHttpReply \| Promise<PluginHttpReply>): () => void` | Serve an HTTP route (since 1.2) at `/api/plugin/<id>/<pattern>`. It sits behind the SAME origin/Host gate and token gate as every core `/api` route — never loopback-only, never exempt. `pattern` is `/`-separated: literal segments, `:name` (exactly one segment, handed over RAW in `params`), and a trailing `*` (what follows, in `rest`). JSON in and out: the body is parsed (`{}` when there is none or it is not JSON; past `PLUGIN_ROUTE_BODY_MAX` the request is a 413), and the reply's `body` goes back as JSON with its `status` (default 200). A GET must not change anything — the core's rule for every `/api` GET. THROWS a sentence for a method outside `PluginHttpMethod`, a malformed pattern, one whose first segment is `hook` (the sink's), or one this plugin already serves for that method. A throw in the handler answers 500 `{ ok:false, error }` and becomes the status line. Unregistered with the plugin; the returned function earlier. |
 | `stream` | `stream(name: string, handlers: PluginStreamHandlers): () => void` | Since 1.4. Serve live stream `name` to the sockets that open it: binary frames on the one socket, never durable or retried (`shared/stream.ts` has the whole contract). THROWS on a bad name or one already served. The returned function ends every open subscription. |
 | `offerFile` | `offerFile(file: string, opts: import("../pluginfile.js").PluginFileOfferOpts): import("../pluginfile.js").PluginFileOffer` | Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). |
+| `repoApps` | `repoApps(): Promise<AppRepoFacts[]>` | Since 2.5: facts about each Android app module in every PRIMARY checkout on this desktop (read-only, bounded async walks, one repo at a time): package, targetSdk, key kind, the outbox APK, the build rows, the auto-download rule and whether it would take the newest APK. [] when the desktop has none. Core's readiness facts (`appready.ts`); rejects in words on a host that cannot read them, or once this plugin is switched off. Concurrent calls share one walk. Any plugin may call it: the facts are paths and names, not secrets (`docs/notes/plugins.md`, "Which apps a repo builds"). |
 
 ## PluginHttpMethod
 

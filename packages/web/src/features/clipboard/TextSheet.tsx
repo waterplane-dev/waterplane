@@ -3,14 +3,14 @@
  * quote or follow a link out of.
  */
 import { useRef } from "react";
-import { Copy, ExternalLink, Quote, RotateCw } from "lucide-react";
+import { AtSign, Copy, ExternalLink, Quote, RotateCw } from "lucide-react";
 import { findUrlsInText } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { TextDumpLines, type TextDumpHandle } from "../../TextDumpLines";
 import { quoteBlock } from "./logic";
 import { dump } from "./store";
-import { copyLink, openLink, openTextDump } from "./actions";
+import { copyLink, copySessionRef, openLink, openTextDump } from "./actions";
 import { Button, Row, Hint } from "../../kit";
 import { SetNote } from "../../SettingsKit";
 
@@ -64,6 +64,7 @@ export function TextSheet() {
       <TextDumpLines ref={textRef} text={textDump} />
       <div className="sheet-actions">
         <Button onClick={copy}><Copy size={16} /> copy</Button>
+        <Button title="copy with this session's reference — to paste into another session" onClick={() => { const p = textRef.current?.pick(); void copySessionRef(p && p.what !== "all" ? p.text : undefined); }}><AtSign size={16} /> copy + ref</Button>
         <Button onClick={quote}><Quote size={16} /> quote in compose</Button>
         <div className="spacer" />
         <button className="send" onClick={() => core.nav.close("text")}>done</button>

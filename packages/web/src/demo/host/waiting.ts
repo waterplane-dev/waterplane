@@ -13,7 +13,7 @@
  * scenario's seeded intents keep their scripted lives (queue-and-schedule's runs
  * on its own script), and nothing else the demo holds starts by itself.
  */
-import { cleanIntentRow, intentVerdict, sessionBudgetHeld } from "@waterplane/shared";
+import { blockWallOf, cleanIntentRow, intentVerdict, sessionBudgetHeld } from "@waterplane/shared";
 import type { BacklogItem, Intent, IntentFacts } from "@waterplane/shared";
 import { backlogFrame, findSession, sessions, submit } from "./desk.ts";
 import type { Desk } from "./model.ts";
@@ -42,6 +42,7 @@ function facts(d: Desk): IntentFacts {
     sessions: live.map((s) => ({
       id: s.id, cwd: s.cwd, running: s.running, turnStartedAt: s.turnStartedAt, turnActive: s.turnActive,
       limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind, awaitingInput: s.awaitingInput, convId: s.claudeSessionId,
+      block: blockWallOf(s), // the host's `intentDeps` fills the same field the same way
     })),
     busyCwds: new Set(),
     busySessions: new Set((d.m.intents ?? []).filter((i) => i.state === "running" || i.state === "starting").map((i) => i.sessionId).filter((x): x is string => !!x)),

@@ -74,8 +74,10 @@ export function launcherReadings(readings: readonly UsageReading[], sessions: re
   return readings.filter((r) => r.source === "claude" || r.backend == null || r.backend === "claude" || live.has(r.backend));
 }
 
-/** The figures claude's segment prints; `null` = the CLI printed none (drawn `?`, as ever). */
-export interface ClaudeFigures { sess: number | null; sessResetAt: number | null; wk: number | null }
+/** The figures claude's segment prints; `null` = the CLI printed none (drawn `?`, as ever).
+ *  `noSess` = the account has NO 5-hour window (`UsageInfo.sessionGoneSince`): the segment
+ *  collapses to the week and its long press says why — never a `?` for a window that is not there. */
+export interface ClaudeFigures { sess: number | null; sessResetAt: number | null; wk: number | null; noSess?: boolean }
 
 export function claudeFigures(r: UsageReading): ClaudeFigures {
   const w = (id: string) => r.windows.find((x) => x.id === id);
@@ -85,7 +87,8 @@ export function claudeFigures(r: UsageReading): ClaudeFigures {
 
 /** The scrape itself as figures — the chip's fallback while no reading exists. */
 export const infoFigures = (u: UsageInfo | null): ClaudeFigures =>
-  ({ sess: u?.sessionPct ?? null, sessResetAt: u?.sessionResetAt ?? null, wk: u?.weeklyPct ?? null });
+  ({ sess: u?.sessionPct ?? null, sessResetAt: u?.sessionResetAt ?? null, wk: u?.weeklyPct ?? null,
+    ...(u?.sessionGoneSince != null ? { noSess: true } : {}) });
 
 /**
  * What claude's segment prints: the scrape itself when the phone holds one (it

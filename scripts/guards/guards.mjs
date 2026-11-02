@@ -33,6 +33,7 @@ const SKILLS = [".claude/skills/**"];
 export const GUARDS = [
   // ── edit: pure file readers ────────────────────────────────────────────────
   { test: "claudemd", tier: "edit", paths: ["CLAUDE.md", ...SKILLS, "docs/notes/**", "tools/skillmap.mjs", "packages/host/src/visualskill.ts"] },
+  { test: "androidappsboundary", tier: "edit", paths: [...WEB, ...HOST, "packages/shared/src/**"] },
   { test: "webshape", tier: "edit", paths: [...WEB, ...EXT] },
   { test: "cssshape", tier: "edit", paths: ["packages/web/src/styles.css", "packages/web/src/styles/**", "tools/csssource.mjs"] },
   { test: "calday", tier: "edit", paths: ["packages/web/src/kit/chart/**", "packages/extensions/token-stats/web/**", "packages/shared/src/calday.ts"] },

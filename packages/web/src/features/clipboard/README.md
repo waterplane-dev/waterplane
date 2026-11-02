@@ -9,7 +9,7 @@ session). Also the **Answer the list** sheet (`answers`, `DecisionsSheet.tsx`): 
 bulleted, else picked — item on the screen with one short field and quick chips each (`yes`/`no`/
 `your call`, plus an item's own "X, or Y?"), inserted into compose as `My decisions:` + `4. Label:
 answer` lines. Fed by `openDecisions(picked?)` — the rows picked on the live terminal
-(`core/session/useTermPick.tsx`) or in the reader (`useReaderPick.tsx`), else the grid, else the cached transcript's tail. Also `openLink` / `copyLink`, which App's sign-in bar (`LoginBar`) shares.
+(`core/session/useTermPick.tsx`) or in the reader (`useReaderPick.tsx`), else the grid, else the cached transcript's tail. Also `openLink` / `copyLink`, which the sign-in card (`BlockBar`) shares.
 
 **Owns**
 
@@ -20,8 +20,11 @@ answer` lines. Fed by `openDecisions(picked?)` — the rows picked on the live t
 - `decide` (the sheet's source lines) and `decideAnswers` (typed answers by item text, so closing
   the sheet does not delete them; cleared for the items that were inserted).
 - Sheets: `clip`, `text`, `answers` — all `persisted: false` (neither is in `PERSISTED_OVERLAYS`).
-- Toolbar commands: `clip` (→ `openClipSheet`), `select` (→ `openTextDump`) and `decide`
-  (→ `openDecisions`, "answer list"). The items stay
+- Toolbar commands: `clip` (→ `openClipSheet`), `select` (→ `openTextDump`), `decide`
+  (→ `openDecisions`, "answer list") and `copyref` (→ `copySessionRef`, "copy reference": the
+  session's peer name — `SessionInfo.cliName` — folder and conversation id onto the phone's clipboard,
+  `sessionReference` in `logic.ts`; the pick bar's and the text sheet's `copy + ref` add the picked
+  text as a quote). A field the host does not know is left out, never guessed. The items stay
   declared in `toolbar.ts`.
 - No wire frames: the desktop clipboard is `api.setClipboard` (HTTP), and the transcript fallback
   is `offlineCache.getTranscript` (IndexedDB, no host). No storage keys.

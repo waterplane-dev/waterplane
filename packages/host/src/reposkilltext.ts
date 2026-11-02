@@ -165,6 +165,15 @@ JSON line to \`${D}/versions.jsonl\`:
   the build script, not in your head — an agent's release and a button's run
   must both leave it. If this repo has no such line yet, add it when you next
   touch its build.
+- **Every build carries a NEW version — uncommitted rebuilds included.** A
+  version derived from the commit count (or a fixed \`versionName\`) stays put
+  while the person iterates on uncommitted edits, so two different APKs both
+  read "0.1.5" on the phone and nobody can tell which one is installed. For an
+  Android app raise \`versionCode\` AND \`versionName\` on every build — e.g.
+  \`versionCode = commits * 1000 + n\`, \`versionName = "0.1.<commits>.<n>"\`, with
+  \`n\` counting the builds of the current commit (0 for its first), kept by the
+  build script in \`${D}/\`. A lower \`versionCode\` than the installed one never installs.
+  The phone flags a build that repeats an older build's version.
 
 ## A reading of this repo's own, on its health charts
 
@@ -206,16 +215,53 @@ refresh. Any change here — adding, removing, or editing a \`run\` — makes th
 index CARRY that week instead of comparing it, so a tweak never reads as the
 repo getting healthier or worse; expect one flat week, not a jump.
 
-## Downloads that start on their own
+## An app on the person's phone: build → download → install
 
-\`${D}/autopull.json\` tells the phone to start downloading new files the moment
-they appear — so a 90 MB APK is already on the phone when the person looks,
-and a dead spot resumes rather than restarts. Shape:
-\`{ "enabled": true, "scope": "outbox", "match": ["*.apk"], "maxBytes": 0,
-"builds": true, "supersede": true }\` (\`scope\` \`outbox\` or \`repo\`; \`match\` is
-name globs, or paths when a pattern has a slash; \`maxBytes\` 0 = no cap;
-\`builds\` also queues build outputs; \`supersede\` keeps only the newest of the
-same artifact). Usually set from the phone; change it only when asked.
+When the person asks whether their app "updates itself", or to "put it on my
+phone", this is the whole chain. Answer from it, never from general Android
+knowledge — the general answer ("Android always asks, you'd need Shizuku or a
+device owner") is WRONG here.
+
+1. **Build through a button.** Only a run of a \`${S}/builds.json\` entry is
+   collected into \`.claude/outbox/\` (see above). An APK you build with
+   \`./gradlew\` in your own shell stays in \`build/\` and never reaches the
+   phone — and copying it into the outbox by hand is the copy nothing prunes.
+   So run the button yourself:
+
+   \`\`\`sh
+   curl -s "${base}/api/agent/builds?dir=$PWD"          # the buttons, with params
+   curl -s -X POST ${base}/api/agent/builds/run -H 'content-type: application/json' \\
+     -d '{"dir":"'"$PWD"'","id":"<button id>","key":"<unique-key>","params":{}}'
+   \`\`\`
+
+   It runs exactly as a tap would and shows on the phone's Builds sheet. \`key\`
+   makes it once-only (a retried curl is the same run). Buttons only: an id that
+   is not in \`builds.json\` is refused — add the entry first when there is none.
+2. **The phone downloads it by itself** when the repo's auto-download rule is
+   on: \`${D}/autopull.json\` — \`{ "enabled": true, "scope": "outbox", "match":
+   ["*.apk"], "maxBytes": 0, "builds": true, "supersede": true }\` (\`scope\`
+   \`outbox\` or \`repo\`; \`match\` is name globs, or paths when a pattern has a
+   slash; \`maxBytes\` 0 = no cap; \`builds\` also queues build outputs;
+   \`supersede\` keeps only the newest of the same artifact). A 90 MB APK is
+   then already on the phone when the person looks, and a dead spot resumes.
+   Usually set from the phone; change it only when asked.
+3. **The phone installs it by itself — quietly after the first time.** In the
+   sideloaded ${N} app (not the Google Play one), an app the person set to
+   "install by itself" installs at the end of its download. **The first install
+   of an app always shows Android's dialog, once; every later update is
+   silent.** Silent needs all of: "install by itself" on for the app (its card
+   its card in the Android apps extension's screen, on when this desktop has an Android repo), "Install unknown apps" allowed for ${N}, the FIRST install
+   done by ${N} (an app first installed from a file manager, adb or Android
+   Studio asks on every update — uninstall it once and let ${N} install it),
+   and the same signing key every build (this desktop's one key; see the setup
+   checklist). A refused silent install falls back to the dialog, never fails.
+
+**You cannot see the phone's half** — which apps install by themselves, what is
+installed, which app installed it. Never guess it: say which of the conditions
+above are met on THIS side (a button exists, the rule takes the APK, one
+signing key), and send the person to the Android apps extension's screen: each app's card
+shows the three steps (build, download, install), which happen by themselves,
+and a button for the first one that does not.
 
 ## Screenshots of what you built
 

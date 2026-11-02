@@ -1,6 +1,6 @@
 ---
 name: host-ledgers
-description: waterplane host ledgers (packages/host/src) — everything this desktop counts and keeps on disk: `ctxlog.ts` (window, spend, compactions off the CLI's log), `ctxwindow.ts`, `tokenstats.ts` + `tokenscan.ts`, `turnagents.ts`, `usage.ts` + `meter.ts` (the /usage reading), `billing.ts`, `budget.ts` + `sessionbudget.ts`, `costwindow.ts`, `burnwatch.ts`, `localledger.ts`, `usagelog.ts` + `usagesources.ts`, the transcript reader (`transcript/`), and how a second backend's store reader is asked. Load BEFORE changing any token, context, cost, budget or limit number the host reads off disk, or adding a reader of either CLI's logs or store. A reading here degrades to ABSENT, never to a wrong number.
+description: "waterplane host ledgers (packages/host/src) — everything this desktop counts and keeps on disk: `ctxlog.ts` (window, spend, compactions off the CLI's log), `ctxwindow.ts`, `tokenstats.ts` + `tokenscan.ts`, `turnagents.ts`, `usage.ts` + `meter.ts` (the /usage reading), `billing.ts`, `budget.ts` + `sessionbudget.ts`, `costwindow.ts`, `burnwatch.ts`, `localledger.ts`, `usagelog.ts` + `usagesources.ts`, the transcript reader (`transcript/`), and how a second backend's store reader is asked. Load BEFORE changing any token, context, cost, budget or limit number the host reads off disk, or adding a reader of either CLI's logs or store. A reading here degrades to ABSENT, never to a wrong number."
 ---
 
 # waterplane host — the ledgers

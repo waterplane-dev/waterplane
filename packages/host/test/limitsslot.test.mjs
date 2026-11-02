@@ -81,8 +81,9 @@ for (const [name, text] of Object.entries({ WALL, STUB, WEEKLY, MENU, IN2H, WARN
     const o = outcome(h.s, h.events);
     assert.equal(o.blocked, det.blocked);
     assert.equal(o.weekly, det.blocked ? det.weekly : false);
-    // A weekly screen banner is never dated (`markLimitBlocked`).
-    assert.equal(o.resetAt, det.blocked && !det.weekly ? det.resetAt : null);
+    // A weekly screen banner's bare time is KEPT as its next occurrence — a lower
+    // bound re-armed daily (`markLimitBlocked`, owner 2026-10-31; weeklybare.test.mjs).
+    assert.equal(o.resetAt, det.blocked ? det.resetAt : null);
     assert.deepEqual(o.events, det.blocked ? ["updated", "limit:blocked", "updated", "limit:scheduled"] : []);
     assert.equal(o.armed, det.blocked, "a block arms the continue ladder; nothing else does");
     assert.equal(h.s.info.limit.needsYou, undefined, "claude's walls never carry needsYou");

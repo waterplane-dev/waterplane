@@ -202,3 +202,36 @@ export async function findTarget(root: string, id: string): Promise<RepoTarget |
   const all = await discoverTargets(root);
   return all.find((t) => t.id === id) ?? null;
 }
+
+/**
+ * Folders straight under a root that rescan skips because no `.git` is in or
+ * below them — a folder dragged in with the Finder, a download. Discovery lists
+ * only git checkouts (`scanTargets`), so without this the folder is simply
+ * missing from the launcher and nothing says why. Only DIRECT children of a
+ * root, and only ones holding no discovered worktree: a grouping folder
+ * (`~/dev/org/` with repos inside) is not one. Reads the targets it is given —
+ * no second walk.
+ */
+export async function plainFolders(root: string, targets: readonly RepoTarget[]): Promise<{ name: string; path: string }[]> {
+  const roots = root.split(",").map((s) => s.trim()).filter(Boolean);
+  const out: { name: string; path: string }[] = [];
+  for (const r of roots) {
+    let entries: import("node:fs").Dirent[];
+    try { entries = await readdir(r, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (e.name.startsWith(".") || SKIP_DIRS.has(e.name)) continue;
+      const path = join(r, e.name);
+      if (!e.isDirectory()) {
+        if (!e.isSymbolicLink()) continue;
+        try { if (!(await stat(path)).isDirectory()) continue; } catch { continue; }
+      }
+      const real = await realpath(path).catch(() => path);
+      const holdsRepo = targets.some((t) => [path, real].some((p) => t.worktreePath === p || t.worktreePath.startsWith(p + "/")));
+      if (holdsRepo) continue;
+      // A `.git` the scan has not caught up with yet (listTargets may answer from the last scan).
+      try { await stat(join(path, ".git")); continue; } catch { /* none: a plain folder */ }
+      out.push({ name: e.name, path });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}

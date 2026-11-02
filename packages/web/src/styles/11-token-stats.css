@@ -659,3 +659,23 @@ button.ts-lim-used { cursor: pointer; }
 .carried-files > li { flex-wrap: wrap; row-gap: 0; }
 .carried-files .carried-label { flex: 1 1 14em; }
 .carried-path { overflow-wrap: anywhere; }
+
+/* The always-on strip and file list (`AlwaysOnRows.tsx`: Repo readings' context-weight row and VS
+   Code's Always-on view). They are drawn on the carried strip and rows above (`.carried-bar`,
+   `.carried-list`), so a repo's files and a session's first request read as one screen; the bar's hue
+   is the threshold band (`AO_SLOT`), set inline. Unsized rows are OUTLINED markers of their own width
+   (their name), never a length on the bar. Here, not in a sheet's file, because VS Code loads this
+   file and not the readings sheet's. */
+.ao-strip { margin: var(--sp-6) 0 var(--sp-8); }
+.ao-strip-head { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); margin-bottom: var(--sp-6); }
+.ao-strip .ts-legend { padding-top: var(--sp-4); }
+.ao-marks {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-6); margin-top: var(--sp-8);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.ao-marks-lead { color: var(--muted); }
+.ao-mark { padding: 0 var(--sp-6); border: 1px dashed var(--muted); border-radius: var(--r-4); color: var(--fg); overflow-wrap: anywhere; }
+.ao-strip-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.ao-list .ao-still { cursor: default; }
+.ao-list .ao-unsized { font-style: italic; }
+.ao-list .ao-open { align-self: flex-start; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }

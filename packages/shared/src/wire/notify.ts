@@ -68,13 +68,20 @@
  * person taps done (`gitAttentionKey`); a successful push is information; a
  * successful pull raises nothing at all. Default ON.
  *
+ * `signin` sits right after `limit` (added 2026-11-02, the same class: work stopped by something
+ * outside it, account-wide): the claude.ai sign-in ran out and turns stopped on it — pushed once
+ * when the account's sign-in episode starts ("Signed out — N sessions stopped") and once when the
+ * host confirms the sign-in ("Signed in again — continue the N sessions that stopped?"; nothing is
+ * typed until the person taps). Attention, keyed `signin`, resolved when the episode empties.
+ * Opens the blocked sheet (`NotifyOpen` `blocked`). Default ON.
+ *
  * `exposure` sits last (added 2026-10-26): the exposure watch (`exposurepush.ts`) found a NEW
  * open alert in a repo that is on the watch — one push per finding, keyed (repo, measure,
  * subject, version) and spent for good; more than three at once in one repo is a single push.
  * Critical and high severity are attention, the rest information. Default ON. Words only.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure",
+  "prompt", "approval", "limit", "signin", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */
@@ -132,7 +139,7 @@ export type NotifyOutcome = "ok" | "failed";
  * is `info`. `followup` is attention because a session's AGENT chose to raise
  * it; the launch option's routine "done" flag passes `level: "info"` itself.
  */
-export const ATTENTION_KINDS: readonly NotificationKind[] = ["prompt", "approval", "cli", "disk", "undelivered", "followup"];
+export const ATTENTION_KINDS: readonly NotificationKind[] = ["prompt", "approval", "signin", "cli", "disk", "undelivered", "followup"];
 
 /**
  * THE one rule for a notification's level, run by the host when it fires and
@@ -358,7 +365,10 @@ export type NotifyOpen =
   /** That repo's (or worktree's) build sheet, on the failed entry. */
   | { to: "build"; repoId: string; buildId?: string }
   /** That repo's readings sheet, on the exposure watch region. */
-  | { to: "setup"; repoId: string };
+  | { to: "setup"; repoId: string }
+  /** The blocked-sessions sheet (`signin`: the account's sign-in episode). An older phone falls
+   *  back to the alert's own row. */
+  | { to: "blocked" };
 
 /** How an attention item was dealt with. */
 export interface NotifyHandled {

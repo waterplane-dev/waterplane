@@ -450,7 +450,7 @@ test("an advisory row is a thing to consider: never a finding, never in Fix all 
   assert.equal(isSetupConsider({ ...cw, status: "pass" }), false);
   assert.ok(!agentFindings([...REPORT, cw, ac]).some((c) => c.advisory));
   assert.ok(!patchFindings([...REPORT, cw, ac]).some((c) => c.advisory));
-  assert.deepEqual([...ADVISORY_CHECKS].sort(), ["apk-install", "auto-compact", "context-weight", "exposure"]);
+  assert.deepEqual([...ADVISORY_CHECKS].sort(), ["apk-install", "auto-compact", "context-weight", "exposure", "skill-frontmatter"]);
 });
 
 test("auto-compact's write CHOOSES a setting: never in Fix all, never handed to the agent, two taps", () => {

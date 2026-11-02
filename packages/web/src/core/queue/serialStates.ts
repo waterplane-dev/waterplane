@@ -2,8 +2,26 @@
 // for `busySerialGroups` and one sentence naming who holds a group. Pure, and
 // imports nothing but shared — `activity/activityQueueRow.ts` reads it too, and
 // `logic.ts` (which imports the activity barrel) would be a cycle.
-import { serialHolders, serialWaitText, waitedSessionName } from "@waterplane/shared";
-import type { SessionInfo } from "@waterplane/shared";
+import { blockWallOf, serialHolders, serialWaitText, waitedSessionName } from "@waterplane/shared";
+import type { LaneSessionState, SessionInfo } from "@waterplane/shared";
+import { trustAutoAccepted, type BackendList } from "../../backendCaps.ts";
+
+/**
+ * The `sessionWall` facts plus the trust one, off a `SessionInfo` — one mapping for
+ * every phone caller (`laneBusy`, `holdWall`, `busySerialGroups`). `backends` absent or not
+ * yet arrived ⇒ a trust box reads as auto-accepted, today's behaviour.
+ */
+export function laneStateOf(s: SessionInfo, backends?: BackendList): LaneSessionState {
+  const trust = s.prompt?.kind === "trust" ? trustAutoAccepted(backends ?? null, s.backend) : undefined;
+  return {
+    turnActive: s.turnActive, limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind,
+    awaitingInput: s.awaitingInput,
+    // Signed out, or the host's net retry holds it — `blockWallOf`, never `blockOf`'s kind: a
+    // net give-up with nothing more scheduled and first-launch setup alone are badges, not walls.
+    block: blockWallOf(s),
+    ...(trust === false ? { trustAutoAccepted: false } : {}),
+  };
+}
 
 /**
  * Flatten the session list into what `busySerialGroups` reads.
@@ -15,10 +33,9 @@ import type { SessionInfo } from "@waterplane/shared";
  * blocked on a usage limit, i.e. exactly the two states this rule exists to
  * wait out.
  */
-export const serialStates = (list: readonly SessionInfo[]) => list.map((s) => ({
+export const serialStates = (list: readonly SessionInfo[], backends?: BackendList) => list.map((s) => ({
   id: s.id, cwd: s.cwd, running: s.running, turnStartedAt: s.turnStartedAt,
-  turnActive: s.turnActive, limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind,
-  awaitingInput: s.awaitingInput,
+  ...laneStateOf(s, backends),
   name: waitedSessionName(s),
 }));
 
@@ -34,6 +51,6 @@ export const serialStates = (list: readonly SessionInfo[]) => list.map((s) => ({
  * ladder reads the same function in its `automaticOnly` reading
  * (`intentSerialHolders`), where a hand session never holds a serial row.
  */
-export function serialTextFor(group: string | undefined, sessions: readonly SessionInfo[]): string {
-  return serialWaitText(group ? serialHolders(serialStates(sessions), []).get(group) : undefined);
+export function serialTextFor(group: string | undefined, sessions: readonly SessionInfo[], backends?: BackendList): string {
+  return serialWaitText(group ? serialHolders(serialStates(sessions, backends), []).get(group) : undefined);
 }

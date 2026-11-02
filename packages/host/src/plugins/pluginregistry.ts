@@ -33,8 +33,8 @@
  */
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { BRAND, cleanPluginValue, PLUGIN_MANIFEST, promptFingerprint, pluginValues, PLUGIN_ARGS_MAX } from "@waterplane/shared";
-import type { PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
+import { autoOnProbe, BRAND, cleanPluginValue, PLUGIN_MANIFEST, promptFingerprint, pluginValues, PLUGIN_ARGS_MAX } from "@waterplane/shared";
+import type { AppRepoFacts, AutoOnProbe, PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
 import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
@@ -56,6 +56,7 @@ import { setSetupSource } from "./setupcontrib.js";
 import { PluginFiles, type ServedFile } from "./pluginfiles.js";
 import { resolveAsset, type AssetResult } from "./pluginassets.js";
 import { hostStateDir } from "../branddirs.js";
+import { AUTO_PROBE_EVERY_MS, autoWhy, cachedProbe, writeProbeCache, type AutoProbes } from "./pluginauto.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import type { Notify } from "../notifytypes.js";
 
@@ -106,6 +107,20 @@ export interface PluginEntry {
   routes: PluginRoute[];
   /** Responses held open right now; each answers `{}` when called (switch-off). */
   holds: Set<() => void>;
+  /** An `autoOn` builtin with NO stored choice at boot and a release that leaves it on: the probe
+   *  that decides its default (`pluginauto.ts`). Absent ⇒ today's path, never probed. */
+  auto?: AutoOnProbe;
+  /** The probe's last definite answer (cache at boot, then each `resolveAuto`); null = never checked. */
+  autoSeen?: boolean | null;
+  /** Set SYNCHRONOUSLY by `setEnabled` (or found in `plugins.json` after a probe's await): a person
+   *  chose, so the probe never touches this entry again this uptime. */
+  chosen?: boolean;
+  /** The last probe answered null (a repo too big to walk whole, or the listing failed) and no
+   *  definite answer came since: the sentence says it cannot tell, not "until checked". */
+  autoUnknown?: boolean;
+  /** The activation in flight (`activate`), so a tap arriving during a cold `importHost` waits
+   *  for it and then reconciles, instead of reading `state: "off"` and doing nothing. */
+  activating?: Promise<void>;
 }
 
 /** What `/api/plugin/<id>/hook` answers: an HTTP status and a JSON body. */
@@ -140,6 +155,12 @@ export interface RegistryDeps {
   streamSink?(): StreamSink | null;
   /** `api.usageProbe` — the host's usage-source registry (`usagesources.ts`). Absent ⇒ refused in words. */
   usageProbe?(plugin: string, def: PluginUsageProbe): () => void;
+  /** The host-supplied probes a manifest's `autoOn` may name. Absent probe ⇒ that entry stays as booted. */
+  probes?: AutoProbes;
+  /** `api.repoApps()` — core's readiness facts (`appready.ts`). Absent ⇒ the call rejects in words. */
+  repoApps?(): Promise<AppRepoFacts[]>;
+  /** Test seam: where builtin `id` lives. Absent ⇒ `builtin.ts`'s `packages/extensions/<id>/`. */
+  locateBuiltin?(id: string): { dir: string; hostFile: string };
 }
 
 export interface HandToAgentArgs { repoDir: string; text: string; label?: string; id?: string; origin: string; fire: boolean }
@@ -172,6 +193,12 @@ export class PluginRegistry {
   private readonly stateDir: string;
   private readonly enabledPath: string;
   private builtinsStarted = false;
+  private autoTimer: NodeJS.Timeout | null = null;
+  private autoRun: Promise<void> | null = null;
+  /** `shutdownAll` ran: no probe answer may activate anything during the SIGTERM flush. */
+  private stopped = false;
+  /** `api.repoApps()` in flight: concurrent calls from any plugin share one walk of the repos. */
+  private appsRun: Promise<AppRepoFacts[]> | null = null;
   private builtinsDone!: () => void;
   /** Resolves once `loadBuiltins()` has run — `main()` awaits it before listening. */
   readonly builtinsLoaded = new Promise<void>((r) => { this.builtinsDone = r; });
@@ -216,22 +243,28 @@ export class PluginRegistry {
   private async loadBuiltinIds(ids: readonly string[], rel: ReleaseBuiltins | null): Promise<void> {
     const switched = this.readEnabled();
     for (const id of ids) {
-      const dir = builtinDir(id);
       // Where THIS build keeps the host module — the `.mts` under tsx, the compiled `.mjs` in
       // `dist/extensions/` otherwise — never manifest-relative: a release ships only the latter.
-      const hostFile = builtinHostModule(id);
+      const { dir, hostFile } = this.deps.locateBuiltin?.(id) ?? { dir: builtinDir(id), hostFile: builtinHostModule(id) };
       const d = readPluginDir(dir, `built in (${id})`, { hostFile });
       let loadError = d.problems.length ? d.problems.join("; ") : null;
       if (!loadError && d.manifest.id !== id) loadError = `${PLUGIN_MANIFEST} says id "${d.manifest.id}", its folder says "${id}"`;
       // Always on — unless the manifest says `optional`: then the person's switch, else the release's default, else on.
       const optional = !loadError && d.manifest.optional === true;
-      const enabled = !optional || (typeof switched[id] === "boolean" ? switched[id]! : rel?.[id]?.on !== false);
+      const chosen = typeof switched[id] === "boolean";
+      // `autoOn` narrows the release default per desktop, from the CACHED probe (read synchronously,
+      // never awaited): a restart with cached `true` is on at once, no off→on flash. A stored choice
+      // or a release that says off ⇒ today's path, no probe.
+      const auto = optional && !chosen && rel?.[id]?.on !== false ? autoOnProbe(d.manifest) : null;
+      const seen = auto ? cachedProbe(this.stateDir, auto) : null;
+      const enabled = !optional || (chosen ? switched[id]! : auto ? seen === true : rel?.[id]?.on !== false);
       const e = this.newEntry({
         dir, source: d.source, manifest: d.manifest, hostFile: loadError ? null : hostFile, loadError,
         enabled, stored: loadError ? {} : this.readStored(d.manifest.id, d.manifest), builtin: true,
         ...(d.manifestLegacy ? { manifestLegacy: true } : {}),
       });
       if (loadError) { e.state = "error"; e.error = loadError; console.warn(`[${BRAND.slug}] extension ${id}: ${loadError}`); }
+      if (auto) { e.auto = auto; e.autoSeen = seen; }
       this.entries.push(e);
       if (!loadError && enabled) await this.activate(e);
     }
@@ -302,12 +335,90 @@ export class PluginRegistry {
       values: e.loadError ? {} : pluginValues(e.manifest, e.stored),
       status: e.status,
       env: Object.fromEntries((e.manifest.env ?? []).map((n) => [n, !!process.env[n]])),
+      // Never on an entry whose start failed: "on automatically" beside `state: "error"` would be untrue.
+      ...(e.auto && !e.chosen && !e.loadError && e.state !== "error"
+        ? { auto: { state: e.enabled ? "on" as const : "off" as const, why: autoWhy(e.auto, e.enabled, e.autoSeen ?? null, e.autoUnknown === true) } }
+        : {}),
     }));
+  }
+
+  // ── the conditional default (`autoOn`, pluginauto.ts) ───────────────────
+
+  /** After listen: `resolveAuto` now, then every 15 minutes (`unref`'d). Never awaited by boot. */
+  startAuto(): void {
+    if (this.stopped || this.autoTimer || !this.entries.some((e) => e.auto)) return;
+    void this.resolveAuto();
+    this.autoTimer = setInterval(() => { void this.resolveAuto(); }, AUTO_PROBE_EVERY_MS);
+    this.autoTimer.unref();
+  }
+
+  /**
+   * Ask each `autoOn` entry's probe. Never writes `plugins.json`; never overrides a choice — that is
+   * re-checked AFTER the await (the in-memory `chosen`, then a fresh `readEnabled()`), so a tap during
+   * the walk wins. `true` and off ⇒ activate (off→on ONLY). `false` while on ⇒ stays on this uptime;
+   * the cache makes the NEXT boot start off. `null` ⇒ state and cache untouched (only the sentence
+   * learns it cannot tell). One run at a time; nothing after `shutdownAll`.
+   */
+  resolveAuto(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    if (!this.autoRun) this.autoRun = this.runAuto().finally(() => { this.autoRun = null; });
+    return this.autoRun;
+  }
+
+  private async runAuto(): Promise<void> {
+    const asked = new Map<AutoOnProbe, Promise<boolean | null>>();
+    for (const e of this.entries) {
+      if (!e.auto || e.chosen || e.loadError) continue;
+      const probe = this.deps.probes?.[e.auto];
+      if (!probe) continue;
+      let p = asked.get(e.auto);
+      if (!p) { p = probe().catch(() => null); asked.set(e.auto, p); }
+      const result = await p;
+      if (this.stopped) return; // shut down during the walk: activate nothing
+      if (e.chosen) continue;
+      if (typeof this.readEnabled()[e.manifest.id] === "boolean") { e.chosen = true; this.deps.changed(); continue; }
+      if (result === null) {
+        if (!e.autoUnknown) { e.autoUnknown = true; this.deps.changed(); } // the sentence: cannot tell
+        continue;
+      }
+      writeProbeCache(this.stateDir, e.auto, result);
+      const before = e.autoSeen;
+      const wasUnknown = e.autoUnknown === true;
+      e.autoSeen = result;
+      e.autoUnknown = false;
+      if (result && !e.enabled) {
+        e.enabled = true;
+        await this.activate(e);
+        // A tap OFF during the import already reconciled (setEnabled awaits `activating`); this
+        // re-check is the backstop, so the person's off can never leave it running.
+        if (!e.enabled && e.state !== "off") await this.deactivate(e);
+        this.deps.changed();
+      } else if (before !== result || wasUnknown) this.deps.changed(); // the sentence under the switch moved
+    }
+  }
+
+  /**
+   * `api.repoApps()`'s walk (the plugin's own `live()` gate is in `pluginapi.ts`). Concurrent calls,
+   * from one plugin or several, join the walk in flight, as `plugin.call` does (`pluginrpc.ts`);
+   * each caller gets its own copy, so one plugin editing the array never reaches another.
+   */
+  repoApps(): Promise<AppRepoFacts[]> {
+    const read = this.deps.repoApps;
+    if (!read) return Promise.reject(new Error("this host cannot read its repos' Android app modules"));
+    if (!this.appsRun) this.appsRun = read().finally(() => { this.appsRun = null; });
+    return this.appsRun.then((apps) => structuredClone(apps));
   }
 
   // ── activation ──────────────────────────────────────────────────────────
 
-  private async activate(e: PluginEntry): Promise<void> {
+  /** Start `e`, recording the run on `e.activating` until it settles (see `setEnabled`). */
+  private activate(e: PluginEntry): Promise<void> {
+    const run: Promise<void> = this.activateNow(e).finally(() => { if (e.activating === run) e.activating = undefined; });
+    e.activating = run;
+    return run;
+  }
+
+  private async activateNow(e: PluginEntry): Promise<void> {
     e.gen += 1;
     e.error = undefined;
     try {
@@ -466,6 +577,8 @@ export class PluginRegistry {
    * (`server/shutdown.ts`). Never throws.
    */
   shutdownAll(): void {
+    this.stopped = true;
+    if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; }
     for (const e of this.entries) {
       if (!e.mod?.shutdown) continue;
       try { e.mod.shutdown(); } catch (err) { console.warn(`[${BRAND.slug}] plugin ${e.manifest.id}: shutdown(): ${msgOf(err)}`); }
@@ -479,14 +592,19 @@ export class PluginRegistry {
     if (!e) return `no plugin "${id}" is installed`;
     if (e.loadError) return `${e.manifest.name} cannot be turned on: ${e.loadError}`;
     if (e.builtin && e.manifest.optional !== true) return `${e.manifest.name} is part of ${BRAND.displayName} and is always on`;
+    e.chosen = true; // before any await: a probe resolving meanwhile must see the choice
     e.enabled = enabled;
     const all = this.readEnabled();
     // An optional builtin's absent flag means the RELEASE's default, which may be off — so both answers are written.
     if (e.builtin) all[id] = enabled;
     else if (enabled) delete all[id]; else all[id] = false;
     this.writeJson(this.enabledPath, { enabled: all });
-    if (enabled && e.state !== "active") await this.activate(e);
-    if (!enabled && e.state !== "off") await this.deactivate(e);
+    // An activation in flight (the auto probe's, or a quick earlier tap's) still reads "off" until its
+    // import resolves: wait for it, then reconcile against the LATEST choice — never a second activate,
+    // never an OFF that the finishing import overrides.
+    while (e.activating) await e.activating;
+    if (e.enabled && e.state !== "active") await this.activate(e);
+    if (!e.enabled && e.state !== "off") await this.deactivate(e);
     this.deps.changed();
     return null;
   }

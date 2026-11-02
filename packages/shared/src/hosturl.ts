@@ -22,6 +22,7 @@
  * makes, and a rewrite that is too eager can point a request somewhere the user
  * never named.
  */
+import { trimEndChars } from "./lineartrim.js";
 
 /**
  * The only path prefixes that are ever re-aimed at the host.
@@ -107,7 +108,7 @@ export function isHostPath(url: string): boolean {
 export function resolveHostUrl(base: string | null | undefined, url: string): string {
   if (!base) return url;
   if (!isHostPath(url)) return url;
-  return `${base.replace(/\/+$/, "")}${url}`;
+  return `${trimEndChars(base, "/")}${url}`;
 }
 
 /**
@@ -117,7 +118,7 @@ export function resolveHostUrl(base: string | null | undefined, url: string): st
  */
 export function wsUrlFor(base: string | null | undefined, path = "/ws"): string | null {
   if (!base) return null;
-  const b = base.replace(/\/+$/, "");
+  const b = trimEndChars(base, "/");
   if (b.startsWith("https://")) return `wss://${b.slice("https://".length)}${path}`;
   if (b.startsWith("http://")) return `ws://${b.slice("http://".length)}${path}`;
   return null;

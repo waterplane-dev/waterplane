@@ -138,3 +138,39 @@ test("auto-fire: another CLI's trust box blocks in words; claude's does not", ()
   assert.equal(autoFireBlocker(mk(resolveBackend("gem")), "s1", 1000), trustRule(resolveBackend("gem")).refusal);
   assert.equal(autoFireBlocker(mk(claudeBackend), "s1", 1000), null, "claude's trust box: delivery accepts it, as ever");
 });
+
+/** Claude 2.1.316's box as it really paints: unnumbered, the cursor on "No, exit". */
+const CLAUDE_TRUST_NOW = [
+  " Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source",
+  " project, or work from your team). If not, take a moment to review what's in this folder first.",
+  "",
+  " ❯ No, exit",
+  "   Yes, I trust this folder",
+  "",
+  " Enter to confirm · Esc to cancel",
+].join("\n");
+
+test("claude's box painting AFTER the words were typed: Yes is chosen, never the Return or Esc under the cursor, and the words go again", async () => {
+  // Measured 2026-10-31: claude went quiet before painting the box, the words went in, the box
+  // came up over them, and the blind Return a hooked session gets chose "No, exit" (claude quit).
+  // Withholding only that Return hung the session instead: no log, so settle never says absent.
+  const sessions = fakeSessions({
+    screen: "? for shortcuts",
+    onWrite: (st, d) => { if (d === TEXT) st.screen = CLAUDE_TRUST_NOW; },
+  });
+  sessions.isHooked = () => true;
+  const r = await deliver(sessions);
+  assert.equal(r.result, "retry", "the words reached no composer, so the queue may send them again");
+  assert.match(r.detail, /trust this folder/);
+  const [typed, keys, ...rest] = sessions.state.writes;
+  assert.equal(typed, TEXT);
+  assert.equal(keys, "\x1b[B\r", "down from \"No, exit\" onto Yes, then Return");
+  assert.deepEqual(rest, [], "no sweep Esc (cancel = exit) and nothing else");
+});
+
+test("claude's box with its question drawn and its rows not yet: no digit guessed, refused if they never come", async () => {
+  const sessions = fakeSessions({ screen: CLAUDE_TRUST_NOW.split("\n").slice(0, 2).join("\n") });
+  const r = await deliver(sessions);
+  assert.equal(r.result, "retry");
+  assert.deepEqual(sessions.state.writes, [], "a Return there is a guess, and the guess under the cursor is exit");
+});

@@ -8,6 +8,7 @@
  * items into one must keep — a merged text that drops a path is a merge that
  * loses the picture somebody attached.
  */
+import { trimEndChars } from "./lineartrim.js";
 
 /**
  * An image path as the backlog row's thumbnails find one.
@@ -36,12 +37,39 @@ export const TRANSPORT_RE = /\.claude\/(?:inbox|outbox)\/\S+/gi;
  * `TRANSPORT_RE` starts at `.claude/`, so an opening fence falls outside its
  * match, while `IMG_RE` is `\S+` and swallows it.
  */
-const trimPath = (s: string): string => s.replace(/^[([{'"`*]+/, "").replace(/[)\]}.,;:'"`*]+$/, "");
+const trimPath = (s: string): string => trimEndChars(s.replace(/^[([{'"`*]+/, ""), ")]}.,;:'\"`*");
+
+/** The image extension alone, for `imgMatches`: no leading quantifier, so linear. */
+const IMG_EXT_RE = /\.(?:png|jpe?g|gif|webp|bmp|heic|heif|svg)\b/gi;
+
+/**
+ * `text.match(IMG_RE)` without the regex's quadratic scan (CodeQL
+ * `js/polynomial-redos`: `\S+` retried from every start of a long run with no
+ * extension). Same hits: a match never crosses whitespace, and greedy `\S+` makes
+ * it run from the START of its whitespace-free run to the end of the LAST
+ * extension in that run (an extension holds no `.`, so no later one is hidden
+ * inside it) — hence at most one per run, and none when that extension's dot is
+ * the run's first character.
+ */
+function imgMatches(text: string): string[] {
+  const out: string[] = [];
+  for (const run of text.split(/\s+/)) {
+    let end = -1;
+    let dot = -1;
+    IMG_EXT_RE.lastIndex = 0;
+    for (let e: RegExpExecArray | null; (e = IMG_EXT_RE.exec(run)); ) {
+      dot = e.index;
+      end = e.index + e[0].length;
+    }
+    if (dot > 0) out.push(run.slice(0, end));
+  }
+  return out;
+}
 
 /** Every image path in some text, de-duplicated, trailing punctuation stripped. */
 export function imagePaths(text: string): string[] {
-  const m = typeof text === "string" ? text.match(IMG_RE) : null;
-  return m ? [...new Set(m.map(trimPath))] : [];
+  const m = typeof text === "string" ? imgMatches(text) : [];
+  return [...new Set(m.map(trimPath))];
 }
 
 /**

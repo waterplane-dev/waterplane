@@ -1,5 +1,7 @@
 /** The usage-window rule's fields. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { RadioRows, Hint } from "../kit";
+import { sessionWindowGoneText } from "@waterplane/shared";
+import { Explain } from "../Explain";
 import { LS, lsSet } from "../storage";
 import { GUARD_LABEL, guardWords, pctChoices, pctOk, pctWords } from "../sendIntent";
 import { LeadPick } from "./LeadPick";
@@ -10,14 +12,24 @@ export function WindowRule({ m }: { m: RuleModel }) {
     anchorW, guardW, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, patchRule,
   } = m;
   const rule = m.rule as NonNullable<typeof m.rule>;
+  const noSess = m.usage?.sessionGoneSince != null;
   return (
     <>
       <>
         <div className="section section-head"><span>Which usage window</span></div>
+        {/* No 5-hour window on this plan: the session choice is collapsed away
+            and the line under it says why. A rule ALREADY on the session window
+            keeps both choices and is told plainly that it never fires there —
+            it is never re-anchored behind the person's back. */}
         <RadioRows<"session" | "weekly"> label="Which usage window"
-          value={rule.window === "weekly" ? "weekly" : "session"}
-          options={[{ key: "session", label: "session window" }, { key: "weekly", label: "weekly window" }]}
+          value={anchorW}
+          options={noSess && anchorW === "weekly"
+            ? [{ key: "weekly", label: "weekly window" }]
+            : [{ key: "session", label: "session window" }, { key: "weekly", label: "weekly window" }]}
           onChange={(k) => patchRule({ window: k })} />
+        {noSess && (anchorW === "session"
+          ? <Hint tone="warn">This plan has no 5-hour window, so a rule on the session window is never armed. Pick weekly window.</Hint>
+          : <Explain of="the usage window" label="no session window on this plan">{sessionWindowGoneText()}</Explain>)}
         <div className="section section-head"><span>When in the window</span></div>
         <RadioRows<"before" | "after"> label="When in the window"
           value={rule.edge === "after" ? "after" : "before"}
@@ -117,7 +129,7 @@ export function WindowRule({ m }: { m: RuleModel }) {
                 the host would keep. One way to say each thing. */}
             <RadioRows<"session" | "weekly"> label="Which meter the condition reads"
               value={guardW}
-              options={(["session", "weekly"] as const).map((w) => ({ key: w, label: GUARD_LABEL[w] }))}
+              options={(noSess && guardW === "weekly" ? ["weekly"] as const : ["session", "weekly"] as const).map((w) => ({ key: w, label: GUARD_LABEL[w] }))}
               onChange={(w) => patchRule({ guardWindow: w === anchorW ? undefined : w })} />
             {/* Not a dimmed control and never a refusal, in any of
                 the three cases: the rule is savable exactly as
@@ -126,8 +138,8 @@ export function WindowRule({ m }: { m: RuleModel }) {
           </>
         )}
         <Hint>
-          Anchored to the reset, not to a clock: the session window slides with whenever you last
-          started using it, so there is no time of day that means the same thing twice.
+          Anchored to the reset, not to a clock{noSess ? "" : <>: the session window slides with whenever you last
+          started using it, so there is no time of day that means the same thing twice</>}.
           Nothing is armed until the host has read the window once.
         </Hint>
       </>

@@ -10,7 +10,8 @@ import type { ActivityBucket } from "./activityTypes.ts";
  *
  * `needsYou` is not "important" — it is the set that will NEVER move without a
  * person: a dead session, a switch that is off, a question box waiting for an
- * answer. Everything else in `blocked` clears itself given time, and the whole
+ * answer, a signed-out session (`auth`: only a sign-in clears it). Everything
+ * else in `blocked` clears itself given time, and the whole
  * value of separating them is that a list of thirty waiting rows has three you
  * can actually do something about.
  *
@@ -22,7 +23,7 @@ export function bucketOf(state: Lifecycle, reason: BlockReason | null): Activity
   if (state === "failed") return "failed";
   if (state === "done" || state === "canceled") return "done";
   if (state === "running" || state === "starting") return "running";
-  if (reason === "sessionGone" || reason === "gate" || reason === "awaitingAnswer") return "needsYou";
+  if (reason === "sessionGone" || reason === "gate" || reason === "awaitingAnswer" || reason === "auth") return "needsYou";
   if (reason === "notYet") return "scheduled";
   return "waiting";
 }

@@ -467,3 +467,8 @@ That screen marks, as offers it never acts on, a user unused for 14 days (said o
 The screen is reached from the vault home ("who uses my secrets" with its count) and from every release card's fold ("see everyone using this secret"), which opens it cut to that secret.
 - asked: 2026-10-29 (vault-card-transparency P9)
 - shipped: 7a89c2a0
+### R-vault-092 · shipped
+The vault approval key also appears inside the session that needs approval, not only in the main view.
+- asked: 2026-10-30
+- shipped: 0fd3168e
+

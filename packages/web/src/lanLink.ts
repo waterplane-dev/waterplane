@@ -27,7 +27,7 @@ import { setHostRoute } from "./hostRoute";
 import { activeHost } from "./hosts";
 import { isNativeShell, routeBase, savedHostBase, setRouteBase, wsUrl } from "./hostUrl";
 import { isDemo } from "./demo/mode";
-import { deviceModel, deviceName } from "./installLog";
+import { deviceModel, deviceName } from "./deviceInfo";
 import { createLanRouter, lanDropOnSave, lanProbeAnswered, parseLanIdentity, type LanIdentity, type LanRouter, type LanVerdict, type TokenState } from "./lanRoute";
 import { currentNet, onShellNet } from "./shellNet";
 import { LS, lsDel, lsJson, lsSetJson } from "./storage";

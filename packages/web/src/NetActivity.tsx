@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
 import { NET_STALL_MS } from "@waterplane/shared";
 import { useLink } from "./link";
+import { activeHost, listHosts, stallTail } from "./hosts";
 
 /**
  * The one place that always answers "is my tap doing anything?".
@@ -92,7 +93,7 @@ export function NetActivity() {
           <span>
             {oldest.label}
             {ops.length > 1 ? ` +${ops.length - 1}` : ""} · {secs}s
-            {stalled ? " — the connection may be down" : ""}
+            {stalled ? stallTail(listHosts(), activeHost()?.id ?? null) : ""}
           </span>
         </div>
       )}

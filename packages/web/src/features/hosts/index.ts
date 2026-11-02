@@ -13,6 +13,10 @@ import { HostsSettings } from "./HostsSettings";
 import { askPairFromLink, openEditActiveHost } from "./actions";
 import { hostRouteEditor } from "../../hostRoute";
 import { isNativeShell } from "../../hostUrl";
+import { browserKV, takeSwitchFailure } from "../../hosts";
+import { core } from "../../sdk";
+import { switchFailText } from "./logic";
+import { hosts } from "./store";
 
 export { openEditActiveHost, openHosts, refreshHosts, setHostRoute } from "./actions";
 export { useHosts, useHostRoute, type HostRouteView } from "./store";
@@ -39,6 +43,10 @@ export const manifest: FeatureManifest = {
     // Wrapped: `set` reads a bare function as an UPDATER and would call it —
     // which opened this host's edit form on every shell boot.
     if (isNativeShell()) hostRouteEditor.set(() => openEditActiveHost);
+    // A switch the last boot could not carry out (storage full) says so once,
+    // in words — before, the switch key just kept naming the old desktop.
+    const failed = isNativeShell() ? takeSwitchFailure(browserKV()) : null;
+    if (failed) core().say.toast(switchFailText(failed, hosts.get().hosts));
     const stop = onShellPair(askPairFromLink);
     return () => { hostRouteEditor.set(null); stop(); };
   },

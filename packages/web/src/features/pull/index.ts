@@ -1,13 +1,13 @@
 /**
  * Downloads: the per-device transfer queue (`pull.ts` owns the transfers), the
- * per-repo auto-download rules, and the apps-that-install-themselves list.
+ * per-repo auto-download rules. (The apps-that-install-themselves screen is the android-apps
+ * extension's, reached through `useAppsDoor`.)
  * README.md says what it owns and why.
  */
 import { createElement } from "react";
 import { keepStores, type FeatureManifest } from "../../sdk";
 import { rulesFor } from "./store";
 import { pulls } from "../../pull";
-import { AppsListSheet } from "./AppsListSheet";
 import { DownloadsSheet } from "./DownloadsSheet";
 import { PullSettings } from "./PullSettings";
 import { bootPull, clearRules, putCfg } from "./actions";
@@ -20,7 +20,6 @@ export const manifest: FeatureManifest = {
   id: "pull",
   sheets: [
     { id: "pull", persisted: true, render: () => createElement(DownloadsSheet), onLeave: clearRules, keep: keepStores(rulesFor) },
-    { id: "apps", persisted: true, render: () => createElement(AppsListSheet) },
   ],
   messages: {
     // The host's queue is authoritative for WHAT to fetch; whether this

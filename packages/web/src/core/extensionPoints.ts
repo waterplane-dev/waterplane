@@ -15,35 +15,39 @@ import { FEATURES } from "../features/registry.ts";
 import { bindSetupRows, setupRowLookup, type SetupRowLookup } from "../setupRemedy.ts";
 import { core } from "./api.ts";
 import {
-  createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createRepoActionTable, createRepoChipList, createSessionViewTable, menuItemCatalog, setupRowDefs, type ContributedEntry, type RepoActionItem,
+  createFailReporter, createHideCheck, createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createRepoActionTable, createRepoChipTable, createSessionViewTable, menuItemCatalog, setupRowDefs, type ContributedEntry, type HideCheck, type RepoActionItem,
 } from "./featureRun.ts";
 import { bindLedgerViews } from "../sdk/ledgers.ts";
 import { bindSecretFillers } from "../sdk/secretFillers.ts";
 import { bindImageTextFeatures, bindPluginList } from "../sdk/extensions.ts";
-import { pluginList } from "../features/plugins";
+import { pluginsLive, pluginsOn } from "../features/plugins";
 import { bindMenuCatalog } from "../toolbar.ts";
 import type { FeatureManifest, LedgerViewDef, SecretFillContext, TabMarkDef } from "../sdk/types.ts";
 
 let actionTable: ReturnType<typeof createRepoActionTable> | null = null;
-let chips: ReturnType<typeof createRepoChipList> | null = null;
+let chipTable: ReturnType<typeof createRepoChipTable> | null = null;
 let rows: SetupRowLookup | null = null;
 let views: readonly LedgerViewDef<any>[] | null = null;
 let sessionViewTable: ReturnType<typeof createSessionViewTable> | null = null;
 let launcherItemTable: ReturnType<typeof createLauncherItemTable> | null = null;
 let menuItemTable: ReturnType<typeof createMenuItemTable> | null = null;
 let secretFillerTable: ReturnType<typeof createSecretFillerTable> | null = null;
-let menuCatalog: ReturnType<typeof menuItemCatalog> | null = null;
+let hideCheck: HideCheck | null = null;
+
+/** ONE `hideWhen` check for every table below (and the ☰ catalog): a predicate that throws is said
+ *  once per feature, not once per table. */
+const hide: HideCheck = (c) => (hideCheck ??= createHideCheck(FEATURES, createFailReporter(true)))(c);
 
 /** The menu lines extensions offer for this repo, registry order. */
-export const repoActions = (repo: RepoTarget): RepoActionItem[] => (actionTable ??= createRepoActionTable(FEATURES, core)).actions(repo);
+export const repoActions = (repo: RepoTarget): RepoActionItem[] => (actionTable ??= createRepoActionTable(FEATURES, core, hide)).actions(repo);
 
 /** The views extensions add to a session's header segment (`SessionViewDef`); [] when none does,
  *  which leaves the header exactly as it was. */
 export const sessionViews = (sessionId: string): ContributedEntry[] =>
-  (sessionViewTable ??= createSessionViewTable(FEATURES, core)).views(sessionId);
+  (sessionViewTable ??= createSessionViewTable(FEATURES, core, hide)).views(sessionId);
 
 /** The buttons extensions add to the launcher's header row (`LauncherItemDef`); [] when none does. */
-export const launcherItems = (): ContributedEntry[] => (launcherItemTable ??= createLauncherItemTable(FEATURES, core)).items();
+export const launcherItems = (): ContributedEntry[] => (launcherItemTable ??= createLauncherItemTable(FEATURES, core, hide)).items();
 
 /**
  * A tapped alert from plugin `pluginId` (a vault fingerprint ask has no session): open its screen
@@ -58,14 +62,15 @@ export function openPluginFromNotification(pluginId: string): boolean {
 }
 
 /** The ☰ lines extensions add for this session (`MenuItemDef`), each keyed by its catalog id. */
-export const menuItems = (active: SessionInfo): ContributedEntry[] => (menuItemTable ??= createMenuItemTable(FEATURES, core)).items(active);
+export const menuItems = (active: SessionInfo): ContributedEntry[] => (menuItemTable ??= createMenuItemTable(FEATURES, core, hide)).items(active);
 // `toolbar.ts` is imported by the registry's own features (`toolbarCfg`), so it reads the contributed
 // catalog through a binding rather than importing this module — the same cycle as `setupRows`.
-bindMenuCatalog(() => (menuCatalog ??= menuItemCatalog(FEATURES)));
+// Not cached: `hideWhen` can change with the plugin list.
+bindMenuCatalog(() => menuItemCatalog(FEATURES, core, hide));
 
 /** The buttons extensions add to the masked password field's row (`SecretFillerDef`); [] when none does. */
 export const secretFillers = (ctx: SecretFillContext): ContributedEntry[] =>
-  (secretFillerTable ??= createSecretFillerTable(FEATURES, core)).items(ctx);
+  (secretFillerTable ??= createSecretFillerTable(FEATURES, core, hide)).items(ctx);
 // The same buttons for an extension's own masked field (the live desktop's protected typing).
 bindSecretFillers(secretFillers);
 
@@ -73,8 +78,8 @@ let marks: { key: string; feature: string; d: TabMarkDef }[] | null = null;
 /** Every tab mark def (`TabMarkDef`), registry order; [] when none, which leaves a tab as it was. */
 export const tabMarks = () => (marks ??= FEATURES.flatMap((f) => (f.tabMarks ?? []).map((d) => ({ key: `${f.id}:${d.id}`, feature: f.id, d }))));
 
-/** Every repo chip def, registry order. */
-export const repoChips = () => (chips ??= createRepoChipList(FEATURES));
+/** Every repo chip def drawn on this pass, registry order (`hideWhen` leaves a feature's out). */
+export const repoChips = () => (chipTable ??= createRepoChipTable(FEATURES, core, hide)).chips();
 
 /** The contributed setup-row words. */
 export const setupRows = (): SetupRowLookup => {
@@ -115,8 +120,8 @@ bindLedgerViews(() => {
 });
 
 // `useExtensionEnabled`/`isExtensionEnabled` (sdk) read the host's plugin list through this binding:
-// sdk/ never imports a feature.
-bindPluginList(pluginList);
+// sdk/ never imports a feature. `pluginsOn` starts from this host's cached last list (`features/plugins/logic.ts`).
+bindPluginList(pluginsOn, pluginsLive);
 
 // The annotator asks `sdk/extensions.ts`'s `useImageTextReader()`, never this module: importing the
 // registry from the annotator closes a cycle through `features/images`.

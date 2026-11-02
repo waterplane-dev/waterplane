@@ -124,6 +124,9 @@ test("the version is read from whichever manifest the project actually has", () 
   assert.equal(projectVersion(repo({ "pubspec.yaml": "version: 1.1.0+344\n" })), "1.1.0+344");
   assert.equal(projectVersion(repo({ "package.json": '{"version":"4.2.1"}' })), "4.2.1");
   assert.equal(projectVersion(repo({ "app/build.gradle": 'versionName "2.3"\nversionCode 41\n' })), "2.3+41");
+  assert.equal(projectVersion(repo({ "app/build.gradle.kts": 'versionCode = commitCount\n        versionName = "0.1.$commitCount"\n' })), undefined,
+    "a templated versionName is computed at build time, not a version (it named an APK 0.1.-commitCount)");
+  assert.equal(projectVersion(repo({ "app/build.gradle.kts": 'versionCode = 7\nversionName = "1.$minor"\n' })), "7");
   assert.equal(projectVersion(repo({ "Cargo.toml": '[package]\nversion = "0.9.1"\n' })), "0.9.1");
   assert.equal(projectVersion(repo({ "package.json": "{not json" })), undefined, "a manifest that does not parse is not an answer");
   assert.equal(projectVersion(repo({})), undefined);

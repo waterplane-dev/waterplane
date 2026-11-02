@@ -1,6 +1,6 @@
 ---
 name: web-term
-description: waterplane phone client — the terminal and the reader (packages/web/src): Terminal.tsx and the geometry it reports to the PTY, TranscriptView.tsx (code in transcript/) with transcriptUtil.ts, PromptAnswer.tsx and its trust overlay in TermArea.tsx, ForkTurn.tsx + forkAnchor.ts, screenlog.ts + ScrollbackSheet.tsx, cliKeys.ts, strayKeys.ts. Load BEFORE touching what is drawn from a live PTY or a transcript: answering a choice box by tap, reader turns and tool folding, fork and reset, the scrollback archive, CLI key mode or stray desktop keys.
+description: "waterplane phone client — the terminal and the reader (packages/web/src): Terminal.tsx and the geometry it reports to the PTY, TranscriptView.tsx (code in transcript/) with transcriptUtil.ts, PromptAnswer.tsx and its trust overlay in TermArea.tsx, ForkTurn.tsx + forkAnchor.ts, screenlog.ts + ScrollbackSheet.tsx, cliKeys.ts, strayKeys.ts. Load BEFORE touching what is drawn from a live PTY or a transcript: answering a choice box by tap, reader turns and tool folding, fork and reset, the scrollback archive, CLI key mode or stray desktop keys."
 ---
 
 # waterplane web — the terminal and the reader

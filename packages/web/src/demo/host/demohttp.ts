@@ -59,6 +59,8 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   const q = req.query ?? {};
 
   if (path === "/api/repos" && method === "GET") return json({ targets: m.repos ?? [] });
+  // The demo root holds only its repos: the rescan finds no folder without git.
+  if (path === "/api/plainfolders" && method === "GET") return json({ folders: [] });
 
   const repo = /^\/api\/repos\/([^/]+)\/(artifacts|inbox)(?:\/(seen))?$/.exec(path);
   if (repo) {
@@ -200,8 +202,6 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   // not a 404 the Activity sheet would print as "could not read".
   if (path === "/api/peerjobs" && method === "GET") return json({ ok: true, jobs: [] });
 
-  // The demo's repos build no Android app: the Apps screen's setup pane says so.
-  if (path === "/api/apps/readiness" && method === "GET") return json({ at: now, apps: [] });
   if (path === "/api/storage/transport" && method === "GET") {
     return json(m.storage?.transport ?? { at: now, repos: [], total: { count: 0, bytes: 0 }, partial: false });
   }

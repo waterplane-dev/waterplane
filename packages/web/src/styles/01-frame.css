@@ -314,8 +314,8 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    the two you are not in are invisible and unreachable by looking. Wraps —
    three labels do not fit one phone line. */
 /* Shared name: ModeSection's `.mode-row` (03-compose.css) is a later rule and wins
-   display/gap/padding for LimitSheet.tsx's row today — a collision to resolve by
-   renaming LimitSheet's class, which is a visible change. */
+   display/gap/padding for BlockedSheet.tsx's row today — a collision to resolve by
+   renaming BlockedSheet's class, which is a visible change. */
 .mode-row { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-10) var(--sp-2); }
 .mode-row .key { flex: 1 1 auto; justify-content: center; }
 .link-btn {

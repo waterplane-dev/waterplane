@@ -10,9 +10,10 @@
  * `<home>/.claude`. An empty string is unset, like the CLI's own truthiness
  * test. Pure: the caller hands over the environment and the home directory.
  */
+import { trimEndChars } from "./lineartrim.js";
 import { envName, legacyEnvNames } from "./brand.js";
 
-const stripSlash = (p: string): string => (p.length > 1 ? p.replace(/[\\/]+$/, "") : p);
+const stripSlash = (p: string): string => (p.length > 1 ? trimEndChars(p, "\\/") : p);
 
 export function claudeConfigDirOf(o: { configDir?: string | undefined; testHome?: string | undefined; home: string }): string {
   if (o.configDir) return o.configDir;

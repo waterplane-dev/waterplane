@@ -15,13 +15,13 @@ import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
-import { NET_RETRY_NOW_SENT, blockedReasonText, netRetryToggleText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
+import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
 import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine } from "../../backendCaps";
 import { ago } from "../../format";
-import { LoginBar } from "../../LoginBar";
-import { NetRetryBar } from "./NetRetryBar";
+import { LOGIN_CMD } from "../../loginCmd";
+import { BlockBar } from "./BlockBar";
 import { ShellLinksBar } from "../../ShellLinksBar";
 import { hasShellBar } from "../../shellLinks";
 import { ZoomPair } from "../../ZoomPair";
@@ -37,6 +37,7 @@ import { CliPeek } from "./CliPeek";
 import { PromptAnswer } from "../../PromptAnswer";
 import { termAnswersBox } from "./termAnswers";
 import { ModelWheel } from "./ModelWheel";
+import { StowCorner } from "../../Stowable";
 import { KeysPop } from "./KeysPop";
 import { KeyRow } from "./KeyRow";
 import { ModeGlyph } from "./ModeSection";
@@ -85,7 +86,7 @@ export interface TermAreaProps {
   term: Pick<TermFeed, "termRef" | "geomRef" | "buffers" | "lastPtyAt" | "ptyTail" | "exitedRef" | "staleAt" | "writeSeq"
     | "termNonce" | "readMode" | "setView" | "readerCmd" | "outlineJump" | "transcriptNonce">;
   q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput" | "blocked">;
-  compose: Pick<ComposeApi, "chord" | "tapChordMod" | "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine">;
+  compose: Pick<ComposeApi, "chord" | "tapChordMod" | "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine" | "runHeaderCmd">;
   launch: Pick<Launch, "sessionCan" | "openCwd" | "runForkRequest" | "relaunch">;
   chrome: SessionChrome;
   backends: BackendInfo[] | null;
@@ -189,6 +190,11 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
         {...corner.handle}>
         <GripVertical size={ICON} />
       </Button>
+      {/* Every folded strip comes back from here (`Stowable.tsx`): present only
+          while something is folded, and next to the grip — at the far end
+          from the fixed full-screen button, so its arrival moves nothing the
+          finger already knows. */}
+      <StowCorner iconSize={ICON} />
       {/* The outline, when pinned, LEFT of the view switch — the owner's
           place for it. It was on the status line beside context for a build
           (0679e450): a number there read as one more fact in a row of facts,
@@ -730,33 +736,10 @@ export function TermArea(p: TermAreaProps): ReactNode {
         />
       )}
 
-      {/* Signing in is the one flow that cannot be finished inside this app, and
-          on a phone-width grid its 300-character URL is broken across six rows
-          — untappable, unselectable, untypeable. Above the prompt bar because a
-          session showing a login screen is not showing a choice box, and if it
-          somehow shows both, the sign-in is the one blocking the other. */}
-      {active.login && (
-        <LoginBar
-          login={active.login}
-          onOpen={openLink}
-          onCopy={(u) => void copyLink(u)}
-          onPasteCode={() => void pasteLoginCode(active.id)}
-        />
-      )}
-
-      {/* The desktop retrying a turn the CLI gave up on a network error
-          (R-connection-024): the line and its Cancel, above the prompt bar;
-          once it gave up, Retry now — the stalled row's own message. */}
-      {active.netRetry && active.running && (
-        <NetRetryBar
-          retry={active.netRetry}
-          onCancel={() => conn.liveSend({ t: "session.netRetryCancel", id: active.id },
-            active.netRetry!.state === "gaveup" ? "hidden — stalled work keeps its note" : "retry cancelled — nothing more is typed")}
-          onTurnOff={() => conn.liveSend({ t: "netretry.set", enabled: false },
-            `${netRetryToggleText(false)} — Settings › Sessions turns it back on`)}
-          onRetryNow={() => conn.liveSend({ t: "session.netRetryNow", id: active.id }, NET_RETRY_NOW_SENT)}
-        />
-      )}
+      {/* What the session is blocked on outside itself — a sign-in (link, or the
+          /login tap) or the desktop retrying a network error — as ONE card above
+          the prompt bar (`BlockBar.tsx`). A usage-limit wall is the toolbar's. */}
+      <BlockBar session={active} onSendLogin={() => compose.runHeaderCmd(LOGIN_CMD)} />
 
       {/* A shell session's own sign-in card: links a program printed or asked the
           desktop to open, a code to copy, and the cheat sheet of the commands

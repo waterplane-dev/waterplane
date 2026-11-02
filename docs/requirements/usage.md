@@ -116,3 +116,8 @@ The token usage screen has ONE time filter that sticks to the top while scrollin
 The usage meter shows one reading per source that has one (Claude, Copilot, any plugin that contributes a probe), side by side; a source with nothing to say draws nothing, except Claude, whose `?` door stays beside the others when its scrape parsed nothing; tapping a source other than Claude opens token statistics on it and says which other sources are not shown, while tapping Claude opens them as they always opened; a desktop with only Claude sees exactly the chip it has today, and a second source does not widen Claude's part (on a phone the sources wrap inside the chip, never off the screen). opencode contributes no reading until one of its providers exposes a quota.
 - asked: 2026-10-15 (the usage-sources plan)
 - shipped: 12729bff, fcd392f1, 1ae60c16, 99e8727e, b7a2e798, 94d18b09, c67e2cab, 40cb54d6
+### R-usage-027 · shipped
+The usage view lets the user step back and forward through past weeks with left and right buttons.
+- asked: 2026-10-30
+- shipped: d005b9bc
+

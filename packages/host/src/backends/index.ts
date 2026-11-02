@@ -288,6 +288,17 @@ function measuredInfo(label: string, versions: readonly string[], running: strin
   return { versions: [...versions], ...(running ? { running } : {}), ...(drift ? { drift } : {}) };
 }
 
+/**
+ * Does delivery answer this backend's folder-trust box itself (`delivery.autoAcceptsTrust`,
+ * the claude family)? Absent id ⇒ claude; an id this host cannot name ⇒ false, as
+ * `derive.ts`'s `trustRule(null)`: never answered. Feeds `sessionWall`'s `trustAutoAccepted`
+ * and the wire's `caps.autoAcceptsTrust`.
+ */
+export function backendAutoAcceptsTrust(id?: string): boolean {
+  const b = id ? BACKENDS.find((x) => x.id === id) : DEFAULT_BACKEND;
+  return b?.delivery?.autoAcceptsTrust === true;
+}
+
 export function backendInfos(): BackendInfo[] {
   return BACKENDS.map((b): BackendInfo => {
     const m = MODEL_CACHE.get(b.id) ?? { aliases: [], ids: [] };
@@ -299,7 +310,8 @@ export function backendInfos(): BackendInfo[] {
       ...(b.caps.turns === false ? { kind: "shell" as const } : {}),
       // Every boolean is DERIVED from the provider table (`derive.ts`), so a cap and a source
       // can never disagree; the bytes are pinned (`backendinfos.pin.test.mjs`).
-      caps: derive(b).wireCaps(),
+      // `autoAcceptsTrust` rides only as `false` (absent inherits auto-accepted, `wire/backend.ts`).
+      caps: { ...derive(b).wireCaps(), ...(b.delivery?.autoAcceptsTrust === true ? {} : { autoAcceptsTrust: false as const }) },
       // `where` rides along only when the backend could actually determine it.
       // Spread rather than `where: m.where` so an absent map stays ABSENT on
       // the wire instead of becoming an explicit `undefined` key — the phone

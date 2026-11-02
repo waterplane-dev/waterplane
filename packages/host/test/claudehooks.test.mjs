@@ -241,6 +241,25 @@ test("a relaunch onto the same conversation gets the hooks, not the exited sessi
   } finally { s2.info.running = false; h.slice.detach(s2); turn.clearStopVerify(s2); }
 });
 
+test("a StopFailure for authentication_failed ENDS the turn, saying nothing ran", async () => {
+  const h = harness();
+  try {
+    h.hook("SessionStart", { session_id: "c1" });
+    h.hook("UserPromptSubmit", { session_id: "c1", prompt: "hi" });
+    h.hook("StopFailure", { session_id: "c1", error: "rate_limit" });
+    await pastWindow();
+    assert.equal(h.s.turnActive, true, "a limit's StopFailure stays with the wall readers: no end");
+    h.hook("StopFailure", { session_id: "c1", error: "authentication_failed", transcript_path: "/p/c1.jsonl" });
+    assert.equal(h.s.turnActive, true, "held like a Stop until the screen agrees");
+    await pastWindow();
+    assert.equal(h.s.turnActive, false, "signed out: the turn is over for the host");
+    assert.equal(h.ended(), 1, "one turnEnded");
+    assert.deepEqual(h.events.find((e) => e[0] === "turnEnded").slice(2), [1, { net: "signedOut" }],
+      "the work waiting on it is told nothing ran — never a served reply, never a net give-up");
+    assert.equal(h.events.filter((e) => e[0] === "idle").length, 0, "no turn-finished ping for a turn that did not run");
+  } finally { h.stop(); }
+});
+
 test("a PreToolUse for AskUserQuestion keeps the call for the box; a turn boundary retires it", () => {
   const h = harness();
   try {
@@ -253,5 +272,20 @@ test("a PreToolUse for AskUserQuestion keeps the call for the box; a turn bounda
     assert.equal(h.s.askHook.id, "toolu_1", "another tool is not a question");
     h.hook("Stop", { session_id: "c1" });
     assert.equal(h.s.askHook, null);
+  } finally { h.stop(); }
+});
+
+test("a StopFailure for authentication_failed marks the session signed out; the next hook clears it", () => {
+  const h = harness();
+  try {
+    h.hook("SessionStart", { session_id: "c1" });
+    h.hook("UserPromptSubmit", { session_id: "c1", prompt: "hi" });
+    h.hook("StopFailure", { session_id: "c1", error: "rate_limit" });
+    assert.equal(h.s.info.signedOut, undefined, "another failure kind is not a sign-out");
+    h.hook("StopFailure", { session_id: "c1", error: "authentication_failed" });
+    assert.equal(h.s.info.signedOut, true);
+    assert.ok(h.events.some((e) => e[0] === "updated" && e[1].signedOut === true), "broadcast to the phone");
+    h.hook("UserPromptSubmit", { session_id: "c1", prompt: "again" });
+    assert.equal(h.s.info.signedOut, undefined, "a turn got through: signed in again");
   } finally { h.stop(); }
 });

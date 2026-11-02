@@ -16,15 +16,15 @@
 
    Current session
    █                                                  2% used
-   Resets 1:49pm (Europe/Berlin)
+   Resets 1:49pm (UTC)
 
    Current week (all models)
    █████                                              10% used
-   Resets Oct 22 at 6:59pm (Europe/Berlin)
+   Resets Oct 22 at 6:59pm (UTC)
 
    Current week (Fable)
    ██▌                                                5% used
-   Resets Oct 22 at 6:59pm (Europe/Berlin)
+   Resets Oct 22 at 6:59pm (UTC)
 
    What's contributing to your limits usage?
    Approximate, based on local sessions on this machine — does not include other devices or       ↓

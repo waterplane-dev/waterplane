@@ -12,6 +12,7 @@ import type {
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../../outbox";
 import type { HostConnection } from "../../ws";
+import type { BackendList } from "../../backendCaps.ts";
 import type { Overlay } from "../../routing";
 import type { SendSeed, SendTarget } from "../../sendIntent";
 import type { DurableOp, QueueBacklogOpts, UploadBuf, UploadProgress } from "../../sdk/types.ts";
@@ -28,6 +29,8 @@ export interface QueueDeps {
   /** The one socket (`useConnection`), passed whole rather than in pieces. */
   conn: { connRef: Ref<HostConnection>; status: string; reconnectAsk: boolean; setReconnectAsk(v: boolean): void };
   sessions: SessionInfo[];
+  /** The host's backend list (`backendCaps.ts`): whether a trust box is a wall. Absent = not yet. */
+  backends?: BackendList;
   repos: RepoTarget[];
   activeId: string | null;
   setActiveId(id: string | null): void;
@@ -58,6 +61,7 @@ export interface QueueEnv extends Omit<QueueDeps, "conn"> {
   reconnectAsk: boolean;
   setReconnectAsk(v: boolean): void;
   sessionsRef: Ref<SessionInfo[]>;
+  backendsRef: Ref<BackendList | undefined>;
   activeIdRef: Ref<string | null>;
   /** The screen's session (a real one or this queue's pending one), this render's. */
   getActive(): SessionInfo | null;

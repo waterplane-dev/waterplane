@@ -329,6 +329,12 @@ export interface IntentDeps {
    *  A row running in it is STALLED, not silent: the sweep neither fails nor
    *  completes it. Optional; absent ⇒ never stalled. */
   sessionNetStalled?(sessionId: string): boolean;
+  /** Is this session SIGNED OUT (`SessionInfo.signedOut`, or `blockOf(s)?.kind === "auth"`)?
+   *  A row running in it is held like a net stall (`SIGNED_OUT_STALL_TEXT`): the
+   *  turn ended on the sign-in failure and nothing ran, so silence is not a lost
+   *  Stop and not an ending. The sweep neither fails nor completes it; the next
+   *  real turn end after a sign-in does. Optional; absent ⇒ never signed out. */
+  sessionSignedOut?(sessionId: string): boolean;
   /** How many rows of ONE `groupId` may be delivering at once — a fan-out's
    *  concurrency pool, which is a bound on real `claude` processes. */
   groupConcurrency(): number;

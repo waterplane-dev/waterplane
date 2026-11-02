@@ -370,6 +370,6 @@ export function dictateLangOffered(
 export function appendDictation(base: string, text: string): string {
   const said = text.trim();
   if (!said) return base;
-  const head = base.replace(/\s*$/, "");
+  const head = base.trimEnd();
   return head ? `${head} ${said}` : said;
 }

@@ -52,7 +52,7 @@
  *   node tools/repohealth.mjs plot [--fixture]
  *   node tools/repohealth.mjs judge <event-id> [--yes]
  */
-import { readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -265,9 +265,28 @@ function tripwireFields(measured) {
  *
  * @returns {boolean} true when the caller must stop.
  */
-function refuseMixedPrereg(rows, version) {
+function mixedPrereg(rows, version) {
   const seen = preregVersions(rows);
-  if (seen.length < 2 && (seen.length === 0 || seen[0].version === version)) return false;
+  return !(seen.length < 2 && (seen.length === 0 || seen[0].version === version));
+}
+
+/**
+ * Where `--recut` moves a series it is about to replace: beside it, named by
+ * the definition(s) it was measured under, and suffixed `.bak` so nothing that
+ * lists `*.jsonl` series ever reads it as a live one. A second re-cut under the
+ * same old definition gets a counter instead of overwriting the first copy.
+ */
+function recutBackupPath(series, rows) {
+  const tag = preregVersions(rows).map((v) => v.version.replace(/[^\w.-]+/g, "_")).join("_") || "unversioned";
+  const base = `${series}.${tag}`;
+  let p = `${base}.bak`;
+  for (let n = 2; existsSync(p); n++) p = `${base}.${n}.bak`;
+  return p;
+}
+
+function refuseMixedPrereg(rows, version) {
+  if (!mixedPrereg(rows, version)) return false;
+  const seen = preregVersions(rows);
 
   const lines = seen.map(
     (v) =>
@@ -328,7 +347,7 @@ function replaceRow(path, row) {
   }
 }
 
-function update({ fixture }) {
+function update({ fixture, recut = false }) {
   const started = Date.now();
   const CFG = cfg();
   const raw = git.readHistory(ROOT, CFG);
@@ -336,7 +355,17 @@ function update({ fixture }) {
   if (SCOPE && !history.commits.length) {
     throw new Error(`no first-parent commit touches ${SCOPE} — there is nothing to measure under that scope.`);
   }
-  const onDisk = load(SERIES);
+  let onDisk = load(SERIES);
+  if (recut && mixedPrereg(onDisk, CFG.VERSION)) {
+    // `--recut` is the reader's own tap on the remedy `refuseMixedPrereg`
+    // names, so it is not a silent rewrite: the old series is MOVED aside,
+    // never deleted, and the line below says where. Without a mix it does
+    // nothing — a stray flag never discards a series that was fine.
+    const kept = recutBackupPath(SERIES, onDisk);
+    renameSync(SERIES, kept);
+    process.stderr.write(`repohealth: re-cut — the old series is kept at ${kept}\n`);
+    onDisk = [];
+  }
   if (refuseMixedPrereg(onDisk, CFG.VERSION)) {
     process.exitCode = 3;
     return;
@@ -749,7 +778,7 @@ const words = argv.filter((a) => !a.startsWith("--"));
 const cmd = words[0] ?? "update";
 
 try {
-  if (cmd === "update") update({ fixture: flags.has("--fixture") });
+  if (cmd === "update") update({ fixture: flags.has("--fixture"), recut: flags.has("--recut") });
   else if (cmd === "status") status();
   else if (cmd === "narrate") await narrate();
   else if (cmd === "html") await html();
@@ -758,7 +787,7 @@ try {
   else {
     process.stderr.write(
       `unknown command ${JSON.stringify(cmd)}\n` +
-        "usage: repohealth.mjs [update [--fixture] | status | narrate | html | plot [--fixture] | " +
+        "usage: repohealth.mjs [update [--fixture] [--recut] | status | narrate | html | plot [--fixture] | " +
         "judge <event-id> [--yes]] [--root=<path>] [--scope=<subdir>]\n",
     );
     process.exit(2);

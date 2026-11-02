@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
+import { Stowable, StowButton } from "./Stowable";
 import {
-  Boxes, Check, CloudDownload, CloudOff, Download, HardDrive, Loader, PackageCheck, PackagePlus, Pause, Play, Plus,
+  Boxes, Check, CloudDownload, CloudOff, Download, Loader, PackageCheck, PackagePlus, Pause, Play, Plus,
   RotateCw, Save, Settings, Smartphone, Trash2, TriangleAlert, X,
 } from "lucide-react";
 import { BRAND, DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
 import { autoPull, pulls, setAutoPull, type PullRecord } from "./pull";
-import { autoSaveOutPref, saveNow, setAutoSaveOut } from "./download";
+import { saveNow } from "./download";
 import { browserPullAsk, downloadAction, downloadStatus, pullGone, stripRows } from "./downloadState";
-import { nativeSaveSupported } from "./nativeSave";
 import { fmtSize } from "./format";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
@@ -15,20 +15,19 @@ import { RadioRows, Button, Row, RowTitle, RowSub, Hint } from "./kit";
 import { Empty } from "./Empty";
 import { hostBase, isNativeShell } from "./hostUrl";
 import { LS, lsGet, lsSet } from "./storage";
-import { nativeDropAfterSave, nativePullSupported, setNativeDropAfterSave } from "./nativePull";
+import { nativePullSupported } from "./nativePull";
 import { ConfirmButton } from "./Confirm";
 import { showToast } from "./toast";
 import {
-  allowToggle, autoInstallText, cleanedText, installIntroText, installOffer, installStatusText, installVerbText,
-  NO_INSTALL, toggleAllow, type InstallCaps,
+  allowToggle, autoInstallText, cleanedText, installIntroText, installOffer, installStatusText, installVerbText, repeatedVersionText,
+  isApkRow, NO_INSTALL, toggleAllow, type InstallCaps,
 } from "./installPolicy";
 import {
   installStatus, nativeInstall, nativeInstallSupported, openInstallSettings,
   readInstallAllow, writeInstallAllow,
 } from "./nativeInstall";
-import { SetLine, SetNote, SetSwitch } from "./SettingsKit";
-import { nativeInfo } from "./webUpdate";
-import { APK_0_1_8, apkNeedWords, apkOk } from "./apkGate";
+import { SetLine, SetNote } from "./SettingsKit";
+import { PullShellSettings } from "./PullShellSettings";
 
 interface Props {
   repos: RepoTarget[];
@@ -41,8 +40,11 @@ interface Props {
   onDismiss: (id?: string) => void;
   /** Open the apps list. The install count here is a COUNT ON A CONTROL, so it
    *  opens exactly what it counted rather than leaving a number to re-derive
-   *  from rows that may no longer be on the phone (`AppsSheet.tsx`). */
-  onOpenApps: () => void;
+   *  from rows that may no longer be on the phone (`AppsSheet.tsx`).
+   *  The screen of this phone's own apps (`useAppsDoor`). Absent while no extension owns that
+   *  screen: its pointers here are then OMITTED, never drawn dead — the downloads list is complete
+   *  without them. */
+  onOpenApps?: () => void;
   /**
    * Open on the RULES pane, with this repo already picked.
    *
@@ -129,17 +131,6 @@ const PRESETS: { label: string; patterns: string[] }[] = [
 export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismiss, onOpenApps, rulesFor, onClose, online = true }: Props) {
   const [records, setRecords] = useState<PullRecord[]>([]);
   const [auto, setAuto] = useState(autoPull());
-  const [autoSave, setAutoSaveState] = useState(autoSaveOutPref());
-  // Held by the shell (the save it follows runs with the page frozen), so it is
-  // ASKED on open. Undefined: no shell, or one older than the switch.
-  const [dropCopy, setDropCopy] = useState<boolean | undefined>(undefined);
-  const [phoneApk, setPhoneApk] = useState("");
-  useEffect(() => { void nativeInfo().then((n) => setPhoneApk(n?.versionName ?? "")); }, []);
-  useEffect(() => {
-    let live = true;
-    void nativeDropAfterSave().then((on) => { if (live) setDropCopy(on); });
-    return () => { live = false; };
-  }, []);
   // `rulesFor` wins over the primary repo — it is the repo whose menu was
   // tapped, and picking one of fifteen again on a phone select is the step that
   // door exists to skip. Read at MOUNT only: the sheet is a fresh mount per
@@ -185,6 +176,8 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   // Newest build on top — the one you came here for is the one just made.
   const finished = records.filter((r) => r.state === "done" && !r.evicted)
     .sort((a, b) => (b.item.mtime || b.item.ts) - (a.item.mtime || a.item.ts));
+  // Every row's app identity, so a build repeating an older build's version says so.
+  const siblings = records.map((r) => ({ name: r.item.name, pkg: r.pkg, pkgVersion: r.pkgVersion, mtime: r.item.mtime }));
   // Repaint while anything is in flight or counting down a retry — see useTick.
   // Only on the pane that shows those rows: a 1 Hz re-render of the whole sheet
   // while somebody is editing patterns on the rules pane buys nothing and
@@ -205,7 +198,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   // Whether any row here can be installed at all, said once. `installIntroText`
   // answers null in a browser, which is what keeps this off every screen that
   // is not the Android shell.
-  const installIntro = installIntroText(caps, allow);
+  const installIntro = (onOpenApps || records.some((r) => isApkRow(r.item))) ? installIntroText(caps, allow) : null;
   const bgCapable = (typeof navigator !== "undefined" && "serviceWorker" in navigator
     && "BackgroundFetchManager" in self && !hostBase()) || nativePullSupported();
 
@@ -247,10 +240,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       {installIntro && (
         <Hint>
           {installIntro}{" "}
-          {caps.canInstall ? (
+          {caps.canInstall ? (onOpenApps && (
             <Button title="which of your apps install themselves"
-              onClick={() => { track("action:pull.apps"); onOpenApps(); }}><Boxes size={14} /> apps</Button>
-          ) : nativeInstallSupported() ? (
+              onClick={() => { track("action:pull.apps"); onOpenApps(); }}><Boxes size={14} /> android apps</Button>
+          )) : nativeInstallSupported() ? (
             <Button title="open the phone's install-unknown-apps setting"
               onClick={() => {
                 track("action:pull.installSettings");
@@ -322,7 +315,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
         {active.length === 0 && (
           <Empty>Nothing waiting. Files you tap to download land here, and so do the ones a repo's rule fetches on its own.</Empty>
         )}
-        {active.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow}
+        {active.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow} siblings={siblings}
               onAllow={(pkg) => { const next = toggleAllow(allow, pkg); setAllow(next); writeInstallAllow(next); }} />)}
       </div>
 
@@ -330,7 +323,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
         <>
           <div className="section">On this phone <span className="section-hint">· {finished.length}</span></div>
           <div className="list">
-            {finished.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow}
+            {finished.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow} siblings={siblings}
               onAllow={(pkg) => { const next = toggleAllow(allow, pkg); setAllow(next); writeInstallAllow(next); }} />)}
           </div>
         </>
@@ -353,60 +346,8 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </SetNote>
         </SetLine>
 
-        {/* Where a finished download GOES. The save button on every row was a
-            second step nobody wants to take 28 times, and taking it twice made a
-            second copy rather than overwriting the first — so the hand-off is
-            automatic and the rows say what the folder holds. */}
-        <SetSwitch
-          label="save to Downloads automatically" icon={Download} on={autoSave}
-          onChange={() => { const on = !autoSave; setAutoSaveOut(on); setAutoSaveState(on); track("action:pull.autosave"); }}
-          note={nativeSaveSupported()
-            ? "Every file that finishes downloading is put in the phone's Downloads by itself. A file already there is left alone — saving it again would only add a copy beside it."
-            : "In a browser the file is handed to the browser's own downloads, which it may refuse unless a tap asked for it — so here this only covers files you tapped."}
-        />
-
-        {/* One copy, not two: once Downloads holds the file, this app's own
-            copy is the same bytes again. APKs still install — the shell reads
-            the Downloads copy. */}
-        {isNativeShell() && (
-          // The shell's own answer draws the switch; the version gate (`apkGate.ts`, shared with
-          // What's new) words the refusal. A new enough shell still being asked draws nothing yet.
-          dropCopy !== undefined ? (
-            <SetSwitch
-              label="keep only the Downloads copy" icon={HardDrive} on={dropCopy}
-              onChange={() => {
-                const on = !dropCopy;
-                track("action:pull.dropcopy");
-                void setNativeDropAfterSave(on).then(
-                  () => setDropCopy(on),
-                  (e: unknown) => showToast(`could not change it — ${e instanceof Error ? e.message : String(e)}`));
-              }}
-              note="Once a file is in Downloads, this app deletes its own copy."
-              more={<p>Apps still install from the Downloads copy; delete that one and the file has to be fetched again.</p>}
-            />
-          ) : !apkOk(APK_0_1_8, phoneApk) && (
-            <SetLine>
-              <SetNote as="span">
-                This switch {apkNeedWords(APK_0_1_8, phoneApk)}.
-              </SetNote>
-              <Button title="open the Apps screen" onClick={() => { track("action:pull.apps"); onOpenApps(); }}>get the APK</Button>
-            </SetLine>
-          )
-        )}
-
-        {/* Installing is its OWN screen — this is the pointer to it, on the
-            settings pane where somebody looking for "which apps update
-            themselves" will look for it. */}
-        {nativeInstallSupported() && (
-          <SetLine>
-            <Button onClick={() => { track("action:pull.apps"); onOpenApps(); }}>
-              <Boxes size={14} /> apps
-            </Button>
-            <SetNote as="span">
-              Which of your apps install themselves when a new build lands here. {installIntro ?? ""}
-            </SetNote>
-          </SetLine>
-        )}
+        <PullShellSettings caps={caps} installIntro={installIntro} finished={finished} onOpenApps={onOpenApps}
+          onShowFiles={() => setPane("files")} />
       </div>
 
       {/* ── The rules ───────────────────────────────────────────── */}
@@ -526,9 +467,11 @@ const dedupe = (xs: string[]) => Array.from(new Set(xs));
  * "24.0 MB" never revealed that 18 of those MB were already downloaded. Every
  * line below exists to answer one of those.
  */
-function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
+function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
   rec: PullRecord; repos: RepoTarget[]; onDismiss: (id?: string) => void;
   caps: InstallCaps; allow: string[]; onAllow: (pkg: string) => void;
+  /** Every row's app identity, for `repeatedVersionText`. */
+  siblings: readonly { name: string; pkg?: string; pkgVersion?: string; mtime?: number }[];
 }) {
   const { item, state, received, error, attempts, rate, nextRetryAt, wireBytes, evicted, saveError } = rec;
   const now = useTick(state === "downloading" || (state === "queued" && !!nextRetryAt));
@@ -591,6 +534,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
   const offer = installOffer(installRow, caps);
   const installLine = installStatusText(installRow);
   const autoLine = autoInstallText(installRow, caps, allow);
+  const repeatLine = repeatedVersionText({ ...installRow, mtime: item.mtime }, siblings);
   const allowSwitch = allowToggle(installRow, caps, allow);
 
   const showBar = total > 0 && received > 0 && state !== "done";
@@ -656,6 +600,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
         {installLine && (
           <RowSub className={rec.install === "failed" ? "warn" : undefined}>{installLine}</RowSub>
         )}
+        {repeatLine && <RowSub className="warn">{repeatLine}</RowSub>}
         {offer.reason && <RowSub className="dim">{offer.reason}</RowSub>}
         {autoLine && autoLine !== offer.reason && <RowSub className="dim">{autoLine}</RowSub>}
         {state !== "done" && (wireBytes ?? 0) > received + 1024 && (
@@ -715,7 +660,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
         {allowSwitch && (
           <Button className={allowSwitch.on ? "active" : ""} title={allowSwitch.label}
             onClick={() => { track("action:pull.installAuto"); onAllow(allowSwitch.pkg); }}>
-            <PackageCheck size={16} /> auto-install: {allowSwitch.on ? "on" : "off"}
+            <PackageCheck size={16} /> install by itself: {allowSwitch.on ? "on" : "off"}
           </Button>
         )}
         {/* The one refusal a tap can fix. */}
@@ -788,6 +733,10 @@ export function PullBar({ records, onOpen, onRemove }: {
   const stalled = !!running && now - (running.lastProgressAt ?? running.updatedAt) > 12_000;
   const rest = active.length - (running ? 1 : 0);
   const queueTail = queueLeft > 0 ? ` · ${fmtSize(queueLeft)} left` : "";
+  // What a fold is keyed on (`stow.ts`): one fact per file in the strip, and
+  // one more per file that stopped — a new download or a failure is news and
+  // brings the strip back; progress on a file already there is not.
+  const stowKey = active.flatMap((r) => [r.item.id, r.state === "failed" ? `failed ${r.item.id}` : ""]).join("\n");
   return (
     /* `pull-strip` marks it as the INCOMING half of the strip: it is pure
        progress, carrying no verdict and no action but its own sheet, which is
@@ -802,6 +751,8 @@ export function PullBar({ records, onOpen, onRemove }: {
        does not give any of it back, so this strip claimed the whole screen and
        the repo list had nowhere to render. Reopening the app did not help: the
        download is still in the queue, so the strip is still mounted. */
+    <Stowable slot="downloads" stowKey={stowKey} label="downloads" icon={CloudDownload}
+      detail={running ? `${pct}%` : failed.length ? `${failed.length} stopped` : `${active.length}`}>
     <div className={`outbox-recover pull-strip ${failed.length || stalled ? "failed" : running ? "sending" : "queued"}`}>
       {running ? (stalled ? <CloudOff size={14} /> : <Loader size={14} className="spin" />) : failed.length ? <TriangleAlert size={14} /> : paused.length ? <Pause size={14} /> : <CloudDownload size={14} />}
       <span>
@@ -830,7 +781,9 @@ export function PullBar({ records, onOpen, onRemove }: {
         : <Button title="remove the stopped downloads from the queue"
             onClick={() => onRemove(failed)}><X size={14} /> remove</Button>)}
       <Button onClick={onOpen}><Download size={14} /> Downloads</Button>
+      <StowButton />
     </div>
+    </Stowable>
   );
 }
 

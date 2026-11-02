@@ -28,8 +28,56 @@
  * what the line has been in every version, hint or no hint.
  */
 
-/** ANSI escapes, so a scraped line is text and not styling. */
-const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[PX^_].*?\x1b\\|\x1b\][^\x07]*\x07/g;
+/** ANSI escapes, so a scraped line is text and not styling (`stripAnsi`). */
+const CSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/y;
+const LINE_END = /[\n\r\u2028\u2029]/g;
+
+/**
+ * ANSI escapes removed, exactly as replacing every match of the regex
+ * `/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[PX^_].*?\x1b\\|\x1b\][^\x07]*\x07/g` with ""
+ * did, but as a scan. That regex was quadratic on PTY bytes (CodeQL
+ * `js/polynomial-redos`): every unterminated `ESC P` / `ESC ]` re-scanned to the
+ * end of its line or of the tail. Same removals: a CSI as before (sticky); a
+ * DCS/SOS/PM/APC runs to the FIRST `ESC \` after it unless a line terminator
+ * (what `.` will not cross) comes first; an OSC runs to the first BEL. The next
+ * ST / BEL / line end is looked up once and reused while it still lies ahead,
+ * so the whole scan is linear.
+ */
+export function stripAnsi(s: string): string {
+  let out = "";
+  let from = 0;
+  // Next index at/after the point last looked up; -1 = none ahead; -2 = not looked up yet.
+  let st = -2;
+  let bel = -2;
+  let eol = -2;
+  const ahead = (cached: number, at: number, find: (at: number) => number): number =>
+    cached === -1 || cached >= at ? cached : find(at);
+  for (let i = s.indexOf("\x1b"); i >= 0; i = s.indexOf("\x1b", i)) {
+    const c = s[i + 1];
+    let end = -1;
+    if (c === "[") {
+      CSI.lastIndex = i;
+      if (CSI.test(s)) end = CSI.lastIndex;
+    } else if (c === "P" || c === "X" || c === "^" || c === "_") {
+      st = ahead(st, i + 2, (at) => s.indexOf("\x1b\\", at));
+      eol = ahead(eol, i + 2, (at) => {
+        LINE_END.lastIndex = at;
+        return LINE_END.exec(s)?.index ?? -1;
+      });
+      if (st >= 0 && (eol < 0 || eol > st)) end = st + 2;
+    } else if (c === "]") {
+      bel = ahead(bel, i + 2, (at) => s.indexOf("\x07", at));
+      if (bel >= 0) end = bel + 1;
+    }
+    if (end < 0) {
+      i++;
+      continue;
+    }
+    out += s.slice(from, i);
+    from = i = end;
+  }
+  return from === 0 ? s : out + s.slice(from);
+}
 /** "17s", "9m 20s", "450ms" — the elapsed field of the parenthetical. */
 const DUR_RE = /^(?:\d+(?:\.\d+)?\s*(?:ms|s|m|h)\s*)+$/i;
 /** Terminal affordances. The reader is not a terminal and has its own key bar,
@@ -128,7 +176,7 @@ export interface WorkingLine {
  */
 export function workingLine(tail?: string): WorkingLine | null {
   if (!tail) return null;
-  const lines = tail.replace(ANSI, "").split(/[\r\n]+/);
+  const lines = stripAnsi(tail).split(/[\r\n]+/);
   const clean = (raw: string | undefined) => (raw ?? "").replace(/[│┃|╭╮╰╯─]/g, " ").replace(/\s+/g, " ").trim();
   let weak: WorkingLine | null = null;
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -211,5 +259,5 @@ const SCROLL_FOOTER = /\bto scroll\b/i;
  */
 export function scrollPanelOpen(tail?: string): boolean {
   if (!tail) return false;
-  return SCROLL_FOOTER.test(tail.replace(ANSI, "").slice(-PANEL_WINDOW));
+  return SCROLL_FOOTER.test(stripAnsi(tail).slice(-PANEL_WINDOW));
 }

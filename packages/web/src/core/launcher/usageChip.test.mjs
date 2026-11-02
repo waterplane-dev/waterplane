@@ -94,3 +94,12 @@ test("the markup keeps today's claude chip and never prints ? for another source
   const other = src.slice(src.indexOf("function OtherFace"), src.indexOf("/** The long-press wording"));
   assert.ok(!other.includes('"?"'), "another source never draws ?");
 });
+
+test("no 5-hour window on the plan: the face collapses to the week, never a `?`", () => {
+  const u = info({ sessionPct: null, sessionResetAt: null, sessionGoneSince: T - 3600_000 });
+  const f = infoFigures(u);
+  assert.equal(f.noSess, true);
+  assert.equal(infoFigures(info({ sessionPct: null })).noSess, undefined, "a bare null is not 'no window'");
+  const src = readFileSync(new URL("./UsageChip.tsx", import.meta.url), "utf8");
+  assert.match(src, /\{!f\.noSess && <>/, "chip and inline strip both gate the 5-hour figure on noSess");
+});

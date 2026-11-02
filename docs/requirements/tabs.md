@@ -71,3 +71,8 @@ A button at the tab strip's left edge opens every open tab as a readable vertica
 - asked: 2026-10-19
 - shipped: 94b41cdc, 4666311a, 73267045, 3d4d2dda
 
+### R-tabs-016 · shipped
+A lock mark appears on a session's tab while that session is waiting for vault approval.
+- asked: 2026-10-30
+- shipped: 9b9e87e1
+

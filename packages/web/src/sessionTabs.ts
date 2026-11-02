@@ -479,7 +479,7 @@ export function filterStrip(all: readonly StripTab[], query: string, statusWord:
 
 /** The chord that opens the list from anywhere — Ctrl+E, VS Code's quick
  *  open. Ctrl only: ⌘E belongs to the browser, and Alt is a typed character on
- *  a Mac. Pressed again with the list up it steps down the list, as there. */
+ *  a Mac. Pressed again with the list up it closes it — a toggle. */
 export function isTabsListPress(e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing?: boolean }): boolean {
   return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && e.key.toLowerCase() === "e";
 }

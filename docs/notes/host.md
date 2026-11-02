@@ -146,7 +146,7 @@ Plus a fourth package that is deliberately **not** a workspace:
     the explicit override that ignores both the hold-off and the gap, because a tap is the user
     overruling exactly that clock. Queue place rides on `SessionLimit.queuePos`/`resuming`/`first`,
     the host-wide half on `limit.config` (`resumingId`, `resumingIds`, `holdUntil`, `mode`). UI:
-    `LimitSheet.tsx`, reached from the launcher's "N at limit" chip. Verified by
+    `features/limits/BlockedSheet.tsx`, reached from the launcher's "N blocked" chip. Verified by
     `e2e-limitqueue.mjs`.
   - **Sequential or parallel — the release mode** (`LimitResumeMode`: `one` / `repo` / `all`,
     `limit.setMode`, persisted beside the global switch in `.waterplane/limit.json`). The serialization
@@ -174,6 +174,9 @@ Plus a fourth package that is deliberately **not** a workspace:
     (`resumeGuards`), and the resurrect handover moves the slot to the new session id.
     `e2e-limitparallel.mjs` pins the three claims that matter: the probe is alone, two repos overlap,
     two sessions in one repo never do.
+    (2026-11-02, C2: the set, the proof, the gap, the guards and `canResumeAlongside` moved WHOLE
+    into `recover/wavegate.ts` — `inFlight`, `canGoAlongside`, `handOver` — with this queue as its
+    account-scope policy; the net retry runs a second, host-scope instance. See the `recover/` section.)
   - **Limit-EXIT resurrection:** the current CLI often *quits* on a plan limit (prints the `/usage-credits` banner and exits) instead of parking at a wait-menu — so there is no live PTY to type `continue` into. `sessions.ts` (`maybeScheduleResurrect`/`resurrect`) detects a limit banner in an exited session's tail and reopens the conversation with `--continue` at the reset time (else `WATERPLANE_LIMIT_RETRY_MS`), carrying the attempts count forward so it stays bounded by `WATERPLANE_LIMIT_MAX_ATTEMPTS`. A user **kill/remove** sets a `killed` flag that suppresses resurrection; a clean (non-limit) exit is never resurrected. The backlog re-adopts the revived session for its repo (`resolveRepoSession` → `diedAtLimit`) so queued work follows its own session across the bounce. Verified by `e2e-resurrect.mjs`.
 - `push.ts` — Web Push (VAPID); fires on prompt-detected and turn-finished (idle). Notifications can carry an `image` (opens the annotator) or a `file` (outbox artifact — tapping posts `download-file` to an open window — or encodes `dlRepo`/`dlPath`/`dlMtime` in the cold-start hash — and the app queues it through `web/download.ts`; the browser is never navigated at `download=1`, which sets Content-Disposition attachment). New non-image outbox files (APK/zip/pdf…) are detected per turn like images and notify with a download tap; limit events append to `<STATE_DIR>/limit-events.jsonl`.
 - `notifyprefs.ts` — **which notification KINDS may fire at all** (`<STATE_DIR>/notify.json`). Every alert the daemon raises went two places unconditionally: the in-app feed and, when subscribed, an OS push. That is right for the kinds that need a human — a session parked on a question, a usage limit — and wrong for `idle`, the "Turn finished" ping, which fires once per turn per session: a handful of agents working a backlog produces a notification a minute, and the observed result is a feed that is ~40 identical "Turn finished" rows with the two urgent kinds buried somewhere inside it. The switch had to exist, and the default had to change. **The gate is on the host, not in the client.** A client-side filter can only hide a row it has already been sent — the phone still buzzed, which is the half that actually interrupts someone — and the synced-settings store cannot hold it either, because `settings.ts` keeps opaque strings the daemon deliberately never parses (that opacity is what lets the web bundle update without the daemon). So it is its own small store, checked inside `server/clients.ts`'s `notify()` before the feed entry, the broadcast and the push alike: a muted kind leaves no trace anywhere, rather than being recorded and hidden. **Sparse by construction** — only the kinds the user has explicitly touched are stored, so a kind added in a later version arrives with its own default instead of being silently muted by a file written before it existed (`notifyEnabled`/`cleanNotifyPrefs` in `@waterplane/shared`, where the client checks the same rule to draw the switches). The one bypass is `pull`: a payload carrying a pull id is not an alert but the TRANSPORT for auto-download — the service worker starts a Background Fetch from the push handler with the app closed — so gating it would silently turn auto-pull off for anyone who muted "artifact". Wire: `notify.prefs.set` → a `notify.prefs` BROADCAST (the mute follows the account, so a second device must not keep showing a switch the desktop just flipped), plus `notify.prefs` unprompted on hello. Verified by `e2e-notifyprefs.mjs`.
@@ -201,7 +204,7 @@ Plus a fourth package that is deliberately **not** a workspace:
 - `thumbs.ts` — **server-made image thumbnails**, the single biggest bandwidth lever. The gallery grid, the new-image strip and the backlog attachment row used to point an `<img>` at the ORIGINAL artifact: measured across this machine's outbox dirs, 1170 images averaging 607 KB (worst case 14 MB), so one scroll through a 300-row grid was >100 MB — unusable on a roaming link. A `?thumb=<w>` on the artifact/inbox GET routes returns a JPEG instead (a real 3.25 MB screenshot → 18 KB at 320 px, 63 KB at 640 px). **No image library is added:** node has no decoder and `sharp` is a native dep that would have to build on every host, so it shells out to whatever the platform already ships — `sips` on macOS (part of the OS), ImageMagick or ffmpeg elsewhere — the same way `host.ts` does screen capture. Widths come from a fixed allow-list (an open one would let a caller fill the cache); results are cached in `<STATE_DIR>/thumbs/` keyed by **path+mtime+size+width**, so a regenerated file at the same path never serves a stale thumb, and the dir self-prunes oldest-first. **Null always means "serve the original"** (no converter, unsupported type, source already under 48 KB, conversion failed) — the feature degrades to the old behaviour rather than breaking. Two carve-outs in `api.ts`: `download=1` always sends the real file, and a VIDEO poster that can't be produced answers 404 rather than falling through — falling through would push the whole movie into an `<img>`/`poster`. Verified by `e2e-thumbs.mjs`.
 - `httpio.ts` — response compression + conditional GETs, in one place so every route gets both. `sendBody()` negotiates brotli (quality 4 — near-gzip encode speed, better ratio) then gzip, only for compressible types over 1 KB, and never for a 206 (a compressed byte range is meaningless). `notModified()`/`statTag()` add ETag+304: artifacts revalidate, versioned thumbs (`&v=<mtime>` in the URL, so the URL changes when the file does) are `immutable` for a week, and Vite's content-hashed `/assets` are `immutable` for a year while `index.html` revalidates. Before this, every transcript poll re-sent hundreds of KB of raw JSON and every gallery revisit re-downloaded images the phone already had.
 - `builds.ts` — `BuildManager`: per-repo named build commands (persisted in `<repoDir>/.waterplane-shared/builds.json`, COMMITTED with the repo, plus this desktop's own gitignored `<repoDir>/.waterplane/builds.json` — see *two files, one list* below), runnable from the phone WITHOUT a claude session — the **token-limit escape hatch** (still build an APK when Claude is rate-limited). Each run spawns `$SHELL -lc <cmd>` under node-pty, streams output (`build.output` frames, broadcast to all — builds are rare, no per-session attach gating; `full` on reconnect replays the retained tail), and on completion scans the repo (incl. `build/`/`dist/`/`target/`, which the gallery skips) for build-output files touched during the run → surfaces them as `BuildArtifact`s downloaded via the normal artifact endpoint (`files.ts` `DOC_EXT` was widened to cover apk/aab/ipa/jar/… so the serve path allows them). The output scan reads dirents (only candidate files are `stat`ed), never follows symlinks, visits output-looking dirs (`build`/`dist`/`out`/`outputs`/`target`/`bin`/…) FIRST and bounds itself at 200k entries — a flat 40k budget that `stat`ed every entry made detection depend on readdir order in a repo with a big data tree (one app repo: 47k entries, 41k of them under `service/data/`), so a successful build could show no artifact at all. `.iq`/`.prg` (Garmin Connect IQ) are recognised alongside apk/aab/…. **A build that wrote NOTHING still names the artifact.** "Touched during the run" is the right test for what a build PRODUCED and the wrong one for what it can hand you: an incremental build whose outputs are current writes no file at all — gradle prints BUILD SUCCESSFUL and "52 actionable tasks: 2 executed, 50 up-to-date" — so a green `assembleRelease` offered zero downloads and read as a broken setup. With nothing fresh, detection falls back to the newest matching deliverables in the repo, each flagged `stale` with its `mtime`, and the sheet's row says "unchanged by this run": "here is the APK" and "this run made it" are different claims, and only the honest pair is worth showing. Optional per-build sub-dir is traversal-guarded. **Two files, one list.** The owner asked for build buttons on every machine and clone of a repo, and chose a second, committed folder over un-ignoring one file inside the state dir: `.waterplane-shared/` (`BRAND.sharedDirName`, `repoSharedDir`, `sharedRel`; new with this identity, so no legacy spelling) holds the `builds.json` every checkout gets, while `.waterplane/builds.json` stays for what is true of THIS desktop alone — a `JAVA_HOME` path, a local SDK. `list()` is shared then local, and a local entry with a shared id REPLACES that entry in place: a machine override, never a second button. `save(repo, list, local?)` partitions the phone's whole list back — ids in `local` go local; with no `local` (an older bundle) an id stays where it lives and a NEW one goes shared, because reaching every checkout is the point — and a shadowed shared entry is kept exactly as it is, so overriding here never edits what other checkouts run. A file is written only when its content changed (the shared one is in git; a no-op save must not dirty the tree), an emptied local file is deleted, no shared file is created to hold nothing, and a file that exists but does not parse is never overwritten. Wire: `build.list` carries optional `localIds` (absent from an older host = nobody said), `build.save` optional `local`; no `PROTOCOL_VERSION` bump, both are additive. `onboard.ts`' `bindToolchain` saves its JAVA_HOME-prefixed copies as LOCAL overrides; the `builds-configured` setup row reads the merged list and its fix writes the SHARED file (`wx`). Trust model = same as spawning `claude`: the shared file is part of the checkout and exactly as trusted as it (the same buttons run that checkout's gradle files and `package.json` scripts anyway), and a run SNAPSHOTS its command at fire time, so a later pull changes the next run, never a recorded one — no separate gate. Pinned by `packages/host/test/buildsmerge.test.mjs`. Wire: `build.list`/`build.save`/`build.run`/`build.cancel`. UI: the repo-row Hammer button → `BuildSheet.tsx`. **The runs list is not this file's any more.** It was an in-memory ring with a hand-written "never evict a still-running run" loop (evicting one would orphan its process and leak its output); a run is now a `{payload:{kind:"build"}, target:{kind:"shell"}}` intent whose id IS the `runId` the wire already carried, so `build.output` frames are unchanged, and the store's compaction rule already guarantees the thing the loop was for — nothing queued, starting or running may leave the file at all. It guarantees the other half too, which the ring never did: a build that was running when the daemon died comes back as a row that says so rather than a run nobody can account for. The config is RESOLVED and snapshotted onto the row at fire time (name, command, guarded working dir), for two reasons — `builds.json` is edited between runs and a row that renames itself afterwards is a lie about what ran, and every refusal ("unknown build", "invalid working dir") is answered synchronously while there is still a socket to tell. `cancel` records that the death was ASKED FOR, because an exit code from a `kill` is otherwise indistinguishable from a failing command, and the row settles `canceled` rather than as one more red `failed`. **What a run produced is not what a person is handed** — see `artifacts.ts` below. Verified by `e2e-build.mjs` (which runs a second, no-op build to pin the stale fallback).
-- `installlog.ts` — **which version of what is on which phone.** Every other part of the download path is a conversation between one desktop and one device, and this is the one question that is not: a build produced here is fetched by every phone whose allow-list names its package and installed by each of them by `ShellPullService`, with the app closed and the document frozen. The only account of that install is a row in the phone that did it — so *is the new build on both phones, and when did the second one get it?* is unanswerable from any single device and trivially answerable here, because this is where the builds came from and the only thing that outlives a reinstall of the app. The store is `settings.ts`' posture exactly: `<STATE_DIR>/installs.json`, tmp+rename, debounced, flushed on SIGTERM, cleaned on the way IN as well as out (a desktop's JSON file is hand-editable, and a row that cannot say what was installed is a gap pretending to be a log line wherever it is read). **It records and never decides** — nothing here installs, refuses or instructs a phone; it is an account of what already happened (`CLAUDE.md`). Three rules carry the whole design. **A report is a RE-STATEMENT, not an event**: the install worth logging is the one that happened at 3 a.m. with the tunnel down, so a phone cannot send it when it happens — it sends everything it still holds on every `hello`, and the merge is keyed and idempotent (`@waterplane/shared`'s `mergeInstallLog`), which is why the route stays QUIET when a reconnect re-states what is already held. Without that, every handshake would broadcast the whole log to every socket for no news. **The key is `<deviceId>:<pullId>:<at>`, and the `at` is in it on purpose**: installing the same build twice is two things that happened, and a key that folded them would lose the second; a shell too old to stamp `installedAt` falls to `0` and folds its re-installs into one row, which is the honest consequence of not knowing rather than a row per reconnect. **The host stamps only its own clock** — `at` is the phone's and an older shell leaves it ABSENT, so a reader says *reported 08:14*, a claim about the log, instead of *installed 08:14*, a wrong claim about the install. A repeat may FILL IN what was missing (the phone has since read the app's label) and may never blank what was there. The devices are DERIVED per read, never stored beside the entries: a device list that can disagree with the log is one nobody can trust, and a phone whose entries all aged out would otherwise linger claiming installs nobody can see. Wire: `install.get`/`install.report` → `install.log`, additive, `PROTOCOL_VERSION` stays 1, not durable and never queued offline — an ackId protects a delivery that is not already idempotent, and this one is. `packages/shared/test/installlog.test.mjs` (the rules) · `packages/host/test/installlog.test.mjs` (the store).
+- (Moved: the android-apps extension's `host/installlog.mts` owns the log over plugin methods; core's `installlog.ts`, `install.*` messages and hello push are removed — [android-apps-architecture.md](android-apps-architecture.md).) `installlog.ts` — **which version of what is on which phone.** Every other part of the download path is a conversation between one desktop and one device, and this is the one question that is not: a build produced here is fetched by every phone whose allow-list names its package and installed by each of them by `ShellPullService`, with the app closed and the document frozen. The only account of that install is a row in the phone that did it — so *is the new build on both phones, and when did the second one get it?* is unanswerable from any single device and trivially answerable here, because this is where the builds came from and the only thing that outlives a reinstall of the app. The store is `settings.ts`' posture exactly: `<STATE_DIR>/installs.json`, tmp+rename, debounced, flushed on SIGTERM, cleaned on the way IN as well as out (a desktop's JSON file is hand-editable, and a row that cannot say what was installed is a gap pretending to be a log line wherever it is read). **It records and never decides** — nothing here installs, refuses or instructs a phone; it is an account of what already happened (`CLAUDE.md`). Three rules carry the whole design. **A report is a RE-STATEMENT, not an event**: the install worth logging is the one that happened at 3 a.m. with the tunnel down, so a phone cannot send it when it happens — it sends everything it still holds on every `hello`, and the merge is keyed and idempotent (`@waterplane/shared`'s `mergeInstallLog`), which is why the route stays QUIET when a reconnect re-states what is already held. Without that, every handshake would broadcast the whole log to every socket for no news. **The key is `<deviceId>:<pullId>:<at>`, and the `at` is in it on purpose**: installing the same build twice is two things that happened, and a key that folded them would lose the second; a shell too old to stamp `installedAt` falls to `0` and folds its re-installs into one row, which is the honest consequence of not knowing rather than a row per reconnect. **The host stamps only its own clock** — `at` is the phone's and an older shell leaves it ABSENT, so a reader says *reported 08:14*, a claim about the log, instead of *installed 08:14*, a wrong claim about the install. A repeat may FILL IN what was missing (the phone has since read the app's label) and may never blank what was there. The devices are DERIVED per read, never stored beside the entries: a device list that can disagree with the log is one nobody can trust, and a phone whose entries all aged out would otherwise linger claiming installs nobody can see. Wire: `install.get`/`install.report` → `install.log`, additive, `PROTOCOL_VERSION` stays 1, not durable and never queued offline — an ackId protects a delivery that is not already idempotent, and this one is. `packages/shared/test/installlog.test.mjs` (the rules) · `packages/host/test/installlog.test.mjs` (the store).
   **What a review changed, and why each one was reachable.** The cap was spent on `entryAt`, which prefers the PHONE's clock: a device a year fast held the top of the log for a year, and the rows that aged out were every other device's real history — reachable by a wrong unit as easily as by malice, since the key carries `at` and a varying one mints a new row per report. Eviction is `reportedAt` now (the host's own stamp, unspoofable) and only the DISPLAY order is `entryAt`; an equal share is reserved per device and the remainder goes by recency, so one phone alone still gets the whole cap and the share only ever costs the loudest device. An `at` later than the moment the host was told is refused outright — an install is reported after it happens, so that is provably not its instant — and the row then says *reported*, which is true. The key is JSON rather than `a:b:c`, because neither half is shape-checked and `("a:b","c")` and `("a","b:c")` were the same string, which is one phone's install landing on another's row. A failure's words no longer travel onto an outcome that is not a failure: on an `at`-less key (an older shell, where a retry folds onto one row) a failed install followed by a successful one came out `installed` still carrying *no space*, which `cleanInstallEntry` refuses to build in the first place. The load path drops a row with no usable `reportedAt` instead of stamping the boot instant on it — the same invention it forbids for `at` — and per-report truncation sorts by recency first, so a phone holding more terminal rows than one report may carry loses its OLDEST rather than whichever the sender happened to list first. **And `auto` became tri-state**, which was the sharpest of them: `false` is not the absence of a claim, it is the positive claim *a person tapped this*, so every unattended overnight install performed by a shell older than the field was logged as something somebody did by hand. Absent now prints no clause at all.
 - `artifacts.ts` (+ `@waterplane/shared`'s `artifacts.ts`) — **what a build leaves behind, and what it is called.** Three defects, measured across nine repos on this desktop at once, all of them invisible on the phone: three repos each produce a deliverable called exactly `app-debug.apk`, so the download list, the install log and the outbox show one word identifying neither the app nor the build; a script that copies its output to a friendlier name leaves the original in place, both are detected, both are queued, and the phone — which fetches one download at a time — spends 454 MB on one 227 MB APK; and nothing anywhere ever removes an old one (the 6.8 GB of transport files across fourteen repos that produced the sweep came mostly from here). The answer is host-side and not per-repo, because nine repos cannot each be taught this and the tenth is written by an agent that has never read the other nine: after every run, what it produced is FOLDED to the distinct artifacts among them, COLLECTED into `.claude/outbox/` under a name carrying the repo + the variant + the project's own version, and older builds of that same artifact are PRUNED. On by default, per repo, in `<repoDir>/.waterplane/artifacts.json` beside `builds.json` and `autopull.json` — how a project names and keeps its deliverables is a property of the project. Wire: `artifacts.get`/`artifacts.save` → `artifacts.config`, additive, not durable, BROADCAST on a save (`pull.save`'s shape and its reasons, including the containment: it MKDIRs and writes inside a client-named directory). **The rules are in `@waterplane/shared`** so the phone words the switches with the vocabulary the host acts on, and so they are pinned with no filesystem (`shared/test/artifacts.test.mjs`); `familyKey` MOVED there from `autopull.ts` because the prune asks it the same question the download queue does — "is this an older build of the thing I just made?" — and two answers to that would mean the phone de-duplicating one way while the desktop deletes another. **A name that already says which build it is, is kept** (`picture-app-debug-v1.1.0-344.apk`, `fp-functions-bundle-20260922-1042.tgz`): renaming those breaks the link between what the build printed and what arrived. **Identity for the fold is size AND a head+tail fingerprint, never size alone** — two ABI splits of one app are within bytes of each other and folding them would silently drop a release; a file that cannot be read is never folded with anything. **The copy is a COW clone, not a hard link** (`COPYFILE_FICLONE`, falling back to a real copy): links were cheaper and wrong, because `flutter build`, `cp -f` and `printf >` all rewrite their output IN PLACE, so the next build landed inside the artifact collected from the previous one and "the newest 3" became three names for one file. **The prune is narrower than the sweep and deliberately so**: only inside `.claude/outbox/`, only files whose `familyKey` matches something THIS run just produced, only past the newest `keep` (3), never the run's own output, and always through `files.ts`' `deleteArtifact` rather than a second `rmSync` with its own idea of safe — a build cleans up after itself and never touches a family it did not just rebuild. Every action is a LINE IN THE RUN'S OWN OUTPUT: a file appearing in the outbox and an older one ceasing to exist must both be sentences somebody can read afterwards. Nothing here may fail a build — an unwritable outbox, a refused clone or a vanished file degrades to "collected nothing", which is exactly where the feature started — and nothing touches what the build wrote: gradle's tree is not ours to tidy. `packages/host/test/artifactcollect.test.mjs` pins the disk half, `scripts/e2e-artifacts.mjs` the wire and the prune. **The AI that writes a repo's build buttons is told all of this** (`web/buildPrompt.ts`'s `ARTIFACT_RULES`, in both prompts): the first generation of those prompts produced exactly the three defects above, so a generated command must now not copy into the outbox, not stamp a name, and not delete anything.
 
@@ -270,8 +273,8 @@ Plus a fourth package that is deliberately **not** a workspace:
   read-only; a value it cannot read (a `targetSdk` from a variable) is absent, never a number. The
   phone half (install access, the app's auto-install switch, waterplane having done the first install) is
   read on the phone (`installPolicy.ts`). Tested by `apkcheck.test.mjs`.
-- `appready.ts` (+ `apkcheck.ts`' `apkRepoFacts`) — **the same repo half as DATA, across every
-  repo**: `GET /api/apps/readiness`. Measured need (2026-10-09): nine Android apps over nine repos,
+- `appready.ts` (+ `apkcheck.ts`' `apkRepoFacts`; the Apps screen that draws it is the android-apps extension's, which reads it through `api.repoApps()`) — **the same repo half as DATA, across every
+  repo**: read by the android-apps extension through `api.repoApps()` (the former `GET /api/apps/readiness` is gone). Measured need (2026-10-09): nine Android apps over nine repos,
   the repo half a prose paragraph in each repo's setup sheet, the phone half on the Apps screen, the
   outcomes in the install log — and the owner had lost track of which apps were actually set up,
   while Tiptoi passed every repo check and failed on the phone (Play Protect, a new device id) and
@@ -279,7 +282,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   literal `applicationIdSuffix` (the waterplane app installs as `….dev`), key kind, `targetSdk`, outbox
   APKs, which build commands read like APK builds (a label, never a filter), and whether the
   auto-download rule's patterns and size cap take the newest APK — and the PHONE words them
-  (`appReady.ts`, joined with its own half in `AppsSetupPane.tsx`, the Apps screen's `setup` pane):
+  (the extension's `appReady.ts`, joined with its own half and drawn as three steps per app card by `appSteps.ts` + `AppsSheet.tsx`):
   the first `no` is the blocker, `unknown` blocks nothing, the last attempt is this phone's own.
   Primary checkouts only (an agent worktree is the same app twice), one repo at a time on the loop,
   and a package-less module beside a named one (a root `apply false` plugin line, a template) is
@@ -1025,6 +1028,18 @@ the session's own new-image strip) as well as a notification, so its key is doin
 one never had.
 
 ### `deliver.ts`
+
+**A trust box that paints AFTER the words (2026-10-31).** On a loaded machine claude goes quiet
+before it paints its folder-trust box, so the first prompt was typed into a screen that then became
+the box; the echo was never seen, and the blind Return a hooked session gets (to look for the submit
+hook) landed on the box's cursor row — "No, exit" since 2.1.293 — and claude quit (3 of 6 first
+prompts on the benchmark, code 0 in 9 s). Now neither that Return nor the miss sweep's Esc (Esc is
+"cancel", which also exits) reaches a trust box: `answerLateTrust` (`deliverreturn.ts`) answers it Yes
+and returns `retry` — the words provably reached no composer (claude has not booted past the box), so
+the queue sends them again. Withholding only the Return was tried first and HUNG the session: with no
+conversation log `settle.ts` can never say `absent`, so nothing re-sent. That answer no longer guesses on a half-painted box either:
+`1⏎` only beside a drawn "1. Yes" row, otherwise the rows are re-read for 3 s and the delivery
+refused with nothing typed. `delivertrust.test.mjs`.
 
 **The bottom of the render is not the bottom of the screen.** `deliver.echo` — *"confirming a prompt
 reached the composer"* — sat at roughly 30% misses on this host, just the healthy side of amber, and
@@ -3279,7 +3294,7 @@ the CLI and written down before anybody answers. Outside `promptFingerprint` for
   — because "don't spend N attempts on one wall" is an argument about the account, and it stops
   applying the moment one session provably works again (a fresh block or a still-blocked verdict
   makes the wave unproven again). The gap between two resumes is a rate limit that survives every
-  mode. UI: `LimitSheet.tsx` off the launcher's "N at limit" chip. Verified by `e2e-limitqueue.mjs`
+  mode. UI: `features/limits/BlockedSheet.tsx` off the launcher's "N blocked" chip. Verified by `e2e-limitqueue.mjs`
   (serialized default) and `e2e-limitparallel.mjs` (probe first, parallel across repos, never two in
   one worktree).
   **Keep banner phrases out of
@@ -5758,6 +5773,24 @@ ride the wire per id (`BackendInfo.models`, both optional) and `shared/windowadv
 `windowAdviceText` is the ONE sentence, drawn under `ModelField` — only when both are measured and
 the first request took at least a quarter of the window.
 
+**2026-10-31 — what a local model actually got (benchmark: `.claude/outbox/local-agents-report.md`).**
+Three changes, each measured. (1) `Skill` joined `LEAN_TOOLS`: this repo's CLAUDE.md routes its
+rules into skills ("load `web` before editing packages/web"), and without the tool a lean session was
+told to load what it could not — +~2.4k tokens (schema + the skill listing). (2) The window: Ollama
+0.3x+ gives a Modelfile with no `num_ctx` a MEMORY-chosen default (here 262k on a 64 GB box: 45.6 GB
+resident, the box into swap, a one-word turn 4 min; the same weights with `num_ctx 65536`: 25.6 GB, 19 s
+cold). A loaded runner's `/api/ps` `context_length` is now the window first (`windowFromPs`), and a
+model the boot catalogue never saw (pulled or created later) is measured on its first launch for the
+next one (`measureDeps`) — before, every such launch went without `CLAUDE_CODE_MAX_CONTEXT_TOKENS`
+and the CLI assumed 200k against a 64k runner. Ollama's `/v1/messages` ignores a warm-up's
+`num_ctx` and RELOADS at its default, so the host cannot cap a window itself: a `num_ctx` variant is
+the person's (docs/guide-other-agents.md). (3) Local sessions start with
+`--setting-sources project,local` (`WATERPLANE_CLAUDE_LOCAL_USER_SETTINGS=1` keeps the user file): a user-level hook that injects "respond terse" on every prompt took
+an 8B model over entirely ("Mode active. Ready." — no task). It also drops the user's permissions,
+which the 2026-10-02 spike ruled not ours to drop; the owner flipped the default to OFF on
+2026-10-31 after the benchmark (local sessions run in bypass, so the lost permissions rarely matter,
+and Claude Code offers no way to drop one hook alone).
+
 #### `backends/claude-endpoint.ts` — the real `claude`, pointed at any Anthropic-compatible URL
 
 Same shape as claude-local, configured by `WATERPLANE_CLAUDE_ENDPOINT_URL` / `_MODELS` (`id` or
@@ -7095,6 +7128,21 @@ One rule now serves both paths (`SessionManager.limitRetry`): a session still
 running behind a block, and one that exited at it. They had two copies of the
 cadence and only one of them had been thought about since.
 
+**The bare weekly time is now a lower bound, not dropped** (owner, 2026-10-31).
+Point 1 above kept the log's instant and still threw the screen's away: a weekly
+notice naming only a clock time ("7pm") had nothing to wait for but the blind
+ladder. The owner chose the earliest possible reset instead. `markLimitBlocked`
+keeps the detector's resolution of that time (its next occurrence, in the
+notice's zone — no second parser) and marks the block `limitResetKind: "daily"`;
+`nextLimitAttempt`'s `daily` then waits for it with no ladder underneath (one
+probe at attempt 0 survives when it is beyond the horizon), and an attempt there
+that finds the wall still up rolls the instant forward by whole days — one
+attempt a day, at the earliest moment it could lift, until it does. The attempts
+cap, the 8-day patience clock and the host-wide hold-off bound it as before. A
+`dated` instant (log or a backend's channel) set on the block is never
+overwritten by a later bare time. The resurrect path asks the same rule.
+Pinned: `packages/host/test/weeklybare.test.mjs`.
+
 ### …and which session replaced which, across a restart
 
 `revivedBy` — dead session id → the one `doResurrect` opened for it — was
@@ -7133,8 +7181,8 @@ whether to adopt it, and a carry older than `LIMIT_CARRY_MS` is dropped — a
 session that came back, worked for a week and met a new wall must not adopt the
 old one's clock and give up on arrival.
 
-The give-up notification is now said once per block (`noteGaveUp` +
-`Session.limitGaveUp`): both callers are re-asked by the minute sweep, so
+The give-up notification is now said once per block (`noteGaveUp` + the
+`Session.gaveUp` latch, `recover/giveuplatch.ts` — see the `recover/` section): both callers are re-asked by the minute sweep, so
 emitting from them directly pushed one notification a minute for as long as the
 wall stood.
 
@@ -8500,7 +8548,7 @@ things:
   probe (at least `PARK_MS` out). The slice rewrites the record on every move while stalled. Ladder
   states stay memory only (a restart types nothing).
 - **Dismiss only HIDES** (2026-10-29, owner): `session.netRetryCancel` on a `gaveup` sets
-  `dismissed: true` and nothing else — the bar (`NetRetryBar`) draws nothing for it, `netStalledOf` and
+  `dismissed: true` and nothing else — the bar (`BlockBar`) draws nothing for it, `netStalledOf` and
   `netRetryStalls` ignore the flag, so the row keeps its note and the ceiling still skips it. It used
   to clear `netRetry`, which ended the stall and let the ceiling FAIL the row an hour later. A stall
   ends only on a real turn end (`turnEnded` clears the episode), a person typing (`typed`/`turnStarted`),
@@ -8534,7 +8582,7 @@ things:
   `features/limits` cannot import it), with the env-forced-off sentence. `netretry.set` off now
   cancels only PENDING ladder rungs and stops probes: a stall is the record the row's note and Retry
   now stand on. Retry now clears `probe` and `dismissed`: a person's tap is a new episode.
-  NetRetryBar's gaveup state offers the same `retry now`.
+  BlockBar's gave-up state offers the same `retry now`.
 - **What a stall holds**: a `running` row keeps its session from being reaped and counts as the
   repo's `serial` holder and an automatic slot (`slotBusy`), so the repo's queued work waits behind a
   stalled row until the probe gets a reply or a person acts on it. **The queued row SAYS so**: the
@@ -8577,6 +8625,240 @@ slice on a fake core: probe cadence uncapped, dismiss hides only, switch off / c
 and keep the stall) and `intentsched.test.mjs` (a dismissed gave-up and a probe under way both keep
 the row out of the ceiling; the serial sentence and `holderSessionId` for a stalled holder).
 
+
+## `block.ts` (shared) — why a session is blocked on something outside it (2026-11-02)
+
+Four reasons a session cannot move had four state machines and no common model: the usage limit
+(`limit`), the spend wall (`limit.spend`), the host's net retry (`netRetry`) and signed out
+(`signedOut`/`login`/`cliSetup`). `blockOf(info)` is the one derivation both ends ask (phase A
+of the blocked-sessions consolidation), off TODAY's wire fields — no wire change.
+
+- **Precedence auth > spend > limit > net.** Nothing works while signed out; a spend wall needs the
+  person where a usage window clears by the clock; a net retry most often clears itself.
+- **Phase** is what the host is doing about it: `waiting` (a try is scheduled, or a place in the
+  resume queue), `retrying` (a try in flight: limit `resuming`, net `sent`), `needsYou` (nothing by
+  design: signed out, a spend wall nobody can date, a backend's `needsYou`, auto-continue off),
+  `gaveUp` (the host stopped). A limit with nothing scheduled reads `gaveUp`; today's wire cannot tell
+  that from the instant between a block landing and its first schedule, nor say when a limit-EXITED
+  session will be resurrected (`resume.ts`) — a later `SessionInfo.block` wire field settles both.
+- **A net stall probe is never `gaveUp`**: a `gaveup` row with a next probe is `waiting`, a probe
+  running is `retrying` — the stall is retrying slowly. Only a `gaveup` with no next probe is `gaveUp`.
+- **A dismissed net retry is still a block**: dismiss only hides the line (see `apiretry.ts` above).
+- **No `running` filter**: whether an exited session's block matters is the caller's question.
+
+`sessionWall` reads it as `LaneSessionState.block` (`blockOf(info)?.kind`): `auth` and `net` are walls
+after `limit` (limit/spend stay `limitBlocked`'s), so backlog auto-fire (`autoFireBlocker`), the intent
+ladder (`sessionBlocker`, new `BlockReason`s `auth`/`net`) and hold-until-idle stop typing into a
+signed-out session or one whose net retry is due, running or stalled. A person's
+own send is not asked (`holdWall` drops only `limit`/`awaitingAnswer`). ABSENT = today's behaviour,
+so a builder that does not fill it (the phone, for now) changes nothing. The serial sentence
+words both (`signed out`, `retrying a network error`); a stalled net holder keeps its own sentence.
+
+**A signed-out turn ENDS** (`backends/claude-sources.ts`): `StopFailure` `authentication_failed`
+joined `server_error`/`overloaded` on the `on.ended` path — before, the turn never ended for the host
+and the session read busy until the next hook. `settleStop` carries `TurnEndNet` `signedOut` for it
+WITHOUT asking the net retry (its log read could answer `checking`, whose late verdict would complete
+the work): no turn-finished ping, and the row waiting on the turn stays `running`, as for `gaveup`.
+The silence ceiling still fails such a row with its generic sentence (not yet worded for a sign-out).
+
+**The 529 row** (checked against every log on the owner's desktop): an
+`overloaded` `StopFailure` writes a log row with `error: "server_error"` ("API Error: 529 Overloaded…"),
+so `netRowVerdict`'s `server_error` gate was right. The same sweep found one real transient shape not
+matched — "The response stopped arriving. The response above may be incomplete." (`server_error`) —
+added to `TRANSIENT`. Pinned by `packages/shared/test/block.test.mjs`,
+`packages/host/test/claudehooks.test.mjs` and `packages/host/test/netlog.test.mjs`.
+
+## `recover/` — the recovery primitives
+
+`recoverwrite.ts`, `giveuplatch.ts`, `blockpush.ts` (2026-11-02) and `wavegate.ts` (below).
+Phase C1 of the blocked-sessions consolidation. Two recoveries typed the same blind `continue` with
+two copies of the same lines — the account wall (`sessions/wall.ts`'s `doLimitContinue`) and the net
+retry (`sessions/apiretry.ts`'s `fire`) — and the wall had two give-up paths, one of which skipped the
+latch. The PRIMITIVES now live in a flat folder both slices may import (a slice never imports a
+slice; `boxkit.ts` is the precedent); the POLICY — the ladders, the resume queue, resurrection, the
+stall probe, what a busy session means — stays with the slices.
+
+**`recoverwrite.ts` — one writer.** `continueBlocker` is one ladder in one order (gone, halted,
+wall, turn, box, unsettled), each question switched on by the caller's policy: the net asks all of
+them; the wall does not ask about a running turn (a wall-rejected turn can end without a hook that
+clears the flag) nor about an unreadable dialog, and its own stop-and-wait menu is not a foreign box.
+The halt latch is read for both — before, only the net checked it; the wall relied on the halt
+killing every session. `writeContinue` types the menu answer (raw, as a tap would), `continue`, then
+Return 250 ms later, the history row and the `sent.json` row (`source` per kind: the wall's `limit`
+for usage AND spend — a new `SentSource` is a wire change — and `netretry` for the net). After each
+pause it asks the caller's `stillOurs`; a session that stopped being ours gets no Return and no
+prompt row (the wall used to press Return into a session that had died in the gap).
+
+**Blind, never `deliver.ts` — measured, not assumed.** `deliver.ts` would add the echo proof that
+`continue` reached the composer, and costs: (1) an unconfirmable verdict registers an open delivery
+whose `absent` verdict makes the HOST type the text again up to `RESEND_TRIES` times — a second
+recovery outside the ladder, the wave gate and the cap; (2) up to five Returns until a hook proves a
+turn STARTED, and a `deliver.submit` miss filed when none does — a CLI behind a wall need not start
+one, so every ladder attempt would read as a broken CLI; (3) the echo-miss sweep's Esc closes "a view
+over the composer", which at a wall is the CLI's own menu; (4) every deliver write calls off a pending
+net retry unless the own-write mark covered the whole ~50 s delivery, a person's keystroke included;
+(5) `waitReady` (up to 45 s) would hold the resume queue's one slot. Neither recovery needs the echo
+to decide anything: the wall verifies on the next idle scan (limit rule 1, the banner below our
+echo), the net on the next turn end's log row.
+
+**`giveuplatch.ts` — one latch, one transition.** Per session (`Session.gaveUp`), per LANE: `wall`
+(usage and spend are one `SessionLimit`, one wait) and `net` (one episode, first rung to a served
+reply, a person typing, a wall, or "Retry now"). `giveUpOnce` runs its announcement exactly once per
+episode; `endGiveUp` re-arms it where an episode ends or a new one begins; `holdGiveUp` takes it
+silently for a stall restored from `live/`. The wall's max-attempts branch now gives up through
+`noteGaveUp` (it pushed `gaveup` past the latch). The net's STALL ENTRY is its transition — out of
+rungs, the halt, or a standing give-up adopted at boot — and a probe that gives up again falls back
+into the same stall silently. The net has no push yet: `limit` is the person's usage-limit switch and
+`info` never counts, so a stalled-work push needs a notification kind of its own (a shared change,
+Phase D/E); until then the transition is a log line.
+
+**`blockpush.ts` — the words per kind.** `wallEventWords(phase, id, info)` returns the decision-log
+row, the push and the attention it resolves for one `limit` event; `server/sessionEvents.ts` does
+only the IO. A spend wall is "Out of credit", its plan the one try at a reset somebody can name or
+"add credit or raise the spend cap, then resume" — never "Usage limit", never a retry cadence. The
+usage limit's undated plan no longer says "every N min" off `LIMIT_RETRY_MS` (only the hold-off after
+a failed resume now): it names the booked next try when there is one, else says the tries widen.
+Every string is checked against `detectLimitText`/`detectSpendText` (a session printing it must not
+block). Pinned by `packages/host/test/recoverwrite.test.mjs`.
+
+**`wavegate.ts` — one wave gate per scope (Phase C2).** The account wall's resume queue had the
+rule worth keeping — when several blocked sessions come due together the FIRST goes alone, and only
+its proof that the block lifted lets the rest go — woven into `sessions/resume.ts` with the limit's
+policy. The rule now lives in `WaveGate`, which knows ids, never sessions, and asks a `WavePolicy`
+for everything else: `order()` (who is in line, best first, derived on demand — a waiting id missing
+from it stopped being eligible and is dropped), `mode()` (`one`/`repo`/`all` once proven),
+`group(id)` (for `repo`), `dispatch(id)`, `holdFor(id)` (the hold after a `blocked` verdict),
+`publish()`, the gaps and the settle guard. The gate owns waiting / in flight / proven / forced /
+the hold / the gap timer / one settle guard per dispatch — the same two timers the resume queue
+had, moved (`hostpins`). Verdicts: `resumed` proves the wave; `blocked` withdraws the proof and
+holds the rest; `gone` frees the slot and proves nothing (a park, a cancel); `timeout` likewise.
+A forced request (a person's tap) overrules the hold and the gap, never the first-alone rule.
+
+Two instances today. **Account** (`resume.ts`'s `limitWave`): today's queue unchanged — order is
+`resumeOrder` (go-first taps, starred, longest blocked), the mode is the person's `LimitResumeMode`,
+dispatch resumes in place or reopens with `--continue`, a request clears the booked
+`nextAttemptAt`, `blocked` holds for `LIMIT_RETRY_MS` and re-books every attempt inside it; the wire
+stamps (`limit.queuePos/resuming/first`, `limit.config`) are unchanged. **Host** (`apiretry.ts`'s
+`netWave`, owner decision 2026-11-02: one wave per host): a rung, a park's look-again, a stall probe
+and *Retry now* ASK the gate; its dispatch is `fire()`. Alone, a session goes at once, so a single
+session's ladder timing is what it was. With several due, the oldest give-up types alone; proof is
+its served reply — the turn end, or a served row in its log, looked for every 5 s while the turn
+runs (a served turn can run for an hour; the rest should not wait for it), with a 10-minute ceiling
+(`timeout`: the next one probes alone). Its fresh give-up holds the rest BY ID (`{ by: id }`): they
+wait for that session's own next rung, so one ladder runs per host instead of one per session, and
+no clock races the probe's own timer. The hold outlives the holder's park (a box or a moving screen
+releases its slot `gone`, learning nothing): it goes first again when it asks, and the rest never
+inherit the probe while it waits — measured, `e2e-netretrywave.mjs` failed that way first, since a
+first rung lands inside the 3 s quiet window and always parks. Any fresh give-up makes the wave unproven again. The mode is
+always `all`, 1 s apart: an outage proven over is over for every session, and each was already
+running in its checkout — `repo` would only delay a state the person had. Held sessions say so on
+their existing line (`why`: `NET_WAVE_WHY`, `nextAt` = the probe's next rung when known) and spend
+no rung; behind a STALLED probe they read stalled too (`probe: true` ⇒ `netRetryStalls`), so work
+waiting on them is not mistaken for silence. Behaviour changes: *Retry now* waits while another
+session's probe is in flight (before, it typed at once); several sessions failing together no longer
+each run their own ladder. Pinned by `packages/host/test/wavegate.test.mjs`.
+
+**`authgate.ts` + `sessions/signinwait.ts` — the sign-in episode (Phase D1a, 2026-11-02).** The
+third gate instance, at ACCOUNT scope, event-shaped. A sign-out is an account fact: every session of
+that account stops on its next turn (`StopFailure authentication_failed`, which `turn.ts` marks
+`signedOut`), and one sign-in fixes all of them — so they are ONE episode, the person is told once,
+and signs in once from any of them.
+
+- **The account key** (`SignInSlice.accountOf`): a session of the `claude` backend, keyed
+  `claude|<config dir>`. Every pane inherits the daemon's `CLAUDE_CONFIG_DIR` (`tmux.ts`), so all
+  claude panes share one credential store. `claude-local` and `claude-endpoint` launch with a token
+  of their own (`ANTHROPIC_AUTH_TOKEN`) that neither `/login` nor `claude auth status` speaks for, so
+  an auth failure there never joins; their per-session signed-out bar stands as before.
+- **Members** join on every refusal (the hook router calls `signInSignedOut` on each
+  `authentication_failed`) and are kept past the on-screen `signedOut`/`login` flags, which the
+  `/login` flow clears while the stopped turn still needs its `continue`. A member leaves when its
+  own continue got through, when a turn NOT ours starts in it (a person continued by hand), when a
+  wall or a running turn takes it over, or when it ends. **Raw keystrokes do not make it leave**:
+  `/login` is typed into a member. The wire is `SessionInfo.signInWait` (`since`, `signedInAt`,
+  `queued`, `continuing`, `unsure`); `blockOf` reads `needsYou` "signed out", then `waiting` "signed in again —
+  continue?", `waiting` queued, `retrying` in flight, `needsYou` `SIGNIN_UNSURE_DETAIL` while the
+  host cannot tell — and a sign-in link on that screen outranks it all. `blockWallOf` keeps it a wall: automatic work never types into it unasked.
+- **Confirmation by poll + evidence.** While the episode has members and is not confirmed,
+  `claude auth status` is read every `WATERPLANE_SIGNIN_POLL_MS` (30 s), fresh
+  (`claudeSignInState(bin, now, 0)` — the reader's 5-minute "in" cache is the stale answer), and at
+  once on EVIDENCE. **"in" counts only after this episode read "out" or saw STRONG evidence**: a
+  credential the API refused can still read "in" locally, and confirming off it would ask the person
+  to continue into the same wall. Strong: another session's served `Stop`, or the CLI's own
+  post-login row on the screen a sign-in link just left (`login.ts`'s `loginSucceeded`: `Login
+  successful.` [+ `Press <key> to continue…`] as a WHOLE row in the last 12 non-blank rows, measured
+  in the 2.1.x binary). A link leaving the screen WITHOUT that row is weak (an Esc out of `/login`,
+  a scroll and a resize retire it too): it buys a read now, which confirms only as an "in" following
+  an "out" of this episode. No member ⇒ no read at all; confirmed ⇒ the poll stops.
+- **Bounded poll, and "cannot tell".** Each "in" that proves nothing doubles the next delay up to
+  5 min (an "out" or evidence resets it), so a stale credential — or a sign-in done on another
+  machine — costs at most one `claude auth status` per 5 min. After two such reads with no "out"
+  EVER read this episode, members wear `signInWait.unsure`: the reader will never confirm, so the
+  phone offers continue ("continue if you have signed in") instead of a wait that never ends. An
+  "out" clears it; nothing is typed without the tap either way.
+- **Ask, never type** (owner, 2026-11-02). A confirmation stamps `signedInAt` on every member and
+  pushes ONCE; nothing is typed. The person's `signin.continue {ids}` (durable, ackId) is the only
+  way a continue is typed — taken even before a confirmation (the person may know better; the phone
+  offers it after). Non-members are named back in the ack's `reason`.
+- **The wave.** One `WaveGate` per episode: `holdFor` = `{ until: Infinity }`, every request
+  forced, mode `all`, 1 s apart; dispatch = `writeContinue` kind `auth` (sent-log source `signin`,
+  actor `user`). Verdicts: our continue's turn ends on a served `Stop`, or still runs 15 s with no
+  refusal ⇒ `resumed` (the member leaves, the rest go); a fresh `authentication_failed` ⇒ `blocked`:
+  the episode is back to "signed out", the queued rest are taken OUT of line (a later sign-in ASKS
+  again, it never types on an old tap), the poll starts over needing a fresh "out" or evidence, and
+  — only if the episode had been confirmed — ONE `stillOut` push under the same key takes back
+  "signed in again". A box, a moving screen or a person's words in the composer (`draft`, below)
+  parks the member (slot freed, asked again in 5 s, at most 12 times) — on the SAME tap, so the
+  re-ask is stamped with the episode's `generation()` and dropped once the episode went back to
+  signed out or ended (a parked member is outside the gate's queue, so dropping the queue alone
+  missed it: a refused first then had the parked one typed into with no new tap). A turn ending
+  with neither verdict, or none starting in 60 s, frees the slot and leaves the member waiting for
+  a tap. `lift()` is not used: no event releases continues by itself.
+- **"Through" is a heuristic.** `resumed` = a served `Stop`, or our continue's turn still running
+  15 s with no refusal. A slow refused turn can read resumed; the rest then go, hit the same
+  refusal, and reset the episode to signed out — each typed only on the person's tap, never
+  unasked. Likewise a durable `signin.continue` queued on the phone before a failed wave can arrive
+  and type ONE continue into a still-signed-out session: by design — the person tapped.
+- **Pushes**, notification kind `signin` (attention, key `signin`, `open: {to: "blocked"}`): "Signed
+  out — N sessions stopped" 2 s after the first join (sessions failing together are one count),
+  "Signed in again — continue the N sessions that stopped?" on each confirmation (the second
+  replaces the first under the key); the episode emptying resolves it. Words: `blockpush.ts`'s
+  `signInWords`.
+- **Across a restart**: `signedOut` and each member's `since` ride in the `live/` record
+  (`LiveMeta.signedOut`/`signInSince`, rewritten on the signed-out edge and on join/leave), so the
+  auth wall and the intents' hold behind it survive `npm run restart`; the episode re-forms from the
+  re-attached members (`SignInSlice.restored` → `AuthEpisode.restore`) with NO push — a restart is
+  not a transition. A tap, a park and a confirmation are not restored: the host reads the account
+  again and asks again.
+- **Never over a draft** (all three recoveries, `recoverwrite.ts`'s `continueBlockerNow`): before
+  the first byte, the live composer is read with `composer.ts`'s `composerReading` — the plain render
+  vs the dim-blanked one, the rule delivery's `composerHoldsOnlyHint` asks — and a PERSON's words
+  there are the `draft` rung: typing `continue` + Return would submit "<their draft>continue". A dim
+  hint or proposal is an empty box; a screen with no placeable composer is no opinion (as before).
+  The wall treats `draft` as its busy path (slot released, re-armed in a minute, no attempt spent or
+  announced — also when the composer reappears under its own menu, `writeContinue`'s `draft`, whose
+  menu-answer row then says "menu cleared, continue held: words in the composer") and SAYS so:
+  `SessionLimit.held` (`LIMIT_HELD_DRAFT`) until the next attempt, another blocker or the clear, so
+  `blockOf` gives the reason as `detail` with `nextAt` null — the re-armed time is only the next
+  look, and a countdown lapsing every minute is what the wall must not show. The `limit` "attempt"
+  event fires only once `continue` + Return went out. The net retry parks ("words in the
+  composer"), backing off per episode while the words stay (`draftParkMs`: the park,
+  `WATERPLANE_NET_RETRY_PARK_MS` 30 s, doubling to 5 min; any other look resets it) — each look
+  replays 100 rows. Sign-in parks as above.
+  Pinned by `packages/host/test/authgate.test.mjs`, `recoverwrite.test.mjs`, `scripts/e2e-authretry.mjs`
+  (the stub's `STUB_AUTH_FILE`) and `scripts/e2e-netdraft.mjs` (`STUB_COMPOSER=frame` +
+  `STUB_DRAFT_FILE`: the rung against the real composer shape).
+
+## `toolloop.ts` + `sessions/loopwatch.ts` — a tool loop, told, never stopped
+
+Measured 2026-10-31: qwen3-vl under `claude-local` (the real `claude` CLI against Ollama) ran 20 minutes and made 499 tool calls. 473 of them, back to back, were the SAME Grep (same input) answered with the SAME result, each followed by the same sentence ("I will now search for the correct string to replace"). Nobody was told. Across 4,000 ordinary session logs on this desktop the longest run of identical completed calls was 2.
+
+So the rule (`toolloop.ts`, pure, `packages/host/test/toolloop.test.mjs`) is exactly that shape and nothing looser: a run of completed tool calls whose name, input (key order ignored) and result are all identical. `WATERPLANE_TOOL_LOOP_AT` (default 20, `0` off) is where it speaks — ten times the longest real run. A test-fix-retest loop changes its result or puts an Edit between; a long run of different Reads differs in input; neither can build a run. A result whose call the cursor never saw breaks the run, so a doubt is a miss, never an alarm. A person's prompt breaks it too; a sidechain or meta row is neither progress nor a call.
+
+The output is the existing follow-up flag, `FollowUp.by: "host"`, with the loop in one line ("looks stuck: the same Grep call 20× in a row over 1 min, same result each time — nothing was stopped"). It was chosen over a new field or message because the flag already does everything the signal needs: it rides `SessionInfo.followUp` on the roster, pushes (`followUpPushText`, attention level), shows on the phone's bell and row in its own colour (`--fu-host`), counts in the flag filter, and only a person's tap clears it. `by: "host"` keeps the claim honest — it is not the session's agent asking — and is additive: an older phone's `cleanFollowUp` drops the unknown setter, so the flag is absent there, never misattributed. A flag somebody else already set is never overwritten. One flag per run (`told`); only a different call or a person's prompt re-arms it, so a loop that keeps going after the person cleared the flag is not re-flagged.
+
+Nothing applies itself: no Esc, no halt. The person stops the session with what exists (the key row, close, halt).
+
+Cost: ridden on the agent poll (`sessions/agentpoll.ts` → `core.checkToolLoop`), so it is asked only while a turn or an agent runs, every `WATERPLANE_AGENT_POLL_MS`. The cursor starts at the log's size when first asked — a long conversation is never read whole — and moves on by whole lines (`ctxlog/ctxcursor.ts`'s `readRange`, at most 8 chunks a tick). Only a backend whose log is claude's jsonl is asked (`derive(b).keepsClaudeLog`). A plugin backend (Copilot, opencode) stays silent today; it could feed the same pure core later from its own tool-call record (a `sources.turns` event or store reader handing `(name, input, result)` triples to `feedLoopRow`'s signature), without a new phone signal.
 
 ## `localcistatus.ts` — the `local-ci` status after a phone push in PR mode
 
@@ -8634,3 +8916,7 @@ reply, a streamed reply repeated under one id, another request) through every re
 first request and requires one answer; `tools/usagerecordpins.test.mjs` is the ratchet — the field name
 `cache_read_input_tokens` is spelled in host code (comments stripped) only there, `sidecar/sidecarclaude.ts`
 excepted because it reads `claude -p --output-format json`'s envelope, a different shape that shares the names.
+
+### `agentbuild.ts`
+
+`GET /api/agent/builds?dir=` and `POST /api/agent/builds/run` (R-apk-020) — an agent runs one of its repo's build BUTTONS exactly as a tap would (`BuildManager.run`), so the output is collected into the outbox, recorded and auto-downloaded; an APK built in the agent's own shell never reaches the phone. Buttons only: an id not in `builds.json` is refused, so the route runs nothing the person cannot see. `key` is required and becomes the intent id (`agent-build-<key>`), so a retried curl is the same run. Same loopback-only, not-a-browser gate as the other agent routes. `optionsCmd` options are not listed (they run only behind the person's approval).

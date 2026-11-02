@@ -14,7 +14,7 @@
  *    minutes left is a coffee, the same number with four hours left is a plan
  *    change.
  */
-import { NO_REPO_COLORS, repoHueIn, type RepoColors } from "@waterplane/shared";
+import { NO_REPO_COLORS, repoHueIn, sessionWindowGoneText, type RepoColors } from "@waterplane/shared";
 import type { SessionInfo, UsageInfo } from "@waterplane/shared";
 import type React from "react";
 
@@ -111,7 +111,7 @@ export function repoAccentStyle(name: string): React.CSSProperties {
 /**
  * Compact "how long ago" label — the ONE of these in the app.
  *
- * There were eight: `ArchiveSheet`, `HistorySheet`, `FilesSheet`, `LimitSheet`,
+ * There were eight: `ArchiveSheet`, `HistorySheet`, `FilesSheet`, `LimitSheet` (now `BlockedSheet`),
  * `SearchSheet`, `QuestionsSheet`, `ScheduleSheet` and `UsageSheet` each wrote
  * their own, differing in whether they rounded or floored and in where they
  * stopped counting. Nothing breaks when eight of these disagree, which is
@@ -271,6 +271,10 @@ export function until(ts: number): string {
 export function usageTitle(u: UsageInfo | null): string {
   const win = (label: string, pct: number | null | undefined, reset: number | null | undefined) =>
     `${label} ${pct != null ? `${pct}%` : "?"}${reset ? ` · resets ${hhmm(reset)} (in ${until(reset)})` : ""}`;
+  if (u?.sessionGoneSince != null) {
+    return `Claude usage — ${win("week", u.weeklyPct, u.weeklyResetAt)}`
+      + `${u.checkedAt ? ` · checked ${ago(u.checkedAt)}` : ""}\n${sessionWindowGoneText()}`;
+  }
   return `Claude usage — ${win("5-hour session", u?.sessionPct, u?.sessionResetAt)}`
     + ` · ${win("week", u?.weeklyPct, u?.weeklyResetAt)}`
     + `${u?.checkedAt ? ` · checked ${ago(u.checkedAt)}` : ""}`;

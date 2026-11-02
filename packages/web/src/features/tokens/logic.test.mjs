@@ -101,3 +101,10 @@ test("hiddenNote names the cut sources, nothing when none", () => {
   assert.equal(hiddenNote([]), "");
   assert.equal(hiddenNote(["Gemini", "Codex"]), "\n+ Gemini, Codex not shown here");
 });
+
+test("usageTitle: no 5-hour window names the week and says why", async () => {
+  const { usageTitle } = await import("../../format.ts");
+  const t = usageTitle({ ok: true, sessionPct: null, weeklyPct: 18, sessionResetAt: null, weeklyResetAt: null, checkedAt: 0, sessionGoneSince: 1 });
+  assert.doesNotMatch(t, /5-hour session \?/);
+  assert.match(t, /No 5-hour window on this plan/);
+});

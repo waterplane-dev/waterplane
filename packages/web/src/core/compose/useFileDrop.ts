@@ -31,8 +31,9 @@ function filesOf(dt: DataTransfer | null): File[] {
 
 const carriesFiles = (dt: DataTransfer | null) => !!dt && Array.from(dt.types ?? []).includes("Files");
 
-/** Route `files` into the session on screen, or say why not. */
-function attach(files: File[], how: "paste" | "drop"): void {
+/** Route `files` into the session on screen, or say why not. Also the compose
+ *  bar's "pick a window" (`windowShot.ts`): a picked window IS a paste. */
+export function attach(files: File[], how: "paste" | "drop" | "window"): void {
   const c = core();
   const repoId = c.world.activeRepo?.id;
   if (!repoId) { c.say.toast("No repo for this session — files have nowhere to go"); return; }
@@ -51,7 +52,7 @@ function attach(files: File[], how: "paste" | "drop"): void {
   c.files.attachFiles(files, repoId);
 }
 
-function askAppend(files: File[], how: "paste" | "drop"): void {
+function askAppend(files: File[], how: "paste" | "drop" | "window"): void {
   const c = core();
   const n = files.filter(isAnnotatable).length;
   const what = n === files.length ? (n === 1 ? "this picture" : `these ${n} pictures`) : files.length === 1 ? "this file" : `these ${files.length} files`;

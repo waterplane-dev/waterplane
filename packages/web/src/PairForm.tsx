@@ -4,7 +4,7 @@ import { KeyRound, Link2, Loader2, Monitor, Pencil } from "lucide-react";
 import { api } from "./api";
 import { pickDeviceName } from "./deviceToken";
 import { browserKV, switchTo } from "./hosts";
-import { deviceModel, deviceName } from "./installLog";
+import { deviceModel, deviceName } from "./deviceInfo";
 import { lanRouteNow } from "./lanLink";
 import {
   fieldsFromPaste, heldTokenFor, pairLinkSentence, pairTargetOf, readRedeemReply, redeemErrorText, storeRedeemed, type PairFields,

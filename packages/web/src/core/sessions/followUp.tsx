@@ -5,7 +5,8 @@
  *
  * Its colour is WHO set it, never the star's gold: `--fu-hand` (you, the
  * accent blue), `--fu-launch` (a launch you ticked, the schedule purple),
- * `--fu-agent` (the session's own agent, teal). `.fu-<by>` sets `color`, so an
+ * `--fu-agent` (the session's own agent, teal), `--fu-host` (the desktop's own
+ * watch — a tool loop — warn amber). `.fu-<by>` sets `color`, so an
  * icon, a line and a chip each take it by `currentColor`.
  */
 import type { ReactNode } from "react";
@@ -17,7 +18,7 @@ import { followUpText } from "@waterplane/shared";
 export const FOLLOWUP_SET = "Flag for follow up";
 export const FOLLOWUP_CLEAR = "Done — clear flag";
 
-/** `.fu-hand` / `.fu-launch` / `.fu-agent` — the colour of who set it. */
+/** `.fu-hand` / `.fu-launch` / `.fu-agent` / `.fu-host` — the colour of who set it. */
 export const followUpClass = (f: FollowUp | undefined): string => (f ? ` fu-${f.by}` : "");
 
 /**

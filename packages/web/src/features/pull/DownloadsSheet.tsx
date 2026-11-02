@@ -3,12 +3,13 @@
  * `PullSheet.tsx`; this only wires it to the core and the feature's store.
  */
 import { PullSheet } from "../../PullSheet";
-import { useCore, useStore } from "../../sdk";
+import { useAppsDoor, useCore, useStore } from "../../sdk";
 import { cfgs, rulesFor } from "./store";
 import { putCfg } from "./actions";
 
 export function DownloadsSheet() {
   const core = useCore();
+  const door = useAppsDoor();
   const configs = useStore(cfgs);
   const rules = useStore(rulesFor);
   return <PullSheet
@@ -25,7 +26,7 @@ export function DownloadsSheet() {
     }}
     onDismiss={(id) => core.conn.liveSend({ t: "pull.dismiss", id }, "dismissed")}
     rulesFor={rules ?? undefined}
-    onOpenApps={() => { core.say.track("overlay:apps"); core.nav.open("apps"); }}
+    onOpenApps={door ? () => { core.say.track("overlay:apps"); door.open({ kind: "all" }); } : undefined}
     onClose={() => core.nav.close("pull")}
   />;
 }

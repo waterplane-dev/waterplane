@@ -42,7 +42,7 @@ export function BuildScheduleForm({ build, entry, usage, options, online, onAppr
 }) {
   const [when, setWhen] = useState<SendWhen>(() => buildScheduleWhen(entry, Date.now()));
   const [vals, setVals] = useState<Record<string, string>>(() => buildScheduleValues(build, entry));
-  const fields = useRuleFields(when, setWhen);
+  const fields = useRuleFields(when, setWhen, usage?.sessionGoneSince != null);
   const preview = previewOf(when, usage ?? undefined);
   const blocker = buildScheduleBlocker(build, vals, when, preview);
   const at = when.kind === "at" ? when : null;

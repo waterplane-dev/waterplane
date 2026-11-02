@@ -3001,6 +3001,24 @@ test("a STALLED row is not failed by the silence ceiling, nor completed by the i
   } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test("a SIGNED-OUT session's row is held like a net stall — never failed with 'no turn-end signal arrived'; the net and plain cases are unchanged", async () => {
+  const { SIGNED_OUT_STALL_TEXT } = await import("@waterplane/shared");
+  assert.equal(SIGNED_OUT_STALL_TEXT, "stopped: the CLI is signed out — sign in, then continue");
+  const hooked = { isHooked: () => true, turnHookSeen: () => true, reapCeilingMs: () => HOUR };
+  const out = new Set(["s-live"]);
+  const { store, root } = restartOver([midTurn("so1")], { ...hooked, sessionIdleMs: () => HOUR * 5, sessionSignedOut: (id) => out.has(id) });
+  try {
+    await store.reconcile();
+    store.kick(); await settle();
+    assert.equal(store.get("so1").state, "running", "signed out: held past the reap ceiling, not failed");
+    assert.notEqual(store.get("so1").result?.ok, false);
+    out.clear(); // signed in again and silent: the ceiling's old verdict returns, unchanged
+    store.kick(); await settle();
+    assert.equal(store.get("so1").state, "failed");
+    assert.match(store.get("so1").result?.detail ?? "", /no turn-end signal arrived/);
+  } finally { store.stop(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test("a queued row held only by a STALLED row's serial claim SAYS so, and points at that session", async () => {
   const { intentVerdict, intentSerialHolders, busyIntentGroups } = await import("@waterplane/shared");
   const cwd = "/r/app";

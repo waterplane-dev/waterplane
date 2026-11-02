@@ -321,6 +321,8 @@ export function repoHealthArgv(
   scope: string | null = null,
   /** The bundled engine without the repo's committed commands (not approved). */
   noOwn = false,
+  /** The person tapped "re-cut": move a series measured under another definition aside and measure afresh. */
+  recut = false,
 ): string[] {
   const argv = engine.kind === "repo" ? [engine.path, step] : [engine.path, step, `--root=${wt}`];
   if (noOwn && engine.kind === "bundled" && step === "update") argv.push("--no-own");
@@ -330,6 +332,9 @@ export function repoHealthArgv(
   // repo into a subtree's series — which is why `readStatus` compares what it
   // asked for against the scope the engine echoes back.
   if (scope) argv.push(`--scope=${scope}`);
+  // A flag, so an engine that predates it ignores it and refuses as before —
+  // the refusal's own sentence then still says what to run by hand.
+  if (recut && step === "update") argv.push("--recut");
   return argv;
 }
 
@@ -468,8 +473,9 @@ const step1 = (
   step: RepoHealthStep,
   onStderr: (chunk: string) => void = () => {},
   scope: string | null = null,
+  recut = false,
 ): Promise<RepoHealthProc> =>
-  spawnOf(deps)(wt, step, onStderr, repoHealthArgv(engine, wt, step, scope, step === "update" && ownGated(engine, wt, deps)));
+  spawnOf(deps)(wt, step, onStderr, repoHealthArgv(engine, wt, step, scope, step === "update" && ownGated(engine, wt, deps), recut));
 
 
 /** The `head` and `behind` the tool prints beside the series.
@@ -784,13 +790,17 @@ export function refreshRepoHealth(
   wt: string,
   deps: RepoHealthDeps = {},
   scope: string | null = null,
+  /** Only ever from a person's tap on the refusal's remedy — never the weekly sweep. */
+  opts: { recut?: boolean } = {},
 ): Promise<RepoHealthView> {
   const key = keyOf(wt, scope);
+  // A tap while a run is in flight JOINS it, recut or not: two `update`s on
+  // one file is the thing single-flight exists to prevent.
   const joined = inflight.get(key);
   if (joined) return joined;
   const started = (async () => {
     try {
-      return await runRefresh(wt, deps, scope);
+      return await runRefresh(wt, deps, scope, opts.recut === true);
     } finally {
       inflight.delete(key);
     }
@@ -799,7 +809,7 @@ export function refreshRepoHealth(
   return started;
 }
 
-async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null = null): Promise<RepoHealthView> {
+async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null = null, recut = false): Promise<RepoHealthView> {
   const now = deps.now ?? Date.now;
   const engine = engineOf(deps)(wt);
   // Nothing to run it with: the read answers the same view, sentence included,
@@ -832,7 +842,7 @@ async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null
           const note = parseRepoHealthProgress(line);
           if (note) run.note = note;
         }
-      }, scope);
+      }, scope, recut);
       if (proc.timedOut) {
         // The words matter: the run was CUT, not answered. Whatever the tool
         // had already appended is on disk and the next refresh carries on from

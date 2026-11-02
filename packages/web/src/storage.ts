@@ -120,11 +120,11 @@ export const KEY_SCOPE = {
   hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", agentWindowWarn: "host", syncTs: "host",
   // identity and the host list itself; healthAxis is this screen's choice
   healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
-  hostSwitch: "device", hostsGone: "device",
+  hostSwitch: "device", hostSwitchFailed: "device", hostsGone: "device",
   // that host's ledger row and LAN identity: parked with it
   deviceToken: "host", lanIdentity: "host", passive: "host",
-  // what that host's install log last said
-  installLog: "host",
+  // what that host's plugin list last said
+  pluginList: "host",
   // the link: the phone's own switches are device, what was MEASURED against a host is host
   dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",

@@ -47,7 +47,7 @@ test("a non-object (corrupt file, array, null) cleans to no preferences at all",
 import { ATTENTION_KINDS, notifyLevel, levelOf, needsYou, gitAttentionKey, buildAttentionKey } from "../dist/index.js";
 
 test("the kinds that wait on a person default to attention; every other kind is information", () => {
-  assert.deepEqual([...ATTENTION_KINDS], ["prompt", "approval", "cli", "disk", "undelivered", "followup"]);
+  assert.deepEqual([...ATTENTION_KINDS], ["prompt", "approval", "signin", "cli", "disk", "undelivered", "followup"]);
   for (const kind of NOTIFICATION_KINDS) {
     assert.equal(notifyLevel(kind), ATTENTION_KINDS.includes(kind) ? "attention" : "info", kind);
   }

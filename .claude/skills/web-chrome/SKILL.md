@@ -1,6 +1,6 @@
 ---
 name: web-chrome
-description: waterplane phone client — the frame around the content (packages/web/src): theme.ts + styles.css, routing.ts and Back (backStep.ts), the link store (link.ts, NetPulseBar.tsx), SessionTabsBar.tsx, repoColors.ts, chromeMode.ts (typing room, full screen), the phone/wide layout (layout.ts, Workspace.tsx), the launcher, CloseSheet.tsx, PassiveScreen.tsx, UpdateBanner.tsx, Markdown.tsx. Load BEFORE touching theming or repo colours, Back or the route stack, the header or session tabs, bulk close, typing room, phone vs wide layout, the passive screen, or bundle chunking.
+description: "waterplane phone client — the frame around the content (packages/web/src): theme.ts + styles.css, routing.ts and Back (backStep.ts), the link store (link.ts, NetPulseBar.tsx), SessionTabsBar.tsx, repoColors.ts, chromeMode.ts (typing room, full screen), the phone/wide layout (layout.ts, Workspace.tsx), the launcher, CloseSheet.tsx, PassiveScreen.tsx, UpdateBanner.tsx, Markdown.tsx. Load BEFORE touching theming or repo colours, Back or the route stack, the header or session tabs, bulk close, typing room, phone vs wide layout, the passive screen, or bundle chunking."
 ---
 
 # waterplane web — the app frame
@@ -160,9 +160,11 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   before it stops them (closing a session stops its shells, fully). `N = 0` is a sentence,
   never a dimmed button. A session a TIMED prompt is aimed at starts KEPT (`isKept`) and `timedKeptNote` says so — never silently spared. Reasoning: [web.md](../../../docs/notes/web.md#the-close-sheet-facets-that-combine-replacing-five-single-cut-buttons).
 - `Stowable.tsx` + `stow.ts` — **a strip above the prompt bar FOLDS, never closes.** Wrap it in `Stowable`
-  (slot + `stowKey` = its CONTENT, so new content unfolds by itself) and put `<StowButton />` in its head;
-  the chip rides the session status line (`StowTray`), no row of its own. Used by `ShellLinksBar`,
-  `LoginBar`, `NextPrompt`. Reasoning: [web.md](../../../docs/notes/web.md#a-strip-above-the-prompt-bar-folds-it-never-closes-stowabletsx--stowts).
+  (slot + `stowKey` = its CONTENT, so new content unfolds by itself) and put `<StowButton />` at the end of
+  its head — **one face, no variants, never a × of its own**. Every folded strip comes back from ONE place:
+  `StowCorner`, a counted button in the terminal's corner group, present only while something is folded.
+  **Folding only inside `StowHome`** (the session screen); elsewhere the strip draws unfolded with no fold
+  control. Used by `ShellLinksBar`, `BlockBar`, `NextPrompt`, `PullBar` (the download strip). Reasoning: [web.md](../../../docs/notes/web.md#a-strip-above-the-prompt-bar-folds-it-never-closes-stowabletsx--stowts).
 - `layout.ts` + `Workspace.tsx` (`core/layout/`) — **PHONE OR WIDE is one fact, one writer** (`startLayout`'s media-query listener; `WIDE_MIN_PX` 1024, **width ONLY** — pointer/hover decide affordances, never structure). **No hysteresis**: anything that must survive a crossing lives outside the frame (the draft in `App`, PTY bytes in `useTermFeed`, the overlay in the route); **never a remount** — both layouts return the same two-slot fragment, so the session screen sits at the same React position at every width. `html[data-layout="wide"]` carries the CSS (one block, `styles/15-wide-layout.css`, last); the launcher moves to `aside.ws-side`. Read `useLayout()`/`useWide()`, never a second width test.
 - `PassiveScreen.tsx` + `passiveMode.ts` — the kids' phone: **the HOST is the boundary**
   (`host/passive.ts` allows a passive token only what `passiveAllows` names — health, the web bundle the OTA update reads, the passive screen's own state, the theme, and the artifact download of an APK the auto-pull queue holds right now; the WebSocket is refused outright, `server/wsops.ts`); this is a courtesy. `bootMode` (pure) picks the one screen — the host's answer, else the remembered mark — and **a passive boot opens no socket**. Never widen what the passive screen can reach.
