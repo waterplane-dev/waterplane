@@ -28,6 +28,41 @@ macOS, Linux, Windows via WSL2 · Android app or web app, no iOS app yet
   will and when a fresh session is cheaper; run a build without a session; queue prompts for after
   the reset and give a session a budget.
 
+<!-- site:why -->
+### Why I wrote it
+
+waterplane started as my own itch, and that is still what it is at its core. Its first name was
+USAMC, "unsuck agentic mobile coding".
+
+- **What I build needs an emulator.** Android apps and Garmin watch apps: build, run it in the
+  emulator or the simulator, look at the screen. A cloud sandbox cannot do that, so the agent has
+  to work on my own machine.
+- **The agents need to be logged in as me.** App stores, registries, admin consoles. Handing my
+  credentials to a hosted agent is not what those services are for, and not an idea I was
+  comfortable with.
+- **I am away a lot, and the agents always need something from me.** A decision, an approval, a
+  look at a screenshot. Auto-approve gets around some of it; do you want that on a system with
+  real users?
+
+So I did what everyone does: NoMachine to the Mac, VS Code to open remote sessions, a few tricks on
+top. Every one of them was annoying from a phone, inconvenient, and not something I wanted exposed.
+I tried the other projects that put an agent on a phone, a lot of them; none fitted my requirements
+and the way I work completely. waterplane is what came out of that.
+
+Two more things I was not at ease with:
+
+- **Credentials and admin logins permanently within reach of agents.** There is a vault extension
+  for this: a secret is released to one command for one run, with a fingerprint on the phone. It is
+  experimental and still private; it may be in a release soon, tagged experimental and off by
+  default. It has been tortured only by AI agents and reviewed by nobody else, so do not trust it
+  yet. And it has a limit no vault can move: a compromised desktop is a compromised desktop, and a
+  vault makes the attacker's work harder, not impossible.
+- **Remote desktop to a Mac from a phone is miserable.** Every solution I tried was. It was
+  surprisingly easy to let Claude build an alternative into waterplane that is actually usable from
+  a phone: the [live desktop view](packages/extensions/desktop/README.md), experimental, macOS,
+  shipped off by default.
+<!-- /site:why -->
+
 <!-- site:desk -->
 ### Not only on the phone
 
@@ -46,35 +81,6 @@ other (run the Windows build, the tests on the bigger machine): the branch trave
 git remote, the job waits on the other desktop's own queue under its owner's switches, and its
 answer comes back into the asking session as one prompt.
 <!-- /site:desk -->
-
-<!-- site:why -->
-### Why I built it
-
-I build software that has to run before I trust it: Android apps in the emulator, Garmin watch
-apps in the Connect IQ simulator. A cloud sandbox has neither, so my agents have to run on my own
-machine. They also have to sign in as me, to stores, consoles and test accounts, and a cloud
-session is neither meant for that nor a good place for it.
-
-And I am away a lot, while the agents keep needing me: a decision here, an approval there. An
-approve-everything mode works around some of that, but do you want it on a system with real
-users? What I had was NoMachine to the Mac, VS Code to start remote Claude sessions, and a few
-slightly better workflows on top, all of them annoying, inconvenient and not very secure. I tried
-a lot of the projects others built for this; none fit the way I work or everything I needed. So
-waterplane was born, first as "USAMC: Unsuck Agentic Mobile Coding", and that is still what it is
-at its core.
-
-Two more things I did not feel good about grew into parts of it:
-
-- **Remote desktop on a phone.** Every remote desktop for the Mac I tried is a pain on a phone
-  screen, and it was surprisingly easy to have Claude build one that is not: the experimental
-  [live desktop extension](packages/extensions/desktop/README.md) streams the screen to the phone
-  and, only if you switch it on, takes taps and keys back.
-- **Logins an agent always has.** Credentials and admin-console sessions sitting where every agent
-  can read them. The experimental vault plugin keeps them sealed and asks the phone before an
-  agent uses one. Do not trust it yet: so far only agents have tortured it, the public has barely
-  reviewed it. And some of the risk no vault removes: on a compromised machine it makes the
-  attacker's work harder, nothing more.
-<!-- /site:why -->
 
 **Why not let an agent such as OpenClaw run Claude Code for you?** That is enough for "go do X" and
 a message back. waterplane is the more comfortable path, with more control where you want it: the

@@ -8,6 +8,10 @@
   "web": "web/index.ts",
   "optional": true,
   "experimental": true,
+  "files": [
+    "helper",
+    "helper-win"
+  ],
   "settings": [
     {
       "kind": "switch",

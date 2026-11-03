@@ -20,6 +20,7 @@ export const LS_PREFS = {
   launchAsk: lsKey("launchAsk"),
   /** The spend warnings' orange/red thresholds (`shared/spendwarn.ts`). */
   spendWarn: lsKey("spendWarn"),
+  weekAllDesktops: lsKey("weekAllDesktops"),
   /** The prompt pad — untargeted drafts, written on one device, sent from another. */
   pad: lsKey("pad"),
   /** Repos hidden from the launcher list. */

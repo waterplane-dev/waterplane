@@ -4,7 +4,7 @@ Watch this desktop's screen live from the phone as H.264 video, on the same conn
 session, and, if you turn it on, click and type into it. Off by default; control is a second switch
 that is also off by default and is enforced on the host, not hidden on the phone.
 
-**Experimental.** Releases do not ship it (`deploy/ship.json`); it runs from a source checkout.
+**Experimental.** Releases ship it off by default (`deploy/ship.json`; the helper sources travel with it, built on first use): switch it on in Settings › Tools & diagnostics › plugins.
 
 - **macOS:** in use by its author. A small Swift helper (`helper/`, ScreenCaptureKit and
   VideoToolbox) is compiled on first use. macOS ties Screen Recording and Accessibility to the

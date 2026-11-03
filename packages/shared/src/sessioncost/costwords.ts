@@ -78,8 +78,11 @@ export const WEEK_CAL_MIN_PCT = 5;
  * percentage the scrape read. The limit weighs models by price, not by raw
  * tokens (a cache read is a tenth of an input token in both), which is why the
  * calibration is in money. Traffic the logs never saw — claude.ai, another
- * machine — counts against the limit but not in the spend, so a share derived
- * from this errs LOW, and the caller's note says the estimate is this desktop's.
+ * machine — counts against the limit but not in the spend, so the dollars per
+ * percent come out LOW and every share derived from them errs HIGH (a peer that
+ * priced $14 of a week another desktop priced $1,241 of read a $2.31 session as
+ * 6.2%). The caller's note says the estimate is this desktop's, and `weekCalSpend`
+ * (`peer.ts`) refuses it when a paired desktop on the account spent more.
  */
 export function weekUsdPerPct(weekCostUsd: number | null | undefined, weeklyPct: number | null | undefined): number | null {
   if (weekCostUsd == null || weeklyPct == null) return null;
@@ -133,6 +136,8 @@ export function turnCostParts(t: {
   usdPerWeekPct?: number | null;
   /** What that calibration counted beyond this desktop (`peerWeekSpend`'s `incl. $0.84 on pc`). */
   weekIncl?: string | null;
+  /** Why there is no calibration although there might have been one (`weekCalSpend`'s refusal). */
+  weekRefused?: string | null;
 }): { turn: string | null; agents: string | null; total: string | null; ctx: string | null; note: string | null } | null {
   const ok = (n: number | undefined): n is number => n != null && Number.isFinite(n) && n > 0;
   const running = ok(t.agentsRunning) ? t.agentsRunning : 0;
@@ -167,7 +172,7 @@ export function turnCostParts(t: {
   const incl = typeof t.weekIncl === "string" && t.weekIncl.trim() ? ` (${t.weekIncl.trim()})` : "";
   const weekNote = (turn || total) && weekShareText(1, t.usdPerWeekPct)
     ? `; % of week estimated from this desktop's spend${incl} against the weekly limit reading`
-    : "";
+    : (turn || total) && typeof t.weekRefused === "string" && t.weekRefused.trim() ? `; ${t.weekRefused.trim()}` : "";
   const note = turn || total
     ? `API list price${turnMissing || totalMissing ? ", subagents not included" : ""}${unpriced}${weekNote}`
     : null;

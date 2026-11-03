@@ -152,3 +152,6 @@ Resuming after an update keeps the git view's repo and settings.
 - asked: 2026-10-30
 - shipped: 6b29a030
 
+### R-git-032 · built
+The git sheet and the launcher's git badge never present a stale "behind" count as current: the desktop sends when the worktree last fetched, the sheet fetches once when it opens and says under its counts how old ↓ is ("as of the last check of origin/main, 5m ago"), a count older than a day or never taken reads ↓? with the reason in words (a nonzero one stays as a floor), and the badge's title says when the remote was last checked.
+- asked: 2026-11-03 — the owner's checkout sat 30 commits behind for four weeks while the phone showed it in sync

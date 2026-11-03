@@ -59,6 +59,11 @@ export interface GitStatus {
   upstream?: string;
   ahead: number;
   behind: number;
+  /** When this worktree last fetched (FETCH_HEAD's mtime, epoch ms) — how old `behind` is: git
+   *  counts against the remote-tracking ref, which only a fetch moves, so a repo nobody fetched
+   *  for a month read ↓0 while 30 commits waited (2026-11-03). ABSENT = never fetched from this
+   *  worktree, no upstream, or an older host. The phone cuts staleness off THIS, never off `behind`. */
+  fetchedAt?: number;
   files: GitFile[];
   clean: boolean;
   /** What the remote's own rules demand of the default branch. ABSENT = direct
@@ -172,6 +177,9 @@ export interface RepoTarget {
    *  the branch has no upstream (nothing to count against), never 0 for that. */
   ahead?: number;
   behind?: number;
+  /** When this worktree last fetched (FETCH_HEAD's mtime) — how old `behind` is; same field and
+   *  rule as `GitStatus.fetchedAt`. ABSENT = never fetched here, no upstream, or an older host. */
+  fetchedAt?: number;
   /** Whether the repo has an `origin` remote — where the git view pushes. `false`
    *  = local only, nothing to push to (the launcher says so). ABSENT = not known
    *  (an older host, or a count not taken yet) — never drawn as "no remote". */

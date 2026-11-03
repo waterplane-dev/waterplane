@@ -11,7 +11,7 @@
  * registry imports every extension and every extension imports this SDK: built at module load that
  * is a cycle reading an undefined list.
  */
-import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, PeerJobLedgerRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc } from "@waterplane/shared";
+import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, PeerJobLedgerRow, PeerWeekSpendRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc } from "@waterplane/shared";
 import { api } from "../api";
 import { core } from "../core/api";
 import { getLedgerDocAt, getTokenStatsAt, putLedgerDoc, putTokenStats } from "../offlineCache";
@@ -47,9 +47,12 @@ export const ledgers: {
   costWindow(from: number, to: number, fresh?: boolean): Promise<CostWindowDoc>;
   /** What this desktop handed to peer desktops, with each job's cost there (`GET /api/peerjobs`). */
   peerJobs(): Promise<PeerJobLedgerRow[]>;
+  /** Every paired desktop's own priced spend over `[from, to]` (`GET /api/peers/weekspend`) — a row per peer, an error row where it did not answer. */
+  peersWeekSpend(from: number, to: number): Promise<PeerWeekSpendRow[]>;
   refreshUsage(quiet?: boolean): void;
 } = {
   peerJobs: () => api.peerJobs(),
+  peersWeekSpend: (from, to) => api.peersWeekSpend(from, to),
   tokenStats: { read: (fresh) => api.tokenStats(fresh), fromCache: getTokenStatsAt, toCache: putTokenStats },
   views: () => viewSource(),
   viewDoc: <D>(def: LedgerViewDef<D>): CachedRead<D> => ({

@@ -81,7 +81,8 @@ function harness(remote = "127.0.0.1") {
   const call = async (method, path, { headers = {}, body, extra, from = remote } = {}) => {
     sent.length = 0;
     const req = { method, headers, body, socket: { remoteAddress: from } };
-    const handled = await handlePeerRoutes(req, res, path, new URL(path, "http://x"), deps(extra));
+    const u = new URL(path, "http://x"); // the server hands the PATH without its query, and the URL whole
+    const handled = await handlePeerRoutes(req, res, u.pathname, u, deps(extra));
     return { handled, ...(sent.at(-1) ?? {}) };
   };
   return { store, call, warned };
@@ -194,4 +195,33 @@ test("routes: /api/peers/<name>/status asks the peer now, on the trusted path on
   assert.deepEqual(r.body, { ok: false, error: "no such peer" });
   r = await h.call("GET", "/api/peers/pc/status", { extra: { askPeer }, from: "192.168.1.9" });
   assert.equal(r.status, 403);
+});
+
+test("routes: /api/peer/weekspend answers a paired peer only, with a sane span", async () => {
+  const h = harness();
+  h.store.upsert({ name: "pc", addr: "127.0.0.1:9", inboundToken: TOK_IN });
+  const ok = { authorization: `Bearer ${TOK_IN}`, [PEER_API_HEADER]: String(PEER_API_VERSION) };
+  const weekSpend = async (from, to) => ({ usd: (to - from) / 1e6, weeklyResetAt: 42 });
+  let r = await h.call("GET", "/api/peer/weekspend?from=0&to=1000000", { headers: ok, extra: { weekSpend } });
+  assert.deepEqual(r.body, { usd: 1, weeklyResetAt: 42 });
+  r = await h.call("GET", "/api/peer/weekspend?from=0&to=1000000", { extra: { weekSpend } });
+  assert.equal(r.status, 403, "no peer token, no figure");
+  r = await h.call("GET", `/api/peer/weekspend?from=0&to=${9 * 86_400_000}`, { headers: ok, extra: { weekSpend } });
+  assert.equal(r.status, 400, "a span past 8 days is refused");
+});
+
+test("routes: /api/peers/weekspend asks every peer; one that cannot answer is a row saying why", async () => {
+  const h = harness();
+  h.store.upsert({ name: "mac", addr: "100.100.1.1:8770", inboundToken: TOK_IN, outboundToken: TOK_OUT });
+  h.store.upsert({ name: "in-only", addr: "100.100.1.2:8770", inboundToken: TOK_IN + "x" });
+  const askWeekSpend = async (t) => ({ kind: "ok", body: { usd: 1241, weeklyResetAt: 7, extra: "dropped" } });
+  let r = await h.call("GET", "/api/peers/weekspend?from=0&to=1000", { extra: { askWeekSpend } });
+  const by = Object.fromEntries(r.body.peers.map((p) => [p.peer, p]));
+  assert.deepEqual(by.mac, { peer: "mac", ok: true, usd: 1241, weeklyResetAt: 7 });
+  assert.equal(by["in-only"].ok, false);
+  assert.match(by["in-only"].error, /no outbound token/);
+  r = await h.call("GET", "/api/peers/weekspend?from=0&to=1000", { extra: { askWeekSpend: async () => ({ kind: "unreachable", error: "timeout" }) } });
+  assert.deepEqual(r.body.peers.find((p) => p.peer === "mac"), { peer: "mac", ok: false, error: "mac did not answer: timeout" });
+  r = await h.call("GET", "/api/peers/weekspend?from=0&to=1000", { from: "192.168.1.9", extra: { askWeekSpend } });
+  assert.equal(r.status, 403, "never from the LAN");
 });

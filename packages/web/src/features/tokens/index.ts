@@ -8,9 +8,10 @@ import { calibrateWeek } from "./actions";
 import { billing, readings, usage } from "./store";
 import { readingsOf } from "./logic";
 import { BillingSettings } from "./BillingSettings";
+import { WeekShareSettings } from "./WeekShareSettings";
 import { TokenSettings } from "./TokenSettings";
 
-export { useUsage, useWeekIncl, useWeekUsdPerPct } from "./store";
+export { useUsage, useWeekIncl, useWeekRefused, useWeekUsdPerPct } from "./store";
 export { useBilling, useUsageFace } from "./store";
 export { clearTokensOn, openTokensOn, readingsNow, tokensOpenOn, tokensOpenOnNow, useTokensOpenOn, useUsageReadings } from "./store";
 export type { UsageFace, ClaudeFigures } from "./logic";
@@ -30,5 +31,7 @@ export const manifest: FeatureManifest = {
     { group: "tools", order: -20, render: () => createElement(TokenSettings) },
     // Sessions, right after the usage budget (limits, order 10): which account this is, and its dollar periods.
     { group: "sessions", order: 11, render: () => createElement(BillingSettings) },
+    // …and how the "% of week" those figures read as is measured.
+    { group: "sessions", order: 12, render: () => createElement(WeekShareSettings) },
   ],
 };

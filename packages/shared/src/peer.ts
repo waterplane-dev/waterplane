@@ -558,3 +558,66 @@ export function peerJobOriginText(o: PeerJobOrigin | null | undefined): string {
   const clean = (s: unknown): string => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, 80) : "");
   return [`job from ${o.from}`, clean(o.askerLabel), clean(o.label)].filter(Boolean).join(" · ");
 }
+
+/**
+ * `GET /api/peer/weekspend?from=&to=` — what ONE paired desktop's own logs priced over a span, and
+ * the weekly reset its own `/usage` last read. The reset is the same-account test: two desktops
+ * signed in as one person read the same weekly reset (to the scrape's minute jitter); another
+ * account's week ends at another instant.
+ */
+export interface PeerWeekSpend { usd: number | null; weeklyResetAt: number | null }
+
+/** One row of the phone's `GET /api/peers/weekspend` — a peer that answered, or why it did not. */
+export type PeerWeekSpendRow =
+  | { peer: string; ok: true; usd: number | null; weeklyResetAt: number | null }
+  | { peer: string; ok: false; error: string };
+
+/** How far two desktops' weekly resets may differ and still be one account's week (`useWeekUsdPerPct`'s window). */
+export const SAME_ACCOUNT_RESET_MS = 3_600_000;
+
+/**
+ * A desktop on the same account whose spend is at least this share of THIS desktop's makes a
+ * calibration from this desktop alone wrong by more than the reading's own ±10% (`WEEK_CAL_MIN_PCT`),
+ * so it is refused, not printed.
+ */
+export const WEEK_CAL_OTHER_SHARE = 0.1;
+
+/**
+ * The spend side of the weekly calibration, or the sentence why there is none.
+ *
+ * The percentage `/usage` reads is the ACCOUNT's; this desktop's ledger is only its own. Measured
+ * 2026-11-03: a Windows peer had priced $14 of a week the Mac had priced $1,241 of, at 38% — the
+ * peer's "1% = $0.37" made a $2.31 session read as 6.2% of the week. Missing spend makes every
+ * share too HIGH, never too low.
+ *
+ * - `sumAll` (the person's switch): every same-account peer's own spend is ADDED, and the peer-job
+ *   figure is dropped for a peer counted that way (its jobs are in its own ledger already).
+ * - off: this desktop alone, plus its peer jobs as before — unless a same-account peer spent at
+ *   least `WEEK_CAL_OTHER_SHARE` of it, which refuses the calibration in words.
+ *
+ * A peer that did not answer, or read another reset, counts for nothing (absent, never zero-spend).
+ */
+export function weekCalSpend(a: {
+  here: number | null | undefined;
+  jobs: { usd: number; byPeer: { peer: string; usd: number }[]; text: string } | null;
+  peers: readonly PeerWeekSpendRow[] | null | undefined;
+  weeklyResetAt: number;
+  sumAll: boolean;
+}): { usd: number; incl: string | null } | { refused: string } | null {
+  if (!posNum(a.here)) return null;
+  const same = (a.peers ?? []).filter((p): p is Extract<PeerWeekSpendRow, { ok: true }> =>
+    p.ok && posNum(p.usd) && p.weeklyResetAt != null && Math.abs(p.weeklyResetAt - a.weeklyResetAt) < SAME_ACCOUNT_RESET_MS);
+  if (a.sumAll && same.length) {
+    const counted = new Set(same.map((p) => p.peer));
+    const jobs = (a.jobs?.byPeer ?? []).filter((j) => !counted.has(j.peer));
+    const parts = [...same.map((p) => ({ peer: p.peer, usd: p.usd as number })), ...jobs];
+    return { usd: a.here + parts.reduce((s, p) => s + p.usd, 0), incl: `incl. ${parts.map((p) => `${fmtUsd(p.usd)} on ${p.peer}`).join(" + ")}` };
+  }
+  const own = a.here + (a.jobs?.usd ?? 0);
+  const bigger = same.filter((p) => (p.usd as number) >= own * WEEK_CAL_OTHER_SHARE);
+  if (!a.sumAll && bigger.length) {
+    const others = bigger.map((p) => `${p.peer} priced ${fmtUsd(p.usd as number)}`).join(", ");
+    return { refused: `% of week not shown: this desktop priced ${fmtUsd(own)} of the week, ${others} on the same account — a share from this desktop alone would read too high. Settings → count every paired desktop adds them.` };
+  }
+  return { usd: own, incl: a.jobs?.text ?? null };
+}

@@ -32,6 +32,7 @@
   },
   "routes": {
     "DELETE /api/conversations": "not reachable in demo: no demo backend's facts include conversations, so the archive draws claude's list only",
+    "GET /api/peers/weekspend": "no paired desktops in the demo: the weekly calibration stays this desktop's own, as on a host with no peers",
     "DELETE /api/netstats": "phone's own link telemetry about a real host; nothing to reset in the demo",
     "DELETE /api/peers/:param": "not reachable in demo: peer desktops (one desktop, no pairing)",
     "DELETE /api/repos/:param/archive": "not reachable in demo: no archived conversations on disk",

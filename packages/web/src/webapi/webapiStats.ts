@@ -1,5 +1,5 @@
 import { SLOW_OP_TIMEOUT_MS } from "@waterplane/shared";
-import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc, PeerJobLedgerRow, WeekBurnStatus } from "@waterplane/shared";
+import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc, PeerJobLedgerRow, PeerWeekSpendRow, WeekBurnStatus } from "@waterplane/shared";
 import { jget, jpostOk } from "./webapiFetch";
 
 /** Token, usage and cost readings. One slice of `api` (see api.ts). */
@@ -25,7 +25,7 @@ export const statsApi = {
   localUsage: () => jget<LocalUsageDoc>("/api/localusage"),
   /** What THIS desktop has handed to peer desktops (`host/peers/routes.ts`, trusted path, read-only). */
   peerJobs: () => jget<{ ok: boolean; jobs: PeerJobLedgerRow[] }>("/api/peerjobs").then((d) => (Array.isArray(d?.jobs) ? d.jobs : [])),
-
+  peersWeekSpend: (from: number, to: number) => jget<{ peers: PeerWeekSpendRow[] }>(`/api/peers/weekspend?from=${Math.round(from)}&to=${Math.round(to)}`, 70_000).then((d) => (Array.isArray(d?.peers) ? d.peers : [])),
   /** Any backend's own ledger (`BackendTokensDoc`, or the document type `D` of the extension view that
    *  draws it — `LedgerViewDef`) — `available:false` with a sentence at 200 when it keeps none; an older
    *  host 404s, which `useRemoteResource` reports as `error`. The slow-op fuse: `fresh=1` re-reads the store. */

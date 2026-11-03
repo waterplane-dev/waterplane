@@ -61,7 +61,7 @@ import { copyCode, copyLink, openLink } from "../../features/clipboard";
 import { pasteLoginCode } from "../../features/hostTools";
 import { openScrollback } from "../../features/scrollback";
 import { openContext } from "../../features/context";
-import { useWeekIncl, useWeekUsdPerPct } from "../../features/tokens";
+import { useWeekIncl, useWeekRefused, useWeekUsdPerPct } from "../../features/tokens";
 import { lineToShell, openShellsFor } from "../../features/shells";
 import { openLogins } from "../../features/shellLogins";
 import { DemoHookCard, DemoHookHint } from "../../features/demoTour";
@@ -331,6 +331,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
   const [hiddenSuggestion, setHiddenSuggestion] = useState("");
   const usdPerWeekPct = useWeekUsdPerPct(); // turn costs as a share of the week
   const weekIncl = useWeekIncl(); // …and what that share counted beyond this desktop
+  const weekRefused = useWeekRefused(); // …or why there is none (a paired desktop spent more)
   const pick = useTermPick(termRef, writeSeq, active.id);
   // Answers queued for THIS box — matched on the FINGERPRINT, not the session: one queued for a box
   // that has since been replaced is not this one's. A list because a checkbox box collects several
@@ -510,6 +511,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
             nextTurn={sessionCostOf(active.contextSpark, { lastTurnAt: active.lastTurnAt, turnActive: active.turnActive, now: Date.now() })}
             usdPerWeekPct={usdPerWeekPct}
             weekIncl={weekIncl}
+            weekRefused={weekRefused}
             onOpenShells={() => openShellsFor(active)}
             files={activeRepoId ? {
               // Thumbnails come from the same artifact route the gallery uses —
@@ -731,6 +733,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
           nextTurn={sessionCostOf(active.contextSpark, { lastTurnAt: active.lastTurnAt, turnActive: active.turnActive, now: Date.now() })}
           usdPerWeekPct={usdPerWeekPct}
           weekIncl={weekIncl}
+          weekRefused={weekRefused}
           onOpenCost={openContext}
           chipOnly={chrome.chromeHidden}
         />

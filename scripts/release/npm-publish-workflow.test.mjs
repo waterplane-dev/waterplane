@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NPM_WORKFLOW } from "./publish-lib.mjs";
+import { NPM_WAIT_SECONDS, NPM_WORKFLOW } from "./publish-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const yml = readFileSync(join(ROOT, ".github/workflows", NPM_WORKFLOW), "utf8");
@@ -50,6 +50,14 @@ test("publish: the tag's own build, with --provenance, through trusted publishin
   assert.match(code, /is older than 11\.5\.1, which trusted publishing needs/, "and its floor is checked");
   assert.match(code, /node scripts\/release\/npm-verify\.mjs "\$PKG" "\$VERSION" --wait \d+ --check/, "checked on npm afterwards: shrinkwrap and provenance");
   assert.match(code, /published=true[\s\S]*already on npm: nothing to publish, skipped/, "an existing version is a clean skip");
+});
+
+test("the run waits for npm as long as the desktop does", () => {
+  // 0.1.17 took 5m11s to appear after `npm publish` returned; a 300 s wait failed the run AFTER a good
+  // publish and skipped provenance-to-release, so the release went out without its .intoto.jsonl.
+  const wait = Number(/npm-verify\.mjs "\$PKG" "\$VERSION" --wait (\d+) --check/.exec(code)?.[1]);
+  assert.equal(wait, NPM_WAIT_SECONDS, "the CI check's wait is NPM_WAIT_SECONDS");
+  assert.match(code, /name: provenance\n\s+path: provenance\/\n\s+retention-days: ([7-9]|[1-9]\d)\b/, "the bundle outlives a weekend, to attach by hand after a late failure");
 });
 
 test("every action is pinned by full commit SHA, and the checkout keeps no credentials", () => {

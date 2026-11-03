@@ -56,11 +56,11 @@ function MixDonut({ parts }: { parts: { id: string; slot: number; share: number 
  * Shared by the reader (under every turn) and the terminal's strip (the
  * newest turn only, `TermCostStrip.tsx`); `trackId` tells their taps apart.
  */
-export function TurnCost({ t, slots, agentsSoFar, usdPerWeekPct, weekIncl, onOpen, next, trackId = "action:read.cost", why = false }: { t: TranscriptTurn; slots: MixSlots | null; agentsSoFar: boolean; usdPerWeekPct: number | null; weekIncl: string | null; onOpen?: () => void; next: string | null; trackId?: string; why?: boolean }) {
+export function TurnCost({ t, slots, agentsSoFar, usdPerWeekPct, weekIncl, weekRefused = null, onOpen, next, trackId = "action:read.cost", why = false }: { t: TranscriptTurn; slots: MixSlots | null; agentsSoFar: boolean; usdPerWeekPct: number | null; weekIncl: string | null; weekRefused?: string | null; onOpen?: () => void; next: string | null; trackId?: string; why?: boolean }) {
   const p = turnCostParts({
     costUsd: t.costUsd, cumCostUsd: t.cumCostUsd, ctxTok: t.ctxTok, agents: turnAgents(t), agentsSoFar,
     agentCostUsd: t.agentCostUsd, cumAgentCostUsd: t.cumAgentCostUsd, agentsRunning: t.agentsRunning,
-    agentUnpricedTok: t.agentUnpricedTok, usdPerWeekPct, weekIncl,
+    agentUnpricedTok: t.agentUnpricedTok, usdPerWeekPct, weekIncl, weekRefused,
   });
   const mix = turnMix(t, slots);
   const kinds = t.agentTypes ?? [];

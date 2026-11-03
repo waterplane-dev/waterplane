@@ -24,7 +24,7 @@ import { Row, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { PrCard } from "./PrCard";
 import { cardVisible, pushLabel as pushLabelText } from "./prCardLogic";
-import { branchUpstream } from "./gitCounts";
+import { behindLabel, branchUpstream, incomingReading, incomingWords } from "./gitCounts";
 
 interface Props {
   repoId: string;
@@ -187,6 +187,10 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
   }, [pushStart]);
   /** A pull in flight — a LABEL on the button and the guard against a second tap, never a disabled attribute. */
   const [pulling, setPulling] = useState(false);
+  /** The once-per-opening fetch (`useEffect` below `refresh`): a LABEL on the ↓ sentence while it
+   *  runs, and its failure as words there — never a disabled attribute, never a modal note. */
+  const [checking, setChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState<string | null>(null);
   const [showBranches, setShowBranches] = useState(false);
   /** The history view, cut to the side whose count was tapped (`null` = closed). */
   const [logFocus, setLogFocus] = useState<GitLogFocus | null>(null);
@@ -257,6 +261,22 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
 
   const refresh = () => statusRes.reload({ quiet: true });
   const loadBranches = () => branchRes.reload({ quiet: true });
+
+  // Once per opening (and again if the branch's upstream changes under it), fetch: ↓ counts
+  // against the remote-tracking ref, which only a fetch moves, so without this the sheet read ↓0
+  // for a month while 30 commits waited (2026-11-03). Pull and the history view fetch on their
+  // own; this is for the count a person reads BEFORE tapping. Moves no branch and no file.
+  const upstream = status?.upstream;
+  useEffect(() => {
+    if (!upstream) return;
+    let gone = false;
+    setChecking(true); setCheckFailed(null);
+    api.gitFetch(repoId)
+      .then((r) => { if (!gone && !r.ok) setCheckFailed(r.error?.split("\n")[0] ?? "the fetch failed"); })
+      .catch((e) => { if (!gone) setCheckFailed(`could not reach the desktop (${e instanceof Error ? e.message : String(e)})`); })
+      .finally(() => { if (gone) return; setChecking(false); refresh(); });
+    return () => { gone = true; };
+  }, [repoId, upstream]); // eslint-disable-line react-hooks/exhaustive-deps -- once per repo and upstream; `refresh` is a per-render closure
 
   useEffect(() => {
     if (!openFile || isMediaDiff(openFile.path)) return;
@@ -482,10 +502,11 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
   const pushLabel = pushStart != null
     ? <><Loader size={14} className="spin" /> pushing… {elapsed(Date.now() - pushStart)}</>
     : <><ArrowUpFromLine size={14} /> {pushLabelText(status?.branchRules, status?.ahead ?? 0)}</>;
-  // The count is as of the desktop's last fetch; the pull fetches first.
+  // The count is as of the desktop's last fetch (`incoming` says how old); the pull fetches first.
+  const incoming = status ? incomingReading(status) : { kind: "none" as const };
   const pullLabel = pulling
     ? <><Loader size={14} className="spin" /> pulling…</>
-    : <><ArrowDownToLine size={14} /> {status && status.behind > 0 ? `Pull ${status.behind}` : "Pull"}</>;
+    : <><ArrowDownToLine size={14} /> {incoming.kind !== "none" && incoming.behind > 0 ? `Pull ${incoming.behind}` : "Pull"}</>;
   // Pull, push and sync work on what is COMMITTED, so they are one row under
   // the commit form whatever the tree's state.
   const remoteRow = (
@@ -521,11 +542,19 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
               <button className="git-ab-n" onClick={() => { track("action:git.log.out"); setLogFocus("out"); }}
                 title="the commits here that are not pushed">↑{status.ahead}</button>
               <button className="git-ab-n" onClick={() => { track("action:git.log.in"); setLogFocus("in"); }}
-                title="the commits on the upstream that are not here — opening checks it">↓{status.behind}</button>
+                title={incoming.kind === "fresh" ? "the commits on the upstream that are not here — opening checks it" : "the commits on the upstream that are not here — not known until a check; opening checks it"}>↓{behindLabel(incoming)}</button>
             </span>
           )}
           {!status.clean && zoomPair}
         </div>
+      )}
+      {/* How old ↓ is, in words under the counts: the figure alone cannot say it was taken a month ago. */}
+      {status?.upstream && (checking || incoming.kind !== "none") && (
+        <Hint className="git-note">
+          {checking
+            ? <><Loader size={13} className="spin" /> checking {status.upstream} for new commits…</>
+            : <>{incomingWords(incoming, status.upstream)}{checkFailed ? ` The check just now failed: ${checkFailed}` : ""}</>}
+        </Hint>
       )}
 
       {showBranches && (

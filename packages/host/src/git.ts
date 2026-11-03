@@ -5,6 +5,7 @@ import { contained, containedReal, realResolve } from "./paths.js";
 import { spawn } from "node:child_process";
 import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
+import { lastFetch } from "./gitlog.js";
 import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
 import { branchRules, invalidateBranchRules } from "./branchrules.js";
@@ -25,6 +26,8 @@ export interface GitStatus {
   upstream?: string;
   ahead: number;
   behind: number;
+  /** FETCH_HEAD's mtime — how old `behind` is (`@waterplane/shared` `GitStatus.fetchedAt`). */
+  fetchedAt?: number;
   files: GitFile[];
   clean: boolean;
 }
@@ -45,7 +48,7 @@ async function git(wt: string, args: string[]): Promise<{ stdout: string; stderr
  * untracked directory to one `?? src/` line, so a fresh directory of ten files
  * would count as one.
  */
-export async function countChangedFiles(wt: string): Promise<{ changed: number; ahead?: number; behind?: number; hasOrigin?: boolean }> {
+export async function countChangedFiles(wt: string): Promise<{ changed: number; ahead?: number; behind?: number; fetchedAt?: number; hasOrigin?: boolean }> {
   // Beside the status, not inside its try: a repo with no `origin` is a fact
   // worth drawing even when the status failed. Unknown (git itself broke) =
   // absent, never a made-up "no remote".
@@ -66,7 +69,7 @@ async function hasOriginRemote(wt: string): Promise<boolean | undefined> {
   }
 }
 
-async function countStatus(wt: string): Promise<{ changed: number; ahead?: number; behind?: number }> {
+async function countStatus(wt: string): Promise<{ changed: number; ahead?: number; behind?: number; fetchedAt?: number }> {
   try {
     // `--branch` adds the `## main...origin/main [ahead 2, behind 1]` header, so
     // the launcher's in/out counts cost no second git call. No upstream (no
@@ -75,7 +78,11 @@ async function countStatus(wt: string): Promise<{ changed: number; ahead?: numbe
     const { stdout } = await git(wt, ["status", "--porcelain=v1", "--branch", "--untracked-files=all"]);
     const lines = stdout.split("\n").filter((l) => l.trim());
     const h = branchHeader(lines[0]?.startsWith("## ") ? lines.shift()!.slice(3) : "");
-    return h.upstream ? { changed: lines.length, ahead: h.ahead, behind: h.behind } : { changed: lines.length };
+    if (!h.upstream) return { changed: lines.length };
+    // `behind` is only as fresh as the last fetch (the header counts against the tracking ref):
+    // its age rides beside it so the phone can say so, rather than draw a month-old ↓0 as current.
+    const fetchedAt = await lastFetch(wt);
+    return { changed: lines.length, ahead: h.ahead, behind: h.behind, ...(fetchedAt !== undefined ? { fetchedAt } : {}) };
   } catch {
     return { changed: 0 };
   }
@@ -228,6 +235,7 @@ export async function gitStatus(wt: string): Promise<GitStatus> {
     if (line.startsWith("## ")) {
       const h = branchHeader(line.slice(3));
       if (h.branch) Object.assign(status, { branch: h.branch, upstream: h.upstream, ahead: h.ahead, behind: h.behind });
+      if (h.upstream) { const fetchedAt = await lastFetch(wt); if (fetchedAt !== undefined) status.fetchedAt = fetchedAt; }
       continue;
     }
     const code = line.slice(0, 2);

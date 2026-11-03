@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   cleanPeerJobCost, peerCostParts, peerDurationText, peerJobLine, peerJobOriginText, peerModelName,
-  peerReportPrompt, peerSpendSplit, peerWeekSpend, peerWeekText, turnCostParts,
+  peerReportPrompt, peerSpendSplit, peerWeekSpend, peerWeekText, turnCostParts, weekCalSpend,
 } from "../dist/index.js";
 
 const view = (over = {}) => ({ id: "j", state: "done", peerApi: 1, version: "x", intentId: "i", sessionId: "s9", ...over });
@@ -108,4 +108,60 @@ test("peerJobOriginText: why a peer session exists", () => {
   assert.equal(peerJobOriginText({ from: "mac", jobId: "j" }), "job from mac");
   assert.equal(peerJobOriginText({ from: "mac", jobId: "j", askerLabel: "  a\n b " }), "job from mac · a b");
   assert.equal(peerJobOriginText(undefined), "");
+});
+
+// ── weekCalSpend: the weekly calibration's spend side across paired desktops ──
+
+const RESET = 1_793_900_000_000;
+const mac = { peer: "mac", ok: true, usd: 1241, weeklyResetAt: RESET + 30_000 };
+
+test("weekCalSpend: off, a same-account peer that spent more refuses the calibration in words (zenbook 2026-11-03)", () => {
+  const r = weekCalSpend({ here: 14.07, jobs: null, peers: [mac], weeklyResetAt: RESET, sumAll: false });
+  assert.ok(r && "refused" in r);
+  assert.match(r.refused, /% of week not shown/);
+  assert.match(r.refused, /\$14\.07/);
+  assert.match(r.refused, /mac priced \$1,?241/);
+});
+
+test("weekCalSpend: on, same-account peers are added and named", () => {
+  const r = weekCalSpend({ here: 14, jobs: null, peers: [mac], weeklyResetAt: RESET, sumAll: true });
+  assert.ok(r && "usd" in r);
+  assert.equal(r.usd, 1255);
+  assert.match(r.incl, /on mac/);
+});
+
+test("weekCalSpend: on, a peer counted whole drops its job figure (no double count)", () => {
+  const jobs = { usd: 5, byPeer: [{ peer: "mac", usd: 5 }], text: "incl. $5.00 on mac" };
+  const r = weekCalSpend({ here: 14, jobs, peers: [mac], weeklyResetAt: RESET, sumAll: true });
+  assert.equal(r.usd, 1255);
+});
+
+test("weekCalSpend: the big desktop is not refused by a small peer", () => {
+  const zen = { peer: "zen", ok: true, usd: 14, weeklyResetAt: RESET };
+  const r = weekCalSpend({ here: 1241, jobs: null, peers: [zen], weeklyResetAt: RESET, sumAll: false });
+  assert.deepEqual(r, { usd: 1241, incl: null });
+});
+
+test("weekCalSpend: another account's reset, an unanswered peer and an unpriced one count for nothing", () => {
+  const peers = [
+    { ...mac, weeklyResetAt: RESET + 2 * 86_400_000 },
+    { peer: "gone", ok: false, error: "gone did not answer" },
+    { peer: "nil", ok: true, usd: null, weeklyResetAt: RESET },
+  ];
+  for (const sumAll of [false, true]) {
+    const r = weekCalSpend({ here: 14, jobs: null, peers, weeklyResetAt: RESET, sumAll });
+    assert.deepEqual(r, { usd: 14, incl: null });
+  }
+});
+
+test("weekCalSpend: nothing priced here is no calibration, never a zero", () => {
+  assert.equal(weekCalSpend({ here: 0, jobs: null, peers: [mac], weeklyResetAt: RESET, sumAll: true }), null);
+  assert.equal(weekCalSpend({ here: null, jobs: null, peers: null, weeklyResetAt: RESET, sumAll: false }), null);
+});
+
+test("turnCostParts: a refused calibration is said in the note where the share would be", () => {
+  const p = turnCostParts({ costUsd: 2.31, cumCostUsd: 2.31, weekRefused: "% of week not shown: because" });
+  assert.match(p.note, /; % of week not shown: because$/);
+  const q = turnCostParts({ costUsd: 2.31, cumCostUsd: 2.31, usdPerWeekPct: 30, weekRefused: "x" });
+  assert.match(q.note, /estimated from this desktop's spend/);
 });

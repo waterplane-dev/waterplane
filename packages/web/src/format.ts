@@ -125,8 +125,8 @@ export function repoAccentStyle(name: string): React.CSSProperties {
  * DURATION and phrases it for a staleness sentence ("4 min ago", "just now"),
  * where this takes an INSTANT and phrases it for a row.
  */
-export function ago(ts: number): string {
-  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+export function ago(ts: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - ts) / 1000));
   if (s < 60) return `${s}s ago`;
   const m = Math.round(s / 60);
   if (m < 60) return `${m}m ago`;

@@ -18,6 +18,7 @@ packages/host/test/pairing.test.mjs:228:c1c75715f5  # tailscale-ip fixture
 packages/host/test/pairing.test.mjs:285:01b1bd3082  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:23:d677af191b  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:32:caed6e5c4d  # tailscale-ip fixture
+packages/host/test/peersstore.test.mjs:216:3008aa1723  # tailscale-ip fixture
 packages/host/test/tailnetpeers.test.mjs:16:6a5718fb2d  # tailscale-ip fixture
 packages/host/test/tailnetpeers.test.mjs:17:7aa2148c86  # tailscale-ip fixture
 packages/host/test/tailnetpeers.test.mjs:19:e7ea9b32c6  # tailscale-ip fixture

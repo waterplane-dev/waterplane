@@ -238,6 +238,13 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     store: ctx.peers, canManage: ctx.canManage, json, readJson: (r) => readJson(r),
     signedIn: () => claudeSignInState(claudeBin()),
     askPeer: (t) => peerAsker.helloFresh(t),
+    // The same fold the phone's own weekly calibration reads (`/api/tokenwindows`, one cell ending at `to`).
+    weekSpend: async (from, to) => {
+      const d = await ctx.tokenStats.windowSeries([{ id: "wk", anchor: to, lenMs: to - from }]);
+      const usd = d.series.find((s) => s.id === "wk")?.windows.find((w) => w.back === 0)?.cost.total;
+      return { usd: typeof usd === "number" && Number.isFinite(usd) ? usd : null, weeklyResetAt: ctx.usageNow?.().usage?.weeklyResetAt ?? null };
+    },
+    askWeekSpend: (t, from, to) => peerAsker.weekSpend(t, from, to),
   }))),
   // `/api/agent/peer/<peer>/intents`: the agentintents twin that hands a job to a peer (`peers/agentpeer.ts`).
   mount("peers/agentpeer", ({ req, res, path, url }) => handlePeerAgent(req, res, path, url, { json, readJson: (r) => readJson(r) })),

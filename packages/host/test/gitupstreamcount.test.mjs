@@ -88,3 +88,30 @@ test("a NON-current branch whose upstream is gone lists no upstream; a live one 
   assert.equal(byName.main.upstream, "upstream/main");
   assert.equal(byName.main.current, true);
 });
+
+// ↓ is only as fresh as the last fetch, so its age rides beside it (`fetchedAt`, FETCH_HEAD's
+// mtime) in both the listing's counts and the git sheet's status — ABSENT until this worktree
+// has fetched once (a `push -u` writes no FETCH_HEAD), never a made-up instant.
+test("fetchedAt: absent before any fetch here, FETCH_HEAD's mtime after, in counts and status alike", async () => {
+  const a = repo();
+  const before = Date.now();
+  assert.equal((await countChangedFiles(a)).fetchedAt, undefined, "listing counts: never fetched");
+  assert.equal((await gitStatus(a)).fetchedAt, undefined, "status: never fetched");
+  g(a, "fetch", "-q", "upstream");
+  const c = await countChangedFiles(a);
+  const s = await gitStatus(a);
+  assert.equal(typeof c.fetchedAt, "number");
+  assert.ok(c.fetchedAt >= before - 2000 && c.fetchedAt <= Date.now() + 2000, `fetchedAt ${c.fetchedAt} is the fetch just made`);
+  assert.equal(s.fetchedAt, c.fetchedAt, "one reading for the badge and the sheet");
+  assert.equal(c.behind, 0);
+});
+
+test("fetchedAt: a branch with no upstream carries none — there is nothing a fetch would date", async () => {
+  const a = repo();
+  g(a, "fetch", "-q", "upstream");
+  g(a, "checkout", "-q", "-b", "solo");
+  const c = await countChangedFiles(a);
+  assert.equal(c.behind, undefined);
+  assert.equal(c.fetchedAt, undefined);
+  assert.equal((await gitStatus(a)).fetchedAt, undefined);
+});

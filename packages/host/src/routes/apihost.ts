@@ -200,7 +200,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       const c = counts.get(t.worktreePath);
       if (!c) continue;
       t.changedCount = c.changed;
-      if (c.ahead !== undefined) { t.ahead = c.ahead; t.behind = c.behind; }
+      if (c.ahead !== undefined) { t.ahead = c.ahead; t.behind = c.behind; if (c.fetchedAt !== undefined) t.fetchedAt = c.fetchedAt; }
       if (c.hasOrigin !== undefined) t.hasOrigin = c.hasOrigin;
     }
     // A push or pull in flight, off the jobs' own maps — no subprocess.

@@ -14,7 +14,7 @@ import { Button, Tag, RowSub } from "../kit";
 export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
   const {
     turns, seenMark, newIdx, unread, markRead, copy, fork, forkTurn, setForkTurn, doc, files, q, stillGoing,
-    whyTurnId, costLastOpen, costOpen, toggleCost, mixSlotsDoc, agentsSoFar, usdPerWeekPct, weekIncl,
+    whyTurnId, costLastOpen, costOpen, toggleCost, mixSlotsDoc, agentsSoFar, usdPerWeekPct, weekIncl, weekRefused,
     onOpenCost, nextTurn, onShowCli, today,
   } = m;
           const isNew = seenMark > 0 && turnTs(t) > seenMark;
@@ -142,7 +142,7 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             which={newest && stillGoing ? "running" : t.id === whyTurnId ? "last" : "earlier"}
             open={t.id === whyTurnId ? costLastOpen : costOpen.has(t.id)}
             onToggle={() => toggleCost(t.id, t.id === whyTurnId)}
-            slots={mixSlotsDoc} agentsSoFar={agentsSoFar.has(t.id)} usdPerWeekPct={usdPerWeekPct ?? null} weekIncl={weekIncl ?? null} onOpen={onOpenCost}
+            slots={mixSlotsDoc} agentsSoFar={agentsSoFar.has(t.id)} usdPerWeekPct={usdPerWeekPct ?? null} weekIncl={weekIncl ?? null} weekRefused={weekRefused ?? null} onOpen={onOpenCost}
             next={newest && !stillGoing && !t.queued ? nextTurnText(nextTurn) : null}
             why={whyTurnId === t.id} />
         );

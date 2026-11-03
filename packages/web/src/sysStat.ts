@@ -123,7 +123,11 @@ export function swapText(mem: MemBreakdown | undefined): string | null {
 export function cpuSplitText(cpu: CpuBusy | undefined): string | null {
   if (!cpu) return null;
   const span = cpu.spanMs >= 1000 ? `${Math.round(cpu.spanMs / 1000)}s` : `${cpu.spanMs}ms`;
-  return `${Math.round(cpu.userPct + cpu.sysPct)}% busy over the last ${span} — ${cpu.userPct.toFixed(0)}% running programs, ${cpu.sysPct.toFixed(0)}% in the kernel, ${cpu.idlePct.toFixed(0)}% idle.`;
+  // Windows under WSL: Task Manager's one busy figure, no user/kernel split — never a "0% in the kernel".
+  if (cpu.splitKnown === false) return `${Math.round(cpu.userPct)}% busy over the last ${span}, as Windows counts it (no split into programs and kernel).`;
+  // WSL without the Windows reading: the Linux VM's own load, not the machine's.
+  const vm = cpu.source === "wsl-vm" ? " Inside the WSL VM only — Windows programs are not in it." : "";
+  return `${Math.round(cpu.userPct + cpu.sysPct)}% busy over the last ${span} — ${cpu.userPct.toFixed(0)}% running programs, ${cpu.sysPct.toFixed(0)}% in the kernel, ${cpu.idlePct.toFixed(0)}% idle.${vm}`;
 }
 
 /** How a load average relates to this machine — a count of cores, not a

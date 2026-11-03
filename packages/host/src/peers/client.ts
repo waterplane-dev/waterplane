@@ -16,6 +16,7 @@ import {
   type PeerHello,
   type PeerJobRequest,
   type PeerJobView,
+  type PeerWeekSpend,
 } from "@waterplane/shared";
 
 export type PeerReply<T> =
@@ -92,6 +93,10 @@ export class PeerClient {
 
   postJob(t: PeerTarget, req: PeerJobRequest): Promise<PeerReply<PeerJobView>> {
     return this.call(t, "POST", "/api/peer/jobs", req, JSON_TIMEOUT_MS);
+  }
+  /** The peer's own priced spend over a span (its ledger scan can take a while over WSL's 9P). */
+  weekSpend(t: PeerTarget, from: number, to: number): Promise<PeerReply<PeerWeekSpend>> {
+    return this.call(t, "GET", `/api/peer/weekspend?from=${Math.round(from)}&to=${Math.round(to)}`, undefined, ARTIFACT_TIMEOUT_MS);
   }
   getJob(t: PeerTarget, id: string): Promise<PeerReply<PeerJobView>> {
     return this.call(t, "GET", `/api/peer/jobs/${encodeURIComponent(id)}`, undefined, JSON_TIMEOUT_MS);

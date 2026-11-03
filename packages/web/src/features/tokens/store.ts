@@ -8,6 +8,7 @@
 import type { BillingStatus, UsageInfo, UsageReading, UsageSourceId } from "@waterplane/shared";
 import { core, createStore, useCore, useStore } from "../../sdk";
 import { usageFace, weekCalKey, type UsageFace } from "./logic";
+import { LS, lsGet, lsSet } from "../../storage";
 
 export const usage = createStore<UsageInfo | null>(null);
 
@@ -17,9 +18,17 @@ export function useUsage(): UsageInfo | null {
   return useStore(usage);
 }
 
+/** Settings › Sessions › count every paired desktop (`weekCalSpend`'s `sumAll`): per desktop
+ *  (`host` class — parked on a host switch, which reloads), default off. ONE writer: `setWeekAllDesktops`. */
+export const weekAllDesktops = createStore<boolean>(lsGet(LS.weekAllDesktops) === "1");
+export function setWeekAllDesktops(on: boolean): void {
+  lsSet(LS.weekAllDesktops, on ? "1" : "0");
+  weekAllDesktops.set(on);
+}
+
 /** Dollars per weekly percent, measured off ONE reading (`weekCalKey`).
  *  ONE writer: `actions.ts`'s `calibrateWeek`. */
-export const weekRate = createStore<{ key: string; resetAt: number; usdPerPct: number; incl?: string } | null>(null);
+export const weekRate = createStore<{ key: string; resetAt: number; usdPerPct: number | null; incl?: string; refused?: string } | null>(null);
 
 /** How far two readings' weekly reset may differ and still be one week: the
  *  CLI prints a wall-clock minute and recomputes it, so it jitters by 60 s
@@ -37,6 +46,15 @@ export function useWeekUsdPerPct(): number | null {
   const r = useStore(weekRate);
   if (!r || !u || weekCalKey(u, Date.now()) == null) return null;
   return Math.abs(r.resetAt - u.weeklyResetAt!) < SAME_WEEK_MS ? r.usdPerPct : null;
+}
+
+/** Why there is no "% of week" for the reading on hand although it was measured (`weekCalSpend`'s
+ *  sentence), or null. Served on the same terms as `useWeekUsdPerPct`. */
+export function useWeekRefused(): string | null {
+  const u = useStore(usage);
+  const r = useStore(weekRate);
+  if (!r?.refused || !u || weekCalKey(u, Date.now()) == null) return null;
+  return Math.abs(r.resetAt - u.weeklyResetAt!) < SAME_WEEK_MS ? r.refused : null;
 }
 
 /** What the served calibration counted beyond this desktop — `incl. $0.84 on pc` — or null.

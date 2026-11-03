@@ -32,8 +32,10 @@ async function count(wt: string, range: string): Promise<number> {
   return Number((await git(wt, ["rev-list", "--count", range])).trim()) || 0;
 }
 
-/** When this worktree last fetched (FETCH_HEAD's mtime) — absent if it never has. */
-async function lastFetch(wt: string): Promise<number | undefined> {
+/** When this worktree last fetched (FETCH_HEAD's mtime) — absent if it never has. The ONE
+ *  reading of it: the history view's "as of", the status header's `fetchedAt` and the launcher's
+ *  counts all cut staleness off this number, so they cannot disagree about how old ↓ is. */
+export async function lastFetch(wt: string): Promise<number | undefined> {
   try {
     const p = (await git(wt, ["rev-parse", "--git-path", "FETCH_HEAD"])).trim();
     return (await stat(resolve(wt, p))).mtimeMs;

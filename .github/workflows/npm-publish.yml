@@ -183,7 +183,9 @@ jobs:
         with:
           name: provenance
           path: provenance/
-          retention-days: 1
+          # A week, so a run that fails after publishing still leaves the bundle to attach by hand
+          # (`gh run download <run> -n provenance`, then `gh release upload <tag> …`).
+          retention-days: 7
           if-no-files-found: error
 
       - name: npm publish --provenance
@@ -192,8 +194,11 @@ jobs:
 
       - name: On npm, with its shrinkwrap and a provenance attestation
         if: steps.npm.outputs.published == 'false'
+        # 15 minutes, the desktop's own wait (NPM_WAIT_SECONDS): npm has taken over 5 minutes to list
+        # a version after `npm publish` returned (0.1.17: 5m11s), and a timeout here skips the
+        # provenance-to-release job although the version is on npm.
         run: |
-          node scripts/release/npm-verify.mjs "$PKG" "$VERSION" --wait 300 --check
+          node scripts/release/npm-verify.mjs "$PKG" "$VERSION" --wait 900 --check
           echo "Published $PKG@$VERSION from $TAG ($GITHUB_SHA) with provenance: https://www.npmjs.com/package/$PKG/v/$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The attestation above, attached to the GitHub release as <tarball>.intoto.jsonl, so the release

@@ -150,8 +150,9 @@ export interface TranscriptViewProps {
   /** Dollars per percent of the weekly limit (`weekUsdPerPct`), so each turn's
    *  cost also reads as a share of the week; null/absent ⇒ no share drawn. */
   usdPerWeekPct?: number | null;
-  /** What that week calibration counted beyond this desktop (`incl. $0.84 on pc`), said in the note. */
+  /** Said in the note: what the week calibration counted beyond this desktop, or why there is none. */
   weekIncl?: string | null;
+  weekRefused?: string | null;
   /** Opens the shells sheet for this session — the status strip's "see
    *  shells" door, drawn only while the strip has shells to say something
    *  about. */

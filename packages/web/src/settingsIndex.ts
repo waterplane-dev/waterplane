@@ -101,6 +101,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "launch-permission", group: "sessions", label: "permission mode", keywords: "approvals dangerous skip ask tool calls yolo bypass" },
   { id: "launch-remote", group: "sessions", label: "remote control", keywords: "claude.ai steer remote-control" },
   { id: "launch-ask", group: "sessions", label: "ask before each launch", keywords: "prompt every time silently defaults pick" },
+  { id: "week-all-desktops", group: "sessions", label: "count every paired desktop", keywords: "week share percent calibration peer desktop spend weekly limit other machine sum" },
   { id: "spend-warn", group: "sessions", label: "spend marks", keywords: "cost warning orange red triangle threshold dollars percent week alert expensive api" },
   { id: "confirm-close", group: "sessions", label: "ask before closing a session", keywords: "close confirm uncommitted unmerged warning don't ask again dialog" },
   { id: "close-when-done", group: "sessions", label: "close automatic sessions when done", keywords: "backlog scheduled linger keep open reap slot auto-close" },

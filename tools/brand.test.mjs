@@ -18,7 +18,7 @@
  *     The Android shell's files are generated from BRAND by `scripts/brand-android.mjs`
  *     (`npm run brand:android`); a test here runs it with `--check`, so drift fails;
  *  3. the LEGACY words are a RATCHET: the number of lines carrying one, outside
- *     history (`*.md`, `docs/**`) and `brand.ts`, may only go down — comments
+ *     history (`*.md`, `docs/**`, and `site/`, the README rendered) and `brand.ts`, may only go down — comments
  *     included, because an old name in prose is stale prose. Lower
  *     `LEGACY_BASELINE` when it does. What is left is legitimate: readers of
  *     the old names (migration, fallbacks, the deprecated plugin alias), test
@@ -114,7 +114,9 @@ function codePart(path, text) {
 }
 
 /** History and the source of truth: never counted against the ratchet. */
-const isHistory = (p) => p === BRAND_FILE || p.endsWith(".md") || p.startsWith("docs/");
+const isHistory = (p) => p === BRAND_FILE || p.endsWith(".md") || p.startsWith("docs/") || p.startsWith("site/");
+// `site/` is prose too: scripts/site renders README blocks into it verbatim, so a legacy word there
+// is the README's own sentence (the project's first name, in "Why I wrote it"), not a spelling in code.
 
 /** `path:line` for every tracked line matching any of `words`, case-insensitive. */
 function grepLines(words) {

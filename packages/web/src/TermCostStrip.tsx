@@ -44,6 +44,8 @@ interface Props {
   nextTurn?: SessionCostReading | null;
   usdPerWeekPct: number | null;
   weekIncl: string | null;
+  /** Why no "% of week" although the week was measured (`useWeekRefused`). */
+  weekRefused?: string | null;
   /** The context & cost sheet — the same door the reader's card opens. */
   onOpenCost?: () => void;
   /** Typing room / full screen: the chrome is hidden to give rows to the
@@ -76,7 +78,7 @@ function useCachedTurns(sessionId: string, refreshKey: number): TranscriptTurn[]
   return turns;
 }
 
-export function TermCostStrip({ sessionId, refreshKey, busy, turnStartedAt, nextTurn, usdPerWeekPct, weekIncl, onOpenCost, chipOnly }: Props) {
+export function TermCostStrip({ sessionId, refreshKey, busy, turnStartedAt, nextTurn, usdPerWeekPct, weekIncl, weekRefused, onOpenCost, chipOnly }: Props) {
   const turns = useCachedTurns(sessionId, refreshKey);
   const [stored, setStored] = useState(() => lsBool(LS.termCostOpen));
   const slots = useMemo(() => mixSlots(turns ?? []), [turns]);
@@ -94,7 +96,7 @@ export function TermCostStrip({ sessionId, refreshKey, busy, turnStartedAt, next
       open={stored && !chipOnly} onToggle={toggle}
       onChip={chipOnly && onOpenCost ? () => { track("action:term.cost"); onOpenCost(); } : undefined}
       slots={slots} agentsSoFar={agentsSoFarAt(turns, t.id)}
-      usdPerWeekPct={usdPerWeekPct} weekIncl={weekIncl} onOpen={onOpenCost} trackId="action:term.cost"
+      usdPerWeekPct={usdPerWeekPct} weekIncl={weekIncl} weekRefused={weekRefused ?? null} onOpen={onOpenCost} trackId="action:term.cost"
       next={which === "last" && t.id === turns[turns.length - 1]?.id ? nextTurnText(nextTurn) : null} why />
   );
 }

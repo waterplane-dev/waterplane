@@ -114,8 +114,11 @@ printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, o
   `npm view` under `--wait 0`, or three failed asks in a row — "could not ask" is never "absent").
   The per-turn decision is `npmWaitDecision` in `publish-lib.mjs`, tested without a network. A failed
   run's message says to check `npm view <pkg>@<v>` before re-running: the workflow's own
-  `npm-verify --wait 300 --check` can fail AFTER a good publish when the registry lags past 5
-  minutes, and a re-run skips a version already on npm.
+  `npm-verify --wait 900 --check` can fail AFTER a good publish when the registry lags past its
+  wait, and a re-run skips a version already on npm. It was `--wait 300` until 0.1.17, whose
+  version took 5m11s to appear (0.1.14–0.1.16: 2–4 min); that run failed after publishing, so
+  `provenance-to-release` was skipped and the `.intoto.jsonl` was attached by hand from the run's
+  `provenance` artifact (`gh run download <run> -n provenance`; kept 7 days for exactly this).
 - **CI's build is rehearsed before the undraft.** After the build, `verify-public-tree` runs
   `npm run release:build -- --unsigned` in the snapshot (the exact command `npm-publish.yml` runs on
   the tag; the copy is clean, which `build.mjs` requires), then `scripts/release/check-npm-tarball.mjs`:

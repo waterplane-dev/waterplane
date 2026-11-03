@@ -29,6 +29,8 @@ import {
   type PeerHello,
   type PeerJobLedgerRow,
   type PeerStatusResponse,
+  type PeerWeekSpend,
+  type PeerWeekSpendRow,
 } from "@waterplane/shared";
 import type { PeerKind } from "@waterplane/shared";
 import { requestPeerKind } from "../net.js";
@@ -86,6 +88,19 @@ export interface PeerRouteDeps {
   signedIn?: () => Promise<"in" | "out" | null>;
   /** Ask a paired peer's `hello` now, for the phone's row. Absent ⇒ that route answers 404. */
   askPeer?: (t: PeerTarget) => Promise<PeerReply<PeerHello>>;
+  /** THIS desktop's priced spend over `[from, to]` and its last weekly reset — what `/api/peer/weekspend`
+   *  answers a paired peer. Absent ⇒ that route answers 404. */
+  weekSpend?: (from: number, to: number) => Promise<PeerWeekSpend>;
+  /** Ask a paired peer's `/api/peer/weekspend`, for the phone's `/api/peers/weekspend`. Absent ⇒ 404. */
+  askWeekSpend?: (t: PeerTarget, from: number, to: number) => Promise<PeerReply<PeerWeekSpend>>;
+}
+
+/** `?from=&to=` as a sane span (≤ 8 days, the weekly window and a margin), or null. */
+function spanOf(url: URL): { from: number; to: number } | null {
+  const from = Number(url.searchParams.get("from") ?? NaN);
+  const to = Number(url.searchParams.get("to") ?? NaN);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 8 * 86_400_000) return null;
+  return { from, to };
 }
 
 let cachedVersion: string | null = null;
@@ -148,6 +163,23 @@ export async function handlePeerRoutes(
       res.writeHead(405, { allow: "GET, POST" }).end();
       return true;
     }
+    // The week's spend on every paired desktop, for the phone's opt-in weekly calibration
+    // (`weekCalSpend`). Read-only; a peer that cannot answer is a row saying why, never a zero.
+    if (path === "/api/peers/weekspend" && method === "GET" && deps.askWeekSpend) {
+      const span = spanOf(url);
+      if (!span) { deps.json(res, { ok: false, error: "from and to must be a span of at most 8 days" }, 400); return true; }
+      const ask = deps.askWeekSpend;
+      const rows: PeerWeekSpendRow[] = await Promise.all(deps.store.list().map(async (p): Promise<PeerWeekSpendRow> => {
+        const t = deps.store.outbound(p.name);
+        if (!t) return { peer: p.name, ok: false, error: `this desktop cannot call ${p.name} (no outbound token)` };
+        const r = await ask(t, span.from, span.to);
+        if (r.kind !== "ok") return { peer: p.name, ok: false, error: r.kind === "unreachable" ? `${p.name} did not answer: ${r.error}` : r.text };
+        const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+        return { peer: p.name, ok: true, usd: num(r.body?.usd), weeklyResetAt: num(r.body?.weeklyResetAt) };
+      }));
+      deps.json(res, { ok: true, peers: rows });
+      return true;
+    }
     if (path.endsWith("/status") && method === "GET" && deps.askPeer) {
       let pname: string;
       try { pname = decodeURIComponent(path.slice("/api/peers/".length, -"/status".length)); } catch { pname = ""; }
@@ -195,6 +227,12 @@ export async function handlePeerRoutes(
       const signed = deps.signedIn ? await deps.signedIn() : null;
       const hello: PeerHello = { peerApi: PEER_API_VERSION, version: deps.version ?? hostVersion(), you: peer.name, ...(signed ? { claudeSignedIn: signed === "in" } : {}) };
       deps.json(res, hello);
+      return true;
+    }
+    if (path === "/api/peer/weekspend" && method === "GET" && deps.weekSpend) {
+      const span = spanOf(url);
+      if (!span) { deps.json(res, { ok: false, error: "from and to must be a span of at most 8 days" }, 400); return true; }
+      deps.json(res, await deps.weekSpend(span.from, span.to));
       return true;
     }
     const serve = deps.serve ?? registeredServe;

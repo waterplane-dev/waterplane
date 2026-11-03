@@ -141,3 +141,12 @@ test("nearly full by either measure: 10 GB on any disk, 5% on a big one", () => 
   assert.equal(diskLow(v(4000, 150)), true);   // 3.75%
   assert.equal(diskLow(v(4000, 300)), false);  // 7.5%
 });
+
+test("cpuSplitText: Windows' one figure is not split, and the WSL VM's figure says whose it is", () => {
+  const base = { userPct: 40, sysPct: 0, idlePct: 60, cores: [], spanMs: 2000 };
+  const win = cpuSplitText({ ...base, source: "windows", splitKnown: false });
+  assert.match(win, /^40% busy over the last 2s, as Windows counts it/);
+  assert.doesNotMatch(win, /kernel,|0% in the kernel/);
+  assert.match(cpuSplitText({ ...base, sysPct: 5, source: "wsl-vm" }), /Inside the WSL VM only/);
+  assert.doesNotMatch(cpuSplitText({ ...base, sysPct: 5 }), /WSL/);
+});
