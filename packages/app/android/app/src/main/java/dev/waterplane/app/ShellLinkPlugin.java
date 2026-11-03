@@ -87,7 +87,11 @@ public class ShellLinkPlugin extends Plugin {
         String label = call.getString("label");
         if (label == null || label.isEmpty()) label = hostOf(url);
         ShellLinkService.enable(getContext(), url, protocol, label);
-        call.resolve(ShellLinkService.describe(getContext()));
+        // Same shape as status(): describe() knows nothing of the permission,
+        // and without it the caller toasts "notifications are blocked" every time.
+        JSObject ret = ShellLinkService.describe(getContext());
+        ret.put("notifications", getPermissionState(NOTIFICATIONS) == PermissionState.GRANTED);
+        call.resolve(ret);
     }
 
     /** Switch it off: the service stops, its notification goes, the periodic

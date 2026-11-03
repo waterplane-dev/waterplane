@@ -57,6 +57,21 @@
 </section>
 <!-- /readme:desk -->
 
+<!-- readme:why -->
+<section class="row" id="why-i-built-it">
+  <div class="text">
+<h2>Why I built it</h2>
+<p>I build software that has to run before I trust it: Android apps in the emulator, Garmin watch apps in the Connect IQ simulator. A cloud sandbox has neither, so my agents have to run on my own machine. They also have to sign in as me, to stores, consoles and test accounts, and a cloud session is neither meant for that nor a good place for it.</p>
+<p>And I am away a lot, while the agents keep needing me: a decision here, an approval there. An approve-everything mode works around some of that, but do you want it on a system with real users? What I had was NoMachine to the Mac, VS Code to start remote Claude sessions, and a few slightly better workflows on top, all of them annoying, inconvenient and not very secure. I tried a lot of the projects others built for this; none fit the way I work or everything I needed. So waterplane was born, first as "USAMC: Unsuck Agentic Mobile Coding", and that is still what it is at its core.</p>
+<p>Two more things I did not feel good about grew into parts of it:</p>
+<ul>
+  <li><strong>Remote desktop on a phone.</strong> Every remote desktop for the Mac I tried is a pain on a phone screen, and it was surprisingly easy to have Claude build one that is not: the experimental <a href="https://github.com/waterplane-dev/waterplane/blob/main/packages/extensions/desktop/README.md">live desktop extension</a> streams the screen to the phone and, only if you switch it on, takes taps and keys back.</li>
+  <li><strong>Logins an agent always has.</strong> Credentials and admin-console sessions sitting where every agent can read them. The experimental vault plugin keeps them sealed and asks the phone before an agent uses one. Do not trust it yet: so far only agents have tortured it, the public has barely reviewed it. And some of the risk no vault removes: on a compromised machine it makes the attacker's work harder, nothing more.</li>
+</ul>
+  </div>
+</section>
+<!-- /readme:why -->
+
 <!-- readme:how-it-works -->
 <section class="row" id="how-it-works">
   <div class="text">

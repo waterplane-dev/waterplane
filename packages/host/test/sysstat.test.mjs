@@ -230,3 +230,24 @@ test("/proc/mounts keeps real block devices and unescapes spaces", () => {
   ].join("\n");
   assert.deepEqual(parseProcMounts(text), ["/", "/mnt/My Disk"]);
 });
+
+// ── Windows-wide CPU under WSL (wincpu.ts) ──
+{
+  const { parseCpuLine } = await import("../dist/wincpu.js");
+  const { isWsl } = await import("../dist/ocrlocal.js");
+  test("wincpu: parseCpuLine accepts a plain number, drops anything else", () => {
+    assert.equal(parseCpuLine("37.5\r"), 37.5);
+    assert.equal(parseCpuLine(" 0.0 "), 0);
+    assert.equal(parseCpuLine("120.0"), 100, "turbo utility above 100 is clamped");
+    assert.equal(parseCpuLine("37,5"), null, "comma decimal is not guessed");
+    assert.equal(parseCpuLine(""), null);
+    assert.equal(parseCpuLine("Get-CimInstance : error"), null);
+    assert.equal(parseCpuLine("-3"), null);
+    assert.equal(parseCpuLine("9999"), null);
+  });
+  test("wincpu: WSL is detected from the env or /proc/version", () => {
+    assert.equal(isWsl({}, "5.15.167.4-microsoft-standard-WSL2"), true);
+    assert.equal(isWsl({ WSL_DISTRO_NAME: "Ubuntu" }, "Linux version 6.1"), true);
+    assert.equal(isWsl({}, "Linux version 6.1.0 (gcc)"), false);
+  });
+}

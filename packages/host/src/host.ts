@@ -5,18 +5,22 @@ import { spawn } from "node:child_process";
 import type { HostStat } from "@waterplane/shared";
 import { execFileP as pexecFile } from "./proc.js";
 import { encodePs, isWsl, psQuote } from "./ocrlocal.js";
+import { windowsCpuNow } from "./wincpu.js";
 
 
 /** CPU/memory/load snapshot of this machine. Cheap, synchronous, no shell. */
 export function hostStat(): HostStat {
   const load = os.loadavg();
   const cores = os.cpus().length || 1;
+  const win = windowsCpuNow();
   return {
     platform: process.platform,
     hostname: os.hostname(),
     cores,
     loadavg: [load[0], load[1], load[2]],
-    cpuPct: Math.round((load[0] / cores) * 100),
+    // Under WSL the load average is the VM's own; Task Manager shows Windows-wide.
+    cpuPct: win ? Math.round(win.pct) : Math.round((load[0] / cores) * 100),
+    ...(win ? { cpuSource: "windows" as const } : {}),
     memTotal: os.totalmem(),
     memFree: os.freemem(),
     uptime: os.uptime(),

@@ -56,6 +56,8 @@ import type {
 import { ROOT, env } from "./env.js";
 import { BRAND, envName, PLUGIN_READER_NAME_RE, PLUGIN_THERMAL_TIMEOUT_MS } from "@waterplane/shared";
 import type { PluginThermalReader } from "@waterplane/shared";
+import { isWsl } from "./ocrlocal.js";
+import { windowsCpuNow } from "./wincpu.js";
 import { hostStateDir } from "./branddirs.js";
 import { execFileP as pexecFile } from "./proc.js";
 
@@ -126,6 +128,8 @@ export function cpuBusyFrom(
  *  from. Module-level for `clihealth.ts`'s reason — the alternative is
  *  threading a sampler object through every call site to hold two numbers. */
 let prevTicks: { at: number; cores: CoreTicks[] } | null = null;
+
+const isWslHost = (): boolean => process.platform === "linux" && isWsl();
 
 function readCpuBusy(now: number): CpuBusy | null {
   const cores = os.cpus().map((c) => ({ ...c.times }));
@@ -624,7 +628,13 @@ export async function sampleSysStat(): Promise<SysStat> {
     loadavg: [load[0], load[1], load[2]],
     cores: os.cpus().length || 1,
   };
-  const cpu = readCpuBusy(now);
+  const vmCpu = readCpuBusy(now);
+  // Under WSL2 the VM sees only its own load; prefer the Windows-wide figure.
+  // It has no user/sys split, so `splitKnown:false` says so rather than 0 lying.
+  const win = windowsCpuNow(now);
+  const cpu: CpuBusy | null = win
+    ? { userPct: win.pct, sysPct: 0, idlePct: Math.round((100 - win.pct) * 10) / 10, cores: [], spanMs: vmCpu?.spanMs ?? 0, source: "windows", splitKnown: false }
+    : vmCpu && isWslHost() ? { ...vmCpu, source: "wsl-vm" } : vmCpu;
   const mem = await readMem(os.totalmem()).catch(() => null);
 
   if (!slow || now - slow.at >= sysStatSlowMs()) {

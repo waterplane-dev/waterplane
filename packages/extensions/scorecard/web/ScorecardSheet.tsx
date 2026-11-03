@@ -144,6 +144,8 @@ export function ScorecardSheet() {
             </div>
           </div>
         ) : <div className="empty">{v.absent ?? "No score yet."}</div>}
+        <div className="section section-head">Which repo is scored</div>
+        <ScoredAs key={repo.id} repo={repo.id} v={v} />
         {v.score != null && !cut && <Hint style={{ padding: "0 14px" }}>{openChecks(v).length} failing, {sec.accepted.length} accepted, {sec.passing.length} passing{v.readAt ? ` · asked ${ago(v.readAt)}` : ""}.</Hint>}
 
         {cut ? <List repo={repo.id} rows={cut} empty="Nothing failing and not accepted." /> : v.score != null && (
@@ -158,8 +160,6 @@ export function ScorecardSheet() {
             </details>
           </>
         )}
-        <div className="section section-head">Which repo is scored</div>
-        <ScoredAs key={repo.id} repo={repo.id} v={v} />
       </div>
     </div>
   );

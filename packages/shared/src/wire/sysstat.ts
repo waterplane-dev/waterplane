@@ -62,6 +62,13 @@ export interface CpuBusy {
   /** How long the split covers, ms. A number, because a "37%" over four
    *  seconds and over four minutes are different claims. */
   spanMs: number;
+  /** Where the reading came from, when not the host OS itself: `windows` =
+   *  the Windows-wide figure read through WSL interop; `wsl-vm` = only the
+   *  WSL2 VM's own load (interop unavailable), so it under-reports the PC. */
+  source?: "windows" | "wsl-vm";
+  /** `false` when only the total is known: `userPct` then holds total busy,
+   *  `sysPct` is 0 and `cores` is empty. Absent means a real split. */
+  splitKnown?: false;
 }
 
 /**

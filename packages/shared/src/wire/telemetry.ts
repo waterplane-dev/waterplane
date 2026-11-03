@@ -238,6 +238,9 @@ export interface HostStat {
   loadavg: [number, number, number];
   /** 1-min load as a percent of cores (loadavg[0] / cores * 100), rounded. */
   cpuPct: number;
+  /** `windows` when `cpuPct` is the Windows-wide figure read through WSL interop
+   *  (the load average inside the VM under-reports the PC); absent otherwise. */
+  cpuSource?: "windows";
   /** Total / free physical memory, bytes. */
   memTotal: number;
   memFree: number;

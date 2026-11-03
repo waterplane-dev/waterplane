@@ -47,6 +47,35 @@ git remote, the job waits on the other desktop's own queue under its owner's swi
 answer comes back into the asking session as one prompt.
 <!-- /site:desk -->
 
+<!-- site:why -->
+### Why I built it
+
+I build software that has to run before I trust it: Android apps in the emulator, Garmin watch
+apps in the Connect IQ simulator. A cloud sandbox has neither, so my agents have to run on my own
+machine. They also have to sign in as me, to stores, consoles and test accounts, and a cloud
+session is neither meant for that nor a good place for it.
+
+And I am away a lot, while the agents keep needing me: a decision here, an approval there. An
+approve-everything mode works around some of that, but do you want it on a system with real
+users? What I had was NoMachine to the Mac, VS Code to start remote Claude sessions, and a few
+slightly better workflows on top, all of them annoying, inconvenient and not very secure. I tried
+a lot of the projects others built for this; none fit the way I work or everything I needed. So
+waterplane was born, first as "USAMC: Unsuck Agentic Mobile Coding", and that is still what it is
+at its core.
+
+Two more things I did not feel good about grew into parts of it:
+
+- **Remote desktop on a phone.** Every remote desktop for the Mac I tried is a pain on a phone
+  screen, and it was surprisingly easy to have Claude build one that is not: the experimental
+  [live desktop extension](packages/extensions/desktop/README.md) streams the screen to the phone
+  and, only if you switch it on, takes taps and keys back.
+- **Logins an agent always has.** Credentials and admin-console sessions sitting where every agent
+  can read them. The experimental vault plugin keeps them sealed and asks the phone before an
+  agent uses one. Do not trust it yet: so far only agents have tortured it, the public has barely
+  reviewed it. And some of the risk no vault removes: on a compromised machine it makes the
+  attacker's work harder, nothing more.
+<!-- /site:why -->
+
 **Why not let an agent such as OpenClaw run Claude Code for you?** That is enough for "go do X" and
 a message back. waterplane is the more comfortable path, with more control where you want it: the
 live session, its questions as buttons, its screenshots in a gallery, the diff before the commit.
