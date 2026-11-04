@@ -8,14 +8,14 @@
  * side (as that side's outbound or inbound token) and never stored on the
  * phone. A re-pair mints new ones, which replaces the old on both hosts.
  */
-import { parkedKeyFor, type PeerStatusResponse, type SavedHost } from "@waterplane/shared";
+import { type PeerStatusResponse, type SavedHost } from "@waterplane/shared";
 import { api } from "../../api";
 import { askConfirm } from "../../Confirm";
-import { deviceToken, isDeviceToken } from "../../deviceToken";
+import { tokenForHost } from "../../deviceToken";
 import { activeHost, browserKV, listHosts, readHosts, realHosts, switchTo, writeSwitch } from "../../hosts";
-import { isNativeShell } from "../../hostUrl";
-import { LS, lsGet } from "../../storage";
-import { core } from "../../sdk";
+import { dialBaseOf, isNativeShell, tokenWithheld } from "../../hostUrl";
+import { LS } from "../../storage";
+import { core, hasShellTls } from "../../sdk";
 import {
   mintPeerToken, noHostText, pairBodies, pairCandidates, pairRefusal, peerNameFor, peerReplyWhy, peerTagFacts, selfAddrs, sidesText,
   type HostLedger, type PairedRow, type PeerRowView, type PeerTagFacts, type SideResult,
@@ -27,11 +27,15 @@ export function pairableHosts(): SavedHost[] {
   return isNativeShell() ? realHosts(listHosts()) : [];
 }
 
-/** This phone's token for `host`: bare for the active one, parked for the rest. */
+/** Where `host` is asked: its TLS address when it holds a pin, like every other dial of it. */
+function dialOf(host: SavedHost): string {
+  return dialBaseOf(host, hasShellTls());
+}
+
+/** This phone's token for `host`: bare for the active one, parked for the rest. Never to an address
+ *  that reads plain on a pinned desktop (`tokenWithheld`). */
 function tokenFor(host: SavedHost): string | null {
-  const active = activeHost();
-  const t = active?.id === host.id ? deviceToken() : lsGet(parkedKeyFor(LS.deviceToken, host.id));
-  return isDeviceToken(t) ? t : null;
+  return tokenWithheld(dialOf(host), host) ? null : tokenForHost(host.id);
 }
 
 function busy(delta: 1 | -1): void {
@@ -63,7 +67,7 @@ export async function loadPeers(): Promise<void> {
   try {
     const ledgers = await Promise.all(cands.map(async (c): Promise<HostLedger> => {
       try {
-        const r = await api.peers.on(c.host.base, tokenFor(c.host), "GET", "/api/peers");
+        const r = await api.peers.on(dialOf(c.host), tokenFor(c.host), "GET", "/api/peers");
         const rows = r.status === 200 ? asRows(r.body) : null;
         const self = r.status === 200 ? asSelf(r.body) : null;
         return rows
@@ -83,7 +87,7 @@ async function loadSignIns(ledgers: HostLedger[]): Promise<void> {
   const asks = ledgers.flatMap((l) => (l.rows ?? []).filter((r) => r.outbound).map((r) => ({ l, r })));
   const got = await Promise.all(asks.map(async ({ l, r }) => {
     try {
-      const res = await api.peers.on(l.host.base, tokenFor(l.host), "GET", `/api/peers/${encodeURIComponent(r.name)}/status`);
+      const res = await api.peers.on(dialOf(l.host), tokenFor(l.host), "GET", `/api/peers/${encodeURIComponent(r.name)}/status`);
       const b = res.body as PeerStatusResponse | null;
       return res.status === 200 && b?.ok && typeof b.claudeSignedIn === "boolean" ? [[`${l.host.id}/${r.name}`, b.claudeSignedIn] as const] : [];
     } catch { return []; }
@@ -119,7 +123,7 @@ export async function pairHosts(aId: string, bId: string): Promise<void> {
   try {
     const write = async (host: SavedHost, body: unknown): Promise<SideResult> => {
       try {
-        const r = await api.peers.on(host.base, tokenFor(host), "POST", "/api/peers", body);
+        const r = await api.peers.on(dialOf(host), tokenFor(host), "POST", "/api/peers", body);
         return r.status === 200 ? { host: host.name, ok: true } : { host: host.name, ok: false, why: peerReplyWhy(r.status, r.body) };
       } catch { return { host: host.name, ok: false }; }
     };
@@ -144,7 +148,7 @@ export async function unpair(p: PairedRow): Promise<void> {
   core().say.track("action:peers.unpair");
   const del = async (host: SavedHost, name: string): Promise<SideResult> => {
     try {
-      const r = await api.peers.on(host.base, tokenFor(host), "DELETE", `/api/peers/${encodeURIComponent(name)}`);
+      const r = await api.peers.on(dialOf(host), tokenFor(host), "DELETE", `/api/peers/${encodeURIComponent(name)}`);
       // 404: already gone, which is what was asked for.
       return r.status === 200 || r.status === 404 ? { host: host.name, ok: true } : { host: host.name, ok: false, why: peerReplyWhy(r.status, r.body) };
     } catch { return { host: host.name, ok: false }; }

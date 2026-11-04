@@ -34,7 +34,7 @@ const SRC = join(ROOT, "packages", "shared", "src");
  *  barrel: the module's header and its re-exports, nothing defined. */
 const MAX_BARREL_LINES = 90; // 89 → 90 (2026-10-16): the slot check's one export line (`intent/slot.ts`)
 
-/** Every `src/intent/*.ts`. The ESLint `max-lines` warning is 900; a slice
+/** Every `src/intent/*.ts`. The ESLint `max-lines` error is 900 lines of code; a slice
  *  here is held to 600 because the largest region of the old file (the
  *  ladder) fits in it, and a slice past it is two responsibilities. */
 const MAX_SLICE_LINES = 600;

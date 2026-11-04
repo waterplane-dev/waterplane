@@ -28,6 +28,7 @@ import {
   replay, sessions, submit, switchMode,
 } from "./desk.ts";
 import { setBudget } from "./budget.ts";
+import { fireBuild, NO_DESKTOP } from "./builds.ts";
 import { setFollowUp } from "./followup.ts";
 import { addWaiting } from "./waiting.ts";
 import { inRepos, mint, NOT_A_DEMO_REPO } from "./model.ts";
@@ -63,7 +64,7 @@ const B = { tier: "B" } as const;
 const because = (reason: string) => ({ tier: "B", reason }) as const;
 
 // ── the sentences tier B answers with — each says what would make it work ──
-const BUILDS = because("Builds run commands on your desktop — the demo has no desktop to run them on. Connect your own to build.");
+const BUILDS = because(NO_DESKTOP);
 const CAPTURE = because("Screenshots are taken on your desktop's screen — connect your own desktop to capture one.");
 const ASSESS = because("An assessment spends model calls on your desktop — connect your own to run one.");
 const FANOUT = because("Fanning out opens sessions in several repos on your desktop — connect your own to try it.");
@@ -386,7 +387,14 @@ export const HANDLERS = {
   },
 
   // ── reads a sheet sends on open: answered empty, never a toast ────────
-  "build.list": { tier: "A", run: (c) => { c.reply({ t: "build.list", repoDir: c.msg.repoDir, builds: [], runs: [] }); } },
+  // Empty unless a fault journey seeded a fixture (`builds.ts`), as `build.run` below.
+  "build.list": {
+    tier: "A",
+    run: (c) => {
+      const f = m(c).builds?.repoDir === c.msg.repoDir ? m(c).builds : undefined;
+      c.reply({ t: "build.list", repoDir: c.msg.repoDir, builds: f?.list ?? [], runs: f?.runs ?? [] });
+    },
+  },
   "capture.list": { tier: "A", run: (c) => { c.reply({ t: "capture.list", repoDir: c.msg.repoDir, targets: [], runs: [], backends: [] }); } },
   "fanout.list": { tier: "A", run: (c) => { c.reply({ t: "fanout.list", runs: [] }); } },
   "launch.list": { tier: "A", run: (c) => { c.reply({ t: "launch.list", launches: m(c).launches ?? [] }); } },
@@ -434,7 +442,7 @@ export const HANDLERS = {
   "backlog.validate": ASSESS,
   "build.cancel": BUILDS,
   "build.options": BUILDS,
-  "build.run": BUILDS,
+  "build.run": { tier: "A", run: (c) => fireBuild(c.desk, c.msg) },
   "build.save": BUILDS,
   // The editor waits on this frame to stop saying "reading the repo..." (a toast
   // alone left that spinner up for good); the real host answers a scan it cannot

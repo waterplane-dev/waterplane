@@ -13,6 +13,7 @@
  * `HostMessage` (`Frame<"…">`) so a wire change shows up here as a tsc error.
  */
 import type { DetectedPrompt, HostMessage, NetRetryConfig, SessionInfo, TranscriptTurn } from "@waterplane/shared";
+import type { DemoBuilds } from "./builds.ts";
 import type { DemoState } from "./snapshot.ts";
 
 /** The `HostMessage` of type `T`. */
@@ -130,6 +131,8 @@ export interface DemoModel {
   schedules?: Frame<"schedule.list">["entries"];
   intents?: Frame<"intent.list">["intents"];
   launches?: Frame<"launch.list">["launches"];
+  /** A fault journey's build commands (`builds.ts`). Absent = the demo has no desktop to run one. */
+  builds?: DemoBuilds;
   deliveries?: Frame<"delivery.list">["items"];
   /** `/api/repos/<id>/artifacts` files (`FileEntry`), per repo id. Thumbnails
    *  come from bundled media through `abs()` (WP1/WP4), never through here. */

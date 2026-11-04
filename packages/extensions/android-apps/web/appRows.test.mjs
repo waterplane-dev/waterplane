@@ -102,6 +102,7 @@ test("the summary counts the list against what the phone knows", () => {
 test("install-now is offered only where a build is actually here", () => {
   const [withBuild] = appRows([build()], ["de.hoh.tiptoi"], PHONE);
   assert.equal(appInstallVerb(withBuild, PHONE)?.id, "l_1");
+  assert.equal(appInstallVerb(withBuild, { ...PHONE, plainRoute: true }), null, "no verb over a plain route; the card says why");
   assert.match(appInstallVerb(withBuild, PHONE)?.label ?? "", /install Tiptoi 0\.1\.98 now/);
   const [noBuild] = appRows([], ["de.hoh.tiptoi"], PHONE);
   assert.equal(appInstallVerb(noBuild, PHONE), null);
@@ -116,7 +117,8 @@ test("an app row words its state exactly as the download row does", () => {
   const [row] = appRows([build({ install: "asked" })], [], PHONE);
   assert.equal(appStateText(row), installStatusText(build({ install: "asked" })));
   const [failed] = appRows([build({ install: "failed", installError: "signatures do not match" })], [], PHONE);
-  assert.match(appStateText(failed) ?? "", /signatures do not match/);
+  assert.equal(appStateText(failed), installStatusText(build({ install: "failed", installError: "signatures do not match" })));
+  assert.match(appStateText(failed) ?? "", /signed with a different key/);
 });
 
 // ── ready to install ─────────────────────────────────────────────────

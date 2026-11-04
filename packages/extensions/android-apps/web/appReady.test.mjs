@@ -94,3 +94,12 @@ test("failure words: Play Protect and an abandoned session are explained, unknow
   assert.match(failureText("INSTALL_FAILED_ABORTED: Session was abandoned"), /retry starts a fresh one/i);
   assert.equal(failureText("something new"), "something new");
 });
+
+test("over a plain route the card stops at download and says why, with no button to press", async () => {
+  const { appHeadline, appSteps, fixFor } = await import("./appSteps.ts");
+  const [r] = readiness([facts()], [], ph({ caps: { ...PHONE, plainRoute: true }, log: [entry({})] }));
+  assert.equal(r.blocker?.id, "route");
+  assert.equal(fixFor(r), null);
+  assert.match(appHeadline(r), /stops at step 2, download/);
+  assert.match(appSteps(r).find((s) => s.id === "download").text, /do not download or install on this route/);
+});

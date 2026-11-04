@@ -52,6 +52,10 @@ import { LS_WORK } from "./storage/keysWork.ts";
  */
 export const LS = {
   healthAxis: lsKey("healthAxis"),
+  /** The app lock's switch ("1"/"0"). A security switch, so never in `UI_RESET_KEYS`, and never synced. */
+  appLock: lsKey("appLock"),
+  /** The sentinel path's `{ ct, nonce }`: random bytes under the lock's key, nothing secret (`features/appLock`). */
+  appLockBlob: lsKey("appLockBlob"),
   ...LS_PREFS,
   ...LS_WORK,
   ...LS_VIEW,
@@ -118,9 +122,9 @@ export const KEY_SCOPE = {
   launchAsk: "host", spendWarn: "host", weekAllDesktops: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
   autoSend: "host", updatesAutoCheck: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
   hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", agentWindowWarn: "host", syncTs: "host",
-  // identity and the host list itself; healthAxis is this screen's choice
-  healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
-  hostSwitch: "device", hostSwitchFailed: "device", hostsGone: "device",
+  // identity and the host list itself; healthAxis is this screen's choice, the app lock this hand's
+  healthAxis: "device", appLock: "device", appLockBlob: "device", tokenSeal: "device", tokenSealOn: "device", tokenSealDead: "device", tokenSealAuth: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
+  hostSwitch: "device", hostSwitchFailed: "device", pairCodesSent: "device", hostOpenAfter: "device", hostsGone: "device",
   // that host's ledger row and LAN identity: parked with it
   deviceToken: "host", lanIdentity: "host", passive: "host",
   // what that host's plugin list last said

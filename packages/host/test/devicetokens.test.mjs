@@ -202,13 +202,14 @@ test("ratelimit: the key map stays bounded", () => {
 
 // ── doctor ───────────────────────────────────────────────────────────────────
 
-test("doctor lan: quiet unbound, warn without a password, ok with one", () => {
+test("doctor lan: quiet unbound, warn without a password, and warn with one (plain HTTP)", () => {
   const r = root();
   assert.equal(checkLan({ root: r, port: 8770, allowPublic: false }, ["192.168.1.5"]), null);
   assert.equal(checkLan({ root: r, port: 8770, allowPublic: true }, []), null);
   assert.equal(checkLan({ root: r, port: 8770, allowPublic: true }, ["192.168.1.5"]).status, "warn");
   new AuthManager(r).setPassword("a long password");
   const ok = checkLan({ root: r, port: 8770, allowPublic: true }, ["192.168.1.5"]);
-  assert.equal(ok.status, "ok");
+  assert.equal(ok.status, "warn");
   assert.match(ok.detail, /LAN ready at http:\/\/192\.168\.1\.5:8770 \(password set/);
+  assert.match(ok.detail, /not encrypted/);
 });

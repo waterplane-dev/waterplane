@@ -211,7 +211,8 @@ test("the landing page for a bad, spent or expired code reveals nothing", async 
   }
   const live = store.mint(null).code;
   const res = fakeRes();
-  await handlePairPage(fakeReq(`/pair/${live}`), res, d);
+  // Over the tailnet: a plain Wi-Fi socket burns a live code instead (`pairpake.test.mjs`).
+  await handlePairPage(fakeReq(`/pair/${live}`, "100.64.9.9"), res, d);
   assert.equal(res.status, 200);
   assert.match(res.body, /SECRETHOST/);
   assert.match(res.body, /No Android app is offered from this computer/);

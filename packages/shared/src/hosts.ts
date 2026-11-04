@@ -17,7 +17,7 @@
  * - which IndexedDB a host's caches live in (`dbNameFor`).
  */
 
-import { normalizeHostBase } from "./hosturl.js";
+import { isPlainRoute, normalizeHostBase, type HostTls } from "./hosturl.js";
 import { BRAND, LEGACY } from "./brand.js";
 
 /** A host's LAN side: the plain-HTTP address on the home network, the Wi-Fi
@@ -39,6 +39,24 @@ export interface SavedHost {
   /** The host migrated from the single-`hostBase` era: keeps the old IDB name. */
   legacy?: true;
   lan?: HostLan;
+  /** The desktop's own id: the re-pair match key. Only from a seal or a welcome on a protected
+   *  route, never from an unsealed reply. Every field below is written by `web/hosts.ts`'s setters. */
+  hostId?: string;
+  /** Its LAN TLS listener and pin. Never with `tlsOff`. */
+  tls?: HostTls;
+  /** The person chose plain HTTP for this desktop: nothing learned over a welcome sets `tls` again. */
+  tlsOff?: true;
+  /** The person typed this `https` address, which keeps their own CA-valid front door protected.
+   *  `https:` only; written only by the address form's save (`vouchedAfter`). */
+  vouched?: true;
+  updateKey?: HostUpdateKey;
+}
+
+/** The key this desktop signs its bundles with, and the highest generation seen under it. */
+export interface HostUpdateKey {
+  /** Base64 of the public key's SPKI DER. */
+  key: string;
+  gen: number;
 }
 
 /** The migrated host's id. Deterministic so the migration is idempotent even
@@ -160,6 +178,38 @@ export function cleanHostLan(raw: unknown): HostLan | null {
   return { base, ssids: normalizeSsids(r.ssids), auto: r.auto === true };
 }
 
+/** A stored pin, or `null`: an unreadable one is no pin, never a guess at one. */
+export function cleanHostTls(raw: unknown): HostTls | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { port, spki } = raw as Record<string, unknown>;
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return typeof spki === "string" && /^[0-9a-f]{64}$/.test(spki) ? { port, spki } : null;
+}
+
+export function cleanUpdateKey(raw: unknown): HostUpdateKey | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { key, gen } = raw as Record<string, unknown>;
+  if (typeof key !== "string" || !/^[A-Za-z0-9+/]{16,1024}={0,2}$/.test(key)) return null;
+  return typeof gen === "number" && Number.isSafeInteger(gen) && gen >= 0 ? { key, gen } : null;
+}
+
+/**
+ * What `vouched` is after a write of `base`. `opened` is what the address form's base field opened
+ * with, absent for every other write: a pairing, a deep link and a found desktop never vouch. The
+ * field's text must differ from that, so saving a prefilled address (a rename) vouches for nothing,
+ * and the confirm prompt opens EMPTY (`addressNeedsConfirm`), so retyping the saved address counts.
+ */
+export function vouchedAfter(prev: Pick<SavedHost, "base" | "vouched"> | null, base: string, opened: string | undefined): boolean {
+  if (opened === undefined || !base.startsWith("https:")) return false;
+  return normalizeHostBase(opened) !== base || (prev?.vouched === true && prev.base === base);
+}
+
+/** An `https` address that reads as plain until the person types it: the ask opens an EMPTY field,
+ *  because a row saved before the route rule may hold an address the network planted. */
+export function addressNeedsConfirm(row: Pick<SavedHost, "base" | "vouched">): boolean {
+  return row.base.startsWith("https:") && !row.vouched && isPlainRoute(row.base);
+}
+
 /** One stored row, or `null` if it cannot be one. A name that cleans to
  *  nothing falls back to the address's own name, never to a placeholder. */
 export function cleanSavedHost(raw: unknown): SavedHost | null {
@@ -172,6 +222,13 @@ export function cleanSavedHost(raw: unknown): SavedHost | null {
   if (r.legacy === true) host.legacy = true;
   const lan = cleanHostLan(r.lan);
   if (lan) host.lan = lan;
+  if (isHostId(r.hostId)) host.hostId = r.hostId;
+  const tls = r.tlsOff === true ? null : cleanHostTls(r.tls);
+  if (tls) host.tls = tls;
+  if (r.tlsOff === true) host.tlsOff = true;
+  if (r.vouched === true && base.startsWith("https:")) host.vouched = true;
+  const updateKey = cleanUpdateKey(r.updateKey);
+  if (updateKey) host.updateKey = updateKey;
   return host;
 }
 

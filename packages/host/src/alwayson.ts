@@ -96,7 +96,7 @@ export function desktopInstructionRows(cwd: string, src?: DesktopSources): { row
     const s = src ?? sourcesOf(configDir, cwd);
     const rows = desktopInventory({
       fs: worktreeFs(configDir), memoryRel, plugins: s.plugins, userMcp: s.userMcp,
-      disabledPlugins: s.disabledPlugins, userOnlyPlugins: s.userOnlyPlugins, localMcp: s.localMcp,
+      disabledPlugins: s.disabledPlugins, userOnlyPlugins: s.userOnlyPlugins, localMcp: s.localMcp, hooks: s.hooks,
     });
     // A plugin installed outside the config dir is not read through the config-dir reader: listed, unsized.
     for (const p of s.outside) {

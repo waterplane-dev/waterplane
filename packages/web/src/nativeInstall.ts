@@ -22,7 +22,8 @@
  * bundle every browser downloads.
  */
 import { nativePlugin } from "./shellBridge";
-import { isNativeShell } from "./hostUrl";
+import { isNativeShell, plainDownloadRoute } from "./hostUrl";
+import { PLAIN_ROUTE_NO_APK } from "@waterplane/shared";
 import { NO_INSTALL, shellDistribution, type InstallCaps, type InstallSources } from "./installPolicy";
 import { LS, lsJson, lsSetJson } from "./storage";
 import { onSettingsChange } from "./settings";
@@ -72,6 +73,7 @@ export async function installStatus(): Promise<{ caps: InstallCaps; allow: strin
         canInstall: !!r?.canInstall,
         silent: !!r?.silent,
         ...shellDistribution(r),
+        ...(plainDownloadRoute() ? { plainRoute: true } : {}),
       },
       allow: Array.isArray(r?.allow) ? r.allow.filter((s) => typeof s === "string") : [],
       // Null where the shell predates the switch: unknown, never "off".
@@ -133,6 +135,7 @@ export async function setCleanAfterInstall(on: boolean): Promise<void> {
 export async function nativeInstall(id: string): Promise<void> {
   const p = plugin();
   if (!p) throw new Error("this device cannot install apps");
+  if (plainDownloadRoute()) throw new Error(PLAIN_ROUTE_NO_APK);
   await p.install({ id });
 }
 

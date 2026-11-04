@@ -56,6 +56,7 @@ import { manifest as demoTour } from "./demoTour";
 import { manifest as newSession } from "./newSession";
 import { manifest as halt } from "./halt";
 import { manifest as askRules } from "./askRules";
+import { manifest as appLock } from "./appLock";
 import { manifest as cliRestart } from "./cliRestart";
 import { manifest as repoSync } from "./repoSync";
 import { manifest as whatsnew } from "./whatsnew";
@@ -106,6 +107,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   newSession,
   halt,
   askRules,
+  appLock,
   cliRestart,
   repoSync,
   whatsnew,

@@ -13,6 +13,7 @@ import { WIRE, recordWireHttp } from "../wirerecord.js";
 import { sendBody, notModified, statTag, readJsonBody, BadBody, answerBadBody, type ReadJsonOpts } from "../httpio.js";
 import { canThumb, thumbnail, thumbWidth } from "../thumbs.js";
 import { env } from "../env.js";
+import { stripWt } from "../auth.js";
 
 // 64 MB. The inbox takes documents now, not just photos — a scanned PDF or a
 // zip clears the old 32 MB ceiling routinely. The body is buffered in RAM, so
@@ -72,7 +73,7 @@ export const MIME: Record<string, string> = {
  */
 export function json(res: ServerResponse, data: unknown, status = 200): void {
   const body = Buffer.from(JSON.stringify(data), "utf8");
-  if (WIRE) recordWireHttp(res.req.method ?? "GET", res.req.url ?? "", status, body);
+  if (WIRE) recordWireHttp(res.req.method ?? "GET", stripWt(res.req.url ?? ""), status, body);
   sendBody(res.req, res, status, body, { "content-type": "application/json" });
 }
 

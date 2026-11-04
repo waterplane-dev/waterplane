@@ -41,6 +41,8 @@ const VITE_DEV_PORT = 5173;
 
 export interface OriginConfig {
   port: number;
+  /** The LAN TLS port (`lantls.ts`), when one is planned. A port, not a host: names stay as they are. */
+  tlsPort?: number;
   /** Tailscale IPv4 of this host, if on a tailnet. */
   tailscaleIp?: string | null;
   /** MagicDNS name (`mac.tailnet.ts.net`) — the origin under `tailscale serve`. */
@@ -134,6 +136,7 @@ function compile(cfg: OriginConfig): Compiled {
 
   // 80/443 cover a reverse proxy (`tailscale serve --https=443`).
   const ports = new Set<number>([cfg.port, 80, 443]);
+  if (cfg.tlsPort) ports.add(cfg.tlsPort);
   if (env("DEV") === "1") ports.add(VITE_DEV_PORT);
 
   const origins = new Set<string>();
@@ -253,6 +256,11 @@ function opaqueReadOk(req?: RequestInfo): boolean {
   const m = (req.method || "").toUpperCase();
   if (m !== "GET" && m !== "HEAD") return false;
   return OPAQUE_READ_ROUTES.some((re) => re.test(req.path!));
+}
+
+/** Whether this method + path is one of the opaque read routes (`wt` read tickets are honoured only here). */
+export function isOpaqueReadRoute(path: string, method: string): boolean {
+  return opaqueReadOk({ path, method });
 }
 
 export interface OriginVerdict {

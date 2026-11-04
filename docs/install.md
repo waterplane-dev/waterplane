@@ -286,12 +286,13 @@ variables. The most useful ones:
 | Variable | Default | What |
 | --- | --- | --- |
 | `WATERPLANE_ROOT` | `~/dev`, else the first of `~/code`, `~/src`, `~/projects`, `~/repos`, … that exists | Directory scanned for repos. **This is the blast radius.** |
-| `WATERPLANE_STATE_DIR` | `~/.local/state/waterplane` | The host's own state, outside the code root. Read from the environment, not a `.env` file. |
+| `WATERPLANE_STATE_DIR` | `~/.local/state/waterplane` | The host's own state, outside the code root. Read from the shell, the repo `.env` or the per-user config `.env`, never from a `.env` inside the state dir itself. |
 | `WATERPLANE_PORT` | `8770` | HTTP + WebSocket port. |
 | `WATERPLANE_HOST` | Tailscale IP, then loopback | Bind address override. |
 | `WATERPLANE_CLAUDE_BIN` | `claude` | Path to the Claude Code binary. |
 | `WATERPLANE_ALLOW_PUBLIC` | off | Also bind LAN interfaces. **Requires a password for LAN devices.** |
-| `GEMINI_API_KEY` | unset | Lets the highlighter read text out of a screenshot crop (the crop is sent to Google's Gemini API). Off without it; `WATERPLANE_OCR=0` turns it off even with a key. |
+| `GEMINI_API_KEY` | unset | Core makes no Gemini call. Read only by a plugin whose manifest declares it. |
+| `WATERPLANE_LOCAL_OCR` | on | `0` turns off reading a photo's text on this desktop. The picture is not sent to any cloud model. |
 
 [.env.example](../.env.example) is the complete list, including the usage-limit timings, dictation,
 the sidecar models for the daemon's own small calls, and the origin allowlist escape hatch.

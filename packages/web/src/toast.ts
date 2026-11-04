@@ -135,7 +135,26 @@ function remember(text: string, at: number, notif?: NotificationItem): void {
 
 /** Say one sentence, over whatever screen is up. Replaces any toast still on.
  *  `notif`: the desktop alert it announces, so its row in the log can open it. */
+let held: (() => boolean) | null = null;
+const heldQueue: Array<[string, NotificationItem | undefined]> = [];
+
+/**
+ * While `isHeld()` is true a toast waits instead of drawing under a card that covers the app
+ * (the lock card sits above the toast layer, so its words would run out their clock unseen).
+ * `releaseToasts()` says them in order once the card is gone.
+ */
+export function holdToastsWhile(isHeld: () => boolean): void {
+  held = isHeld;
+}
+
+export function releaseToasts(): void {
+  if (held?.()) return;
+  const q = heldQueue.splice(0);
+  for (const [m, n] of q) showToast(m, n);
+}
+
 export function showToast(m: string, notif?: NotificationItem): void {
+  if (held?.()) { heldQueue.push([m, notif]); return; }
   current = m;
   emit();
   remember(m, Date.now(), notif);

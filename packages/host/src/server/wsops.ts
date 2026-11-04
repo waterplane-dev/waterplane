@@ -22,6 +22,8 @@ import { requestPeerKind, isProxied } from "../net.js";
 import { checkRequestOrigin } from "../origin.js";
 import { tokenFromRequest } from "../auth.js";
 import { lanIdentity } from "../lanid.js";
+import { updatePublicKey } from "../updatekey.js";
+import { lanTlsWelcome } from "../lantls.js";
 import { hostName } from "../net.js";
 import { discoverTargets } from "../repos.js";
 import { inRoot, realResolve } from "../scaffold.js";
@@ -235,7 +237,7 @@ export function createWsOps(ctx: ServerCtx) {
       // socket landed on; `deviceId` only when this socket IS a ledger device.
       let hostId: string | undefined;
       try { hostId = lanIdentity(ctx.ROOT).hostId; } catch { /* unwritable root ⇒ absent, never a made-up id */ }
-      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id, startedAt: bootClock.startedAt, readyAt: bootClock.readyAt });
+      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id, startedAt: bootClock.startedAt, readyAt: bootClock.readyAt, updateKey: updatePublicKey(ctx.ROOT), ...lanTlsWelcome() });
       // Which binaries this host can drive, and what each of them can be ASKED.
       // It rides beside `welcome` rather than in the `hello` arm because it is a
       // fact about the HOST, like every field of that frame — and because the

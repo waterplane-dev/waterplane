@@ -39,6 +39,103 @@ export const HOST_PATH_PREFIXES = ["/api", "/ws"] as const;
 /** Default daemon port — matches `WATERPLANE_PORT`'s default in the host. */
 export const DEFAULT_HOST_PORT = 8770;
 
+/** Why the phone warns on a plain route, in the one wording every screen uses. True of plain HTTP
+ *  and of an `https` address nothing vouches for: a relay's certificate is valid for its own name. */
+export const PLAIN_ROUTE_WARNING =
+  "Not protected: nothing proves this address is your desktop, so someone on this network could read what you send and could take over your desktop. Use it only on a network you trust, or reach the desktop over the tailnet.";
+/** The receipt when the app moves onto such a route by itself. */
+export const PLAIN_ROUTE_TOAST = "This Wi-Fi route is not protected: fingerprint approvals and app updates are off until you are back on the tailnet.";
+/** Why a fingerprint step is refused there, and what to do about it. */
+export const PLAIN_ROUTE_NO_FINGERPRINT =
+  "Fingerprint approvals are off on this route: nothing proves it reaches your desktop, so someone on this network could fake what you approve. Reach the desktop over the tailnet (Network health › change LAN settings), then approve.";
+/** Why an app update waits there. It resumes by itself on the next connect over a protected route. */
+export const PLAIN_ROUTE_NO_UPDATE =
+  "App updates wait for the tailnet: nothing proves this route reaches your desktop, so someone on this network could swap the update.";
+/** Why an APK is neither fetched nor installed there, and what to do about it. */
+export const PLAIN_ROUTE_NO_APK =
+  "Apps do not download or install on this route: nothing proves it reaches your desktop, so someone on this network could swap the app. Reach the desktop over the tailnet, then try again.";
+/** Why the text reader's files are not fetched there. */
+export const PLAIN_ROUTE_NO_ASSETS =
+  "The reader's files do not download on this route: nothing proves it reaches your desktop, so someone on this network could swap them. Reach the desktop over the tailnet, then try again.";
+
+/** What the phone knows about a route that the address cannot say. */
+export interface RouteContext {
+  /** A pinned TLS base on a shell that enforces the pin, or an `https` base the person typed. Read
+   *  only for `https`: nothing makes plain HTTP protected. */
+  trusted?: boolean;
+  /** `false`: the shell reports no tailnet under this network, so a tailnet name proves nothing and
+   *  the address may be whoever runs the Wi-Fi. Absent is a shell that does not say: today's answer. */
+  tailnet?: boolean;
+}
+
+/** A desktop's LAN TLS listener, as a pairing or a protected welcome stated it. */
+export interface HostTls {
+  port: number;
+  /** Lowercase hex SHA-256 of the leaf's SPKI DER. */
+  spki: string;
+}
+
+function isLoopbackName(h: string): boolean {
+  return h === "localhost" || h.endsWith(".localhost") || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+
+function isTailnetAddress(h: string): boolean {
+  if (h.startsWith("fd7a:115c:a1e0:")) return true;
+  const m = /^100\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  return !!m && Number(m[1]) >= 64 && Number(m[1]) <= 127;
+}
+
+/**
+ * Is this route UNPROTECTED? `https:` alone proves nothing: a relay with a public certificate for
+ * its own name passes validation. **Protected** is exactly one of: loopback; a Tailscale address
+ * (100.64.0.0/10, fd7a:115c:a1e0::/48) or MagicDNS name over `http`, or `https` to a `*.ts.net`
+ * name, unless `ctx.tailnet === false`; an `https` base `ctx.trusted` speaks for. Everything else is
+ * plain whatever its scheme, and so is a base that does not parse: the question is asked before
+ * trusting a route, so the unknown answer is the cautious one. `null` is no route at all.
+ *
+ * The native half is `ShellRoute.java`; `shared/test/hosturl.test.mjs` runs its table here too.
+ */
+export function isPlainRoute(base: string | null | undefined, ctx: RouteContext = {}): boolean {
+  if (!base) return false;
+  let u: URL;
+  try { u = new URL(base); } catch { return true; }
+  const tls = u.protocol === "https:" || u.protocol === "wss:";
+  if (!tls && u.protocol !== "http:" && u.protocol !== "ws:") return true;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isLoopbackName(h) || (tls && ctx.trusted)) return false;
+  if (ctx.tailnet === false) return true;
+  return !(h.endsWith(".ts.net") || (!tls && isTailnetAddress(h)));
+}
+
+/**
+ * A row whose own address is `https` to a name of its own: a vouched proxy. A LAN TLS pin never
+ * belongs on one, however it is learned: the pin would apply on that address too
+ * (`ShellRoute.pinApplies`), and the background services would refuse a proxy answering correctly
+ * with its CA-valid leaf.
+ */
+export function isProxyBase(base: string): boolean {
+  return base.startsWith("https:") && isPlainRoute(base);
+}
+
+/** Is this address protected only by the tailnet, so that with Tailscale off nothing reaches it? */
+export function needsTunnel(base: string): boolean {
+  return !isPlainRoute(base) && isPlainRoute(base, { tailnet: false });
+}
+
+/**
+ * The TLS address of a plain LAN base: `https://<same host>:<port>`. A base that is not `http:` and
+ * plain by name comes back as it went in: the listener is only on LAN interfaces, so a tailnet or
+ * loopback base rewritten here would be a dead address, and an `https` base already says where it
+ * goes. Whether to ask at all (a shell that enforces the pin, a row not `tlsOff`) is `hostUrl.ts`'s.
+ */
+export function tlsBaseOf(plainBase: string, tls: Pick<HostTls, "port"> | null | undefined): string {
+  if (!tls || !Number.isInteger(tls.port) || tls.port < 1 || tls.port > 65535) return plainBase;
+  let u: URL;
+  try { u = new URL(plainBase); } catch { return plainBase; }
+  if (u.protocol !== "http:" || !isPlainRoute(plainBase)) return plainBase;
+  return normalizeHostBase(`https://${u.hostname}:${tls.port}`) ?? plainBase;
+}
+
 /**
  * Turn whatever a human typed into a canonical `scheme://host[:port]` base, or
  * `null` if it cannot be one.

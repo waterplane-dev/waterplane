@@ -1,4 +1,5 @@
 import { idbDel } from "../idb";
+import { activeHost } from "../hosts";
 import { nativeDiscard, nativeEnqueue, nativeList, nativePullSupported, type NativePullRow, type NativePullState } from "../nativePull";
 import type { PullRecord } from "./pullTypes";
 import { NATIVE_SYNC_MS, artifactUrl } from "./pullConsts";
@@ -34,6 +35,8 @@ export async function pullStartNative(this: PullManager, rec: PullRecord): Promi
       // host's own auto-pull rules leave it off — nobody is there to be handed
       // a file.
       autoSave: !!rec.autoSave,
+      // The row's id, what the shell's pins are keyed by (`sdk/shellTls.ts`).
+      hostId: activeHost()?.id,
     });
     // The service answers with its whole queue, so the row's state comes from
     // the thing that owns it rather than from a guess made here — which is

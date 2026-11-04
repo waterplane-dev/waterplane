@@ -96,3 +96,18 @@ The Waterplane repo has no open CodeQL code-scanning or Dependabot alerts.
 - asked: 2026-11-02
 - shipped: a61a4b4a, 97a78c02
 
+### R-security-021 · built, unverified on a phone
+On a route that is not protected the Android app refuses every vault fingerprint use, every over-the-air update and every app download or install, saying why in text, and an update resumes by itself on the next connection over a protected route. Protected means: this device; a Tailscale address or MagicDNS name (unless a newer app reports that the phone has no tailnet); a Wi-Fi address the phone holds a pin for (R-connection-032); or an https address the person typed themselves. An https address alone is not protected, and neither is a name that merely looks like a tailnet's.
+- asked: 2026-11-03 (owner)
+- note: the rule is `isPlainRoute` in shared, mirrored by `ShellRoute.java`. The pin and the no-tailnet report need a newer app; an older app keeps the older answer (tailnet and HTTPS only). Not tried on a phone.
+
+### R-security-022 · built, unverified on a phone
+A route that is not protected (R-security-021) is warned about loudly: an unfolded warning in the address form and the health sheet, "LAN, not protected" (or "not protected" off the LAN) on the strip, a toast when the app moves onto it by itself, and a doctor warning on the desktop. The words say "not protected", not "not encrypted", because an https address can be unprotected too.
+- asked: 2026-11-03 (owner)
+- shipped: f3aeee6d
+
+### R-security-023 · built, unverified on a phone
+A desktop that opts in to the LAN (`WATERPLANE_ALLOW_PUBLIC=1`) also answers on an encrypted port that the Android app pins, so the device token, the app's pages and downloads cross the Wi-Fi as ciphertext to that desktop and nothing else. Nothing listens there without the opt-in, the password gate is the same, and the port is not reachable from loopback or the tailnet. The Wi-Fi owner can still stop the connection, and a person who gets into the desktop's files can read its keys: this protects the network path, not the desktop.
+- asked: 2026-11-03 (owner)
+- shipped: ce1e392c, 1da2c03a
+- note: SECURITY.md lists what pinning does not defend. A browser on the LAN is not covered (its page arrives unprotected). Not tried on a phone.

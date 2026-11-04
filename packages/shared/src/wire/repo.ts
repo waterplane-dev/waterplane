@@ -78,6 +78,15 @@ export interface GitCommit {
   author: string;
   at: number;
   subject: string;
+  /** Outgoing commits only: what the pre-push checks last said about exactly this commit. */
+  check?: GitCheck;
+}
+
+/** One run of the pre-push hook over one commit (host `prepushcheck.ts`). Information only: the
+ *  real push still runs the hook. */
+export interface GitCheck {
+  ok: boolean;
+  at: number;
 }
 
 /**
@@ -98,6 +107,10 @@ export interface GitLog {
   outgoingTotal: number;
   shared: GitCommit[];
   fetchedAt?: number;
+  /** There is a pre-push hook to run; absent = none. `testsCommit`: it tests the commit it is
+   *  given, so any outgoing commit can be checked and pushed up to. Otherwise it tests the working
+   *  tree and only the newest commit can be checked. */
+  prePush?: { testsCommit: boolean };
 }
 
 /**
@@ -114,6 +127,8 @@ export interface GitPushState {
   result?: { ok: boolean; output?: string; error?: string; finishedAt: number };
   /** What the push has printed so far — absent from a host that does not stream it. */
   progress?: GitPushProgress;
+  /** This job runs the hook alone and pushes nothing. */
+  check?: boolean;
 }
 
 /**
@@ -187,7 +202,7 @@ export interface RepoTarget {
   /** A git job the desktop is running in this worktree right now — a push (its
    *  pre-push checks take minutes) or a pull — so the launcher's git button can
    *  spin while it runs. ABSENT = none running (or an older host). */
-  gitRunning?: "push" | "pull";
+  gitRunning?: "push" | "pull" | "check";
   /** The last pull or push of a verb here FAILED and nobody has handled it —
    *  derived on the host from its attention store with `needsYou`, so this
    *  chip, the bell and the feed row are one predicate. `id` is the feed

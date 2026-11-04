@@ -7,9 +7,9 @@
  * That is the only moment a host switch can move keys safely (`hosts.ts`), and
  * the moment the one-`hostBase`-era storage becomes a host list.
  *
- * Imports nothing but `boot/brandMigrate.ts`, `hosts.ts`, `hostUrl.ts` and
- * what they import (`storage.ts`, `@waterplane/shared`), none of which read a
- * host key at load. The browser is untouched by the host list: it is served by
+ * Imports nothing but `boot/brandMigrate.ts`, `hosts.ts`, `hostUrl.ts`,
+ * `tokenVault.ts` and what they import (`storage.ts`, `deviceToken.ts`,
+ * `@waterplane/shared`), none of which read a host key at load. The browser is untouched by the host list: it is served by
  * one host and has no list.
  *
  * The brand migration runs FIRST, in the browser too: it copies keys an older
@@ -21,6 +21,7 @@ import { runBrandMigration } from "./boot/brandMigrate";
 import { bootHosts, browserKV } from "./hosts";
 import { isNativeShell } from "./hostUrl";
 import { installDemoWorld } from "./demo/world";
+import { settleAtBoot, type Settled } from "./tokenVault";
 
 // The static web demo reads and writes its own corner of storage
 // (`demo/world.ts`), swapped in before anything else touches a key — even the
@@ -28,3 +29,14 @@ import { installDemoWorld } from "./demo/world";
 const demoWorld = installDemoWorld(isNativeShell());
 if (!demoWorld) runBrandMigration();
 if (isNativeShell()) bootHosts(browserKV());
+
+// A sealing or unsealing that was cut off, put back on one side of the line before any token is
+// read (`tokenVault.ts`). A throw here would be a white page; the card reads the storage itself.
+let settled: Settled | null = null;
+if (isNativeShell() && !demoWorld) {
+  const kv = browserKV();
+  try { if (kv) settled = settleAtBoot(kv); } catch { /* storage refused; the next boot repeats it */ }
+}
+
+/** What this boot found of the sealed sign-ins; null where nothing looked. */
+export const bootSettled = (): Settled | null => settled;

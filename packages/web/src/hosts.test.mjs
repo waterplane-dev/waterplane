@@ -7,10 +7,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BRAND, HOST_PARK_PREFIX, bareKeyFor, lsKey, parkedKeyFor } from "@waterplane/shared";
+import { BRAND, HOST_PARK_PREFIX, addressNeedsConfirm, bareKeyFor, cleanSavedHost, lsKey, parkedKeyFor, parseHostList, serializeHostList, vouchedAfter } from "@waterplane/shared";
 
 import {
-  addHost, allKeys, bootHosts, dropInactiveHost, finishSwitch, planRemove, readGone, readHosts, stallTail, takeSwitchFailure, updateHost, writeSwitch,
+  addHost, allKeys, bootHosts, dropInactiveHost, finishSwitch, planRemove, readGone, readHosts, stallTail, takeSwitchFailure, updateHost, writeSwitch, setHostPins, setHostTlsOff, setHostUpdateKey,
 } from "./hosts.ts";
 import { pickSavedBase } from "./hostUrl.ts";
 import { LS } from "./storage.ts";
@@ -452,4 +452,112 @@ test("a switch that commits but cannot restore for lack of room dials the NEW de
   assert.equal(kv.getItem(LS.hostSwitch), null);
   assert.equal(kv.getItem(LS.backlogDraft), big);
   assert.equal(kv.getItem(LS.hostBase), "http://100.64.0.9:8770");
+});
+
+test("a switch in sealed mode leaves the blob and its flag where they are, and parks no token", () => {
+  const kv = shim();
+  const a = addHost(kv, { name: "a", base: "http://100.64.0.1:8770" }).host.id;
+  const b = addHost(kv, { name: "b", base: "http://100.64.0.2:8770" }).host.id;
+  kv.setItem(LS.hostActive, a);
+  kv.setItem(LS.composeDrafts, JSON.stringify({ s: "typed on A" }));
+  kv.setItem(LS.tokenSeal, "the blob");
+  kv.setItem(LS.tokenSealOn, "1");
+  writeSwitch(kv, { from: a, to: b });
+  finishSwitch(kv);
+  assert.equal(kv.getItem(LS.hostActive), b);
+  assert.equal(kv.getItem(LS.tokenSeal), "the blob");
+  assert.equal(kv.getItem(LS.tokenSealOn), "1");
+  assert.equal(kv.getItem(parkedKeyFor(LS.tokenSeal, a)), null);
+  assert.equal(kv.getItem(parkedKeyFor(LS.deviceToken, a)), null);
+});
+
+// ── A row's route facts: carried, and written only by their setters ──────────
+
+const PIN = { port: 8771, spki: "a".repeat(64) };
+const UKEY = { key: "A".repeat(124), gen: 3 };
+const FULL = { id: "abcd1234", name: "desk", base: "https://me.example", hostId: "efgh5678", tls: PIN, vouched: true, updateKey: UKEY };
+
+test("the route fields survive a parse, and anything unreadable is dropped, never defaulted", () => {
+  assert.deepEqual(parseHostList(serializeHostList([FULL])), [FULL]);
+  const bad = (over) => cleanSavedHost({ ...FULL, ...over });
+  assert.equal(bad({ hostId: "NOT AN ID" }).hostId, undefined);
+  for (const tls of [{ port: 0, spki: PIN.spki }, { port: 8771.5, spki: PIN.spki }, { port: 8771, spki: "ABC" }, { port: 8771 }, "x"]) assert.equal(bad({ tls }).tls, undefined);
+  for (const updateKey of [{ key: "short", gen: 1 }, { key: UKEY.key, gen: -1 }, { key: UKEY.key }, { key: "not base64 !!!!!!!!!!!", gen: 1 }]) assert.equal(bad({ updateKey }).updateKey, undefined);
+  assert.equal(bad({ vouched: "yes" }).vouched, undefined);
+  assert.equal(bad({ base: "http://192.168.1.5:8770" }).vouched, undefined, "vouched exists for https only");
+  assert.deepEqual([bad({ tlsOff: true }).tlsOff, bad({ tlsOff: true }).tls], [true, undefined], "a row on plain HTTP holds no pin");
+});
+
+test("updateHost carries every field it was not told about", () => {
+  const kv = shim();
+  const a = addHost(kv, { name: "x", base: "100.64.0.1" });
+  setHostPins(kv, a.host.id, { hostId: "efgh5678", tls: PIN });
+  setHostUpdateKey(kv, a.host.id, UKEY);
+  const r = updateHost(kv, a.host.id, { name: "renamed", base: "100.64.0.2", lan: { base: "192.168.1.5" } });
+  assert.ok(r.ok);
+  assert.deepEqual([r.host.hostId, r.host.tls, r.host.updateKey, r.host.name, r.host.base], ["efgh5678", PIN, UKEY, "renamed", "http://100.64.0.2:8770"]);
+  assert.equal(r.host.lan.base, "http://192.168.1.5:8770");
+  assert.deepEqual(readHosts(kv)[0], r.host, "and it reads back");
+  setHostTlsOff(kv, a.host.id, true);
+  assert.equal(updateHost(kv, a.host.id, { base: "100.64.0.2" }).host.tlsOff, true);
+});
+
+test("vouched: only the form's save, only https, only where the field's text changed", () => {
+  const was = { base: "https://me.example" };
+  assert.equal(vouchedAfter(null, "https://me.example", ""), true, "typed into an empty form");
+  assert.equal(vouchedAfter(was, "https://other.example", was.base), true, "edited");
+  assert.equal(vouchedAfter(was, was.base, was.base), false, "a prefilled field vouches for nothing");
+  assert.equal(vouchedAfter(was, was.base, "  https://me.example:443 "), false, "the same address, however it is spelled");
+  assert.equal(vouchedAfter(was, was.base, ""), true, "the confirm prompt opens empty, so retyping the saved address is the person's");
+  assert.equal(vouchedAfter({ ...was, vouched: true }, was.base, was.base), true, "a rename keeps what was vouched");
+  assert.equal(vouchedAfter({ ...was, vouched: true }, "https://other.example", undefined), false, "any other write of base");
+  assert.equal(vouchedAfter({ ...was, vouched: true }, was.base, undefined), false, "any other write, same value");
+  assert.equal(vouchedAfter(was, "http://192.168.1.5:8770", ""), false, "https only");
+  assert.equal(vouchedAfter(null, "https://me.example", undefined), false, "a pairing, a deep link, a found desktop");
+});
+
+test("vouched through the store: the form writes it, every other write clears it", () => {
+  const kv = shim();
+  const a = addHost(kv, { base: "https://me.example", opened: "" });
+  assert.equal(a.host.vouched, true);
+  assert.equal(addHost(kv, { base: "https://found.example" }).host.vouched, undefined, "not the form");
+  const renamed = updateHost(kv, a.host.id, { name: "n", base: a.host.base, opened: a.host.base });
+  assert.equal(renamed.host.vouched, true);
+  setHostPins(kv, a.host.id, { hostId: "efgh5678" });
+  setHostTlsOff(kv, a.host.id, false);
+  setHostUpdateKey(kv, a.host.id, UKEY);
+  assert.equal(readHosts(kv)[0].vouched, true, "a setter writes no base, so it clears nothing");
+  assert.equal(updateHost(kv, a.host.id, { base: a.host.base }).host.vouched, undefined);
+  const moved = updateHost(kv, a.host.id, { base: "http://192.168.1.5:8770", opened: "https://me.example" });
+  assert.equal(moved.host.vouched, undefined);
+});
+
+test("an https address nobody typed asks to be typed; anything protected or plain http never does", () => {
+  assert.equal(addressNeedsConfirm({ base: "https://me.example" }), true);
+  assert.equal(addressNeedsConfirm({ base: "https://203.0.113.5" }), true);
+  assert.equal(addressNeedsConfirm({ base: "https://me.example", vouched: true }), false);
+  assert.equal(addressNeedsConfirm({ base: "https://desk.tail1.ts.net" }), false);
+  assert.equal(addressNeedsConfirm({ base: "http://192.168.1.5:8770" }), false);
+});
+
+test("the setters: pins replace, tlsOff takes the pin and refuses a new one, a bad value changes nothing", () => {
+  const kv = shim();
+  const a = addHost(kv, { base: "192.168.1.5" });
+  const id = a.host.id;
+  assert.ok(setHostPins(kv, id, { hostId: "efgh5678", tls: PIN }).ok);
+  const next = { port: 9000, spki: "b".repeat(64) };
+  assert.deepEqual(setHostPins(kv, id, { tls: next }).host.tls, next);
+  assert.equal(readHosts(kv)[0].hostId, "efgh5678", "a pin alone leaves the id");
+  assert.equal(setHostPins(kv, id, { tls: null }).host.tls, undefined);
+  setHostPins(kv, id, { tls: PIN });
+  const before = kv.getItem(LS.hosts);
+  for (const r of [setHostPins(kv, id, { tls: { port: 0, spki: "x" } }), setHostPins(kv, id, { hostId: "NOT AN ID" }), setHostUpdateKey(kv, id, { key: "x", gen: 0 }), setHostPins(kv, "nosuchid", { hostId: "efgh5678" })]) assert.equal(r.ok, false);
+  assert.equal(kv.getItem(LS.hosts), before);
+  const off = setHostTlsOff(kv, id, true);
+  assert.deepEqual([off.host.tlsOff, off.host.tls], [true, undefined], "tlsOff removes the pin");
+  assert.equal(setHostPins(kv, id, { tls: PIN }).ok, false, "and no welcome sets one while it is on");
+  assert.equal(setHostTlsOff(kv, id, false).host.tlsOff, undefined);
+  assert.deepEqual(setHostPins(kv, id, { tls: PIN }).host.tls, PIN);
+  assert.deepEqual(setHostUpdateKey(kv, id, UKEY).host.updateKey, UKEY);
+  assert.equal(setHostUpdateKey(kv, id, null).host.updateKey, undefined);
 });

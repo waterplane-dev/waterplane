@@ -2,8 +2,8 @@
  * The download button's own rules, pinned without a browser.
  *
  * Same arrangement as `contextPlot.test.mjs`: `downloadState.ts` has no DOM in
- * it (its only import is a type), so `node --test` runs it straight over the
- * TypeScript and `npm run test:unit` discovers it.
+ * it, so `node --test` runs it straight over the TypeScript and
+ * `npm run test:unit` discovers it.
  *
  *     node --test packages/web/src/downloadState.test.mjs
  *
@@ -14,7 +14,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { autoSaveEligible, browserPullAsk, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, stripRows, syncKeeps } from "./downloadState.ts";
+import { PLAIN_ROUTE_NO_APK } from "@waterplane/shared";
+import { apkFetchRefusal, autoSaveEligible, browserPullAsk, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, stripRows, syncKeeps } from "./downloadState.ts";
 
 const rec = (over = {}) => ({
   item: { id: "l_x", repoId: "r", repoDir: "", repoName: "repo", name: "app.apk", relPath: ".claude/outbox/app.apk", size: 1000, mtime: 5, ts: 5, source: "manual" },
@@ -341,4 +342,12 @@ test("a browser beside the APK is asked once, and only about automatic work", ()
   assert.equal(browserPullAsk({ ...base, answered: true }), false, "asked once");
   assert.equal(browserPullAsk({ ...base, records: [rec({ local: true })] }), false, "a tap is not automatic");
   assert.equal(browserPullAsk({ ...base, records: [rec({ state: "done" })] }), false, "nothing on its way");
+});
+
+test("an APK is not fetched over a plain route, by name or by type; any other file is the person's to read", () => {
+  assert.equal(apkFetchRefusal({ name: "app.apk" }, true), PLAIN_ROUTE_NO_APK);
+  assert.equal(apkFetchRefusal({ name: "", relPath: ".claude/outbox/app.apk" }, true), PLAIN_ROUTE_NO_APK);
+  assert.equal(apkFetchRefusal({ name: "build", mime: "application/vnd.android.package-archive" }, true), PLAIN_ROUTE_NO_APK);
+  assert.equal(apkFetchRefusal({ name: "app.apk" }, false), null);
+  assert.equal(apkFetchRefusal({ name: "report.md" }, true), null);
 });

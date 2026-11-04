@@ -536,7 +536,8 @@ async function tidyAfterMerge(wt: string, n: number, method: string, head: strin
   else if (cur !== base) not(`did not pull ${base} (this checkout is on ${cur || "no branch"})`, !!cur);
   else {
     const p = await (pullFn ?? gitPull)(wt, ref); // with the ref, a refused pull is filed like the phone's own (git outcome sink)
-    if (p.ok) did.push(`Pulled ${base}.`); else not(`did not pull ${base}: ${(p.error ?? "").split("\n")[0]}`, false, !!ref);
+    // A network failure is not filed as attention (gitnotify.ts holds it back), so the tidy counts it itself.
+    if (p.ok) did.push(`Pulled ${base}.`); else not(`did not pull ${base}: ${(p.error ?? "").split("\n")[0]}`, false, !!ref && p.cause !== "network");
   }
   const safeRef = head && head !== base && /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/.test(head) && !head.includes("..");
   if (!safeRef) { not(head ? `kept branch ${head}` : "did not delete the branch (its name is unknown)"); }

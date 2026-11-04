@@ -179,7 +179,7 @@ web change  →  npm run build      (or npm run restart)
                     ↓
         daemon publishes /api/webbundle  ← build id + per-file sha256
                     ↓
-        app checks on launch (and every 30 min), downloads, verifies
+        app checks on launch and every 5 min while open, downloads, verifies
                     ↓
         staged  →  starts on the next launch  (or "restart into it" now)
 ```
@@ -568,9 +568,9 @@ The duplication worry is the right worry, so the split is explicit:
 - **The service speaks a frozen subset**: send `hello`; keep alive with WebSocket
   *protocol* pings (OkHttp's `pingInterval`, 2 min — the host's ws library
   auto-pongs, so liveness costs no protocol duplication and far fewer radio
-  wakeups than `ws.ts`'s 12-second JSON ping); and act on exactly two inbound
-  frames — `notification` (post an OS notification) and `authRequired` (stop
-  reconnecting, say so). Everything else is ignored, the same rule `main.ts`'s
+  wakeups than `ws.ts`'s 12-second JSON ping); and act on exactly three inbound frames — `notification` (post an OS notification),
+  `authRequired` (stop reconnecting, say so) and `pull.new` (start the announced download natively,
+  because the page that would is frozen by then). Everything else is ignored, the same rule `main.ts`'s
   dispatcher follows for an unknown `t`.
 - **`PROTOCOL_VERSION` and the host address are passed in from the web layer**,
   never compiled into Java: the version ships in the OTA-updating bundle while
@@ -579,6 +579,95 @@ The duplication worry is the right worry, so the split is explicit:
 - **Host cost: zero.** `broadcast()` already sends `notification` frames to every
   socket, and the `notifyprefs` gate already ran before the broadcast. The
   service is just another client.
+
+### One socket per saved desktop (`multiLink`)
+
+A phone paired with several desktops gets **one link per desktop**, not only the
+one in use — a card raised by a desktop the phone is not switched to (a vault
+approval above all) must still reach the shade with the app swiped away.
+
+- **`ShellLink.start({url, label, protocol, links})`**: the web layer
+  (`shellLink.ts` → `shellLinkSet.ts`) sends every real saved desktop as
+  `links: [{hostId, url, label}]`, the active one FIRST, always the saved tailnet
+  base (never LAN), the label being the person's own name for it. The same call
+  still carries the old `url`/`label` (= the active desktop), so **an old APK
+  with a new bundle** reads only those and watches one desktop as before, and
+  **an old bundle on a new APK** sends no list and gets exactly the old
+  behaviour (a stored list is forgotten). `isSupported()` reports
+  `multiLink: true`. `KEY_URL` keeps meaning the active desktop
+  (`savedUrl`: the paired-host check, auto-downloads).
+- **`ShellLinkService` holds one `Link` each** — its own socket, backoff,
+  `authRequired` pause and status. A re-sent list reconnects nothing; an added
+  desktop opens, a removed one closes, a moved one reconnects (`ShellLinkSet.diff`,
+  JVM-tested in `src/test/.../ShellLinkSetTest.java`). The page re-sends the list
+  after a desktop is added, edited or removed and once per boot — only while the
+  link is on, and never asking for a permission.
+- **Alerts say whose they are** (only with two or more links): the title starts
+  with the desktop's label, the tag is prefixed `hostId|` (two desktops' equal
+  tags must not replace each other), and the tap hands `window.shellOpen`
+  `host:<hostId>|<target>`. The page (`shellOpenTarget.ts` `shellHostOpen`)
+  handles the target itself when that desktop is the active one, and otherwise
+  **switches there only because the person tapped** — `switchTo(hostId, target)`,
+  landing on the target after the reload. Nothing switches by itself.
+- **On each link's (re)open it asks `GET /api/attention` once** and posts ONE
+  summary alert for that desktop when anything waits there (tag
+  `<hostId>|summary`, *prompt* channel, "studio: 2 waiting" with the same words
+  as the in-app sheet), because the notify link never replays a feed. The same
+  cards seen again on a reconnect do not ring again; a desktop with nothing
+  waiting clears its old summary.
+- The queue-backlog alert and auto-downloads (`pull.new`) stay the **active**
+  desktop's: the page's queue holds that desktop's work only.
+- **A password-gated desktop (`WATERPLANE_ALLOW_PUBLIC`) gets that desktop's own
+  device token, and nothing else does.** A row of `links` may carry `token`; the
+  web builds it per host (`shellLinkToken`) under `bearerForSaved`'s rule — to the
+  saved base origin only, never a LAN base, never another desktop — and leaves it
+  out for a passive (kids') token, which the host refuses on the socket (`4403`)
+  and on `/api/attention` anyway. `start` also hands `wsProtocol`, the base
+  subprotocol, a parameter like `protocol`. Java sends the token only to that
+  link's own url: `Sec-WebSocket-Protocol: <base>, <base>-tok.<tok>` on the socket,
+  `Authorization: Bearer` on the attention read. Optional both ways: an old APK
+  ignores the field, an old bundle sends none, and an ungated desktop with no
+  token dials exactly as before.
+- **At rest: `ShellLinkTokens`.** The service needs the token after a swipe, a
+  reboot or a process death, so it cannot live only in the page. Each token is
+  AES-256-GCM sealed under one non-exportable Android Keystore key, in its own
+  `MODE_PRIVATE` file beside (never inside) the `shell.link` list, with the
+  desktop's id and address as associated data, so a blob opens for no other
+  desktop. The key needs **no user authentication** on purpose: nobody is holding
+  the phone when the service reconnects, so the fingerprint key
+  (`ShellKeystorePlugin`) would stop the link. This guards against a copied file,
+  not against code running as this app; the page's own copy is plaintext
+  localStorage, so it is no worse than what was there. No new dependency:
+  `EncryptedSharedPreferences` is not in this build and is the same Keystore + GCM.
+  A token that cannot be sealed is never stored in the clear; that link runs
+  without it. Every `start` rewrites the set, so a removed desktop, or one handed
+  without a token, loses its blob; switching the link off deletes them all.
+- **In memory only: `start({…, tokensInMemory: true})`.** For a phone whose sign-ins
+  are sealed, no token reaches the disk, not even as a `ShellLinkTokens` blob. The
+  call deletes every blob before it returns; the tokens stay in a static map in
+  this process (bound to desktop and address like a blob), never in an intent or a
+  preference; each such row of the stored list gains `tokenHeld: true`, never the
+  token. Alerts work until the process dies. After that a sticky or boot restart
+  finds `tokenHeld` and no token: that link does not dial, its state is `locked`,
+  the status line says "locked — open the app", and only the page handing the
+  token back reopens it. A token the desktop refused stays in the map and the link
+  stays "signed out — pair again": a re-send of the same token does not redial.
+  `caps()` resolves `{memoryTokens: true}`, positive detection, since an older
+  shell lacks the method. Without the option nothing changes: tokens are sealed at
+  rest as above, and a `start` without it after one with it seals them again.
+- **Never in a log, a notification or an intent.** `Spec.toString` leaves it out,
+  and `loggingBehavior: "none"` (`capacitor.config.ts`) stops Capacitor printing
+  `start`'s arguments, which it otherwise does in the debug builds `npm run apk`
+  makes.
+- **A refused token pauses, once.** `authRequired`, or a 401 on the attention read,
+  on a link that CARRIED a token means revoked or the password changed: state
+  `signedOut` ("signed out there — pair again"), no retry, and the stored blob is
+  deleted. An explicit start does not clear this pause (it does clear the tokenless
+  `auth` one); only a different token does, because `sameSocket` compares tokens
+  and a new one is a new `Link`. After a process death the page's next `start` may
+  offer the same token once more and it pauses again: one try per boot of the
+  page, never a loop. With no token at all a gated desktop still reads "needs this
+  phone signed in there", per desktop.
 
 The rejected extreme — a native client speaking the full protocol — is
 duplication this repo spent a day deleting, and it still could not drain
@@ -614,10 +703,8 @@ row the user is already looking at is noise.
   `signin` ("Signed out", HIGH — a session stopped by a sign-out asks you to continue) has
   its own named channel since 2026-11-02: **needs a new APK**; until one is installed the
   alert still lands, on a channel named `signin` at DEFAULT importance.
-- **Replacement is by tag.** `NotificationItem` carries no `tag` field yet (that
-  is a separate, additive host+`shared` change), so one is derived here —
-  `kind|sessionId`, falling back to the item id — and `item.tag` is preferred the
-  moment it starts arriving, so that change needs nothing from the Java side.
+- **Replacement is by tag.** `NotificationItem.tag` carries it when the host sets one;
+  without one the service derives `kind|sessionId`, falling back to the item id.
 - Tapping opens the app with the session id, reaching the same focus path
   `sw.js`'s `notificationclick` takes in the browser.
 
@@ -672,13 +759,14 @@ is the typed wrapper.
 
 | call | what it does |
 |---|---|
-| `isSupported()` | `{supported, notifications, batteryExempt}` |
+| `isSupported()` | `{supported, notifications, batteryExempt, powerSave, multiLink}` |
 | `status()` | `{enabled, running, state, host, queueDepth, connectedAt, lastFrameAt, error, notifications, batteryExempt}` |
-| `start({url, protocol, label})` | persist + start. `url` is `wsUrl()`, `protocol` is `PROTOCOL_VERSION` |
+| `start({url, protocol, label, links?, wsProtocol?})` | persist + start. `url` is `wsUrl()`, `protocol` is `PROTOCOL_VERSION` |
 | `stop()` | stop, cancel the periodic check, forget the flag |
 | `setQueueDepth({depth})` | how many sends the page is holding (see below) |
 | `requestNotifications()` | `POST_NOTIFICATIONS`; a refusal is **not** fatal |
 | `requestBatteryExemption()` | opens the Settings screen (not the direct-grant dialog) |
+| `openNotificationSettings()` | opens the app's notification settings |
 
 And two globals the shell calls into, both optional at the far end:
 `window.shellNudge(reason)` and `window.shellOpen(sessionId)` —
@@ -766,13 +854,20 @@ rotation does not re-deliver it.
 scheme and host; the page parses it (`shared/pairing.ts`) and asks the person
 before adopting a host — a suggestion, never a command.
 
+The link may also carry `s=1` (pair by the encrypted exchange only), `k=` (a
+12-hex commitment the host's sealed reply must match) and `l=` (the desktop's
+Wi-Fi address). `u` stays a plain address on purpose: an older APK could not
+reach a TLS one. Whether every camera app opens a custom scheme is not known; the
+typed code runs the same exchange.
+
 `MainActivity.callWindow(fn, jsonArg)` is the one helper every fire-and-forget
 push goes through (`shellNudge`, `shellNetChanged`); the parked calls
-(`shellOpen`, `shellPair`) share one `ParkedCall` retry loop.
+(`shellOpen`, `shellPair`, `shellShare`) share one `ParkedCall` retry loop.
 
 ## Biometric keystore (`ShellKeystorePlugin`)
 
-A key on the phone that only a fingerprint can use. Generic: it wraps and
+A key on the phone that only a fingerprint can use, or on request one the phone's
+PIN opens too. Generic: it wraps and
 unwraps bytes and knows nothing about what they are for — any meaning (a vault,
 a token) lives in whoever calls it. Typed wrapper: `web/src/nativeKeystore.ts`,
 exported from `web/src/sdk`. Needs a new APK (`USE_BIOMETRIC`,
@@ -783,17 +878,55 @@ and `nativeKeystore.available()` is false.
 |---|---|
 | `status()` | `{hardware, enrolled, strongBox}` from `BiometricManager.canAuthenticate(BIOMETRIC_STRONG)` |
 | `has({alias})` | `{exists}` |
-| `generate({alias, strongBox?, replace?})` | AES-256-GCM in the Keystore, StrongBox when present (else TEE) → `{strongBox}`; refuses an existing alias without `replace` |
-| `wrap({alias, dataB64, aadB64?, title?, subtitle?})` | one fingerprint → `{ctB64, nonceB64}` (Keystore-chosen nonce, tag inside `ct`) |
-| `unwrap({alias, ctB64, nonceB64, aadB64?, title?, subtitle?})` | one fingerprint → `{dataB64}` |
-| `remove({alias})` | deletes the key |
+| `generate({alias, strongBox?, replace?, auth?})` | AES-256-GCM in the Keystore, StrongBox when present (else TEE) → `{strongBox}`; refuses an existing alias without `replace`. `auth` is `"biometric"` (the same as leaving it out) or `"any"` (the key below); any other word is `badInput`. A caller who sent `auth` gets it back in the result; an older shell ignores the word and returns no `auth`, so test for that |
+| `wrap({alias, dataB64, aadB64?, title?, subtitle?})` | one prompt → `{ctB64, nonceB64}` (Keystore-chosen nonce, tag inside `ct`) |
+| `unwrap({alias, ctB64, nonceB64, aadB64?, title?, subtitle?})` | one prompt → `{dataB64}` |
+| `remove({alias})` | deletes the key and what was remembered about it |
+| `lockStatus()` | `{hardware, enrolled, screenLock}`, read fresh, no prompt, changes nothing. `hardware` is false only when no sensor exists (a sensor that is down still reads true); `enrolled` is `canAuthenticate(BIOMETRIC_WEAK)` reading clean, so false proves nothing unless `screenLock` is false too; `screenLock` is `KeyguardManager.isDeviceSecure()` |
+| `authenticate({title?, subtitle?, description?, allowCredential?})` | a presence check, no key involved: `BiometricPrompt` without a `CryptoObject`, `BIOMETRIC_WEAK` plus the phone's PIN, pattern or password (`allowCredential` defaults to true; false is biometric only, with a Cancel button) → `{method}`, one of `biometric`, `credential`, `unknown` |
 
 The key is per-use bound to a STRONG biometric (`setUserAuthenticationParameters(0,
 AUTH_BIOMETRIC_STRONG)` on API 30+, validity `-1` below) and invalidated by a new
 enrolment. Every `wrap`/`unwrap` is a `BiometricPrompt` with a `CryptoObject`;
-no PIN fallback. Refusals carry one word in `code`: `noHardware`, `noneEnrolled`,
-`keyInvalidated`, `noKey`, `exists`, `cancelled`, `lockout`, `busy`, `badInput`,
-`failed` (plus `unavailable` from the wrapper when there is no plugin).
+no PIN fallback. `authenticate` is the one call with a PIN fallback, because it
+guards no key: an enrolment change does not affect it. It shares the `busy` latch
+and the refusal words with `wrap`/`unwrap`.
+
+`generate({auth: "any"})` makes the other key: a fingerprint or the phone's PIN opens
+it for 10 seconds (`setUserAuthenticationParameters(10, AUTH_BIOMETRIC_STRONG |
+AUTH_DEVICE_CREDENTIAL)` on API 30+, validity `10` below). Timeout 0 with the credential
+is the shape Android rejects. `wrap`/`unwrap` on such an alias show the prompt with no
+`CryptoObject`, then make the cipher and finish at once; the prompt is STRONG plus the
+credential on API 30+, WEAK plus the credential below, since the stronger pair does not
+exist on API 28-29. A WEAK face there passes the prompt but does not open the key: that is
+`failed`, with a message saying to use the PIN or try again (the same refusal follows a PIN
+when the Cipher comes more than 10 seconds after the sheet). The key needs a screen lock and no
+fingerprint, so for this key `noneEnrolled` means no screen lock, and `status()`, which
+reads strong biometrics, is the wrong question: ask `lockStatus().screenLock`. Android
+documents it as bound to the lock screen's secret, so a new fingerprint does not touch it
+and removing the screen lock destroys it (`noneEnrolled` while there is no lock, then
+`noKey` or `keyInvalidated`). Which kind an alias is sits in the prefs file
+`shell.keystore.kind`, holding only the `any` aliases, so every older key reads as
+biometric. An older shell than this one cannot use an `any` key. None of this has been
+run on a phone yet; the manual test below lists what to check.
+
+Refusals carry one word in `code`:
+`noHardware`, `noneEnrolled`, `keyInvalidated`, `noKey`, `exists`, `cancelled`,
+`lockout`, `busy`, `badInput`, `failed` (plus `unavailable` from the wrapper when
+there is no plugin).
+
+`keyInvalidated` and `noKey` are said only when the exception names a dead key:
+`KeyPermanentlyInvalidatedException` anywhere in its causes, the Keystore's own message
+for an invalidated or missing key, or from API 33 `ERROR_KEY_DOES_NOT_EXIST`. Any other
+`UnrecoverableKeyException` or `InvalidKeyException` stays `failed`, because `getKey`
+throws the first for a passing system error too, and a caller may give up what the key
+wraps on those two words. So an OEM that words a dead key its own way reads as `failed`.
+This is read from the Android 16 sources and has not been seen on a phone.
+
+`noHardware` also covers a sensor that is down for a moment, and `noneEnrolled`
+also covers a phone whose screen lock is gone, so read `lockStatus()` before
+treating either as final. `lockStatus` and `authenticate` need a newer APK than
+the rest of the plugin: test `typeof K.authenticate === "function"`.
 
 **Manual test on a device** (remote-debug the WebView from `chrome://inspect`, console):
 
@@ -808,7 +941,51 @@ await K.unwrap({alias: "t", ...w, aadB64: btoa("y")}).catch(e => e.code);       
 await K.wrap({alias: "t", dataB64: "AA=="}).catch(e => e.code);  // tap Cancel → "cancelled"
 // enrol another fingerprint in Settings, then: wrap → "keyInvalidated"
 await K.remove({alias: "t"}); await K.has({alias: "t"});        // {exists: false}
+await K.lockStatus();                               // {hardware, enrolled, screenLock}: all true on a phone with a fingerprint and a PIN
+await K.authenticate({title: "Test"});              // fingerprint → {method: "biometric"}
+await K.authenticate({title: "Test"});              // use PIN on the sheet → {method: "credential"}
+await K.authenticate({title: "Test"}).catch(e => e.code);  // Back on the sheet → "cancelled"
+await K.authenticate({title: "Test", allowCredential: false}).catch(e => e.code);  // Cancel button → "cancelled"
+await Promise.all([K.authenticate({}), K.authenticate({}).catch(e => e.code)]);    // second → "busy", first still shows
+// remove every fingerprint, keep the PIN: lockStatus → enrolled false, screenLock true; authenticate → PIN only, no refusal
+// remove the screen lock too: lockStatus → enrolled false, screenLock false; authenticate → "noneEnrolled"
 ```
+
+The `any` key, on API 30+ and on one phone below it (StrongBox and TEE both if the phone has
+StrongBox: `strongBox: false` forces the TEE):
+
+```js
+await K.generate({alias: "p", auth: "any"});        // {strongBox, auth: "any"}; older shell: no auth
+await K.generate({alias: "b", auth: "nope"}).catch(e => e.code);  // "badInput"
+const p = await K.wrap({alias: "p", dataB64: btoa("hello"), title: "Test"});   // fingerprint
+atob((await K.unwrap({alias: "p", ...p})).dataB64);                            // use the PIN → "hello"
+await K.unwrap({alias: "p", ...p, title: "Test"}).catch(e => e.code);          // Back on the sheet → "cancelled"
+await K.unwrap({alias: "p", ...p, nonceB64: btoa("short")}).catch(e => e.code); // "badInput", no sheet
+await K.unwrap({alias: "p", ...p, aadB64: btoa("y")}).catch(e => e.code);      // after the sheet, "badInput"
+// straight after unlocking the phone: wrap still shows the sheet
+// API 29 with a face unlock: pass the sheet with the face → "failed" naming the PIN; the PIN works
+// a phone with a PIN and no fingerprint: generate, wrap and unwrap all work, on the PIN
+// enrol a new fingerprint: unwrap still works (if not, the README and the sealed tokens' words are wrong)
+// remove the screen lock: generate and unwrap → "noneEnrolled"; set one again: unwrap → "noKey" or "keyInvalidated"
+//   (a bare "failed" here would strand a caller: report it)
+await K.generate({alias: "p", replace: true}); await K.wrap({alias: "p", dataB64: "AA=="}); // back to fingerprint only, no PIN offered
+await K.remove({alias: "p"});
+```
+
+The rest of the app lock needs a real phone too (Settings › Connection › lock this app):
+
+1. Turn it on, leave the app for over a minute, come back: the lock screen is up. Back
+   for under a minute: it is not. Kill the app and reopen: it is.
+2. Fail a fingerprint until the sensor locks out: the sheet moves to the PIN, and the PIN opens
+   the app.
+3. Below API 30 (an emulator will do): `authenticate` with the PIN goes through Android's own
+   credential screen, not the sheet. The page goes hidden and comes back; it must not lock again
+   on the way back. `method` may read `unknown` there.
+4. Check switching through recents: the lock arrives when `visibilitychange` says it should,
+   and the recents thumbnail is what you expect.
+5. While locked: Back does nothing that shows the app, and the keyboard goes away.
+6. On today's shell without `authenticate` (the fingerprint-key path): enrol a new fingerprint,
+   and the unlock reports `keyInvalidated`.
 
 ## Permissions, and what each one is for
 
@@ -845,7 +1022,7 @@ Here is every line with the feature behind it. Two facts frame the list:
 | `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` | reaching your desktop; noticing the network changed so the link reconnects; the Wi-Fi name on Android 11 and older |
 | `FOREGROUND_SERVICE`, `_SPECIAL_USE`, `_DATA_SYNC` | the background link (one WebSocket to your desktop) and the download engine. Each shows its own ongoing notification while it runs, and the link runs only after you switch it on |
 | `RECEIVE_BOOT_COMPLETED` | restarting the background link after a reboot. It does nothing unless you switched the link on |
-| `USE_BIOMETRIC` | a fingerprint-locked key for an extension's secrets (`ShellKeystorePlugin`). The public build's own screens never call it |
+| `USE_BIOMETRIC` | a fingerprint-locked key for an extension's secrets, and the optional app lock (`ShellKeystorePlugin`). Off until you turn it on |
 | `UPDATE_PACKAGES_WITHOUT_USER_ACTION` (**`dev` flavor only**) | after the first confirmed install of an app, its later builds update without a dialog (the README's *other phones install it by themselves*). The `play` build does not declare it |
 
 **Not a permission, but visible:** `<queries>` for launcher activities lets the app see which
@@ -1073,6 +1250,42 @@ a hand edit that drifts from `BRAND` fails. It never touches keystores or signin
 prose in comments and this README, and a new `appId` is a new app to Android and to Play — see
 the one-time migration note above for what that costs an installed phone.
 
+## Wi-Fi security: what needs a new APK, and what a shipped one does
+
+Reasoning is in `docs/notes/protocol-and-security.md`; what it defends is in
+`SECURITY.md`. **None of this has run on a real phone**; the Java side has JVM
+tests (`ShellRouteTest`, `ShellTlsPinsTest`, `ShellTlsClientTest`,
+`ShellBundleVerifyTest`, `ShellUpdatePinsTest`).
+
+**Needs a new APK** (Java, so not over the air):
+
+- the pinned Wi-Fi link: `ShellTls` (the pin set), `onReceivedSslError` in the
+  WebView client (a conditional handler: it proceeds only on the stored pin and
+  cancels otherwise), a pinning trust manager in `ShellLinkService` and
+  `ShellPullService` (a host with a pin and a URL that is not protected means no
+  dial, "locked: open the app"), and the `ShellRoute` port of the route rule;
+- native bundle verification and the update-key pin store (`ShellBundleVerify`,
+  `ShellUpdatePins`, with its own dialog: no `MainActivity` edit);
+- `NetState.tailnet`, so a phone with Tailscale off stops treating `100.x` as
+  safe.
+
+**Ships over the air** (the page): the page's signature check and key pinning,
+pairing by the encrypted exchange, the refusal of an `https` address in a
+redeem reply, the APK-install refusal on a route that is not protected, the Wi-Fi
+route ladder (inert without the plugin) and read tickets.
+
+**A shipped APK degrades to today's behaviour.** It learns the pin and ignores
+it, stays on plain Wi-Fi with the warnings, and still takes a signed update
+through the page's check once it holds a key. Pairing it by link works as
+before with a code that never crossed the wire. On an old desktop a new APK
+offers no pin and behaves as before. The first APK install over the network is
+unprotected whatever this does (Android accepts any signature on a first
+install); Play is the clean path.
+
+Google Play's scanner flags `onReceivedSslError` handlers that always proceed;
+this one proceeds only on a stored pin. No new bundle (AAB) or version code was
+made for this work; a debug build is for the emulator.
+
 ## Known limits
 
 - **Verified on emulators for API 34, 35 and 36** — insets in portrait, both
@@ -1098,25 +1311,22 @@ the one-time migration note above for what that costs an installed phone.
 - **The navigation guard's two dialogs are verified on API 34, not on 36.** A
   relative in-shell href is refused and named; an outward origin asks first.
 
-- **The LAN password gate does not work in the APK.** The auth token is an
-  httpOnly `SameSite=Lax` cookie (`host/auth.ts`), and `http://localhost` →
-  `http://100.x:8770` is cross-site, so the browser withholds it. Rewritten
-  fetches already ask for `credentials: "include"`; making it work needs the
-  token carried in a header instead, which is a host change. Unaffected on the
-  normal Tailscale path, where the gate is off.
+- **The LAN password gate works in the APK through a device token, not the cookie.** The
+  httpOnly `SameSite=Lax` cookie is withheld cross-site (`http://localhost` → `http://100.x:8770`), so
+  the shell mints a token and sends it as `Authorization: Bearer` on fetch and as a `-tok.` WebSocket
+  subprotocol (`host/auth.ts`, `web/deviceToken.ts`). `ShellPullService` does not carry that token: `nativeEnqueue` hands it a URL and it
+  adds only the WebView's cookie, which the cross-site rule above keeps empty, so by the code a native
+  download from a gated host is refused. Not yet seen on a device. Unaffected on the normal
+  Tailscale path, where the gate is off.
 - **Web Push does not reach the APK** — Android System WebView does not
   implement the Push API at all. The fix is not FCM: the app holds its own
   WebSocket open in a `specialUse` foreground service and raises local
   notifications, which needs no Google dependency and works on a tailnet-only
   setup. See *Running in the background* above. **Built, and off until you
-  switch it on** — the settings toggle that switches it on is not written yet,
-  so today the only thing that starts it is a direct
-  `Capacitor.Plugins.ShellLink.start(…)` call.
+  switch it on** in Settings or the phone setup sheet.
 - **Saving a downloaded file works now** (see above) — it did not, silently, for
-  as long as the shell existed. **Downloads still run in the WebView.** `web/pull.ts`'s chunked Range loop
-  works (and resumes), but it stops when Android freezes the app. A native
-  downloader in a foreground service would make an APK-sized pull survive the
-  screen going off. Not built yet.
+  as long as the shell existed. **Downloads run natively** in
+  `ShellPullService` (see above), so an APK-sized pull survives the screen going off.
 - **Status-bar icon tint** — fixed. The bar is dark and the icons were dark on
   top of it: the clock, the signal and the notification icons were invisible and
   the only thing left of the battery was its coloured fill, with the outline and

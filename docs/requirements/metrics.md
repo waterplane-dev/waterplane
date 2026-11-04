@@ -147,7 +147,7 @@ When a repo's own health engine copy fails, the view offers a button that seeds 
 - shipped: 6e2394a1
 
 ### R-metrics-031 · shipped
-Repo health reports how many recent commits removed only comments or blank lines from a file near the line cap, so squeezing notes to fit is visible.
+Repo health reports how many recent commits removed only comments or blank lines from a file near the line cap, so notes lost near the cap are visible.
 - asked: 2026-10-21
 - shipped: e34537cf
 

@@ -5,8 +5,12 @@
  * sends a normal welcome. Lifted from `App.tsx` unchanged.
  */
 import { useState } from "react";
-import { Lock, RotateCw } from "lucide-react";
+import { KeyRound, Lock, RotateCw } from "lucide-react";
+import { BRAND } from "@waterplane/shared";
 import { api } from "../../api";
+import { heldTokens, sealedMode } from "../../deviceToken";
+import { goneLead, shellCase } from "./logic";
+import { isNativeShell, requestHostSetup } from "../../hostUrl";
 import { useStore } from "../../sdk";
 import { gate } from "./store";
 import { unlocked } from "./actions";
@@ -15,9 +19,11 @@ import { SetNote } from "../../SettingsKit";
 
 const ICON = 16;
 
-export function AuthGate({ reconnect }: {
+export function AuthGate({ reconnect, unlockSeal }: {
   /** App's `connRef.current.reconnect()` — the ONE socket, re-dialled. */
   reconnect: () => void;
+  /** Open the sealed sign-ins: null when they are in memory, else why not. */
+  unlockSeal: () => Promise<string | null>;
 }) {
   const authGate = useStore(gate);
   const [authPw, setAuthPw] = useState("");
@@ -37,7 +43,38 @@ export function AuthGate({ reconnect }: {
     }
   };
 
+  const doUnseal = async () => {
+    if (authBusy) return;
+    setAuthBusy(true); setAuthErr(null);
+    const why = await unlockSeal();
+    setAuthBusy(false);
+    if (why) { setAuthErr(why); return; }
+    unlocked(); reconnect();
+  };
+
   if (!authGate) return null;
+  const shell = authGate.enabled ? shellCase(isNativeShell(), sealedMode() && !heldTokens()) : null;
+  if (shell) {
+    return (
+      <div className="sheet auth-gate">
+        <div className="auth-card">
+          <div className="auth-title"><Lock size={20} style={{ verticalAlign: "-3px", marginRight: 6 }} />Locked</div>
+          {shell === "locked"
+            ? <SetNote as="p">This desktop needs this phone's sign-in, which is locked.</SetNote>
+            : <SetNote as="p">{goneLead(authGate.kind)} On the desktop run <code>{BRAND.slug} pair</code>, then tap pair with code.</SetNote>}
+          {authErr && <SetNote className="oracle-warn" style={{ marginTop: 8 }}>{authErr}</SetNote>}
+          {shell === "locked" && (
+            <Button variant="primary" style={{ marginTop: 12, width: "100%" }} onClick={() => void doUnseal()}>
+              {authBusy ? "checking…" : "unlock the sign-in"}
+            </Button>
+          )}
+          {/* This card takes the whole screen, so Settings is out of reach: the pair form opens from here. */}
+          <Button style={{ marginTop: 12, width: "100%" }} onClick={requestHostSetup}><KeyRound size={ICON} /> pair with code</Button>
+          {shell === "gone" && <Button style={{ marginTop: 12, width: "100%" }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</Button>}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="sheet auth-gate">
       <div className="auth-card">

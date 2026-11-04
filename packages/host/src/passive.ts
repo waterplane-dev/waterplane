@@ -40,6 +40,8 @@ export function unlockMsFromEnv(): number {
 const READ = new Set(["GET", "HEAD"]);
 /** Exact read-only paths a passive token may ask. Adding one is a decision. */
 const PASSIVE_READS = new Set(["/api/health", "/api/webbundle", "/api/webbundle/file", "/api/passive/state", "/api/theme"]);
+/** A passive row may ask for a read ticket; the ticket carries its scope (`auth.ts`). */
+export const READ_TICKET_ROUTE = "/api/auth/read-ticket";
 const ARTIFACT = /^\/api\/repos\/([^/]+)\/artifact$/;
 
 /**
@@ -50,6 +52,7 @@ const ARTIFACT = /^\/api\/repos\/([^/]+)\/artifact$/;
 export function passiveAllows(
   method: string, path: string, query: URLSearchParams, queuedApk: (repoId: string, relPath: string) => boolean,
 ): boolean {
+  if (method.toUpperCase() === "POST" && path === READ_TICKET_ROUTE) return true;
   if (!READ.has(method.toUpperCase())) return false;
   if (PASSIVE_READS.has(path)) return true;
   const m = ARTIFACT.exec(path);

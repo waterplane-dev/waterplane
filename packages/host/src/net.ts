@@ -98,6 +98,16 @@ export function requestPeerKind(remoteAddress: string | undefined | null, header
   return kind;
 }
 
+/**
+ * Whether this request came over the host's own TLS listener (`lantls.ts`). A fact about the
+ * channel, never about the caller: peer kind stays what `requestPeerKind` says, so an encrypted
+ * socket from the Wi-Fi is `lan`, gated like a plain one. `tailscale serve` terminates TLS in front
+ * of us, so a request through it is a plain socket here, and rightly reads false.
+ */
+export function isEncryptedSocket(socket: object): boolean {
+  return (socket as { encrypted?: boolean }).encrypted === true;
+}
+
 /** This desktop's name as a person would call it: the OS hostname, minus the
  *  `.local` mDNS suffix macOS appends. */
 export function hostName(): string {

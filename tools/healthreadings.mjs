@@ -2,12 +2,14 @@
 /**
  * This repo's own repo-health readings (`.waterplane-shared/health.json`), one
  * subcommand each. A reading prints ONE JSON number on stdout and nothing else
- * (contract: tools/repohealth/own.mjs); cwd is the repo root, pure node.
+ * (contract: tools/repohealth/own.mjs); cwd is the repo root, node plus the repo's own typescript
+ * (tools/codelines.mjs parses): with no node_modules a reading is absent, never a wrong number.
  *
- *   node tools/healthreadings.mjs nearCap       # files within 50 lines of the max-lines cap
+ *   node tools/healthreadings.mjs nearCap       # files within 50 counted lines of the max-lines cap
  *   node tools/healthreadings.mjs skillBodies   # kB of text under .claude/skills/
  *   node tools/healthreadings.mjs bareHookDeps  # exhaustive-deps disables with no reason
- *   node tools/healthreadings.mjs capSqueeze    # commits that fit a file under the cap by deleting notes
+ *   node tools/healthreadings.mjs capSqueeze    # commits that deleted only notes from a file near the cap
+ *   node tools/healthreadings.mjs seamUntested  # seam modules (SEAMS) no test reaches, at HEAD
  *
  * Pure counters are exported for tools/healthreadings.test.mjs.
  */
@@ -15,6 +17,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { codeLineCount, lineCount } from "./codelines.mjs";
 
 export const MARGIN = 50;
 /** Fallback if eslint.config.js's `max-lines` cannot be parsed. */
@@ -24,13 +27,6 @@ export const DEFAULT_CAP = 900;
 export function capFromConfig(text) {
   const m = /"max-lines"\s*:\s*\[\s*"error"\s*,\s*\{\s*max:\s*(\d+)/.exec(String(text));
   return m ? Number(m[1]) : DEFAULT_CAP;
-}
-
-/** Lines as eslint's max-lines counts them (skipBlankLines false): split on \n, a final newline adds none. */
-export function lineCount(text) {
-  if (!text) return 0;
-  const n = text.split(/\r\n|\r|\n/).length;
-  return /(\r\n|\r|\n)$/.test(text) ? n - 1 : n;
 }
 
 /** Whether eslint's max-lines applies to this path (its `files` globs, minus ignores and fixtures). */
@@ -46,9 +42,11 @@ export function inCapScope(p) {
   return /^packages\/extensions\/[^/]+\/(host|shared|cli)\//.test(p);
 }
 
-/** Count of `files` ({path,text}) in scope with lineCount >= cap - margin. */
+/** Count of `files` ({path,text}) in scope at cap - margin or more, counted as the cap counts. */
 export function countNearCap(files, cap = DEFAULT_CAP, margin = MARGIN) {
-  return files.filter((f) => inCapScope(f.path) && lineCount(f.text) >= cap - margin).length;
+  return files.filter((f) => inCapScope(f.path)
+    && lineCount(f.text) >= cap - margin // code never exceeds the whole file: skip the parse
+    && codeLineCount(f.text, f.path) >= cap - margin).length;
 }
 
 /** Total bytes of file sizes, as kB with one decimal. */
@@ -77,7 +75,7 @@ export function bareHookDisables(text) {
   return out;
 }
 
-/** A capped file this close under the cap (880 at 900) is one where a shrink is suspect. */
+/** A capped file this close under the cap (880 at 900, as the cap counts) is one where a shrink is suspect. */
 export const SQUEEZE_MARGIN = 20;
 export const SQUEEZE_DAYS = 30;
 
@@ -97,9 +95,13 @@ function git(args, cwd) {
 }
 
 /**
- * Commits in the last `days` where a capped file at `cap - SQUEEZE_MARGIN`+ lines lost lines, ended at or
- * under the cap, and every line removed from it was a comment or blank: the notes deleted to fit the cap instead of a split by
- * subject. A commit counts once however many files it squeezed. Throws if git cannot be read.
+ * Commits in the last `days` where a capped file at `cap - SQUEEZE_MARGIN`+ counted lines lost lines, ended
+ * at or under the cap, and every line removed from it was a comment or blank. Comments stopped counting
+ * on 2026-11-04, so such a trim buys no room: a hit is a note lost to a cap that never asked for it, by
+ * habit or by a stale brief. A blank removed does still count, and is the one way left to gain a line.
+ * Commits before that day are read by today's count too, so the ones that trimmed a file of mostly
+ * notes fell out of the number that day. A commit counts once however many files it hit. Throws if
+ * git cannot be read.
  */
 export function countCapSqueeze({ cwd = ".", cap = DEFAULT_CAP, days = SQUEEZE_DAYS } = {}) {
   const log = git(["log", "--no-merges", "--no-renames", `--since=${days} days ago`, "--numstat", "--format=%x00%H"], cwd);
@@ -111,15 +113,53 @@ export function countCapSqueeze({ cwd = ".", cap = DEFAULT_CAP, days = SQUEEZE_D
     const squeezed = shrunk.some(([, , path]) => {
       let before, after;
       try { before = git(["show", `${sha}^:${path}`], cwd); } catch { return false; } // root commit or new file
-      if (lineCount(before) < cap - SQUEEZE_MARGIN) return false;
+      if (lineCount(before) < cap - SQUEEZE_MARGIN) return false; // code never exceeds the whole file: skip the parse
+      if (codeLineCount(before, path) < cap - SQUEEZE_MARGIN) return false;
       try { after = git(["show", `${sha}:${path}`], cwd); } catch { return false; } // deleted: moved, not trimmed
       // Still over the cap after it is not a fit: a file with no cap then (wire/messages.ts at 1300+).
-      if (lineCount(after) > cap) return false;
+      if (codeLineCount(after, path) > cap) return false;
       return removedLines(git(["show", "--format=", "--no-renames", "-U0", sha, "--", path], cwd)).every(isNoteLine);
     });
     if (squeezed) n++;
   }
   return n;
+}
+
+/**
+ * The modules CLAUDE.md calls the one implementation or the security boundary: a bug in one deletes typed
+ * words or widens access, and in the generic untested share (hundreds of modules) it cannot be seen. The ONE
+ * list. A path is a module; a path ending `/` is every source module directly in that directory.
+ */
+export const SEAMS = [
+  "packages/host/src/answergate.ts",
+  "packages/host/src/auth.ts",
+  "packages/host/src/confirmgate.ts",
+  "packages/host/src/deliver.ts",
+  "packages/host/src/origin.ts",
+  "packages/host/src/passive.ts",
+  "packages/host/src/paths.ts",
+  "packages/host/src/render.ts",
+  "packages/host/src/scaffold.ts",
+  "packages/web/src/PromptComposer.tsx",
+  "packages/web/src/core/queue/",
+  "packages/web/src/download.ts",
+  "packages/web/src/passiveApi.ts",
+];
+
+const inSeam = (seam, path) => (seam.endsWith("/")
+  ? path.startsWith(seam) && !path.slice(seam.length).includes("/")
+  : path === seam);
+
+/**
+ * Which seams `untested` (metrics/untested's list) holds, sorted as it is. `sources` is every source module
+ * in the tree. Throws when the count would be a guess: no list, or a seam that names no module, because a
+ * renamed seam otherwise drops out of the number and reads as a test somebody wrote.
+ */
+export function seamsUntested(seams, sources, untested) {
+  if (!Array.isArray(untested)) throw new Error("no untested list to count from");
+  const stale = seams.filter((s) => !sources.some((p) => inSeam(s, p)));
+  if (stale.length) throw new Error(`no source module at ${stale.join(", ")}: SEAMS is stale`);
+  return untested.filter((p) => seams.some((s) => inSeam(s, p)));
 }
 
 function gitFiles() {
@@ -168,6 +208,26 @@ const READINGS = {
       process.exit(1);
     }
   },
+  // Imported here, not at the top: the engine needs shared's dist, and the other readings do not.
+  async seamUntested() {
+    try {
+      const [{ configure }, { buildSnapshot }, { measureUntested }, git] = await Promise.all([
+        import("./repohealth/census.mjs"), import("./repohealth/snapshot.mjs"),
+        import("./repohealth/metrics/untested.mjs"), import("./repohealth/git.mjs"),
+      ]);
+      const root = process.cwd();
+      const cfg = configure(root, git);
+      const snap = buildSnapshot(root, "HEAD", git, cfg);
+      const got = measureUntested(snap, null, 0, cfg); // history and index: the metric reads neither
+      if (got.value === null) throw new Error(got.reason);
+      const hits = seamsUntested(SEAMS, snap.files.map((f) => f.path), got.value);
+      if (hits.length) process.stderr.write(hits.join("\n") + "\n");
+      return hits.length;
+    } catch (e) {
+      process.stderr.write(`seamUntested: cannot count: ${e.message}\n`);
+      process.exit(1);
+    }
+  },
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -176,5 +236,5 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     process.stderr.write(`usage: healthreadings.mjs ${Object.keys(READINGS).join("|")}\n`);
     process.exit(2);
   }
-  process.stdout.write(JSON.stringify(fn()) + "\n");
+  process.stdout.write(JSON.stringify(await fn()) + "\n");
 }

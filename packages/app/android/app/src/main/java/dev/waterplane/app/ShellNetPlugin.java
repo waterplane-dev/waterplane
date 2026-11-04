@@ -3,6 +3,8 @@ package dev.waterplane.app;
 import android.Manifest;
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.TransportInfo;
@@ -24,6 +26,9 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Which network the phone is on — the one input the LAN auto-route cannot get
  * from inside a WebView.
@@ -37,7 +42,9 @@ import com.getcapacitor.annotation.PermissionCallback;
  *   Capacitor.Plugins.ShellNet.current()
  *     → { transport: 'wifi'|'cellular'|'other'|'none',
  *         ssid: string|null,
- *         permission: 'granted'|'denied'|'prompt' }
+ *         permission: 'granted'|'denied'|'prompt',
+ *         vpn?: boolean,    // the active network runs over a VPN; absent when unknown
+ *         tailnet?: boolean } // that VPN holds a Tailscale address; absent when unknown
  *   Capacitor.Plugins.ShellNet.requestLocation() → the same shape, after asking
  *   window.shellNetChanged(<that same object>)   // pushed on change
  * </pre>
@@ -140,7 +147,21 @@ public class ShellNetPlugin extends Plugin {
 
     private JSObject state() {
         JSObject ret = new JSObject();
-        NetworkCapabilities nc = caps;
+        ConnectivityManager cm = getContext().getSystemService(ConnectivityManager.class);
+        NetworkCapabilities live = null;
+        LinkProperties links = null;
+        try {
+            Network active = cm == null ? null : cm.getActiveNetwork();
+            if (active != null) {
+                live = cm.getNetworkCapabilities(active);
+                links = cm.getLinkProperties(active);
+            }
+        } catch (RuntimeException e) {
+            Log.d(TAG, "network unreadable: " + e);
+        }
+        // The callback's copy when there is one: only it carries the Wi-Fi name. Before its first
+        // delivery the platform's own answer stands, or this would report a live network as none.
+        NetworkCapabilities nc = caps != null ? caps : live;
         String transport;
         if (nc == null) transport = "none";
         else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) transport = "wifi";
@@ -150,7 +171,38 @@ public class ShellNetPlugin extends Plugin {
         String ssid = "wifi".equals(transport) ? ssid(nc) : null;
         ret.put("ssid", ssid != null ? ssid : JSObject.NULL);
         ret.put("permission", permission());
+        // Absent, not false, with no network to ask: the page reads `vpn === false` as "the
+        // tailnet is off", and that must never be a guess.
+        if (nc != null) ret.put("vpn", nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
+        // Off the live pair, so the capabilities and the addresses are one network's.
+        Boolean tailnet = ShellRoute.tailnetOf(
+                live == null ? null : Boolean.valueOf(live.hasTransport(NetworkCapabilities.TRANSPORT_VPN)),
+                addressesOf(links));
+        if (tailnet != null) ret.put("tailnet", tailnet.booleanValue());
         return ret;
+    }
+
+    /** {@code NetState.tailnet} for a service with no plugin instance: the same read as {@link #state}. */
+    @Nullable
+    static Boolean tailnetNow(Context context) {
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        try {
+            Network active = cm == null ? null : cm.getActiveNetwork();
+            NetworkCapabilities nc = active == null ? null : cm.getNetworkCapabilities(active);
+            if (nc == null) return null;
+            return ShellRoute.tailnetOf(nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN), addressesOf(cm.getLinkProperties(active)));
+        } catch (RuntimeException e) {
+            Log.d(TAG, "network unreadable: " + e);
+            return null;
+        }
+    }
+
+    @Nullable
+    private static List<byte[]> addressesOf(@Nullable LinkProperties links) {
+        if (links == null) return null;
+        List<byte[]> out = new ArrayList<>();
+        for (LinkAddress a : links.getLinkAddresses()) out.add(a.getAddress().getAddress());
+        return out;
     }
 
     private String permission() {
@@ -236,6 +288,12 @@ public class ShellNetPlugin extends Plugin {
         @Override
         public void onCapabilitiesChanged(Network network, NetworkCapabilities nc) {
             caps = nc;
+            schedulePush();
+        }
+
+        /** A VPN's addresses can land after its capabilities, and `tailnet` is read off them. */
+        @Override
+        public void onLinkPropertiesChanged(Network network, LinkProperties links) {
             schedulePush();
         }
 

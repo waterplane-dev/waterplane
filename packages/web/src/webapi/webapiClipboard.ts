@@ -1,5 +1,8 @@
+import { scrubTickets } from "../hostUrl";
+
 /** Copy text to clipboard with a textarea fallback for non-secure contexts. */
-export async function copyText(text: string): Promise<boolean> {
+export async function copyText(raw: string): Promise<boolean> {
+  const text = scrubTickets(raw); // the one copy path: a read ticket never leaves on a copied link
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);

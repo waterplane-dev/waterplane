@@ -384,6 +384,9 @@ export interface NotifyHandled {
  * Null when the string is not one, or the JSON is not an item — never a
  * half-read item.
  */
+/** The `shellOpen` target for the notification list (a multi-item summary of another desktop). */
+export const NOTIFICATIONS_SHELL_VIEW = "view:notifications";
+
 export function notifFromShell(s: string): NotificationItem | null {
   if (!s.startsWith("notif:")) return null;
   try {

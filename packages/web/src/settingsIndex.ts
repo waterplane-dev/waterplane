@@ -188,6 +188,8 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "lan-password", group: "connection", label: "LAN password", keywords: "auth gate local network secure token login public" },
   { id: "lan-gate-tailscale", group: "connection", label: "gate Tailscale too", keywords: "password auth peers trusted" },
   { id: "lan-logout", group: "connection", label: "log out this device", keywords: "auth token sign out lan" },
+  { id: "app-lock", group: "connection", label: "lock this app", keywords: "fingerprint biometric face unlock pin screen lock secure phone app lock" },
+  { id: "token-seal", group: "connection", label: "lock the desktop sign-ins", keywords: "token device key seal encrypt fingerprint biometric protect credential password desktop sign-in alerts background link" },
   { id: "sync-push", group: "connection", label: "push this device's settings", keywords: "sync host copy conflict templates presets pad toolbar wins" },
 
   // ── Tools & diagnostics ────────────────────────────────────────────────

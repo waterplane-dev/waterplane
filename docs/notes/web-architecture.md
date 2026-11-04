@@ -338,7 +338,7 @@ same state, one of them is not a feature yet.
 - the registry imports each feature exactly once and nothing else;
 - every `SheetDef`, written literally as `{ id: "<overlay>", persisted: …`, names an `Overlay`
   member, and its `persisted` agrees with `PERSISTED_OVERLAYS`;
-- no file under `features/` is over 900 lines, and none under `core/` (`MAX_CORE_FILE_LINES`);
+- no file under `features/` is over 900 lines of code, and none under `core/` (`MAX_CORE_FILE_LINES`);
 - every `core/<dir>/` is one of the core modules below (`CORE_DIRS`) — a stray `core/misc/` fails;
 - **a move is a move**: `App.tsx` has no `case "<t>":` for any `t` a feature's `messages` declares
   (except `welcome`, which App keeps for its own reconnect work), and `overlayViews` has no entry for

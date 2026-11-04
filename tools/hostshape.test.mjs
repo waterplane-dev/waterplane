@@ -27,6 +27,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { headModules } from "./skillmap.mjs";
 import { warnLongFiles } from "./longfiles.mjs";
+import { codeLineCount } from "./codelines.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const PACKAGES = join(ROOT, "packages");
@@ -85,8 +86,9 @@ const MAX_LINES = {
  *  list of short handlers, and one past this is a domain that wants its own file. */
 const MAX_API_TABLE_LINES = 500;
 
-/** A slice is never the class moved one folder down. The number eslint's
- *  `max-lines` warns at — here it fails. */
+/** A slice is never the class moved one folder down. eslint's `max-lines`
+ *  number, counted its way: comments are free (`codeLineCount`). The tighter
+ *  caps and ratchets around it count every line, notes included. */
 const MAX_SLICE_LINES = 900;
 /** …and the two newer folders hold the stricter line the split brief set: 500. */
 const TIGHT_DIRS = { capture: 500, backlog: 500, "routes/work": 500, sidecar: 500, deliver: 500 };
@@ -150,8 +152,8 @@ test(`no slice is over ${MAX_SLICE_LINES} lines`, () => {
   const over = [];
   for (const dir of Object.keys(SLICE_DIRS)) {
     for (const f of slices(dir)) {
-      const n = lines(read(f));
       const cap = TIGHT_DIRS[dir] ?? MAX_SLICE_LINES;
+      const n = cap === MAX_SLICE_LINES ? codeLineCount(read(f), f) : lines(read(f));
       if (n > cap) over.push(`${f}: ${n} lines (cap ${cap})`);
     }
   }

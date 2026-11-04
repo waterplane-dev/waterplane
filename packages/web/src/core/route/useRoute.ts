@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { parseFocus, parseHash, type Overlay } from "../../routing.ts";
-import { pushBackDepth, routeStack, screenAsks, subscribeScreenParams } from "../../backStep.ts";
+import { isBackHeld, pushBackDepth, routeStack, screenAsks, subscribeScreenParams } from "../../backStep.ts";
 import { landPop, landRoute } from "./landRoute.ts";
 import { defineShellGlobal } from "../../shellBridge.ts";
 import { viewerHandles } from "../../docKind.ts";
@@ -124,7 +124,7 @@ export function useRoute() {
   useEffect(() => {
     // `shellBack` (and each older shell's spelling — `shellBridge.ts`).
     return defineShellGlobal("Back", () => {
-      if (routeStack.depth <= 0) return false;
+      if (routeStack.depth <= 0 || isBackHeld()) return false;
       history.back();
       return true;
     }, "");

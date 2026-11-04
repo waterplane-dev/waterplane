@@ -57,7 +57,7 @@
   <text class="s" x="741" y="120">git, builds, settings</text>
   <rect class="ext" x="956" y="62" width="204" height="86" rx="7"/>
   <text class="t" x="970" y="84">In-repo extensions</text>
-  <text class="s" x="970" y="104">token-stats, requirements</text>
+  <text class="s" x="970" y="104">desktop, vault, token-stats, …</text>
   <text class="s" x="970" y="120">plugin-shaped, shipped built in</text>
 
   <!-- TRANSPORT -->

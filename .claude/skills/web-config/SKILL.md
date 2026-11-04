@@ -60,14 +60,23 @@ How this app is configured and what it is allowed to launch: the Settings screen
   (bare keys), every other PARKED under `waterplane.h.<id>.`; a switch is two phases split by a reload,
   and `hostBoot.ts` is deliberately the FIRST import of `main.tsx` so the park/restore runs before
   any module reads a host key. Removing a host never deletes its words (`waterplane.hostsGone`). Screens:
-  `features/hosts/` — read its own README first. Reasoning: [web.md](../../../docs/notes/web.md).
+  `features/hosts/` — read its own README first. **Another desktop's waiting cards** (`GET /api/attention`,
+  polled while visible): the ONE cross-origin call, its token is that host's PARKED one and only to its
+  saved tailnet origin (`bearerForSaved` — never LAN, never another origin); a stale read shows no
+  number; a tap switches, nothing switches by itself. Reasoning: [web.md](../../../docs/notes/web.md).
 - `pqKem.ts` —
-  pairing and keys (with `nativeKeystore.ts` and `PairForm.tsx`): ML-KEM-768, generic, hybridised with ECDH by the CALLER; WebCrypto when the WebView has it, else `@noble/post-quantum` — evaluated lazily but PACKAGED in the vendor chunk (on the phone with the link gone); the private half never leaves the closure. `nativeKeystore.ts` is the biometric Keystore key (wrap/unwrap bytes, generic; `unavailable` in a browser or an older APK). Screens: `features/hosts/` (its README).
+  pairing and keys (with `nativeKeystore.ts` and `PairForm.tsx`): ML-KEM-768, generic, hybridised with ECDH by the CALLER; WebCrypto when the WebView has it, else `@noble/post-quantum` — the lazy `noble` file, in the shell's bundle (on the phone with the link gone); the private half never leaves the closure. `nativeKeystore.ts` is the biometric Keystore key (wrap/unwrap bytes, generic; `unavailable` in a browser or an older APK). Screens: `features/hosts/` (its README). **Pairing by code** (`pairPake.ts`, `pairRedeem.ts`, `pairNative.ts`): **PAKE first on any address** (`pairStep`); a PROTECTED address may go on to redeem with no question, a plain one never does on a typed refusal, and only a 404/401 at `start` gets the one `Confirm` (never under `s=1`, never at `finish`). Nothing an unsealed reply SAYS reaches the screen on a plain address. A code is marked (`markCodePlain`, a hash, for a code's life) BEFORE it leaves plain, and is never used again. `storeRedeemed` is Rule 1; `storeSealed` adds what a seal proves but still takes the address from `asked.base`, and at a row's own `lan.base` keeps the row's `base`; a vouched proxy's row takes no TLS pin (`isProxyBase`, one check with `welcomePinPlan`; `pinSealed` follows the row); `pairedNoRoute` is the receipt when Tailscale is off and the ladder will not take the row, and changes no setting; `sealedAsk` is the second question. **A TLS pin is keyed by the ROW id, the update key by the desktop's `hostId`** (`pinSealed`). `bearerFor` refuses `pake/*`.
 - `shellNet.ts` + `deviceToken.ts` + `lanRoute.ts` + `lanLink.ts` — the LAN auto-route: which
   network the phone is on (the Android `ShellNet` plugin's page half), this phone's device token for
   the active host, the pure gate ladder (SSID → token → identity → probe → HMAC), and the runtime
-  that wires it to the socket and falls back to the tailnet on any LAN failure. Reasoning:
-  [web.md](../../../docs/notes/web.md).
+  that wires it to the socket and falls back to the tailnet on any LAN failure. **`tokenWithheld`**: on an
+  enforcing shell, on a pinned row whose address reads plain now and on any tailnet address with `tailnet === false`, pinned or not
+  (a plain LAN address on an unpinned row is the opt-in and still sends it), the device token stays on the phone on
+  every carrier (transport patch, socket, attention poll, peers, a plain redeem), and what answers such a dial
+  can never drop it: the patch does not watch it, the socket reads `authRequired` as a failed dial (no gate, no
+  pause), `rejectToken` checks too. **The first reading is owed** (`seedRouteNet`, a shell with `ShellTls` and `ShellNet`): until it
+  lands, or for 8 s, the token reads it as off and what a `welcome` teaches waits (`whenNetRead`), judged on the dial it came on. Reasoning: [web.md](../../../docs/notes/web.md).
+- `tokenVault.ts` + `tokenSealWords.ts` — the sealed sign-ins' pure halves (the prompts and Keystore calls are `features/appLock`'s; its README has the cold-start table). `tokenVault.ts`: which keys hold a device token, and the seal/unseal write order that every cut-off prefix survives (seal: blob, read back, flag, THEN delete plaintext; unseal: plaintext back, flag off, THEN the blob). Plaintext is deleted only for ids the blob lists, so a passive token or a stray bare one may stay plaintext: no wording may say every copy is gone. AAD is the constant `"tokens"`; the Keystore key stays on unseal. `tokenSealWords.ts`: every sentence of the row, confirm card and receipts, and `sealRowCant`; it states the trade-off per desktop and never claims a fingerprint change for a PIN key.
 - `HintChip.tsx` — the VISIBLE half of `hints.ts`: a `?` that opens the same card the long press
   does, from the same catalog, with the same text. Long press suits a toolbar of icons, not a screen of
   TERMS. It carries the id on
@@ -103,6 +112,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
   watch has no delta and falls back to load); **process rows are a FOLD** (`23 processes`, never a
   pid) with `rssSumText` saying the column overlaps; the slow readers **say their age** (`slowAgeSec`);
   an absent temperature is a SENTENCE naming the helper, never a blank. `sysStat.test.mjs`.
+- `features/appLock/` + `appLock.ts` — the optional app lock and its Settings › Connection row (`AppLockSettings.tsx`, native shell only). **It fails closed**: only `keyInvalidated`/`noKey`/`badInput`, or `noHardware`/`noneEnrolled` confirmed by a FRESH status read, open the app and switch it off; `failed` and anything unknown stay at any count (no counter). The pref is written only AFTER the sheet passes; a row that cannot turn on says why via `lockRowCant`, a lock that is on always shows its switch. README there lists the residuals.
 - `hostedAck.ts` + `HostedAckSheet.tsx` — **one acknowledgement before the FIRST hosted launch**, per
   device, resettable. **UNKNOWN IS NEVER FOLDED INTO HOSTED** — only an explicit `where === "hosted"`
   gates; no frame, claude, absent backend, no model named, `"local"`, an unnamed id and a newer

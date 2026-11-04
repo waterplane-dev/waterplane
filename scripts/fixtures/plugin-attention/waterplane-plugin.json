@@ -1,0 +1,7 @@
+{
+  "id": "asker",
+  "name": "Asker",
+  "version": "1.0.0",
+  "apiVersion": "2.0",
+  "description": "e2e fixture (scripts/e2e-attention.mjs): raises one urgent card on request, the way the vault raises an approval."
+}

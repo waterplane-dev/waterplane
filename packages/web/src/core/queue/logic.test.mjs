@@ -7,9 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACK_TIMEOUT_MS, OP_ACK_TIMEOUT_MS, SUBMIT_ACK_TIMEOUT_MS, PENDING_PREFIX, ackWindow, goneLanesOf, isLaterId, isPendingId, laterId,
-  budgetHeldLaneSet, budgetReleased, entryFrame, laneFor, laneLabelOf, markAttempt, pendingLaneId, requeue, sendingLabel, serialStates, laneStateOf, unpark, whichWords,
+  budgetHeldLaneSet, budgetReleased, entryFrame, laneFor, laneLabelOf, markAttempt, pendingLaneId, queueFoldKey, requeue, sendingLabel, serialStates, laneStateOf, unpark, whichWords,
 } from "./logic.ts";
 import { laneBusy, sessionWall } from "@waterplane/shared";
+import { isStowed, stow, unstow } from "../../stow.ts";
 
 const row = (o = {}) => ({ ackId: "a", sessionId: "s1", cwd: "/r/myapp", text: "hello", ts: 1000, status: "queued", ...o });
 
@@ -195,4 +196,14 @@ test("laneStateOf: a trust box is a wall only where the host says delivery does 
   // The serial flattening reads the same fact.
   assert.equal(laneBusy(serialStates([copilotS], backends)[0]), true);
   assert.equal(laneBusy(serialStates([copilotS])[0]), false);
+});
+
+test("a folded queue strip holds through delivery; a new row or a failure comes back up", () => {
+  const a = { ackId: "a" }, b = { ackId: "b" }, c = { ackId: "c" };
+  const folded = queueFoldKey([a, b]);
+  stow("queue-test", folded);
+  assert.ok(isStowed("queue-test", queueFoldKey([b])), "one went out, the other is still the same fold");
+  assert.ok(!isStowed("queue-test", queueFoldKey([a, b, c])), "a new row is news");
+  assert.ok(!isStowed("queue-test", queueFoldKey([a], true)), "the same row, failed, is news");
+  unstow("queue-test", folded);
 });

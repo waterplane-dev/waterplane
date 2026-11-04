@@ -62,6 +62,8 @@ const CURRENT_NAME_ALLOWED = [
   // The Android shell's identity: written by scripts/brand-android.mjs, whose --check the test below runs.
   // Dependency-free so another repo can copy it as it is (the versions.jsonl record writer).
   (p) => p === "scripts/build-record.mjs",
+  // CPace's domain separator: a wire constant both ends must agree on across a rename, so never read from BRAND.
+  (p) => p === "packages/shared/src/pake.ts",
   (p) => p === "packages/app/capacitor.config.ts",
   (p) => p === "packages/app/android/app/build.gradle",
   (p) => p.startsWith("packages/app/android/app/src/") && /\/(strings\.xml|AndroidManifest\.xml)$|\.java$/.test(p),

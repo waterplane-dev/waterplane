@@ -34,3 +34,21 @@ export function dictateFallbackWhy(f: FallbackFacts): string | null {
   if (f.status.available) return null;
   return `${lead}: ${f.status.reason ?? "the desktop says whisper is not available"}`;
 }
+
+/**
+ * A link listener that calls `ask` once each time the link comes back.
+ *
+ * `wasOpen` moves BEFORE `ask` runs, and the order is the point: `ask` starts a
+ * request, a request's `netBegin` emits the link synchronously, and this listener
+ * hears that emit from inside `ask`. Read the other way round it still sees a link
+ * that has just come back and asks again, on and on, until the stack overflows: a
+ * "no" is not memoised, so every reconnect to a desktop without whisper did that.
+ */
+export function askOnLinkBack(wasOpen: boolean, ask: () => void): (link: { status: string }) => void {
+  return (link) => {
+    const open = link.status === "open";
+    const back = open && !wasOpen;
+    wasOpen = open;
+    if (back) ask();
+  };
+}

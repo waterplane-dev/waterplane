@@ -49,6 +49,7 @@
 /packages/web/src/features/queue/ @johanneshoh
 /packages/web/src/features/setup/ @johanneshoh
 /packages/web/src/features/askRules/ @johanneshoh
+/packages/web/src/features/appLock/ @johanneshoh
 /packages/web/src/features/hostTools/ @johanneshoh
 /packages/web/src/features/hosts/ @johanneshoh
 /packages/web/src/features/pad/ @johanneshoh

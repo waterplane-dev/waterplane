@@ -3,11 +3,11 @@
  * the whole list. A row opens that repo's git view; the run itself lives in
  * `actions.ts` and outlives the sheet.
  */
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Loader, Square } from "lucide-react";
+import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Loader, ShieldCheck, Square } from "lucide-react";
 import { core, useStore } from "../../sdk";
 import { Button, Hint, Row, RowSub, RowTitle, Sheet, useNow } from "../../kit";
 import { gitSyncText } from "../../gitCounts";
-import { leftOutWords, planWords, syncable, targets, type RowState } from "./logic";
+import { leftOutWords, planWords, syncable, targets, type RowState, type SyncVerb } from "./logic";
 import { startRun, stopRun } from "./actions";
 import { run } from "./store";
 
@@ -23,6 +23,7 @@ function stateWords(st: RowState, now: number): string {
     case "waiting": return "waiting";
     case "pulling": return "pulling…";
     case "pushing": return `pushing… ${clock(now - st.startedAt)} — pre-push checks first`;
+    case "checking": return `running checks… ${clock(now - st.startedAt)} — nothing is pushed`;
     default: return st.text;
   }
 }
@@ -35,7 +36,7 @@ export function RepoSyncSheet() {
   const repos = visibleRepos.filter(syncable);
   const pushN = targets(repos, "push").length;
   const close = () => c.nav.close("reposync");
-  const go = (verb: "pull" | "push" | "sync") => { void startRun(verb, visibleRepos); };
+  const go = (verb: SyncVerb) => { void startRun(verb, visibleRepos); };
   return (
     <Sheet title="Sync repos" icon={<ArrowDownUp size={ICON} />} onClose={close}>
       <div className="sheet-scroll">
@@ -53,6 +54,7 @@ export function RepoSyncSheet() {
                 {/* The count is exactly the rows marked ↑ below — the push touches those and no others. */}
                 {pushN > 0 && <Button onClick={() => go("push")}><ArrowUpFromLine size={14} /> Push {pushN}</Button>}
                 <Button onClick={() => go("sync")} title="pull each, then push whatever is still ahead"><ArrowDownUp size={14} /> Sync all</Button>
+                {pushN > 0 && <Button onClick={() => go("check")} title="run the pre-push checks in the repos marked ↑, one at a time — nothing is pushed"><ShieldCheck size={14} /> Run checks in {pushN}</Button>}
               </>
             )}
           </div>
@@ -60,7 +62,7 @@ export function RepoSyncSheet() {
         {repos.map((r) => {
           const st = cur.rows[r.id];
           const counts = gitSyncText(r);
-          const spin = st && (st.s === "pulling" || st.s === "pushing");
+          const spin = st && (st.s === "pulling" || st.s === "pushing" || st.s === "checking");
           return (
             <Row as="button" key={r.id} kind="grow" onClick={() => c.nav.openGit(r.id)} title="open this repo's git view">
               <RowTitle>

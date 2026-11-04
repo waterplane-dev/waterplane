@@ -22,7 +22,7 @@
  * coming back, deliveries the host could not confirm, or the app being reloaded
  * out from under the queue.
  */
-import { stateRel } from "@waterplane/shared";
+import { PLAIN_ROUTE_WARNING, stateRel } from "@waterplane/shared";
 import { useEffect, useRef, useState } from "react";
 import { Activity, CircleCheck, CloudUpload, Globe, ListOrdered, RotateCcw, KeyRound, Router, Settings2 } from "lucide-react";
 import { readStorageState, storageState, type StorageState } from "./persist";
@@ -33,11 +33,12 @@ import {
 import { dur, fmtStorage } from "./format";
 import { api } from "./api";
 import { SheetHead } from "./Sheet";
-import { useHostRoute, useHostRouteEditor } from "./hostRoute";
-import { NO_PASSWORD_SENTENCE } from "./lanRoute";
+import { useHostRoute, useHostRouteEditor, useHostRoutePair } from "./hostRoute";
+import { asksLanPassword } from "./lanRoute";
 import { openSettingsAt } from "./settingsFocus";
 import { Button } from "./kit/Button";
-import { SetLine, SetNote } from "./SettingsKit";
+import { SetLine, SetNote, SetWarn } from "./SettingsKit";
+import { plainHostRoute } from "./hostUrl";
 import { SHEET } from "./sheetNames";
 
 const ICON = 16;
@@ -131,6 +132,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
   const focusRef = useRef<HTMLElement | null>(null);
   const route = useHostRoute();
   const editRoute = useHostRouteEditor();
+  const pairRoute = useHostRoutePair();
   useEffect(() => {
     const el = focusRef.current;
     if (!focus || !el) return;
@@ -268,6 +270,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               <span>{route.sentence}</span>
             </SetNote>
           )}
+          {plainHostRoute() && <SetWarn>{PLAIN_ROUTE_WARNING}</SetWarn>}
           {/* The sentence reports settings (LAN address, auto-switch); the
               place they change is one tap away, not three screens. */}
           {route && editRoute && (
@@ -275,8 +278,9 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               <Button onClick={editRoute}>
                 <Settings2 size={ICON} /> change LAN settings
               </Button>
+              {route.trouble && pairRoute && <Button onClick={pairRoute}><KeyRound size={ICON} /> pair by code</Button>}
               {/* This one is the host's setting, not the phone's form. */}
-              {route.sentence === NO_PASSWORD_SENTENCE && (
+              {asksLanPassword(route.sentence) && (
                 <Button onClick={() => openSettingsAt("lan-password")}>
                   <KeyRound size={ICON} /> set the LAN password
                 </Button>

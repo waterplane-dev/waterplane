@@ -8,7 +8,7 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { PLUGIN_ROUTE_BODY_MAX, PROTOCOL_VERSION } from "@waterplane/shared";
+import { PLUGIN_ROUTE_BODY_MAX, PROTOCOL_VERSION, summarizeWaiting } from "@waterplane/shared";
 import { realpathSync } from "node:fs";
 import { discoverTargets, findTarget, targetId } from "../repos.js";
 import { checkRepoCompliance } from "../compliance.js";
@@ -85,13 +85,25 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
 
+  // What this desktop waits on a person for (`shared/waiting.ts`): sessions
+  // `sessionWaits` holds + attention items that `needsYou()`, a line each, no
+  // body. The phone polls it for a desktop it is NOT switched to, so a card
+  // raised here (a vault approval above all) is announced by name over there.
+  // Read-only; Origin/Host + token gated like every /api; deliberately NOT in
+  // `passive.ts`'s allowlist. Nothing here a full token cannot already read
+  // over the socket.
+  route("GET", "/api/attention", ({ res }, ctx) => {
+    json(res, summarizeWaiting(ctx.sessions.list(), (ctx.attention?.unhandled() ?? []).map((r) => r.item), Date.now()));
+    return true;
+  }),
+
   // ── Web bundle: what the Android shell updates itself from ──────────
   // The APK carries the UI so a dead tunnel can't take the app away; these two
   // routes are what stop that from also freezing it at APK build time. See
   // webbundle.ts. Read-only, and they expose nothing `serveStatic` doesn't
   // already hand out at `/` — this is the same tree, described instead of served.
-  route("*", "/api/webbundle", ({ res }) => {
-    json(res, webBundleManifest());
+  route("*", "/api/webbundle", ({ res }, ctx) => {
+    json(res, webBundleManifest(ctx.root));
     return true;
   }),
   route("*", "/api/webbundle/file", async ({ req, res, url }) => {

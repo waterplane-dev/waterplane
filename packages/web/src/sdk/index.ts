@@ -21,6 +21,7 @@ export { useBackStep } from "../backStep.ts";
 /** This device's preferences (`core/prefs.ts`) — read-only from a feature; the
  *  Settings sheet is their writer. */
 export { useConnStatus, watchConnStatus } from "./connStatus.ts";
+export { activeHostName } from "./hostName.ts";
 export { setPref, usePref, type DevicePrefs, type PrefKey } from "../core/prefs.ts";
 export type { CachedListStore, CachedLists } from "./cached.ts";
 export { repoRunStore, type RepoRunStore, type RunLike } from "./repoRun.ts";
@@ -63,5 +64,7 @@ export {
   type ModelRow, type Pacing,
 } from "../periodWords.ts";
 export { explainCostPrompt, type CostSubject } from "../explainCost.ts";
+export { plainHostRoute, plainShellRoute } from "../hostUrl.ts";
 export { pqKem, type PqKem, type PqKemPair } from "../pqKem.ts";
 export { nativeKeystore, isKeystoreError, KEYSTORE_CODES, type KeystoreCode, type KeystoreError, type KeystoreStatus, type NativeKeystore, type PromptText } from "../nativeKeystore.ts";
+export { hasShellTls, shellTls, shellTlsRefusal } from "./shellTls.ts";

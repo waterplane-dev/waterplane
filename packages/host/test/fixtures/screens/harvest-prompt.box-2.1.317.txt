@@ -1,0 +1,40 @@
+      00      "xx": "^0.00.0"
+      00    },
+  ⎿  Xxxxxxx xxxxxxxx/xxx/xxxxxxx.xxxx (+0 -0)
+       0    },
+      00    "xxxxxxxxxxxx": {
+      00      "@xxxxx/xxxx-xxxxxxx": "0.0.0",
+      00 -    "@xxxxx/xxxx": "^00.00.0",
+      00      "@xxxxxxxxxx/xxxxxx": "*",
+      00      "@xxxxx/xxxxx-xxx": "^0.00.0",
+      00      "@xxxxx/xxxxx": "^0.0.0",
+  ⎿  … 0 xxxx xxxx xxxxxxx
+  ⎿  Xxxxxxx xx xxxx xxxx
+
+⏺ Xxxxxxxx xxxxx xxx, xxxxxxx XX #00. Xxxxxx xxxxx xx xxxxxxx.
+
+  Xxx 0 xxxxx xxxxxxxx
+
+⏺ Xxxxxxxxx 0xx00x00. Xxx xxx xxx-xxx xxxxx xx x xxxxxx xxxx — xxxxxxx xxxxxx xxx.
+
+  Xxx 0 xxxxx xxxxxxx
+───────────────────────────────────────────────────────────────────────────────────────
+ ☐ Xxxxxx xxxx
+
+│ Xxxxxx XXx #00–#00 (xxxxxx 0.00.0, xxxx 0.0.0, @xxxxx/xxxx 00.00.0) xxx xxxxxxx xx
+│ xxxx (0xx00x00), xxx xxx xxxxxx xxxx xxxxx xxxxxx. Xxxxxx X xxxx x xxxxxx xxxx xxx?
+│ Xx xxxxx xxxx xxxxxxx xxx ~0 xxxxx xxxx xxxxxxx xxxxx Xxxxxxx 0.0.00 (xxxx xxxxx,
+│ xxxxxxxxx, xxxxx xxxx). Xxxx X xxxxx #00–#00 xxxxxxxx xx xxx xxxx xxxxxx, xxxxx
+│ xxxxxxx xxxxx xxxxxxxx.
+
+❯ 1. Xxxx xxx (Xxxxxxxxxxx)
+     Xxxxxxx xx xxxxxxxxxx-xxx/xxxxxxxxxx, xxxx xxxxx #00–#00 xxxx x xxxx xx xxx xxxx
+     xxxxxx xxx xxxxxx xxxxx xxxxxxxx.
+  2. Xxxxx xxxx, xxxx xxxxx
+     Xxxxx #00–#00 xxx, xxxxxx xxxx'xx xxxxxxx xx xxx xxxxxx xxx xxxxxx xxxx xxx xxxx
+     xxxx. Xxxxxxx xxxx xxxxxxxxx.
+  3. Type something.
+───────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

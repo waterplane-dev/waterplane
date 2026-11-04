@@ -35,6 +35,16 @@ const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-settings-`));
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Wait for the frame, never a fixed pause. Every check here once slept 300-400 ms and then read what
+ * had arrived, so under a loaded run the check ran first: after the restart the document was still
+ * null while settings.json held the value, which read as settings lost (2026-11-04, 6 of 14 runs with
+ * every core busy). A condition that never comes falls through to the check, which then fails on it.
+ */
+const until = async (cond, ms = 15_000) => {
+  const end = Date.now() + ms;
+  while (!cond() && Date.now() < end) await sleep(20);
+};
 
 const env = {
   ...process.env,
@@ -63,18 +73,25 @@ await waitForHost(PORT);
 /** One connected client. Keeps every settings frame it was sent, in order. */
 async function connect(label) {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
-  const state = { label, doc: null, updates: [], errors: [] };
+  const state = { label, doc: null, docs: 0, updates: [], errors: [] };
   ws.on("message", (raw) => {
     const m = JSON.parse(raw.toString());
-    if (m.t === "settings.all") state.doc = m.doc;
+    if (m.t === "settings.all") { state.doc = m.doc; state.docs++; }
     if (m.t === "settings.update") state.updates.push(m);
     if (m.t === "error") state.errors.push(m);
   });
   await new Promise((r) => ws.on("open", r));
   ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-  await sleep(400);
+  await until(() => state.doc !== null);
   state.send = (msg) => ws.send(JSON.stringify(msg));
   state.close = () => ws.close();
+  // How a check proves a frame did NOT come: one socket is ordered and the host handles a message
+  // whole before the next, so what it sent this client before this reply has arrived by the reply.
+  state.settled = async () => {
+    const seen = state.docs;
+    state.send({ t: "settings.get" });
+    await until(() => state.docs > seen);
+  };
   return state;
 }
 
@@ -89,7 +106,7 @@ check(a.doc && Object.keys(a.doc).length === 0, "a host with no settings yet ans
 // 2 — a write is stored and broadcast to BOTH sockets.
 const v1 = JSON.stringify([{ id: "s1", title: "ship it", text: "commit and push" }]);
 a.send({ t: "settings.set", key: SNIPPETS, value: v1, ts: 1000, device: "phone" });
-await sleep(300);
+await until(() => a.updates.length > 0 && b.updates.length > 0);
 const aGot = a.updates.filter((u) => u.key === SNIPPETS);
 const bGot = b.updates.filter((u) => u.key === SNIPPETS);
 check(aGot.length === 1 && aGot[0].value === v1, `the writer gets its own write echoed (${aGot.length} update(s))`);
@@ -99,13 +116,14 @@ check(bGot[0]?.device === "phone", `the update names the device that wrote it ($
 // 3 — last write wins, and the loser is corrected rather than ignored.
 const v2 = JSON.stringify([{ id: "s1", title: "ship it", text: "commit, push, and tag" }]);
 b.send({ t: "settings.set", key: SNIPPETS, value: v2, ts: 2000, device: "desktop" });
-await sleep(300);
+await until(() => a.updates.at(-1)?.value === v2 && b.updates.at(-1)?.value === v2);
 check(a.updates.at(-1)?.value === v2, "a newer write from another device replaces the older value everywhere");
 
 a.updates.length = 0;
 b.updates.length = 0;
 a.send({ t: "settings.set", key: SNIPPETS, value: JSON.stringify([{ id: "s1", title: "stale", text: "old" }]), ts: 1500 });
-await sleep(300);
+await a.settled();
+await b.settled();
 check(a.updates.length === 1 && a.updates[0].value === v2, "an OLDER write is answered with the winning value, not silently dropped");
 check(b.updates.length === 0, "…and the correction goes only to the loser, not to every device");
 
@@ -113,13 +131,14 @@ check(b.updates.length === 0, "…and the correction goes only to the loser, not
 a.updates.length = 0;
 b.updates.length = 0;
 b.send({ t: "settings.set", key: SNIPPETS, value: v2, ts: 2000 });
-await sleep(300);
+await b.settled();
+await a.settled();
 check(b.updates.length <= 1 && a.updates.length === 0, "a re-push at the same timestamp does not re-broadcast to the other devices");
 
 // 5 — the allow-list. The send outbox is the one that must never travel.
 a.errors.length = 0;
 a.send({ t: "settings.set", key: `${LS}outbox`, value: "[]", ts: 3000 });
-await sleep(300);
+await until(() => a.errors.length > 0);
 const fresh = await connect("C");
 check(!(`${LS}outbox` in (fresh.doc || {})), "a key outside the allow-list is not stored");
 check(a.errors.some((e) => /not stored/.test(e.message)), `…and the client is told why (${JSON.stringify(a.errors[0]?.message)})`);
@@ -128,7 +147,7 @@ check(a.errors.some((e) => /not stored/.test(e.message)), `…and the client is 
 // is a corrupt prompt list on every other device.
 a.errors.length = 0;
 a.send({ t: "settings.set", key: `${LS}pad`, value: "x".repeat(1024 * 1024 + 10), ts: 4000 });
-await sleep(400);
+await until(() => a.errors.length > 0);
 const fresh2 = await connect("D");
 check(!(`${LS}pad` in (fresh2.doc || {})), "an over-cap value is refused rather than truncated");
 check(a.errors.some((e) => /too big/.test(e.message)), `…with the reason named (${JSON.stringify(a.errors[0]?.message)})`);

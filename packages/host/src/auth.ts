@@ -21,7 +21,7 @@
  * Changing/clearing the password drops every row — every gated device is
  * logged out. No token is valid while no password is set (deny-until-set).
  */
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -29,7 +29,9 @@ import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
 import type { DeviceRow, DeviceScope } from "@waterplane/shared";
 import { peerKind, type PeerKind } from "./net.js";
 import { DeviceLedger } from "./deviceledger.js";
-import { PassiveGate } from "./passive.js";
+import { PassiveGate, passiveAllows } from "./passive.js";
+import { isOpaqueReadRoute } from "./origin.js";
+import { isEncryptedSocket } from "./net.js";
 import { BRAND, LEGACY } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 
@@ -185,6 +187,35 @@ export class AuthManager {
     return this.deviceFor(tok, kind) !== null;
   }
 
+  /** Key for read tickets: memory only, so a restart voids every ticket (the phone renews quietly). */
+  private readonly ticketKey = randomBytes(32);
+
+  /** A 1 h read ticket for this device: HMAC-signed `{deviceId, scope, exp}`. */
+  mintReadTicket(row: DeviceRow, now = Date.now()): { ticket: string; exp: number } {
+    const exp = now + READ_TICKET_MS;
+    const body = Buffer.from(JSON.stringify({ deviceId: row.id, scope: row.scope === "passive" ? "passive" : "full", exp })).toString("base64url");
+    return { ticket: `${body}.${this.ticketMac(body)}`, exp };
+  }
+
+  private ticketMac(body: string): string { return createHmac("sha256", this.ticketKey).update(body).digest("base64url"); }
+
+  /** The live device row and the ticket's scope, or null: bad MAC, expired, or the row is gone. */
+  readTicket(wt: string | null | undefined, now = Date.now()): { row: DeviceRow; scope: "full" | "passive" } | null {
+    if (!this.isEnabled() || !wt || wt.length > 512) return null;
+    const dot = wt.indexOf(".");
+    if (dot < 1) return null;
+    const body = wt.slice(0, dot);
+    const mac = Buffer.from(wt.slice(dot + 1));
+    const want = Buffer.from(this.ticketMac(body));
+    if (mac.length !== want.length || !timingSafeEqual(mac, want)) return null;
+    let t: { deviceId?: unknown; scope?: unknown; exp?: unknown };
+    try { t = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch { return null; }
+    if (typeof t.deviceId !== "string" || typeof t.exp !== "number" || t.exp <= now) return null;
+    const row = this.devices.get(t.deviceId);
+    if (!row) return null;
+    return { row, scope: t.scope === "passive" ? "passive" : "full" };
+  }
+
   /** Log a token out: its device row is deleted. */
   revoke(tok: string | undefined | null): void {
     const row = tok ? this.devices.lookup(tok) : null;
@@ -276,6 +307,36 @@ export function authCookie(tok: string): string {
 export function clearAuthCookie(): string[] {
   // Expire the legacy-named cookies too, so a logout really logs the browser out.
   return [AUTH_COOKIE, ...LEGACY_AUTH_COOKIES].map((n) => `${n}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+export const READ_TICKET_MS = 60 * 60 * 1000;
+
+/** `url` with any `wt` query parameter removed: the only form of a URL that may reach a log or a share. */
+export function stripWt(url: string): string {
+  const q = url.indexOf("?");
+  if (q < 0) return url;
+  const kept = url.slice(q + 1).split("&").filter((kv) => kv.split("=")[0] !== "wt");
+  return kept.length ? `${url.slice(0, q)}?${kept.join("&")}` : url.slice(0, q);
+}
+
+/**
+ * The `?wt=` read ticket as a credential: honoured ONLY on an opaque read route, ONLY on the host's
+ * own TLS socket, ONLY for GET/HEAD, only while the device row lives, and held to the ticket's scope
+ * (a passive row's ticket gets what `passiveAllows` gives a passive token, nothing more).
+ * `queuedApk` is the auto-pull question `passiveAllows` asks.
+ */
+export function admitReadTicket(
+  auth: AuthManager,
+  r: { url: string | undefined; method: string; path: string; socket: object },
+  queuedApk: (repoId: string, relPath: string) => boolean,
+  now = Date.now(),
+): DeviceRow | null {
+  if (!isEncryptedSocket(r.socket) || !isOpaqueReadRoute(r.path, r.method)) return null;
+  const u = new URL(r.url ?? "/", "http://localhost");
+  const hit = auth.readTicket(u.searchParams.get("wt"), now);
+  if (!hit) return null;
+  if ((hit.scope === "passive" || hit.row.scope === "passive") && !passiveAllows(r.method, r.path, u.searchParams, queuedApk)) return null;
+  return hit.row;
 }
 
 export { peerKind, type PeerKind };

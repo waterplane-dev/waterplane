@@ -24,11 +24,18 @@ import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -123,6 +130,19 @@ public class ShellLinkService extends Service {
     private static final String KEY_PROTOCOL = "protocol";
     private static final String KEY_LABEL = "label";
     private static final String KEY_QUEUE = "queueDepth";
+    /** Every desktop to watch, as a JSON list of {@code {hostId,url,label}}, active FIRST
+     *  ({@link ShellLinkSet}). Absent: the old single-url shape, read off
+     *  {@link #KEY_URL}/{@link #KEY_LABEL}. Those two always hold the ACTIVE desktop either way, so
+     *  {@link #savedUrl} (the paired-host check, auto-downloads) keeps meaning what it meant. */
+    private static final String KEY_LINKS = "links";
+    /** The base WebSocket subprotocol (`BRAND.wsProtocol`) a link's token rides beside, handed
+     *  over by the page like {@link #KEY_PROTOCOL}. Absent (an older bundle, which sends no token
+     *  either): no token is offered on any socket. */
+    private static final String KEY_WS_PROTOCOL = "wsProtocol";
+    /** The last {@code start} asked that no token reach the disk: tokens are read from
+     *  {@link #heldTokens} only, {@link ShellLinkTokens} is never opened, and a row marked
+     *  {@code tokenHeld} with no token in memory is locked. Absent: tokens are sealed at rest. */
+    private static final String KEY_TOKENS_MEMORY = "tokensInMemory";
 
     // ── Notification channels ────────────────────────────────────────────
     /** The service's own status line. Its own channel, at
@@ -180,34 +200,24 @@ public class ShellLinkService extends Service {
      *  starting — a settings row would draw the switch as having failed at the
      *  exact moment it worked. */
     private static volatile boolean pendingStart;
+    /**
+     * Memory mode's tokens ({@link ShellLinkSet#memoryTokens}), replaced whole. Static because the
+     * plugin and the service share this process and nothing else may carry them: not an Intent,
+     * not a preference. It dies with the process, which is the point; the rows then read locked.
+     */
+    private static volatile Map<String, String> heldTokens = Collections.emptyMap();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     @Nullable private OkHttpClient client;
-    /**
-     * The current socket — <b>from the moment it is asked for</b>, not from the
-     * moment it opens. OkHttp hands the object back synchronously and connects
-     * behind it, so holding it from the start is what makes two things possible
-     * that a "connected socket only" field cannot: a reconnect that arrives
-     * mid-handshake can CANCEL the attempt instead of racing a second one into
-     * existence, and every listener callback can check {@code ws != socket} and
-     * fall silent if it belongs to an attempt that has already been abandoned.
-     */
-    @Nullable private WebSocket socket;
     @Nullable private ConnectivityManager.NetworkCallback netCallback;
-
-    private volatile String status = "starting";
-    @Nullable private volatile String lastError;
-    private volatile long connectedAt = 0;
-    /** When the current attempt was STARTED, as opposed to when it succeeded.
-     *  A connect in flight is as young as a connect that just landed, and the
-     *  network callback fires on registration — see {@link #FRESH_SOCKET_MS}. */
-    private long connectStartedAt = 0;
-    private volatile long lastFrameAt = 0;
-    private long backoffMs = BACKOFF_MIN_MS;
-    /** The host said this connection needs the LAN password. Stop reconnecting —
-     *  every retry would bounce the same way — and say so on the status line
-     *  until the user opens the app and signs in. */
-    private boolean authPaused = false;
+    /**
+     * One {@link Link} per watched desktop, active FIRST. Replaced whole (copy on write) on the
+     * main thread, so the plugin's {@link #describe} reads a list that never changes under it.
+     */
+    private volatile List<Link> links = Collections.emptyList();
+    /** The stored list has been read once: before that an empty {@link #links} is "starting",
+     *  not "no desktop saved" (the status line is drawn before anything can have been read). */
+    private boolean linksApplied = false;
     private boolean stopping = false;
 
     // ── Static API for the rest of the shell ─────────────────────────────
@@ -234,13 +244,26 @@ public class ShellLinkService extends Service {
 
     /** Remember the configuration, then start. Persisting BEFORE the start is
      *  what makes a sticky restart and a boot start able to reconstruct it. */
-    static void enable(Context ctx, String url, int protocol, String label) {
-        prefs(ctx).edit()
+    static void enable(Context ctx, String url, int protocol, String label, @Nullable String linksJson,
+                       List<ShellLinkSet.Spec> withTokens, @Nullable String wsProtocol, boolean memoryOnly) {
+        heldTokens = memoryOnly ? ShellLinkSet.memoryTokens(withTokens) : Collections.<String, String>emptyMap();
+        // Sealed beside the list, never in it; a desktop gone from the list, or handed without a
+        // token, loses its stored one here (`ShellLinkTokens.replaceAll`).
+        if (memoryOnly) {
+            if (!ShellLinkTokens.clearNow(ctx)) Log.w(TAG, "stored tokens not deleted yet");
+        } else if (linksJson != null) ShellLinkTokens.replaceAll(ctx, withTokens);
+        else ShellLinkTokens.clear(ctx);
+        SharedPreferences.Editor e = prefs(ctx).edit()
                 .putBoolean(KEY_ENABLED, true)
                 .putString(KEY_URL, url)
                 .putInt(KEY_PROTOCOL, protocol)
-                .putString(KEY_LABEL, label)
-                .apply();
+                .putString(KEY_LABEL, label);
+        // An old bundle's start (no list) is the single-url shape again: forget a list a newer
+        // bundle left, or this would keep watching desktops the page no longer names.
+        if (linksJson != null) e.putString(KEY_LINKS, linksJson); else e.remove(KEY_LINKS);
+        if (wsProtocol != null) e.putString(KEY_WS_PROTOCOL, wsProtocol); else e.remove(KEY_WS_PROTOCOL);
+        if (memoryOnly) e.putBoolean(KEY_TOKENS_MEMORY, true); else e.remove(KEY_TOKENS_MEMORY);
+        e.apply();
         pendingStart = true;
         Intent i = new Intent(ctx, ShellLinkService.class).setAction(ACTION_START);
         i.putExtra(EXTRA_URL, url);
@@ -252,6 +275,10 @@ public class ShellLinkService extends Service {
     static void disable(Context ctx) {
         pendingStart = false;
         prefs(ctx).edit().putBoolean(KEY_ENABLED, false).apply();
+        // Off means nothing to sign in with: no token outlives the switch (the next start
+        // hands them again).
+        heldTokens = Collections.emptyMap();
+        ShellLinkTokens.clear(ctx);
         ShellLinkWorker.cancel(ctx);
         try {
             ctx.startService(new Intent(ctx, ShellLinkService.class).setAction(ACTION_STOP));
@@ -319,14 +346,32 @@ public class ShellLinkService extends Service {
         o.put("supported", true);
         o.put("enabled", isEnabled(ctx));
         o.put("running", s != null);
-        o.put("state", s != null ? s.status : (pendingStart ? "starting" : "stopped"));
+        List<Link> held = s != null ? s.links : Collections.<Link>emptyList();
+        Link active = held.isEmpty() ? null : held.get(0);
+        String idle = pendingStart ? "starting" : "stopped";
+        o.put("state", s == null ? idle : active != null ? active.status : "unconfigured");
         o.put("host", prefs(ctx).getString(KEY_LABEL, null));
         o.put("queueDepth", prefs(ctx).getInt(KEY_QUEUE, 0));
-        if (s != null) {
-            o.put("connectedAt", s.connectedAt);
-            o.put("lastFrameAt", s.lastFrameAt);
-            if (s.lastError != null) o.put("error", s.lastError);
+        if (active != null) {
+            o.put("connectedAt", active.connectedAt);
+            o.put("lastFrameAt", active.lastFrameAt);
+            if (active.lastError != null) o.put("error", active.lastError);
         }
+        // One row per watched desktop — what the settings row words apart. Built from the stored
+        // list when the service is not up, so a stopped link still names what it would watch.
+        JSONArray rows = new JSONArray();
+        if (s != null) {
+            for (Link l : held) rows.put(l.describe());
+        } else {
+            for (ShellLinkSet.Spec sp : storedSpecs(ctx)) {
+                JSObject r = new JSObject();
+                r.put("hostId", sp.hostId);
+                r.put("label", sp.label);
+                r.put("state", idle);
+                rows.put(r);
+            }
+        }
+        o.put("links", rows);
         return o;
     }
 
@@ -365,17 +410,20 @@ public class ShellLinkService extends Service {
             // not — the WorkManager backstop fires every fifteen minutes and
             // would otherwise reopen a socket the host has said it will refuse,
             // for ever, on a phone nobody is holding.
-            authPaused = false;
-            String url = intent != null ? intent.getStringExtra(EXTRA_URL) : null;
-            if (url != null && !url.equals(url())) {
-                Log.i(TAG, "re-pointed at " + url);
-                dropSocket();
+            // A REFUSED token is the exception: the same token would be refused again, so
+            // only a new one (a new Link, `sameSocket`) reopens that desktop.
+            for (Link l : links) {
+                if (!l.tokenRefused) l.authPaused = false;
+                l.pinPaused = false;
             }
         }
 
+        // The stored list against the held one: a desktop added opens, one removed closes, one
+        // unchanged keeps its socket (a re-sent list reconnects nothing — `ShellLinkSet.diff`).
+        applyLinks();
         registerNetworkCallback();
         ShellLinkWorker.schedule(this);
-        ensureSocket(0);
+        for (Link l : links) l.ensureSocket(0);
         // START_STICKY, not START_REDELIVER_INTENT: the configuration is in
         // SharedPreferences precisely so the restart does not depend on an
         // Intent the platform may or may not have kept.
@@ -386,7 +434,7 @@ public class ShellLinkService extends Service {
     public void onDestroy() {
         if (instance == this) instance = null;
         unregisterNetworkCallback();
-        dropSocket();
+        for (Link l : links) l.close();
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
@@ -399,7 +447,7 @@ public class ShellLinkService extends Service {
 
     private void shutdown() {
         stopping = true;
-        dropSocket();
+        for (Link l : links) l.close();
         unregisterNetworkCallback();
         stopForeground(Service.STOP_FOREGROUND_REMOVE);
         stopSelf();
@@ -419,12 +467,7 @@ public class ShellLinkService extends Service {
     }
 
     private Notification statusNotification() {
-        String label = prefs(this).getString(KEY_LABEL, null);
-        String line;
-        if (authPaused) line = "sign-in needed";
-        else if ("connected".equals(status)) line = "connected · " + (label != null ? label : "host");
-        else if (stopping) line = "stopping";
-        else line = "reconnecting…";
+        String line = stopping ? "stopping" : !linksApplied ? "starting…" : statusLine(links);
         return new NotificationCompat.Builder(this, CHANNEL_STATUS)
                 .setSmallIcon(R.drawable.ic_stat_app)
                 .setContentTitle("waterplane")
@@ -434,7 +477,7 @@ public class ShellLinkService extends Service {
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setContentIntent(openAppIntent(null, null, null, STATUS_NOTIFICATION_ID))
+                .setContentIntent(openAppIntent(null, STATUS_NOTIFICATION_ID))
                 .build();
     }
 
@@ -527,34 +570,123 @@ public class ShellLinkService extends Service {
         }
     }
 
-    // ── The socket ───────────────────────────────────────────────────────
+    // ── The links: one socket per watched desktop ────────────────────────
 
-    @Nullable
-    private String url() {
-        return prefs(this).getString(KEY_URL, null);
+    /** The stored list, or the old single url as one spec with no host id. */
+    static List<ShellLinkSet.Spec> storedSpecs(Context ctx) {
+        return storedSpecs(ctx, false);
     }
 
-    private void ensureSocket(long delayMs) {
-        if (stopping || authPaused) return;
-        if (socket != null) return;
-        handler.removeCallbacks(connectRunnable);
-        handler.postDelayed(connectRunnable, delayMs);
-    }
-
-    private final Runnable connectRunnable = this::connect;
-
-    private void connect() {
-        if (stopping || authPaused || socket != null) return;
-        String url = url();
-        if (url == null || url.isEmpty()) {
-            status = "unconfigured";
-            refreshStatus();
-            return;
+    /** {@code withTokens}: each spec carries its desktop's token, unsealed or, in memory mode, out
+     *  of {@link #heldTokens} — the service's own read, never the status one. */
+    static List<ShellLinkSet.Spec> storedSpecs(Context ctx, boolean withTokens) {
+        SharedPreferences p = prefs(ctx);
+        boolean memoryOnly = p.getBoolean(KEY_TOKENS_MEMORY, false);
+        String raw = p.getString(KEY_LINKS, null);
+        if (raw != null) {
+            List<ShellLinkSet.Spec> in = new ArrayList<>();
+            try {
+                JSONArray a = new JSONArray(raw);
+                for (int i = 0; i < a.length(); i++) {
+                    JSONObject o = a.optJSONObject(i);
+                    if (o == null) continue;
+                    String hostId = o.optString("hostId", null);
+                    String url = o.optString("url", null);
+                    String tok = !withTokens ? null
+                            : memoryOnly ? heldTokens.get(ShellLinkSet.tokenAad(hostId, url))
+                            : ShellLinkTokens.read(ctx, hostId, url);
+                    in.add(new ShellLinkSet.Spec(hostId, url, o.optString("label", null), tok, o.optBoolean("tokenHeld", false)));
+                }
+            } catch (org.json.JSONException e) {
+                Log.w(TAG, "stored link list unreadable: " + e);
+            }
+            List<ShellLinkSet.Spec> clean = ShellLinkSet.clean(in);
+            if (!clean.isEmpty()) return clean;
         }
-        status = "connecting";
-        refreshStatus();
+        String url = p.getString(KEY_URL, null);
+        if (!ShellLinkSet.isWsUrl(url)) return Collections.emptyList();
+        String label = p.getString(KEY_LABEL, null);
+        return Collections.singletonList(new ShellLinkSet.Spec(null, url, label != null ? label : ShellLinkSet.hostOf(url)));
+    }
+
+    /** This desktop's link at {@code url}'s origin, with its token (see {@link #storedSpecs}). */
+    @Nullable
+    static ShellLinkSet.Spec linkFor(Context ctx, @Nullable String hostId, @Nullable String url) {
+        return ShellLinkSet.linkFor(storedSpecs(ctx, true), hostId, url);
+    }
+
+    /**
+     * A pin was set or removed. The next dial reads it anyway; this is for what will not dial: a
+     * link paused on a refused key, and a socket let in under a key no longer pinned.
+     *
+     * @param changed false when the same key was set again, which leaves an open socket alone.
+     */
+    static void pinChanged(@Nullable String hostId, boolean changed) {
+        ShellLinkService s = instance;
+        if (s == null || hostId == null) return;
+        s.handler.post(() -> {
+            for (Link l : s.links) if (hostId.equals(l.spec.hostId)) l.repinned(changed);
+        });
+    }
+
+    /** Make the held links match the stored list. Main thread only. */
+    private void applyLinks() {
+        // A blob a crash kept past `enable`: nothing reads it in memory mode, and it does not stay.
+        if (prefs(this).getBoolean(KEY_TOKENS_MEMORY, false)) ShellLinkTokens.clear(this);
+        List<ShellLinkSet.Spec> next = storedSpecs(this, true);
+        List<ShellLinkSet.Spec> heldSpecs = new ArrayList<>();
+        for (Link l : links) heldSpecs.add(l.spec);
+        ShellLinkSet.Diff d = ShellLinkSet.diff(heldSpecs, next);
+        List<Link> out = new ArrayList<>();
+        for (ShellLinkSet.Spec n : next) {
+            ShellLinkSet.Spec kept = d.keep.get(n);
+            Link l = null;
+            if (kept != null) for (Link h : links) if (h.spec == kept) { l = h; break; }
+            if (l != null) { l.spec = n; l.pauseIfLocked(); } // a new label rides on the same socket
+            else { l = new Link(n); Log.i(TAG, "watching " + n); } // Spec.toString: never the token
+            out.add(l);
+        }
+        for (Link h : links) if (!out.contains(h)) { Log.i(TAG, "no longer watching " + h.spec.label); h.close(); }
+        links = Collections.unmodifiableList(out);
+        linksApplied = true;
+        if (out.isEmpty()) refreshStatus();
+    }
+
+    /** Is this link the ACTIVE desktop's (the first)? */
+    private boolean isActive(Link l) {
+        List<Link> held = links;
+        return !held.isEmpty() && held.get(0) == l;
+    }
+
+    /**
+     * The status line, each desktop's state its own: "connected · studio" with one link,
+     * "studio connected · zenbook reconnecting…" with several — never folded into one word that
+     * hides a desktop not answering.
+     */
+    private static String statusLine(List<Link> held) {
+        if (held.isEmpty()) return "no desktop saved";
+        if (held.size() == 1) {
+            Link l = held.get(0);
+            String paused = l.pausedWord();
+            if (paused != null) return paused;
+            if ("connected".equals(l.status)) return "connected · " + l.spec.label;
+            return "reconnecting…";
+        }
+        StringBuilder b = new StringBuilder();
+        for (Link l : held) {
+            if (b.length() > 0) b.append(" · ");
+            String paused = l.pausedWord();
+            String word = paused != null ? paused : "connected".equals(l.status) ? "connected" : "reconnecting…";
+            b.append(l.spec.label).append(' ').append(word);
+        }
+        return b.toString();
+    }
+
+    private OkHttpClient client() {
         if (client == null) {
             client = new OkHttpClient.Builder()
+                    // Never hop between http and https on a redirect's say-so.
+                    .followSslRedirects(false)
                     // **Liveness is a protocol ping, not a JSON heartbeat.** The
                     // host's ws library answers a control ping automatically, so
                     // this costs no protocol duplication — and at two minutes it
@@ -567,124 +699,404 @@ public class ShellLinkService extends Service {
                     .retryOnConnectionFailure(true)
                     .build();
         }
-        Log.i(TAG, "connecting to " + url);
-        connectStartedAt = System.currentTimeMillis();
-        socket = client.newWebSocket(new Request.Builder().url(url).build(), listener);
+        return client;
     }
-
-    private final WebSocketListener listener = new WebSocketListener() {
-        @Override
-        public void onOpen(WebSocket ws, Response response) {
-            handler.post(() -> {
-                if (ws != socket) { ws.cancel(); return; } // an abandoned attempt
-                status = "connected";
-                lastError = null;
-                connectedAt = System.currentTimeMillis();
-                lastFrameAt = connectedAt;
-                backoffMs = BACKOFF_MIN_MS;
-                refreshStatus();
-                // The one frame this side sends. The version is the web layer's,
-                // handed over at `start()` — see the class comment. `role:notify`
-                // asks the host to send this link only the frames `onFrame` reads
-                // (`shared/wire/notifylink.ts`); every other frame is a radio
-                // wakeup thrown away. A host also infers it from OkHttp's UA, which
-                // is what covers an APK built before this line.
-                int protocol = prefs(ShellLinkService.this).getInt(KEY_PROTOCOL, 1);
-                ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + ",\"role\":\"notify\"}");
-                reportQueueBacklog();
-            });
-        }
-
-        @Override
-        public void onMessage(WebSocket ws, String text) {
-            lastFrameAt = System.currentTimeMillis();
-            handler.post(() -> { if (ws == socket) onFrame(text); });
-        }
-
-        @Override
-        public void onFailure(WebSocket ws, Throwable t, @Nullable Response response) {
-            handler.post(() -> {
-                if (ws != socket) return;
-                lastError = t.getMessage();
-                Log.w(TAG, "socket failed: " + t);
-                dropSocket();
-                scheduleRetry();
-            });
-        }
-
-        @Override
-        public void onClosed(WebSocket ws, int code, String reason) {
-            handler.post(() -> {
-                if (ws != socket) return;
-                Log.i(TAG, "socket closed " + code + " " + reason);
-                dropSocket();
-                scheduleRetry();
-            });
-        }
-    };
 
     /**
-     * Three frames, and everything else on the floor.
-     *
-     * The wire is versioned and this APK does not update with the bundle, so a
-     * frame type this build has never heard of is the expected case, not an
-     * error — the same rule `main.ts`'s dispatcher follows for an unknown `t`.
+     * One desktop's socket, with its own backoff, auth pause and status. Every field is touched
+     * on the main thread ({@link #handler}) except the volatile ones {@link #describe} reads.
      */
-    private void onFrame(String text) {
-        String t;
-        JSONObject msg;
-        try {
-            msg = new JSONObject(text);
-            t = msg.optString("t", "");
-        } catch (org.json.JSONException e) {
-            return; // Malformed: the WebView's socket is the one that has to care.
+    private final class Link {
+        volatile ShellLinkSet.Spec spec;
+        /**
+         * The current socket — <b>from the moment it is asked for</b>, not from the
+         * moment it opens. OkHttp hands the object back synchronously and connects
+         * behind it, so holding it from the start is what makes two things possible
+         * that a "connected socket only" field cannot: a reconnect that arrives
+         * mid-handshake can CANCEL the attempt instead of racing a second one into
+         * existence, and every listener callback can check {@code ws != socket} and
+         * fall silent if it belongs to an attempt that has already been abandoned.
+         */
+        @Nullable WebSocket socket;
+        volatile String status = "starting";
+        @Nullable volatile String lastError;
+        volatile long connectedAt = 0;
+        /** When the current attempt was STARTED, as opposed to when it succeeded.
+         *  A connect in flight is as young as a connect that just landed, and the
+         *  network callback fires on registration — see {@link #FRESH_SOCKET_MS}. */
+        long connectStartedAt = 0;
+        volatile long lastFrameAt = 0;
+        long backoffMs = BACKOFF_MIN_MS;
+        /** The host said this connection needs the LAN password. Stop reconnecting —
+         *  every retry would bounce the same way — and say so on the status line
+         *  until the user opens the app and signs in. Per desktop: one gated host
+         *  never silences the others. */
+        volatile boolean authPaused = false;
+        /** The host refused the token this link CARRIED (revoked, or its password changed): paused
+         *  like {@link #authPaused}, worded "signed out there — pair again", and never cleared by
+         *  an explicit start — only a new token (a new spec, so a new Link) dials again. */
+        volatile boolean tokenRefused = false;
+        /** The leaf was not the pinned key. A retry on the same network meets the same answer, so
+         *  this waits, worded, for what can change it: a new network, an explicit start, a pin. */
+        volatile boolean pinPaused = false;
+        /** The status line's word for a TLS failure on a pinned address, or null. */
+        @Nullable volatile String tlsWord;
+        /** The last dial was refused: this desktop holds a pin and this address is not protected
+         *  ({@link ShellRoute#mayDial}). Not a pause: {@link #connect} asks again, off the network,
+         *  whenever anything wakes the link, and no timer is left behind to do so. */
+        volatile boolean routeLocked = false;
+        boolean closed = false;
+        /** What the last summary alert said (its items), so a reconnect that finds the same
+         *  cards waiting does not ring again. */
+        @Nullable String lastSummaryKey;
+        final Runnable connectRunnable = this::connect;
+
+        Link(ShellLinkSet.Spec spec) {
+            this.spec = spec;
+            pauseIfLocked();
         }
-        if (FRAME_AUTH_REQUIRED.equals(t)) {
-            // The host is about to close this socket; retrying just bounces.
+
+        /** A locked link is paused like a tokenless gated one, and an explicit start clears that
+         *  pause before the list is applied, so this runs on every apply: only a token reopens it. */
+        void pauseIfLocked() {
+            if (!spec.locked()) return;
             authPaused = true;
-            status = "auth";
+            status = "locked";
+        }
+
+        @Nullable
+        String pausedWord() {
+            String w = ShellLinkSet.pausedWord(tokenRefused, spec.locked(), authPaused);
+            if (w != null) return w;
+            return routeLocked ? ShellRoute.WORD_LOCKED : tlsWord;
+        }
+
+        /** This desktop's own client: its pin if it holds one, else {@link #client()} itself. */
+        private OkHttpClient linkClient() {
+            return ShellTlsClient.forUrl(ShellLinkService.this, client(), spec.hostId, spec.url);
+        }
+
+        /** A TLS failure on a pinned address, said on the status line. An address with no pin,
+         *  and a failure that is not TLS, retry as they always did. */
+        private void noteTlsFailure(Throwable t) {
+            if (ShellTlsPins.pinFor(ShellLinkService.this, spec.hostId, spec.url) == null) return;
+            String words = ShellTlsClient.words(t);
+            if (words == null) return;
+            lastError = words;
+            boolean key = ShellTlsClient.isPinRefusal(t);
+            tlsWord = key ? ShellTlsClient.WORD_KEY : ShellTlsClient.WORD_TLS;
+            pinPaused = key;
+        }
+
+        void repinned(boolean changed) {
+            if (!changed && !pinPaused) return;
+            pinPaused = false;
+            tlsWord = null;
+            lastError = null;
+            backoffMs = BACKOFF_MIN_MS;
+            handler.removeCallbacks(connectRunnable);
+            dropSocket();
+            ensureSocket(250);
+        }
+
+        JSObject describe() {
+            JSObject r = new JSObject();
+            r.put("hostId", spec.hostId);
+            r.put("label", spec.label);
+            r.put("state", tokenRefused ? "signedOut" : spec.locked() ? "locked" : authPaused ? "auth" : pinPaused ? "keyChanged" : status);
+            if (lastError != null) r.put("error", lastError);
+            if (connectedAt > 0) r.put("connectedAt", connectedAt);
+            return r;
+        }
+
+        void close() {
+            closed = true;
+            handler.removeCallbacks(connectRunnable);
+            dropSocket();
+        }
+
+        void ensureSocket(long delayMs) {
+            if (stopping || authPaused || pinPaused || closed) return;
+            if (socket != null) return;
+            handler.removeCallbacks(connectRunnable);
+            handler.postDelayed(connectRunnable, delayMs);
+        }
+
+        private void connect() {
+            if (stopping || authPaused || pinPaused || closed || socket != null) return;
+            routeLocked = !ShellRoute.mayDial(spec.url, ShellTlsPins.pinOf(ShellLinkService.this, spec.hostId) != null,
+                    ShellNetPlugin.tailnetNow(ShellLinkService.this));
+            if (routeLocked) {
+                // Its own word, not the "locked" of a token lost with the process: the page answers
+                // that one by handing the token back, which would not help here.
+                status = ShellRoute.WORD_LOCKED;
+                lastError = null;
+                refreshStatus();
+                return;
+            }
+            status = "connecting";
+            refreshStatus();
+            Log.i(TAG, "connecting to " + spec);
+            connectStartedAt = System.currentTimeMillis();
+            Request.Builder rb = new Request.Builder().url(spec.url);
+            // That desktop's own token, to its own url only, as the subprotocol the page's socket
+            // uses (`deviceToken.ts` `wsProtocols`). OkHttp sends the header verbatim.
+            String protocols = ShellLinkSet.subprotocols(prefs(ShellLinkService.this).getString(KEY_WS_PROTOCOL, null), spec.token);
+            if (protocols != null) rb.header("Sec-WebSocket-Protocol", protocols);
+            socket = linkClient().newWebSocket(rb.build(), listener);
+        }
+
+        final WebSocketListener listener = new WebSocketListener() {
+            @Override
+            public void onOpen(WebSocket ws, Response response) {
+                handler.post(() -> {
+                    if (ws != socket) { ws.cancel(); return; } // an abandoned attempt
+                    status = "connected";
+                    lastError = null;
+                    tlsWord = null;
+                    connectedAt = System.currentTimeMillis();
+                    lastFrameAt = connectedAt;
+                    backoffMs = BACKOFF_MIN_MS;
+                    refreshStatus();
+                    // The one frame this side sends. The version is the web layer's,
+                    // handed over at `start()` — see the class comment. `role:notify`
+                    // asks the host to send this link only the frames `onFrame` reads
+                    // (`shared/wire/notifylink.ts`); every other frame is a radio
+                    // wakeup thrown away. A host also infers it from OkHttp's UA, which
+                    // is what covers an APK built before this line.
+                    int protocol = prefs(ShellLinkService.this).getInt(KEY_PROTOCOL, 1);
+                    ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + ",\"role\":\"notify\"}");
+                    // The queue is the page's, and the page is the active desktop's.
+                    if (isActive(Link.this)) reportQueueBacklog(Link.this);
+                    // The notify link never replays: a card raised while this socket was
+                    // down would never be seen. Ask once what is waiting there now.
+                    fetchSummary();
+                });
+            }
+
+            @Override
+            public void onMessage(WebSocket ws, String text) {
+                lastFrameAt = System.currentTimeMillis();
+                handler.post(() -> { if (ws == socket) onFrame(text); });
+            }
+
+            @Override
+            public void onFailure(WebSocket ws, Throwable t, @Nullable Response response) {
+                handler.post(() -> {
+                    if (ws != socket) return;
+                    lastError = t.getMessage();
+                    Log.w(TAG, spec.label + ": socket failed: " + t);
+                    noteTlsFailure(t);
+                    dropSocket();
+                    if (pinPaused) {
+                        status = "keyChanged";
+                        refreshStatus();
+                        return;
+                    }
+                    scheduleRetry();
+                });
+            }
+
+            @Override
+            public void onClosed(WebSocket ws, int code, String reason) {
+                handler.post(() -> {
+                    if (ws != socket) return;
+                    Log.i(TAG, spec.label + ": socket closed " + code + " " + reason);
+                    // 4403: a passive (kids') token never gets the socket (`host/passive.ts`).
+                    // A retry is the same refusal, so it pauses instead of looping.
+                    if (code == 4403) { refused(); return; }
+                    dropSocket();
+                    scheduleRetry();
+                });
+            }
+        };
+
+        /**
+         * Three frames, and everything else on the floor.
+         *
+         * The wire is versioned and this APK does not update with the bundle, so a
+         * frame type this build has never heard of is the expected case, not an
+         * error — the same rule `main.ts`'s dispatcher follows for an unknown `t`.
+         */
+        private void onFrame(String text) {
+            String t;
+            JSONObject msg;
+            try {
+                msg = new JSONObject(text);
+                t = msg.optString("t", "");
+            } catch (org.json.JSONException e) {
+                return; // Malformed: the WebView's socket is the one that has to care.
+            }
+            if (FRAME_AUTH_REQUIRED.equals(t)) {
+                // The host is about to close this socket; retrying just bounces.
+                refused();
+                return;
+            }
+            if (FRAME_PULL_NEW.equals(t)) {
+                // Auto-downloads are the ACTIVE desktop's: the page adopts the row into its
+                // own queue, which holds that desktop's files only.
+                if (isActive(this)) onPullNew(msg.optJSONObject("item"), this);
+                return;
+            }
+            if (!FRAME_NOTIFICATION.equals(t)) return;
+            JSONObject item = msg.optJSONObject("item");
+            if (item != null) postAlert(item, this);
+        }
+
+        /** The desktop wants a sign-in: pause, no retry. Carrying a token, that token was refused.
+         *  In memory mode there is no blob to forget and {@link #heldTokens} keeps its copy: the
+         *  next apply then finds the same spec and this link stays "signed out". Dropping it would
+         *  turn the row locked and tell the person to open the app, which cannot help. */
+        void refused() {
+            authPaused = true;
+            if (offersToken()) {
+                tokenRefused = true;
+                ShellLinkTokens.forget(ShellLinkService.this, spec.hostId);
+            }
+            status = tokenRefused ? "signedOut" : "auth";
             dropSocket();
             refreshStatus();
-            return;
         }
-        if (FRAME_PULL_NEW.equals(t)) {
-            onPullNew(msg.optJSONObject("item"));
-            return;
+
+        /** Does this link actually offer its token (a token AND a base protocol to carry it)? */
+        private boolean offersToken() {
+            return ShellLinkSet.subprotocols(prefs(ShellLinkService.this).getString(KEY_WS_PROTOCOL, null), spec.token) != null;
         }
-        if (!FRAME_NOTIFICATION.equals(t)) return;
-        JSONObject item = msg.optJSONObject("item");
-        if (item != null) postAlert(item);
+
+        void dropSocket() {
+            WebSocket ws = socket;
+            socket = null;
+            if (ws != null) {
+                try { ws.cancel(); } catch (RuntimeException e) { Log.d(TAG, "cancel: " + e); }
+            }
+            if (!"connected".equals(status)) return;
+            status = "reconnecting";
+        }
+
+        private void scheduleRetry() {
+            if (stopping || authPaused || pinPaused || closed) return;
+            status = "reconnecting";
+            refreshStatus();
+            long wait = backoffMs;
+            backoffMs = Math.min(BACKOFF_MAX_MS, backoffMs * 2);
+            ensureSocket(wait);
+        }
+
+        /** A network came back. Reset the backoff and go now — an exponential wait
+         *  computed against a network that no longer exists is time spent offline
+         *  for no reason. */
+        void reconnectNow() {
+            if (closed) return;
+            backoffMs = BACKOFF_MIN_MS;
+            pinPaused = false; // another network may not have whoever was in between
+            tlsWord = null;
+            handler.removeCallbacks(connectRunnable);
+            long fresh = Math.max(connectedAt, connectStartedAt);
+            if (socket != null && System.currentTimeMillis() - fresh < FRESH_SOCKET_MS) return;
+            dropSocket();
+            ensureSocket(250);
+        }
+
+        /**
+         * {@code GET /api/attention} once, on each (re)open, and ONE summary alert when anything
+         * waits there — the notify link never replays a feed, so without this a card raised while
+         * the socket was down (the phone in a tunnel, the desktop asleep) is never seen.
+         *
+         * Same trust as the socket: that desktop's own token as {@code Authorization: Bearer}, to
+         * this link's own origin only ({@link #httpBase} of its url), or none. A 401 says nothing in
+         * the shade; carrying a token, it pauses the link as refused. A failed read says nothing
+         * either: a number is never posted from a guess.
+         */
+        private void fetchSummary() {
+            String base = httpBase(spec.url);
+            if (base == null) return;
+            Request.Builder rb = new Request.Builder().url(base + "/api/attention").get();
+            final String auth = offersToken() ? ShellLinkSet.bearer(spec.token) : null;
+            if (auth != null) rb.header("Authorization", auth);
+            Request req = rb.build();
+            OkHttpClient once = linkClient().newBuilder().callTimeout(10, TimeUnit.SECONDS).build();
+            once.newCall(req).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, java.io.IOException e) {
+                    Log.d(TAG, spec.label + ": attention read failed: " + e);
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) {
+                    String body = null;
+                    try (Response r = response) {
+                        if (r.isSuccessful() && r.body() != null) body = r.body().string();
+                        else {
+                            Log.d(TAG, spec.label + ": attention read " + r.code());
+                            if (r.code() == 401 && auth != null) handler.post(() -> { if (!closed && !authPaused) refused(); });
+                        }
+                    } catch (java.io.IOException | RuntimeException e) {
+                        Log.d(TAG, spec.label + ": attention body: " + e);
+                    }
+                    if (body == null) return;
+                    final String text = body;
+                    handler.post(() -> { if (!closed) postSummary(text); });
+                }
+            });
+        }
+
+        private void postSummary(String text) {
+            JSONObject s;
+            try { s = new JSONObject(text); } catch (org.json.JSONException e) { return; }
+            JSONObject sess = s.optJSONObject("sessions");
+            JSONObject att = s.optJSONObject("attention");
+            if (sess == null || att == null) return; // not a summary this build can read
+            int sessionsN = Math.max(0, sess.optInt("n", 0));
+            int attentionN = Math.max(0, att.optInt("n", 0));
+            List<String> ids = new ArrayList<>();
+            JSONArray idArr = sess.optJSONArray("ids");
+            if (idArr != null) for (int i = 0; i < idArr.length(); i++) ids.add(idArr.optString(i, ""));
+            List<ShellLinkSet.Waiting> items = new ArrayList<>();
+            StringBuilder key = new StringBuilder();
+            JSONArray arr = att.optJSONArray("items");
+            if (arr != null) for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null) continue;
+                items.add(new ShellLinkSet.Waiting(o.optString("kind", "info"), optStr(o, "plugin"), optStr(o, "sessionId")));
+                key.append(o.optString("id", "")).append(',');
+            }
+            for (String id : ids) key.append(id).append(';');
+            String tag = ShellLinkSet.tagFor(spec.hostId, "summary");
+            int nid = tag.hashCode();
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            int total = sessionsN + attentionN;
+            if (total == 0) {
+                // Nothing waits there now: an earlier summary of this desktop is out of date.
+                lastSummaryKey = null;
+                if (nm != null) nm.cancel(tag, nid);
+                return;
+            }
+            String k = key.append('#').append(total).toString();
+            if (k.equals(lastSummaryKey)) return; // the same cards, seen on a reconnect
+            lastSummaryKey = k;
+            if (APP_FOREGROUND.get()) return;
+            String target = ShellLinkSet.summaryTarget(items, attentionN, ids, sessionsN);
+            Notification n = new NotificationCompat.Builder(ShellLinkService.this, channelFor("prompt"))
+                    .setSmallIcon(R.drawable.ic_stat_app)
+                    .setContentTitle(ShellLinkSet.summaryTitle(spec.label, total))
+                    .setContentText(ShellLinkSet.summaryBody(items, attentionN, sessionsN))
+                    .setAutoCancel(true)
+                    .setOnlyAlertOnce(true)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setContentIntent(openAppIntent(ShellLinkSet.openTarget(spec.hostId, target), nid))
+                    .build();
+            if (nm == null) return;
+            try {
+                nm.notify(tag, nid, n);
+            } catch (SecurityException e) {
+                Log.d(TAG, "summary not shown: " + e);
+            }
+        }
     }
 
-    private void dropSocket() {
-        WebSocket ws = socket;
-        socket = null;
-        if (ws != null) {
-            try { ws.cancel(); } catch (RuntimeException e) { Log.d(TAG, "cancel: " + e); }
-        }
-        if (!"connected".equals(status)) return;
-        status = "reconnecting";
-    }
-
-    private void scheduleRetry() {
-        if (stopping || authPaused) return;
-        status = "reconnecting";
-        refreshStatus();
-        long wait = backoffMs;
-        backoffMs = Math.min(BACKOFF_MAX_MS, backoffMs * 2);
-        ensureSocket(wait);
-    }
-
-    /** A network came back. Reset the backoff and go now — an exponential wait
-     *  computed against a network that no longer exists is time spent offline
-     *  for no reason. */
-    private void reconnectNow() {
-        backoffMs = BACKOFF_MIN_MS;
-        handler.removeCallbacks(connectRunnable);
-        long fresh = Math.max(connectedAt, connectStartedAt);
-        if (socket != null && System.currentTimeMillis() - fresh < FRESH_SOCKET_MS) return;
-        dropSocket();
-        ensureSocket(250);
+    @Nullable
+    private static String optStr(JSONObject o, String k) {
+        return o.isNull(k) ? null : o.optString(k, null);
     }
 
     // ── The network changed ──────────────────────────────────────────────
@@ -728,7 +1140,7 @@ public class ShellLinkService extends Service {
             public void onAvailable(Network network) {
                 handler.post(() -> {
                     Log.i(TAG, "network available");
-                    reconnectNow();
+                    for (Link l : links) l.reconnectNow();
                     MainActivity.nudgeWebView("network");
                 });
             }
@@ -736,7 +1148,7 @@ public class ShellLinkService extends Service {
             @Override
             public void onLost(Network network) {
                 handler.post(() -> {
-                    status = "reconnecting";
+                    for (Link l : links) if (!l.authPaused && !l.routeLocked) l.status = "reconnecting";
                     refreshStatus();
                 });
             }
@@ -770,12 +1182,20 @@ public class ShellLinkService extends Service {
      * and one hand on a new row is fewer races than two. Obeys the page's
      * auto-download switch; the host's rules decided the rest.
      */
-    private void onPullNew(@Nullable JSONObject item) {
+    private void onPullNew(@Nullable JSONObject item, Link from) {
         if (item == null || APP_FOREGROUND.get()) return;
         if (!ShellPullService.autoEnabled(this)) return;
-        String base = httpBase(url());
+        String base = httpBase(savedUrl(this));
         if (base == null) return;
-        if (ShellPullService.adopt(this, item, base)) Log.i(TAG, "queued " + item.optString("relPath"));
+        String refusal = ShellPullService.adoptRefusal(this, base, from.spec.hostId);
+        if (refusal != null) {
+            // The page takes the file on its own wake, under its own check.
+            Log.w(TAG, from.spec.label + ": " + refusal);
+            from.lastError = refusal;
+            refreshStatus();
+            return;
+        }
+        if (ShellPullService.adopt(this, item, base, from.spec.hostId)) Log.i(TAG, "queued " + item.optString("relPath"));
     }
 
     /** `wss://host:443/ws` → `https://host:443`. Null for anything else. */
@@ -807,10 +1227,14 @@ public class ShellLinkService extends Service {
      * and {@code item.tag} is preferred the moment it starts arriving, so that
      * change needs nothing from this file.
      */
-    private void postAlert(JSONObject item) {
+    private void postAlert(JSONObject item, Link from) {
         if (APP_FOREGROUND.get()) return;
         String kind = item.optString("kind", "info");
-        String title = item.optString("title", "waterplane");
+        // Several desktops: the title starts with whose it is, the tag is that desktop's own
+        // (two desktops' equal tags must not replace each other), and the tap says which desktop
+        // to open it on — the page switches only on that tap (`shellOpenTarget.ts`).
+        String hostId = from.spec.hostId;
+        String title = ShellLinkSet.titleFor(from.spec.label, item.optString("title", "waterplane"), links.size());
         String body = item.optString("body", "");
         String sessionId = item.optString("sessionId", null);
         // Filled by the host; a tap on an alert with no session opens this plugin's
@@ -821,6 +1245,7 @@ public class ShellLinkService extends Service {
             String key = sessionId != null && !sessionId.isEmpty() ? sessionId : item.optString("id", "");
             tag = kind + "|" + key;
         }
+        tag = ShellLinkSet.tagFor(hostId, tag);
         int id = tag.hashCode();
         Notification n = new NotificationCompat.Builder(this, channelFor(kind))
                 .setSmallIcon(R.drawable.ic_stat_app)
@@ -830,7 +1255,7 @@ public class ShellLinkService extends Service {
                 .setAutoCancel(true)
                 .setWhen(item.optLong("ts", System.currentTimeMillis()))
                 .setPriority(isUrgent(kind) ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(openAppIntent(sessionId, plugin, item, id))
+                .setContentIntent(openAppIntent(ShellLinkSet.openTarget(hostId, tapTarget(sessionId, plugin, item)), id))
                 .build();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
@@ -851,7 +1276,7 @@ public class ShellLinkService extends Service {
      * someone opens the app. When this socket comes back and the persisted
      * depth is non-zero, say so once.
      */
-    private void reportQueueBacklog() {
+    private void reportQueueBacklog(Link active) {
         if (APP_FOREGROUND.get()) return;
         int depth = prefs(this).getInt(KEY_QUEUE, 0);
         if (depth <= 0) return;
@@ -865,7 +1290,7 @@ public class ShellLinkService extends Service {
         } catch (org.json.JSONException e) {
             return;
         }
-        postAlert(item);
+        postAlert(item, active);
     }
 
     /**
@@ -886,21 +1311,26 @@ public class ShellLinkService extends Service {
      * kind of target never needs a new APK. An older web bundle finds no session
      * by that string, which is harmless.
      */
-    private PendingIntent openAppIntent(@Nullable String sessionId, @Nullable String plugin, @Nullable JSONObject item, int requestCode) {
+    @Nullable
+    private static String tapTarget(@Nullable String sessionId, @Nullable String plugin, @Nullable JSONObject item) {
+        if (sessionId != null && !sessionId.isEmpty()) return sessionId;
+        // MainActivity hands the extra to window.shellOpen unchanged; the web side reads
+        // "plugin:<id>" as a plugin's screen (session ids never contain ':'). An older
+        // web bundle finds no session by that name, which is harmless.
+        if (plugin != null && !plugin.isEmpty()) return "plugin:" + plugin;
+        if (item != null) return "notif:" + item.toString();
+        return null;
+    }
+
+    /** {@code target} is what {@code window.shellOpen} is handed ({@link #tapTarget}, prefixed
+     *  {@code host:<id>|} for a desktop of several — {@link ShellLinkSet#openTarget}); null opens
+     *  the app and nothing else. */
+    private PendingIntent openAppIntent(@Nullable String target, int requestCode) {
         Intent i = new Intent(this, MainActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (sessionId != null && !sessionId.isEmpty()) {
-            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, sessionId);
-        } else if (plugin != null && !plugin.isEmpty()) {
-            // MainActivity hands the extra to window.shellOpen unchanged; the web side reads
-            // "plugin:<id>" as a plugin's screen (session ids never contain ':'). An older
-            // web bundle finds no session by that name, which is harmless.
-            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, "plugin:" + plugin);
-        } else if (item != null) {
-            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, "notif:" + item.toString());
-        }
+        if (target != null && !target.isEmpty()) i.putExtra(MainActivity.EXTRA_OPEN_SESSION, target);
         // IMMUTABLE unconditionally: `minSdk` is 24, and nothing here wants the
         // receiver to be able to fill in fields of this intent.
         return PendingIntent.getActivity(this, requestCode, i,

@@ -69,7 +69,16 @@ export function parseNetState(v: unknown): NetState | null {
   const permission = PERMISSIONS.includes(o.permission as NetPermission) ? (o.permission as NetPermission) : null;
   if (!transport || !permission) return null;
   const ssid = typeof o.ssid === "string" && o.ssid.trim() ? o.ssid : null;
-  return { transport, ssid, permission };
+  return {
+    transport, ssid, permission,
+    ...(typeof o.vpn === "boolean" ? { vpn: o.vpn } : {}),
+    ...(typeof o.tailnet === "boolean" ? { tailnet: o.tailnet } : {}),
+  };
+}
+
+/** Is the plugin there to ask? False in a browser and on a shell older than it. */
+export function hasShellNet(): boolean {
+  return plugin() !== null;
 }
 
 /** Ask the shell now. `null` = no plugin, or it did not answer. */

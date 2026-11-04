@@ -57,7 +57,8 @@ pasting its repo address.
 
 ## Plugins
 
-None listed yet.
+- [GitHub Copilot CLI backend](https://github.com/waterplane-dev/waterplane-plugin-copilot): run
+  sessions on the Copilot CLI. `install.sh --with copilot`, or paste the repo address in the plugin manager.
 
 **To get yours listed:** tag the repo with `waterplane-plugin`, then open a pull request adding one
 line here (name, link, one sentence on what it adds) or an issue with the link. A listed plugin

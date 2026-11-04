@@ -436,6 +436,17 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       if (!live()) return;
       reg.deps.notify(n.urgent ? "approval" : "plugin", { plugin: id, title: String(n.title).slice(0, 200), body: String(n.body).slice(0, 1000), ...(n.sessionId ? { sessionId: n.sessionId } : {}), tag: `plugin-${id}-${typeof n.tag === "string" && n.tag ? n.tag.slice(0, 120) : (n.sessionId ?? "all")}` });
     },
+    // The SAME namespacing `notify` gives a tag, so a plugin can only ever name its own (and the
+    // deps check `plugin` too: `plugin-a-b-x` is both a's `b-x` and a-b's `x`).
+    notifyDone: (tag) => {
+      if (!live() || typeof tag !== "string" || !tag) return;
+      reg.deps.notifyDone?.(id, `plugin-${id}-${tag.slice(0, 120)}`);
+    },
+    // `keep` namespaced exactly as `notify` and `notifyDone` do; the deps reach only items whose `plugin` is this one.
+    notifyDoneExcept: (keep) => {
+      if (!live() || !Array.isArray(keep)) return;
+      reg.deps.notifyDoneExcept?.(id, keep.filter((t): t is string => typeof t === "string" && t !== "").map((t) => `plugin-${id}-${t.slice(0, 120)}`));
+    },
     claudeUsage: () => {
       const u = reg.deps.usage();
       return u?.ok ? { sessionPct: u.sessionPct, weeklyPct: u.weeklyPct } : null;

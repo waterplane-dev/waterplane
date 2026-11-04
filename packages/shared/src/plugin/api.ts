@@ -222,6 +222,21 @@ export interface HostPluginApi {
   /** Record a paid model call, so it shows in the phone's usage numbers. */
   meter(call: { service: string; model: string; inTok: number; outTok: number }): void;
   /** `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. `tag` (optional, no version bump): a stable key, a later notification with the same tag replaces the earlier one in the OS tray; the host namespaces it per plugin. */ notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean; tag?: string }): void;
+  /**
+   * (since 2.6) The thing a `notify({tag})` was about is settled (a card approved, denied or expired):
+   * every still-waiting attention item THIS plugin filed under that tag stops counting as waiting
+   * (`handled: {by:"resolved"}`, kept in the feed). Only this plugin's own tags: another plugin's item
+   * or a core one is never reached. An unknown or already-settled tag is a silent no-op.
+   */
+  notifyDone(tag: string): void;
+  /**
+   * (since 2.7) Every still-waiting attention item THIS plugin filed, EXCEPT those under one of the `keep`
+   * tags, stops counting as waiting — for a plugin whose start finds notices a previous run left behind
+   * (its cards were in memory and died with that run). Name every tag that is still live in `keep`; an
+   * item filed without a tag is under the host's default tag (the session id, or `all`). Another plugin's
+   * item or a core one is never reached.
+   */
+  notifyDoneExcept(keep: readonly string[]): void;
   /** The Claude plan usage (5-hour / weekly %), or null when unknown. */
   claudeUsage(): { sessionPct: number | null; weeklyPct: number | null } | null;
 

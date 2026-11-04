@@ -1,4 +1,4 @@
-import { BRAND } from "@waterplane/shared";
+import { BRAND, PLAIN_ROUTE_NO_APK } from "@waterplane/shared";
 import type { AppRepoFacts, InstallLogEntry } from "../shared/wire.mts";
 import {
   failureText, installerName, isPlayBuild, quietVerdict, type AppRow, type InstallCaps, type InstallSources,
@@ -27,7 +27,7 @@ import {
 export type CheckState = "ok" | "no" | "warn" | "unknown";
 
 export interface ReadyCheck {
-  id: "build" | "outbox" | "key" | "sdk" | "pull" | "repo" | "access" | "switch" | "owner" | "last";
+  id: "build" | "outbox" | "key" | "sdk" | "pull" | "repo" | "route" | "access" | "switch" | "owner" | "last";
   half: "repo" | "phone";
   state: CheckState;
   /** A few words — what the line is about, as drawn. */
@@ -133,6 +133,7 @@ export function phoneChecks(pkg: string, label: string, ph: PhoneHalf, row?: App
       text: "This Google Play build of the app installs nothing by itself." }];
   }
   const out: ReadyCheck[] = [];
+  if (caps.plainRoute) out.push({ id: "route", half: "phone", state: "no", label: "protected route", text: PLAIN_ROUTE_NO_APK });
   out.push(caps.canInstall
     ? { id: "access", half: "phone", state: "ok", label: "install access", text: `This phone lets ${BRAND.displayName} install apps.` }
     : { id: "access", half: "phone", state: "no", label: "install access",

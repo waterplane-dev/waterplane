@@ -6,6 +6,7 @@ import { noteSynced } from "../../link";
 import { fmtSecs, noteHostRestarting, noteHostWelcome, restartView } from "../../link/hostRestart";
 import { applyRemoteSetting, mergeSettingsDoc } from "../../settings";
 import { pulls } from "../../pull";
+import { updates } from "../../webUpdate";
 import { showToast } from "../../toast";
 import { LS } from "../../storage";
 import { onAssessAck } from "../../features/backlog";
@@ -54,6 +55,7 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
       const { conn, term, verbs, q, focusSession } = wsLatest.current;
       switch (msg.t) {
         case "welcome":
+          updates.noteWelcome(msg, connRef.current.dialUrl);
           // Both ends have always EXCHANGED a protocol version and neither ever
           // compared it. There are three independently-updating copies of this
           // bundle — the browser's service-worker cache, the Android shell's OTA

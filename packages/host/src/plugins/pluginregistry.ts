@@ -135,6 +135,12 @@ export interface RegistryDeps {
   decision(row: DecisionLogEntry): void;
   meter(e: { service: string; model: string; kind: string; inTok: number; outTok: number; ts: number }): void;
   notify: Notify;
+  /** `api.notifyDone` — settle every waiting attention item `plugin` filed under the (already
+   *  namespaced) `tag`. Never reaches another plugin's item or a core one. Absent ⇒ a no-op. */
+  notifyDone?(plugin: string, tag: string): void;
+  /** `api.notifyDoneExcept` — settle every waiting attention item `plugin` filed whose tag is not one
+   *  of the (already namespaced) `keep` tags. Never reaches another plugin's item or a core one. */
+  notifyDoneExcept?(plugin: string, keep: readonly string[]): void;
   usage(): UsageInfo;
   /** The plugin list changed — broadcast it. */
   changed(): void;

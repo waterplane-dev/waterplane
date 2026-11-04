@@ -3,7 +3,9 @@
  * auto-memory file of the repo's project slug, user skills, plugin skills (minus the plugins
  * `enabledPlugins` turns off, which get a row saying so), user and local-scope MCP servers, and ONE
  * unsized row for the managed/synced plugin packs no file here names — the static list is what
- * disk shows; a session's measured skill listing is the truth (`SessionCarried`).
+ * disk shows; a session's measured skill listing is the truth (`SessionCarried`). Hooks that can
+ * put text in context (`CONTEXT_HOOK_EVENTS`) are one unsized row per file and event: the log
+ * records the event, never the command, so only the session's measured "hook context" has a size.
  * The per-repo half is `agentfiles.ts` `instructionInventory()`; these rows carry `scope: "desktop"`
  * so a list can hold both and say which is which.
  *
@@ -34,6 +36,8 @@ export interface DesktopInventoryInput {
   userOnlyPlugins?: string[];
   /** `mcpServers` keys of `~/.claude.json` `projects[<cwd realpath>]` — local scope (`claude mcp add`). */
   localMcp?: string[];
+  /** Context hooks of the user's settings.json; null = unreadable (a row says so). */
+  hooks?: ContextHook[] | null;
 }
 
 /** Every kind word `desktopInventory` writes (plugin skills carry their plugin in brackets after it). */
@@ -48,6 +52,7 @@ export const DESKTOP_KINDS = {
   localMcp: "local MCP server",
   plugin: "plugin",
   managedSkills: "managed plugin skills",
+  hook: "context hook",
 } as const;
 
 /** Why a plugin row has no skills listed: `enabledPlugins` turned it off. */
@@ -57,6 +62,27 @@ export const PLUGIN_UNREAD = "enabled in settings, but not installed under the c
 /** The one row for plugin packs no file on this desktop names (claude.ai-managed, synced). */
 export const MANAGED_SKILLS =
   "skills from claude.ai-managed or synced plugins are not on disk here; the session view's skill listing (what a session's first request carried) is the measured count";
+
+/** The two hook events whose output reaches the model's context; every other event injects nothing. */
+export const CONTEXT_HOOK_EVENTS = ["SessionStart", "UserPromptSubmit"] as const;
+export type ContextHookEvent = (typeof CONTEXT_HOOK_EVENTS)[number];
+
+/** One file's commands on one event. A count, never the command text: that can hold a secret, and these rows reach the phone. */
+export interface ContextHook {
+  event: ContextHookEvent;
+  /** The file that declares it, in the row's own path words. */
+  path: string;
+  commands: number;
+}
+
+// closed: `event` comes from this build's own CONTEXT_HOOK_EVENTS, read off this desktop's settings, never off the wire
+const HOOK_REACH: Record<ContextHookEvent, string> = { SessionStart: "every session", UserPromptSubmit: "every prompt" };
+
+/** Why a context-hook row has no number, and where its size is measured instead. */
+export const hookUnsized = (h: Pick<ContextHook, "event" | "commands">): string => {
+  const [runs, it] = h.commands === 1 ? ["a command", "it"] : ["commands", "them"];
+  return `runs ${runs} whose output the CLI adds to ${HOOK_REACH[h.event]}; a session's context view measures the size as "hook context", and /hooks lists ${it}`;
+};
 
 /** `~/.claude.json` sits in the home dir, BESIDE the config dir, so its rows name it whole (a `~` path is already words). */
 export const USER_CLAUDE_JSON = "~/.claude.json";
@@ -72,6 +98,23 @@ function skillsUnder(fs: AgentFilesFs, dir: string): { path: string; text: strin
     if (text != null) out.push({ path, text });
   }
   return out;
+}
+
+const hookKind = (h: ContextHook, plugin?: string) =>
+  `${DESKTOP_KINDS.hook} ${h.event} (${h.commands} ${h.commands === 1 ? "command" : "commands"}${plugin ? `, plugin ${plugin}` : ""})`;
+
+const hookRow = (h: ContextHook, plugin?: string): InstructionFile => ({ path: h.path, kind: hookKind(h, plugin), parts: [], unsized: hookUnsized(h) });
+
+const hooksUnreadRow = (path: string): InstructionFile => ({ path, kind: `${DESKTOP_KINDS.hook}s`, parts: [], unsized: `${path} could not be read` });
+
+/** The hooks an enabled plugin ships. The reader cannot tell missing from unreadable, so null is no rows; text that is not JSON says so. */
+function pluginHookRows(fs: AgentFilesFs, p: { name: string; rel: string }): InstructionFile[] {
+  const path = `${trimEndChars(p.rel, "/")}/hooks/hooks.json`;
+  const text = fs.read(path);
+  if (text == null) return [];
+  let json: unknown;
+  try { json = JSON.parse(text); } catch { return [hooksUnreadRow(path)]; }
+  return isObj(json) ? contextHooksOf(json, path).map((h) => hookRow(h, p.name)) : [hooksUnreadRow(path)];
 }
 
 const skillKind = (base: string, text: string) => (skillDescChars(text) > 0 ? base : `${base} — no description found in its frontmatter`);
@@ -103,6 +146,10 @@ export function desktopInventory(i: DesktopInventoryInput): InstructionFile[] {
   for (const key of i.userOnlyPlugins ?? []) {
     out.push({ path: "settings.json", kind: `${DESKTOP_KINDS.plugin} ${key}`, parts: [], unsized: PLUGIN_UNREAD, ...D });
   }
+  if (i.hooks === null) out.push({ ...hooksUnreadRow("settings.json"), ...D });
+  for (const h of i.hooks ?? []) out.push({ ...hookRow(h), ...D });
+  // `plugins` holds the enabled ones only: a disabled plugin's hooks do not load, so they are never read.
+  for (const p of i.plugins ?? []) for (const r of pluginHookRows(i.fs, p)) out.push({ ...r, ...D });
   if (i.userMcp == null) {
     out.push({ path: USER_CLAUDE_JSON, kind: DESKTOP_KINDS.userMcpServers, parts: [], unsized: "~/.claude.json could not be read", ...D });
   } else {
@@ -125,6 +172,21 @@ type JsonRead = unknown;
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** A settings-shaped object's context hooks, one entry per event with a command. A missing or non-object `hooks` is none. */
+function contextHooksOf(json: Record<string, unknown>, path: string): ContextHook[] {
+  const hooks = json.hooks;
+  if (!isObj(hooks)) return [];
+  const out: ContextHook[] = [];
+  for (const event of CONTEXT_HOOK_EVENTS) {
+    const groups = hooks[event];
+    if (!Array.isArray(groups)) continue;
+    const commands = groups.flatMap((g) => (isObj(g) && Array.isArray(g.hooks) ? g.hooks : []))
+      .filter((h) => isObj(h) && h.type === "command" && typeof h.command === "string").length;
+    if (commands) out.push({ event, path, commands });
+  }
+  return out;
+}
 
 export interface DesktopSourcesInput {
   /** `<config dir>/plugins/installed_plugins.json`. */
@@ -154,6 +216,12 @@ export interface DesktopSources {
   localMcp: string[];
   /** `.mcp.json` servers this desktop declined (`disabledMcpjsonServers`, in `.claude.json` or any settings file). */
   mcpjsonDeclined: string[];
+  /** Context hooks of the user's settings.json; null = that file is there but unreadable. */
+  hooks: ContextHook[] | null;
+  /** Context hooks of the repo's settings files: repo rows, unsized. */
+  projectHooks: ContextHook[];
+  /** The repo's settings files that are there but unreadable: one row each. */
+  projectHooksUnread: string[];
 }
 
 /**
@@ -171,7 +239,7 @@ export function desktopSources(i: DesktopSourcesInput): DesktopSources {
   takeEnabled(i.userSettings, null);
   for (const p of i.projectSettings) takeEnabled(p.json, p.path);
 
-  const out: DesktopSources = { plugins: [], outside: [], disabledPlugins: [], userOnlyPlugins: [], projectPlugins: [], userMcp: [], localMcp: [], mcpjsonDeclined: [] };
+  const out: DesktopSources = { plugins: [], outside: [], disabledPlugins: [], userOnlyPlugins: [], projectPlugins: [], userMcp: [], localMcp: [], mcpjsonDeclined: [], hooks: [], projectHooks: [], projectHooksUnread: [] };
   const userKeys = new Set<string>();
   if (i.installed !== "missing") {
     if (!isObj(i.installed) || !isObj(i.installed.plugins)) out.plugins = null;
@@ -194,6 +262,13 @@ export function desktopSources(i: DesktopSourcesInput): DesktopSources {
     if (!e.on || userKeys.has(key)) continue;
     if (e.path) out.projectPlugins.push({ key, path: e.path });
     else out.userOnlyPlugins.push(key);
+  }
+
+  if (isObj(i.userSettings)) out.hooks = contextHooksOf(i.userSettings, "settings.json");
+  else if (i.userSettings !== "missing") out.hooks = null;
+  for (const p of i.projectSettings) {
+    if (isObj(p.json)) out.projectHooks.push(...contextHooksOf(p.json, p.path));
+    else if (p.json !== "missing") out.projectHooksUnread.push(p.path);
   }
 
   const declined = new Set<string>();
@@ -219,9 +294,10 @@ export const MCP_DECLINED = "declined on this desktop (disabledMcpjsonServers) �
 
 /**
  * The repo rows as THIS desktop loads them: a `.mcp.json` server it declined says so instead of
- * claiming tool schemas, and the plugins the repo's settings turn on are listed, unsized.
+ * claiming tool schemas, and the plugins and context hooks the repo's settings turn on are listed,
+ * unsized.
  */
-export function repoRowsOnThisDesktop(files: InstructionFile[], s: Pick<DesktopSources, "mcpjsonDeclined" | "projectPlugins">): InstructionFile[] {
+export function repoRowsOnThisDesktop(files: InstructionFile[], s: Pick<DesktopSources, "mcpjsonDeclined" | "projectPlugins"> & Partial<Pick<DesktopSources, "projectHooks" | "projectHooksUnread">>): InstructionFile[] {
   const declined = new Set(s.mcpjsonDeclined);
   const rows = files.map((f) => (f.path === ".mcp.json" && f.kind.startsWith("MCP server ") && declined.has(f.kind.slice("MCP server ".length))
     ? { ...f, unsized: MCP_DECLINED }
@@ -229,5 +305,7 @@ export function repoRowsOnThisDesktop(files: InstructionFile[], s: Pick<DesktopS
   for (const p of s.projectPlugins) {
     rows.push({ path: p.path, kind: `project ${DESKTOP_KINDS.plugin} ${p.key}`, parts: [], unsized: "enabled in this repo's settings — its skills load from the plugin cache and are not sized here" });
   }
+  for (const path of s.projectHooksUnread ?? []) rows.push(hooksUnreadRow(path));
+  for (const h of s.projectHooks ?? []) rows.push(hookRow(h));
   return rows;
 }

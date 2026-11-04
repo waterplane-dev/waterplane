@@ -52,7 +52,7 @@ function desktopRows(folder: string, configDir: string): { rows: InstructionFile
     const s = sourcesOf(folder, real, configDir);
     const rows = desktopInventory({
       fs: configFs(configDir), memoryRel, plugins: s.plugins, userMcp: s.userMcp,
-      disabledPlugins: s.disabledPlugins, userOnlyPlugins: s.userOnlyPlugins, localMcp: s.localMcp,
+      disabledPlugins: s.disabledPlugins, userOnlyPlugins: s.userOnlyPlugins, localMcp: s.localMcp, hooks: s.hooks,
     });
     for (const p of s.outside) {
       rows.push({ path: p.path, kind: `${DESKTOP_KINDS.pluginSkills} (${p.name})`, parts: [], unsized: "installed outside the config dir; not read", scope: "desktop" });

@@ -21,6 +21,7 @@ import { builtinDoctorChecks, externalDoctorChecks } from "./plugins/builtin.js"
 import { hostSecretDir } from "./secrets.js";
 import { ptyMax, ptyOpen } from "./ptycap.js";
 import { lanIdentityPresent } from "./lanid.js";
+import { lanTlsDoctor } from "./lantls.js";
 import { env } from "./env.js";
 import { logTag, BRAND, envName, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
 import { homedir, release } from "node:os";
@@ -459,9 +460,16 @@ export function checkLan(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, 
   const identity = lanIdentityPresent(i.root);
   return {
     id: "lan",
-    status: "ok",
-    detail: `LAN ready at ${at} (password set, ${identity ? "identity present" : "identity created on the first trusted phone's request"})`,
+    status: "warn",
+    detail: `LAN ready at ${at} (password set, ${identity ? "identity present" : "identity created on the first trusted phone's request"}), plain HTTP: not encrypted`,
+    fix: "Anyone on this network can read the traffic and could take over this desktop. Prefer Tailscale; the phone refuses fingerprint approvals and app updates on this route.",
   };
+}
+
+/** `lan-tls`: the encrypted LAN port, its number and short pin, or that it is off and why (`lantls.ts`). Always a row: "off" is the answer to the first thing a person checks. */
+export function checkLanTls(i: Pick<DoctorInput, "root" | "port" | "allowPublic">, ips: string[] = lanIps()): Check {
+  const hostEnv = env("HOST");
+  return { id: "lan-tls", ...lanTlsDoctor({ root: i.root, allowPublic: i.allowPublic, plainPort: i.port, boundLan: ips, binds: hostEnv ? [hostEnv] : ips }) };
 }
 
 /** How close to expiry is worth a line. A node key is good for 180 days by
@@ -734,6 +742,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     ...serviceChecks(),
     checkReachability(i),
     ...[checkLan(i)].filter((c): c is Check => c !== null),
+    checkLanTls(i),
     ...(tskey ? [tskey] : []),
     secure,
     ...(port ? [port] : []),

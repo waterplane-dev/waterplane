@@ -5,8 +5,9 @@ import { viewerHandles } from "../../docKind";
 import { onServiceWorkerPullMessage } from "../../pull";
 import { onShellOpenSession } from "../../shellLink";
 import { openPluginFromNotification } from "../extensionPoints";
-import { openNotifFromOutside } from "../../features/notifications";
-import { shellOpenTarget } from "./shellOpenTarget";
+import { openNotifFromOutside, openNotifs } from "../../features/notifications";
+import { shellHostOpen, shellOpenTarget } from "./shellOpenTarget";
+import { activeDesktopId, openFromOtherDesktop } from "../../features/hosts";
 import { openArtifact, viewImage } from "../../features/images";
 import type { Route } from "./useRoute";
 import type { TermFeed } from "../term/useTermFeed";
@@ -99,12 +100,20 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
   // the effect below attaches once a session by that id actually exists.
   const shellWantRef = useRef<string | null>(null);
   const [shellWant, setShellWant] = useState<string | null>(null);
-  useEffect(() => onShellOpenSession((sessionId) => {
+  useEffect(() => onShellOpenSession((raw) => {
+    // `host:<id>|<rest>`: the background link watches every saved desktop, so its alert says whose
+    // it was. Another desktop's is a SWITCH, and only because the person tapped it — the rest is
+    // where that desktop's next boot lands (`switchTo`'s `open`). This desktop's is just `rest`.
+    const viaHost = shellHostOpen(raw);
+    if (viaHost && viaHost.hostId !== activeDesktopId()) { openFromOtherDesktop(viaHost.hostId, viaHost.rest); return; }
+    const sessionId = viaHost ? viaHost.rest : raw;
+    if (!sessionId) return;   // a summary with no single item: opening the app was the errand
     // `plugin:<id>` is a plugin's alert, not a session (see `shellOpenTarget`): no list to wait for.
     const target = shellOpenTarget(sessionId);
     if ("plugin" in target) { openPluginFromNotification(target.plugin); return; }
     // A whole alert with no session (a health move, a burning week): `openNotif` lands it.
     if ("notif" in target) { openNotifFromOutside(target.notif); return; }
+    if ("view" in target) { openNotifs(); return; }
     shellWantRef.current = sessionId;
     setShellWant(sessionId);
   }), []);

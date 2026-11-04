@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dictateFallbackWhy } from "./dictateFallback.ts";
+import { askOnLinkBack, dictateFallbackWhy } from "./dictateFallback.ts";
 
 const ok = { available: true };
 
@@ -35,4 +35,26 @@ test("the desktop's own reason is passed through", () => {
 
 test("a refusal with no reason still says whisper is out", () => {
   assert.match(dictateFallbackWhy({ secure: true, canRecord: true, status: { available: false } }), /whisper is not available/);
+});
+
+test("the link coming back asks once, and the emit its own request causes does not ask again", () => {
+  let asks = 0;
+  const listener = askOnLinkBack(false, () => {
+    asks++;
+    if (asks > 50) throw new Error("re-entered");
+    listener({ status: "open" });   // `netBegin` emits synchronously, from inside the ask
+  });
+  listener({ status: "open" });
+  assert.equal(asks, 1);
+  listener({ status: "open" });
+  assert.equal(asks, 1, "still open is not coming back");
+  listener({ status: "closed" });
+  listener({ status: "open" });
+  assert.equal(asks, 2);
+});
+
+test("a link already open at mount is not a link coming back", () => {
+  let asks = 0;
+  askOnLinkBack(true, () => { asks++; })({ status: "open" });
+  assert.equal(asks, 0);
 });

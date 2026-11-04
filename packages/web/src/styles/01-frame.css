@@ -79,6 +79,8 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pair-card { display: flex; flex-direction: column; gap: var(--sp-10); padding: var(--sp-16); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); }
 .pair-card-head { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
 .pair-card-qr { align-items: center; }
+/* The `elsewhere` sheet: one card per other desktop waiting on you (features/hosts/ElsewhereSheet.tsx). */
+.elsewhere-card { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-8) 0; border-bottom: 1px solid var(--line); }
 .pair-wide { width: 100%; min-height: 50px; font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
 .pair-centre { text-align: center; }
 .pair-ttl { display: inline-flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-10); border-radius: var(--r-pill); background: var(--raise); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
@@ -92,6 +94,8 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pair-copy-row code { flex: 1; min-width: 0; padding: var(--sp-10) var(--sp-12); background: var(--well); border: 1px solid var(--line); border-radius: var(--r-8); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
 .pair-title { display: flex; align-items: center; gap: var(--sp-10); margin-bottom: var(--sp-16); }
 .pair-title-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--r-10); background: var(--raise); color: var(--accent); }
+.pair-welcome { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8); margin-bottom: var(--sp-20); padding-bottom: var(--sp-16); border-bottom: 1px solid var(--line); }
+.pair-subtitle { margin-bottom: var(--sp-10); font-weight: var(--fw-semibold); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
 .pair-modes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); margin-bottom: var(--sp-16); }
 .pair-modes .seg { min-height: 44px; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
 .pair-steps { margin: 0 0 var(--sp-14); padding-left: var(--sp-20); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-15); }
@@ -107,7 +111,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pair-confirm-note { margin-top: var(--sp-14); text-align: left; }
 .key.pair-link-btn { margin-top: var(--sp-10); background: none; border-color: transparent; color: var(--accent); }
 /* `.set-note` is `flex-basis: 100%` for wrapping rows; in these COLUMNS that is a full height. */
-:is(.pair-sheet, .pair-card, .pair-confirm, .pair-demo, .pair-foot, .pair-state) > .set-note { flex-basis: auto; }
+:is(.pair-sheet, .pair-card, .pair-confirm, .pair-demo, .pair-foot, .pair-state, .pair-welcome) > .set-note { flex-basis: auto; }
 .brand span { white-space: nowrap; letter-spacing: 0.02em; }
 /* The desktop's own ≤4-word name for this session (`SessionInfo.tabTitle`).
    WRAPS rather than clipping — the tab strip is where this name is abbreviated,

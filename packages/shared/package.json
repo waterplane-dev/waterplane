@@ -10,6 +10,9 @@
       "default": "./dist/index.js"
     }
   },
+  "dependencies": {
+    "@noble/curves": "2.4.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch"

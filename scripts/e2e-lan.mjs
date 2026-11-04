@@ -10,7 +10,9 @@
 // <ENV>_ALLOW_PUBLIC=1 — skipped, in words, when there is none): tokens survived
 // the restart, no token ⇒ 401 / authRequired, Bearer and subprotocol are
 // accepted, a LAN token does NOT unlock the identity, verify still answers
-// pre-auth, a preflight passes the token gate, and a revoke kills a token at once.
+// pre-auth, a preflight passes the token gate, the APK's notify link and its
+// `/api/attention` read get in with the token and are refused without, and a
+// revoke kills a token at once.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
@@ -153,6 +155,44 @@ async function waitLan(addr) {
   return false;
 }
 
+/**
+ * The APK's background link on a gated desktop (`ShellLinkService`): OkHttp's User-Agent (so the
+ * notify role), the token as ONE `Sec-WebSocket-Protocol` header `"<base>, <base>-tok.<tok>"`
+ * exactly as the Java builds it (`ShellLinkSet.subprotocols`), and `GET /api/attention` with
+ * `Authorization: Bearer`. With the token: let in (a JSON ping is answered); without, or with a
+ * wrong one: `authRequired` / 401 — the pause the link words per desktop.
+ */
+function notifySocket(addr, protocolHeader) {
+  return new Promise((resolve) => {
+    // The client library refuses a reply protocol it did not offer itself, so it is told the offer
+    // and the request then goes out with the Java's exact header bytes (", " and all).
+    const offer = protocolHeader ? protocolHeader.split(", ") : [];
+    const ws = new WebSocket(`ws://${addr}:${PORT}/ws`, offer, {
+      headers: { "user-agent": "okhttp/4.12.0" },
+      finishRequest: (req) => { if (protocolHeader) req.setHeader("sec-websocket-protocol", protocolHeader); req.end(); },
+    });
+    const t = setTimeout(() => { ws.terminate(); resolve("timeout"); }, 4000);
+    ws.on("open", () => {
+      ws.send(JSON.stringify({ t: "hello", protocol: 1, role: "notify" }));
+      ws.send(JSON.stringify({ t: "ping" }));
+    });
+    ws.on("message", (m) => {
+      const msg = JSON.parse(m.toString());
+      if (msg.t === "pong" || msg.t === "authRequired") { clearTimeout(t); ws.close(); resolve(msg.t); }
+    });
+    ws.on("error", () => { clearTimeout(t); resolve("error"); });
+  });
+}
+
+async function notifyLinkGated(lan, tok) {
+  check((await notifySocket(lan, `${WS_PROTOCOL}, ${WS_PROTOCOL}-tok.${tok}`)) === "pong", "gated: the notify link with its token is let in (ping → pong)");
+  check((await notifySocket(lan, null)) === "authRequired", "gated: the notify link without a token → authRequired");
+  check((await notifySocket(lan, `${WS_PROTOCOL}, ${WS_PROTOCOL}-tok.not-a-real-token-at-all`)) === "authRequired", "gated: the notify link with a refused token → authRequired");
+  check((await http(lan, "/api/attention", { headers: bearer(tok) })).status === 200, "gated: /api/attention with the Bearer token → 200");
+  check((await http(lan, "/api/attention")).status === 401, "gated: /api/attention without a token → 401");
+  check((await http(lan, "/api/attention", { headers: bearer("not-a-real-token-at-all") })).status === 401, "gated: /api/attention with a refused token → 401");
+}
+
 async function phaseB(a) {
   const lan = lanAddress();
   if (!lan) { console.log("SKIP: phase B — this machine has no private LAN IPv4 to bind"); return; }
@@ -181,6 +221,8 @@ async function phaseB(a) {
   const n = nonce();
   const v = await http(lan, "/api/lan/verify", { method: "POST", body: { nonce: n } });
   check(v.status === 200 && v.json?.mac === mac(a.secret, a.hostId, n), "verify answers pre-auth over LAN with the right MAC");
+
+  await notifyLinkGated(lan, a.t1.token);
 
   const list = await http(lan, "/api/devices", { headers: bearer(a.t1.token) });
   const me = list.json?.devices?.find((d) => d.id === a.t1.deviceId);

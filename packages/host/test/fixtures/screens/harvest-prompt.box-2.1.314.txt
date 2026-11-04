@@ -1,0 +1,40 @@
+  - Xxx xxxxx xxxxxxx xx xxxx xxxx xxxxxxxx xxxxx xxxxxxxxx xx xxxx 0000, xxxx
+    xx XxxXxx, xxx xxx Xxxx.
+
+  XXXX:
+  - Xxx'xx xxx xxxxxxxxxx xxx Xxxxxx xx xxx xxxxxxxxx. Xxxxxx'x xxxxxxxxxx
+    xxxxxxxxx xxx Xxxxx xx xxxxxxx xxxx xx xxxx xxxxxxx'x xxxxx, xx xxxxx'x
+    xxxxxxx xx xxxxxxx xx xxxx.
+  - Xx xxxxxxx xxxxxx xx xxxxxx: xx xxxxxx, xx xxxxxxx, xxxxxxx xxxx xxxx xxx
+    xxxxxx.
+  - Xxxx xxxxx xx Xxxxxxxxx. Xxxxxx xx xxxxx x XX xxxxxxx, xx xxx xxxxxxx xxxx
+    xxxxx xxx XX–XX Xxxx Xxxxxxx Xxxxxxxxx xxx xxx xxxxxxxx xxxxxxxx xxxxxxx
+    xx xxx xxxxx xxxxx, xxxx xx Xxxxxxxxxx xxxxx. Xx XX xxxxxxx xxxxxx xxxx.
+
+  Xxxx: Xxxxx Xxx xxx Xxxxxxxxx xxxx xxxxx xxxxx xxxx xxxx xxxxx xxxx. Xxx
+  xxxx xxxx xxxx, xxx xxxxx xxxxxxxx xxxx x xxxxxxx xxxxxx (xxxx 0 xxxxxx,
+  xxxxxx xxxxxxxx xxxxx xxxx 0 xxxx), xx xxxxxx xxxxxx xxxx xxxxx.
+
+  Xxxx xxx xxxx xx: xxx xxxx xxx xxxx xxxxx xxx xxx, xxx xxxxxx xxxxxxxx xx
+  xxxxx xxxxxxxx xxxx xxxx. Xxxxxxxx xxxxxx xxxxxxxx xxxxxxx xxxxxxx xxxxxxxx
+  xxxx xxxxx xxxxx xxxx. X'x xxx xx xxxxx xxxx xx xxx xxxx xx.
+
+  Xxx xxxxxxxxx xxxxxx X xxxxx:
+──────────────────────────────────────────────────────────────────────────────
+←  ☐ XXX xxxxxxx  ☐ Xxxxxx  ✔ Xxxxxx  →
+
+│ Xxxxx Xxxxxx Xxxxx xxxxxxx xxxxxx xxxx xxx xxxxxxxxxx.xxx xxxxx xxxxxxx (x
+│ xxxxx Xxxxx Xxx xxxxxxx xxxx x Xxxxxxxxx xxxxxxxx xx Xxxxxxxxx)?
+
+❯ 1. Xxx xxxxxxx (Xxxxxxxxxxx)
+     X xxxxxxxxx xxxxxxx, x.x. xxxxxxxxxx-xxxx, xxxxxx xx xxxx xxxxxxx
+     xxxxxxx. Xxxxx xxx xxxxx xxx xxxxxxxxxxx xxxxxxxx, xxx xxxxxxxx xx xxxxx
+     xxxxxxx xxxxxxxxxx.
+  2. Xxxxxxxx xxxxxxx
+     Xxxxx x xxxxxxx xxx xxxxxxx xxxx; xxxx xx xxxxx xxx xxxxx Xxxxx. Xxxxxx,
+     xxx xx xxxxx xxxx xxxx xxxxxxx'x xxxxx xxx xxxx.
+  3. Type something.
+──────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

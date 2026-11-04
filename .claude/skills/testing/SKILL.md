@@ -9,7 +9,7 @@ Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
 
 1. **`npm run test:unit`** — `node --test` over `packages/shared/test/*.test.mjs` (on `shared/dist`),
    `packages/web/src/**/*.test.mjs` (the TypeScript itself via node's type stripping — a test imports
-   siblings WITH `.ts`), `packages/extensions/*/web/**/*.test.mjs`, `scripts/release/*.test.mjs`,
+   siblings WITH `.ts`; a module with extensionless imports runs too: `import` `scripts/lib-tsload.mjs` first, then `await import("./x.ts")`, as `core/queue/migrate.test.mjs` does), `packages/extensions/*/web/**/*.test.mjs`, `scripts/release/*.test.mjs`,
    `packages/plugin-testkit/test/*.test.mjs` and **`tools/*.test.mjs`**. No host, no DOM, no browser: a rule can be pinned before there is anything to
    boot. Web examples: `sdk/sdk.test.mjs`, `core/core.test.mjs`, `core/queue/queue.test.mjs` (where an
    ackId may be minted — counted per file — and `writeOutbox` as the store's one writer),
@@ -28,7 +28,7 @@ Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
 3. **`node scripts/run-e2e.mjs [filter]`** — `scripts/e2e-*.mjs`, the only layer that boots a real
    **host** (in-repo extensions' live in `packages/extensions/<id>/e2e/`). It DISCOVERS scripts, so a new one
    needs no registration (a hand-kept list once drifted until two thirds never ran) and
-   `scripts/e2e-*.mjs` plus `packages/extensions/*/e2e/e2e-*.mjs` is the list; what each pins is the [rough map](../../../docs/notes/testing-and-ops.md#the-rough-map).
+   `scripts/e2e-*.mjs` plus `packages/extensions/*/e2e/e2e-*.mjs` is the list, minus `BY_HAND` in `run-e2e.mjs` (a script needing an emulator and an APK, which no push can provide); what each pins is the [rough map](../../../docs/notes/testing-and-ops.md#the-rough-map).
 4. Beside them: **`npm run test:contract`** (`scripts/run-contract.mjs`, checks in `scripts/contract/`:
    the same protocol checks against the real host and the demo's fake, not yet in `npm test`),
    **`npm run test:ui`** (`scripts/ui/run.mjs`: Playwright journeys with aria snapshots, scratch web build,

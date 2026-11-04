@@ -20,18 +20,27 @@
  *    id that changed per build would have the phone re-downloading ~900 KB over
  *    a roaming link to arrive at a byte-identical bundle.
  *  - **Per-file `sha256`**, so the client can verify each piece before it
- *    replaces a working app. This guards against a truncated transfer on a bad
- *    link — it is NOT a defence against a hostile host, which is already able to
- *    run arbitrary code on your machine (see SECURITY.md); the bundle is only
- *    ever fetched from the host the user paired with.
+ *    replaces a working app. This catches a truncated transfer on a bad link and
+ *    nothing more: the hashes come in the same answer as the rest of the
+ *    manifest, so whoever can change one can change the other.
+ *  - **`signed` + `sig` are the defence.** `signed` carries the build id, the
+ *    file list, this desktop's `hostId` and a rising `gen`; `sig` is this
+ *    desktop's own P-256 key over those bytes (`updatekey.ts`). A phone that
+ *    pinned the key over a protected route reads only what is inside `signed`,
+ *    so a relay on the Wi-Fi can neither change a bundle nor replay an older
+ *    one. It does nothing for a phone with no pin, and nothing against a hostile
+ *    desktop, which holds the key and can already run arbitrary code on your
+ *    machine (see SECURITY.md).
  *  - **Degrade, never break.** No `dist`, no `build-id.txt`, or a bundle past the
  *    caps ⇒ `ok: false` with a reason, and the shell simply says updating is
- *    unavailable and keeps running what it has.
+ *    unavailable and keeps running what it has. No usable signing key ⇒ the same
+ *    manifest with no `signed`, and the reason on the console.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { BRAND } from "@waterplane/shared";
+import { signUpdate } from "./updatekey.js";
 
 /** Why a dist with no `build-id.txt` is refused, and what to do in either kind
  *  of install: a checkout builds it; a release tarball ships it, so one without
@@ -67,20 +76,52 @@ export interface BundleManifest {
   total: number;
   /** Present when `ok` is false — safe to show to the user. */
   reason?: string;
+  /** base64 of the JSON this manifest's signature covers. A new client reads
+   *  only this, so nothing has to be put in a canonical form. Old clients ignore it. */
+  signed?: string;
+  /** base64 P1363 `r‖s`, ECDSA P-256 SHA-256 over the decoded `signed` bytes. */
+  sig?: string;
 }
 
 /** Cheap fingerprint of the tree (paths + sizes + mtimes), to skip re-hashing. */
 let cacheKey = "";
 let cached: BundleManifest | null = null;
+/** The signed copy of one cached manifest. A failed signing is not kept, so the next poll tries again. */
+let signedCopy: { base: BundleManifest; root: string; out: BundleManifest } | null = null;
 
 /**
- * The manifest for the bundle currently on disk.
+ * The manifest for the bundle currently on disk, signed with the key of `root`.
+ * With no `root` there is no state dir to keep a key in, so it stays unsigned.
+ */
+export function webBundleManifest(root?: string): BundleManifest {
+  const base = hashedManifest();
+  return root === undefined ? base : signedManifest(base, root);
+}
+
+/**
+ * `base` with `signed` and `sig`, or `base` itself when it cannot be signed. Signs
+ * once per manifest object: the phone polls this, and `hashedManifest` hands back
+ * the same object until the tree changes. A refused manifest describes no build
+ * and is never signed.
+ */
+export function signedManifest(base: BundleManifest, root: string): BundleManifest {
+  if (!base.ok || !base.buildId) return base;
+  if (signedCopy?.base === base && signedCopy.root === root) return signedCopy.out;
+  const sig = signUpdate(root, { buildId: base.buildId, total: base.total, files: base.files });
+  if (!sig) return base;
+  const out = { ...base, ...sig };
+  signedCopy = { base, root, out };
+  return out;
+}
+
+/**
+ * The hashed manifest of the tree.
  *
  * Hashes are cached against a paths+sizes+mtimes fingerprint: the phone polls
  * this, and re-reading ~1 MB per poll to produce a value that changes a few
  * times a day is waste. A rebuild moves an mtime, so the cache cannot go stale.
  */
-export function webBundleManifest(): BundleManifest {
+function hashedManifest(): BundleManifest {
   let files: string[];
   try {
     files = walk(WEB_DIST).sort();

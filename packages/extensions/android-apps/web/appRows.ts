@@ -12,7 +12,7 @@ import { stateText, isPlayBuild, isPlaySelf, PLAY_INTRO_TEXT, isApkRow, repeated
 import type { InstallCaps, InstallRow, InstallState } from "@waterplane/shared";
 import type { InstallSources } from "@waterplane/sdk";
 
-export { NO_INSTALL, isPlayBuild, isPlaySelf, failureText, toggleAllow } from "@waterplane/shared";
+export { NO_INSTALL, isPlayBuild, isPlaySelf, failureText, installVerbText, toggleAllow } from "@waterplane/shared";
 export type { InstallCaps, InstallRow, InstallState, InstallSources };
 
 // ── The apps screen ──────────────────────────────────────────────────
@@ -214,7 +214,7 @@ export function appStateText(row: AppRow): string | null {
 /** What the tap on an app row does about a build that is here. Null where
  *  there is nothing to install — the row still says what it says. */
 export function appInstallVerb(row: AppRow, caps: InstallCaps): { id: string; label: string } | null {
-  if (!caps.supported || !caps.canInstall || !row.buildId) return null;
+  if (!caps.supported || !caps.canInstall || caps.plainRoute || !row.buildId) return null;
   if (row.install === "installing") return null;
   if (isPlaySelf(row.pkg, caps)) return null;
   return { id: row.buildId, label: `install ${row.label}${row.version ? ` ${row.version}` : ""} now` };

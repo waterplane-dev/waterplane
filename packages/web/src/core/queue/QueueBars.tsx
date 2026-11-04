@@ -27,11 +27,12 @@ import { track } from "../../usage";
 import { setPref } from "../prefs.ts";
 // Activity, cut to what a strip counted (a count on a control is a filter).
 import { openActivityOn } from "../../features/activity";
-import { WHICH_MAX, sendingLabel, whichWords } from "./logic.ts";
+import { WHICH_MAX, queueFoldKey, sendingLabel, whichWords } from "./logic.ts";
 import type { QueueApi } from "./useQueue.ts";
 import type { Connection } from "../conn/useConnection";
 import { Button } from "../../kit/Button";
 import { SHEET } from "../../sheetNames";
+import { Stowable, StowButton } from "../../Stowable";
 
 /** Stop a tap from blurring the compose box (which would dismiss the keyboard). */
 const keepFocus = (e: ReactPointerEvent) => e.preventDefault();
@@ -114,12 +115,20 @@ export function QueueBars(props: QueueBarsProps) {
   // The same cut the strip draws (`stripRows`): a file waiting for a tap with
   // auto-download off here keeps no bar on screen.
   const pullActive = stripRows(pullRecords, autoPull()).length > 0;
+  // What the standing strip is drawing, as its fold sees it: the rows of the
+  // branch on screen, and the chip's words and icon for that branch.
+  const standing = failed.length ? { rows: failed, label: "not delivered", icon: AlertTriangle }
+    : confirming.length ? { rows: confirming, label: "being confirmed", icon: Hourglass }
+    : queued.length ? { rows: queued, label: "queued", icon: status !== "open" ? CloudOff : holdQueueRef.current ? Pause : Hourglass }
+    : { rows: flying, label: "sending", icon: Loader };
   if (!asking && !failed.length && !confirming.length && !queued.length && !inFlight && !pullActive && !sendSettled) return null;
   return (
     <>
       {pullBar}
       <PullBrowserAsk records={pullRecords} />
       {reconnectAsk && parkedSends.length > 0 && (
+        <Stowable slot="queue-ask" stowKey={queueFoldKey(parkedSends)} label="send what you queued?"
+          detail={String(parkedSends.length)} icon={Radio}>
         <div className="outbox-recover ask">
           <Radio size={14} />
           <span>Back online — send {parkedSends.length} message{parkedSends.length > 1 ? "s" : ""} you queued while offline?</span>
@@ -136,7 +145,9 @@ export function QueueBars(props: QueueBarsProps) {
             title="keep them queued — nothing is sent until you release it">
             <X size={14} /> Hold
           </Button>
+          <StowButton />
         </div>
+        </Stowable>
       )}
       {(failed.length === 0 && confirming.length === 0 && queuedAll.length === 0 && !inFlight && sendSettled) && (
         // The linger frame (see QUEUE_BAR_LINGER_MS): same shape, same height,
@@ -148,6 +159,8 @@ export function QueueBars(props: QueueBarsProps) {
         </div>
       )}
       {(failed.length > 0 || confirming.length > 0 || queued.length > 0 || inFlight) && (
+        <Stowable slot="queue" stowKey={queueFoldKey(standing.rows, failed.length > 0)} label={standing.label}
+          detail={String(standing.rows.length)} icon={standing.icon}>
         <div className={`outbox-recover ${failed.length ? "failed" : confirming.length ? "confirming" : queued.length ? "queued" : "sending"}`}>
           {failed.length > 0 ? (
             <>
@@ -163,6 +176,7 @@ export function QueueBars(props: QueueBarsProps) {
               <Button onPointerDown={keepFocus} onClick={restoreOutbox}><RotateCw size={14} /> Restore</Button>
               <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(failed, "the messages that were not delivered"); }}><ListOrdered size={14} /> Manage</Button>
               <Button onPointerDown={keepFocus} onClick={dismissOutbox}><X size={14} /> Dismiss</Button>
+              <StowButton />
               {/* WHICH ones. A count with no names is the whole complaint
                   this answers: "2 messages not delivered" over a Manage
                   button that opened 200 rows left the person to work out
@@ -203,6 +217,7 @@ export function QueueBars(props: QueueBarsProps) {
                 onClick={() => { track("action:queue.confirming"); openActivityOn(confirming, "the messages the desktop is still confirming"); }}>
                 <ListOrdered size={14} /> Which
               </Button>
+              <StowButton />
             </>
           ) : queued.length > 0 ? (
             <>
@@ -244,6 +259,7 @@ export function QueueBars(props: QueueBarsProps) {
                   failed and needs-you row — the words just sent were nowhere
                   on the first screen. */}
               <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> Manage</Button>
+              <StowButton />
             </>
           ) : (
             // "Sending…" with no clock is the exact complaint this bar was
@@ -256,9 +272,11 @@ export function QueueBars(props: QueueBarsProps) {
               <Loader size={14} className="spin" />
               <span>{sendingLabel(flying)}</span>
               <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> Manage</Button>
+              <StowButton />
             </>
           )}
         </div>
+        </Stowable>
       )}
     </>
   );

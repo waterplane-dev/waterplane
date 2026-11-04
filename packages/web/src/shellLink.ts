@@ -36,8 +36,13 @@
  * reached off the global Capacitor injects rather than an npm import: no
  * native-shell dependency enters the bundle every browser downloads.
  */
-import { PROTOCOL_VERSION, wsUrlFor, type PairTarget } from "@waterplane/shared";
+import { PROTOCOL_VERSION, parkedKeyFor, wsUrlFor, type PairTarget, type SavedHost } from "@waterplane/shared";
 import { isNativeShell, savedHostBase } from "./hostUrl";
+import { activeHost, listHosts, realHosts } from "./hosts";
+import { shellLinkSet, type ShellLinkCreds, type ShellLinkSpec } from "./shellLinkSet";
+import { hasShellTls } from "./sdk/shellTls";
+import { DEVICE_TOKEN_EVENT, WS_BASE_PROTOCOL, heldTokens, sealedMode, tokenForHost } from "./deviceToken";
+import { LS, lsGet } from "./storage";
 import { isDemo } from "./demo/mode";
 import { PAIR_LINK_INVALID, pairLinkRequest } from "./pairRedeem";
 import { defineShellGlobal, nativePlugin } from "./shellBridge";
@@ -58,7 +63,11 @@ export interface ShellLinkStatus {
   /** `stopped` | `starting` | `connecting` | `connected` | `reconnecting` |
    *  `auth` (the host wants the LAN password) | `unconfigured`. */
   state: string;
+  /** The ACTIVE desktop's label (the link's first). */
   host: string | null;
+  /** One row per watched desktop, active first — absent on a shell older than `multiLink`,
+   *  which watches only one. Each link's state is its own; none is folded into the top line. */
+  links?: { hostId: string | null; label: string; state: string; error?: string }[];
   queueDepth: number;
   connectedAt?: number;
   lastFrameAt?: number;
@@ -71,15 +80,20 @@ export interface ShellLinkStatus {
 
 interface LinkPlugin {
   /** `powerSave` is absent on a shell older than the tab-sync offer. */
-  isSupported(): Promise<{ supported: boolean; notifications: boolean; batteryExempt: boolean; powerSave?: boolean }>;
+  /** `multiLink` is absent on a shell that watches one desktop only. */
+  isSupported(): Promise<{ supported: boolean; notifications: boolean; batteryExempt: boolean; powerSave?: boolean; multiLink?: boolean }>;
   status(): Promise<ShellLinkStatus>;
-  start(opts: { url: string; protocol: number; label: string }): Promise<ShellLinkStatus>;
+  /** BOTH shapes in one call: an old shell reads `url`/`label` (the active desktop) and never
+   *  looks at `links`; a `multiLink` shell takes `links` when present. */
+  start(opts: StartOpts): Promise<ShellLinkStatus>;
   stop(): Promise<void>;
   setQueueDepth(opts: { depth: number }): Promise<void>;
   requestNotifications(): Promise<{ granted: boolean }>;
   requestBatteryExemption(): Promise<void>;
   /** Absent on a shell older than the phone-setup checklist. */
   openNotificationSettings?(): Promise<void>;
+  /** Absent on a shell older than memory tokens: `memoryTokens` means `start` takes `tokensInMemory`. */
+  caps?(): Promise<{ memoryTokens?: boolean }>;
 }
 
 function plugin(): LinkPlugin | null {
@@ -94,6 +108,20 @@ function plugin(): LinkPlugin | null {
  *  browser, where Web Push is the answer and `push.ts` already gives it. */
 export function shellLinkSupported(): boolean {
   return isNativeShell() && plugin() !== null;
+}
+
+let memoryTokens: boolean | null = null;
+
+/**
+ * Can this shell's link hold sign-ins in memory only? Asked once: a shell does not change under a
+ * running page. Anything but a plain yes is no, so an old shell gets no token while sealed.
+ */
+export async function shellLinkMemoryTokens(): Promise<boolean> {
+  if (memoryTokens !== null) return memoryTokens;
+  const p = plugin();
+  if (!p) return false;
+  try { memoryTokens = typeof p.caps === "function" && (await p.caps())?.memoryTokens === true; } catch { memoryTokens = false; }
+  return memoryTokens;
 }
 
 /** Is the phone's battery saver on? Null in a browser, or a shell too old to say. */
@@ -135,15 +163,76 @@ export async function shellLinkStatus(): Promise<ShellLinkStatus | null> {
 export async function enableShellLink(): Promise<ShellLinkStatus | null> {
   const p = plugin();
   if (!p) return null;
-  // The SAVED (tailnet) address, never the LAN route in force: the service
-  // outlives this page and the Wi-Fi it verified — the tailnet works anywhere,
-  // and a LAN address is only ever dialled right after its MAC was checked.
+  const opts = startOpts(await shellLinkMemoryTokens());
+  if (!opts) return null; // No host paired — there is nothing to hold open.
+  try { await p.requestNotifications(); } catch { /* refused; the link still runs */ }
+  const st = await p.start(opts);
+  lastStarted = JSON.stringify(opts);
+  return st;
+}
+
+/**
+ * What `start` is handed: every real saved desktop as `links` (active first, `shellLinkSet`),
+ * plus the active one as the old single `url`/`label` an older shell reads.
+ *
+ * The SAVED (tailnet) address, never the LAN route in force: the service outlives this page and
+ * the Wi-Fi it verified — the tailnet works anywhere, and a LAN address is only ever dialled
+ * right after its MAC was checked.
+ */
+/** `wsProtocol` is the base subprotocol a link carrying a token offers beside `<base>-tok.<tok>`
+ *  (`deviceToken.ts` `wsProtocols`) — a parameter like `protocol`, never a Java constant. */
+interface StartOpts { url: string; protocol: number; label: string; links?: ShellLinkSpec[]; wsProtocol?: string; tokensInMemory?: true }
+
+/** What this phone holds for a saved desktop: the ACTIVE one's token is the live key, every other
+ *  one's is its parked copy (`parkedKeyFor`) — the same split `features/hosts/actions.ts` reads. */
+function credsFor(activeId: string | null): (h: SavedHost) => ShellLinkCreds {
+  return (h) => {
+    const key = (k: string) => (h.id === activeId ? k : parkedKeyFor(k, h.id));
+    return { token: tokenForHost(h.id), passive: lsGet(key(LS.passive)) === "1" };
+  };
+}
+
+/** Sealed, a token rides only to a shell that keeps it off the disk (`memory`); any other shell
+ *  would store what it is handed, so it gets none. */
+function startOpts(memory: boolean): StartOpts | null {
+  const activeId = activeHost()?.id ?? null;
+  const sealed = sealedMode();
+  const links = shellLinkSet(realHosts(listHosts()), activeId, credsFor(activeId), { carry: !sealed || memory, enforcing: hasShellTls() });
+  const first = links[0];
+  if (first) {
+    return { url: first.url, protocol: PROTOCOL_VERSION, label: first.label, links, wsProtocol: WS_BASE_PROTOCOL, ...(sealed && memory ? { tokensInMemory: true as const } : {}) };
+  }
+  // No host list (never, once the shell has booted one): the active base alone, as before.
   const base = savedHostBase();
   const url = wsUrlFor(base, "/ws");
-  if (!url) return null; // No host paired — there is nothing to hold open.
-  try { await p.requestNotifications(); } catch { /* refused; the link still runs */ }
-  const label = base ? base.replace(/^https?:\/\//, "") : "host";
-  return p.start({ url, protocol: PROTOCOL_VERSION, label });
+  if (!url) return null;
+  return { url, protocol: PROTOCOL_VERSION, label: base ? base.replace(/^https?:\/\//, "") : "host" };
+}
+
+/** What this page last handed `start`, so a re-sync with nothing changed crosses no bridge. */
+let lastStarted: string | null = null;
+
+/**
+ * Re-point a background link that is ON at the saved desktops as they are now: after a desktop
+ * was added, renamed, re-addressed or removed, and once per boot (an edit that reloaded the page
+ * happened before this page existed). Never turns the link on, never asks for a permission —
+ * the Settings switch is the only thing that starts it — and a set it already has is not resent.
+ */
+export async function resyncShellLink(): Promise<void> {
+  const p = plugin();
+  if (!p) return;
+  // Sealed and not opened this run: there is nothing to hand, and a tokenless `start` would take
+  // from a link still holding its tokens in memory the ones the next unlock gives back anyway.
+  if (sealedMode() && !heldTokens()) return;
+  const opts = startOpts(await shellLinkMemoryTokens());
+  const key = opts ? JSON.stringify(opts) : null;
+  if (!opts || key === lastStarted) return;
+  try {
+    const st = await p.status();
+    if (!st.enabled) return;
+    await p.start(opts);
+    lastStarted = key;
+  } catch { /* the link keeps the set it had; the next edit or boot tries again */ }
 }
 
 /** Switch it off: the service stops, its notification goes, the periodic
@@ -151,6 +240,7 @@ export async function enableShellLink(): Promise<ShellLinkStatus | null> {
 export async function disableShellLink(): Promise<void> {
   const p = plugin();
   if (!p) return;
+  lastStarted = null;
   try { await p.stop(); } catch { /* already gone */ }
 }
 
@@ -260,6 +350,9 @@ export function onShellPair(fn: (t: PairTarget) => void): () => void {
  * the traffic meter's transport patches are.
  */
 export function installShellBridge(): void {
+  // A token minted, re-minted or dropped on the active desktop re-points a link that is on
+  // (`resyncShellLink` resends only a changed set, and never turns the link on).
+  try { window.addEventListener(DEVICE_TOKEN_EVENT, () => { void resyncShellLink(); }); } catch { /* no window */ }
   defineShellGlobal("Nudge", (reason: string) => {
     try {
       window.dispatchEvent(new CustomEvent(SHELL_NUDGE_EVENT, { detail: { reason } }));

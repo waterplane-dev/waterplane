@@ -153,6 +153,20 @@ export class AttentionStore {
     return n;
   }
 
+  /** Every unhandled item `pred` picks ⇒ handled `{by:"resolved", note}` — for a cause named by
+   *  something other than a key (a plugin's own notification tag, `api.notifyDone`). Returns how many
+   *  changed; 0 writes nothing. */
+  resolveWhere(pred: (r: AttentionRecord) => boolean, note: string, at = Date.now()): number {
+    let n = 0;
+    for (const r of this.recs) {
+      if (r.item.handled || !pred(r)) continue;
+      r.item = { ...r.item, handled: { at, by: "resolved", note } };
+      n++;
+    }
+    if (n) { this.cap(); this.changed(); }
+    return n;
+  }
+
   /** The person's done on one item. Idempotent: an unknown or already-handled
    *  id changes nothing and returns false. */
   handle(id: string, at = Date.now()): boolean {

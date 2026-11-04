@@ -55,15 +55,16 @@ Four packages, each with its own layering, each layering held by an ESLint rule 
   Built first; everything else imports it.
 - **`packages/host`** — `main.ts` → `server/` → `routes/` + `api.ts` → the two facades
   (`sessions.ts`, `intents/manager.ts`) whose slices meet only through a hub interface
-  (`SessionCore`, `IntentCore`) → ~120 flat modules → leaves (`backends/`, `plugins/`, `capture/`).
+  (`SessionCore`, `IntentCore`) → ~200 flat modules → leaves (`backends/`, `plugins/`, `capture/`).
   Rule: `local/host-boundary`. Detail: [host-architecture.md](host-architecture.md).
 - **`packages/web`** — `App.tsx` → `core/` (the runners and the one-of-each hooks: the socket, the
-  send queue, the terminal) → `sdk/` (the only import a feature needs) → ~31 `features/<name>/` →
+  send queue, the terminal) → `sdk/` (the only import a feature needs) → ~44 `features/<name>/` →
   `kit/` (shared UI) → flat modules. Rule: `local/feature-boundary`; one socket:
   `local/no-second-socket`. Detail: [web-architecture.md](web-architecture.md).
 - **`packages/extensions/<id>`** — features written against the plugin API but shipped inside
-  waterplane: `requirements` (host + web), `opencode` (host only, optional), `token-stats` (web
-  only). Rule: `local/extension-boundary` — a host half sees only `@waterplane/shared`, `node:*`
+  waterplane: `android-apps`, `copilot-usage`, `desktop`, `diskspace`, `links`, `ocr`, `opencode`,
+  `permissions`, `requirements`, `scorecard`, `token-stats` and `vault`, each a host half, a web half
+  or both. Rule: `local/extension-boundary` — a host half sees only `@waterplane/shared`, `node:*`
   and the `HostPluginApi` it is handed; a web half only the sdk, kit and shared. Core reaches in
   through exactly two doors: `plugins/builtin.ts` and `features/registry.ts`.
 

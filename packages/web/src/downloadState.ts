@@ -13,7 +13,14 @@
  * One vocabulary, so the gallery, the build sheet, a notification and the
  * Downloads sheet cannot word the same state four ways.
  */
+import { PLAIN_ROUTE_NO_APK, isApkRow } from "@waterplane/shared";
 import type { PullRecord } from "./pull";
+
+/** Why this row is not fetched, or null. An APK is the one file that runs as itself on the phone,
+ *  so it never comes over an unprotected route; anything else is the person's to read. */
+export function apkFetchRefusal(item: { name?: string; relPath?: string; mime?: string }, plain: boolean): string | null {
+  return plain && isApkRow({ name: item.name || item.relPath, mime: item.mime }) ? PLAIN_ROUTE_NO_APK : null;
+}
 
 /** Where a file is, from the button's point of view. */
 export type DownloadPhase =

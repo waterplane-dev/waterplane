@@ -6,11 +6,13 @@ import { spawn } from "node:child_process";
 import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
 import { lastFetch } from "./gitlog.js";
+import { fetchFailure } from "./gitfetchfail.js";
 import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
 import { branchRules, invalidateBranchRules } from "./branchrules.js";
 import { pushFailureText, pushRefusedByRule, refsLockedAt } from "./pushverdict.js";
 import { landedAlready, recordLanded } from "./pushlanded.js";
+import { hookTestsCommit, isOutgoing, pushDestination, runCheck } from "./prepushcheck.js";
 
 
 export interface GitFile {
@@ -621,10 +623,21 @@ function gitStreamed(wt: string, args: string[], onData?: (stream: "out" | "err"
 }
 const STREAM_MAX = 16 * 1024 * 1024;
 
-export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk: string) => void): Promise<{ ok: boolean; output?: string; error?: string }> {
+/** The argv of a push of only the commits up to `sha`, or the sentence why not. The hook still
+ *  runs on it, so the repo's hook must test the pushed commit: one testing the tree would judge
+ *  the newer commits this push leaves out. */
+async function pushUpToArgs(wt: string, sha: string): Promise<{ args: string[] } | { error: string }> {
+  if (!(await hookTestsCommit(wt))) return { error: "This repo's hook tests the working tree, so it cannot judge an older commit on its own. Push the whole branch." };
+  if (!(await isOutgoing(wt, sha))) return { error: "That commit is no longer waiting to be pushed." };
+  const dest = await pushDestination(wt);
+  return dest ? { args: ["push", "--porcelain", dest.remote, `${sha}:${dest.ref}`] } : { error: "This checkout is not on a branch." };
+}
+
+export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk: string) => void, upTo?: string): Promise<{ ok: boolean; output?: string; error?: string }> {
   let setUpstream: { remote: string; branch: string } | null = null;
   if (pulling.has(wt)) return { ok: false, error: "A pull is running in this worktree — push once it has ended." };
   const rules = await rulesFor(wt);
+  if (upTo && rules && rules.mode !== "direct") return { ok: false, error: "This repo takes changes through a PR, which carries the whole branch. Push it, or move the commits you want to leave out to another branch." };
   if (rules && rules.mode !== "direct") {
     const r = await pushForPr(wt, rules, { push: (args) => gitStreamed(wt, args, onData), failText: pushFailureText });
     if (r) return r;
@@ -634,7 +647,11 @@ export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk
     // (`rev-parse @{u}`), never by a phrase in the output: that output carries the pre-push
     // hook's own log, and a failing hook that printed "set-upstream" re-ran the whole local CI.
     const args = ["push", "--porcelain"];
-    if (!(await hasUpstream(wt))) {
+    if (upTo) {
+      const to = await pushUpToArgs(wt, upTo);
+      if ("error" in to) return { ok: false, error: to.error };
+      args.splice(0, args.length, ...to.args);
+    } else if (!(await hasUpstream(wt))) {
       const br = (await git(wt, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => ({ stdout: "" }))).stdout.trim();
       if (br && br !== "HEAD" && safeBranch(br)) { args.push("--set-upstream", "origin", br); setUpstream = { remote: "origin", branch: br }; }
     }
@@ -680,6 +697,8 @@ const pushes = new Map<string, GitPushJob>();
 interface GitPushJob {
   running: boolean;
   startedAt: number;
+  /** A run of the hook alone (`runCheck`): the same job, so it holds off a pull and a push the same way. */
+  check?: boolean;
   result?: { ok: boolean; output?: string; error?: string; finishedAt: number };
   progress: PushProgress;
   done: Promise<{ ok: boolean; output?: string; error?: string }>;
@@ -694,7 +713,7 @@ interface GitPushJob {
  */
 export interface GitOutcome {
   repo: GitRepoRef;
-  verb: "pull" | "push";
+  verb: "pull" | "push" | "check";
   ok: boolean;
   output?: string;
   error?: string;
@@ -705,6 +724,9 @@ export interface GitOutcome {
   /** A push only: the branch and the commit it tried to send, read when it started. A failure
    *  is filed with this, and resolved only once THAT commit is on THAT branch's upstream. */
   head?: PushHead;
+  /** A pull only: the fetch failed on the NETWORK (timeout, transport error — `gitfetchfail.ts`),
+   *  a cause that passes by itself. Absent for every other failure. */
+  cause?: "network";
 }
 /** Which branch and commit a push tried to send. */
 export interface PushHead { branch: string; sha: string }
@@ -719,19 +741,29 @@ function report(o: GitOutcome): void {
   try { void Promise.resolve(outcomeSink?.(o)).catch(said); } catch (e) { said(e); }
 }
 
+/** What a job does beside a plain push: only the commits up to `upTo`, or `check` (the hook alone,
+ *  on that commit or, with undefined, on HEAD). */
+export type PushAsk = { upTo: string } | { check: string | undefined };
+
 /** Start a push in `wt`, or join the one already running there. `repo`, when
  *  given, has the run's outcome reported (`setGitOutcomeSink`) — once, by the
  *  run that started it. */
-export function startPush(wt: string, repo?: GitRepoRef): GitPushJob {
+export function startPush(wt: string, repo?: GitRepoRef, ask?: PushAsk): GitPushJob {
   const live = pushes.get(wt);
   if (live?.running) return live;
-  const job: GitPushJob = { running: true, startedAt: Date.now(), progress: new PushProgress(), done: null as never };
+  const check = !!ask && "check" in ask;
+  const upTo = ask && "upTo" in ask ? ask.upTo : undefined;
+  const job: GitPushJob = { running: true, startedAt: Date.now(), progress: new PushProgress(), done: null as never, ...(check ? { check } : {}) };
   job.done = (repo ? headOf(wt) : Promise.resolve(undefined)).then(async (head) => {
     const refused = pulling.has(wt);
-    const r = await gitPush(wt, (k, d) => job.progress.feed(k, d));
+    const feed = (k: "out" | "err", d: string) => job.progress.feed(k, d);
+    const r = !check ? await gitPush(wt, feed, upTo)
+      : refused ? { ok: false, error: "A pull is running in this worktree — run the checks once it has ended." }
+      : await runCheck(wt, ask && "check" in ask ? ask.check : undefined, feed);
     job.running = false;
     job.result = { ...r, finishedAt: Date.now() };
-    if (repo && !refused) report({ repo, verb: "push", ...r, startedAt: job.startedAt, finishedAt: job.result.finishedAt, wt, ...(head ? { head } : {}) });
+    const sent = head && upTo ? { ...head, sha: upTo } : head;
+    if (repo && !refused) report({ repo, verb: check ? "check" : "push", ...r, startedAt: job.startedAt, finishedAt: job.result.finishedAt, wt, ...(sent ? { head: sent } : {}) });
     return r;
   });
   pushes.set(wt, job);
@@ -741,7 +773,7 @@ export function startPush(wt: string, repo?: GitRepoRef): GitPushJob {
 /** The push running or last run in `wt`, or null when there has been none since the host started. */
 export function pushState(wt: string): GitPushState | null {
   const job = pushes.get(wt);
-  return job ? { running: job.running, startedAt: job.startedAt, result: job.result, progress: job.progress.snapshot() } : null;
+  return job ? { running: job.running, startedAt: job.startedAt, result: job.result, progress: job.progress.snapshot(), ...(job.check ? { check: true } : {}) } : null;
 }
 
 /** The branch and commit HEAD is on, or undefined (detached, unborn, git broke). */
@@ -757,8 +789,9 @@ async function headOf(wt: string): Promise<PushHead | undefined> {
 const pulling = new Set<string>();
 
 /** The git job running in `wt` right now, for the repo listing's busy chip. */
-export function gitRunningIn(wt: string): "push" | "pull" | undefined {
-  if (pushes.get(wt)?.running) return "push";
+export function gitRunningIn(wt: string): "push" | "pull" | "check" | undefined {
+  const job = pushes.get(wt);
+  if (job?.running) return job.check ? "check" : "push";
   return pulling.has(wt) ? "pull" : undefined;
 }
 
@@ -778,12 +811,13 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
  * Refused while a push runs here: the pre-push hook is building and testing
  * this very tree, and moving HEAD under it would test one thing and push another.
  */
-export async function gitPull(wt: string, repo?: GitRepoRef): Promise<{ ok: boolean; output?: string; error?: string }> {
+export type GitPullResult = { ok: boolean; output?: string; error?: string; cause?: "network" };
+export async function gitPull(wt: string, repo?: GitRepoRef): Promise<GitPullResult> {
   if (pushes.get(wt)?.running) return { ok: false, error: "A push is running in this worktree — pull once it has ended." };
   if (pulling.has(wt)) return { ok: false, error: "A pull is already running in this worktree." };
   pulling.add(wt);
   const startedAt = Date.now();
-  let r: { ok: boolean; output?: string; error?: string };
+  let r: GitPullResult;
   try {
     r = await pullOnce(wt);
   } finally {
@@ -794,7 +828,8 @@ export async function gitPull(wt: string, repo?: GitRepoRef): Promise<{ ok: bool
 }
 
 /** One pull's body; `gitPull` holds the per-worktree latch around it. */
-async function pullOnce(wt: string): Promise<{ ok: boolean; output?: string; error?: string }> {
+const FETCH_TIMEOUT_MS = 120_000;
+async function pullOnce(wt: string): Promise<GitPullResult> {
   let up: string;
   try {
     up = (await git(wt, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])).stdout.trim();
@@ -802,9 +837,11 @@ async function pullOnce(wt: string): Promise<{ ok: boolean; output?: string; err
     return { ok: false, error: "This branch has no upstream to pull from. Push it once to set one." };
   }
   try {
-    await pexec("git", ["fetch", "--no-tags"], { cwd: wt, timeout: 120_000, env: NO_PROMPT, maxBuffer: 4 * 1024 * 1024 });
+    await pexec("git", ["fetch", "--no-tags"], { cwd: wt, timeout: FETCH_TIMEOUT_MS, env: NO_PROMPT, maxBuffer: 4 * 1024 * 1024 });
   } catch (err) {
-    return { ok: false, error: `The fetch from ${up} failed — nothing was changed.\n\n${errText(err)}` };
+    // The reason goes on the FIRST line: it is the line a notification and a sync row show.
+    const f = fetchFailure(err, FETCH_TIMEOUT_MS);
+    return { ok: false, error: `The fetch from ${up} failed: ${f.reason} — nothing was changed.\n\n${errText(err)}`, ...(f.network ? { cause: "network" as const } : {}) };
   }
   const [ahead, behind] = (await git(wt, ["rev-list", "--left-right", "--count", "HEAD...@{u}"])).stdout.trim().split(/\s+/).map(Number);
   const toPush = ahead ? ` ${plural(ahead, "local commit")} still to push.` : "";

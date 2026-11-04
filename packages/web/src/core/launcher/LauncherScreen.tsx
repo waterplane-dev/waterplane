@@ -35,7 +35,7 @@ import { openSchedules } from "../../features/schedule";
 import { openActivity } from "../../features/activity";
 import { pickImageFor } from "../../features/images";
 import { takeShot, useHostPush } from "../../features/hostTools";
-import { HostMenuItem, HostSwitchKey } from "../../features/hosts";
+import { ElsewhereChip, HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { FirstRunCard } from "../../features/onboard";
 import { WhatsNewLauncherRow } from "../../features/whatsnew";
 import { enterDemo, isDemo } from "../../demo/mode";
@@ -311,6 +311,9 @@ export function LauncherScreen(p: LauncherProps) {
         {/* With a second desktop saved, which one this is becomes a reading
             and switching a habit: a split key — toggle to the next desktop /
             open the switcher — sized to fit beside the cog. One host ⇒ none. */}
+        {/* Another of your desktops waits on you (a vault approval, a question): its name and
+            count, a tap opens exactly those rows. Absent when nothing fresh waits elsewhere. */}
+        <ElsewhereChip />
         <HostSwitchKey />
         {/* No connection readout here. "open · 100.x.y.z" was a permanent
             green label restating what the net-pulse strip already shows live

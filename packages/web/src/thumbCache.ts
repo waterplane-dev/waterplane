@@ -27,6 +27,7 @@
  */
 import { timedFetch } from "@waterplane/shared";
 import { idbClear, idbDel, idbGet, idbGetAll, idbSet } from "./idb";
+import { ticketless } from "./hostUrl";
 
 const BLOBS = "thumbs";
 const META = "thumbmeta";
@@ -54,14 +55,14 @@ interface ThumbMeta { url: string; savedAt: number; bytes: number }
 
 /** The stored bytes for a thumbnail URL, or null. */
 export async function getThumbBlob(url: string): Promise<Blob | null> {
-  const b = await idbGet<Blob>(BLOBS, url);
+  const b = await idbGet<Blob>(BLOBS, ticketless(url));
   return b instanceof Blob && b.size > 0 ? b : null;
 }
 
 /** Is this thumbnail already on the device? Reads the small record, never the
  *  blob — used by the warmer to skip work, dozens of times per listing. */
 async function haveThumb(url: string): Promise<boolean> {
-  return !!(await idbGet<ThumbMeta>(META, url));
+  return !!(await idbGet<ThumbMeta>(META, ticketless(url)));
 }
 
 const queued = new Set<string>();
@@ -112,8 +113,10 @@ async function store(url: string): Promise<void> {
   // response can arrive without a length, and "no header" must not mean
   // "store whatever came back".
   if (!blob.size || blob.size > MAX_ENTRY_BYTES) throw new Error("not a thumbnail");
-  await idbSet(BLOBS, url, blob);
-  await idbSet(META, url, { url, savedAt: Date.now(), bytes: blob.size } satisfies ThumbMeta);
+  // Keyed without the read ticket: one is renewed hourly and must never reach a store.
+  const key = ticketless(url);
+  await idbSet(BLOBS, key, blob);
+  await idbSet(META, key, { url: key, savedAt: Date.now(), bytes: blob.size } satisfies ThumbMeta);
   void prune();
 }
 

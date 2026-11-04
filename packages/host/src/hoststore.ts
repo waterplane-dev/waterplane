@@ -158,11 +158,16 @@ const LIVE_FILES = new Set([
   // oracle PLUGIN reads it once to seed its own settings.
   "acks.json", "assess.json", "auth.json", "backend-catalogue.json", "backlog-config.json", "backlog.json",
   "budget.json", "burnwatch.json", "clihealth.json", "closed.json", "contextlimits.json", "ctxwindow.json", "explains.json",
-  "installs.json", "intents-archive.jsonl", "intents.json", "launches.json", "limit.json",
+  "installs.json", "intents-archive.jsonl", "intents.json", "lan-identity.json", "lan-tls.json", "launches.json", "limit.json",
   "notify.json", "oracle.json", "peer-jobs.json", "plugins.json", "pr-merges-asked.json", "pulls.json", "push-subs.json", "reviews.json",
   "schedules.json", "sessions.json", "settings.json", "setup.json",
-  "stars.json", "tmux.conf", "updates.json", "vapid.json",
+  "stars.json", "tmux.conf", "update-key.json", "updates.json", "vapid.json",
 ]);
+// Three of those are what a paired phone pins, so losing one is not a cache miss:
+// `lan-identity.json` (the desktop's hostId and LAN secret), `lan-tls.json` (the
+// key behind the TLS pin) and `update-key.json` (the key that signs web bundles,
+// and its `gen`). A new one makes each phone refuse or ask again until it is
+// paired or allows it again.
 
 /** Fold a bucket of files into one row. A row per file would be forty rows
  *  nobody reads; a row per KIND is the reading a person actually wants. */
@@ -257,8 +262,8 @@ export function hostStoreReport(root: string, now = Date.now()): HostStoreReport
       kind: "live",
       count: live.count,
       bytes: live.bytes,
-      cost: "The intent ledger, the ack memory, per-session stores, settings and credentials.",
-      cant: "the daemon is reading these. Losing the ack memory can make a queued prompt run twice, which is worse than any amount of space.",
+      cost: "The intent ledger, the ack memory, per-session stores, settings and credentials, including the desktop's LAN identity, its LAN TLS key and its update-signing key.",
+      cant: "the daemon is reading these. Losing the ack memory can make a queued prompt run twice; losing the LAN TLS or update-signing key makes every paired phone refuse the desktop or ask again. Both are worse than any amount of space.",
     },
     {
       id: "unknown",

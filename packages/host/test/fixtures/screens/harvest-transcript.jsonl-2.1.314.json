@@ -1,0 +1,47 @@
+[
+  {
+    "parentUuid": "<string>",
+    "isSidechain": "<boolean>",
+    "type": "system",
+    "subtype": "bridge_status",
+    "content": "<string>",
+    "url": "<string>",
+    "isMeta": "<boolean>",
+    "timestamp": "<string>",
+    "uuid": "<string>",
+    "userType": "<string>",
+    "entrypoint": "<string>",
+    "cwd": "<string>",
+    "sessionId": "<string>",
+    "version": "<string>",
+    "gitBranch": "<string>"
+  },
+  {
+    "parentUuid": "<string>",
+    "isSidechain": "<boolean>",
+    "promptId": "<string>",
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": "<string>"
+    },
+    "uuid": "<string>",
+    "timestamp": "<string>",
+    "permissionMode": "auto",
+    "origin": {
+      "kind": "<string>"
+    },
+    "promptSource": "<string>",
+    "turnOrigin": "<string>",
+    "turnPosition": {
+      "promptIndex": "<number>",
+      "turnIndex": "<number>"
+    },
+    "userType": "<string>",
+    "entrypoint": "<string>",
+    "cwd": "<string>",
+    "sessionId": "<string>",
+    "version": "<string>",
+    "gitBranch": "<string>"
+  }
+]

@@ -8,6 +8,7 @@ import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { GitCommit, GitLog } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
+import { prePushFacts, readChecks } from "./prepushcheck.js";
 
 /** Rows per list. A branch 400 commits behind is told as a count, not drawn. */
 const LIST_MAX = 100;
@@ -64,7 +65,9 @@ export async function gitLog(wt: string): Promise<GitLog> {
     git(wt, ["merge-base", "HEAD", "@{u}"]).then((s) => s.trim()).catch(() => ""),
   ]);
   const shared = base ? parseLog(await git(wt, ["log", `-n${SHARED_MAX}`, FORMAT, base])) : [];
-  return { branch, upstream, incoming, incomingTotal, outgoing, outgoingTotal, shared, fetchedAt };
+  const [checks, prePush] = await Promise.all([readChecks(wt), prePushFacts(wt)]);
+  const marked = outgoing.map((c) => (checks[c.sha] ? { ...c, check: checks[c.sha] } : c));
+  return { branch, upstream, incoming, incomingTotal, outgoing: marked, outgoingTotal, shared, fetchedAt, ...(prePush ? { prePush } : {}) };
 }
 
 /**

@@ -155,3 +155,11 @@ Resuming after an update keeps the git view's repo and settings.
 ### R-git-032 · built
 The git sheet and the launcher's git badge never present a stale "behind" count as current: the desktop sends when the worktree last fetched, the sheet fetches once when it opens and says under its counts how old ↓ is ("as of the last check of origin/main, 5m ago"), a count older than a day or never taken reads ↓? with the reason in words (a nonzero one stays as a floor), and the badge's title says when the remote was last checked.
 - asked: 2026-11-03 — the owner's checkout sat 30 commits behind for four weeks while the phone showed it in sync
+
+### R-git-033 · built
+Pre-push checks run without a push: the git view's and the Sync sheet's *Run checks* run the repo's own hook exactly as a push would feed it, pushing nothing, with the push's clock and steps, and notify when they end. The real push still runs the hook; a verdict never skips or refuses anything.
+- asked: 2026-11-04 — "a button to run the pre-push hooks without actually pushing so that I can either run all repositories or within one selected repository"
+
+### R-git-034 · built
+The history's not-pushed list marks each commit the checks judged, passed or failed, and how long ago. Where the repo says its hook tests the pushed commit (git config `waterplane.prePushTestsCommit`), any outgoing commit can be checked by itself and a passed one offers *Push up to here (N)*, sending it and the older commits and leaving newer ones local. Where the hook tests the working tree, only the newest commit can be checked, a run over uncommitted changes marks nothing, and the list says why there is no partial push. In PR mode a partial push is refused in words.
+- asked: 2026-11-04 — "select one of these commits and say everything until this commit. Now push and just leave out the other two or three more newer commits"

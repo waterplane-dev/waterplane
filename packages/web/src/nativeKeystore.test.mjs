@@ -59,3 +59,50 @@ test("a plugin's rejection is normalised; its answers are passed on", async () =
     delete globalThis.Capacitor;
   }
 });
+
+test("on a plain route no fingerprint is ever asked for, and the refusal says why", async () => {
+  const calls = [];
+  const spy = (name) => async () => { calls.push(name); return {}; };
+  globalThis.Capacitor = { Plugins: { ShellKeystore: { wrap: spy("wrap"), unwrap: spy("unwrap"), has: async () => ({ exists: true }) } } };
+  globalThis.location = { origin: "http://192.168.1.20:8770" };
+  try {
+    const plain = (e) => e.code === "plainRoute" && /nothing proves it reaches your desktop/.test(e.message);
+    await assert.rejects(nativeKeystore.wrap({ alias: "k", dataB64: "AA==" }), plain);
+    await assert.rejects(nativeKeystore.unwrap({ alias: "k", ctB64: "x", nonceB64: "y" }), plain);
+    assert.deepEqual(calls, []);
+    assert.deepEqual(await nativeKeystore.has({ alias: "k" }), { exists: true }); // asks for no fingerprint
+    globalThis.location = { origin: "https://desk.tail1.ts.net" };
+    await nativeKeystore.unwrap({ alias: "k", ctB64: "x", nonceB64: "y" });
+    assert.deepEqual(calls, ["unwrap"]);
+  } finally {
+    delete globalThis.Capacitor;
+    delete globalThis.location;
+  }
+});
+
+test("authenticate and lockStatus are feature-detected: an older shell says unavailable", async () => {
+  globalThis.Capacitor = { Plugins: { ShellKeystore: { wrap: async () => ({}) } } };
+  try {
+    assert.equal(nativeKeystore.canAuthenticate(), false);
+    await assert.rejects(nativeKeystore.authenticate({}), (e) => e.code === "unavailable");
+    await assert.rejects(nativeKeystore.lockStatus(), (e) => e.code === "unavailable");
+  } finally {
+    delete globalThis.Capacitor;
+  }
+});
+
+test("authenticate uses no key, so a plain route does not seal it, and its refusals are labelled", async () => {
+  let refuse = false;
+  const authenticate = async () => { if (refuse) throw Object.assign(new Error("gone"), { code: "cancelled" }); return { method: "biometric" }; };
+  globalThis.Capacitor = { Plugins: { ShellKeystore: { wrap: async () => ({}), authenticate } } };
+  globalThis.location = { origin: "http://192.168.1.20:8770" };
+  try {
+    assert.equal(nativeKeystore.canAuthenticate(), true);
+    assert.deepEqual(await nativeKeystore.authenticate({ title: "t" }), { method: "biometric" });
+    refuse = true;
+    await assert.rejects(nativeKeystore.authenticate({}), (e) => e.code === "cancelled" && e.message === "gone");
+  } finally {
+    delete globalThis.Capacitor;
+    delete globalThis.location;
+  }
+});

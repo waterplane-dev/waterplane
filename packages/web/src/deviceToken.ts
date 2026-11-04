@@ -19,8 +19,14 @@
  *
  * Host-scoped (`KEY_SCOPE`): a host switch parks it with that host's words.
  * The pure half (`bearerFor`, `wsProtocols`, `pickDeviceName`) is node-tested.
+ *
+ * **Sealed mode** (`tokenVault.ts`): the tokens leave storage for one Keystore blob and live in
+ * `held` below, by host id, for this run only. Every reader goes through `deviceToken()` or
+ * `tokenForHost()`, so `hostUrl.ts`, `ws.ts` and `lanLink.ts` never learn the mode exists. Storage
+ * is still read when nothing is held: what stays plain in this mode is a passive token, which the
+ * passive screen needs and no prompt ever guards. With the mode off `held` is never consulted.
  */
-import { BRAND } from "@waterplane/shared";
+import { BRAND, parkedKeyFor } from "@waterplane/shared";
 import { LS, lsDel, lsGet, lsSet } from "./storage.ts";
 
 /** The base subprotocol the host echoes; the token rides as a SECOND offer
@@ -39,28 +45,123 @@ export function isDeviceToken(t: unknown): t is string {
   return typeof t === "string" && validToken(t);
 }
 
+// ── Sealed mode: the tokens of this run ─────────────────────────────────
+
+const held = new Map<string, string>();
+/** Did the map get the blob's contents? Until then it may hold only what arrived this run. */
+let heldComplete = false;
+
+export function sealedMode(): boolean {
+  return lsGet(LS.tokenSealOn) === "1";
+}
+
+/** The token held in memory for desktop `id`, whatever the mode. */
+export function heldToken(id: string): string | null {
+  return held.get(id) ?? null;
+}
+
+/** Fill the map from an unsealed blob. Something that arrived during this run is newer than the
+ *  blob, so it stays. Fires the token event: the background link re-reads what it may carry. */
+export function holdTokens(tokens: Readonly<Record<string, string>>): void {
+  for (const [id, t] of Object.entries(tokens)) if (validToken(t) && !held.has(id)) held.set(id, t);
+  heldComplete = true;
+  tokenChanged();
+}
+
+/** One token that arrived in sealed mode (a pairing); `rewrap` is the caller's. */
+export function holdToken(id: string, tok: string): void {
+  if (validToken(tok)) held.set(id, tok);
+}
+
+export function forgetHeldToken(id: string): void {
+  held.delete(id);
+}
+
+/** Empty the map (the mode went off, its tokens are back in storage). */
+export function releaseTokens(): void {
+  held.clear();
+  heldComplete = false;
+}
+
+/**
+ * Everything to seal, or null while the blob has not been opened this run: after "open without
+ * the sign-ins" the map holds only what arrived since, and wrapping that would replace every other
+ * desktop's sign-in with nothing. Null means unwrap first, or leave the blob as it is.
+ */
+export function heldTokens(): Record<string, string> | null {
+  return heldComplete ? Object.fromEntries(held) : null;
+}
+
 export function deviceToken(): string | null {
+  const id = sealedMode() ? lsGet(LS.hostActive) : null;
+  const h = id ? held.get(id) : undefined;
+  if (h) return h;
   const t = lsGet(LS.deviceToken);
   return validToken(t) ? t : null;
 }
 
-export function setDeviceToken(tok: string): void {
-  if (validToken(tok)) lsSet(LS.deviceToken, tok);
+/** This phone's token for saved desktop `id`, active or parked: the one read for a desktop by id. */
+export function tokenForHost(id: string): string | null {
+  const h = sealedMode() ? held.get(id) : undefined;
+  if (h) return h;
+  const t = lsGet(id === lsGet(LS.hostActive) ? LS.deviceToken : parkedKeyFor(LS.deviceToken, id));
+  return validToken(t) ? t : null;
 }
 
+/** Fired after this phone's token on the active host was set or dropped, so the background link
+ *  (`shellLink.ts`) re-hands its links: a token it was refused is resent only once a NEW one exists. */
+export const DEVICE_TOKEN_EVENT = "app:device-token";
+
+function tokenChanged(): void {
+  try { if (typeof window !== "undefined") window.dispatchEvent(new Event(DEVICE_TOKEN_EVENT)); } catch { /* torn down */ }
+}
+
+export function setDeviceToken(tok: string): void {
+  if (!validToken(tok)) return;
+  // Sealed: memory only. Prompting for a token nobody asked for is wrong, and the mints that land
+  // here are free to repeat over the tailnet at the next start.
+  if (sealedMode()) { const id = lsGet(LS.hostActive); if (id) held.set(id, tok); }
+  else lsSet(LS.deviceToken, tok);
+  tokenChanged();
+}
+
+/** Never touches the blob: a stale entry there is refused by the host and dropped again. */
 export function dropDeviceToken(): void {
+  if (sealedMode()) { const id = lsGet(LS.hostActive); if (id) held.delete(id); }
   lsDel(LS.deviceToken);
+  tokenChanged();
 }
 
 /** The `Authorization` value for a request to `url`, or null. Only when `url`
- *  is on the same ORIGIN as `base` (the host base in force right now). */
+ *  is on the same ORIGIN as `base` (the host base in force right now), and never on `pake/*`: those
+ *  run over a plain port, and the token a re-pair retires rides sealed in the `box` instead. */
 export function bearerFor(url: string, base: string | null, tok: string | null): string | null {
   if (!tok || !base) return null;
   try {
-    return new URL(url).origin === new URL(base).origin ? `Bearer ${tok}` : null;
+    const u = new URL(url);
+    if (u.pathname.startsWith("/api/pair/pake/")) return null;
+    return u.origin === new URL(base).origin ? `Bearer ${tok}` : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * The `Authorization` value for a request to ANOTHER saved desktop (`url`), carrying that
+ * desktop's own PARKED token — or null. The same rule as `bearerFor` with the saved TAILNET
+ * `base` as the only origin: never its LAN address (dialled only after a MAC check, which runs
+ * for the active host alone, `lanRoute.ts`), never any other origin, never a hand-edited token.
+ */
+export function bearerForSaved(host: { base: string; lan?: { base: string } }, tok: string | null, url: string): string | null {
+  if (!validToken(tok)) return null;
+  try {
+    const origin = new URL(url).origin;
+    if (host.lan?.base && new URL(host.lan.base).origin === origin) return null;
+    if (!/^https?:$/.test(new URL(url).protocol)) return null;
+  } catch {
+    return null;
+  }
+  return bearerFor(url, host.base, tok);
 }
 
 /** The subprotocols to offer on the upgrade: none without a token (the socket

@@ -254,6 +254,10 @@ public class ShellPullService extends Service {
         String origin = "";
         /** The host's `PullItem`, verbatim, for the page to adopt. */
         String pullItem = "";
+        /** The desktop this row comes from, "" when nobody said: a pin is looked up by this at
+         *  every transfer ({@link ShellTlsPins#pinFor}), so a replaced pin holds on a queued row.
+         *  The token is never stored here; it is read from the link when the request is made. */
+        String hostId = "";
         /** "Later" on the ready-to-install notification: when it comes back.
          *  0 = not snoozed. The row is still listed as ready in the app. */
         long snoozeUntil;
@@ -310,6 +314,7 @@ public class ShellPullService extends Service {
                 if (!cleanNote.isEmpty()) o.put("cleanNote", cleanNote);
             }
             if (droppedAt > 0) o.put("droppedAt", droppedAt);
+            if (!hostId.isEmpty()) o.put("hostId", hostId);
             if (!origin.isEmpty()) {
                 o.put("origin", origin);
                 try { o.put("item", new JSONObject(pullItem)); } catch (JSONException e) { /* adopted by nobody */ }
@@ -348,6 +353,7 @@ public class ShellPullService extends Service {
             it.cleanedBytes = o.optLong("cleanedBytes", 0);
             it.cleanNote = o.optString("cleanNote", "");
             it.droppedAt = o.optLong("droppedAt", 0);
+            it.hostId = o.optString("hostId", "");
             it.origin = o.optString("origin", "");
             JSONObject pi = o.optJSONObject("item");
             it.pullItem = pi == null ? "" : pi.toString();
@@ -423,7 +429,7 @@ public class ShellPullService extends Service {
      *  start the platform refuses still leaves something the page can see and
      *  the next foreground can run. */
     static void enqueue(Context ctx, String id, String url, String name, String mime,
-                        long size, String etag, boolean autoSave) {
+                        long size, String etag, boolean autoSave, @Nullable String hostId) {
         synchronized (LOCK) {
             Map<String, Item> items = load(ctx);
             Item it = items.get(id);
@@ -434,6 +440,8 @@ public class ShellPullService extends Service {
             }
             it.url = url;
             it.name = name;
+            // The page's claim of an adopted row sends no id: the adopt's stays.
+            if (hostId != null && !hostId.isEmpty()) it.hostId = hostId;
             it.mime = mime == null || mime.isEmpty() ? Downloads.guessMime(name) : mime;
             if (size > 0) it.size = size;
             if (etag != null && !etag.isEmpty()) it.etag = etag;
@@ -486,8 +494,15 @@ public class ShellPullService extends Service {
      * verdict — this is a heartbeat-grade call, never a tap. What to fetch is
      * still the host's decision (its rules queued the item) and the switch is
      * the page's (mirrored in {@link #autoEnabled}); nothing is decided here.
+     *
+     * <b>Only from a protected address</b> ({@link #adoptRefusal}): the page's plain-route check
+     * is not running, and what lands here can go on to install itself.
+     *
+     * @param hostId the link's desktop: its pin holds on the transfer, and on a pinned desktop
+     *               that link's own token rides it, to that link's origin only.
      */
-    static boolean adopt(Context ctx, JSONObject item, String base) {
+    static boolean adopt(Context ctx, JSONObject item, String base, @Nullable String hostId) {
+        if (adoptRefusal(ctx, base, hostId) != null) return false;
         String id = item.optString("id", "");
         String repoId = item.optString("repoId", "");
         String relPath = item.optString("relPath", "");
@@ -506,12 +521,21 @@ public class ShellPullService extends Service {
             it.size = Math.max(0, item.optLong("size", 0));
             it.origin = "link";
             it.pullItem = item.toString();
+            if (hostId != null) it.hostId = hostId;
             it.updatedAt = System.currentTimeMillis();
             items.put(id, it);
             save(ctx, items);
         }
         start(ctx, new Intent(ctx, ShellPullService.class).setAction(ACTION_KICK));
         return true;
+    }
+
+    /** Why nothing may be fetched from {@code base} with the page frozen, or null. No row is
+     *  left behind: the page would claim it on its next wake and re-queue it unchecked. */
+    @Nullable
+    static String adoptRefusal(Context ctx, @Nullable String base, @Nullable String hostId) {
+        if (ShellRoute.isProtected(base, ShellTlsPins.pinFor(ctx, hostId, base) != null)) return null;
+        return "a new file was not fetched in the background: this address is not a protected route. Open the app";
     }
 
     static void mutate(Context ctx, String id, String action) {
@@ -681,6 +705,17 @@ public class ShellPullService extends Service {
     // ── one transfer ─────────────────────────────────────────────────────
 
     private void transfer(Item item) {
+        // Permanent: the address will not change under a queued row, so a retry dials nothing new.
+        // Null, not the live reading: a Tailscale that is off comes back, and a row must not die of it.
+        if (!ShellRoute.mayDial(item.url, ShellTlsPins.pinOf(this, item.hostId) != null, null)) {
+            fail(item.id, ShellRoute.WORD_LOCKED, true);
+            return;
+        }
+        Boolean tailnet = ShellNetPlugin.tailnetNow(this);
+        if (!ShellRoute.mayDial(item.url, ShellTlsPins.pinOf(this, item.hostId) != null, tailnet)) {
+            fail(item.id, ShellRoute.WORD_LOCKED, false);
+            return;
+        }
         File part = partOf(this, item.id);
         //noinspection ResultOfMethodCallIgnored
         part.getParentFile().mkdirs();
@@ -701,10 +736,16 @@ public class ShellPullService extends Service {
         // a no-op.
         String cookie = cookieFor(item.url);
         if (cookie != null) rb.header("Cookie", cookie);
+        // A frozen page leaves no cookie to borrow on a gated desktop reached by pin.
+        ShellLinkSet.Spec link = ShellTlsPins.pinOf(this, item.hostId) == null ? null
+                : ShellLinkService.linkFor(this, item.hostId, item.url);
+        String auth = link == null ? null : ShellLinkSet.bearer(link.token);
+        if (auth != null) rb.header("Authorization", auth);
+        boolean pinned = ShellTlsPins.pinFor(this, item.hostId, item.url) != null;
 
         Response res = null;
         try {
-            okhttp3.Call c = http().newCall(rb.build());
+            okhttp3.Call c = ShellTlsClient.forUrl(this, http(), item.hostId, item.url).newCall(rb.build());
             call = c;
             res = c.execute();
             int code = res.code();
@@ -725,6 +766,8 @@ public class ShellPullService extends Service {
                 boolean permanent = code == 401 || code == 403 || code == 404 || code == 410;
                 String msg = code == 403
                         ? "http 403 — the host refused this request (origin not allowed)"
+                        : code == 401 && link != null && link.locked()
+                                ? "http 401 — this desktop's token is kept in memory only and none is held now; open the app"
                         : code == 401 ? "http 401 — this host wants a sign-in; open the app"
                         : "http " + code;
                 fail(item.id, msg, permanent);
@@ -787,7 +830,10 @@ public class ShellPullService extends Service {
             // Progress resets the give-up count; a cancel is not a failure.
             boolean cancelled = "paused".equals(stateOf(item.id));
             if (cancelled) return;
-            fail(item.id, describe(e), false, now > before);
+            // A key that is not the pinned one will not fix itself on a retry; a tap asks again.
+            String tls = pinned ? ShellTlsClient.words(e) : null;
+            if (tls != null) fail(item.id, tls, ShellTlsClient.isPinRefusal(e), now > before);
+            else fail(item.id, describe(e), false, now > before);
         } finally {
             if (res != null) res.close();
         }
@@ -1433,6 +1479,8 @@ public class ShellPullService extends Service {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .callTimeout(0, TimeUnit.MILLISECONDS)   // a big file is not a slow call
                 .retryOnConnectionFailure(true)
+                // Never hop between http and https on a redirect's say-so.
+                .followSslRedirects(false)
                 .build();
         client = c;
         return c;

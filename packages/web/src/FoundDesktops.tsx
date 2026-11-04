@@ -3,6 +3,7 @@ import { BRAND, type SavedHost, type TailnetPeersResponse } from "@waterplane/sh
 import { Check, Loader2, Radar, Server } from "lucide-react";
 import { api, bgFetch } from "./api";
 import { addAndActivate, listHosts } from "./hosts";
+import { plainHostRoute } from "./hostUrl";
 import { emptyFoundText, foundRows, foundSub, healthVerdict, type FoundRow } from "./hostDiscover";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { SetNote } from "./SettingsKit";
@@ -16,13 +17,23 @@ import { SetNote } from "./SettingsKit";
  * the desktop in use stay). A desktop with a password cannot be added with a tap;
  * it hands over to the pair form, prefilled with its address, and says how to
  * get a code. The typed address below stays the fallback.
+ *
+ * **Only on a protected route.** The list is a reply, and a tap saves its address: over a plain one
+ * whoever runs the Wi-Fi would choose what this phone saves, and a `100.x` from them reads as protected.
  */
 type Load = { s: "busy" } | { s: "bad"; why: string } | { s: "ok"; res: TailnetPeersResponse };
 
-export function FoundDesktops({ onPassword }: {
+interface FoundProps {
   /** A found desktop that needs a pairing code: open the pair form on its address. */
   onPassword: (base: string, name: string) => void;
-}) {
+}
+
+export function FoundDesktops(props: FoundProps) {
+  if (plainHostRoute()) return <SetNote>This connection is not protected, so a list of desktops could be forged. Type the new desktop's address below.</SetNote>;
+  return <FoundList {...props} />;
+}
+
+function FoundList({ onPassword }: FoundProps) {
   const [load, setLoad] = useState<Load>({ s: "busy" });
   const [saved, setSaved] = useState<SavedHost[]>(() => listHosts());
   const [picked, setPicked] = useState<string | null>(null);

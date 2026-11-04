@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { foundRows, healthVerdict, passwordSentence, emptyFoundText, foundSub } from "./hostDiscover.ts";
-import { pairShareText, canCopyDirectly, CLIPBOARD_NEEDS_HTTPS } from "./pairShare.ts";
+import { pairLinkOf, pairShareText, canCopyDirectly, CLIPBOARD_NEEDS_HTTPS } from "./pairShare.ts";
 
 const peer = (name, addr, gated = false) => ({ name, addr, os: "linux", gated });
 const saved = (id, base) => ({ id, name: id, base });
@@ -60,6 +60,24 @@ test("share text carries the link and the code, readable as text", () => {
   assert.match(t, /with orb: http:\/\/100\.1\.2\.3:8770\/pair\/ABCDEFGH/);
   assert.match(t, /Code: ABCD-EFGH/);
   assert.doesNotMatch(pairShareText({ landingUrl: "u", code: "ABCDEFGH" }, null), /with/);
+});
+
+test("a desktop with no tailnet shows the deep link: its landing URL would burn the code on a plain socket", () => {
+  const m = { base: "http://192.168.1.20:8770", lanBase: "http://192.168.1.20:8770", landingUrl: "http://192.168.1.20:8770/pair/ABCDEFGH", deepLink: "waterplane://pair?u=x&c=ABCDEFGH&s=1", code: "ABCDEFGH" };
+  assert.equal(pairLinkOf(m), m.deepLink);
+  assert.match(pairShareText(m, null), /waterplane:\/\/pair/);
+  assert.doesNotMatch(pairShareText(m, null), /\/pair\/ABCDEFGH/);
+  assert.equal(pairLinkOf({ ...m, base: "http://100.64.0.5:8770" }), m.landingUrl, "a tailnet base's landing page is on a protected socket");
+  assert.equal(pairLinkOf({ ...m, base: "http://100.64.0.5:8770", lanBase: undefined }), m.landingUrl);
+});
+
+test("a new phone with no Tailscale gets the LAN deep link, and a landing URL never carries the LAN address", () => {
+  const m = { base: "http://100.64.0.5:8770", lanBase: "http://192.168.1.20:8770", landingUrl: "http://100.64.0.5:8770/pair/ABCDEFGH", deepLink: "waterplane://pair?u=t&c=ABCDEFGH&l=x", lanDeepLink: "waterplane://pair?u=lan&c=ABCDEFGH", code: "ABCDEFGH" };
+  assert.equal(pairLinkOf(m), m.landingUrl, "the sheet opens as it always did");
+  assert.equal(pairLinkOf(m, true), m.lanDeepLink);
+  assert.match(pairShareText(m, null, true), /waterplane:\/\/pair\?u=lan/);
+  assert.doesNotMatch(pairShareText(m, null, true), /\/pair\/ABCDEFGH/);
+  assert.equal(pairLinkOf({ ...m, lanDeepLink: undefined }, true), m.landingUrl, "no LAN bound: nothing to offer");
 });
 
 test("clipboard: direct only in a secure context that has one; the sentence says https", () => {

@@ -9,6 +9,12 @@
  * the APK); the installed app is reached through the DEEP LINK
  * (`<scheme>://pair?u=<base>&c=<code>`). Both parse to the same `{base, code}`.
  *
+ * The deep link may also carry, each additive so a shipped page reads `u` and `c` and ignores them:
+ * `s=1` (pair by PAKE only, `pake.ts`; never fall back to a plain redeem), `k=<32 hex>` (`pairCommit`:
+ * what the seal must match, so someone who has the code still cannot be this desktop) and
+ * `l=<plain LAN base>` (so a phone with no tailnet need not type the address). `u` stays plain, and
+ * TLS facts ride only inside the seal: a shipped APK could not reach a TLS address.
+ *
  * The base goes through `normalizeHostBase`, so a scanned or pasted link can
  * never aim the app at a `javascript:` or `data:` base.
  */
@@ -17,6 +23,7 @@ import { normalizeHostBase } from "./hosturl.js";
 import { BRAND, LEGACY } from "./brand.js";
 import { randomFromAlphabet, defaultRandomBytes, type RandomBytes } from "./hosts.js";
 import { trimEndChars } from "./lineartrim.js";
+import { pakeDecode, sha256 } from "./pake.js";
 
 /** 32 characters (a power of two: uniform from a byte), no 0, O, 1 or I. */
 export const PAIR_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -51,10 +58,58 @@ export function formatPairCode(code: string): string {
 export interface PairTarget {
   base: string;
   code: string;
+  /** `s=1`: this link pairs by PAKE or not at all. Absent: nobody asked for that. */
+  secure?: boolean;
+  /** `k=`: what the seal must match (`pairCommit`). */
+  commit?: string;
+  /** `l=`: the plain LAN base. */
+  lan?: string;
 }
 
-export function pairDeepLink(base: string, code: string): string {
-  return `${PAIR_SCHEME}://pair?u=${encodeURIComponent(base)}&c=${encodeURIComponent(code)}`;
+/** What a deep link adds to `u` and `c`. */
+export type PairLinkFacts = Pick<PairTarget, "secure" | "commit" | "lan">;
+
+const PAIR_COMMIT_HEX = 32;
+
+export function pairDeepLink(base: string, code: string, facts: PairLinkFacts = {}): string {
+  const extra = [
+    facts.secure ? "&s=1" : "",
+    facts.commit ? `&k=${facts.commit}` : "",
+    facts.lan ? `&l=${encodeURIComponent(facts.lan)}` : "",
+  ].join("");
+  return `${PAIR_SCHEME}://pair?u=${encodeURIComponent(base)}&c=${encodeURIComponent(code)}${extra}`;
+}
+
+const hex = (b: Uint8Array): string => Array.from(b, (c) => c.toString(16).padStart(2, "0")).join("");
+
+function hexBytes(s: string): Uint8Array | null {
+  if (s.length % 2 !== 0 || !/^[0-9a-f]*$/.test(s)) return null;
+  return Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16));
+}
+
+/**
+ * `k=`: the first 32 hex digits (128 bits) of SHA-256(DER ‖ PIN), lowercase, where DER is the update key's SPKI
+ * DER (the base64 of `updateKey`, decoded) and PIN the 32 bytes of the TLS pin (the hex of `tls.spki`,
+ * decoded). A desktop with no TLS listener has no PIN, so the hash covers the DER alone. Null when
+ * either input is malformed, so a phone reads that as a mismatch and never as a pass. 128 bits because
+ * the value is the same for every code of a desktop and a link is shared as text: a shorter one could
+ * be ground offline once and reused against any later code.
+ */
+export async function pairCommit(updateKey: unknown, spki?: unknown): Promise<string | null> {
+  const der = pakeDecode(updateKey);
+  const pin = spki === undefined ? new Uint8Array(0) : typeof spki === "string" ? hexBytes(spki) : null;
+  if (!der || der.length === 0 || !pin || (spki !== undefined && pin.length !== 32)) return null;
+  const both = new Uint8Array(der.length + pin.length);
+  both.set(der);
+  both.set(pin, der.length);
+  return hex(await sha256(both)).slice(0, PAIR_COMMIT_HEX);
+}
+
+/** The update key's fingerprint (8a): lowercase hex SHA-256 of the SPKI DER. What the desktop prints
+ *  beside the code, so the native dialog has something to compare against. */
+export async function updateKeyFingerprint(updateKey: unknown): Promise<string | null> {
+  const der = pakeDecode(updateKey);
+  return der && der.length > 0 ? hex(await sha256(der)) : null;
 }
 
 export function pairLandingUrl(base: string, code: string): string {
@@ -75,7 +130,18 @@ export function parsePairDeepLink(raw: unknown): PairTarget | null {
   }
   const base = normalizeHostBase(params.get("u") ?? "");
   const code = normalizePairCode(params.get("c"));
-  return base && code ? { base, code } : null;
+  if (!base || !code) return null;
+  // A commitment that cannot be read is refused rather than dropped: dropped, it would pass as a
+  // link that made no promise.
+  const commit = params.get("k");
+  if (commit !== null && !new RegExp(`^[0-9a-f]{${PAIR_COMMIT_HEX}}$`).test(commit)) return null;
+  const lan = normalizeHostBase(params.get("l") ?? "");
+  return {
+    base, code,
+    ...(params.get("s") === "1" ? { secure: true } : {}),
+    ...(commit !== null ? { commit } : {}),
+    ...(lan ? { lan } : {}),
+  };
 }
 
 /** The code in a landing path: `/pair/<code>` (page) or `/pair/<code>/apk`. */
@@ -154,8 +220,18 @@ export interface PairMintResponse {
   landingUrl: string;
   deepLink: string;
   base: string;
-  /** Plain-HTTP LAN base, when the host has a LAN interface bound. */
+  /** Plain-HTTP LAN base, when the host has a LAN interface bound. Equal to `base` on a desktop with
+   *  no tailnet, and then `landingUrl` is a plain address: opening it burns the code. */
   lanBase?: string;
+  /** The deep link says `s=1`. Absent with no password set, because PAKE refuses every attempt then. */
+  secure?: boolean;
+  /** The deep link's `k=`. */
+  commit?: string;
+  /** Lowercase hex SHA-256 of the update key's DER, printed beside the code. */
+  updateKeyFingerprint?: string;
+  /** The same link with `u=` the LAN address, for a shipped APK that ignores `l=`. Only when `base`
+   *  is another address. */
+  lanDeepLink?: string;
 }
 
 /** `POST /api/pair/redeem` */
@@ -191,6 +267,67 @@ export type PairRedeemResponse =
       scope?: "passive";
     }
   | { ok: false; error: PairRedeemError; message: string };
+
+// ── PAKE pairing over HTTP (`pake.ts`). Binary fields are base64, `pakeDecode`d strictly. ──
+
+/** `POST /api/pair/pake/start`. Carries no `Authorization`. */
+export interface PakeStartRequest {
+  sidP: string;
+  ya: string;
+}
+
+/** `POST /api/pair/pake/finish`, also with no `Authorization`. `confirm[i]` and `box[i]` answer
+ *  `yb[i]`; the phone cannot know which code it holds, so it answers all of them. */
+export interface PakeFinishRequest {
+  sidP: string;
+  confirm: string[];
+  box: string[];
+}
+
+/** What a `box` holds. `presented` is the old token a re-pair retires, sealed so a relay never sees
+ *  it, and so it can never ride in a header on these routes. */
+export interface PakeBoxBody {
+  deviceName: string;
+  presented?: string;
+}
+
+/**
+ * Why a PAKE route refused. `closed`, `no-password` and `no-codes` come from a host that DOES speak
+ * PAKE, so a phone never answers them with a plain redeem. `unknown` is a miss; `no-session` is a
+ * `finish` with nothing to finish, its 60 seconds up or its one try spent. None of them is a 404,
+ * which stays what a host with no PAKE at all may answer.
+ */
+export type PakeError = PairRedeemError | "closed" | "no-codes" | "no-session";
+
+export type PakeRefusal = { ok: false; error: PakeError; message: string };
+
+export type PakeStartResponse = { ok: true; nh: string; yb: string[] } | PakeRefusal;
+
+export type PakeFinishResponse = { ok: true; seal: string } | PakeRefusal;
+
+/** Inside the seal: `redeemPair`'s answer and what only a sealed reply may carry. The seal opening
+ *  proves the host knew the code, which is why the LAN identity may go to a LAN redeemer here. */
+export type PakeSealedReply = Extract<PairRedeemResponse, { ok: true }> & {
+  hostId: string;
+  /** Absent with no TLS listener. `spki` is lowercase hex. */
+  tls?: { port: number; spki: string };
+  /** Base64 SPKI DER (8a). */
+  updateKey?: string;
+  lanIdentity: { hostId: string; secret: string };
+};
+
+export function pakeErrorText(error: PakeError): string {
+  switch (error) {
+    case "closed":
+      return "Too many wrong attempts closed encrypted pairing for this code. Show a new code on the desktop.";
+    case "no-codes":
+      return "The desktop has no pairing code showing. Show a new code and try again.";
+    case "no-session":
+      return "That pairing attempt ran out of time. Try again.";
+    default:
+      return pairRedeemErrorText(error);
+  }
+}
 
 export function pairRedeemErrorText(error: PairRedeemError): string {
   switch (error) {

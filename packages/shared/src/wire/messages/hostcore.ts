@@ -34,8 +34,12 @@ export type HostCoreMsg =
   // multi-host phone can tell a socket landed on the host it meant; `deviceId`
   // is the paired-device ledger row this socket authenticated as. Absent on
   // an older host — never inferred. `startedAt`/`readyAt` (optional): see
-  // `host.restarting` below.
-  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number }
+  // `host.restarting` below. `updateKey` (optional, additive): base64 of the
+  // public key's SPKI DER, which signs this desktop's web bundles. `tlsPort`/
+  // `tlsSpki` (optional, additive): the encrypted LAN listener, `tlsSpki` being
+  // lowercase hex SHA-256 of the leaf's SPKI DER. A phone believes these three
+  // only when the URL this socket dialled is protected, never on a plain route.
+  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number; updateKey?: string; tlsPort?: number; tlsSpki?: string }
   /**
    * The daemon is going down (SIGTERM/SIGINT — `npm run restart` is one),
    * broadcast before the flush. Additive: an old phone ignores it. With

@@ -66,8 +66,8 @@ export const GUARDS = [
   { test: "uifilm", tier: "edit", paths: ["scripts/ui/**", "packages/web/src/core/session/TermArea.tsx", "packages/web/src/ZoomPair.tsx", "packages/web/src/features/demoTour/DemoHook.tsx"] },
   { test: "repohealth-packs", tier: "edit", paths: ["tools/repohealth/**"] },
   { test: "screenfixtures", tier: "edit", paths: ["tools/screenfixtures.mjs", "packages/host/test/fixtures/**"] },
-  { test: "capsqueeze", tier: "edit", paths: ["tools/capsqueeze.mjs", "tools/healthreadings.mjs"] }, // the decision; the staged-diff check itself runs in precommit.mjs
-  { test: "healthreadings", tier: "edit", paths: ["tools/healthreadings.mjs", ".claude/skills/**", ".*-shared/health.json"] }, // the shared config dir by glob: this file cannot import BRAND
+  { test: "capsqueeze", tier: "edit", paths: ["tools/capsqueeze.mjs", "tools/healthreadings.mjs", "tools/codelines.mjs"] }, // the decision; the staged-diff check itself runs in precommit.mjs
+  { test: "healthreadings", tier: "edit", paths: ["tools/healthreadings.mjs", "tools/codelines.mjs", "eslint.config.js", ".claude/skills/**", ".*-shared/health.json"] }, // the shared config dir by glob: this file cannot import BRAND
   { test: "site", tier: "edit", paths: ["README.md", "site/**", "scripts/site/**", "docs/media/**", "docs/assets/**"] },
   { test: "e2ewatchdog", tier: "edit", paths: ["scripts/e2e-*.mjs", "scripts/lib-watchdog.mjs", "packages/extensions/*/e2e/**"] },
   { test: "guards", tier: "edit", paths: ["scripts/guards/**", "tools/*.test.mjs"] },
@@ -108,6 +108,7 @@ export const GUARDS = [
   { test: "repohealth", tier: "push", paths: [], why: "git history, and shared's dist" },
   { test: "repohealth-own", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },
   { test: "repohealth-central", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },
+  { test: "rune2e", tier: "push", paths: ["scripts/run-e2e.mjs"], why: "spawns run-e2e.mjs, whose lib-brand imports shared/dist" },
 ];
 
 const TIER_RANK = { edit: 0, commit: 1, push: 2 };

@@ -206,3 +206,13 @@ test("peer-jobs.json is a named ledger, not 'not in this catalogue'", () => {
   assert.equal(rowOf(rep, "unknown").count, 0);
   assert.equal(rowOf(rep, "live").count, 1);
 });
+
+test("the LAN identity, LAN TLS key and update key are live state, not 'not in this catalogue'", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hoststore-lan-"));
+  const store = join(dir, BRAND.stateDirName);
+  mkdirSync(store, { recursive: true });
+  for (const n of ["lan-identity.json", "lan-tls.json", "update-key.json"]) writeFileSync(join(store, n), "{}");
+  const rep = hostStoreReport(dir);
+  assert.equal(rowOf(rep, "unknown").count, 0);
+  assert.equal(rowOf(rep, "live").count, 3);
+});

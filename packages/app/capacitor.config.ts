@@ -67,6 +67,15 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
 
     /**
+     * **No bridge logging, in any build.** Capacitor's default logs every plugin
+     * call's ARGUMENTS to logcat in a debug build, and `assembleDevDebug` is what
+     * `npm run apk` ships: `ShellLink.start` carries each gated desktop's device
+     * token (`ShellLinkTokens`), so the default would write those tokens to the
+     * log. The WebView's console stays readable over `chrome://inspect`.
+     */
+    loggingBehavior: "none",
+
+    /**
      * The terminal is xterm.js and the app is full of long-press gestures
      * (session reorder, image zoom). `webContentsDebuggingEnabled` is left
      * unset on purpose: Capacitor then follows the build's debuggable flag, so

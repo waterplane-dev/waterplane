@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { BRAND, HOST_PARK_PREFIX, LEGACY, SYNCED_SETTING_KEYS, isHostScopedKey, parkedKeyFor } from "@waterplane/shared";
 
 import { DEVICE_KEYS, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, readHealthAxis, trSeenKey } from "./storage.ts";
-import { UI_RESET_KEYS } from "./resetKeys.ts";
+import { RESET_KEEP_PREFIXES, UI_RESET_KEYS } from "./resetKeys.ts";
 
 test("every registry key is classified, and nothing else is", () => {
   assert.deepEqual(Object.keys(KEY_SCOPE).sort(), Object.keys(LS).sort());
@@ -86,4 +86,13 @@ test("the UI reset forgets only this device's look — never words, never a sync
 test("healthAxis is a device key and reads weeks when storage says nothing", () => {
   assert.equal(KEY_SCOPE.healthAxis, "device");
   assert.equal(readHealthAxis(), "weeks");
+});
+
+test("the sealed sign-ins are device keys, never synced, never reset, and the hard reset keeps them", () => {
+  for (const k of ["tokenSeal", "tokenSealOn", "tokenSealDead", "tokenSealAuth"]) {
+    assert.equal(KEY_SCOPE[k], "device", k);
+    assert.ok(!SYNCED_SETTING_KEYS.includes(LS[k]), k);
+    assert.ok(!UI_RESET_KEYS.includes(k), k);
+    assert.ok(RESET_KEEP_PREFIXES.some((p) => LS[k].startsWith(p)), `${k}: a crash recovery would delete the last copy of every token`);
+  }
 });

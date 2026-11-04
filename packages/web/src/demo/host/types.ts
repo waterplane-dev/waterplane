@@ -30,6 +30,7 @@
  *    transport snapshots after each `onChange` and restores on boot.
  */
 import type { ClientMessage, HostMessage } from "@waterplane/shared";
+import type { DemoBuilds } from "./builds.ts";
 import type { DemoFaultRule } from "./faults.ts";
 import type { DemoSnapshot } from "./snapshot.ts";
 
@@ -116,4 +117,9 @@ export interface DemoFaults {
   set(rules: DemoFaultRule[]): void;
   /** What each rule has done so far, for a test to assert it fired. */
   fired(): { rule: number; count: number }[];
+  /** Give this desktop build commands (`builds.ts`), or replace the ones it has. */
+  builds(b: DemoBuilds): void;
+  /** Hand every open socket `msg` now, past every rule: with `drop` rules, the
+   *  test decides which frame lands when, and a receipt it holds is sent here. */
+  emit(msg: HostMessage): void;
 }

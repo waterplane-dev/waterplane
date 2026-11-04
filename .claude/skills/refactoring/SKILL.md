@@ -40,9 +40,10 @@ sections are what each package decided).
 
 ## Rules that bit
 
-- **A file at the cap is cut by subject; its notes are never trimmed to make room.** The comments are
-  where this repo records why a rule exists — deleting them to get back under `max-lines` loses the
-  reason and still owes the split. `capSqueeze` (`tools/healthreadings.mjs`) counts the commits that did.
+- **A file at the cap is cut by subject; its notes are never trimmed to make room.** `max-lines` counts
+  code and blanks, not comments (`tools/codelines.mjs` is the count), so a trim buys nothing there. The
+  tighter caps and ratchets (`TIGHT_DIRS`, `MAX_LINES`, the 500s in `webshape`) still count every line:
+  past one of those, cut by subject too. `capSqueeze` (`tools/healthreadings.mjs`) counts notes-only trims near the cap.
 - **Review lands with the work, not after it.** A feature built in several work packages is reviewed
   while it is still in the agent's worktree or branch; main gets each package with its review fixes
   already in. Other sessions in the shared tree build on main within the hour, so a "review fixes"

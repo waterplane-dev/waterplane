@@ -48,7 +48,7 @@ import { useTabStripBridge } from "./core/sessions/useTabStripBridge";
 import { useOutsideOpens } from "./core/route/useOutsideOpens";
 import { useQueueSignals } from "./core/queue/useQueueSignals";
 import { useHostState } from "./core/sessions/useHostState";
-import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner, UpdatesBanner } from "./core/Banners";
+import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner, UpdatesBanner, unlockSignIns } from "./core/Banners";
 import { SessionScreen } from "./core/session/SessionScreen";
 import { useSessionChrome } from "./core/session/useSessionChrome";
 import { LauncherScreen } from "./core/launcher/LauncherScreen";
@@ -355,7 +355,7 @@ export function App() {
   });
   useEffect(() => bootFeatures(), []);
 
-  if (authGate) return <AuthGate reconnect={() => connRef.current.reconnect()} />;
+  if (authGate) return <AuthGate reconnect={() => connRef.current.reconnect()} unlockSeal={unlockSignIns} />;
 
   // ── Overlays (`core/route/overlayViews.tsx`) ─────────────────────────
   const sheet = chrome.drawnSheet(overlayLayer({

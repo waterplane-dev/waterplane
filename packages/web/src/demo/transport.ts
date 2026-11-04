@@ -568,7 +568,7 @@ export function installDemoTransport(): boolean {
   }
   setDemoActive(id);
   // Tests only: the fault journeys' handle (scripts/ui/journey-fault-*.mjs),
-  // `globalThis.__demoFaultHook = { set(rules), fired(), snapshot() }`.
+  // `globalThis.__demoFaultHook = { set(rules), fired(), snapshot(), builds(b), emit(msg) }`.
   // The condition is a build-time constant — a literal `import.meta.env.X`,
   // which vite folds (`?.` would defeat that; the `typeof` is for node, which
   // has no `env`) — so a build made without VITE_DEMO_FAULTS=1, every shipped
@@ -579,6 +579,8 @@ export function installDemoTransport(): boolean {
       set: (rules: DemoFaultRule[]) => host.faults.set(rules),
       fired: () => host.faults.fired(),
       snapshot: () => host.snapshot(),
+      builds: (b: Parameters<typeof host.faults.builds>[0]) => host.faults.builds(b),
+      emit: (msg: Parameters<typeof host.faults.emit>[0]) => host.faults.emit(msg),
     };
   }
   return true;

@@ -59,6 +59,12 @@ export const RESET_KEEP_PREFIXES: readonly string[] = [
   // would delete the words of every host but the one that crashed. `hostBase`
   // is rewritten from the list at the next boot, so it need not be kept.
   LS.hosts, LS.hostActive, LS.hostSwitch, LS.hostsGone, HOST_PARK_PREFIX,
+  // The sealed sign-ins: with the mode on the blob is the ONLY copy of every parked token, which
+  // this reset has always kept in plain form under `HOST_PARK_PREFIX`. Its switch goes with it.
+  LS.tokenSeal, LS.tokenSealOn, LS.tokenSealDead, LS.tokenSealAuth,
+  // The app lock. A crash screen can sit in front of the lock card, and a reset that dropped these
+  // would be a way to switch the lock off with nobody at the sensor.
+  LS.appLock, LS.appLockBlob,
   // Everything under an OLDER brand's prefix, and the marks that say it was
   // copied. Until the copy has run, a legacy key is the only copy of a draft;
   // after it, dropping the mark would run the copy again and bring back a

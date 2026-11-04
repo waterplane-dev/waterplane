@@ -24,8 +24,10 @@
  *    ones that never pass through a transport: strings handed to `<img src>`
  *    and to Background Fetch.
  */
-import { normalizeHostBase, parseHostList, resolveHostUrl, wsUrlFor } from "@waterplane/shared";
+import { isPlainRoute, normalizeHostBase, parseHostList, resolveHostUrl, tlsBaseOf, wsUrlFor, type NetState, type RouteContext, type SavedHost } from "@waterplane/shared";
 import { LS, lsGet } from "./storage.ts";
+import { currentNet, hasShellNet, onShellNet } from "./shellNet.ts";
+import { hasShellTls } from "./sdk/shellTls.ts";
 import { bearerFor, deviceToken, noteBearerRejected } from "./deviceToken.ts";
 import { DEMO_WS_URL, isDemo } from "./demo/mode.ts";
 import { demoMediaUrl } from "./demo/media.ts";
@@ -50,6 +52,53 @@ let cached: string | null | undefined;
 /** The route override (`setRouteBase`): the same host reached another way. */
 let route: string | null = null;
 
+/** The fields a dial decides on. */
+type RouteRow = Pick<SavedHost, "base" | "lan" | "tls" | "tlsOff" | "vouched">;
+
+/**
+ * The address to dial for one of a row's plain addresses (`base`, or `lan.base`): the TLS address
+ * where this shell can enforce the pin the row holds, else that address as saved. `tlsBaseOf` leaves
+ * a tailnet, loopback or `https` address alone. So a pinned desktop is never dialled plain on a LAN
+ * address, and a shipped APK (no `ShellTls`) that learned a pin simply ignores it.
+ */
+export function dialBaseOf(row: RouteRow, enforcing: boolean, base: string = row.base): string {
+  return enforcing && !row.tlsOff ? tlsBaseOf(base, row.tls) : base;
+}
+
+/** What a row and the phone can say about `base` that the address cannot (`isPlainRoute`). */
+export function routeContext(base: string, row: RouteRow | null, enforcing: boolean, net: Pick<NetState, "tailnet"> | null): RouteContext {
+  const ctx: RouteContext = {};
+  if (net?.tailnet !== undefined) ctx.tailnet = net.tailnet;
+  if (!row) return ctx;
+  const pinned = enforcing && !!row.tls && !row.tlsOff &&
+    [row.base, row.lan?.base].some((b) => !!b && b !== base && tlsBaseOf(b, row.tls) === base);
+  if (pinned || (row.vouched && row.base === base)) ctx.trusted = true;
+  return ctx;
+}
+
+/**
+ * Does the device token stay on the phone for a dial to `base`? Only on a shell that enforces pins,
+ * and then in two cases. A tailnet address with Tailscale off, pinned or not, `tlsOff` or not: that
+ * dial cannot reach the desktop, only whoever runs the Wi-Fi, so holding the token loses nothing. And
+ * any address that reads plain now on a row holding a pin it may use: a pinned desktop has a protected
+ * way in. A plain LAN address on an unpinned row keeps sending it: that is the opt-in, with its
+ * warning. A `tailnet` nobody reported leaves the address's name to decide, so a tailnet phone is
+ * unchanged.
+ */
+export function tokenWithheldOf(base: string | null, row: RouteRow | null, enforcing: boolean, net: Pick<NetState, "tailnet"> | null): boolean {
+  if (!base || !enforcing) return false;
+  const plain = isPlainRoute(base, routeContext(base, row, enforcing, net));
+  if (plain && net?.tailnet === false && !isPlainRoute(base)) return true;
+  return plain && !!row?.tls && !row.tlsOff;
+}
+
+/** Would reaching this row on its address (or `base`, one of its addresses) be unprotected, whatever
+ *  network the phone is on now? For a saved row, a screen about a desktop that may not be active. */
+export function savedRowPlain(row: RouteRow, enforcing: boolean, base: string = row.base): boolean {
+  const dial = dialBaseOf(row, enforcing, base);
+  return isPlainRoute(dial, routeContext(dial, row, enforcing, null));
+}
+
 /**
  * The address of the host the LIST names active (`hosts` + `hostActive`),
  * else the stored `hostBase` (no list yet: first run, an older build). Read off
@@ -57,19 +106,33 @@ let route: string | null = null;
  * list: if `hostBase` lagged — a boot that threw before writing it — the page
  * ran on the old desktop under the new desktop's name (2026-11-01).
  */
-export function pickSavedBase(hostsRaw: string | null, activeId: string | null, hostBaseRaw: string | null): string | null {
+export function pickSavedBase(hostsRaw: string | null, activeId: string | null, hostBaseRaw: string | null, enforcing = false): string | null {
   const row = activeId ? parseHostList(hostsRaw)?.find((h) => h.id === activeId) : undefined;
-  return (row && normalizeHostBase(row.base)) || normalizeHostBase(hostBaseRaw || "");
+  return (row && dialBaseOf(row, enforcing)) || normalizeHostBase(hostBaseRaw || "");
 }
 
-/** The SAVED address of the active host — the tailnet route, as stored. */
+/** The SAVED route of the active host: its address as stored, or the TLS address `dialBaseOf` gives. */
 export function savedHostBase(): string | null {
   if (cached !== undefined) return cached;
   cached = null;
   if (isNativeShell()) {
-    cached = pickSavedBase(lsGet(LS.hosts), lsGet(LS.hostActive), lsGet(KEY));
+    cached = pickSavedBase(lsGet(LS.hosts), lsGet(LS.hostActive), lsGet(KEY), hasShellTls());
   }
   return cached;
+}
+
+/** The active row's `tls` or `tlsOff` changed: the next `savedHostBase()` reads it again. A change of
+ *  address reloads the page instead (`hosts.ts`). The socket is the caller's to redial. */
+export function invalidateSavedHostBase(): void {
+  cached = undefined;
+}
+
+/** Is the saved route the TLS address of a pin, rather than the row's own address? That is a phone
+ *  with no tailnet route to this desktop: a tailnet base is never rewritten. */
+export function savedBasePinned(): boolean {
+  const saved = savedHostBase();
+  const row = saved ? activeRow() : null;
+  return !!row && row.base !== saved;
 }
 
 /**
@@ -103,6 +166,151 @@ export function routeBase(): string | null {
   return route;
 }
 
+/** What the shell last said about the network; null until it has, and on a shell with no plugin. */
+let routeNet: NetState | null = null;
+let netHeard = false;
+/** A shell that never answers must not hold the first paint. */
+const NET_SEED_MS = 500;
+/** How long a shell that can say `tailnet` is waited for, after which it is one that does not say. */
+const NET_OWED_MS = 8000;
+/** The first reading is on its way: a shell that can report has not, and its time is not up. */
+let netOwed = false;
+const netWaiters: (() => void)[] = [];
+/** What "no reading yet" reads as, for the token alone (`tokenWithheld`). */
+const NOT_READ = { tailnet: false };
+
+function settleNet(): void {
+  netOwed = false;
+  for (const fn of netWaiters.splice(0)) { try { fn(); } catch { /* the next welcome asks again */ } }
+}
+
+function takeNet(s: NetState | null): void {
+  if (s && !routeNet) routeNet = s;
+  if (routeNet) settleNet();
+}
+
+/** Ask again, further apart: the shell's first push is fire-and-forget and can land before the page
+ *  has a listener, and nothing pushes again until the network changes. */
+function askUntilRead(wait: number, left: number): void {
+  const t = setTimeout(() => {
+    if (!netOwed) return;
+    if (left <= wait) { settleNet(); return; }
+    void currentNet().then(takeNet);
+    askUntilRead(wait * 2, left - wait);
+  }, Math.min(wait, left));
+  (t as { unref?: () => void }).unref?.();
+}
+
+/**
+ * Read the network once, and keep reading it: `plainHostRoute()` is synchronous, so `tailnet` has to
+ * be in hand before anything asks. Awaited once at boot, before the first render, which waits
+ * `NET_SEED_MS` at most; an answer later than that is kept all the same. Never rejects.
+ *
+ * Only a shell that holds `ShellTls` owes a reading: `tailnet` came after it, so a shipped APK with
+ * `ShellNet` and no `ShellTls` is judged by the address's name, as it always was.
+ */
+export async function seedRouteNet(): Promise<void> {
+  if (!netHeard) {
+    netHeard = true;
+    try { onShellNet((s) => { routeNet = s; settleNet(); }); } catch { /* no DOM */ }
+    if (!routeNet && isNativeShell() && hasShellTls() && hasShellNet()) {
+      netOwed = true;
+      askUntilRead(NET_SEED_MS, NET_OWED_MS);
+    }
+  }
+  let fuse: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<void>((done) => { fuse = setTimeout(done, NET_SEED_MS); });
+  await Promise.race([currentNet().then(takeNet), late]);
+  clearTimeout(fuse);
+}
+
+/** Is the first network reading still on its way? False on a shell that owes none, and once
+ *  `NET_OWED_MS` is up: from then on it is a shell that does not say. */
+export function netOwedNow(): boolean {
+  return netOwed;
+}
+
+/**
+ * Run `fn` once the route rule has its reading, now if nothing is owed. What a `welcome` teaches goes
+ * through here: on a name alone, a relay on the Wi-Fi could replace a pin with no dialog. The caller
+ * reads the socket's dial before it asks, because the socket may have moved on by then.
+ */
+export function whenNetRead(fn: () => void): void {
+  if (netOwed) netWaiters.push(fn);
+  else fn();
+}
+
+function activeRow(): SavedHost | null {
+  const id = lsGet(LS.hostActive);
+  return (id && parseHostList(lsGet(LS.hosts))?.find((h) => h.id === id)) || null;
+}
+
+/** The route rule for one address of the active row. `plainHostRoute()` asks it of where the route
+ *  is now; a welcome is judged by the address its own socket dialled. */
+export function plainInShell(base: string): boolean {
+  const enforcing = hasShellTls();
+  return isPlainRoute(base, routeContext(base, activeRow(), enforcing, routeNet));
+}
+
+/**
+ * The one answer to "may the token ride here?" (`tokenWithheldOf`), read per call: the network moves
+ * under a running app. `base` defaults to the base in force, `row` to the active row. Whoever answers
+ * a withheld dial can say nothing about the token either: `lanLink.ts` and `ws.ts` keep it through a
+ * 401 or an `authRequired`, or anyone at that address could make this phone forget it.
+ *
+ * **No reading yet** reads as Tailscale off, here and nowhere else. Holding it back costs one dial at
+ * most: an ungated tailnet desktop opens the socket with no token, a gated one reads as a failed dial
+ * and is retried, and `lanLink.ts` re-dials with the token once the reading says it may ride. Sending
+ * it costs the token, to whoever answers. `NET_OWED_MS` is the bound: past it a silent shell is judged
+ * by name again, so nobody stays out. A passive phone is left out of this: with no token it would
+ * read `/api/auth/status` as not passive and forget the mark that draws its one screen.
+ */
+export function tokenWithheld(base: string | null = hostBase(), row?: RouteRow): boolean {
+  if (!isNativeShell()) return false;
+  const net = netOwed && lsGet(LS.passive) !== "1" ? NOT_READ : routeNet;
+  return tokenWithheldOf(base, row ?? activeRow(), hasShellTls(), net);
+}
+
+/** Is `base` unprotected right now? For an address that is not the route in force: the one a socket
+ *  dialled (`baseOfDial`), which is what a `welcome` is judged on, or the saved one. */
+export function plainBaseNow(base: string): boolean {
+  return plainInShell(base);
+}
+
+/** `wss://h:8771/ws` → `https://h:8771`: the base a socket's url was built from. Null for anything else. */
+export function baseOfDial(url: string): string | null {
+  const m = /^(wss?):\/\/([^/?#]+)/.exec(url);
+  return m ? normalizeHostBase(`${m[1] === "wss" ? "https" : "http"}://${m[2]}`) : null;
+}
+
+/**
+ * Is this device reaching the desktop unprotected right now (`isPlainRoute`)? Read per call: the
+ * route moves under a running app. In the APK that is `hostBase()`, in a browser the page's own
+ * origin, since the page IS the daemon there, and an `https` page is the address the person went to.
+ */
+export function plainHostRoute(): boolean {
+  if (isDemo()) return false;
+  const b = hostBase();
+  if (b) return plainInShell(b);
+  return !isNativeShell() && typeof location !== "undefined" && isPlainRoute(location.origin, { trusted: location.protocol === "https:" });
+}
+
+/** `plainHostRoute()` where it can change anything: a browser's page already came from that address. */
+export function plainShellRoute(): boolean {
+  return isNativeShell() && plainHostRoute();
+}
+
+/**
+ * Would an APK reach this phone over an unprotected route? Asked of the SAVED address, because every
+ * download goes there (`abs()`), never the LAN route: on a plain LAN route the bytes still ride the
+ * tailnet. Only the shell installs anything, so a browser is told nothing.
+ */
+export function plainDownloadRoute(): boolean {
+  if (isDemo() || !isNativeShell()) return false;
+  const b = savedHostBase();
+  return !!b && plainInShell(b);
+}
+
 /** Has a host been paired? Always true in the browser (it serves us), and in
  *  the demo, whose fake desktop is in the bundle (`demo/transport.ts`). */
 export function hostConfigured(): boolean {
@@ -123,13 +331,69 @@ export function hostConfigured(): boolean {
  * Background Fetch or a Java-side download, and the cookie is withheld
  * cross-site. The host gates every `/api/*` on the LAN, so the same URL on
  * the LAN route is a 401 — a blank thumbnail, a failed download — while the
- * tailnet address is trusted by network identity with no token at all.
+ * tailnet address is trusted by network identity with no token at all. A
+ * LAN-only desktop with a pin is `savedHostBase()`'s TLS address here too, where
+ * nothing is trusted by network identity: that one load carries a read ticket.
  */
 export function abs(url: string): string {
   // The demo has no host to point at: a host FILE is bundled media
   // (`public/demo/media/…`), anything else stays `/api` for the demo's fetch.
   if (isDemo()) return demoMediaUrl(url);
-  return resolveHostUrl(savedHostBase(), url);
+  return ticketedUrl(resolveHostUrl(savedHostBase(), url), ticket, Date.now());
+}
+
+// ── The read ticket ─────────────────────────────────────────────────────
+//
+// `abs()` URLs carry no bearer, so a phone with no tailnet would get a 401 for every `<img>`. The
+// desktop signs a short-lived ticket (`POST /api/auth/read-ticket`) that it honours as `?wt=` on the
+// two opaque read routes, over TLS only. Memory only: never in a store, a cache key or a copied link.
+
+/** One ticket, tied to the address it was asked of. `exp` is the desktop's, epoch ms. */
+export interface ReadTicket { base: string; wt: string; exp: number }
+
+/** The host's `OPAQUE_READ_ROUTES` (`origin.ts`); `hostUrl.test.mjs` holds the two lists together. */
+const OPAQUE_READ_PATHS = [/^\/api\/repos\/[^/]+\/artifact$/, /^\/api\/repos\/[^/]+\/inbox\/[^/]+$/];
+
+/** `url` with the ticket on it, where the ticket is alive, of this address, and for this route. */
+export function ticketedUrl(url: string, t: ReadTicket | null, now: number): string {
+  if (!t || now >= t.exp || !url.startsWith(`${t.base}/`)) return url;
+  const cut = url.indexOf("#");
+  const head = cut < 0 ? url : url.slice(0, cut);
+  let u: URL;
+  try { u = new URL(head); } catch { return url; }
+  if (u.searchParams.has("wt") || !OPAQUE_READ_PATHS.some((re) => re.test(u.pathname))) return url;
+  return `${head}${u.search ? "&" : "?"}wt=${encodeURIComponent(t.wt)}${cut < 0 ? "" : url.slice(cut)}`;
+}
+
+/** `url` without any ticket: what a cache may key on. A URL only, never a person's words. */
+export function ticketless(url: string): string {
+  return url.replace(/([?&])wt=[^&#]*(&?)/g, (_m, lead: string, more: string) => (more ? lead : ""));
+}
+
+let ticket: ReadTicket | null = null;
+/** The one before: an `<img>` drawn before a renewal still names it. */
+let lastTicket: ReadTicket | null = null;
+
+export function setReadTicket(t: ReadTicket | null): void {
+  if (ticket && ticket.wt !== t?.wt) lastTicket = ticket;
+  ticket = t;
+}
+
+/** How long the ticket held for this address has left; 0 when there is none. */
+export function readTicketLeft(base: string | null, now: number): number {
+  return ticket && ticket.base === base ? Math.max(0, ticket.exp - now) : 0;
+}
+
+/** Text on its way off this device (copy, share) with this page's tickets taken out. Only those
+ *  exact values: a `wt=` a person typed is their own, so a general strip would change their words. */
+export function scrubTickets(text: string): string {
+  let out = text;
+  for (const t of [ticket, lastTicket]) {
+    if (!t) continue;
+    const wt = encodeURIComponent(t.wt).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`([?&])wt=${wt}(&?)`, "g"), (_m, lead: string, more: string) => (more ? lead : ""));
+  }
+  return out;
 }
 
 /**
@@ -175,8 +439,12 @@ export function installHostRouting(): void {
   const origFetch = globalThis.fetch.bind(globalThis);
   // The device token rides ONLY to the host base in force (`bearerFor`): never
   // a third party, never the LAN address while it is still being verified. A
-  // 401 on a request that carried it is the host refusing the token.
-  const authFor = (url: string): string | null => bearerFor(url, hostBase(), deviceToken());
+  // 401 on a request that carried it is the host refusing the token, so a
+  // request that held it back (`tokenWithheld`) is never watched.
+  const authFor = (url: string): string | null => {
+    const auth = bearerFor(url, hostBase(), deviceToken());
+    return auth && tokenWithheld() ? null : auth;
+  };
   const watch = (p: Promise<Response>, auth: string | null): Promise<Response> =>
     auth ? p.then((r) => { if (r.status === 401) noteBearerRejected("http"); return r; }) : p;
   const withAuth = (init: RequestInit | undefined, auth: string | null): RequestInit | undefined => {

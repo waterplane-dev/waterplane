@@ -44,6 +44,10 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   Laid out as cards (`.pair-*` in styles.css): this phone, then "or on another phone" with the QR,
   the code and its countdown, then the copy rows. A link-filled pair form (`PairForm`) opens as one
   question — this desktop, this code, pair? — with "change address or code" for the fields.
+  A desktop with both a tailnet and a LAN address offers *no Tailscale on it? show the Wi-Fi QR*: the QR and
+  copy rows then hold `lanDeepLink` (a landing URL is unreachable from that phone, and never exists for the LAN).
+  A desktop with no tailnet draws the deep link instead of the landing URL (`pairLinkOf`): its
+  landing URL is a plain address, and the host burns a code that arrives that way.
 - **Adding a desktop** (`../../HostSetup.tsx` in `add` mode, `../../FoundDesktops.tsx`,
   `../../hostDiscover.ts`): "found on your tailnet" rows from `GET /api/tailnet/peers` on the host
   in use (`host/tailnetpeers.ts`: `tailscale status --json`, online peers probed on `/api/health`,
@@ -52,6 +56,16 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   `<slug> pair` there. The typed address stays the fallback. `HostQrSheet` also shows the link and
   the code as selectable text with Copy and (when `navigator.share` exists) Share
   (`../../PairCopyRows.tsx`, `../../pairShare.ts`); no secure context ⇒ a sentence, never a grey.
+- **A desktop's encrypted link** (`../../lanLink.ts`, `../../lanRoute.ts`): a row with a pin on a
+  shell that enforces it carries *use plain HTTP* (the shield, `askPlainHttp`), reachable with no
+  connection. It sets `tlsOff` and removes the pin, only on a person's tap and through `Confirm.tsx`;
+  with a recorded refusal at that address the question leads with the changed key and offers *pair
+  by code* first (`pairHostByCode`, the pair form on the row's own address, or its `lan.base` with
+  Tailscale known off, the code typed). Paired there with no route left, the form's receipt says so
+  and offers *change LAN settings* (`pairedNoRoute`, drawn by `HostSetup`); no setting moves by itself. A row
+  on plain HTTP says so and offers the same pairing, which is the only way back. So does the row in
+  use while the route reports `trouble`. Pins are keyed by the ROW's id, and `syncShellPins` drops
+  one whose row went.
 - Sheet `devices` (`PairedDevicesSheet.tsx`, not persisted): the host's device ledger
   (`GET /api/devices`) — name, paired date, last seen, route, "this phone" — and revoke through
   `askConfirm` (`POST /api/devices/revoke`); revoking this phone is allowed and says it signs this
@@ -65,9 +79,27 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   host", then `web-desktops` (browser only: how a second desktop or phone is reached with no app —
   one address each, no code on the tailnet; the README's table says the same), then `pair-phone` and
   `paired-devices` (shell and browser). The QR sheet's foot says the no-app route too.
+- **Waiting elsewhere** (R-connection-030): a card on a desktop the phone is NOT switched to (a vault
+  approval above all) used to time out unseen. `startElsewherePoll` (`actions.ts`, from the manifest
+  `boot`: shell only, two or more of the person's own desktops, never the demo or a passive device)
+  asks each OTHER saved desktop `GET /api/attention` (`shared/waiting.ts`, `api.waitingAt`) every 45 s
+  while the app is visible, at once on visibility/focus/shell nudge, one desktop after another; a
+  failing one backs off to 5 min. The token sent is THAT desktop's parked one, only to its saved
+  tailnet origin (`deviceToken.ts` `bearerForSaved`: never its LAN address, never another origin).
+  Reads live in the memory-only `elsewhere` store. `ElsewhereChip.tsx` sits beside `HostSwitchKey`
+  ("zenbo… · 1 waiting", "2 desktops · 3 waiting", or "… · signed out" on a 401); a tap opens sheet
+  `elsewhere` (`ElsewhereSheet.tsx`, not persisted) on exactly the rows `elsewhereRows` counted: one
+  card per desktop with "switch to <name>", and each waiting item a row whose tap switches AND lands
+  on it — `switchHost(id, open)` writes `LS.hostOpenAfter` beside the switch marker, the next boot
+  drains it once (`takeOpenAfter`, only for the desktop switched to) into `window.shellOpen`. The note is a strict allow-list: a session id, `plugin:<id>`, `notif:<json>` (a whole alert, must parse) or `view:notifications` (a multi-item summary lands on the notification list). A
+  number is shown only from a read ≤ 90 s old; a desktop that stopped answering says so with its
+  last answer's age and no number; one never read is absent. One toast when a desktop's total rises
+  (never on its first read). Nothing switches or answers by itself. Gap: with the app off screen
+  for over five minutes the WebView is frozen — the APK's native link (stage 2) is what covers that.
 - `logic.ts` — `countHostWords`, `wordsText`, `removeLines`, `hostAddress`, `showHostName`,
   `hostRows`, `shortHostName`, `nextHostId`, and for pairing `qrPath`, `codeLeftText`, `deviceRouteText`, `seenAgo`,
-  `revokeLines`, `devicesEmptyText`; node-tested in `logic.test.mjs`.
+  `revokeLines`, `devicesEmptyText`, and for waiting elsewhere `elsewhereRows`, `elsewhereTotal`,
+  `elsewhereChipText`, `elsewhereRowText`, `elsewhereSaidText`, `nextRead`, `nextAskIn`; node-tested in `logic.test.mjs`.
 
 **Reads from core**: `nav.open/close`, `conn.info.lanIps` (LAN address suggestions for the active
 host), `conn.info.auth.enabled` (whether the ledger can have rows), `say.toast/track`.

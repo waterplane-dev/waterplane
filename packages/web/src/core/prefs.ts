@@ -61,6 +61,10 @@ export interface DevicePrefs {
   dismissedSelfUpdate: string;
   /** Ask backend + model before every fresh launch. Default OFF, synced. */
   launchAsk: boolean;
+  /** Ask for the fingerprint before showing this app (`features/appLock`). Default OFF, this phone only. */
+  appLock: boolean;
+  /** Are this phone's device tokens sealed (`tokenVault.ts`)? Default OFF, this phone only. */
+  tokenSeal: boolean;
   /** The spend marks' thresholds (`shared/spendwarn.ts`). Default ON at 2%/5% of a week, synced. */
   spendWarn: SpendWarnCfg;
   /** Close an automatic session once its work is done. Default OFF, synced —
@@ -157,6 +161,11 @@ export const prefs = createPrefs<DevicePrefs>({
   // Default OFF, so `lsBool` and not `!== "0"`: a device that has never heard
   // of this key must not read its absence as "ask me".
   launchAsk: { load: () => lsBool(LS.launchAsk), save: (v) => lsSetBool(LS.launchAsk, v), keys: [LS.launchAsk] },
+  // Default OFF for the same reason; a device key, so no `keys` list.
+  appLock: { load: () => lsBool(LS.appLock), save: (v) => lsSetBool(LS.appLock, v) },
+  // A reading, never a switch: the flag moves only inside `tokenVault.ts`'s commits, after the
+  // blob is on disk. `setPref` only refreshes what a mounted row shows.
+  tokenSeal: { load: () => lsBool(LS.tokenSealOn), save: () => { /* the vault is the one writer */ } },
   spendWarn: {
     load: () => cleanSpendWarn(lsJson<unknown>(LS.spendWarn, null)),
     save: (v) => lsSetJson(LS.spendWarn, v),

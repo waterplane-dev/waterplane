@@ -111,6 +111,7 @@ export * from "./hosts.js";
 export * from "./lanroute.js";
 // Pairing a new phone by QR: code format, deep link / landing URL, redeem DTOs.
 export * from "./pairing.js";
+export * from "./pake.js";
 // The paired-device ledger as the phone sees it.
 export * from "./devices.js";
 export * from "./passive.js";
@@ -196,6 +197,10 @@ export * from "./netretrycfg.js";
 /** Why a session is blocked on something outside it (signed out, spend wall,
  *  usage limit, network retry) — `blockOf`, the one derivation both ends ask. */
 export * from "./block.js";
+
+/** What a desktop waits on a person for: `sessionWaits` (the phone's "wait"
+ *  bucket and the host's count) and `GET /api/attention`'s `WaitingSummary`. */
+export * from "./waiting.js";
 
 /** Several pictures as ONE picture — the arrangement, so a mark can span the
  *  screens it is about. Pure geometry; the canvas half lives in web. */

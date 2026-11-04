@@ -27,6 +27,9 @@ import { bannerView, openUpdates, useUpdatesStatus } from "../features/plugins";
 import { armRestart, disarmRestart, useArmedRestart } from "../features/cliRestart";
 import { Button } from "../kit/Button";
 
+/** `main.tsx` mounts the lock beside `App`, and only core may hand it a feature. */
+export { AppLockGate, SealGate, armAppLock, rewrapAfterPair, unlockSignIns, useSealWaiting } from "../features/appLock";
+
 const ICON = 16;
 
 /** How long the "you are on plain HTTP" banner stays hidden after a dismiss.

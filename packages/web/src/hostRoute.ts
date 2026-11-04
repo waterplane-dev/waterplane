@@ -8,8 +8,9 @@
  */
 import { createStore, useStore } from "./sdk";
 
-/** How the active host is reached: its LAN address or the tailnet. */
-export interface HostRouteView { route: "lan" | "tailnet"; sentence: string }
+/** How the active host is reached: its LAN address or the tailnet. `trouble`: a pinned desktop that
+ *  cannot be reached, whose screens offer pairing by code beside the sentence. */
+export interface HostRouteView { route: "lan" | "tailnet"; sentence: string; trouble?: "keyChanged" | "noAnswer" }
 
 /** `null` until the route is known; the chips draw nothing until then. */
 export const hostRoute = createStore<HostRouteView | null>(null);
@@ -30,4 +31,11 @@ export const hostRouteEditor = createStore<(() => void) | null>(null);
 
 export function useHostRouteEditor(): (() => void) | null {
   return useStore(hostRouteEditor);
+}
+
+/** Opens the pair form on the active host's address, for a readout that is not a feature. */
+export const hostRoutePair = createStore<(() => void) | null>(null);
+
+export function useHostRoutePair(): (() => void) | null {
+  return useStore(hostRoutePair);
 }

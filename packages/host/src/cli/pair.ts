@@ -8,6 +8,10 @@
  * caller may always do) — the same route the phone's QR sheet uses, so there is
  * one mint and one set of rules (single use, 10 minutes, hashed in memory).
  *
+ * On a desktop with no tailnet the landing URL is a plain address, and opening it there burns the
+ * code (`pair.ts`), so it is not printed: the deep link and the typed code are what such a phone has.
+ * The update key's fingerprint is printed beside the code, for the native dialog to be compared with.
+ *
  * No terminal QR: the only QR encoder in the repo (`qrcode-generator`) is a
  * dependency of `packages/web`, and a release's host does not carry it; a new
  * dependency for a convenience the URL + code already cover is not worth it.
@@ -36,21 +40,29 @@ export function parsePairArgs(args: string[]): PairArgs | { error: string } {
 export const PAIR_HELP = `usage: ${BRAND.slug} pair [--port N] [--json]
 
   Mint a single-use pairing code on this desktop's running host and print the
-  landing URL, the web app's URL, the deep link and the code. On the phone, open "Add a desktop"
-  and paste the URL (or the address and the code). The code lasts 10 minutes.
+  landing URL, the web app's URL, the deep link and the code, with the update key's
+  fingerprint beside it. On the phone, open "Add a desktop" and paste the URL (or the
+  address and the code). The code lasts 10 minutes.
 `;
 
 /** What is printed for a minted code. Pure. */
 export function pairLines(m: PairMintResponse): string[] {
+  const lanOnly = m.lanBase === m.base;
   const lines = [
     `Pairing code   ${formatPairCode(m.code)}   (works once, expires in 10 minutes)`,
+    ...(m.updateKeyFingerprint ? [`Update key     ${m.updateKeyFingerprint}`] : []),
     `Address        ${m.base.replace(/^https?:\/\//, "")}`,
-    `Web app        ${m.base}/   (open in the phone's browser: no install needed)`,
-    `Landing URL    ${m.landingUrl}`,
+    ...(lanOnly ? [] : [
+      `Web app        ${m.base}/   (open in the phone's browser: no install needed)`,
+      `Landing URL    ${m.landingUrl}`,
+    ]),
     `Deep link      ${m.deepLink}`,
   ];
   if (m.lanBase) lines.push(`LAN address    ${m.lanBase.replace(/^https?:\/\//, "")}`);
-  lines.push("", `On the phone: open the landing URL in its browser (it offers the web app and the Android app), or in ${BRAND.name} -> Hosts -> add -> pair with code, paste it (or type the address and the code).`);
+  if (m.lanDeepLink) lines.push(`LAN deep link  ${m.lanDeepLink}`);
+  lines.push("", lanOnly
+    ? `On the phone: in ${BRAND.name} -> Hosts -> add -> pair with code, paste the deep link (or type the address and the code). Never open a pairing link in the phone's browser on this network: that cancels the code.`
+    : `On the phone: open the landing URL in its browser (it offers the web app and the Android app), or in ${BRAND.name} -> Hosts -> add -> pair with code, paste it (or type the address and the code).`);
   return lines;
 }
 

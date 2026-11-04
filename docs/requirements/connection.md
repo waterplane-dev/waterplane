@@ -156,3 +156,34 @@ Switching to a peer desktop that is on and reachable completes; after a switch t
 The desktop-switch banner names the desktop being switched to, not the one being left, and a slow repo load on the old desktop does not hold up the switch.
 - asked: 2026-11-01
 
+
+### R-connection-030 · shipped
+A paired desktop the phone is not switched to that waits on the person (a session showing a question, a card such as a vault approval) is announced on the launcher by name and count while the app is on screen, with a one-tap switch that lands on the waiting item. Nothing switches or answers by itself; a desktop that does not answer shows no number, and a phone signed out there says so with the way back.
+- asked: 2026-11-03 (owner)
+- shipped: 3c7e8a80
+
+### R-connection-031 · built, unverified on a phone
+With the app swiped away, the Android app's background link watches every saved desktop, not only the one in use: an alert from any of them reaches the phone's notifications titled with that desktop's name (when there are several), and on each reconnect the phone asks that desktop once what waits there and posts one summary, because the link does not replay what it missed. A tap on another desktop's alert switches there and lands on the item (a whole alert, or the notification list for a summary of several) — only on that tap, nothing switches by itself. An older app or an older page keeps watching the one desktop as before. A password-gated desktop is watched too, with this phone's own token for that desktop, sent to that desktop's saved address only (never a LAN address, never another desktop) and kept sealed on the phone until the desktop is removed or the link is switched off — unless the phone locks its desktop sign-ins (R-apk-027), when a newer app keeps it in memory only and no copy at rest (R-apk-028), and an older app is handed none. A desktop that refuses the token pauses its own link, says "signed out there — pair again" and is not asked again until the phone holds a new token; one this phone holds no token for pauses and says it needs signing in. A passive (kids') phone's token is never carried.
+- asked: 2026-11-03 (owner)
+
+### R-connection-032 · built, unverified on a phone
+On a newer Android app, a desktop paired over an encrypted link is reached over it on the Wi-Fi and never over plain HTTP: the app learns the desktop's key on a protected connection, then dials the desktop's encrypted port, and a key that does not match is refused with words ("the desktop's key changed, or someone is between: pair again by code") instead of "cannot reach". When the encrypted port is unreachable the app falls to the tailnet or says why; it never quietly drops to plain HTTP. The background link and the pull service follow the same rule with the page closed ("locked: open the app"). An older app, and a desktop that offers no encrypted port, keep plain HTTP with the warning of R-security-022.
+- asked: 2026-11-03 (owner brief)
+- shipped: 1da2c03a, b89402ae, aa2e3e3f
+- note: the app's shell plugin (`ShellTls`) is the capability; the page detects it, never a version. Not tried on a phone.
+
+### R-connection-033 · built, unverified on a phone
+A phone with no Tailscale pairs with a desktop on the same Wi-Fi by typing the 8-character code or opening the QR's link with the system camera, and the code never crosses the network in the clear: the phone proves it knows the code and gets the token back sealed, so someone relaying on the Wi-Fi gets one guess per attempt and someone posing as the desktop at most five. With more than five codes open only the five newest pair this way; a phone holding an older one is told the desktop does not know it and to show a new QR. A page opened over plain Wi-Fi with a live code burns that code and shows no link; a code that already went out plain is dead on that phone. After 10 wrong tries a code stops working for this kind of pairing (it still works over the tailnet). An older desktop or app still pairs the old way, after a question that says why it might be unsafe. The desktop needs a password; with none it refuses and says so. The phone also learns the desktop's address as the one it was asked with, not the desktop's tailnet or loopback address. Paired at a saved desktop's LAN address with Tailscale off, where that desktop is not set to use the LAN from this Wi-Fi, the phone changes no setting: it says there is no way there yet and offers the LAN settings.
+- asked: 2026-11-03 (owner brief)
+- shipped: db775c2b, 8ef8316f
+- note: SECURITY.md lists the accepted residuals. Whether every camera app opens the waterplane link is not known. Not tried on a phone.
+
+### R-connection-034 · built, unverified on a phone
+The way out of a pinned desktop whose encrypted port is off: the desktop's row has "use plain HTTP for this desktop" (works with no connection, asks first, says what it costs and the way back), which drops the pin and sends that desktop over plain HTTP again; pairing it again by code puts the pin back. Nothing does this by itself, and a changed key leads with why and offers pairing by code first.
+- asked: 2026-11-03 (owner brief)
+- shipped: aa2e3e3f
+
+### R-connection-035 · built, unverified on a phone
+A phone with no Tailscale still sees a desktop's images and downloads: the app asks for a short read ticket (one hour, renewed quietly) that is accepted only for those loads, only over the encrypted port, and only while the phone's sign-in exists, held to its scope (a passive phone gets what its token gets). Tickets are not written to logs and are stripped from shared links.
+- asked: 2026-11-03 (owner brief)
+- shipped: 3fdb8db0

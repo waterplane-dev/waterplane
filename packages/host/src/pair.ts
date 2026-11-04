@@ -7,6 +7,9 @@
  *   POST /api/pair/redeem {code, deviceName}
  *                                    PRE-auth — the code IS the credential —
  *                                    rate-limited per remote IP
+ *   POST /api/pair/pake/start, /finish
+ *                                    PRE-auth too: the same code over a network
+ *                                    nobody trusts (`pairpake.ts`)
  *   GET  /pair/<code>                the landing page the QR opens
  *   GET  /pair/<code>/apk            the Android build, same origin
  *
@@ -29,11 +32,17 @@
  * page. `/pair/*` is NOT in `OPAQUE_READ_ROUTES` and passes no origin check:
  * it is a top-level navigation, not an `/api/` call.
  *
+ * **A code never crosses a plain socket and lives.** A code in a request line is read by whoever
+ * relays it, who then holds the PAKE secret and can play host. So on a socket that is not loopback,
+ * the tailnet, `tailscale serve` or TLS, a live code is BURNED, before the rate limit and the method
+ * check, because a relay could spend the limit first and then forward the code. What that socket
+ * gets is a page with no deep link, no APK and nothing about this desktop.
+ *
  * Redeem mints a device token (a ledger row, `auth.issueToken`) only when a
  * password is set — deny-until-set. With none set a loopback/Tailscale peer
  * needs no token and is told so; a LAN peer is refused BEFORE the code is spent.
  * The LAN identity secret goes only to a loopback/Tailscale redeemer, as
- * `GET /api/lan/identity` does.
+ * `GET /api/lan/identity` does, or under a PAKE seal.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream, readdirSync, readFileSync, statSync } from "node:fs";
@@ -42,11 +51,13 @@ import { join, resolve } from "node:path";
 import {
   PAIR_TTL_MS, formatPairCode, newPairCode, normalizeDeviceName, normalizePairCode, pairDeepLink, pairLandingUrl,
   pairPathCode, pairRedeemErrorText, BRAND, releaseApkName,
-  type PairMintResponse, type PairRedeemError, type PairRedeemHost, type PairRedeemResponse, type PeerKind,
+  type PairLinkFacts, type PairMintResponse, type PairRedeemError, type PairRedeemHost, type PairRedeemResponse, type PeerKind,
 } from "@waterplane/shared";
 import { tokenFromRequest, type AuthManager } from "./auth.js";
 import { lanIdentity } from "./lanid.js";
-import { hostName, lanIps, serveHttpsUrl, tailscaleIp } from "./net.js";
+import type { LanTlsFacts } from "./lantls.js";
+import { hostName, isEncryptedSocket, lanIps, requestPeerKind, serveHttpsUrl, tailscaleIp } from "./net.js";
+import { PAKE_MISS_CAP, PakeSessions, pairLinkFacts, pakeFinish, pakeStart } from "./pairpake.js";
 import { RateLimiter, rateKey } from "./ratelimit.js";
 import { corsHeaders } from "./origin.js";
 import { env } from "./env.js";
@@ -61,7 +72,7 @@ const PAIR_MAX_ENTRIES = 50;
 
 export type PairState = "ok" | "unknown" | "expired" | "used";
 
-interface Entry { hash: Buffer; createdAt: number; expiresAt: number; mintedBy: string | null; usedAt: number | null; passive: boolean }
+interface Entry { hash: Buffer; createdAt: number; expiresAt: number; mintedBy: string | null; usedAt: number | null; passive: boolean; pakeMisses: number }
 
 /** `WATERPLANE_PAIR_TTL_MS` shortens the lifetime for e2e (floored at 1 s, never
  *  longer than the shared 10 minutes the phone's sentences promise). */
@@ -84,12 +95,15 @@ export class PairStore {
   private readonly ttlMs: number;
   private readonly maxOutstanding: number;
   private readonly compare: (a: Buffer, b: Buffer) => boolean;
+  /** The PAKE attempts under way: memory only, and derived from the codes, so they live beside them. */
+  readonly pake: PakeSessions;
 
   constructor(opts: PairStoreOpts = {}) {
     this.now = opts.now ?? Date.now;
     this.ttlMs = opts.ttlMs ?? pairTtlFromEnv();
     this.maxOutstanding = opts.maxOutstanding ?? PAIR_MAX_OUTSTANDING;
     this.compare = opts.compare ?? timingSafeEqual;
+    this.pake = new PakeSessions({ now: this.now });
   }
 
   /** A new code; the plaintext exists only in the return value. */
@@ -101,14 +115,17 @@ export class PairStore {
     const live = this.entries.filter((e) => e.usedAt === null && e.expiresAt > now);
     for (let i = 0; i <= live.length - this.maxOutstanding; i++) this.entries.splice(this.entries.indexOf(live[i]!), 1);
     const expiresAt = now + this.ttlMs;
-    this.entries.push({ hash: hashCode(code), createdAt: now, expiresAt, mintedBy, usedAt: null, passive });
+    this.entries.push({ hash: hashCode(code), createdAt: now, expiresAt, mintedBy, usedAt: null, passive, pakeMisses: 0 });
     while (this.entries.length > PAIR_MAX_ENTRIES) this.entries.shift();
     return { code, expiresAt };
   }
 
-  /** Constant-time over every entry: no early exit on a match. */
   private find(code: string): Entry | null {
-    const h = hashCode(code);
+    return this.findHash(hashCode(code));
+  }
+
+  /** Constant-time over every entry: no early exit on a match. */
+  private findHash(h: Buffer): Entry | null {
     let hit: Entry | null = null;
     for (const e of this.entries) if (this.compare(e.hash, h) && hit === null) hit = e;
     return hit;
@@ -122,25 +139,61 @@ export class PairStore {
 
   /** What a code is, spending nothing (the landing page, the APK). */
   peek(code: string): PairState {
+    return this.peekHash(hashCode(code));
+  }
+
+  peekHash(hash: Buffer): PairState {
     const now = this.now();
     this.prune(now);
-    return this.stateOf(this.find(code), now);
+    return this.stateOf(this.findHash(hash), now);
   }
 
   /** Does this code pair a passive device? Spends nothing. */
   isPassive(code: string): boolean {
-    return this.find(code)?.passive === true;
+    return this.isPassiveHash(hashCode(code));
+  }
+
+  isPassiveHash(hash: Buffer): boolean {
+    return this.findHash(hash)?.passive === true;
   }
 
   /** Spend a live code. Anything but "ok" spends nothing. */
   redeem(code: string): { state: PairState; mintedBy: string | null; passive: boolean } {
+    return this.redeemHash(hashCode(code));
+  }
+
+  redeemHash(hash: Buffer): { state: PairState; mintedBy: string | null; passive: boolean } {
     const now = this.now();
     this.prune(now);
-    const e = this.find(code);
+    const e = this.findHash(hash);
     const state = this.stateOf(e, now);
     if (state === "ok" && e) e.usedAt = now;
     return { state, mintedBy: e?.mintedBy ?? null, passive: e?.passive === true };
   }
+
+  /** A live code crossed a plain socket: spent, for nobody. True when it was live. */
+  burn(code: string): boolean {
+    return this.redeem(code).state === "ok";
+  }
+
+  /** The live codes, and the hashes of those PAKE may still offer. */
+  pakeCodes(): { live: number; open: Buffer[] } {
+    const now = this.now();
+    this.prune(now);
+    const live = this.entries.filter((e) => e.usedAt === null && e.expiresAt > now);
+    return { live: live.length, open: live.filter((e) => e.pakeMisses < PAKE_MISS_CAP).map((e) => e.hash) };
+  }
+
+  /** One wrong confirm against each of these codes. Closes a code for PAKE, never for redeem. */
+  pakeMiss(hashes: readonly Buffer[]): void {
+    for (const h of hashes) {
+      const e = this.findHash(h);
+      if (e) e.pakeMisses += 1;
+    }
+  }
+
+  /** The one comparison of secrets here, for `pairpake.ts`'s confirms. */
+  readonly compareHash = (a: Buffer, b: Buffer): boolean => this.compare(a, b);
 
   /** Live codes right now. */
   outstanding(): number {
@@ -163,7 +216,9 @@ export class PairStore {
 
 export interface PairNet {
   name: string;
-  /** The tailnet base: the https serve URL when discovered, else http://<tailscale IP>:port. */
+  /** The tailnet base: the https serve URL when discovered, else http://<tailscale IP>:port. With
+   *  no tailnet, the plain LAN base: never loopback a phone cannot reach, and never the TLS address,
+   *  which a shipped APK could not reach either. */
   base: string;
   httpsUrl: string | null;
   /** Plain-HTTP LAN base, only when a LAN interface is bound (`WATERPLANE_ALLOW_PUBLIC=1`). */
@@ -183,21 +238,27 @@ const NET_CACHE_MS = 60_000;
 export async function pairNet(port: number): Promise<PairNet> {
   const now = Date.now();
   if (netCache && netCache.port === port && now - netCache.at < NET_CACHE_MS) return netCache.net;
-  const httpsUrl = await serveHttpsUrl(port);
-  const ts = await tailscaleIp();
-  const hostEnv = env("HOST");
-  const explicit = hostEnv && !/^(0\.0\.0\.0|::)$/.test(hostEnv) ? hostEnv : null;
-  const addr = explicit ?? ts ?? "127.0.0.1";
-  const hostPart = addr.includes(":") ? `[${addr}]` : addr;
-  const lan = env("ALLOW_PUBLIC") === "1" && !explicit ? lanIps()[0] : undefined;
-  const net: PairNet = {
-    name: hostName(),
-    base: httpsUrl ?? `http://${hostPart}:${port}`,
-    httpsUrl,
-    ...(lan ? { lanBase: `http://${lan}:${port}` } : {}),
-  };
+  const net = pairNetFrom({
+    port, name: hostName(), httpsUrl: await serveHttpsUrl(port), tailscale: await tailscaleIp(),
+    hostEnv: env("HOST"), allowPublic: env("ALLOW_PUBLIC") === "1", lanIps: lanIps(),
+  });
   netCache = { at: now, port, net };
   return net;
+}
+
+/** `pairNet`'s decision over the facts it asked for. Pure. Loopback is left only when nothing else
+ *  is bound, and then no phone is reachable anyway. */
+export function pairNetFrom(i: { port: number; name: string; httpsUrl: string | null; tailscale: string | null; hostEnv: string | undefined; allowPublic: boolean; lanIps: readonly string[] }): PairNet {
+  const explicit = i.hostEnv && !/^(0\.0\.0\.0|::)$/.test(i.hostEnv) ? i.hostEnv : null;
+  const lan = i.allowPublic && !explicit ? i.lanIps[0] : undefined;
+  const addr = explicit ?? i.tailscale ?? lan ?? "127.0.0.1";
+  const hostPart = addr.includes(":") ? `[${addr}]` : addr;
+  return {
+    name: i.name,
+    base: i.httpsUrl ?? `http://${hostPart}:${i.port}`,
+    httpsUrl: i.httpsUrl,
+    ...(lan ? { lanBase: `http://${lan}:${i.port}` } : {}),
+  };
 }
 
 // ── The Android build ───────────────────────────────────────────────────
@@ -292,6 +353,8 @@ export interface PairDeps {
   apk(): ApkFile | null;
   /** The Tailscale gate just switched on (a passive redeem): re-check the open sockets, as `auth.gateTailscale` does. */
   onGateChange?(): void;
+  /** The TLS listener's facts; absent means ask `lanTlsFacts()`. A seam for tests. */
+  tls?(): LanTlsFacts | null;
 }
 
 /** 5 attempts in a burst, then one every 10 s, per remote IP: 32^8 codes do
@@ -299,6 +362,9 @@ export interface PairDeps {
 export const redeemLimit = new RateLimiter({ burst: 5, perSec: 0.1 });
 /** The landing + APK: a phone loads the page, maybe twice, and the APK once. */
 export const landingLimit = new RateLimiter({ burst: 12, perSec: 0.2 });
+/** PAKE, like redeem: a `start` and a `finish` per attempt, one bucket each. */
+export const pakeStartLimit = new RateLimiter({ burst: 5, perSec: 0.1 });
+export const pakeFinishLimit = new RateLimiter({ burst: 5, perSec: 0.1 });
 
 /** Why a redeem was refused, with the host-only case the shared union lacks. */
 export type PairRedeemRefusal = PairRedeemError | "no-password";
@@ -347,20 +413,28 @@ export async function redeemPair(
 ): Promise<{ status: number; body: PairRedeemReply }> {
   const code = normalizePairCode(body.code);
   if (!code) return { status: 400, body: refuse("bad-request") };
+  return redeemHash(hashCode(code), body.deviceName, kind, deps, presented);
+}
+
+/** `redeemPair` past the code's own format: the one way a code is spent for a device, which PAKE
+ *  reaches with the hash it matched. */
+async function redeemHash(
+  hash: Buffer, deviceName: unknown, kind: PeerKind, deps: Pick<PairDeps, "root" | "auth" | "store" | "net" | "onGateChange">, presented: string | null,
+): Promise<{ status: number; body: PairRedeemReply }> {
   const trustedPath = kind === "loopback" || kind === "tailscale";
-  const state = deps.store.peek(code);
+  const state = deps.store.peekHash(hash);
   if (state !== "ok") return { status: state === "unknown" ? 404 : 410, body: refuse(state) };
   if (!deps.auth.isEnabled() && !trustedPath) return { status: 403, body: refuse("no-password") };
   // A passive device without a token would be a full one on Tailscale: refused, code unspent.
-  if (!deps.auth.isEnabled() && deps.store.isPassive(code)) return { status: 403, body: refuse("no-password", NO_PASSWORD_PASSIVE) };
-  const spent = deps.store.redeem(code);
+  if (!deps.auth.isEnabled() && deps.store.isPassiveHash(hash)) return { status: 403, body: refuse("no-password", NO_PASSWORD_PASSIVE) };
+  const spent = deps.store.redeemHash(hash);
   if (spent.state !== "ok") return { status: 410, body: refuse("used") };
   const net = await deps.net();
   const host: PairRedeemHost = { name: net.name, base: net.base, httpsUrl: net.httpsUrl, ...(net.lanBase ? { lanBase: net.lanBase } : {}) };
   const out: PairRedeemReply = { ok: true, host };
   if (deps.auth.isEnabled()) {
     const gateBefore = deps.auth.gateTailscale();
-    const { token, deviceId } = deps.auth.issueToken(normalizeDeviceName(body.deviceName) ?? "paired phone", kind, spent.passive ? "passive" : undefined);
+    const { token, deviceId } = deps.auth.issueToken(normalizeDeviceName(deviceName) ?? "paired phone", kind, spent.passive ? "passive" : undefined);
     out.token = token;
     out.deviceId = deviceId;
     if (spent.passive) out.scope = "passive";
@@ -379,11 +453,31 @@ export async function redeemPair(
   return { status: 200, body: out };
 }
 
-/** `POST /api/pair/redeem`, before the auth gate. True when it answered. */
+/** `start` or `finish`, past the socket: no header is read, the `box` carries `presented`. */
+export function pakeRoute(path: "start" | "finish", body: Record<string, unknown>, kind: PeerKind, deps: PairDeps): ReturnType<typeof pakeStart> | ReturnType<typeof pakeFinish> {
+  if (path === "start") return pakeStart(body, deps);
+  return pakeFinish(body, deps, (hash, deviceName, presented) => redeemHash(hash, deviceName, kind, deps, presented));
+}
+
+/** `POST /api/pair/pake/*`. Sized for five boxes; a redeem's `readJson` default is not. */
+async function handlePake(req: IncomingMessage, res: ServerResponse, which: "start" | "finish", kind: PeerKind, deps: PairDeps): Promise<void> {
+  const limit = which === "start" ? pakeStartLimit : pakeFinishLimit;
+  const key = rateKey(req);
+  if (!limit.take(key)) {
+    reply(req, res, 429, refuse("rate-limited"), { "retry-after": String(Math.ceil(limit.retryAfterMs(key) / 1000) || 1) });
+    return;
+  }
+  const r = await pakeRoute(which, await readJson(req, 16384), kind, deps);
+  reply(req, res, r.status, r.body);
+}
+
+/** `POST /api/pair/redeem` and `/api/pair/pake/*`, before the auth gate. True when it answered. */
 export async function handlePairPreAuth(req: IncomingMessage, res: ServerResponse, kind: PeerKind, deps: PairDeps): Promise<boolean> {
   const path = (req.url ?? "/").split("?")[0];
-  if (path !== "/api/pair/redeem") return false;
+  const pake = path === "/api/pair/pake/start" ? "start" : path === "/api/pair/pake/finish" ? "finish" : null;
+  if (path !== "/api/pair/redeem" && !pake) return false;
   if (req.method !== "POST") { reply(req, res, 405, { error: "POST only" }); return true; }
+  if (pake) { await handlePake(req, res, pake, kind, deps); return true; }
   const key = rateKey(req);
   if (!redeemLimit.take(key)) {
     reply(req, res, 429, refuse("rate-limited"), { "retry-after": String(Math.ceil(redeemLimit.retryAfterMs(key) / 1000) || 1) });
@@ -405,11 +499,17 @@ export async function handlePairAuthed(req: IncomingMessage, res: ServerResponse
   if (passive && !deps.auth.isEnabled()) { reply(req, res, 409, { error: NO_PASSWORD_PASSIVE }); return true; }
   const { code, expiresAt } = deps.store.mint(deps.auth.deviceFor(tok)?.id ?? null, passive);
   const net = await deps.net();
-  const out: PairMintResponse & { lanBase?: string } = {
+  const { link, fingerprint } = await pairLinkFacts(deps, net);
+  const { lan, ...overLan } = link;
+  const out: PairMintResponse = {
     code, expiresAt, base: net.base, ...(passive ? { passive } : {}),
     landingUrl: pairLandingUrl(net.base, code),
-    deepLink: pairDeepLink(net.base, code),
+    deepLink: pairDeepLink(net.base, code, link),
     ...(net.lanBase ? { lanBase: net.lanBase } : {}),
+    ...(link.secure ? { secure: true } : {}),
+    ...(link.commit ? { commit: link.commit } : {}),
+    ...(fingerprint ? { updateKeyFingerprint: fingerprint } : {}),
+    ...(lan ? { lanDeepLink: pairDeepLink(lan, code, overLan) } : {}),
   };
   reply(req, res, 200, out);
   return true;
@@ -461,8 +561,20 @@ export function invalidPage(): string {
   return page("Pairing code not valid", `<h1>This pairing code is not valid</h1><p>It may have expired (codes last 10 minutes), already been used, or been mistyped.</p><p>Ask for a new code on your other phone: in ${BRAND.name}, open the host list and choose "show QR".</p>`);
 }
 
+/** A code that came over a plain socket: what it gets instead of the landing page. It says nothing
+ *  about this desktop, offers no deep link and no APK, and the code in the URL is already dead. */
+export function plainSocketPage(): string {
+  return page("Pairing code used up", `<h1>This pairing code is now used up</h1><p>It came over an unprotected connection, where anyone on the network could read it, so the desktop cancelled it.</p><p>Show a new code on the desktop and scan it from the desktop's screen with this phone's camera, with the ${BRAND.name} app installed. Scanning never sends the code over the network.</p><p class="muted">No app yet? Get it from Google Play or the release page first, then scan.</p>`);
+}
+
+/** Whether a code may cross this request's socket: the one reading of `requestPeerKind` for it.
+ *  `lan`, `public` (a Funnel request is one) and `unknown` are plain unless the socket is TLS. */
+export function codeMayCross(kind: PeerKind, socket: object): boolean {
+  return kind === "loopback" || kind === "tailscale" || isEncryptedSocket(socket);
+}
+
 /** The page for a live code. Pure: tests render it without a server. */
-export function landingPage(code: string, net: PairNet, apk: ApkFile | null, releaseUrl: string | null = null): string {
+export function landingPage(code: string, net: PairNet, apk: ApkFile | null, releaseUrl: string | null = null, link: PairLinkFacts = {}): string {
   const addr = net.base;
   // The PWA route is the URL itself, in words, not only a button: a phone that will never take the
   // APK (an iPhone, a locked-down Android) needs the address to open, bookmark or type.
@@ -483,10 +595,11 @@ export function landingPage(code: string, net: PairNet, apk: ApkFile | null, rel
     ? `<a class="choice alt" href="/pair/${esc(code)}/apk" download="${esc(apkFileName(apk))}">${ICON_DOWNLOAD}<span>Download the Android app</span></a>
        <p class="muted">${mb} MB, built ${esc(new Date(apk.mtimeMs).toISOString().slice(0, 10))}. Android will ask to allow installs from your browser.</p>`
     : `<p class="box">No Android app is offered from this computer. Use the web version${net.httpsUrl ? " — it installs to the home screen" : ""}.</p>`;
-  const deep = pairDeepLink(addr, code);
+  const deep = pairDeepLink(addr, code, link);
+  const reach = net.lanBase === net.base ? "This phone must be on the same network as this desktop." : "This phone must be on the same tailnet, with Tailscale connected.";
   return page(`Pair with ${net.name}`, `
 <h1>Connect to ${esc(net.name)}</h1>
-<p class="muted">This phone must be on the same tailnet, with Tailscale connected.</p>
+<p class="muted">${reach}</p>
 ${web}
 ${app}
 <div class="box">
@@ -503,11 +616,18 @@ ${app}
  *  the invalid page, never the SPA shell. */
 export async function handlePairPage(req: IncomingMessage, res: ServerResponse, deps: PairDeps): Promise<void> {
   const method = req.method ?? "GET";
-  if (method !== "GET" && method !== "HEAD") { res.writeHead(405, { ...PAGE_HEADERS, allow: "GET, HEAD" }); res.end(); return; }
   const path = (req.url ?? "/").split("?")[0];
+  const p = pairPathCode(path);
+  // First of all: the code has crossed the socket by now, whatever this request turns out to be.
+  const burned = !!p && !codeMayCross(requestPeerKind(req.socket.remoteAddress, req.headers), req.socket) && deps.store.burn(p.code);
+  if (method !== "GET" && method !== "HEAD") { res.writeHead(405, { ...PAGE_HEADERS, allow: "GET, HEAD" }); res.end(); return; }
   const invalid = (status: number) => { res.writeHead(status, PAGE_HEADERS); res.end(method === "HEAD" ? undefined : invalidPage()); };
   if (!landingLimit.take(rateKey(req))) { invalid(429); return; }
-  const p = pairPathCode(path);
+  if (burned) {
+    res.writeHead(403, PAGE_HEADERS);
+    res.end(method === "HEAD" ? undefined : plainSocketPage());
+    return;
+  }
   // The code is checked BEFORE anything about this desktop is looked up.
   if (!p || deps.store.peek(p.code) !== "ok") { invalid(404); return; }
   const apk = deps.apk();
@@ -531,7 +651,8 @@ export async function handlePairPage(req: IncomingMessage, res: ServerResponse, 
     s.pipe(res);
     return;
   }
-  const html = landingPage(p.code, await deps.net(), apk, releaseApkUrl());
+  const net = await deps.net();
+  const html = landingPage(p.code, net, apk, releaseApkUrl(), (await pairLinkFacts(deps, net)).link);
   res.writeHead(200, PAGE_HEADERS);
   res.end(method === "HEAD" ? undefined : html);
 }

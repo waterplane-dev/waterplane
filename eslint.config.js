@@ -70,7 +70,10 @@ export default tseslint.config(
       // pre-release splits (2026-10-04) took every source file under 900: a file
       // that grows past it is cut by subject behind its path (skill
       // `refactoring`), never given a disable comment or a higher number.
-      "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: false }],
+      // Comments are free: they hold the why, and the cap limits code, not
+      // reasoning. `tools/codelines.mjs` is this count for everything that
+      // mirrors it; change both together.
+      "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: true }],
       "no-restricted-syntax": [
         "error",
         {
@@ -176,7 +179,7 @@ export default tseslint.config(
       parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } },
     },
     rules: {
-      "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: false }],
+      "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: true }],
     },
   },
   // ReDoS before release. GitHub's CodeQL scans only the PUBLIC mirror, so a regex that backtracks

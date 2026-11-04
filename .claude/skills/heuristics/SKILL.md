@@ -178,7 +178,8 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   redacted capture per signal per CLI version under `<state>/clifixtures/` — chrome rows verbatim,
   every other row masked, a `shape` signal as a key skeleton (`shared`'s `fixtureSample`); the echo as
   prompt+grid masked alike, the block notice ROT13'd (`FIXTURE_FORMS`). `tools/harvestfixtures.mjs --write`
-  copies them in with the role its reader (`test/signalreaders.mjs`) gives; a person reviews.
+  copies them in with the role its reader (`test/signalreaders.mjs`) gives; a person reviews. Run it after
+  every `claude` CLI update.
   [Why](../../../docs/notes/testing-and-ops.md#harvested-screen-fixtures-clifixturests-toolsharvestfixturesmjs).
 - `limit.ts` — usage-limit banner + reset parsing → auto-continue, plus the **resume queue**
   (`sessions/resume.ts`, `releaseResume`): a limit is an ACCOUNT fact, so sessions block as a group

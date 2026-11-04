@@ -1,17 +1,26 @@
 import { useEffect, useState } from "react";
 import { nativePlugin } from "./shellBridge";
-import { BRAND, envName, PROTOCOL_VERSION, normalizeHostBase, normalizeHostName, normalizeSsid, defaultHostName, type PairTarget, type SavedHost } from "@waterplane/shared";
-import { CheckCircle2, FlaskConical, KeyRound, Loader2, Plug, Plus, Router, Wifi, X, XCircle } from "lucide-react";
-import { SetNote, SetSwitch, SetLine } from "./SettingsKit";
-import { PairForm } from "./PairForm";
+import { BRAND, envName, PLAIN_ROUTE_WARNING, PROTOCOL_VERSION, addressNeedsConfirm, normalizeHostBase, normalizeHostName, normalizeSsid, defaultHostName, vouchedAfter, type PairTarget, type SavedHost } from "@waterplane/shared";
+import { CheckCircle2, ExternalLink, FlaskConical, KeyRound, Loader2, Plug, Plus, Router, Settings2, Smartphone, Wifi, X, XCircle } from "lucide-react";
+import { SetNote, SetSwitch, SetLine, SetWarn } from "./SettingsKit";
+import { PairForm, type PairNoRoute } from "./PairForm";
 import { FoundDesktops } from "./FoundDesktops";
 import { passwordSentence } from "./hostDiscover";
 import { lanSettingsSaved } from "./lanLink";
 import { askConfirm } from "./Confirm";
 import { LOCATION_DISCLOSURE, LOCATION_SKIPPED_TEXT } from "./shellNet";
 import { tryDemo } from "./demoEntry";
+import { openExternal } from "./openExternal";
+import { showToast } from "./toast";
 import { activeHostId, addAndActivate, addHost, browserKV, updateHost, type HostInput } from "./hosts";
+import { savedRowPlain } from "./hostUrl";
+import { hasShellTls } from "./sdk/shellTls";
 import { Button } from "./kit/Button";
+import { plainSaveRefusal } from "./hostEditGuard";
+import { sealedMode } from "./deviceToken";
+import { pickLockPath } from "./appLock";
+import { LS, lsBool } from "./storage";
+import { isDemo } from "./demoEntry";
 
 /**
  * Add or edit one desktop — Android shell only.
@@ -28,8 +37,8 @@ import { Button } from "./kit/Button";
  *
  * FIRST and ADD also offer "pair with code" (`PairForm.tsx`) — on the first
  * run it is the PRIMARY option, because a code from a phone already paired
- * brings the address, the device token and the LAN identity in one step. A
- * `<scheme>://pair` link opens it prefilled (`pair` + `pairFromLink`).
+ * brings the device token in the same step. A `<scheme>://pair` link opens it
+ * prefilled (`pair` + `pairFromLink`).
  *
  * The probe before saving is not decoration. Everything downstream of a wrong
  * address degrades into the app's *normal* offline behaviour — a reconnect
@@ -45,6 +54,14 @@ type Probe =
   | { s: "bad"; why: string; hint?: string };
 
 const PROBE_TIMEOUT_MS = 6000;
+
+/** Where a fresh install sends someone who has no desktop half yet. */
+const DESKTOP_GUIDE = `https://${BRAND.domain}/#install`;
+
+/** The ask over an EMPTY field: the saved address stays out of it, because the only thing that
+ *  makes it protected is that the person typed it (`vouchedAfter`), not that they read it here. */
+const CONFIRM_ADDRESS_TEXT =
+  "Type this desktop's address to confirm it. It is an https address that counts as protected only once you have typed it yourself, so the saved one is not shown: an older version of this app may have saved an address you never chose.";
 
 export type HostSetupMode = "first" | "add" | "edit";
 
@@ -65,7 +82,7 @@ function ssidWhy(st: NetState | null): string {
   return "Android did not say the Wi-Fi name — location may be switched off.";
 }
 
-export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onDone, onCancel }: {
+export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onDone, onCancel, onEditLan }: {
   mode: HostSetupMode;
   /** Open on "pair with code", prefilled (a deep link, or a typed code). */
   pair?: PairTarget | null;
@@ -78,9 +95,13 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   /** After a save that does not reload (add, edit of a host that is not active). */
   onDone: (saved: SavedHost | null) => void;
   onCancel?: () => void;
+  /** Open a row's LAN settings: the control on a pairing that left no route. */
+  onEditLan?: (saved: SavedHost) => void;
 }) {
+  const [noRoute, setNoRoute] = useState<PairNoRoute | null>(null);
   const [name, setName] = useState(host?.name ?? "");
-  const [text, setText] = useState(host?.base ?? "");
+  const [confirming, setConfirming] = useState(mode === "edit" && !!host && addressNeedsConfirm(host));
+  const [text, setText] = useState(confirming ? "" : host?.base ?? "");
   const [lanText, setLanText] = useState(host?.lan?.base ?? "");
   const [ssids, setSsids] = useState<string[]>(host?.lan?.ssids ?? []);
   const [auto, setAuto] = useState(host?.lan?.auto ?? false);
@@ -94,6 +115,15 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   const base = normalizeHostBase(text);
   const lanBase = lanText.trim() ? normalizeHostBase(lanText) : null;
   const net = shellNet();
+  // What the base field opened with: `vouched` needs the text to differ from it.
+  const opened = confirming ? "" : host?.base ?? "";
+  // The row this form would save, so the warning says what the saved row will read as.
+  const draft = {
+    base: base ?? "", tls: host?.tls, tlsOff: host?.tlsOff,
+    lan: lanBase ? { base: lanBase, ssids, auto } : undefined,
+    vouched: base && vouchedAfter(host ?? null, base, opened) ? (true as const) : undefined,
+  };
+  const plain = (!!base && savedRowPlain(draft, hasShellTls())) || (!!lanBase && savedRowPlain(draft, hasShellTls(), lanBase));
 
   useEffect(() => { if (pair && mode !== "edit") setPairing(true); }, [pair, mode]);
 
@@ -151,6 +181,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
       name: normalizeHostName(name) ?? undefined,
       base: text,
       lan: lanBase ? { base: lanBase, ssids, auto } : null,
+      opened,
     };
   }
 
@@ -158,6 +189,8 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   function save(activate: boolean): void {
     const kv = browserKV();
     if (!kv) { setProblem("This phone's storage is not available."); return; }
+    const trap = plainSaveRefusal(normalizeHostBase(text) ?? text, sealedMode(), lsBool(LS.appLock), isDemo() ? null : pickLockPath(nativePlugin("Keystore")));
+    if (trap) { setProblem(trap); return; }
     if (mode === "edit" && host) {
       const r = updateHost(kv, host.id, input());
       if (!r.ok) { setProblem(r.why); return; }
@@ -212,20 +245,45 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
 
   const title = mode === "edit" ? `Edit ${host?.name ?? "host"}` : mode === "add" ? "Add a desktop" : "Connect to your desktop";
   const namePlaceholder = base ? defaultHostName(base) : "desk";
+  const fromPairLink = !!(pairFromLink && pair);
+
+  if (noRoute) {
+    return (
+      <div className={mode === "first" ? "auth-gate" : undefined}>
+        <div className={mode === "first" ? "auth-card" : "form"}>
+          <SetWarn>{noRoute.sentence}</SetWarn>
+          <SetLine style={{ marginTop: 10 }}>
+            {onEditLan && <Button onClick={() => onEditLan(noRoute.host)}><Settings2 size={13} /> change LAN settings</Button>}
+            <Button onClick={noRoute.go}>done</Button>
+          </SetLine>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={mode === "first" ? "auth-gate" : undefined}>
       <div className={mode === "first" ? "auth-card" : "form"}>
-        {mode === "first" && (
-          <div className="auth-title pair-title"><span className="pair-title-icon"><Plug size={18} /></span> {title}</div>
+        {mode === "first" && !fromPairLink && (
+          // The first thing a fresh install shows: what this app is, and that it does nothing until
+          // the desktop half exists. A pairing link skips it, because that person has a desktop.
+          <>
+            <div className="auth-title pair-title"><span className="pair-title-icon"><Smartphone size={18} /></span> Welcome to {BRAND.name}</div>
+            <div className="pair-welcome">
+              <SetNote>A remote control for Claude Code on your own computer. The coding happens on the desktop; this app lets you steer it from anywhere.</SetNote>
+              <SetNote><b>Set up the desktop first.</b> Install {BRAND.name} there (macOS, Linux, or Windows with WSL2), then come back and connect this phone.</SetNote>
+              <Button title={`opens ${DESKTOP_GUIDE} in your browser`} onClick={() => { if (!openExternal(DESKTOP_GUIDE)) showToast("could not open the link"); }}><ExternalLink size={13} /> desktop setup guide</Button>
+            </div>
+          </>
         )}
+        {mode === "first" && <div className={fromPairLink ? "auth-title pair-title" : "pair-subtitle"}>{fromPairLink && <span className="pair-title-icon"><Plug size={18} /></span>} {title}</div>}
         {mode === "add" && !pair && (
           <FoundDesktops onPassword={(b, n) => { setFound({ target: { base: b, code: "" }, note: passwordSentence(n) }); setPairing(true); }} />
         )}
         {found && pairing && (
           <SetNote className="warn" style={{ marginBottom: 10 }}>{found.note}</SetNote>
         )}
-        {mode !== "edit" && !(pairFromLink && pair) && (
+        {mode !== "edit" && !fromPairLink && (
           <div className="pair-modes" role="tablist">
             <button role="tab" aria-selected={pairing} className={`seg${pairing ? " on" : ""}`} onClick={() => setPairing(true)}><KeyRound size={14} /> pair with code</button>
             <button role="tab" aria-selected={!pairing} className={`seg${pairing ? "" : " on"}`} onClick={() => setPairing(false)}><Plug size={14} /> type the address</button>
@@ -239,6 +297,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
               initial={pair ?? found?.target}
               fromLink={pairFromLink}
               onDone={(h) => onDone(h)}
+              onNoRoute={setNoRoute}
             />
             {onCancel && (
               <SetLine style={{ marginTop: 10 }}>
@@ -247,6 +306,14 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             )}
           </>
         ) : (<>
+        {confirming && (
+          <>
+            <SetWarn>{CONFIRM_ADDRESS_TEXT}</SetWarn>
+            <SetLine style={{ marginBottom: 12 }}>
+              <Button onClick={() => { setConfirming(false); setText(host?.base ?? ""); }}>keep it unconfirmed</Button>
+            </SetLine>
+          </>
+        )}
         <SetNote style={{ marginBottom: 12 }}>
           The address the {BRAND.name} daemon prints at boot — usually its Tailscale IP.
           Port {" "}
@@ -351,6 +418,8 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           </details>
         )}
 
+        {plain && <SetWarn>{PLAIN_ROUTE_WARNING}</SetWarn>}
+
         {problem && <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</SetNote>}
 
         <SetLine style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
@@ -383,8 +452,8 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
 
         {mode === "first" && (
           <SetNote style={{ marginTop: 14, opacity: 0.65 }}>
-            This app keeps its interface inside the APK, so it stays usable — queue,
-            drafts, cached transcripts — even when the desktop is unreachable.
+            Once connected, your queue, drafts and cached transcripts stay usable here
+            even when the desktop is unreachable.
           </SetNote>
         )}
       </div>

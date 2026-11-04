@@ -2,7 +2,7 @@ import { useState } from "react";
 import { formatPairCode, type PairMintResponse } from "@waterplane/shared";
 import { Check, Copy, Share2 } from "lucide-react";
 import { copyText } from "./api";
-import { CLIPBOARD_NEEDS_HTTPS, canCopyDirectly, pairShareText } from "./pairShare";
+import { CLIPBOARD_NEEDS_HTTPS, canCopyDirectly, pairLinkOf, pairShareText } from "./pairShare";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { SetNote } from "./SettingsKit";
@@ -21,7 +21,7 @@ import { SetNote } from "./SettingsKit";
 const ICON = 14;
 const SELECTABLE = { userSelect: "text", WebkitUserSelect: "text", overflowWrap: "anywhere" } as const;
 
-export function PairCopyRows({ m, hostName }: { m: PairMintResponse; hostName: string | null }) {
+export function PairCopyRows({ m, hostName, overLan = false }: { m: PairMintResponse; hostName: string | null; overLan?: boolean }) {
   const [done, setDone] = useState<"link" | "code" | null>(null);
   const [failed, setFailed] = useState(false);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -35,7 +35,7 @@ export function PairCopyRows({ m, hostName }: { m: PairMintResponse; hostName: s
   }
 
   async function share(): Promise<void> {
-    try { await navigator.share({ title: "Pair a phone", text: pairShareText(m, hostName) }); }
+    try { await navigator.share({ title: "Pair a phone", text: pairShareText(m, hostName, overLan) }); }
     catch (e) { if ((e as Error)?.name !== "AbortError") showToast("could not open the share sheet"); }
   }
 
@@ -43,8 +43,8 @@ export function PairCopyRows({ m, hostName }: { m: PairMintResponse; hostName: s
     <div className="pair-copy">
       <div className="pair-copy-label">Link</div>
       <div className="pair-copy-row">
-        <code style={SELECTABLE}>{m.landingUrl}</code>
-        <Button onClick={() => void copy("link", m.landingUrl)}>
+        <code style={SELECTABLE}>{pairLinkOf(m, overLan)}</code>
+        <Button onClick={() => void copy("link", pairLinkOf(m, overLan))}>
           {done === "link" ? <Check size={ICON} /> : <Copy size={ICON} />} {done === "link" ? "copied" : "copy link"}
         </Button>
       </div>

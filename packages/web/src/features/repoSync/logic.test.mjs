@@ -37,3 +37,9 @@ test("the plan and the left-out line say their numbers", () => {
   assert.equal(leftOutWords(0), "");
   assert.equal(leftOutWords(1), "1 repo without an origin or an upstream not listed.");
 });
+
+test("run checks touches exactly the repos a push would", () => {
+  const repos = [{ ahead: 2 }, { ahead: 0 }, { ahead: undefined }, { ahead: 1, hasOrigin: false }];
+  assert.deepEqual(targets(repos, "check"), targets(repos, "push"));
+  assert.equal(targets(repos, "check").length, 1);
+});

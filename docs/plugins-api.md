@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.5.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.7.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -173,9 +173,13 @@ live session a requesting process belongs to (pane + ppid walk, scratchpad, cwd)
 read-only Android app facts), the manifest field `autoOn` (an in-repo optional extension's default
 narrowed per desktop by a host probe; a non-string is refused, an unknown name ignored) and
 `PluginView.auto` (that default and its sentence). 2.4 plugins load as-is.
+**2.6** (additive): `HostPluginApi.notifyDone(tag)` — a settled `notify({tag})` stops counting as
+waiting; scoped to the calling plugin's own tags. 2.5 plugins load as-is.
+**2.7** (additive): `HostPluginApi.notifyDoneExcept(keep)` — a plugin's start settles the notices a
+previous run left behind, keeping the tags still live; scoped to its own items. 2.6 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.5.0";
+export const PLUGIN_API_VERSION = "2.7.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -793,6 +797,8 @@ export interface HostPluginApi { … }
 | `decision` | `decision(row: Omit<DecisionLogEntry, "id" \| "ts" \| "source" \| "plugin" \| "sessionTitle"> & { sessionTitle?: string; }): void` | Append a decision-log row (`source`/`plugin` are filled in). |
 | `meter` | `meter(call: { service: string; model: string; inTok: number; outTok: number; }): void` | Record a paid model call, so it shows in the phone's usage numbers. |
 | `notify` | `notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean; tag?: string; }): void` | `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. `tag` (optional, no version bump): a stable key, a later notification with the same tag replaces the earlier one in the OS tray; the host namespaces it per plugin. |
+| `notifyDone` | `notifyDone(tag: string): void` | (since 2.6) The thing a `notify({tag})` was about is settled (a card approved, denied or expired): every still-waiting attention item THIS plugin filed under that tag stops counting as waiting (`handled: {by:"resolved"}`, kept in the feed). Only this plugin's own tags: another plugin's item or a core one is never reached. An unknown or already-settled tag is a silent no-op. |
+| `notifyDoneExcept` | `notifyDoneExcept(keep: readonly string[]): void` | (since 2.7) Every still-waiting attention item THIS plugin filed, EXCEPT those under one of the `keep` tags, stops counting as waiting — for a plugin whose start finds notices a previous run left behind (its cards were in memory and died with that run). Name every tag that is still live in `keep`; an item filed without a tag is under the host's default tag (the session id, or `all`). Another plugin's item or a core one is never reached. |
 | `claudeUsage` | `claudeUsage(): { sessionPct: number \| null; weeklyPct: number \| null; } \| null` | The Claude plan usage (5-hour / weekly %), or null when unknown. |
 | `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (the ids `GET /api/repos` hands out), or by its absolute worktree path (realpath-compared against the repos the host lists — a CLI names its repo by path); null when unknown or outside the root. |
 | `setupCheck` | `setupCheck(fn: (repo: SetupSubject) => ComplianceCheck \| null): () => void` | Contribute a row to every repo's setup checklist. Called on each check of each repo, so keep it cheap; null = no row for this repo. A throw drops the row and becomes the plugin's status line. Returns an unregister. |

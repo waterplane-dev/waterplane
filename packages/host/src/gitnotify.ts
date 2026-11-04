@@ -23,10 +23,16 @@
  *   bare tag, so the tray entry goes with the record;
  * - a push that SUCCEEDS leaves an information receipt — it ran for minutes;
  * - a pull that succeeds resolves the pull key and raises nothing: the person was
- *   watching it.
+ *   watching it;
+ * - a pull whose fetch failed on the NETWORK (`o.cause`, `gitfetchfail.ts`: a timeout, an
+ *   unreachable host) is not "needs you" — nothing is wrong with the repo and the next pull
+ *   works. It is one INFO notice per burst (a "pull all" that lost the network is one notice
+ *   naming every repo, not one per repo), and becomes the usual attention item only when the
+ *   same repo fails that way `NETWORK_STRIKES` times in a row (2026-11-03: three SSH pulls
+ *   timed out together and read as three unexplained "needs you" items).
  */
 import { gitAttentionKey, gitPushFailureKey, parseAttentionKey } from "@waterplane/shared";
-import type { GitOutcome } from "./git.js";
+import type { GitOutcome, GitRepoRef } from "./git.js";
 import { pushedAlready } from "./pushreach.js";
 import { pushFailures, type AttentionStore } from "./attentionstore.js";
 import type { ExplainOutcome } from "./explainjob.js";
@@ -35,13 +41,49 @@ import type { ExplainOutcome } from "./explainjob.js";
  *  (spelled here — a flat module never imports `routes/`). */
 export interface GitNotifyDeps {
   notify(kind: "git", p: {
-    title: string; body: string; tag: string; open: { to: "git"; repoId: string; verb: "pull" | "push" | "explain" };
-    outcome: "ok" | "failed"; key?: string; detail?: string; pushHead?: { branch: string; sha: string };
+    title: string; body: string; tag: string; open?: { to: "git"; repoId: string; verb: "pull" | "push" | "explain" };
+    outcome: "ok" | "failed"; level?: "attention" | "info"; key?: string; detail?: string; pushHead?: { branch: string; sha: string };
   }): void;
   resolveAttention(key: string, note: string): number;
   /** The kept attention items — where a failed push's branch and commit are read back.
    *  Absent (a test, an older wiring): a push that succeeds resolves as before. */
   attention?: Pick<AttentionStore, "unhandled">;
+  /** How long a burst of network-failed pulls is gathered into one notice (test seam). */
+  networkBurstMs?: number;
+}
+
+/** A repo whose pulls fail on the network this many times IN A ROW is filed as attention:
+ *  past that it is not a passing blip. Any other ending of a pull resets the count. */
+export const NETWORK_STRIKES = 3;
+const NETWORK_BURST_MS = 3000;
+const strikes = new Map<string, number>();
+let burst: { repos: GitRepoRef[]; reasons: string[]; timer: ReturnType<typeof setTimeout> } | null = null;
+
+/** The reason a network failure gave, off its first line (`gitPull`'s "failed: <reason> — "). */
+const networkReason = (error: string | undefined): string =>
+  /failed: (.+?) — nothing was changed/.exec(gitFailureHeadline(error))?.[1] ?? "the remote could not be reached";
+
+function gatherNetworkPull(o: GitOutcome, ctx: GitNotifyDeps): void {
+  if (!burst) {
+    burst = { repos: [], reasons: [], timer: setTimeout(() => sayNetworkBurst(ctx), ctx.networkBurstMs ?? NETWORK_BURST_MS) };
+    burst.timer.unref?.();
+  }
+  if (!burst.repos.some((r) => r.id === o.repo.id)) burst.repos.push(o.repo);
+  burst.reasons.push(networkReason(o.error));
+}
+
+function sayNetworkBurst(ctx: GitNotifyDeps): void {
+  const b = burst;
+  burst = null;
+  if (!b?.repos.length) return;
+  const reason = b.reasons.every((r) => r === b.reasons[0]) ? b.reasons[0] : `${b.reasons[0]} (and others)`;
+  const one = b.repos.length === 1 ? b.repos[0] : null;
+  ctx.notify("git", {
+    title: one ? `Pull did not reach the remote · ${one.name}` : `Pulls did not reach the remote · ${b.repos.length} repos`,
+    body: `${one ? "" : `${b.repos.map((r) => r.name).join(", ")}: `}${reason}. Nothing was changed — a network problem, it usually passes by itself; pull again later.`,
+    level: "info", outcome: "failed", tag: "git-pull-network",
+    ...(one ? { open: { to: "git" as const, repoId: one.id, verb: "pull" as const } } : {}),
+  });
 }
 
 /** The line a failure's notification shows: for a push, `pushFailureText`'s
@@ -66,6 +108,17 @@ const took = (ms: number): string => {
 };
 
 export async function reportGitOutcome(o: GitOutcome, ctx: GitNotifyDeps): Promise<void> {
+  // A check somebody asked for and walked away from. Information either way: nothing failed to
+  // happen, so no attention item and no red chip, which are a push's and pull's.
+  if (o.verb === "check") {
+    ctx.notify("git", {
+      title: `${o.ok ? "Checks passed" : "Checks failed"} · ${o.repo.name}`,
+      body: o.ok ? `took ${took(o.finishedAt - o.startedAt)}, nothing pushed` : gitFailureHeadline(o.error),
+      outcome: o.ok ? "ok" : "failed", level: "info", tag: `git-${o.repo.id}-check`,
+      open: { to: "git", repoId: o.repo.id, verb: "push" },
+    });
+    return;
+  }
   const key = gitAttentionKey(o.repo.id, o.verb);
   const open = { to: "git" as const, repoId: o.repo.id, verb: o.verb };
   // The OS collapses notifications by tag: per branch for a push, or B's receipt would
@@ -73,6 +126,14 @@ export async function reportGitOutcome(o: GitOutcome, ctx: GitNotifyDeps): Promi
   const bareTag = `git-${o.repo.id}-${o.verb}`;
   let tag = o.verb === "push" && o.head ? `${bareTag}-${o.head.branch}` : bareTag;
   const Verb = o.verb === "push" ? "Push" : "Pull";
+  if (o.verb === "pull") {
+    if (o.ok || o.cause !== "network") strikes.delete(o.repo.id);
+    else {
+      const n = (strikes.get(o.repo.id) ?? 0) + 1;
+      strikes.set(o.repo.id, n);
+      if (n < NETWORK_STRIKES) { gatherNetworkPull(o, ctx); return; }
+    }
+  }
   if (!o.ok) {
     ctx.notify("git", {
       title: `${Verb} failed · ${o.repo.name}`,

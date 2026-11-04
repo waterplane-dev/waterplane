@@ -7,6 +7,7 @@ import {
 } from "./link";
 import { dur } from "./format";
 import { useHostRoute } from "./hostRoute";
+import { plainHostRoute } from "./hostUrl";
 
 /**
  * The permanent connection strip — a dot, a latency graph and a number, pinned
@@ -270,7 +271,7 @@ function RouteChip() {
     <span className={`np-route${lan ? " np-route-lan" : ""}`} role="button" data-hint="net.pulse.route"
       onClick={(e) => openHealth("link", e)}>
       {lan ? <Router size={10} aria-hidden="true" /> : <Globe size={10} aria-hidden="true" />}
-      <span>{lan ? "LAN" : "tailnet"}</span>
+      <span>{plainHostRoute() ? (lan ? "LAN, not protected" : "not protected") : lan ? "LAN" : "tailnet"}</span>
     </span>
   );
 }

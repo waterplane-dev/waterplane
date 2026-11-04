@@ -80,6 +80,10 @@ export const gitApi = {
     jpost<{ ok: boolean; output?: string; error?: string }>(`/api/repos/${repoId}/git/pull`, {}, SLOW_OP_TIMEOUT_MS),
   /** Start (or join) the desktop's push JOB — its pre-push hook runs for minutes, never one held request — then ask after it (`null` = none since the desktop started). */
   gitPush: (repoId: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/push`, { background: true }),
+  /** The pre-push hook alone, on HEAD or `sha`: the same job and the same asking after, nothing pushed. */
+  gitCheck: (repoId: string, sha?: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/check`, sha ? { sha } : {}),
+  /** A push of only the commits up to `sha`; the hook still runs on it. */
+  gitPushTo: (repoId: string, sha: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/pushto`, { sha }),
   gitPushState: (repoId: string, signal?: AbortSignal) => jget<{ push: GitPushState | null }>(`/api/repos/${repoId}/git/push`, undefined, signal).then((r) => r.push),
   /** The PR card (PR mode only): the lease keeps the host polling `gh`; the rest are one tap each (auto-merge carries the card's `method`, like merge). A refusal comes back as `{ok:false,error}`. */
   prLease: (repoId: string, holder: string) => jpost<PrListDoc>(`/api/repos/${repoId}/git/prs/lease`, { holder }),

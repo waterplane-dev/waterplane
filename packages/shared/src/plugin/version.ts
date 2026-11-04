@@ -46,8 +46,12 @@
  * read-only Android app facts), the manifest field `autoOn` (an in-repo optional extension's default
  * narrowed per desktop by a host probe; a non-string is refused, an unknown name ignored) and
  * `PluginView.auto` (that default and its sentence). 2.4 plugins load as-is.
+ * **2.6** (additive): `HostPluginApi.notifyDone(tag)` — a settled `notify({tag})` stops counting as
+ * waiting; scoped to the calling plugin's own tags. 2.5 plugins load as-is.
+ * **2.7** (additive): `HostPluginApi.notifyDoneExcept(keep)` — a plugin's start settles the notices a
+ * previous run left behind, keeping the tags still live; scoped to its own items. 2.6 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "2.5.0";
+export const PLUGIN_API_VERSION = "2.7.0";
 
 /** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
 export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";

@@ -22,9 +22,9 @@
  * key the app itself deleted while that host was active (the park is a mirror).
  */
 import {
-  bareKeyFor, cleanHostLan, defaultHostName, isHostId, newHostId, normalizeHostBase, normalizeHostName,
-  parkPrefix, parseHostList, planHostMigration, planHostSwitch, serializeHostList,
-  type HostLan, type ParkOp, type SavedHost,
+  bareKeyFor, cleanHostLan, cleanSavedHost, defaultHostName, isHostId, newHostId, notifFromShell, NOTIFICATIONS_SHELL_VIEW, normalizeHostBase, normalizeHostName,
+  parkPrefix, parseHostList, planHostMigration, planHostSwitch, serializeHostList, vouchedAfter,
+  type HostLan, type HostTls, type HostUpdateKey, type ParkOp, type SavedHost,
 } from "@waterplane/shared";
 import { LS, demoSnapKey, isDeviceKey } from "./storage.ts";
 
@@ -236,6 +236,8 @@ function settleFullSwitch(kv: KV): void {
       if (b && kv.getItem(b) !== null) kv.removeItem(k);
     }
     kv.removeItem(LS.hostSwitch);
+    // The landing a tap asked for belongs to the switch that was abandoned.
+    kv.removeItem(LS.hostOpenAfter);
     stage = "park";
   } else if (sw.to !== null && current === sw.to) {
     stage = "restore";
@@ -258,9 +260,48 @@ export function takeSwitchFailure(kv: KV | null): SwitchFailure | null {
   } catch { return null; }
 }
 
+/** A `shellOpen` string a switch may land on: a plugin's screen, a session id, the notification
+ *  list (`view:notifications`, a multi-item summary) or a whole alert (`notif:<json>`, which must
+ *  parse exactly as `shellOpenTarget` parses it, size-capped). Never a URL or any other string. */
+const OPEN_AFTER_RE = /^(plugin:[a-z][a-z0-9-]{1,39}|[A-Za-z0-9_-]{1,64})$/;
+const OPEN_AFTER_NOTIF_MAX = 8000;
+function openAfterOk(open: string): boolean {
+  if (open.startsWith("notif:")) return open.length <= OPEN_AFTER_NOTIF_MAX && notifFromShell(open) !== null;
+  return open === NOTIFICATIONS_SHELL_VIEW || OPEN_AFTER_RE.test(open);
+}
+
+/** Where the switch to `to` should land (`LS.hostOpenAfter`), or nothing when `open` is not one. */
+export function writeOpenAfter(kv: KV, to: string, open: string): void {
+  if (!openAfterOk(open)) return;
+  kv.setItem(LS.hostOpenAfter, JSON.stringify({ to, open, at: Date.now() }));
+}
+
+/**
+ * Read and forget where to land after a switch (once per boot that has one). Only for the
+ * desktop the switch went TO and is now active; a note for another one, or a shape this does
+ * not write, is dropped unsaid.
+ */
+export function takeOpenAfter(kv: KV | null, activeId: string | null): string | null {
+  if (!kv) return null;
+  const raw = kv.getItem(LS.hostOpenAfter);
+  if (raw === null) return null;
+  try { kv.removeItem(LS.hostOpenAfter); } catch { /* the target is checked again below */ }
+  try {
+    const v = JSON.parse(raw) as { to?: unknown; open?: unknown };
+    if (!activeId || v.to !== activeId || typeof v.open !== "string" || !openAfterOk(v.open)) return null;
+    return v.open;
+  } catch { return null; }
+}
+
 // ── The list ──────────────────────────────────────────────────────────
 
-export interface HostInput { name?: string; base: string; lan?: Partial<HostLan> | null }
+export interface HostInput {
+  name?: string;
+  base: string;
+  lan?: Partial<HostLan> | null;
+  /** What the address form's base field opened with. ONLY the form passes this (`vouchedAfter`). */
+  opened?: string;
+}
 
 export type HostEditResult = { ok: true; host: SavedHost; reused: boolean } | { ok: false; why: string };
 
@@ -286,13 +327,15 @@ export function addHost(kv: KV, input: HostInput): HostEditResult {
   if (back?.legacy && !hosts.some((h) => h.legacy)) host.legacy = true;
   const lan = lanOf(input.lan);
   if (lan) host.lan = lan;
+  if (vouchedAfter(null, base, input.opened)) host.vouched = true;
   kv.setItem(LS.hosts, serializeHostList([...hosts, host]));
   if (back) kv.setItem(LS.hostsGone, serializeHostList(gone.filter((g) => g.id !== back.id)));
   return { ok: true, host, reused: !!back };
 }
 
 /** Rename / re-address / change the LAN side of a listed host. Writing the
- *  active host's new address to `hostBase` is the caller's reload to make. */
+ *  active host's new address to `hostBase` is the caller's reload to make.
+ *  Every other field of the row is carried; `vouched` survives only the address form's save. */
 export function updateHost(kv: KV, id: string, input: HostInput): HostEditResult {
   const hosts = readHosts(kv);
   const i = hosts.findIndex((h) => h.id === id);
@@ -301,15 +344,64 @@ export function updateHost(kv: KV, id: string, input: HostInput): HostEditResult
   if (!base) return { ok: false, why: "Not an address. Use a host name or IP, optionally with a port." };
   if (hosts.some((h) => h.id !== id && h.base === base)) return { ok: false, why: "Another host already has that address." };
   const prev = hosts[i]!;
-  const host: SavedHost = { id, name: normalizeHostName(input.name) ?? defaultHostName(base), base };
-  if (prev.legacy) host.legacy = true;
+  const host: SavedHost = { ...prev, name: normalizeHostName(input.name) ?? defaultHostName(base), base };
+  delete host.lan;
+  delete host.vouched;
   const lan = input.lan === undefined ? prev.lan ?? null : lanOf(input.lan);
   if (lan) host.lan = lan;
+  if (vouchedAfter(prev, base, input.opened)) host.vouched = true;
   const next = hosts.slice();
   next[i] = host;
   kv.setItem(LS.hosts, serializeHostList(next));
   if (kv.getItem(LS.hostActive) === id) kv.setItem(LS.hostBase, base);
   return { ok: true, host, reused: false };
+}
+
+/** One row's facts changed, its address untouched: the one writer behind the setters below, so an
+ *  unreadable value is refused here rather than dropped silently by the next read. */
+function patchHost(kv: KV, id: string, change: (h: SavedHost) => void): HostEditResult {
+  const hosts = readHosts(kv);
+  const i = hosts.findIndex((h) => h.id === id);
+  if (i < 0) return { ok: false, why: "That host is no longer in the list." };
+  const wanted: SavedHost = { ...hosts[i]! };
+  change(wanted);
+  const host = cleanSavedHost(wanted);
+  if (!host || (wanted.tls && !host.tls) || (wanted.updateKey && !host.updateKey) || (wanted.hostId && !host.hostId)) {
+    return { ok: false, why: "That is not a value this row can hold." };
+  }
+  const next = hosts.slice();
+  next[i] = host;
+  kv.setItem(LS.hosts, serializeHostList(next));
+  return { ok: true, host, reused: false };
+}
+
+/**
+ * The desktop's own id and TLS pin. `tls: null` drops the pin, and a pin set REPLACES the one held.
+ * Only a seal or a welcome on a protected route may call this. A row the person put on plain HTTP
+ * takes no pin (`setHostTlsOff(…, false)` first, which only a sealed re-pair does).
+ */
+export function setHostPins(kv: KV, id: string, pins: { hostId?: string; tls?: HostTls | null }): HostEditResult {
+  if (pins.tls && readHosts(kv).find((h) => h.id === id)?.tlsOff) return { ok: false, why: "This desktop is set to plain HTTP, so it takes no pin." };
+  return patchHost(kv, id, (h) => {
+    if (pins.hostId !== undefined) h.hostId = pins.hostId;
+    if (pins.tls) h.tls = pins.tls;
+    else if (pins.tls === null) delete h.tls;
+  });
+}
+
+/** The key this desktop's bundles are signed with, or `null` to forget it. */
+export function setHostUpdateKey(kv: KV, id: string, key: HostUpdateKey | null): HostEditResult {
+  return patchHost(kv, id, (h) => {
+    if (key) h.updateKey = key;
+    else delete h.updateKey;
+  });
+}
+
+/** "Use plain HTTP for this desktop": on, the pin goes with it; off, a welcome may set one again. */
+export function setHostTlsOff(kv: KV, id: string, off: boolean): HostEditResult {
+  return patchHost(kv, id, (h) => {
+    if (off) { h.tlsOff = true; delete h.tls; } else delete h.tlsOff;
+  });
 }
 
 /**
@@ -352,12 +444,15 @@ export function reloadToLauncher(): void {
 // ── The page's calls (localStorage, reload) ───────────────────────────
 
 /** Switch the active host: park this one's keys, restore `id`'s — at the next
- *  boot — and reload. A no-op onto the host already active. */
-export function switchTo(id: string): boolean {
+ *  boot — and reload. A no-op onto the host already active. `open` (a `shellOpen` string) is
+ *  where the next boot lands (`takeOpenAfter`). */
+export function switchTo(id: string, open?: string): boolean {
   const kv = browserKV();
   if (!kv) return false;
   const from = kv.getItem(LS.hostActive);
   if (from === id || !readHosts(kv).some((h) => h.id === id)) return false;
+  // Where to land once there (a tap on one waiting item of that desktop) — beside the marker.
+  if (open) { try { writeOpenAfter(kv, id, open); } catch { /* the switch still happens; it lands on the launcher */ } }
   writeSwitch(kv, { from: isHostId(from) ? from : null, to: id });
   reloadToLauncher();
   return true;

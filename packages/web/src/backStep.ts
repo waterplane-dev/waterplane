@@ -45,8 +45,20 @@ export const routeStack: { depth: number; keys: string[] } = { depth: 0, keys: [
  * stale at 0 makes every Back exit the app.
  */
 export function pushBackDepth(): void {
-  shellInterface<{ setBackDepth?: (n: number) => void }>()?.setBackDepth?.(routeStack.depth);
+  shellInterface<{ setBackDepth?: (n: number) => void }>()?.setBackDepth?.(backHeld ? 0 : routeStack.depth);
 }
+
+/**
+ * While the app lock is up, Back is not the page's: a pop would move the
+ * screens behind the card. The shell is told depth 0, so it does what it does
+ * at the root and leaves the app; the real depth comes back with the release.
+ */
+let backHeld = false;
+export function holdBack(on: boolean): void {
+  backHeld = on;
+  pushBackDepth();
+}
+export const isBackHeld = (): boolean => backHeld;
 
 /** Open steps, by the depth of their entry. */
 const steps = new Map<number, { id: number; close: () => void }>();

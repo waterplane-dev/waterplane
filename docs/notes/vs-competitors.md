@@ -94,12 +94,12 @@ next-turn price*.
 
 - **A real PTY running the real binary.** Slash commands, the context meter, plan and trust prompts
   all work because nothing is re-implemented.
-- **Multiple backends as data** (`host/src/backends/`): `claude` today, `opencode` as the second,
+- **Multiple backends as data** (`host/src/backends/`): `claude` (also against a local model or an endpoint) and a plain `shell` in core, `opencode` and Copilot as plugins,
   each a descriptor of `bin` / `launchArgs` / `delivery` / `caps` / `models`. An unknown backend id
   throws by name rather than silently falling back to something else.
 - **Capability gating that produces absence, never a wrong number.** A backend without a context
   meter reports no `contextLeft`, not 0%.
-- **Hook-driven turn boundaries.** `SessionStart` / `UserPromptSubmit` / `Stop` / `Notification` /
+- **Hook-driven turn boundaries.** `SessionStart` / `UserPromptSubmit` / `Stop` / `StopFailure` / `Notification` /
   `SessionEnd` curl a loopback endpoint — the positive signal. Silence heuristics are the fallback.
 - **A `Stop` hook can be answered "no"** (keep-going loops, `/goal` hooks), so a Stop is held
   against the screen for 1.2 s and only the CLI's own working line may contradict it.
@@ -151,7 +151,7 @@ This is the part with no equivalent found anywhere else compared in Part 3 (each
 - **Build discovery** (`host/src/buildscan.ts`) — what a repo can already build, read off its own
   manifests, so adding a command costs no turn. It invents nothing: a gradle task is offered only
   where the build file gives evidence for it.
-- **The verified capture loop** (`host/src/capture.ts`, landing) — screenshots with a verdict.
+- **The verified capture loop** (`host/src/capture.ts`, `capture/`) — screenshots with a verdict.
   `verify → settle → diff → emit`; settle is frame-stability, never a sleep; the default output is a
   ~50-token verdict line rather than an image; backends are web (Playwright, resolved at runtime),
   android (adb), garmin (shells out to `ciqkit`, never vendors it) and window.
@@ -222,7 +222,8 @@ This is the part with no equivalent found anywhere else compared in Part 3 (each
   the author can make.
 - **A budget ceiling before the wall** — but an explicit send, an answer to a live box, and uploads
   are never held.
-- **No prices anywhere.** Cost depends on plan, model and cache tier, none of which is in the logs.
+- **Dollars are list-price counterfactuals, never a bill.** Each turn is priced at Anthropic's list rates
+  (`shared/pricing.ts`) from the model and cache tier in the logs; the plan is the one unknown and is not guessed.
 
 ### 1.7 Honesty as a feature
 
@@ -386,7 +387,7 @@ the entire time, so your code execution and filesystem access stay on your machi
   "device card" above, if it exists, would change that; unverified).
 
 **Not either/or.** waterplane can launch every session it spawns with `--remote-control` — the launch
-option "Remote Control" in Settings (`SettingsSheet.tsx`), passed as the flag by `backends/claude.ts`;
+option "Remote Control" in Settings (`core/settings/SettingsSheet.tsx`), passed as the flag by `backends/claude.ts`;
 the host captures the claude.ai session link when it appears (`sessions.ts`). Switched on, the same
 local session is reachable from waterplane *and* from the Claude app at once: start sessions, read,
 build and schedule from waterplane; glance or answer from the Claude app when that is the app already
@@ -534,7 +535,7 @@ last updated 2026-09-08 per a web search; read 2026-10-02.
 | **Permissions / plan mode** | ? | SDK `canUseTool` and permission modes: typed, no detection | Choice boxes read off the screen and answered by tap; heuristic, tracked by `clihealth.ts` |
 | **Slash commands** | ? | `supportedCommands()` list; `/rewind` special-cased | All of them, because it is the CLI |
 | **Platforms** | iOS + Android + web + macOS | iOS + Android + web + desktop + CLI | Android APK + PWA (the PWA is the iPhone route, untested on a real one). **No native iOS app** |
-| **Agents** | Five-ish | Claude, Codex, OpenCode, Copilot, Cursor, Kimi, Kiro, Trae, Pi | Claude + opencode |
+| **Agents** | Five-ish | Claude, Codex, OpenCode, Copilot, Cursor, Kimi, Kiro, Trae, Pi | Claude (also local models), opencode, Copilot |
 | **Voice** | Yes | Yes | Dictation only (`dictate.ts`, `useVoice.ts`) — not hands-free |
 | **Device handoff** | One keypress, state carried | Not a concept found | Not a concept — sessions live host-side and are always live |
 | **Offline queue** | Unknown **?** | Not found | Single send path, durable, at-most-once, 500-row cap, failed rows kept for ever |
@@ -546,7 +547,7 @@ last updated 2026-09-08 per a web search; read 2026-10-02.
 | **Scheduling / fan-out** | — | Schedules | Durable intents: run later, run across N repos, sweeps |
 | **Notifications** | Push, cross-platform | Push | Web Push (VAPID, no account) in the browser; a foreground service in the APK |
 | **Maturity** | Public, contributors, forks | Public, ~19k stars, v0.10.2, one maintainer + bots | One user |
-| **Licence** | MIT | Apache-2.0 | (not released) |
+| **Licence** | MIT | Apache-2.0 | MIT |
 
 ### 3b — the matrix across everything compared (2026-10-02)
 
@@ -566,8 +567,8 @@ or grep, not proof of absence). Omnara is left as mostly **?** on purpose: see 2
 | **Repo health** | Yes (context weight, setup compliance) | — | — | — | — | Source-control view; health — | No | No | ? | Git UI |
 | **Offline exactly-once queue** | Yes (ackIds, 500-row cap) | Reconnects after sleep; queue ? | ? | ? | — | ? | No (Mosh keeps the link, not a ledger) | — | ? | — |
 | **iOS** | Web app only (untested on a real iPhone) | Yes | Yes | Yes | Yes | Yes | Yes (Blink iOS; Termius iOS and Android) | WIP, none listed | Yes (App Store) | Browser only |
-| **Relay / account needed** | None; Tailscale only | claude.ai account (not API key); Anthropic relay; transcript stored there | claude.ai account + GitHub | Relay server (self-hostable) + account | Optional relay; direct possible | Orca Relay (sign-in) or local network | None beyond SSH (+ Tailscale) | None; Tailscale or tunnels | Omnara Cloud or self-host | None self-hosted; account for Cloud |
-| **Price / licence** | One user, not released | Included in plan | Included in plan | MIT, free | Apache-2.0, free | MIT, free | Blink $19.99/yr (open source); Termius free tier, Pro $10/mo | MIT, free | Apache-2.0; credits on Cloud | AGPL-3.0; Cloud from €7/mo |
+| **Relay / account needed** | None; Tailscale, or a password on the same Wi-Fi | claude.ai account (not API key); Anthropic relay; transcript stored there | claude.ai account + GitHub | Relay server (self-hostable) + account | Optional relay; direct possible | Orca Relay (sign-in) or local network | None beyond SSH (+ Tailscale) | None; Tailscale or tunnels | Omnara Cloud or self-host | None self-hosted; account for Cloud |
+| **Price / licence** | MIT, free | Included in plan | Included in plan | MIT, free | Apache-2.0, free | MIT, free | Blink $19.99/yr (open source); Termius free tier, Pro $10/mo | MIT, free | Apache-2.0; credits on Cloud | AGPL-3.0; Cloud from €7/mo |
 
 What the matrix says in one breath: the row nobody else fills is **build + install an APK**, and the
 cluster of **usage-window scheduling, cost history and the offline queue** is where waterplane is alone
@@ -618,9 +619,9 @@ gaining surface faster than the SDK, waterplane's does.
 **waterplane's honest weak spots**, in order:
 
 1. **No native iOS app** — iPhone gets the web app only, not yet tested on a real one. Happy's Expo choice is why they have it; Paseo has it too.
-2. **Single-user, single-machine.** No team story, no handoff, no shared session.
+2. **Single-user.** One person, several of their own desktops and a paired peer for delegated jobs; no team story, no shared session.
 3. **Tailscale is both the moat and the onboarding cliff.**
-4. **Distribution is zero.** No landing page, no store listing, no community.
+4. **Distribution is small.** A site, GitHub releases, npm and a public demo; no store listing yet, almost no community.
 5. **Platform risk — no longer hypothetical.** Anthropic already ships the phone surface for a local
    session (Remote Control: photos in, push, `/usage`, permission prompts, scheduled tasks). PTY
    fidelity and the build/artifact/limit loop are defensible; "notify me when it's done" and "answer a

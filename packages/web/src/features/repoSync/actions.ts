@@ -5,7 +5,8 @@
  *
  * - pulls run a few at a time: seconds each, no hook;
  * - pushes run ONE at a time: each runs the repo's pre-push checks (build,
- *   lint, tests) on this desktop, and several at once fight for it;
+ *   lint, tests) on this desktop, and several at once fight for it. A check
+ *   is the same hook and pushes nothing, so it walks the same chain;
  * - sync is the git view's: pull, then push whatever the fresh status still
  *   has ahead.
  *
@@ -41,16 +42,18 @@ async function pullOne(id: string): Promise<boolean> {
 
 const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-/** Start (or join) the desktop's push job and follow it to its end. */
-async function pushOne(id: string, pulled?: string): Promise<void> {
+/** Start (or join) the desktop's push job, or with `check` its hook alone, and follow it to its end. */
+async function pushOne(id: string, pulled?: string, check = false): Promise<void> {
   const before = pulled ? `${pulled} ` : "";
   let p: GitPushState | null;
-  try { p = await api.gitPush(id); } catch (e) {
-    setRow(id, { s: "failed", text: `${before}The push did not start: ${(e as Error).message}` });
+  try { p = await (check ? api.gitCheck(id) : api.gitPush(id)); } catch (e) {
+    setRow(id, { s: "failed", text: `${before}The ${check ? "check" : "push"} did not start: ${(e as Error).message}` });
     return;
   }
   const startedAt = p.startedAt;
-  setRow(id, { s: "pushing", startedAt });
+  // Read off the job, not the tap: a tap that joined a running push is following a push.
+  const checking = !!p.check;
+  setRow(id, { s: checking ? "checking" : "pushing", startedAt });
   for (;;) {
     if (p && p.startedAt === startedAt && p.result) break;
     await wait(PUSH_POLL_MS);
@@ -61,6 +64,10 @@ async function pushOne(id: string, pulled?: string): Promise<void> {
     }
   }
   const r = p.result!;
+  if (checking) {
+    setRow(id, r.ok ? { s: "ok", text: r.output ?? "Checks passed." } : { s: "failed", text: `Checks failed. ${r.error ?? ""}`.trim() });
+    return;
+  }
   setRow(id, r.ok
     ? { s: "ok", text: `${before}Pushed: ${r.output?.split("\n").slice(-1)[0] || "ok"}` }
     : { s: "failed", text: `${before}Push failed. ${r.error ?? ""}`.trim() });
@@ -91,10 +98,10 @@ export async function startRun(verb: SyncVerb, repos: readonly RepoTarget[]): Pr
   // Pushes are a chain: one at a time, in the order repos become ready.
   let pushes: Promise<void> = Promise.resolve();
   const enqueuePush = (id: string, pulled?: string) => {
-    pushes = pushes.then(() => (stopped ? undefined : pushOne(id, pulled)));
+    pushes = pushes.then(() => (stopped ? undefined : pushOne(id, pulled, verb === "check")));
   };
 
-  if (verb === "push") {
+  if (verb === "push" || verb === "check") {
     for (const r of list) enqueuePush(r.id);
   } else {
     const todo = [...list];

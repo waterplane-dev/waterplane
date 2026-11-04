@@ -10,7 +10,7 @@ import {
 import { ago, Button, Empty, Hint, hhmm, Row, RowSub, SetLine, SetNote, SheetHead, useRemoteResource } from "@waterplane/kit";
 import type { AndroidAppsMethods } from "../shared/wire.mts";
 import {
-  appInstallVerb, appRows, appsSummary, appStateText, buildsOf, cleanupLabel, cleanupText, isPlayBuild, NO_INSTALL,
+  appInstallVerb, appRows, installVerbText, appsSummary, appStateText, buildsOf, cleanupLabel, cleanupText, isPlayBuild, NO_INSTALL,
   readyApps, snoozeText, toggleAllow, type InstallCaps,
 } from "./appRows.ts";
 import { APPS_SHEET, installLog } from "./state.ts";
@@ -351,7 +351,7 @@ function AppCard({ card, caps, open, onToggle, onFlip, onFix, logged, onOpenLog,
               void shellInstall.install(verb.id).catch((e: unknown) => say.toast(e instanceof Error ? e.message : "could not start the install"));
             }}>
             {row.install === "failed" ? <RotateCw size={16} /> : <PackagePlus size={16} />}
-            {row.install === "failed" ? "retry install" : `install ${row.version || "this build"}`}
+            {row.install === "failed" ? installVerbText(row.install, row.installError) : `install ${row.version || "this build"}`}
           </Button>
         )}
         {/* The switch, when it is not already the fix button above. */}

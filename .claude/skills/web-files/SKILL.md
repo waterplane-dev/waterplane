@@ -129,6 +129,12 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   notification beats any listener, so the id is PARKED. The whole native stack (service, plugin,
   worker, boot receiver) is **inert until `enableShellLink()` is called**, so the Settings toggle is
   the only thing that starts it. A refused notification permission is NOT a failure.
+  **It watches EVERY saved desktop** (`shellLinkSet.ts`, active first, tailnet base only), sending
+  both the list and the old single `url` in one `start`; `resyncShellLink` re-points a link that is
+  ON (never turns it on, never asks a permission). A tap's `host:<id>|<rest>` switches desktops
+  only on that tap (`shellHostOpen`, `openFromOtherDesktop`). A gated desktop's row carries its own
+  `token` (`shellLinkToken`: `bearerForSaved`'s rule, never a passive one); Java seals it in
+  `ShellLinkTokens`. `setDeviceToken`/`dropDeviceToken` fire `DEVICE_TOKEN_EVENT` so a re-mint re-hands it.
 - `docKind.ts` — **the one extension table on this side**: what the viewer can PAINT
   (`viewerHandles`), and what it paints FORMATTED first with a toggle back to source (`isRich` =
   markdown + HTML). The rendered HTML

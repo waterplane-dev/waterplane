@@ -8,7 +8,8 @@
  * a tap except files this phone no longer needs (the other core build, a file the desktop's
  * manifest dropped) — the off-offer (`forget`) is the person's.
  */
-import { createStore, extAssets, extStorage } from "@waterplane/sdk";
+import { createStore, extAssets, extStorage, plainShellRoute } from "@waterplane/sdk";
+import { PLAIN_ROUTE_NO_ASSETS } from "@waterplane/shared";
 import { downloadError, langCodes, langNames, OCR_ID, parseManifest, progressLine, readyLine, SIMD_PROBE, sha256Hex, totalBytes, wantedFiles, type AssetFile, type AssetManifest } from "./logic.ts";
 import type { EngineFiles } from "./engine.ts";
 
@@ -106,6 +107,7 @@ export async function ensure(): Promise<void> {
   ac = new AbortController();
   const signal = ac.signal;
   const live = () => mine === run;
+  if (plainShellRoute()) { ocrState.set({ k: "error", error: PLAIN_ROUTE_NO_ASSETS }); return; }
   ocrState.set({ k: "checking" });
   try {
     const { m, fresh } = await currentManifest(signal);

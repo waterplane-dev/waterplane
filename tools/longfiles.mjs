@@ -1,14 +1,14 @@
 /**
  * The 800-line EARLY WARNING shared by the shape tests: files that are still under their hard cap but
- * long enough that the next feature should split them rather than grow them. It only PRINTS — a warning
+ * long enough that the next feature should split them rather than grow them. Counted as the cap counts
+ * (comments free; a stylesheet by its whole length, having no such cap). It only PRINTS — a warning
  * that can fail is just a lower cap. `hostshape` and `webshape` call `warnLongFiles` at the top level.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { codeLineCount, lineCount } from "./codelines.mjs";
 
 export const WARN_LINES = 800;
-
-const lines = (text) => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 
 /** Source files (not tests, not build output) under `dir` longer than `over` lines, longest first. */
 export function longFiles(dir, over = WARN_LINES) {
@@ -19,7 +19,9 @@ export function longFiles(dir, over = WARN_LINES) {
       const p = join(d, name);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!/\.(m?[jt]sx?|css)$/.test(name) || /\.test\./.test(name)) continue;
-      const n = lines(readFileSync(p, "utf8"));
+      const text = readFileSync(p, "utf8");
+      if (lineCount(text) <= over) continue; // code never exceeds the whole file: skip the parse
+      const n = name.endsWith(".css") ? lineCount(text) : codeLineCount(text, p);
       if (n > over) out.push({ rel: relative(dir, p), n });
     }
   };

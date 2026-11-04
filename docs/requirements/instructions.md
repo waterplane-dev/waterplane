@@ -57,3 +57,8 @@ Every agent backend (cloud Claude, Copilot, claude-local, opencode) receives the
 A repo can have a compact context file sized to a local model's context window, so local models get the project rules that fit.
 - asked: 2026-10-31
 
+
+### R-instructions-013 · shipped
+The always-on list names every SessionStart and UserPromptSubmit hook of the user's settings, the repo's settings files and enabled plugins: one row per file and event with its command count and no size, saying that its output reaches every session or every prompt, that a session's context view measures it as "hook context", and that /hooks lists it. A disabled plugin's hooks are not listed, and the context-weight threshold does not count these rows.
+- asked: 2026-11-03 (owner)
+- shipped: 7ab24a8e

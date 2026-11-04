@@ -7,7 +7,7 @@ import {
   type ClientMessage,
   type HostMessage,
 } from "@waterplane/shared";
-import { wsUrl } from "./hostUrl";
+import { baseOfDial, tokenWithheld, wsUrl } from "./hostUrl";
 import { noteHostSeen, noteLinkStatus, noteReload, noteRtt, noteTraffic } from "./link";
 import { SHELL_NUDGE_EVENT } from "./shellLink";
 import { deviceToken, wsProtocols } from "./deviceToken";
@@ -107,6 +107,7 @@ export class HostConnection {
   private authPaused = false;                   // gated by the host (needs password) — stop auto-reconnecting
   /** Set by `redial`: the next dial is to exactly this url, no guard asked. */
   private redialing = false;
+  private heldToken = false;
   /**
    * Asked before every dial that is NOT a `redial`: which url to use. The LAN
    * route (`lanLink.ts`) uses it so a socket that drops while on the LAN
@@ -363,6 +364,9 @@ export class HostConnection {
   /** The url the socket dials. */
   get dialUrl(): string { return this.url; }
 
+  /** The last dial left this phone's token behind (`tokenWithheld`). */
+  get tokenHeld(): boolean { return this.heldToken; }
+
   setDialGuard(fn: ((url: string) => string) | null): void { this.dialGuard = fn; }
 
   /**
@@ -435,10 +439,13 @@ export class HostConnection {
     this.status = "connecting";
     this.emitStatus();
     let ws: WebSocket;
+    const withheld = tokenWithheld(baseOfDial(this.url));
+    this.heldToken = withheld && !!deviceToken();
     try {
       // The device token as a second subprotocol, when this phone holds one
-      // (`deviceToken.ts`); with none the dial is byte-identical to before.
-      const protocols = wsProtocols(deviceToken());
+      // (`deviceToken.ts`) and may send it here; with none the dial is
+      // byte-identical to before.
+      const protocols = wsProtocols(withheld ? null : deviceToken());
       if (this.dial) ws = this.dial(this.url, protocols);
       else ws = protocols ? new WebSocket(this.url, protocols) : new WebSocket(this.url);
     } catch {
@@ -513,6 +520,11 @@ export class HostConnection {
         if (this.probeResolve) this.settleProbe(Date.now() - this.probeAt);
         return; // heartbeat reply — not for listeners
       }
+      // Asked for a token this dial held back: that is whoever answers a plain
+      // address, not the desktop. Nothing here may ask for the password, pause
+      // the retries or drop the token, so it reads as one more failed dial, and
+      // the socket that follows carries the token once the route is protected.
+      if (msg.t === "authRequired" && withheld) { ws.close(); return; }
       // Host says this connection needs the LAN password: it's about to close
       // the socket. Stop the reconnect loop (each retry would just bounce) until
       // login() succeeds and calls reconnect(). Clear the reload watchdog so a

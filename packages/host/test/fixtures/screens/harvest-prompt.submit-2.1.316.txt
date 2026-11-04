@@ -1,0 +1,30 @@
+0 Xxxx: `xxx xxxx` 000/000 (000 xxxxxx). `xxx xxx x0x` (xxxx xxxxx
+         x + xxxx xxxxxxx) 00 XXXX / 0 XXXX (00 / 0 XXXX xx xxx xxxxx).
+       0
+     … +00 xxxxx
+  ⎿  Xxxxxxx xx xxxx xxxx
+────────────────────────────────────────────────────────────────────────────────
+←  ☒ Xxxxxxx 0  ☐ Xxxxxxx 0  ✔ Xxxxxx  →
+
+│ Xxxxx xx xxxxx Xxxxxxx-xxxxxx xxxxxx xxxxxxxxx xxxxxx xx xx xxx xxxxxxx? (Xxxx
+│ 0 xx 0; xxxxxxx xx xxxxxx xxxxx xxx xxxxxx.)
+
+  1. [✔] X0 xxxxx xxxxxxxxxx
+         Xxx xxXxxxxxxx/xxxXxxxxxxx xxxx xxx xxx 0 xxxxxx.xxxxx xxxxx. Xxxxxxx x
+         xxxxxxxx xxxx xxxx/xxxxxx xxxxx (~0 XX xxxxxx), xxxx ~0 x.
+  2. [✔] X0 xxx xxxx xxxxxx
+         xxxxxxx xxxxx xxxxxx.xxxxx xxxxxxx xxxxx.xxxxxx. Xxxxx x xxxx xxx.xxxx
+         'xxxxx xx xxx' (xxxxx-xxxx), xxxx ~0 x.
+  3. [✔] X0 xxxxxx xxxxxx
+         Xxx xxxxxx xxx xxxxxxx(): xxxxxxxx xxx 00-xxxxx xxxxxx-xxxx XXX xxx xxx
+         xxxxxx'x xxxxxxxxx xxxxx. ~0–0 x.
+  4. [✔] X0 xxx XXxx xxxxxx
+         Xxxxxxx xxx xxxxxx xxxxx xxx XXxx xxxxxxxx xxxx x xxxx-xxxx xxx. ~0–0
+         x.
+  5. [ ] Type something
+❯    Next
+────────────────────────────────────────────────────────────────────────────────
+  6. Chat about this
+
+Xxxxx xx xxxxxx · Xxx/Xxxxx xxxx xx xxxxxxxx · xxxx+x xx xxxx xx Xxx · Xxx xx
+xxxxxx

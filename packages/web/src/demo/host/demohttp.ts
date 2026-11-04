@@ -8,7 +8,7 @@
  *
  * `/api/health` stays in index.ts — it belongs to the disconnect fault.
  */
-import { ASK_RULE_BACKENDS, PRICES_AS_OF, SUGGESTED_ASK_RULES, filterGalleryRows, zeroCost, zeroTotals, type GalleryQuery, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
+import { ASK_RULE_BACKENDS, PRICES_AS_OF, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
 import { demoHealthIndex } from "./healthindex.ts";
@@ -194,6 +194,10 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   // Sessions started outside waterplane on this desktop: the demo's desktop runs no claude of its own,
   // so none — an honest empty list rather than a 404 the adopt sheet would print as a failure.
   if (path === "/api/external" && method === "GET") return json({ sessions: [] });
+
+  // What this desktop waits on a person for (`shared/waiting.ts`), off the scenario's own sessions
+  // and feed. The phone never polls it in the demo (one desktop), but it is a route the client names.
+  if (path === "/api/attention" && method === "GET") return json(summarizeWaiting(sessions(m), m.notifications ?? [], now));
 
   // A fork's theme overlay (`themeOverlay.ts`): the demo desktop has none — the upstream look.
   if (path === "/api/theme" && method === "GET") return json({ overlay: {} });

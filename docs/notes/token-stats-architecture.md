@@ -70,7 +70,7 @@ silently). Follow-up, not here: an ExtBoundary around adopted sheets.
 
 ## Layout and cap
 
-Every extension web file is held to **900 lines** (`webshape`). While the root was being cut it was
+Every extension web file is held to **900 lines of code** (`webshape`). While the root was being cut it was
 exempt by a ratchet (`MAX_TOKENSTATS_LINES`, lowered in every commit); the ratchet is deleted now that
 the root is under the cap, so the cap alone governs.
 

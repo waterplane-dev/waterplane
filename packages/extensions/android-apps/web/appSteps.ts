@@ -37,7 +37,7 @@ export type FixKind =
 
 const STEP_OF: Record<ReadyCheck["id"], StepId> = {
   build: "build", outbox: "build", key: "build", sdk: "build", repo: "build",
-  pull: "download",
+  pull: "download", route: "download",
   access: "install", switch: "install", owner: "install", last: "install",
 };
 

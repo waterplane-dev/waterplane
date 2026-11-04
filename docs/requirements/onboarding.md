@@ -157,3 +157,7 @@ A signed-out session tells a first-time user they can type /login in the text bo
 - asked: 2026-11-02
 - shipped: 08e78c8f
 
+### R-onboarding-028 · shipped
+A fresh install's first screen says what the app is (a remote control for Claude Code on your own computer), that the desktop must be set up first with a link to the guide, and how a QR is scanned: with the phone's camera app, since the app has no scanner. A pairing link skips the welcome.
+- asked: 2026-11-04 (owner, screenshot of the first screen)
+- shipped: `HostSetup.tsx`, `PairForm.tsx`, commit "first screen: say what this is"

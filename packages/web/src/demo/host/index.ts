@@ -252,6 +252,8 @@ function build(scenario: DemoScenario, clock: DemoClock, defaults: DemoHostDefau
         const n = Math.max(0, s.faultHits[i] - (m.from ?? 0));
         return { rule: i, count: m.times == null ? n : Math.min(n, m.times) };
       }),
+      builds(b) { desk.m.builds = plain(b); changed(); },
+      emit(msg) { for (const k of sinks) k({ kind: "frame", msg: plain(msg) }); },
     },
   };
 }

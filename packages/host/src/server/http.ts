@@ -23,7 +23,9 @@ import { passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "..
 import { requestPeerKind, isProxied } from "../net.js";
 import { RateLimiter, rateKey } from "../ratelimit.js";
 import { canonicalRequestPath, checkRequestOrigin, corsHeaders } from "../origin.js";
-import { cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
+import { admitReadTicket, cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
+import { SELF_SIGNED_NOTICE_HEADERS, SELF_SIGNED_NOTICE_HTML, selfSignedNoticeFor } from "../lantls.js";
+import { READ_TICKET_ROUTE } from "../passive.js";
 import { handleAuthedRoutes, handleLanPreAuth, type AuthRouteDeps } from "../authroutes.js";
 import { discoverTailnetPeers } from "../tailnetpeers.js";
 import { PairStore, handlePairAuthed, handlePairPage, handlePairPreAuth, latestApk, pairNet, type PairDeps } from "../pair.js";
@@ -91,6 +93,19 @@ export function createHttp(ctx: ServerCtx) {
       const { retryAfterMs, ...out } = r;
       res.writeHead(status, { ...jsonHead, "cache-control": "no-store", ...(retryAfterMs ? { "retry-after": String(Math.ceil(retryAfterMs / 1000)) } : {}) });
       res.end(JSON.stringify(out));
+      return;
+    }
+    // A read ticket for the opaque loads (`<img src>`, downloads) of a phone that has no tailnet:
+    // minted for the presented device token, 1 h, accepted only as `?wt=` on a TLS socket (`admitReadTicket`).
+    if (url.pathname === READ_TICKET_ROUTE && method === "POST") {
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      if (!row) {
+        res.writeHead(401, { ...jsonHead, "cache-control": "no-store" });
+        res.end(JSON.stringify({ error: "a device token is needed", authRequired: true }));
+        return;
+      }
+      res.writeHead(200, { ...jsonHead, "cache-control": "no-store" });
+      res.end(JSON.stringify(ctx.auth.mintReadTicket(row)));
       return;
     }
     if (url.pathname === "/api/auth/lock" && method === "POST") {
@@ -299,18 +314,22 @@ export function createHttp(ctx: ServerCtx) {
     // so a LAN token never unlocks it. Pairing redeem is pre-auth beside it:
     // the code is the credential (single use, rate-limited per IP).
     const preAuth = p.startsWith("/api/lan/") ? handleLanPreAuth(req, res, kind, deps)
-      : p === "/api/pair/redeem" ? handlePairPreAuth(req, res, kind, pairDeps())
+      : p === "/api/pair/redeem" || p === "/api/pair/pake/start" || p === "/api/pair/pake/finish" ? handlePairPreAuth(req, res, kind, pairDeps())
       : Promise.resolve(false);
     void preAuth.then((done) => (done ? undefined : gated())).catch(fail);
 
     /** The token gate, then the ledger + identity routes, then the API. */
     async function gated(): Promise<void> {
       const tok = tokenFromRequest(req.headers);
+      // `?wt=`: a read ticket stands in for the bearer on the opaque read routes over TLS, nowhere else.
+      const ticketRow = p.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")
+        ? admitReadTicket(ctx.auth, { url: req.url, method: req.method, path: p, socket: req.socket }, queuedApkIn(ctx.autopull.list()))
+        : null;
       // `/api/peer/*` is the one prefix a DEVICE token neither unlocks nor is asked for: the
       // other daemon presents a PEER token, which `peers/routes.ts` checks (and refuses a
       // device token, a LAN caller and a missing token there).
       const peerApi = p === "/api/peer" || p.startsWith("/api/peer/");
-      if (p.startsWith("/api/") && !peerApi && ctx.auth.needsToken(kind) && !ctx.auth.checkToken(tok, kind)) {
+      if (p.startsWith("/api/") && !peerApi && !ticketRow && ctx.auth.needsToken(kind) && !ctx.auth.checkToken(tok, kind)) {
         res.writeHead(401, { "content-type": "application/json", ...corsHeaders(req.headers) });
         res.end(JSON.stringify({ error: "auth required", authRequired: true, enabled: ctx.auth.isEnabled() }));
         return;
@@ -372,7 +391,14 @@ export function createHttp(ctx: ServerCtx) {
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
       });
-      if (!handled) await serveStatic(req, res);
+      if (handled) return;
+      // A self-signed TLS port answers a plain page in place of the app (`lantls.ts`).
+      if (selfSignedNoticeFor(req.socket)) {
+        res.writeHead(200, SELF_SIGNED_NOTICE_HEADERS);
+        res.end(req.method === "HEAD" ? undefined : SELF_SIGNED_NOTICE_HTML);
+        return;
+      }
+      await serveStatic(req, res);
     }
   }
 

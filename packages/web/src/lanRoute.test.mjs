@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 
 import {
-  NO_IDENTITY_SENTENCE, NO_PASSWORD_SENTENCE, createLanRouter, lanMacHex, lanProbeAnswered, newNonce, parseLanIdentity, verifyLanAnswer,
+  NO_IDENTITY_SENTENCE, NO_PASSWORD_SENTENCE, NO_PROTECTED_LAN_SENTENCE, asksLanPassword, createLanRouter, fallbackGone, lanDialOf, lanMacHex, lanOnlyBase, lanOnlySentence, lanProbeAnswered, newNonce,
+  parseLanIdentity, pinSyncPlan, refusalFits, tailscaleOffSentence, troubleSentence, verifyLanAnswer, welcomePinPlan,
 } from "./lanRoute.ts";
 import { LOCATION_DISCLOSURE, LOCATION_SKIPPED_TEXT, parseNetState } from "./shellNet.ts";
 
@@ -209,4 +210,164 @@ test("the LAN probe counts a gated host's 401 as an answer — the probe carries
   assert.equal(lanProbeAnswered(403), false, "an origin refusal is not a usable answer");
   assert.equal(lanProbeAnswered(500), false);
   assert.equal(lanProbeAnswered(302), false, "a captive portal redirect is not this host");
+});
+
+// ── A desktop this phone holds a pin for ───────────────────────────────
+
+const SPKI = "ab".repeat(32);
+const TLS = { port: 8771, spki: SPKI };
+const PLAIN_LAN = "http://192.168.1.20:8770";
+const TLS_LAN = "https://192.168.1.20:8771";
+const ROW = { id: "row11111", name: "desk", base: "http://100.64.0.5:8770", lan: { base: PLAIN_LAN, ssids: ["Home"], auto: true }, tls: TLS };
+
+const pinnedRig = (row, enforcing, over = {}) => rig({
+  host: () => row,
+  dial: (lan) => lanDialOf(row, lan, enforcing),
+  noFallback: (net) => fallbackGone(row, net),
+  ...over,
+});
+
+test("the ladder checks a pinned row on its TLS address, and the route it yields is that address", async () => {
+  const { router, calls } = pinnedRig(ROW, true);
+  const v = await router.evaluate("start");
+  assert.equal(v.lanBase, TLS_LAN);
+  assert.ok(calls.includes(`probe ${TLS_LAN}`) && calls.includes(`verify ${TLS_LAN}`));
+  assert.ok(!calls.some((c) => c.includes(PLAIN_LAN)), "the plain address is never contacted");
+  assert.match(v.sentence, /192\.168\.1\.20:8771/);
+});
+
+test("an enforcing shell never yields a plain LAN route, whichever step fails", async () => {
+  const dead = async (base) => { assert.notEqual(base, PLAIN_LAN); return { ok: false, at: 5000 }; };
+  for (const over of [{ probe: dead }, { verify: async () => null }]) {
+    const { router, calls } = pinnedRig(ROW, true, over);
+    const v = await router.evaluate("start");
+    assert.equal(v.route, "tailnet");
+    assert.equal(v.lanBase, null);
+    assert.ok(!calls.some((c) => c.includes(PLAIN_LAN)));
+  }
+});
+
+test("a LAN address with no TLS form is refused for a pinned row, with nothing contacted", async () => {
+  const row = { ...ROW, lan: { ...ROW.lan, base: "https://192.168.1.20:9000" } };
+  const { router, calls } = pinnedRig(row, true);
+  const v = await router.evaluate("start");
+  assert.equal(v.sentence, NO_PROTECTED_LAN_SENTENCE);
+  assert.deepEqual(calls, []);
+});
+
+test("a shipped shell holding a pin stays on the plain LAN, as does a row on plain HTTP by choice", async () => {
+  assert.equal((await pinnedRig(ROW, false).router.evaluate("start")).lanBase, PLAIN_LAN);
+  const off = { ...ROW, tls: undefined, tlsOff: true };
+  assert.equal((await pinnedRig(off, true).router.evaluate("start")).lanBase, PLAIN_LAN);
+});
+
+test("a refused key on the way to the tailnet is said; a plain no-answer keeps the ladder's sentence", async () => {
+  const fail = { probe: async () => ({ ok: false, at: 5000 }) };
+  const v = await pinnedRig(ROW, true, { ...fail, refused: async () => true }).router.evaluate("start");
+  assert.equal(v.trouble, "keyChanged");
+  assert.match(v.sentence, /^Using the tailnet: .*different key.*someone is in between\.$/);
+  const w = await pinnedRig(ROW, true, { ...fail, refused: async () => false }).router.evaluate("start");
+  assert.equal(w.trouble, undefined);
+  assert.match(w.sentence, /^Using the tailnet: https:\/\/192\.168\.1\.20:8771 did not answer/);
+});
+
+test("with no tailnet to fall to, both failures offer pairing by code and neither says tailnet", async () => {
+  const fail = { probe: async () => ({ ok: false, at: 5000 }) };
+  const off = { net: async () => ({ ...WIFI, tailnet: false }) };
+  for (const [refused, trouble] of [[true, "keyChanged"], [false, "noAnswer"]]) {
+    const v = await pinnedRig(ROW, true, { ...fail, ...off, refused: async () => refused }).router.evaluate("start");
+    assert.equal(v.trouble, trouble);
+    assert.match(v.sentence, /pair again by code\.$/);
+    assert.doesNotMatch(v.sentence, /tailnet/);
+  }
+});
+
+test("fallbackGone: a LAN-only row, or Tailscale KNOWN off; absent is unknown, never off", () => {
+  assert.equal(fallbackGone({ base: PLAIN_LAN }, null), true);
+  assert.equal(fallbackGone({ base: ROW.base }, { ...WIFI, tailnet: false }), true);
+  assert.equal(fallbackGone({ base: "https://x.y.ts.net" }, { ...WIFI, tailnet: false }), true);
+  assert.equal(fallbackGone({ base: ROW.base }, WIFI), false, "a VPN with no addresses yet reports nothing");
+  assert.equal(fallbackGone({ base: ROW.base }, { ...WIFI, tailnet: true }), false);
+  assert.equal(fallbackGone({ base: ROW.base }, null), false);
+  assert.equal(lanOnlyBase("https://me.example"), false, "a vouched proxy is not a LAN address");
+});
+
+test("the words name the address without its scheme", () => {
+  assert.match(lanOnlySentence(TLS_LAN), /at 192\.168\.1\.20:8771\. No tailnet address/);
+  assert.match(troubleSentence("noAnswer", TLS_LAN, false), /^192\.168\.1\.20:8771 did not answer\. The desktop may be off, or its address may have changed: pair again by code\.$/);
+});
+
+test("a refusal counts only for this address and only when newer than `since`", () => {
+  assert.equal(refusalFits(null, TLS_LAN), false);
+  assert.equal(refusalFits({ host: "192.168.1.20", at: 10 }, TLS_LAN), true);
+  assert.equal(refusalFits({ host: "192.168.1.99", at: 10 }, TLS_LAN), false);
+  assert.equal(refusalFits({ host: "192.168.1.20", at: 10 }, TLS_LAN, 11), false, "history");
+  assert.equal(refusalFits({ host: "fd00::1", at: 10 }, "https://[fd00::1]:8771"), true, "IPv6 with or without brackets");
+  assert.equal(refusalFits({ at: 10 }, TLS_LAN), true, "no name to compare");
+});
+
+test("a welcome teaches only on a protected dial, and absent fields clear nothing", () => {
+  const w = { hostId: "desk5678", tlsPort: 8771, tlsSpki: SPKI };
+  const row = { base: ROW.base };
+  assert.equal(welcomePinPlan(row, w, false), null, "never on an unprotected route");
+  assert.deepEqual(welcomePinPlan(row, w, true), { hostId: "desk5678", tls: TLS });
+  assert.equal(welcomePinPlan({ ...row, hostId: "desk5678", tls: TLS }, w, true), null, "nothing new");
+  assert.equal(welcomePinPlan({ ...row, hostId: "desk5678", tls: TLS }, { hostId: "desk5678" }, true), null, "a socket not bound yet leaves the pin");
+});
+
+test("a re-keyed desktop's welcome replaces the pin; a bad value, tlsOff and a vouched proxy do not", () => {
+  const other = "cd".repeat(32);
+  const held = { base: ROW.base, tls: TLS };
+  assert.deepEqual(welcomePinPlan(held, { tlsPort: 8771, tlsSpki: other }, true), { tls: { port: 8771, spki: other } });
+  assert.deepEqual(welcomePinPlan(held, { tlsPort: 9000, tlsSpki: SPKI }, true), { tls: { port: 9000, spki: SPKI } });
+  assert.equal(welcomePinPlan(held, { tlsPort: 8771, tlsSpki: "nope" }, true), null);
+  assert.equal(welcomePinPlan({ base: ROW.base, tlsOff: true }, { tlsPort: 8771, tlsSpki: SPKI }, true), null);
+  assert.equal(welcomePinPlan({ base: "https://me.example" }, { tlsPort: 8771, tlsSpki: SPKI }, true), null, "the service would refuse the proxy's own leaf");
+  assert.deepEqual(welcomePinPlan({ base: "https://x.y.ts.net" }, { tlsPort: 8771, tlsSpki: SPKI }, true), { tls: TLS }, "ts.net keeps system trust, so it may hold one");
+});
+
+test("the shell's pins follow the rows; a pin already right is left alone, keeping the refusal", () => {
+  const rows = [{ id: "aaaa1111", tls: TLS }, { id: "bbbb2222" }, { id: "cccc3333", tlsOff: true }];
+  assert.deepEqual(pinSyncPlan(rows, []), { set: [{ hostId: "aaaa1111", spki: SPKI }], remove: [] });
+  assert.deepEqual(pinSyncPlan(rows, [{ hostId: "aaaa1111", spki: SPKI }]), { set: [], remove: [] });
+  assert.deepEqual(pinSyncPlan(rows, [{ hostId: "aaaa1111", spki: "cd".repeat(32) }]).set, [{ hostId: "aaaa1111", spki: SPKI }]);
+  assert.deepEqual(pinSyncPlan(rows, [{ hostId: "cccc3333", spki: SPKI }, { hostId: "gone1111", spki: SPKI }]).remove, ["cccc3333", "gone1111"]);
+});
+
+// ── Tailscale off, and nothing to fall to ───────────────────────────────
+
+const FOREIGN = { ...WIFI, ssid: "Cafe", tailnet: false };
+
+test("Tailscale off on a foreign Wi-Fi: the sentence never says the tailnet is in use", async () => {
+  const v = await pinnedRig(ROW, true, { net: async () => FOREIGN }).router.evaluate("start");
+  assert.equal(v.route, "tailnet");
+  assert.equal(v.sentence, `Tailscale is off on this phone: turn it on to reach the desktop. Not on LAN: "Cafe" is not one of this desktop's saved networks.`);
+});
+
+test("off mobile data, with LAN off, and a failure in use: the same, and the reason stays", async () => {
+  const mobile = await pinnedRig(ROW, true, { net: async () => ({ ...FOREIGN, transport: "cellular", ssid: null }) }).router.evaluate("start");
+  assert.match(mobile.sentence, /^Tailscale is off on this phone.*the phone is on mobile data\.$/);
+  const off = { ...ROW, lan: { ...ROW.lan, auto: false } };
+  assert.match((await pinnedRig(off, true, { net: async () => FOREIGN }).router.evaluate("start")).sentence, /^Tailscale is off.*switching to LAN automatically is off\.$/);
+  const { router } = pinnedRig(ROW, true, { net: async () => FOREIGN });
+  await router.evaluate("start");
+  assert.match(router.noteFailure("closed").sentence, /^Tailscale is off.*the LAN connection failed \(closed\)/);
+});
+
+test("the old sentence stays where it is true: Tailscale on or unknown, or an address that needs no tunnel", async () => {
+  const say = async (row, net) => (await pinnedRig(row, true, { net: async () => net }).router.evaluate("start")).sentence;
+  const said = `Using the tailnet: "Cafe" is not one of this desktop's saved networks.`;
+  assert.equal(await say(ROW, { ...FOREIGN, tailnet: true }), said);
+  const { tailnet: _t, ...unknown } = FOREIGN;
+  assert.equal(await say(ROW, unknown), said);
+  assert.equal(await say({ ...ROW, base: "https://me.example" }, FOREIGN), said);
+  assert.equal(rig({ net: async () => FOREIGN }).router.noteFailure("x").sentence.startsWith("Using the tailnet"), true, "no network read yet: nothing known");
+});
+
+test("a sentence that claims no tailnet is left alone, and the password button survives the rewording", () => {
+  const trouble = troubleSentence("noAnswer", PLAIN_LAN, false);
+  assert.equal(tailscaleOffSentence(trouble), trouble);
+  assert.equal(asksLanPassword(NO_PASSWORD_SENTENCE), true);
+  assert.equal(asksLanPassword(tailscaleOffSentence(NO_PASSWORD_SENTENCE)), true);
+  assert.equal(asksLanPassword(NO_IDENTITY_SENTENCE), false);
 });

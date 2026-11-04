@@ -318,7 +318,7 @@ function webStamp(): { version?: string; sha?: string; dirty?: true; at: number 
  * PACKAGED.
  */
 // Every name vendorChunk returns, highest claim first (see `codeSplitting` below).
-const CHUNK_ORDER = ["react", "xterm", "icons", "vendor", "shared", "demo", "sheets"];
+const CHUNK_ORDER = ["react", "xterm", "icons", "noble", "vendor", "shared", "demo", "sheets"];
 
 function vendorChunk(id: string): string | undefined {
   // The demo (demo-mode-plan.md §4): the fake desktop, its transport and the
@@ -338,6 +338,12 @@ function vendorChunk(id: string): string | undefined {
     if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react";
     if (id.includes("@xterm")) return "xterm";
     if (id.includes("lucide-react")) return "icons";
+    // The one lazy file here: nothing imports noble statically (`shared/pake.ts`, `pqKem.ts`), so as
+    // its own group it stays off `index.html`'s modulepreload list, where every load paid for it. One
+    // group for ALL of it: `@noble/post-quantum` imports `@noble/curves` and `hashes`, so split apart
+    // they keep a static edge from a preloaded chunk. In the shell it is still a local file: an update
+    // carries every file of `dist` (`webbundle.ts`), and the running bundle is never pruned.
+    if (/[\\/]node_modules[\\/]@noble[\\/]/.test(id)) return "noble";
     return "vendor";
   }
   // Our own code splits the same way, for the same reason: the sheets are ~26

@@ -15,6 +15,8 @@ import assert from "node:assert/strict";
 const ROUTES = [
   "* /api/health",
   "GET /api/theme",
+  // What this desktop waits on a person for (`shared/waiting.ts`) — another desktop's phone polls it.
+  "GET /api/attention",
   "* /api/webbundle",
   "* /api/webbundle/file",
   "POST /api/hook",
@@ -156,6 +158,8 @@ const ROUTES = [
   "POST /api/repos/:id/git/message/*",
   "POST /api/repos/:id/git/explain/*",
   "GET /api/repos/:id/git/explain/*",
+  "POST /api/repos/:id/git/check/*",
+  "POST /api/repos/:id/git/pushto/*",
   "GET /api/repos/:id/git/prs",
   "POST /api/repos/:id/git/prs/lease",
   "POST /api/repos/:id/git/prs/merge",

@@ -447,6 +447,14 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 /* LAN password gate (full-screen login takeover) + Settings inputs */
 .auth-gate { display: flex; justify-content: center; min-height: 100vh; }
 .auth-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); padding: var(--sp-24); }
+/* The app lock (`features/appLock`): opaque, and above everything `#root` can
+   draw (the highest there is 80), toasts included. Nothing behind it may show,
+   and its own sentence is on the card. A portal to `body`, because `#root` is
+   `inert` while it is up. */
+.app-lock {
+  position: fixed; inset: 0; z-index: 90; background: var(--bg); color: var(--fg); display: flex; overflow-y: auto;
+  padding: calc(24px + env(safe-area-inset-top)) var(--sp-16) calc(24px + env(safe-area-inset-bottom));
+}
 .auth-title { font-size: calc(var(--fs-18) * var(--ui-font, 1)); font-weight: var(--fw-semibold); margin-bottom: var(--sp-10); }
 .auth-input {
   width: 100%; box-sizing: border-box; padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-15) * var(--ui-font, 1));

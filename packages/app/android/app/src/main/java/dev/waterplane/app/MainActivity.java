@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -14,6 +15,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
+import android.webkit.SslErrorHandler;
 import android.webkit.URLUtil;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
@@ -32,6 +34,9 @@ import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
 
 import org.json.JSONObject;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The whole native side of the app: Capacitor's bridge, plus the handful of
@@ -86,6 +91,10 @@ public class MainActivity extends BridgeActivity {
      *  for cannot be shown and the tap comes back as another notification. */
     @Nullable private String pendingInstall;
 
+    /** Origin → hostId, for each origin the WebView let through on a pin. In memory, like the
+     *  WebView's own decision, so the handler has always run first in this process. */
+    private final Map<String, String> pinnedOrigins = new ConcurrentHashMap<>();
+
     /**
      * The live activity, or null when there is none.
      *
@@ -114,6 +123,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ShellInstallPlugin.class);
         registerPlugin(ShellNetPlugin.class);
         registerPlugin(ShellKeystorePlugin.class);
+        registerPlugin(ShellTlsPlugin.class);
 
         super.onCreate(savedInstanceState);
 
@@ -761,6 +771,36 @@ public class MainActivity extends BridgeActivity {
                 }
                 return super.shouldOverrideUrlLoading(view, request);
             }
+
+            /**
+             * A desktop's own self-signed listener, reached over `wss://`, fetch, XHR and `<img>`
+             * alike: all of them land here, so this is the WebView's whole pin check.
+             *
+             * For Play's scanner and its reviewer: this is CONDITIONAL, never unconditional.
+             * `proceed()` runs only when the leaf's SPKI hash equals a pin this phone was given
+             * by a sealed pairing. Any other key, and a certificate that cannot be parsed, is
+             * `cancel()`. With no pin held, this is the platform's default, which also cancels.
+             */
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                ShellTlsPins.Book pins = ShellTlsPins.read(MainActivity.this);
+                if (pins.isEmpty()) {
+                    super.onReceivedSslError(view, handler, error);
+                    return;
+                }
+                String seen = ShellTlsPins.spkiOf(error.getCertificate());
+                String hostId = pins.hostIdOf(seen);
+                if (hostId != null) {
+                    String origin = ShellRoute.originOf(error.getUrl());
+                    if (origin != null) pinnedOrigins.put(origin, hostId);
+                    handler.proceed();
+                    return;
+                }
+                handler.cancel();
+                String host = ShellRoute.hostOf(error.getUrl());
+                Log.w(TAG, "refused a leaf no pin holds, at " + host);
+                ShellTlsPins.noteRefusal(MainActivity.this, host, seen, System.currentTimeMillis());
+            }
         });
         getBridge().addWebViewListener(new WebViewListener() {
             @Override
@@ -898,6 +938,12 @@ public class MainActivity extends BridgeActivity {
      * @param mimeType  may be null; `DownloadManager` sniffs the response.
      */
     private void saveToDownloads(String url, String name, String userAgent, String mimeType) {
+        if (isPinnedDesktop(url)) {
+            // Not handed to the pull service: a row the page did not make is an orphan it deletes.
+            toast("Android's downloader cannot check this desktop's key, so " + name
+                    + " was not saved. Use the app's own download button");
+            return;
+        }
         try {
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
             req.setMimeType(mimeType);
@@ -920,6 +966,22 @@ public class MainActivity extends BridgeActivity {
             Log.w(TAG, "download failed: " + e);
             toast("could not download " + name + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * {@code DownloadManager} runs in another process and cannot pin, so a pinned desktop never
+     * reaches it. Two ways to know one: the WebView let this origin through on a pin (the handler
+     * fires before any load in this process), or a watched link names it. A desktop's
+     * {@link ShellRoute#pinApplies CA-valid front door} is neither, and downloads as it did.
+     */
+    private boolean isPinnedDesktop(String url) {
+        String origin = ShellRoute.originOf(url);
+        if (origin == null) return false;
+        if (ShellTlsPins.pinFor(this, pinnedOrigins.get(origin), url) != null) return true;
+        for (ShellLinkSet.Spec s : ShellLinkService.storedSpecs(this)) {
+            if (ShellRoute.sameOrigin(s.url, url) && ShellTlsPins.pinFor(this, s.hostId, url) != null) return true;
+        }
+        return false;
     }
 
     private void toast(String text) {

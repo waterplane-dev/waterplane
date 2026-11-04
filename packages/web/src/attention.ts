@@ -12,7 +12,7 @@
  * "2 waiting" could open three cards; the limit sheet listed exited sessions
  * its chip did not count. `attentionCut` is now the one call both make.
  */
-import { blockOf, shellsSummary } from "@waterplane/shared";
+import { blockOf, sessionWaits, shellsSummary } from "@waterplane/shared";
 import type { BlockKind, SessionBlock, SessionInfo } from "@waterplane/shared";
 import { isShellBackend, type BackendList } from "./backendCaps.ts";
 
@@ -48,7 +48,9 @@ export function sessionStatus(s: SessionInfo, backends: BackendList = null): Ses
   // A dialog we could not parse into options is still blocked on you.
   // …and so is a turn that ENDED on a question: the CLI takes typing, but the
   // work does not move until you answer, and `done` said the opposite.
-  if (s.prompt || s.awaitingInput || s.asking) return "wait";
+  // `sessionWaits` (shared) is the ONE test: another desktop's `GET /api/attention`
+  // counts with it, so its number and this bucket cannot disagree.
+  if (sessionWaits(s)) return "wait";
   // A shell has no turns, so nothing ever marks it idle — and "no idle yet" is
   // what reads as "coding". A turnless session is never working.
   if (isShellBackend(backends, s.backend)) return "done";

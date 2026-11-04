@@ -518,8 +518,8 @@ exist. Text only, no build, no import (as `webshape.test.mjs`). It holds:
   it stops at 700).
 - **`MAX_SLICE_LINES = 900`** for every `.ts` under `sessions/`, `intents/` (excluding
   `manager.ts` and `adapters.ts`, which have their own numbers) and `server/` — the same number
-  `eslint`'s `max-lines` warns at and `webshape` fails feature files at. A slice at 900 is the
-  class moved one folder down.
+  `eslint`'s `max-lines` and `webshape` fail at, counted the same way (lines of code, comments free:
+  `tools/codelines.mjs`). A slice at 900 is the class moved one folder down.
 - **The two type files hold only types**: `sessions/core.ts` and `server/ctx.ts` contain no
   `function `, `class `, `=> {`, `new ` or `setInterval`/`setTimeout` token outside comments
   (`intents/contract.ts` is allowed its four pure helpers and is checked for no `class ` and no

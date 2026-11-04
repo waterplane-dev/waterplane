@@ -2,7 +2,7 @@
 import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { bootWait } from "./lib-e2e.mjs";
@@ -97,6 +97,39 @@ bootWait(PORT, 900, async () => {
     check(st.clean === true, "no half-done rebase left in the tree");
     rmSync(remote, { recursive: true, force: true });
     rmSync(dirname(other), { recursive: true, force: true });
+
+    // the pre-push hook without a push: a job like a push, a verdict on the commit, then a push
+    // of only the commits up to it
+    const demo = await post("/api/repo", { name: "checkdemo" });
+    const cid = (await j("/api/repos")).targets.find((t) => t.repoName === "checkdemo").id;
+    const bare = mkdtempSync(join(tmpdir(), `${SLUG}-checkbare-`));
+    g(bare, "init", "-q", "--bare", "-b", "main");
+    g(demo.path, "config", "user.email", "t@t"); g(demo.path, "config", "user.name", "t");
+    const commitFile = (n) => { writeFileSync(join(demo.path, n), n); g(demo.path, "add", n); g(demo.path, "commit", "-qm", n); return g(demo.path, "rev-parse", "HEAD"); };
+    commitFile("base");
+    g(demo.path, "branch", "-M", "main");
+    g(demo.path, "remote", "add", "origin", bare);
+    g(demo.path, "push", "-q", "-u", "origin", "main");
+    const [one, two] = [commitFile("one"), commitFile("two")];
+    const hook = join(demo.path, ".git/hooks/pre-push");
+    writeFileSync(hook, "#!/bin/sh\ncat >/dev/null\nexit 0\n"); chmodSync(hook, 0o755);
+    g(demo.path, "config", `${SLUG}.prePushTestsCommit`, "true");
+    const ended = async () => { for (;;) { const { push } = await j(`/api/repos/${cid}/git/push`); if (push && !push.running) return push; await new Promise((r) => setTimeout(r, 100)); } };
+    const started = await post(`/api/repos/${cid}/git/check`, { sha: one });
+    check(started.check === true, "a check is a job that says it is one");
+    const checked = await ended();
+    check(checked.result?.ok === true && checked.check === true, "the check ends passed");
+    check(g(bare, "rev-parse", "main") !== one, "a check pushes nothing");
+    const clog = await j(`/api/repos/${cid}/git/log`);
+    check(clog.prePush?.testsCommit === true, "the log says the hook tests the commit");
+    check(clog.outgoing.find((c) => c.sha === one)?.check?.ok === true && !clog.outgoing.find((c) => c.sha === two)?.check, "only the checked commit wears the verdict");
+    const notSha = await fetch(`${base}/api/repos/${cid}/git/check`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sha: "--upload-pack=x" }) });
+    check(notSha.status === 400, "a check of something that is no commit id is refused");
+    await post(`/api/repos/${cid}/git/pushto`, { sha: one });
+    const pushedTo = await ended();
+    check(pushedTo.result?.ok === true && !pushedTo.check, "the push up to it ends well");
+    check(g(bare, "rev-parse", "main") === one && g(demo.path, "rev-parse", "HEAD") === two, "the older commit went, the newer one stayed");
+    rmSync(bare, { recursive: true, force: true });
 
     // file read + traversal guard
     const fr = await j(`/api/repos/${id}/git/file?path=hello.txt`);

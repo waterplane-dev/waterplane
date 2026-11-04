@@ -258,8 +258,9 @@ Using a login on demand without autofill: on the phone, show (one fingerprint) g
 - shipped: e97d3aa4 42d3d866
 
 ### R-vault-051 · shipped
-The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once. - plan: REPO-VIEW-PLAN.md §10
+The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once. While a card waits, the home has no headline of its own: the request sits under "waiting for you", and the kept line stands apart from it. - plan: REPO-VIEW-PLAN.md §10
 - asked: 2026-10-17 (owner: "if you have good ideas on How to make the vault UI more intuitive and sexy. Do it!")
+- asked: 2026-11-03 (owner: "wrong /confusing wording. The release request is in the section below")
 - shipped: 2fb07096, 08842d9d, 55291043, 6a2a7447, 6bde8c54
 
 ### R-vault-052 · shipped
@@ -476,3 +477,13 @@ The vault approval key also appears inside the session that needs approval, not 
 Secrets are stored only in the vault and do not appear in other places in the vault plugin.
 - asked: 2026-11-02
 
+
+### R-vault-094 · shipped
+Each vault's key on a phone is its own: one phone can hold the keys of several desktops' vaults, and a second desktop's vault never replaces or deletes another vault's key. Keys of vaults made before this keep working with no re-enrol and are never deleted automatically.
+- asked: 2026-11-03
+- shipped: d974977a
+
+### R-vault-095 · built, unverified on a phone
+A vault approval does not need Tailscale: it works on the desktop itself (localhost) and from a phone on the same Wi-Fi. On the Wi-Fi the app allows the fingerprint only over a route that proves it reaches the paired desktop (the pinned encrypted link, R-connection-032); over plain Wi-Fi it refuses in words (R-security-021). The optional browser route (the desktop's own certificate from a local CA) is still a separate, unfinished step.
+- asked: 2026-10-24 (owner: the vault must work without Tailscale, on localhost and LAN)
+- note: MULTI-DEVICE-PLAN.md WP4 says what is done and what stays optional. Not tried on a phone.

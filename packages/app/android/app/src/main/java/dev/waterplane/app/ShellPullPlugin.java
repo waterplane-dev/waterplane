@@ -86,12 +86,20 @@ public class ShellPullPlugin extends Plugin implements ShellPullService.Watcher 
             call.reject("only http(s) downloads");
             return;
         }
+        // Optional: the desktop this file comes from, whose pin (if any) must hold on the URL.
+        // Absent on a re-enqueue, a row keeps the one it has.
+        String hostId = call.getString("hostId");
+        if (hostId != null && !ShellLinkSet.isHostId(hostId)) {
+            call.reject("bad arguments");
+            return;
+        }
         Double sizeArg = call.getDouble("size");
         ShellPullService.enqueue(getContext(), id, url, name,
                 call.getString("mime"),
                 sizeArg == null ? 0L : (long) (double) sizeArg,
                 call.getString("etag"),
-                Boolean.TRUE.equals(call.getBoolean("autoSave")));
+                Boolean.TRUE.equals(call.getBoolean("autoSave")),
+                hostId);
         call.resolve(state());
     }
 

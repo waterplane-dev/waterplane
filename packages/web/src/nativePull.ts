@@ -102,7 +102,7 @@ interface Handle { remove(): void }
 interface NativePullPlugin {
   enqueue(o: {
     id: string; url: string; name: string; mime?: string;
-    size?: number; etag?: string; autoSave?: boolean;
+    size?: number; etag?: string; autoSave?: boolean; hostId?: string;
   }): Promise<{ items: NativePullRow[]; running: boolean }>;
   cancel(o: { id: string }): Promise<void>;
   discard(o: { id: string }): Promise<void>;
@@ -170,6 +170,8 @@ export interface NativePullState {
 export async function nativeEnqueue(o: {
   id: string; url: string; name: string; mime?: string;
   size?: number; etag?: string; autoSave?: boolean;
+  /** The saved row this file comes from: the shell holds that desktop's pin on the transfer. */
+  hostId?: string;
 }): Promise<NativePullState | null> {
   const p = plugin();
   if (!p) return null;

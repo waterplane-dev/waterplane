@@ -7,6 +7,7 @@
  * `web/installPolicy.ts` and imports from here.
  */
 import { BRAND } from "./brand.js";
+import { PLAIN_ROUTE_NO_APK } from "./hosturl.js";
 
 /** What the phone will allow, as `ShellInstall.status()` answers it. */
 export interface InstallCaps {
@@ -25,6 +26,8 @@ export interface InstallCaps {
   distribution?: "dev" | "play";
   /** The shell's own package, where it said. */
   self?: string;
+  /** The PAGE's fact, not the shell's: an APK here would come over an unprotected route. */
+  plainRoute?: boolean;
 }
 
 export const NO_INSTALL: InstallCaps = { supported: false, canInstall: false, silent: false };
@@ -149,6 +152,7 @@ export function installOffer(row: InstallRow, caps: InstallCaps): {
   if (row.evicted) {
     return { verb: null, reason: "the bytes were cleared to save space — fetch it again to install it" };
   }
+  if (caps.plainRoute) return { verb: null, reason: PLAIN_ROUTE_NO_APK };
   if (!caps.canInstall) {
     return {
       verb: null,
@@ -187,6 +191,15 @@ export function stateText(install: InstallState | undefined, error: string | und
  *  and the figure Settings has to reach. */
 export function failureText(error: string | undefined): string {
   if (!error) return "the phone did not say why";
+  // A different signing key from the copy already installed. Android never updates an app across keys, so a
+  // retry fails identically forever — the card offered "retry install" for it (owner, 2026-11-03). Only an
+  // uninstall (which deletes the app's data) or a build signed with the installed copy's key gets past it.
+  if (isSignatureConflict(error)) {
+    return "this build is signed with a different key than the copy already on this phone, and Android only updates " +
+      "an app signed with the same key — a retry fails the same way. Either build it with the key the installed " +
+      "copy has, or uninstall that copy first (which deletes its data on this phone) and then install this one " +
+      "(INSTALL_FAILED_UPDATE_INCOMPATIBLE)";
+  }
   // Play Protect's package verifier said no. The shell already re-asks OUT LOUD after a
   // refused silent attempt (`installLoudAfterRefusal`), so reaching this means that ask
   // was refused or dismissed too — the platform's words name neither Play Protect nor a remedy.
@@ -209,10 +222,17 @@ export function failureText(error: string | undefined): string {
     + `Free space until Settings shows about ${mb(need + 500e6 - usable)} free, then retry`;
 }
 
+/** The installer refused because the build's signing key differs from the installed copy's — the one
+ *  failure no retry can fix. Matches the platform's code and its sentence, as the shell relays them. */
+export function isSignatureConflict(error: string | undefined): boolean {
+  return !!error && /INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match/i.test(error);
+}
+
 /** The word on the install button. After a failure it is a RETRY — the same
  *  tap, but "install" beside "could not install" read as the thing that had
  *  just not worked rather than the way to try again. */
-export function installVerbText(install: InstallState | undefined): string {
+export function installVerbText(install: InstallState | undefined, error?: string): string {
+  if (install === "failed" && isSignatureConflict(error)) return "install after uninstalling the old copy";
   if (install === "failed") return "retry install";
   if (install === "installed") return "install again";
   return "install";

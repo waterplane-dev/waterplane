@@ -23,6 +23,15 @@ test("an apk is recognised by name or by declared type", () => {
   assert.equal(isApkRow({}), false);
 });
 
+test("over a plain route a finished APK offers no install, and the row says why and what to do", () => {
+  const offer = installOffer(row(), { ...PHONE, plainRoute: true });
+  assert.equal(offer.verb, null);
+  assert.match(offer.reason, /do not download or install on this route/);
+  assert.match(offer.reason, /tailnet/);
+  assert.equal(installOffer(row(), PHONE).verb, "install");
+  assert.equal(installOffer(row(), { ...NO_INSTALL, plainRoute: true }).reason, null, "a browser is told nothing");
+});
+
 test("a browser is told nothing at all about installing", () => {
   const offer = installOffer(row(), NO_INSTALL);
   assert.equal(offer.verb, null);
@@ -63,8 +72,8 @@ test("waiting for a confirmation is never worded as a failure", () => {
 
 test("a failure keeps the phone's own words, and says so when there are none", () => {
   assert.match(
-    installStatusText(row({ install: "failed", installError: "signatures do not match" })) ?? "",
-    /could not install: signatures do not match/,
+    installStatusText(row({ install: "failed", installError: "Package is invalid" })) ?? "",
+    /could not install: Package is invalid/,
   );
   assert.match(installStatusText(row({ install: "failed" })) ?? "", /did not say why/);
 });
@@ -81,6 +90,7 @@ test("out of space is said as out of space, in MB, with the retry that fixes it"
 
 test("the button after a failure is a retry", () => {
   assert.equal(installVerbText("failed"), "retry install");
+  assert.equal(installVerbText("failed", "Session was abandoned"), "retry install");
   assert.equal(installVerbText("installed"), "install again");
   assert.equal(installVerbText(undefined), "install");
 });
@@ -202,3 +212,16 @@ test("repeatedVersionText: a newer build declaring an older build's version says
   assert.equal(repeatedVersionText(neu, [{ ...old, pkg: "other.app" }, neu]), null);
 });
 
+
+test("a signing-key conflict is never offered as a retry: it names the uninstall, its data cost, and the other way", () => {
+  const err = "it conflicts with the app already installed — INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package "
+    + "dev.waterplane.app signatures do not match newer version; ignoring!";
+  const text = installStatusText(row({ install: "failed", installError: err })) ?? "";
+  assert.match(text, /signed with a different key/);
+  assert.match(text, /a retry fails the same way/);
+  assert.match(text, /uninstall that copy first \(which deletes its data/);
+  assert.match(text, /build it with the key the installed copy has/);
+  assert.doesNotMatch(text, /ignoring!/);
+  assert.equal(installVerbText("failed", err), "install after uninstalling the old copy");
+  assert.equal(installVerbText("failed", "signatures do not match"), "install after uninstalling the old copy");
+});

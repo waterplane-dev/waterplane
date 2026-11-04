@@ -47,7 +47,7 @@ export const RULES = {
     welcome: {
       tailscaleIp: null, tailscaleBin: null, tailscaleDns: null, httpsUrl: null,
       lanIps: [], port: 0, root: "demo", hostId: "demo", hostName: "Demo",
-      deviceId: undefined,
+      deviceId: undefined, updateKey: undefined, tlsPort: undefined, tlsSpki: undefined,
       auth: { enabled: false, gateTailscale: false, canManage: false },
     },
   },

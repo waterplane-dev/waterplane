@@ -119,3 +119,31 @@ The feature is named for what it does: Android apps, automatic deploy and instal
 Each built APK carries a version identifier that increases with every build, so the installed version shows which build it is.
 - asked: 2026-11-01
 
+
+### R-apk-025 · shipped
+The Android app can require the phone's fingerprint before it shows its screen: when the app starts, and when the person comes back after more than a minute away. Off by default, per phone, switched in Settings › Connection › *lock this app* (turning it on and off each take one authentication); nothing changes on the desktop, and queued sends, notifications and the background link keep working behind the lock. The lock fails closed: a cancelled, failed, locked-out or busy prompt keeps the app locked with a retry, and so does anything the app does not recognise. It opens the app and switches itself off, saying so and where it is turned back on, only for a reason a person holding the phone cannot cause: the fingerprint set changed (a credential only the phone's owner has), the app's own saved check is unreadable, or a fresh status read confirms the phone has no sensor or nothing left to check with. A browser, the PWA, the demo and an app without the fingerprint keystore have no switch; where the switch cannot be turned on the row says why (an old app, no sensor, nothing enrolled, no screen lock, or a plain-HTTP route on an app that needs a key for it).
+- asked: 2026-11-03
+- shipped: cb2d749e, 49f9e8ec
+- note: the lock is a hold-the-phone defence at UI level; see SECURITY.md for what it does not cover.
+
+### R-apk-026 · shipped
+On an app with the newer shell the lock's sheet offers the phone's PIN, pattern or password when the fingerprint fails or is locked out, and face unlock counts where the phone has it. An older app locks with a fingerprint only. Needs a new APK; the UI side detects the capability, never a version.
+- asked: 2026-11-03
+- shipped: 49f9e8ec
+
+### R-apk-027 · shipped
+The Android app can lock the phone's sign-ins to password-protected desktops: Settings › Connection › *lock the desktop sign-ins*, off by default, per phone, independent of *lock this app*. On, the phone's device tokens are one blob under a Keystore key instead of plaintext in the page's storage, and opening the app asks for the fingerprint (or, on a newer app, the phone's PIN) before anything connects; with the app lock also on, that is the same single prompt, never two. The row names every saved desktop and what the lock costs it before the choice (a desktop with no password has nothing to lock; one reached on the Wi-Fi signs this phone in again by itself; one that gates the tailnet must be paired again if the key is lost; alerts while the app is closed depend on the app version), and says what the phone cannot know as that. It refuses in words where it cannot work, for example a desktop saved at a plain-HTTP address. A prompt that is cancelled, locked out or unrecognised keeps the app on the card; *open without the sign-ins* mounts the app with the sign-ins still locked and never gets past the app lock. The lock opens and switches itself off, saying which desktops it lost, only for a reason a person holding the phone cannot cause, never because no sensor answers, and even then the locked copy is set aside rather than deleted. When a refusal shows the sign-ins cannot be opened, the row offers *forget the locked sign-ins*: confirmed, past the app lock if that is on, saying per desktop what is lost and what to do next. The socket does not connect before the unlock (tokenless HTTP such as the update check does, with no token), and an older app with both locks on will not save a plain-HTTP address for a desktop, since that app could never open again. It guards a copy of the app's storage, not a hand holding the unlocked phone.
+- asked: 2026-11-03
+- shipped: 4374d316, 5b60c2f0, 771f39f8
+- note: SECURITY.md lists the residuals: a revoked token can stay in the blob until the next rewrap, a stray bare token can stay plaintext, passive (kids') tokens are not sealed. Device checks are still the owner's.
+
+### R-apk-028 · shipped
+On a newer app, while the sign-ins are locked the background link keeps each token in memory only: nothing about it reaches the disk. Alerts from password-protected desktops keep coming with the app swiped away until the phone restarts or Android stops the app; then that link says "locked — open the app" and resumes when the app is opened and unlocked. An older app is handed no token while locked, so with the app closed those alerts wait until the app is opened. The UI detects the capability, never a version.
+- asked: 2026-11-03
+- shipped: 9780cdce, 771f39f8
+
+### R-apk-029 · built, unverified on a phone
+The app takes an update over the air only when it can check it: once a phone holds a desktop's update key, an update with no signature, a bad one, or an older one than it already took is refused, nothing is downloaded, and Settings › Connection › app version says why in words that stay true whether the desktop is out of date or cannot read its key file. The key is learned on the next connection over the tailnet or an encrypted link, never over a plain Wi-Fi route: with no question on an older app, and through the app's own dialog on a newer one. A changed key and a restored desktop each wait for the person's answer, and an older app on an older desktop updates as it always did.
+- asked: 2026-11-03 (LAN security plan, section 5)
+- shipped: c7661bd2, e44959a9, 2815d9b1
+- note: two layers. The page checks the signature on every app, so a relay cannot swap a bundle once the phone holds a key; a newer app also checks natively, which covers page code that is already compromised, and asks in its own dialog the first time a desktop's key is seen. The signature proves the bundle came from the desktop that was paired, never that its code is good (SECURITY.md). A passive (kids') phone opens no socket, so it never learns a key and takes updates as it did before. Not tried on a phone.

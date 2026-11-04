@@ -6,9 +6,9 @@
  *
  * WebCrypto's own ML-KEM when the WebView has it (`crypto.subtle` "ML-KEM-768", feature-detected
  * once by actually making a key), else the audited pure-JS `@noble/post-quantum`. Its module is
- * EVALUATED only when a phone without native ML-KEM first needs it (a dynamic import), but it is
- * PACKAGED in the static vendor chunk like every dependency (`vite.config.ts`'s `vendorChunk`), so it
- * is on the phone when the link is gone. Keys travel raw: the 1184-byte encapsulation key, the 1088-byte ciphertext, the 32-byte
+ * LOADED only when a phone without native ML-KEM first needs it (a dynamic import, the lazy `noble`
+ * file of `vite.config.ts`'s `vendorChunk`). In the shell that file is in the bundle on the phone, so
+ * it is there when the link is gone; a browser fetches it, and has no Keystore to use it with. Keys travel raw: the 1184-byte encapsulation key, the 1088-byte ciphertext, the 32-byte
  * secret. The private half stays inside the closure (a non-extractable CryptoKey, or noble's bytes).
  */
 

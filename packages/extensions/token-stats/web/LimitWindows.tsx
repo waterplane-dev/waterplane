@@ -1,7 +1,7 @@
 /** The two rate-limit windows, right now: their bars, the figure under each and the readings chart. */
 import { useEffect, useState } from "react";
 import { Clock, Gauge, ScanLine } from "lucide-react";
-import { fmtCount, fmtShare, fmtUsd, tokenTotal, type UsageHistoryDoc, type UsageInfo } from "@waterplane/shared";
+import { fmtCount, fmtShare, fmtUsd, sessionWindowGoneText, tokenTotal, type UsageHistoryDoc, type UsageInfo } from "@waterplane/shared";
 import {
   type CutRefusal, cutRefusalText, isCut, LIVE_WINDOWS, type LiveWindowId, type WindowCut,
 } from "./usageCut.ts";
@@ -82,9 +82,14 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
   /** The reasons no token figure could be put on a row, de-duplicated: both
    *  windows normally fail for the same reason and printing it twice reads as
    *  two faults. */
+  // A plan with no 5-hour window (`sessionGoneSince`, host `usage.ts`): the
+  // session row is ONE sentence, not an empty bar, a "—", a chart refusing to
+  // draw and a complaint about a missing reset time — four ways of looking
+  // broken for one fact about the plan.
+  const noSess = usage?.sessionGoneSince != null;
   const refusals = [...new Set(
     [...(cuts?.entries() ?? [])]
-      .filter(([, c]) => !isCut(c))
+      .filter(([id, c]) => !isCut(c) && !(noSess && id === "session"))
       .map(([id, c]) => {
         const spec = LIVE_WINDOWS.find((w) => w.id === id)!;
         return cutRefusalText(spec, c as CutRefusal);
@@ -92,13 +97,13 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
   )];
 
   const rows = [
-    {
+    ...(noSess ? [] : [{
       label: "5-hour session",
       which: "session" as const,
       pct: usage?.sessionPct ?? null,
       reset: usage?.sessionResetAt ?? null,
       note: "A rolling five-hour window. This is the one you can sit out.",
-    },
+    }]),
     {
       label: "Week (all models)",
       which: "week" as const,
@@ -126,6 +131,16 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
           </Button>
         )}
       </div>
+
+      {noSess && (
+        <div className="ts-lim">
+          <div className="ts-barhead">
+            <span className="ts-barlabel">5-hour session</span>
+            <span className="ts-barval">not on this plan</span>
+          </div>
+          <div className="ts-lim-sub">{sessionWindowGoneText()}</div>
+        </div>
+      )}
 
       {rows.map((r) => (
         <div key={r.label} className="ts-lim">

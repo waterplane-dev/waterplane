@@ -16,11 +16,13 @@
  * Three rules the shape of this file comes from:
  *
  *  - **A bundle is verified before it can replace a working app.** Every file's
- *    sha256 is checked against the manifest, and a mismatch aborts the whole
- *    update rather than landing a half-good bundle. This is protection against a
- *    truncated transfer on a bad link, NOT against a hostile host — the daemon
- *    already runs `claude` on your machine, so it is trusted by construction
- *    (SECURITY.md). It is only ever the host the user paired with.
+ *    sha256 is checked against the file list, and a mismatch aborts the whole
+ *    update rather than landing a half-good bundle. That list comes from inside
+ *    `signed`, under this desktop's pinned key: the relay this guards against
+ *    sends data, never code, because the running page is local and was itself
+ *    verified. `updateTrust.ts` is the policy, `updatePins.ts` how a key comes to
+ *    be believed. The desktop itself stays trusted by construction: it already
+ *    runs `claude` on your machine (SECURITY.md).
  *  - **Nothing is applied while you are looking at it.** A finished download is
  *    *staged*: it takes effect the next time the app is started cold. This is a
  *    remote control for live sessions, and reloading the page mid-turn to install
@@ -36,22 +38,23 @@
  *    whatever bundle is being served — APK or download — instead of by
  *    bookkeeping that can get out of step with reality.
  */
-import { isNativeShell } from "./hostUrl";
+import { isNativeShell, plainHostRoute, plainInShell, whenNetRead } from "./hostUrl";
 import { isDemo } from "./demo/mode";
 import { nativePlugin } from "./shellBridge";
 import { LS, lsDel, lsGet, lsJson, lsSet, lsSetJson } from "./storage";
 import { api, bgFetch } from "./api";
 import { armRouteResume } from "./resumeRoute";
 import { showToast } from "./toast";
-import { cleanBuildStamp, type BuildStamp } from "@waterplane/shared";
+import { PLAIN_ROUTE_NO_UPDATE, cleanBuildStamp, isHostId, type BuildStamp, type HostMessage } from "@waterplane/shared";
 import { shellStampOf } from "./buildVersionWords";
-
-/** One file in the daemon's bundle manifest (host/webbundle.ts). */
-interface BundleFile {
-  path: string;
-  size: number;
-  sha256: string;
-}
+import { activeHost, browserKV } from "./hosts";
+import { cachedPassive } from "./passiveMode";
+import { askConfirm } from "./Confirm";
+import { createUpdateTrust, type PinAnswer, type PinShell } from "./updatePins";
+import {
+  ASK_WORDS, NATIVE_UNVERIFIED_REASON, REFUSAL_WORDS, REFUSED_NOTICE, UNVERIFIED_FALLBACK, askOf, baseOfDial, goodUpdateKey, nativeRefusal,
+  type BundleFile, type NativePin, type SignedBody, type TrustAsk,
+} from "./updateTrust";
 
 interface BundleManifest {
   ok: boolean;
@@ -59,6 +62,18 @@ interface BundleManifest {
   files: BundleFile[];
   total: number;
   reason?: string;
+  /** base64 of the JSON the signature covers. Absent from an older desktop. */
+  signed?: string;
+  /** base64 P1363 `r‖s` over the decoded `signed` bytes. */
+  sig?: string;
+}
+
+/** What may be downloaded: the signed list when there is one, and what `finishBundle` needs. */
+interface Admitted {
+  buildId: string;
+  files: BundleFile[];
+  total: number;
+  proof?: { signed: string; sig: string; key: string; body: SignedBody; rowId: string };
 }
 
 export type UpdatePhase =
@@ -69,6 +84,7 @@ export type UpdatePhase =
   | "downloading"
   | "staged"        // downloaded and verified; takes effect on restart
   | "held"          // the host's build already failed to start on this phone; not taken again unasked
+  | "refused"       // the signature rules stopped this update; `message` says why, `trust` what a person can answer
   | "error";
 
 export interface UpdateStatus {
@@ -81,9 +97,11 @@ export interface UpdateStatus {
   stagedId: string | null;
   /** Files done / total and bytes done / total, while downloading. */
   progress?: { files: number; totalFiles: number; bytes: number; totalBytes: number };
-  /** Populated for `error`, the host's explanation for `unavailable`, or why
-   *  the build is `held` (what the native fallback recorded). */
+  /** Populated for `error`, the host's explanation for `unavailable`, why the
+   *  build is `held` (what the native fallback recorded), or why it is `refused`. */
   message?: string;
+  /** What a person can answer to end a `refused`, which `settleTrust` carries out. */
+  trust?: TrustAsk;
   /** When the host last actually answered a check — not when one was last
    *  attempted, so "up to date" carries a clock a person can distrust. */
   lastCheckedAt: number | null;
@@ -108,6 +126,8 @@ export interface NativeUpdateInfo {
   /** Which build of the SHELL this is — version, commit, build time (`shellStampOf`); null from an
    *  APK that predates the stamp. */
   shell: BuildStamp | null;
+  /** The native pin store; null from an APK with no native verification, which is how one is told. */
+  updateKeys: NativePin[] | null;
 }
 
 type Listener = (s: UpdateStatus) => void;
@@ -183,6 +203,16 @@ function clearApplyTries(): void {
   lsDel(LS_TRIES);
 }
 
+const trust = createUpdateTrust({
+  kv: browserKV,
+  activeRow: activeHost,
+  shell: () => plugin() as unknown as PinShell | null,
+  shellKeys: async () => (await nativeInfo())?.updateKeys ?? null,
+  visible: () => document.visibilityState === "visible",
+  hasSocket: () => !cachedPassive(),
+  confirm: (o) => askConfirm({ ...o, tone: "warn" }),
+});
+
 class UpdateManager {
   private status: UpdateStatus = {
     phase: updateSupported() ? "idle" : "unsupported",
@@ -198,6 +228,8 @@ class UpdateManager {
   private applyTimer: ReturnType<typeof setTimeout> | null = null;
   /** `applyNow()` reloads the WebView, so this is only ever cleared by an error. */
   private applying = false;
+  /** Refusals already told in a toast: a poll must not repeat one. */
+  private told = new Set<string>();
 
   subscribe(cb: Listener): () => void {
     this.listeners.add(cb);
@@ -213,7 +245,105 @@ class UpdateManager {
 
   private set(patch: Partial<UpdateStatus>): void {
     this.status = { ...this.status, ...patch };
+    // Kept through `checking`, or the answer's button blinks on every poll.
+    if (patch.phase && patch.phase !== "checking" && patch.phase !== "refused") this.status.trust = undefined;
     this.emit();
+  }
+
+  /** Stopped by the signature rules: the sentence here, a line once, the app untouched. `quiet`
+   *  for a wait that needs nobody: every cold start can pass through one before its welcome. */
+  private refuse(message: string, ask: TrustAsk | undefined, quiet = false): void {
+    this.set({ phase: "refused", message, trust: ask, progress: undefined });
+    if (quiet || this.told.has(message)) return;
+    this.told.add(message);
+    showToast(REFUSED_NOTICE);
+  }
+
+  /**
+   * The policy table over one manifest. Null when this update stops here, having
+   * said why. A pin is asked and the manifest judged again, so a `yes` carries
+   * straight on into the verification it was asked for.
+   */
+  private async admit(m: BundleManifest, byHand = false): Promise<Admitted | null> {
+    for (let round = 0; round < 2; round++) {
+      const g = await trust.judge(m);
+      if (g.v === "open") return { buildId: m.buildId!, files: m.files, total: m.total };
+      if (g.v === "good") {
+        const rowId = activeHost()?.id;
+        if (!rowId) break;
+        const { buildId, files, total } = g.body;
+        return { buildId, files, total, proof: { signed: m.signed!, sig: m.sig!, key: g.key, body: g.body, rowId } };
+      }
+      if (g.v === "refuse") {
+        this.refuse(REFUSAL_WORDS[g.why], askOf(g.why), g.why === "no-key");
+        return null;
+      }
+      const answer = await trust.ask(g, byHand);
+      if (answer !== "pinned") {
+        this.saidNo(answer, g.change ? "key-changed" : "pin");
+        return null;
+      }
+    }
+    this.refuse(REFUSAL_WORDS["not-verified"], undefined);
+    return null;
+  }
+
+  private saidNo(answer: PinAnswer, ask: Exclude<TrustAsk, "restored">): void {
+    // A "no" to a first pin was just said on screen; a changed key may have asked nobody yet.
+    if (answer === "bad-key") this.refuse(REFUSAL_WORDS["bad-key"], undefined);
+    else this.refuse(ASK_WORDS[ask], ask, ask === "pin");
+  }
+
+  /**
+   * Answer the question a `refused` is waiting on: the tap in App version. Works
+   * from a fresh manifest, so the answer is about what the desktop offers now,
+   * and only on a route where that manifest can be believed.
+   */
+  async settleTrust(): Promise<void> {
+    if (!plugin() || this.busy) return;
+    if (plainHostRoute()) { this.set({ phase: "unavailable", message: PLAIN_ROUTE_NO_UPDATE }); return; }
+    this.busy = true;
+    let ok = false;
+    try {
+      const m = await api.webBundle.manifest<BundleManifest>();
+      if (!m?.ok || !m.buildId) throw new Error(m?.reason || "the host did not answer");
+      if (plainHostRoute()) throw new Error(PLAIN_ROUTE_NO_UPDATE);
+      const g = await trust.judge(m);
+      if (g.v === "refuse" && g.why === "rollback" && g.hostId && g.key) {
+        const a = await trust.restored(g.hostId, g.key);
+        if (a === "pinned") ok = true;
+        else this.refuse(REFUSAL_WORDS.rollback, "restored");
+      } else {
+        ok = !!(await this.admit(m, true));
+      }
+    } catch (e) {
+      this.set({ phase: "error", message: msg(e) });
+    } finally {
+      this.busy = false;
+    }
+    if (ok) void this.check();
+  }
+
+  /**
+   * A `welcome` arrived. Its `updateKey` is believed only when the socket that
+   * delivered it dialled a protected address, and `dialUrl` is that address: the
+   * dial guard writes through it, and `ws.ts` detaches a socket before it dials
+   * another, so a frame here is never from a route this url is not. Before the
+   * shell's first reading a name proves nothing, so it waits for one (`whenNetRead`),
+   * judged on this url whatever the socket dials by then.
+   */
+  noteWelcome(msg: Extract<HostMessage, { t: "welcome" }>, dialUrl: string): void {
+    if (!updateSupported() || isDemo()) return;
+    if (!goodUpdateKey(msg.updateKey) || !isHostId(msg.hostId)) return;
+    const base = baseOfDial(dialUrl), hostId = msg.hostId, key = msg.updateKey;
+    whenNetRead(() => {
+      const row = activeHost();
+      if (!base || !row || plainInShell(base)) return;
+      trust.offer(row.id, { hostId, key });
+      trust.learn().then((a) => {
+        if (a === "pinned" || this.status.phase === "refused") void this.check();
+      }).catch(() => { /* unwritable storage: the next welcome asks again */ });
+    });
   }
 
   /**
@@ -249,6 +379,8 @@ class UpdateManager {
     if (!n || !n.lastRecoveryAt) return;
     if (Number(lsGet(LS_SEEN) ?? 0) >= n.lastRecoveryAt) return;
     lsSet(LS_SEEN, String(n.lastRecoveryAt));
+    // The launch check dropped it: it never failed to start, and `badBuild` is some older failure's.
+    if (n.badReason === NATIVE_UNVERIFIED_REASON) { showToast(UNVERIFIED_FALLBACK); return; }
     const what = n.badBuild ? `Build ${n.badBuild.slice(0, 8)}` : "A downloaded build";
     showToast(`${what} did not start${n.badReason ? ` (${n.badReason})` : ""}, so the app went back to the build inside it. It takes the desktop's next build as usual.`);
   }
@@ -324,27 +456,39 @@ class UpdateManager {
     // the native watchdog would roll the bundle back after three demo boots.
     if (isDemo()) { this.set({ phase: "unavailable", message: DEMO_NO_UPDATE }); return this.status; }
     if (this.busy) return this.status;
+    // The bundle and its hashes come from the same answer, so on plain HTTP a
+    // person on the network could replace both. Reconnecting re-runs this check.
+    if (plainHostRoute()) { this.set({ phase: "unavailable", message: PLAIN_ROUTE_NO_UPDATE }); return this.status; }
     this.set({ phase: "checking", message: undefined });
     try {
       const current = this.status.current ?? (await runningBuildId());
       const m = await api.webBundle.manifest<BundleManifest>();
       if (!m) throw new Error("the host did not answer");
+      // The route can move while the answer is on its way, and the answer is what is believed.
+      if (plainHostRoute()) { this.set({ phase: "unavailable", message: PLAIN_ROUTE_NO_UPDATE }); return this.status; }
       if (!m.ok || !m.buildId) {
         this.set({ phase: "unavailable", current, available: null, message: m.reason || "the host cannot serve a bundle", lastCheckedAt: Date.now() });
         return this.status;
       }
       this.set({ current, available: m.buildId, lastCheckedAt: Date.now() });
-      const held = m.buildId === current ? null : await heldBuild(m.buildId);
-      if (m.buildId === current) {
+      // Nothing to take, so nothing to refuse: a phone already on this build has no use
+      // for a sentence about its signature.
+      if (m.buildId === current) { this.set({ phase: "idle" }); return this.status; }
+      const ok = await this.admit(m);
+      if (!ok) return this.status;
+      const id = ok.buildId;
+      this.set({ available: id });
+      const held = id === current ? null : await heldBuild(id);
+      if (id === current) {
         this.set({ phase: "idle" });
       } else if (held !== null) {
         // The shell fell back from exactly this build. Downloading it again is
         // what turned one white screen into a loop: staged, restarted into on
         // the next pocketing, blank again. Wait for a different build, or for
         // the person to ask for this one by hand (`download(true)`).
-        this.unstage(m.buildId);
+        this.unstage(id);
         this.set({ phase: "held", message: held });
-      } else if (m.buildId === this.status.stagedId) {
+      } else if (id === this.status.stagedId) {
         // Already downloaded on an earlier run; just waiting for a restart.
         this.set({ phase: "staged" });
       } else {
@@ -371,23 +515,29 @@ class UpdateManager {
     const p = plugin();
     if (!p || this.busy) return;
     if (isDemo()) { this.set({ phase: "unavailable", message: DEMO_NO_UPDATE }); return; }
+    if (plainHostRoute()) { this.set({ phase: "unavailable", message: PLAIN_ROUTE_NO_UPDATE }); return; }
     this.busy = true;
     try {
       const m = await api.webBundle.manifest<BundleManifest>();
       if (!m) throw new Error("the host did not answer");
+      if (plainHostRoute()) throw new Error(PLAIN_ROUTE_NO_UPDATE);
       if (!m.ok || !m.buildId) throw new Error(m.reason || "no bundle on the host");
-      const id = m.buildId;
+      const ok = await this.admit(m, force);
+      if (!ok) return;
+      const id = ok.buildId;
 
       this.set({
         phase: "downloading",
         available: id,
-        progress: { files: 0, totalFiles: m.files.length, bytes: 0, totalBytes: m.total },
+        progress: { files: 0, totalFiles: ok.files.length, bytes: 0, totalBytes: ok.total },
       });
 
       await p.beginBundle({ id });
       let bytes = 0;
-      for (let i = 0; i < m.files.length; i++) {
-        const f = m.files[i];
+      for (let i = 0; i < ok.files.length; i++) {
+        const f = ok.files[i];
+        // The route can move mid-download; a bundle never finishes over plain HTTP.
+        if (plainHostRoute()) throw new Error(PLAIN_ROUTE_NO_UPDATE);
         // `v` is the build id, so the URL changes when the build does — the host
         // can answer 304 for a file this device already revalidated.
         const fr = await api.webBundle.file(f.path, id);
@@ -401,9 +551,15 @@ class UpdateManager {
         }
         await p.writeFile({ id, path: f.path, dataBase64: toBase64(buf) });
         bytes += buf.byteLength;
-        this.set({ progress: { files: i + 1, totalFiles: m.files.length, bytes, totalBytes: m.total } });
+        this.set({ progress: { files: i + 1, totalFiles: ok.files.length, bytes, totalBytes: ok.total } });
       }
-      await p.finishBundle({ id });
+      // An APK with no native check ignores the two extra fields; one with it refuses an
+      // unsigned bundle by itself once any key is pinned, and `catch` below words that.
+      const proof = ok.proof;
+      await p.finishBundle(proof ? { id, signed: proof.signed, sig: proof.sig } : { id });
+      // Raised here, at the same step as the native mark, so a bundle later abandoned still
+      // counts: going back to the build inside the APK never lowers this.
+      if (proof) trust.taken(proof.rowId, proof.key, proof.body);
       try {
         await p.stage({ id, force });
       } catch (e) {
@@ -426,7 +582,9 @@ class UpdateManager {
       // Staged while the app is already down: no visibility change is coming.
       if (document.visibilityState === "hidden") this.armApply(APPLY_HIDDEN_MS);
     } catch (e) {
-      this.set({ phase: "error", message: msg(e), progress: undefined });
+      const why = nativeRefusal(e);
+      if (why) this.refuse(REFUSAL_WORDS[why], askOf(why));
+      else this.set({ phase: "error", message: msg(e), progress: undefined });
     } finally {
       this.busy = false;
     }
@@ -450,7 +608,16 @@ class UpdateManager {
     // Re-armed rather than assumed: staging may have happened on an earlier run
     // whose arm a boot in between has already spent.
     armRouteResume();
-    try { await p.applyNow({ id }); } catch (e) { this.set({ phase: "error", message: msg(e) }); }
+    try {
+      await p.applyNow({ id });
+    } catch (e) {
+      const why = nativeRefusal(e);
+      if (!why) { this.set({ phase: "error", message: msg(e) }); return; }
+      // Staged before this phone held a key, or no longer good under it: forget the marker, or
+      // `check` calls it staged for ever. The next check downloads it again, signed.
+      this.unstage(id);
+      this.refuse(REFUSAL_WORDS[why], askOf(why));
+    }
   }
 
   /** Back to the bundle inside the APK — the manual twin of the boot watchdog. */
@@ -467,6 +634,23 @@ class UpdateManager {
 }
 
 export const updates = new UpdateManager();
+
+/**
+ * Ask the native store to drop a desktop's key as its row goes: the shell's dialog is the only
+ * thing that may. True when no pin stays, which includes an APK with no pins and a row never pinned.
+ */
+export async function forgetUpdateKey(row: { hostId?: string; name: string }): Promise<boolean> {
+  const hostId = row.hostId;
+  // `updateKeys`, not `typeof`: Capacitor's plugin object may answer for a method the APK lacks.
+  const held = (await nativeInfo())?.updateKeys?.some((p) => p.hostId === hostId);
+  const shell = plugin() as unknown as PinShell | null;
+  if (!hostId || !held || !shell) return true;
+  try {
+    return (await shell.forgetUpdateKey({ hostId, name: row.name }))?.forgotten === true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Which build is being served to us right now.
@@ -497,6 +681,7 @@ export async function nativeInfo(): Promise<NativeUpdateInfo | null> {
       badReason: typeof r.badReason === "string" ? r.badReason : "",
       lastRecoveryAt: typeof r.lastRecoveryAt === "number" ? r.lastRecoveryAt : 0,
       shell: shellStampOf(r),
+      updateKeys: Array.isArray(r.updateKeys) ? r.updateKeys : null,
     };
   } catch {
     return null;
@@ -507,7 +692,9 @@ export async function nativeInfo(): Promise<NativeUpdateInfo | null> {
 async function heldBuild(id: string): Promise<string | null> {
   const n = await nativeInfo();
   if (!n || n.badBuild !== id) return null;
-  return `build ${id.slice(0, 8)} did not start on this phone${n.badReason ? ` (${n.badReason})` : ""}, so the app went back to the build inside it`;
+  // The launch check writes the reason and leaves the mark: that reason is not why THIS build failed.
+  const reason = n.badReason === NATIVE_UNVERIFIED_REASON ? "" : n.badReason;
+  return `build ${id.slice(0, 8)} did not start on this phone${reason ? ` (${reason})` : ""}, so the app went back to the build inside it`;
 }
 
 export async function runningBuildId(): Promise<string | null> {

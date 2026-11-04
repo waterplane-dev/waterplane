@@ -154,7 +154,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             exactly then. The counts are files, then ↑out ↓in. */}
         {main && (
           <button className={`focus-btn${gitPending(main) ? " count" : ""}`}
-            title={main.gitFailed ? `the last ${main.gitFailed.verb} failed — open git to see why` : main.gitRunning ? `${main.gitRunning === "push" ? "a push" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
+            title={main.gitFailed ? `the last ${main.gitFailed.verb} failed — open git to see why` : main.gitRunning ? `${main.gitRunning === "push" ? "a push" : main.gitRunning === "check" ? "a check" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
             onClick={() => openGitFor(main.id)}>
             {/* A push runs the pre-push checks for minutes; the spinner says so
                 here, so the row is not read as "22 still to push, nothing doing". */}

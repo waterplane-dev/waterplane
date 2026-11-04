@@ -14,6 +14,7 @@ import { core } from "../../sdk";
 import { SetAction, SetCustom, SetNote, SetSwitch, SetWarn } from "../../SettingsKit";
 import { copyText } from "../../api";
 import { requestShellBatteryExemption, shellLinkSupported } from "../../shellLink";
+import { linkErrorWord, linkStateWord, linksStateText } from "../../shellLinkSet";
 import { usePhoneSetup } from "../../usePhoneSetup";
 import { setupSummary } from "../../phoneSetup";
 import { SetupStepRows } from "./PhoneSetupSheet";
@@ -134,12 +135,14 @@ export function HostNotifySettings() {
         <SetSwitch
           id="notif-shell-link" label="background link" icon={shellLink.running ? Wifi : WifiOff}
           on={!!shellLink.running}
-          state={shellLink.enabled ? (shellLink.running ? shellLink.state : "starting…") : "off"}
+          state={shellLink.enabled ? (shellLink.running ? linkStateWord(shellLink.state) : "starting…") : "off"}
           tone={shellLink.error ? "danger" : undefined}
           onChange={toggleShellLink}
           note="Keeps the connection alive with the app closed, and drains queued sends in the background."
         >
-          {shellLink.error && <SetWarn>{shellLink.error}</SetWarn>}
+          {linkErrorWord(shellLink.error) && <SetWarn>{linkErrorWord(shellLink.error)}</SetWarn>}
+          {/* Several desktops: one link each, each state said apart (`linksStateText`). */}
+          {shellLink.enabled && linksStateText(shellLink.links) && <SetNote>{linksStateText(shellLink.links)}</SetNote>}
           {shellLink.enabled && !shellLink.notifications && (
             <SetWarn tone="plain">
               Notification permission is off, so the link runs but cannot tell you anything —

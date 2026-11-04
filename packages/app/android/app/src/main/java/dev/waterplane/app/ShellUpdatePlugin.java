@@ -1,13 +1,20 @@
 package dev.waterplane.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Base64;
+import android.widget.Button;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -17,6 +24,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Over-the-air updates for the web bundle — the native half.
@@ -26,13 +34,26 @@ import java.io.IOException;
  * APK sideloaded onto the phone. Instead the app downloads the daemon's current
  * bundle into its own storage and points the WebView at it.
  *
- * **Almost all of the work is deliberately NOT here.** Checking the version,
- * fetching the files and verifying their hashes all live in `web/webUpdate.ts`,
- * where they are TypeScript, reuse the app's own host-address handling, and can
- * be read and changed without an Android toolchain. This class is only the four
- * things JavaScript in a WebView cannot do: put bytes on the filesystem, tell
- * Capacitor which directory to serve from, survive a restart, and refuse to
- * brick the app.
+ * **The fetching is deliberately NOT here; the final say is.** Checking the
+ * version and fetching the files live in `web/webUpdate.ts`, where they are
+ * TypeScript, reuse the app's own host-address handling, and can be read and
+ * changed without an Android toolchain. That page also checks hashes and the
+ * signature, which stops a relay. It cannot stop page code that is already
+ * compromised from persisting itself, so nothing the page says is taken on
+ * trust here: a desktop's right to update this app is a key a person pinned in
+ * a native dialog, and a bundle counts only once {@link ShellBundleVerify} has
+ * checked its signature, build id, `gen` and exact file set against that pin
+ * ({@link ShellUpdatePins} holds the rules). This class adds the things
+ * JavaScript in a WebView cannot do: put bytes on the filesystem, tell Capacitor
+ * which directory to serve from, survive a restart, and refuse to brick the app.
+ *
+ * **Verified at every door.** `finishBundle` before the rename, `stage` and
+ * `applyNow` again from the `signed` and `sig` kept beside the bundle, and
+ * {@link #maybeRecover} at every launch, because Capacitor's own `WebView` plugin
+ * lets a page write the stored path without coming through here. A launch that
+ * fails the check starts on the APK's bundle, never on a blank page. With no pin
+ * stored at all there is nothing to check against: an older desktop still
+ * updates as it always did.
  *
  * The mechanism is Capacitor's own: `Bridge.setServerBasePath` plus the
  * `serverBasePath` preference the bridge restores at boot. Two of its properties
@@ -110,6 +131,23 @@ public class ShellUpdatePlugin extends Plugin {
     private static final String KEY_APK_INSTALLED_AT = "apkInstalledAt";
 
     /**
+     * The pin store: JSON rows of {hostId, key, gen}, see {@link ShellUpdatePins}.
+     * Written only by a person's answer in a native dialog and by the high-water
+     * mark of a bundle that verified. No plugin method writes it from page input.
+     * Survives a revert, a fallback and a new APK: none of them touch this key.
+     */
+    private static final String KEY_UPDATE_KEYS = "updateKeys";
+    /** Read-modify-write of the store: plugin thread and dialog answers on the UI thread. */
+    private static final Object PIN_LOCK = new Object();
+
+    /**
+     * A tap this soon after the dialog appears is ignored. Page code picks the
+     * moment the dialog opens, so it could otherwise put a button under the
+     * person's finger and let the tap land on Allow.
+     */
+    private static final long DIALOG_TAP_GUARD_MS = 700;
+
+    /**
      * On-screen time a downloaded bundle gets to call `markHealthy` before the
      * shell gives up on it. `main.tsx` calls it from the first committed render
      * — before pairing, before the socket, before any network — so this is a
@@ -126,9 +164,34 @@ public class ShellUpdatePlugin extends Plugin {
     private static volatile long healthyLoad = -1;
     private static final Handler ui = new Handler(Looper.getMainLooper());
 
+    /** The dialog on screen, if any: one at a time, so a page cannot stack them. UI thread only. */
+    private AlertDialog asking;
+
     /** Downloaded bundles live here, one directory per build id. */
     private static File bundlesDir(Context ctx) {
         return new File(ctx.getFilesDir(), "bundles");
+    }
+
+    /**
+     * Where a bundle's `signed` and `sig` are kept. A sibling of {@link #bundlesDir},
+     * not inside it: inside a bundle they would be served and break its exact file
+     * set, and {@link #prune} empties everything else in `bundles`.
+     */
+    private static File manifestFile(Context ctx, String id) {
+        return new File(new File(ctx.getFilesDir(), "bundle-manifests"), id + ".manifest");
+    }
+
+    private static List<ShellUpdatePins.Pin> pins(Context ctx) {
+        synchronized (PIN_LOCK) {
+            return ShellUpdatePins.parse(ours(ctx).getString(KEY_UPDATE_KEYS, ""));
+        }
+    }
+
+    /** `commit`, not `apply`: a crash must not undo a pin or lower the high-water mark. */
+    private static void savePins(Context ctx, List<ShellUpdatePins.Pin> rows) {
+        if (!ours(ctx).edit().putString(KEY_UPDATE_KEYS, ShellUpdatePins.serialize(rows)).commit()) {
+            com.getcapacitor.Logger.warn("shell-update", "could not save the update keys");
+        }
     }
 
     private static SharedPreferences ours(Context ctx) {
@@ -168,6 +231,20 @@ public class ShellUpdatePlugin extends Plugin {
         // blank page Capacitor would serve without complaint. Drop it now.
         if (!stored.isEmpty() && !new File(stored, "index.html").isFile()) {
             dropStoredBundle(ctx, stored, "its files were missing");
+            stored = "";
+            recovered = true;
+        }
+
+        // A stored path that does not verify goes the same way. Not marked bad:
+        // it did not fail to start, and the same build arriving signed is welcome.
+        if (!stored.isEmpty() && !servable(ctx, stored)) {
+            capacitor(ctx).edit().remove(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH).apply();
+            prefs.edit()
+                    .putLong(KEY_LAST_RECOVERY, System.currentTimeMillis())
+                    .putString(KEY_BAD_REASON, "it is not signed by a desktop this phone trusts")
+                    .apply();
+            com.getcapacitor.Logger.warn("shell-update", "dropped unverified bundle " + stored);
+            stored = "";
             recovered = true;
         }
 
@@ -181,6 +258,28 @@ public class ShellUpdatePlugin extends Plugin {
         // so the counter only ever grows across launches that did not get there.
         prefs.edit().putInt(KEY_BOOT_FAILS, fails + 1).apply();
         return recovered;
+    }
+
+    /**
+     * The launch check. The path must be a final bundle directory, because a
+     * `.part` or a directory nested in one is exactly what a page would persist,
+     * and then it must verify. Anything unexpected is a no: the worst outcome
+     * here is the APK's own bundle, and throwing would be a crash at boot.
+     */
+    private static boolean servable(Context ctx, String path) {
+        try {
+            List<ShellUpdatePins.Pin> rows = pins(ctx);
+            if (rows.isEmpty()) return true;
+            File dir = new File(path);
+            String id = dir.getName();
+            if (badId(id) || !dir.getCanonicalFile().equals(new File(bundlesDir(ctx).getCanonicalFile(), id))) {
+                return false;
+            }
+            return ShellUpdatePins.servable(rows, id, ShellUpdatePins.readStored(manifestFile(ctx, id)), dir);
+        } catch (IOException | RuntimeException e) {
+            com.getcapacitor.Logger.warn("shell-update", "cannot check the stored bundle: " + e);
+            return false;
+        }
     }
 
     /** Forget the stored bundle path and remember which build it was and why. */
@@ -291,6 +390,18 @@ public class ShellUpdatePlugin extends Plugin {
                 + prefs.getString(KEY_BAD_REASON, "no reason recorded") + ")";
     }
 
+    /** Re-verify a final directory from what was kept beside it. True if the call was rejected. */
+    private boolean refuseUnverified(PluginCall call, String id, File dest) {
+        Context ctx = getContext();
+        try {
+            ShellUpdatePins.recheck(pins(ctx), id, ShellUpdatePins.readStored(manifestFile(ctx, id)), dest);
+            return false;
+        } catch (ShellBundleVerify.Refused e) {
+            call.reject(e.getMessage(), e.code);
+            return true;
+        }
+    }
+
     /** Where we are running from, and whether a recovery has ever fired. */
     @PluginMethod
     public void info(PluginCall call) {
@@ -302,6 +413,15 @@ public class ShellUpdatePlugin extends Plugin {
         ret.put("lastRecoveryAt", ours(getContext()).getLong(KEY_LAST_RECOVERY, 0));
         ret.put("badBuild", ours(getContext()).getString(KEY_BAD_BUILD, ""));
         ret.put("badReason", ours(getContext()).getString(KEY_BAD_REASON, ""));
+        JSArray keys = new JSArray();
+        for (ShellUpdatePins.Pin p : ShellUpdatePins.real(pins(getContext()))) {
+            JSObject row = new JSObject();
+            row.put("hostId", p.hostId);
+            row.put("key", p.key);
+            row.put("gen", p.gen);
+            keys.put(row);
+        }
+        ret.put("updateKeys", keys);
         // The APK's OWN version, which is a different question from the bundle's
         // build id and had no answer at all. The web layer updates itself over
         // the air; the shell around it does not, so "is the binary current?"
@@ -384,16 +504,52 @@ public class ShellUpdatePlugin extends Plugin {
         call.resolve();
     }
 
-    /** Rename the completed `.part` into its final directory. */
+    /**
+     * Verify the completed `.part` and rename it into its final directory: the
+     * only way a final directory comes to exist. Plugin calls run one at a time
+     * on one thread, so no `writeFile` can land between the check and the rename.
+     * A refused bundle leaves any earlier directory of that id as it was.
+     */
     @PluginMethod
     public void finishBundle(PluginCall call) {
         String id = call.getString("id");
         if (badId(id)) { call.reject("bad bundle id"); return; }
-        File part = new File(bundlesDir(getContext()), id + ".part");
-        File dest = new File(bundlesDir(getContext()), id);
-        if (!new File(part, "index.html").isFile()) { call.reject("bundle has no index.html"); return; }
+        Context ctx = getContext();
+        String signed = call.getString("signed");
+        String sig = call.getString("sig");
+        File part = new File(bundlesDir(ctx), id + ".part");
+        File dest = new File(bundlesDir(ctx), id);
+        File kept = manifestFile(ctx, id);
+        if (!new File(part, "index.html").isFile()) {
+            deleteRecursive(part);
+            call.reject("bundle has no index.html");
+            return;
+        }
+        ShellBundleVerify.Manifest verified;
+        try {
+            verified = ShellUpdatePins.admit(pins(ctx), id, signed, sig, part);
+            if (verified != null) ShellUpdatePins.writeStored(kept, signed, sig);
+        } catch (ShellBundleVerify.Refused e) {
+            deleteRecursive(part);
+            call.reject(e.getMessage(), e.code);
+            return;
+        } catch (IOException e) {
+            deleteRecursive(part);
+            call.reject("cannot keep the bundle's signature", ShellBundleVerify.NOT_VERIFIED, e);
+            return;
+        }
+        if (verified == null) deleteRecursive(kept);   // an unsigned bundle replaces a signed one of this id
         deleteRecursive(dest);
-        if (!part.renameTo(dest)) { call.reject("cannot finalise bundle"); return; }
+        if (!part.renameTo(dest)) {
+            deleteRecursive(kept);
+            call.reject("cannot finalise bundle");
+            return;
+        }
+        if (verified != null) {
+            synchronized (PIN_LOCK) {
+                savePins(ctx, ShellUpdatePins.raise(pins(ctx), verified.hostId, verified.gen));
+            }
+        }
         JSObject ret = new JSObject();
         ret.put("path", dest.getAbsolutePath());
         call.resolve(ret);
@@ -414,6 +570,9 @@ public class ShellUpdatePlugin extends Plugin {
         if (badId(id)) { call.reject("bad bundle id"); return; }
         File dest = new File(bundlesDir(getContext()), id);
         if (!new File(dest, "index.html").isFile()) { call.reject("no such bundle"); return; }
+        // Before `refuseBad`: `force` answers a build that failed to start and
+        // nothing else, and it clears that mark, so it must not run on a refusal.
+        if (refuseUnverified(call, id, dest)) return;
         String refused = refuseBad(call, id);
         if (refused != null) { call.reject(refused, "BAD_BUILD"); return; }
         capacitor(getContext()).edit()
@@ -430,6 +589,9 @@ public class ShellUpdatePlugin extends Plugin {
         if (badId(id)) { call.reject("bad bundle id"); return; }
         File dest = new File(bundlesDir(getContext()), id);
         if (!new File(dest, "index.html").isFile()) { call.reject("no such bundle"); return; }
+        // Before `refuseBad`: `force` answers a build that failed to start and
+        // nothing else, and it clears that mark, so it must not run on a refusal.
+        if (refuseUnverified(call, id, dest)) return;
         String refused = refuseBad(call, id);
         if (refused != null) { call.reject(refused, "BAD_BUILD"); return; }
         capacitor(getContext()).edit()
@@ -454,6 +616,116 @@ public class ShellUpdatePlugin extends Plugin {
         bridge.setServerAssetPath("public");
     }
 
+    // ── pins: only a person's tap writes these ───────────────────────────
+    /**
+     * Pin a desktop's update key. Resolves `{pinned}`. Every new key needs a yes
+     * in a native dialog, which page code cannot tap, so the first pin asks too;
+     * the key already pinned for this desktop asks nothing. Declined, or with no
+     * resumed activity to ask on: `{pinned:false}`, nothing stored, and the page
+     * can ask again on a later connect.
+     */
+    @PluginMethod
+    public void pinUpdateKey(PluginCall call) {
+        String hostId = call.getString("hostId");
+        String key = call.getString("key");
+        if (!ShellBundleVerify.goodHostId(hostId) || !ShellBundleVerify.validKey(key)) {
+            call.reject("that is not a desktop's update key", "BAD_KEY");
+            return;
+        }
+        Context ctx = getContext();
+        ShellUpdatePins.Ask ask = ShellUpdatePins.ask(pins(ctx), hostId, key);
+        if (ask == ShellUpdatePins.Ask.ALREADY_PINNED) { answer(call, "pinned", true); return; }
+        String name = ShellUpdatePins.safeName(call.getString("name"), hostId);
+        askPerson(ShellUpdatePins.pinWords(ask, name, key), yes -> {
+            if (yes) {
+                synchronized (PIN_LOCK) {
+                    savePins(ctx, ShellUpdatePins.accept(pins(ctx), hostId, key));
+                }
+            }
+            answer(call, "pinned", yes);
+        });
+    }
+
+    /**
+     * Forget a desktop's update key, through the same kind of dialog: dropping a
+     * pin loosens what this phone accepts, so page code cannot do it alone.
+     * Resolves `{forgotten}`, true when no pin for this desktop remains, which
+     * includes one that never had any. Its `gen` goes with the row.
+     */
+    @PluginMethod
+    public void forgetUpdateKey(PluginCall call) {
+        String hostId = call.getString("hostId");
+        if (!ShellBundleVerify.goodHostId(hostId)) { call.reject("bad host id", "BAD_KEY"); return; }
+        Context ctx = getContext();
+        List<ShellUpdatePins.Pin> rows = pins(ctx);
+        if (ShellUpdatePins.forget(rows, hostId).size() == rows.size()) { answer(call, "forgotten", true); return; }
+        String name = ShellUpdatePins.safeName(call.getString("name"), hostId);
+        askPerson(ShellUpdatePins.forgetWords(name, rows.size() == 1), yes -> {
+            if (yes) {
+                synchronized (PIN_LOCK) {
+                    savePins(ctx, ShellUpdatePins.forget(pins(ctx), hostId));
+                }
+            }
+            answer(call, "forgotten", yes);
+        });
+    }
+
+    private static void answer(PluginCall call, String field, boolean value) {
+        JSObject ret = new JSObject();
+        ret.put(field, value);
+        call.resolve(ret);
+    }
+
+    private interface Answer {
+        void got(boolean yes);
+    }
+
+    /**
+     * Put the question on screen. Answers exactly once: yes only from the
+     * positive button; no from the other button, Back, an outside tap, the
+     * activity going away, or there being no resumed activity to ask on.
+     *
+     * @param words title, message, yes, no
+     */
+    private void askPerson(String[] words, Answer then) {
+        AppCompatActivity activity = getActivity();
+        if (activity == null) { then.got(false); return; }
+        activity.runOnUiThread(() -> {
+            boolean resumed = !activity.isFinishing()
+                    && activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED);
+            if (!resumed || asking != null) { then.got(false); return; }
+            boolean[] said = { false };
+            AlertDialog dialog = new AlertDialog.Builder(activity)
+                    .setTitle(words[0])
+                    .setMessage(words[1])
+                    .setPositiveButton(words[2], null)
+                    .setNegativeButton(words[3], null)
+                    .setOnDismissListener(d -> {
+                        asking = null;
+                        if (!said[0]) then.got(false);
+                    })
+                    .create();
+            asking = dialog;
+            dialog.show();
+            long shownAt = SystemClock.uptimeMillis();
+            Button allow = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            // Another app drawing over the dialog must not be able to pass a tap through it.
+            allow.setFilterTouchesWhenObscured(true);
+            allow.setOnClickListener(v -> {
+                if (SystemClock.uptimeMillis() - shownAt < DIALOG_TAP_GUARD_MS) return;
+                said[0] = true;
+                dialog.dismiss();
+                then.got(true);
+            });
+        });
+    }
+
+    /** An open dialog dies with the window, so answer its call now. */
+    @Override
+    protected void handleOnDestroy() {
+        if (asking != null) asking.dismiss();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
     /** Build ids are hex from the host; anything else has no business as a path. */
     private static boolean badId(String id) {
@@ -473,6 +745,14 @@ public class ShellUpdatePlugin extends Plugin {
         String running = base == null ? "" : new File(base).getName();
         for (File k : kids) {
             if (!k.getName().equals(keepId) && !k.getName().equals(running)) deleteRecursive(k);
+        }
+        // What was kept for them goes too. Everything else in there has no bundle.
+        File keep = manifestFile(getContext(), keepId);
+        File keepRunning = manifestFile(getContext(), running);
+        File[] manifests = keep.getParentFile().listFiles();
+        if (manifests == null) return;
+        for (File m : manifests) {
+            if (!m.equals(keep) && !m.equals(keepRunning)) deleteRecursive(m);
         }
     }
 

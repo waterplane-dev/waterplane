@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, FolderTree, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, FolderTree, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { GitBranch, GitFile, GitPushProgress, GitPushState, GitStatus } from "@waterplane/shared";
 import { api, copyText } from "./api";
 import { track } from "./usage";
@@ -79,6 +79,7 @@ function pushTook(p: GitPushState): string {
 function pushEndedWords(p: GitPushState): string {
   const r = p.result!;
   const took = pushTook(p);
+  if (p.check) return r.ok ? `${r.output ?? "Checks passed."} Took ${took}.` : `Checks failed after ${took}. ${r.error}`;
   return r.ok ? `Pushed in ${took}: ${r.output?.split("\n").slice(-1)[0] ?? "ok"}` : `Push failed after ${took}. ${r.error}`;
 }
 
@@ -179,6 +180,8 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
   const [pushStart, setPushStart] = useState<number | null>(null);
   /** What the running push has printed so far, off the same poll as its end. */
   const [pushProgress, setPushProgress] = useState<GitPushProgress | null>(null);
+  /** The running job only runs the hook (`GitPushState.check`): it pushes nothing, and its label says so. */
+  const [checkRun, setCheckRun] = useState(false);
   const [, tick] = useState(0);
   useEffect(() => {
     if (pushStart == null) return;
@@ -331,9 +334,37 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
     try {
       const p = await api.gitPush(repoId);
       setPushStart(p.startedAt);
+      setCheckRun(!!p.check);
+      if (p.check) { setNote(`${before}This repo's checks are running, and nothing gets pushed by them. Push once they end.`); return; }
       setNote(`${before}Pushing${ahead ? ` ${ahead} commit${ahead > 1 ? "s" : ""}` : ""}. The desktop runs this repo's pre-push checks first (build, lint, tests) — that can take many minutes. You can leave this screen; the push carries on, and reopening it picks the clock back up.`);
     } catch (e) {
       setNote(`${before}The push did not start: ${(e as Error).message}`);
+    }
+  }
+  /** The hook alone, on HEAD or a commit from the history. The same job as a push, so the same clock and steps. */
+  async function runChecks(sha?: string) {
+    if (pushStart != null) return;
+    track("action:git.check");
+    try {
+      const p = await api.gitCheck(repoId, sha);
+      setPushStart(p.startedAt);
+      setCheckRun(!!p.check);
+      setNote(`${p.check ? "Running this repo's pre-push checks. Nothing is pushed." : "A push is already running here; following it."} You can leave this screen; the desktop carries on and notifies you when it ends.`);
+    } catch (e) {
+      setNote(`The checks did not start: ${(e as Error).message}`);
+    }
+  }
+  /** Only the commits up to `sha`; newer ones stay here. The hook still runs, and takes seconds where it remembers a pass. */
+  async function pushTo(sha: string, commits: number) {
+    if (pushStart != null) return;
+    track("action:git.pushTo");
+    try {
+      const p = await api.gitPushTo(repoId, sha);
+      setPushStart(p.startedAt);
+      setCheckRun(!!p.check);
+      setNote(`Pushing ${commits} commit${commits > 1 ? "s" : ""} up to ${sha.slice(0, 7)}; newer commits stay here. The pre-push hook runs first.`);
+    } catch (e) {
+      setNote(`The push did not start: ${(e as Error).message}`);
     }
   }
   /**
@@ -384,13 +415,14 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
       if (ac.signal.aborted || !p) return;
       if (p.running) {
         setPushStart(p.startedAt);
+        setCheckRun(!!p.check);
         setPushProgress(p.progress ?? null);
-        setNote((cur) => cur ?? "A push is running on the desktop — its pre-push checks first, then the push itself.");
+        setNote((cur) => cur ?? (p.check ? "This repo's pre-push checks are running on the desktop. Nothing is pushed." : "A push is running on the desktop — its pre-push checks first, then the push itself."));
       } else if (p.result && Date.now() - p.result.finishedAt < PUSH_RECENT_MS) {
         // A note already on screen wins — this effect races the first taps.
         setNote((cur) => {
           if (cur) return cur;
-          const text = `Last push, ${elapsed(Date.now() - p.result!.finishedAt)} ago — ${pushEndedWords(p)}`;
+          const text = `Last ${p.check ? "check" : "push"}, ${elapsed(Date.now() - p.result!.finishedAt)} ago — ${pushEndedWords(p)}`;
           if (!p.result!.ok && p.result!.error) setFailure({ note: text, f: { verb: "push", took: pushTook(p), error: p.result!.error } });
           return text;
         });
@@ -408,7 +440,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
       if (!p || p.startedAt !== pushStart) {
         setPushStart(null);
         setPushProgress(null);
-        setNote("The desktop no longer knows this push — it restarted while the push ran. The counts above say whether the commits went.");
+        setNote(checkRun ? "The desktop no longer knows this check — it restarted while the check ran, so there is no verdict." : "The desktop no longer knows this push — it restarted while the push ran. The counts above say whether the commits went.");
         refresh();
         return;
       }
@@ -481,7 +513,9 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
     return <GitExplain repoId={repoId} ahead={status?.ahead ?? 0} behind={status?.behind ?? 0} onFetched={refresh} onClose={() => setExplaining(false)} />;
   }
   if (logFocus) {
-    return <GitLogView repoId={repoId} focus={logFocus} onFocus={setLogFocus} onFetched={refresh} onClose={() => setLogFocus(null)} />;
+    return <GitLogView repoId={repoId} focus={logFocus} onFocus={setLogFocus} onFetched={refresh} onClose={() => setLogFocus(null)}
+      onCheck={(sha) => { setLogFocus(null); void runChecks(sha); }}
+      onPushTo={(sha, n) => { setLogFocus(null); void pushTo(sha, n); }} />;
   }
 
   // ── Single-file diff view ───────────────────────────────────────────
@@ -500,7 +534,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
   // Push needs no commit first: it sends what is already committed and leaves
   // the working tree alone. The count says how much that is.
   const pushLabel = pushStart != null
-    ? <><Loader size={14} className="spin" /> pushing… {elapsed(Date.now() - pushStart)}</>
+    ? <><Loader size={14} className="spin" /> {checkRun ? "checking" : "pushing"}… {elapsed(Date.now() - pushStart)}</>
     : <><ArrowUpFromLine size={14} /> {pushLabelText(status?.branchRules, status?.ahead ?? 0)}</>;
   // The count is as of the desktop's last fetch (`incoming` says how old); the pull fetches first.
   const incoming = status ? incomingReading(status) : { kind: "none" as const };
@@ -517,6 +551,12 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
         title="pull, then push whatever is still ahead">
         <ArrowDownUp size={14} /> Sync
       </Button>
+      {(status?.ahead ?? 0) > 0 && pushStart == null && (
+        <Button onClick={() => { void runChecks(); }} disabled={busy}
+          title="run this repo's pre-push checks on the newest commit — nothing is pushed; the history then shows the verdict on that commit">
+          <ShieldCheck size={14} /> Run checks
+        </Button>
+      )}
       {/* Last: the one control in this row that spends, and it only reads. */}
       <Button onClick={() => { track("action:git.explainOpen"); setExplaining(true); }}
         title="have the desktop explain what a push would send and a pull would bring — security, user-facing changes, what needs deploying">

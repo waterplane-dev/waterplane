@@ -7,15 +7,15 @@
  * cannot do a verb does not draw it; nothing here is ever greyed.
  */
 import { useState } from "react";
-import { Check, FlaskConical, Globe, KeyRound, Link2, LogOut, Pencil, Plus, QrCode, Router, Server, Trash2 } from "lucide-react";
+import { Check, FlaskConical, Globe, KeyRound, Link2, LogOut, Pencil, Plus, QrCode, Router, Server, ShieldOff, Trash2 } from "lucide-react";
 import { Sheet } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { HostSetup } from "../../HostSetup";
 import { isDemoHost } from "../../hosts";
 import { leaveDemo, tryDemo } from "../../demoEntry";
-import { useBackStep, useCore } from "../../sdk";
-import { confirmRemoveHost, openPairQr, showAddHost, showEditHost, showHostList, switchHost } from "./actions";
-import { hostAddress, hostRows } from "./logic";
+import { hasShellTls, useBackStep, useCore } from "../../sdk";
+import { askPlainHttp, confirmRemoveHost, openPairQr, pairHostByCode, showAddHost, showEditHost, showHostList, switchHost } from "./actions";
+import { PLAIN_BY_CHOICE_TEXT, hostAddress, hostRows } from "./logic";
 import { useHostRoute, useHosts, useSwitcherView } from "./store";
 import { usePeersSheet } from "../../peersSlot";
 import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
@@ -42,7 +42,8 @@ export function HostSwitcherSheet() {
     // A pairing deep-link `…://pair` link filled this in; nothing is sent until "pair".
     return (
       <Sheet title="Pair with a desktop" icon={<KeyRound size={ICON} />} onClose={showHostList}>
-        <HostSetup mode="add" pair={v.target} pairFromLink onDone={showHostList} onCancel={showHostList} />
+        {/* The key: "change LAN settings" goes from here to the edit form below, the same element to React. */}
+        <HostSetup key="pair" mode="add" pair={v.target} pairFromLink={!v.typed} onDone={showHostList} onCancel={showHostList} onEditLan={(h) => showEditHost(h.id)} />
       </Sheet>
     );
   }
@@ -93,6 +94,8 @@ export function HostSwitcherSheet() {
                 </Row>
               );
             }
+            // Only a shell that enforces a pin can be stopped by one, so only there is a way out.
+            const pinned = !!h.tls && hasShellTls();
             return (
               <Row key={h.id} kind="wrap">
                 {active ? (
@@ -104,14 +107,22 @@ export function HostSwitcherSheet() {
                         {route.route === "lan" ? <Router size={12} /> : <Globe size={12} />} {route.sentence}
                       </RowSub>
                     )}
+                    {h.tlsOff && <RowSub>{PLAIN_BY_CHOICE_TEXT}</RowSub>}
                   </Row>
                 ) : (
                   <Row as="button" kind="grow" onClick={() => switchHost(h.id)}>
                     <RowTitle>{h.name}</RowTitle>
                     <RowSub className="dim">{hostAddress(h.base)} · tap to switch</RowSub>
+                    {h.tlsOff && <RowSub>{PLAIN_BY_CHOICE_TEXT}</RowSub>}
                   </Row>
                 )}
                 <div className="row-acts">
+                  {(h.tlsOff || (active && route?.trouble)) && (
+                    <Button title="pair this phone with the desktop again, with a code from its screen" onClick={() => pairHostByCode(h)}><KeyRound size={ICON} /> pair by code</Button>
+                  )}
+                  {pinned && (
+                    <Button aria-label={`use plain HTTP for ${h.name}`} title="use plain HTTP for this desktop" onClick={() => void askPlainHttp(h)}><ShieldOff size={ICON} /></Button>
+                  )}
                   {/* The QR is minted by the host this page talks to — the
                       active one — so only its row offers it. */}
                   {active && (

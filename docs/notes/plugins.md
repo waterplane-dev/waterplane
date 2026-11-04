@@ -1,6 +1,6 @@
 # waterplane plugins — extending waterplane from outside the repo
 
-**Contract:** `packages/shared/src/plugin.ts` (types, manifest validator, value cleaning). This note is
+**Contract:** `packages/shared/src/plugin.ts` (a barrel over `plugin/`: the version, the manifest validator and value cleaning, the API, the backend descriptor, the module shape). This note is
 the reasoning; the contract is the rule.
 
 Two things that sound alike and are kept apart on purpose:
@@ -42,7 +42,7 @@ what this project vouches for; the topic is everything that exists.
 
 ## The API is versioned: semver, one rule
 
-`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`2.2.0` now). A manifest's `apiVersion` (`"2.2"`, or a
+`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`2.7.0` now). A manifest's `apiVersion` (`"2.2"`, or a
 bare `2`, meaning `2.0`) loads when its **major
 equals the host's and its minor is no newer**; the patch is never compared. Anything else is
 refused before any of its code runs, as a sentence naming both versions and which side is behind
@@ -116,7 +116,7 @@ and what holds it now:
 |---|---|
 | offline: a sheet must exist with the tunnel down | a plugin's web half ships INSIDE the webbundle / OTA update and is staged with it; never fetched when a sheet opens |
 | crash isolation: a bad plugin must not take the app down | one error boundary per contributed sheet, row, chip and action; a throw shows `Unavailable` with the reason, like a host plugin in `state: "error"` |
-| version skew between plugin UI and app | `sdkVersion` in the manifest, checked at load like `apiVersion`; React, lucide and the kit are the app's, never bundled by the plugin |
+| version skew between plugin UI and app | nothing to skew: an extension's web half compiles into the app's own bundle and an external plugin only declares UI the app draws, so `apiVersion` is the one version checked at load; React, lucide and the kit are the app's, never bundled by the plugin |
 | access to the phone's origin (localStorage, auth token, the socket) | the same trust as the host half, which can do worse; in-repo it is lint-enforced by `local/extension-boundary`, for an external one it is what installing means |
 | an engine too big for every OTA update (2026-10-24, `ocr`) | the ONE exception: an extension's manifest `assets` dir is served by the host at `/api/plugin/<id>/asset/<file>` and downloaded to the phone when the person ENABLES the extension, kept in IndexedDB (`sdk` `extAssets`, store `extassets`) for offline use — not Cache Storage, which the APK (no service worker) and plain http (no Cache API) lack; the `/ext-asset/` service-worker route stays unused. Only a worker/WASM engine and its data, started by the extension's bundle code; never a sheet, row or UI piece, never fetched when a sheet opens. Same trust: the host already serves the bundle |
 | the invariants (one socket, the queue, no draft clobber, the answer gate) | the ONLY route to each goes through the SDK: send = the queue, answer = the gate, wire = `plugin.call` on the one socket. Reaching past the SDK is what the lint catches |
@@ -175,7 +175,7 @@ its readers with it. **The reader answers only questions about its own binary; t
 rule that is not about pixels or rows**:
 
 - **`PluginScreenReader`** — a dialog with NO numbers, answered by walking a selection. Core
-  (`sessions/boxread.ts`'s `checkNavBox`, `choosePromptBox`) keeps the cheap gate on the stripped tail,
+  (`sessions/boxread.ts`'s `checkNavBox`, `sessions/boxes.ts`'s `choosePromptBox`) keeps the cheap gate on the stripped tail,
   the render, the miss budget and the resize grace, and the walk that sends ONE arrow per pass,
   RE-READS, and refuses rather than pressing Return on the wrong row. The reader answers
   `candidate(tail)`, `read(rows)`, `prompt(box)`, `stillUp(rows)`, `navTo(box, choice)`. A throw is "no box".
@@ -453,7 +453,7 @@ checkout either way.
 verbatim, so moving one out is a folder move, not a rewrite. One folder holding the whole extension
 also means a diff confined to it is visibly confined. The first
 is `requirements` (the setup row and its set-up fix, moved out of `host/src/requirements.ts`; the
-row's words are pinned by `packages/host/test/requirementsrow.test.mjs`). The second is `token-stats`, **web-only** (no `host/`): the token statistics screen, reading the ledgers through `@waterplane/sdk`'s `ledgers`; see [token-stats-architecture.md](token-stats-architecture.md). `scorecard` is optional and shows a repo's public OpenSSF Scorecard (host reads the API, phone draws a chip and a sheet; README in its folder). `android-apps` is optional and **on by itself when this desktop has an Android repo** (`autoOn`, probed once and cached; switchable in plugin settings): the phone's Apps screen (one card per app: build, download, install) and the install log, which it owns over plugin methods and reads the readiness walk through `api.repoApps()` — [android-apps-architecture.md](android-apps-architecture.md). The third is `opencode`, **host-only** and **private** (left out of the public snapshot, `deploy/public-allowlist.txt`): the opencode BACKEND on `api.backend()` — the descriptor, the hybrid and its `serve` children, and its two readers on `api.screenReader`/`api.storeReader` (above) — the first extension that is `optional` and `experimental`. Its tests, e2e and stubs live in its folder (`test/`, `e2e/`, `scripts/`); core finds them by glob, and builds and tests without them (`tools/publictree.test.mjs`, `scripts/verify-public-tree.mjs`).
+row's words are pinned by `packages/host/test/requirementsrow.test.mjs`). The second is `token-stats`, **web-only** (no `host/`): the token statistics screen, reading the ledgers through `@waterplane/sdk`'s `ledgers`; see [token-stats-architecture.md](token-stats-architecture.md). `scorecard` is optional and shows a repo's public OpenSSF Scorecard (host reads the API, phone draws a chip and a sheet; README in its folder). `android-apps` is optional and **on by itself when this desktop has an Android repo** (`autoOn`, probed once and cached; switchable in plugin settings): the phone's Apps screen (one card per app: build, download, install) and the install log, which it owns over plugin methods and reads the readiness walk through `api.repoApps()` — [android-apps-architecture.md](android-apps-architecture.md). `opencode` is **private** (a host half, plus a token-stats view in `web/` and readers in `shared/`; left out of the public snapshot, `deploy/public-allowlist.txt`): the opencode BACKEND on `api.backend()` — the descriptor, the hybrid and its `serve` children, and its two readers on `api.screenReader`/`api.storeReader` (above) — the first extension that is `optional` and `experimental`. Its tests, e2e and stubs live in its folder (`test/`, `e2e/`, `scripts/`); core finds them by glob, and builds and tests without them (`tools/publictree.test.mjs`, `scripts/verify-public-tree.mjs`). The rest (`copilot-usage`, `desktop`, `diskspace`, `links`, `ocr`, `permissions`, `vault`) each say what they are in their folder's README.
 
 **What a backend extension needed from the API** (additive, `PLUGIN_API_VERSION` unchanged): `PluginLaunchRequest.cwd`/`hostSessionId`/`forkAtTurn`, `PluginLaunchPlan.exec`, `delivery`/`caps`/`sources` read THROUGH a def's getters (`pluginDescriptor` never copies them), and `HostPluginModule.shutdown()` — synchronous, run by `PluginRegistry.shutdownAll()` as the daemon exits, for every loaded module, the place to kill child processes (`deactivate` is a switch-off, which must not kill a running session's server). Manifest: `optional`, `experimental` (→ `BackendInfo.experimental`).
 
@@ -462,8 +462,7 @@ row's words are pinned by `packages/host/test/requirementsrow.test.mjs`). The se
 `shared/**` import only `@waterplane/shared`, `node:*` builtins (host only) and paths inside their own
 extension — never `packages/host/src`; the daemon arrives as the `HostPluginApi` handed to
 `activate`. Core imports an extension only through `features/registry.ts` → `<id>/web/index.ts`
-and `plugins/builtin.ts` → `<id>/host/index` (today that one resolves a path string, not an
-import). The web half's list is in [web-architecture.md](web-architecture.md#the-boundary-enforced).
+and `plugins/builtin.ts` → `<id>/host/index` (a dynamic `import()` of a resolved path, not a static import). The web half's list is in [web-architecture.md](web-architecture.md#the-boundary-enforced).
 
 - **The same `HostPluginApi` object** (`makeApi`), for every folder `packages/host/src/plugins/builtin.ts`
   DISCOVERS (a manifest naming a `host` module, in id order) — a folder, never a core edit, so a

@@ -3,7 +3,10 @@
  * host this page talks to (`POST /api/pair/mint`) and shows it three ways — a
  * QR of the landing URL (`host/pair.ts` renders that page: web version or
  * the APK), the code as text for typing into another phone's "pair with code",
- * and the landing address.
+ * and the landing address. A desktop with no tailnet shows the deep link
+ * instead (`pairLinkOf`): its landing URL is a plain address, and opening that burns the code.
+ * A desktop with both offers the same for a new phone with no Tailscale: the landing URL is a tailnet
+ * address that phone cannot reach, and the sheet's QR never carried the deep link's `l=`.
  *
  * Works in the browser PWA too (D10): minting needs a trusted, signed-in
  * caller, which this page already is. The countdown runs from when THIS phone
@@ -14,12 +17,13 @@
 import { useEffect, useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
 import { PASSIVE_PAIR_NOTE, PAIR_TTL_MS, formatPairCode, type PairMintResponse } from "@waterplane/shared";
-import { Baby, Clock, ExternalLink, Loader2, QrCode, RotateCw, Smartphone } from "lucide-react";
+import { Baby, Clock, ExternalLink, Loader2, QrCode, RotateCw, Smartphone, Wifi } from "lucide-react";
 import { Sheet } from "../../Sheet";
 import { api } from "../../api";
 import { isNativeShell } from "../../hostUrl";
 import { openExternal } from "../../openExternal";
 import { PairCopyRows } from "../../PairCopyRows";
+import { pairLanOnly, pairLinkOf } from "../../pairShare";
 import { useCore } from "../../sdk";
 import { codeLeftText, qrPath } from "./logic";
 import { Button } from "../../kit";
@@ -70,6 +74,8 @@ export function HostQrSheet() {
   // else until the PIN unlocks it (`shared/passive.ts`). A new code per flip —
   // the scope is the code's, decided when it is minted.
   const [passive, setPassive] = useState(false);
+  // The new phone has no Tailscale: the QR and the copy rows hold `lanDeepLink`.
+  const [wantLan, setWantLan] = useState(false);
 
   async function mint(asPassive = passive): Promise<void> {
     setMinted({ s: "busy" });
@@ -91,6 +97,7 @@ export function HostQrSheet() {
   const left = minted.s === "ok" ? codeLeftText(minted.until - now) : null;
 
   const here = appMayBeHere();
+  const overLan = wantLan && minted.s === "ok" && !!minted.m.lanDeepLink;
 
   return (
     <Sheet title="Pair another phone" icon={<QrCode size={ICON} />} onClose={() => c.nav.close("pairqr")}>
@@ -132,29 +139,55 @@ export function HostQrSheet() {
             )}
             {here && <div className="pair-or">or on another phone</div>}
             <section className="pair-card pair-card-qr">
-              <Qr text={minted.m.landingUrl} />
+              <Qr text={pairLinkOf(minted.m, overLan)} />
               <div className="pair-code">{formatPairCode(minted.m.code)}</div>
               <div className="pair-ttl"><Clock size={12} /> {left} · works once</div>
+              {minted.m.updateKeyFingerprint && (
+                <SetNote className="pair-centre">
+                  Update key, for the question the app asks after pairing: <code style={{ overflowWrap: "anywhere" }}>{minted.m.updateKeyFingerprint}</code>
+                </SetNote>
+              )}
               <SetNote className="pair-centre">
                 Scan with the other phone's camera, or type the code into its "pair with code" with the address{" "}
-                <code>{minted.m.base.replace(/^https?:\/\//, "")}</code>.
+                <code>{(overLan ? minted.m.lanBase ?? minted.m.base : minted.m.base).replace(/^https?:\/\//, "")}</code>.
               </SetNote>
+              {minted.m.lanDeepLink && (
+                <Button title="switches this QR and the link below between the tailnet and the Wi-Fi" onClick={() => setWantLan(!overLan)}>
+                  <Wifi size={13} /> {overLan ? "it has Tailscale: show the usual QR" : "no Tailscale on it? show the Wi-Fi QR"}
+                </Button>
+              )}
             </section>
             <section className="pair-card">
-              <PairCopyRows m={minted.m} hostName={null} />
+              <PairCopyRows m={minted.m} hostName={null} overLan={overLan} />
             </section>
           </>
         )}
-        <div className="pair-foot">
-          <SetNote>The new phone needs Tailscale signed in to the same tailnet.</SetNote>
-          <SetNote>
-            No app needed: the QR opens a page with "use web version" — that address is the whole app,
-            and on your tailnet it needs no code. The code is for the Android app's "pair with code".
-          </SetNote>
-          <Button onClick={() => { if (!openExternal(TAILSCALE_ANDROID)) c.say.toast("could not open the link"); }}>
-            <ExternalLink size={13} /> Tailscale for Android
-          </Button>
-        </div>
+        {minted.s === "ok" && pairLanOnly(minted.m) ? (
+          <div className="pair-foot">
+            <SetNote>
+              This desktop has no Tailscale address, so the QR opens the app and never a web page. Install the app
+              first, and put the new phone on the same Wi-Fi as the desktop.
+            </SetNote>
+          </div>
+        ) : overLan ? (
+          <div className="pair-foot">
+            <SetNote>
+              This QR opens the app and never a web page. Install the app first, and put the new phone on the same
+              Wi-Fi as the desktop.
+            </SetNote>
+          </div>
+        ) : (
+          <div className="pair-foot">
+            <SetNote>The new phone needs Tailscale signed in to the same tailnet.</SetNote>
+            <SetNote>
+              No app needed: the QR opens a page with "use web version" — that address is the whole app,
+              and on your tailnet it needs no code. The code is for the Android app's "pair with code".
+            </SetNote>
+            <Button onClick={() => { if (!openExternal(TAILSCALE_ANDROID)) c.say.toast("could not open the link"); }}>
+              <ExternalLink size={13} /> Tailscale for Android
+            </Button>
+          </div>
+        )}
       </div>
     </Sheet>
   );

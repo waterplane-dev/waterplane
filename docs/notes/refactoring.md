@@ -6,7 +6,8 @@ Written after `packages/web/src/App.tsx` went from 17,014 lines to 1,091 across 
 commits (2026-09-24/25), while other sessions kept committing into the same working tree. The web
 result is described in [web-architecture.md](web-architecture.md); this note is about the METHOD,
 so the next big file does not have to rediscover it. (As of 2026-10-04 no source file is over 900 lines:
-~38 were split into folders behind barrels, and `max-lines: 900` is a lint error, so a file that grows past it is the next one.)
+~38 were split into folders behind barrels, and `max-lines: 900` is a lint error, so a file that grows past it is the next one.
+Since 2026-11-04 that number is lines of code: see [The cap counts code, not notes](#the-cap-counts-code-not-notes).)
 
 ## Target first, then moves
 
@@ -67,6 +68,38 @@ Never `git stash`/`reset`/`checkout` here — those destroy the other sessions' 
   behaviour-neutral and bisectable.
 - **Accepted behaviour changes are listed**, never discovered: a refactor that changes something on
   purpose says so in the commit and in the final report.
+
+## The cap counts code, not notes
+
+`max-lines` runs with `skipComments: true` since 2026-11-04. A cap on whole lines taxed exactly what
+this repo keeps its reasons in: the `capSqueeze` reading stood at 6 on 2026-11-03, six recent commits
+that deleted comments to fit, and `endsession: restore the comment clauses c12f7ff2 trimmed when
+moving the teardown` is what one of them cost. The cap is a proxy for "every feature edits this
+file", and a note does not make a file that. Blank lines stay counted: they are not reasoning, and
+leaving them in keeps the number close to what a reader scrolls.
+
+What follows from it:
+
+- **One count.** `tools/codelines.mjs` is eslint's rule for everything that mirrors the cap: the
+  900s in `hostshape` and `webshape`, the 800-line early warning, `nearCap`, `capSqueeze` and the
+  pre-commit guard. It parses with TypeScript, because a scan by hand reads `//` in a string, a
+  template, a regex or JSX text as a comment; `healthreadings.test.mjs` holds it to eslint's own
+  count, and runs the real config at the boundary. So the readings need `node_modules`: without it
+  they are absent, not wrong.
+- **`capSqueeze` changed meaning.** It was "fitted the cap by deleting notes", which can no longer
+  happen. It is now "deleted only notes from a file with 880+ counted lines": a trim that bought
+  nothing, so 0 is the expected value and a hit is a habit or a stale brief. It fell from 6 to 0
+  the day the count changed, because the largest capped file then held under 700 lines of code, and
+  the series is not comparable across that day. `tools/capsqueeze.mjs` refuses the same trim at commit.
+- **Only the 900 changed.** The tighter caps and per-file ratchets (`TIGHT_DIRS`, `MAX_LINES`, the
+  500s in `webshape`, 600 in `sharedshape`, 500 in `spenderssplit`) still count every line: they
+  were set from whole-file sizes, and most are one number per file, around 260 of them, with a
+  history of raises written beside each. They were left alone on evidence: of 2,899 commits in the
+  60 days to 2026-11-04, 31 shrank a capped file by deleting only notes; the six that named a cap
+  named the 900, and the rest were features being removed. A note can still be squeezed against
+  a tighter cap and `capSqueeze` does not see it, so re-open this if a commit is ever seen doing so.
+- **File length rises.** The generic File length reading counts whole files, so it will read a
+  little higher as files fill with notes. That was accepted with the change.
 
 ## Proving nothing changed
 

@@ -7,6 +7,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { 
   type ClientMessage, logTag, envName, notifyEnabled } from "@waterplane/shared";
 import { tailscaleIp, tailscaleBin, tailscaleDnsName, serveHttpsUrl, lanIps } from "./net.js";
+import { prepareLanTls, startLanTls, type LanTlsServer } from "./lantls.js";
 import { configureOrigins } from "./origin.js";
 import { printBootSummary, printReport, reportJson, runChecks } from "./doctor.js";
 import { AuthManager, authLostNotice, selectWsProtocol } from "./auth.js";
@@ -591,6 +592,7 @@ async function main(): Promise<void> {
   }
   if (binds.length === 0) binds = ["127.0.0.1"]; setPeerSelfAddr(ip && binds.includes(ip) ? `${ip}:${PORT}` : null); // a peer dials the tailnet IP, only when bound
   if (allowPublic) console.warn(`${logTag} ${envName("ALLOW_PUBLIC")}=1 — binding without the safe-address guard. Make sure the network is trusted.`);
+  const lanTls = prepareLanTls({ root: ROOT, allowPublic, plainPort: PORT, boundLan, binds }); // null without the opt-in: only ever `boundLan` ∩ `binds`
 
   // Now that we know which addresses/names we answer to, arm the same-origin
   // guard for /api and /ws. Anything else a browser might send us is refused.
@@ -599,7 +601,7 @@ async function main(): Promise<void> {
   // machine), and a guard that refuses it turns the advertised HTTPS address
   // into a 403 — which is how someone ends up stuck on plain http://100.x with
   // no service worker.
-  configureOrigins({ port: PORT, tailscaleIp: ip, tailscaleDns: tsDns, lanIps: boundLan, serveUrl: httpsUrl });
+  configureOrigins({ port: PORT, tlsPort: lanTls?.port, tailscaleIp: ip, tailscaleDns: tsDns, lanIps: boundLan, serveUrl: httpsUrl });
   // On a tailnet whose MagicDNS name could not be read (tailscaled still
   // starting, CLI hiccup) the guard has no exact name to trust; keep asking
   // once a minute, up to 30 times, and re-arm it with the name when it comes.
@@ -611,7 +613,7 @@ async function main(): Promise<void> {
         const dns = await tailscaleDnsName();
         if (dns) {
           clearInterval(timer);
-          configureOrigins({ port: PORT, tailscaleIp: ip, tailscaleDns: dns, lanIps: boundLan, serveUrl: await serveHttpsUrl(PORT) });
+          configureOrigins({ port: PORT, tlsPort: lanTls?.port, tailscaleIp: ip, tailscaleDns: dns, lanIps: boundLan, serveUrl: await serveHttpsUrl(PORT) });
         } else if (tries >= 30) clearInterval(timer);
       })();
     }, 60_000);
@@ -629,7 +631,7 @@ async function main(): Promise<void> {
   if (!DOCTOR) createExposurePush(ROOT, notify, (k, n) => ctx.resolveAttention(k, n)).start(); // one push per new exposure alert on a watched repo; boot sweep after 30 s, then every 10 min
   if (!DOCTOR) startDiskWatch({ notify, recovered: () => { ctx.resolveAttention("disk", "disk space back"); } }); // low disk: one push per level (macOS ends Tailscale to free space)
 
-  const attachWs = (server: ReturnType<typeof createServer>) => {
+  const attachWs = (server: ReturnType<typeof createServer> | LanTlsServer) => {
     // permessage-deflate: the socket carries base64'd PTY output, and a claude
     // TUI repaint is tens of KB of highly repetitive ANSI — the single largest
     // continuous byte stream in the app, previously sent raw AND inflated ~33%
@@ -648,6 +650,7 @@ async function main(): Promise<void> {
       },
     });
     wsops.wireWsConnections(wss, { ip, tsBin, tsDns, httpsUrl, boundLan });
+    return wss;
   };
   assertCtxComplete(ctx); // every ctx member assigned, or the boot fails naming it
   for (const host of binds) {
@@ -655,6 +658,7 @@ async function main(): Promise<void> {
     attachWs(httpServer);
     http.listenWithRetry(httpServer, host, PORT);
   }
+  if (lanTls) startLanTls(lanTls, http.handler, attachWs); // the same handler and socket wiring, encrypted; never fatal
   console.log(`${logTag} open the Tailscale URL on your phone; localhost works on this machine.`);
   if (!DOCTOR) plugins.startAuto(); // `autoOn`: after listen, never awaited
 

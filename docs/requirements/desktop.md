@@ -86,14 +86,14 @@ pressed to jump there), and a middle-button drag on the picture.
 - asked: 2026-10-14 (owner)
 - shipped: a0301548
 
-### R-desktop-013 · built, unverified on Windows
+### R-desktop-013 · shipped
 The live desktop works on a Windows desktop whose host runs in WSL, as it does on the Mac: watch,
 the same presets, and control behind the same switch. Nothing to install: the helper is compiled on
 first use by the C# compiler Windows already carries. Where it cannot show the screen (the host
 outside the signed-in session, a locked screen), the phone says so in words.
 - asked: 2026-10-16 (owner, a marked screenshot of the Desktop button: "build the remote desktop thing also for windows")
-- built: the commit that adds `packages/extensions/desktop/helper-win/`; compiled under C# 5 and run
-  (synthetic source, JPEG, dry input) under Mono only — never on Windows yet
+- shipped: b61d0713
+- verified: 2026-11-03 (owner, on their Windows machine: "verified working for me")
 ### R-desktop-014 · shipped
 In the remote desktop view, keyboard input and shortcuts typed on the desktop are forwarded to the remote desktop, including in full screen.
 - asked: 2026-10-14

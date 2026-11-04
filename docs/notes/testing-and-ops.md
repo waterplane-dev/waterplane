@@ -218,8 +218,8 @@ see:
   activity bar.
 - **`no-restricted-syntax`** on `dangerouslySetInnerHTML` — transcript text is whatever an agent
   wrote and whatever a tool returned.
-- **`max-lines`** at 900, as a WARNING. The point is noticing growth, not blocking a module that is
-  large because its problem is.
+- **`max-lines`** at 900 lines of code, as an ERROR since 2026-10-04: comments are free and blanks count
+  ([why](refactoring.md#the-cap-counts-code-not-notes)), and `tools/codelines.mjs` mirrors the count.
 - **`regexp/no-super-linear-backtracking` + `regexp/no-super-linear-move`** (`eslint-plugin-regexp`,
   2026-11-02) — ReDoS, as a RATCHET. GitHub's CodeQL scans only the public mirror, so a regex that
   backtracks badly is reported after it has shipped, and private-only code is never scanned. Running
@@ -393,6 +393,12 @@ nothing until two scripts stop sharing a port — `e2e-settle` and `e2e-settlesw
 - **Longest first.** `~/.cache/<slug>/e2e-times.json` keeps each script's last duration and the
   pool starts the slowest first (`intentnodrop` 140 s, `intent` 92 s, `settle` 88 s), so a long
   script never starts last with five idle workers. It only orders; `E2E_TIMES=0` turns it off.
+
+**The by-hand list** (`BY_HAND` in `run-e2e.mjs`) is for a script the runner must not start at all:
+`e2e-android-lan` and `e2e-android-oldshell` need a built APK and the AVD, share one emulator port
+and outlast the per-script limit. So neither `npm test` nor the pre-push gate covers them, and the
+runner prints a line saying so on every run. Run them with `node scripts/<name>` after touching the
+shell or the LAN path. `tools/rune2e.test.mjs` holds the list.
 
 **The serial list** (`SERIAL` in `run-e2e.mjs`) is for a script that cannot share the machine for a
 reason its own source cannot fix without weakening an assertion; each entry carries its reason and
@@ -664,7 +670,7 @@ honest: an unreadable box IS a miss, prose that merely says the footer's words r
 `askbox` the CLI's own words for a box the terminal cut ·
 `promptlive` a box that is being REDRAWN stays published (output never retires a prompt) ·
 `schedule` the wall-clock rules + fire-once-per-occurrence ·
-`origin` same-origin guard · `rootguard` where a client may make the daemon RUN something · `webbundle`/`hosturl` Android shell ·
+`origin` same-origin guard · `lantls` the LAN TLS port: nothing listens without the opt-in, the same gate over TLS, the pin across a restart, a busy port or bad leaf leaves the plain host up · `rootguard` where a client may make the daemon RUN something · `webbundle`/`hosturl` Android shell ·
 `slashlocal` view-opening commands (`/cost`) delivered without an Esc or a Return storm ·
 `echo-stream` the composer found by its BOX through a torn render, with no Esc into the live turn ·
 `settle` re-deciding a delivery whose verdict was ambiguous, from the CLI's own log ·
@@ -1079,10 +1085,12 @@ never published a prompt".
 
 ### The e2e suite — the name list the skill used to carry
 
+LAN security (2026-11-03): `e2e-lantls.mjs` (real host, TLS listener only under `ALLOW_PUBLIC=1`, `/ws` over TLS with a token, no token refused, a self-signed `GET /` is not the app, `Host`/`Origin` on the TLS port) and `e2e-pake.mjs` (CPace pairing, a wrong code as a typed miss, a bad share) are on disk; the plain-socket burn is pinned in `packages/host/test/pairpake.test.mjs`, because a host bound on loopback has no plain peer to burn for. The Java suites (`gradlew testDevDebugUnitTest`: `ShellRouteTest`, `ShellTlsPinsTest`, `ShellTlsClientTest`, `ShellBundleVerifyTest`, `ShellUpdatePinsTest`) hold the route table and the signature vector shared with node. A phone-shaped run (an emulator script that pairs by code, checks the token never crosses the plain port, refuses a wrong certificate and a forged or rolled-back bundle) is produced separately and its results are not recorded here. No real phone, no current WebView and no real Wi-Fi relay has been used.
+
 The suite, so a name here is a name on disk: `ack` `agentintent` `answer` `api` `archive` `askbox` `askprose` `attach`
 `autopull` `backlog` `backlog-echo` `backlog-keepopen` `backlog-prompt` `backlog-slots` `backlog-wait` `budget` `build` `capture` `checkbox`
 `buildparams` `clihealth` `ctxgraph` `echo-stream` `docs` `fanout` `fork` `forkfrom` `gallery` `git` `hints` `hook` `hosturl` `images`
-`intent` `intentnodrop` `launch` `launchwait` `livereclaim` `limit` `limitbusy` `limitparallel` `limitrepaint` `limitqueue` `limitreset` `limitstuck`
+`intent` `intentnodrop` `lantls` `launch` `launchwait` `livereclaim` `limit` `limitbusy` `limitparallel` `limitrepaint` `limitqueue` `limitreset` `limitstuck`
 `login` `manualfire` `netfuse` `netstats` `notifyprefs` `offlinelists` `onesession` `opqueue`
 `origin` `outbox` `outboxbadge` `pastechit` `permmode` `pin` `plugin` `prompt` `promptlive` `ptyleak` `queue` `restore`
 `resume` `resurrect` `resurrect-item` `rootguard` `scaffold` `schedule` `screenlog` `scrollcomposer` `search` `secret` `sent`

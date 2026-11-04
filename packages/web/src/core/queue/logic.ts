@@ -73,6 +73,17 @@ export const LANE_GAP_MS = 450;
  *  fourth line is what the sheet is for. */
 export const WHICH_MAX = 3;
 
+/**
+ * What a folded queue strip is folded ON (`Stowable`'s content key): one fact
+ * per row it draws. A row moving along — queued, sending, being confirmed — is
+ * the same fact, so a fold outlives the delivery it was made on. A NEW row is
+ * news (it is the only receipt a send gets while the strip is folded) and a
+ * row that FAILED is a different fact, so a failure always comes back up.
+ */
+export function queueFoldKey(rows: readonly Pick<OutboxEntry, "ackId">[], failed = false): string {
+  return rows.map((e) => (failed ? `failed ${e.ackId}` : e.ackId)).join("\n");
+}
+
 // ── The pending session (`pending:<createAck>`) ────────────────────────────
 
 export const PENDING_PREFIX = "pending:";

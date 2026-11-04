@@ -31,6 +31,11 @@ export interface NetState {
   /** Wi-Fi name, `null` when unreadable (not Wi-Fi, or permission missing). */
   ssid: string | null;
   permission: NetPermission;
+  /** The active network runs over a VPN. Absent = this shell does not say. */
+  vpn?: boolean;
+  /** The default network is the tailnet's: a VPN with a link address in 100.64/10 or
+   *  fd7a:115c:a1e0::/48, not merely any VPN. Absent = this shell does not say, never `false`. */
+  tailnet?: boolean;
 }
 
 /** How long the LAN `/api/health` probe may take before the LAN is not used. */

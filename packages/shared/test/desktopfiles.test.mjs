@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DESKTOP_KINDS, MANAGED_SKILLS, MCP_DECLINED, PLUGIN_DISABLED, desktopInventory, desktopSources, instructionInventory, repoRowsOnThisDesktop } from "../dist/index.js";
+import { DESKTOP_KINDS, MANAGED_SKILLS, MCP_DECLINED, PLUGIN_DISABLED, alwaysOnTotalsWords, claudeWeightInput, desktopInventory, desktopSources, hookUnsized, instructionInventory, repoRowsOnThisDesktop, weighContext } from "../dist/index.js";
 
 function fsOf(files) {
   return {
@@ -113,4 +113,79 @@ test("sources: an unreadable installed_plugins.json or .claude.json is null, nev
   assert.equal(s.plugins, null);
   assert.equal(s.userMcp, null);
   assert.deepEqual(s.localMcp, []);
+});
+
+const cmd = (command) => ({ type: "command", command });
+const hookSources = (userSettings, projectSettings = []) => desktopSources({ installed: "missing", userSettings, projectSettings, claudeJson: "missing", projectKey: "/repo", relToConfig });
+const hookRows = (rows) => rows.filter((r) => r.kind.startsWith(DESKTOP_KINDS.hook));
+
+test("hooks: a missing or non-object `hooks`, and a missing file, are no rows", () => {
+  for (const settings of [{}, { hooks: null }, { hooks: [] }, { hooks: "x" }, "missing"]) {
+    assert.deepEqual(hookSources(settings).hooks, [], JSON.stringify(settings));
+  }
+  const s = hookSources({ hooks: { SessionStart: "x", UserPromptSubmit: [null, { hooks: "x" }, { hooks: [{ type: "command" }, { type: "prompt", prompt: "p" }] }] } });
+  assert.deepEqual(s.hooks, [], "nothing here runs a command");
+});
+
+test("hooks: two commands on one event are one row; events that inject nothing are none", () => {
+  const s = hookSources({ hooks: {
+    SessionStart: [{ matcher: "startup", hooks: [cmd("a")] }, { hooks: [cmd("b")] }],
+    UserPromptSubmit: [{ hooks: [cmd("c")] }],
+    PreToolUse: [{ hooks: [cmd("d")] }],
+    Stop: [{ hooks: [cmd("e")] }],
+  } });
+  assert.deepEqual(s.hooks, [
+    { event: "SessionStart", path: "settings.json", commands: 2 },
+    { event: "UserPromptSubmit", path: "settings.json", commands: 1 },
+  ]);
+  const rows = hookRows(desktopInventory({ fs: fsOf({}), memoryRel: null, plugins: [], userMcp: [], hooks: s.hooks }));
+  assert.deepEqual(rows.map((r) => [r.path, r.kind, r.scope, r.parts.length]), [
+    ["settings.json", "context hook SessionStart (2 commands)", "desktop", 0],
+    ["settings.json", "context hook UserPromptSubmit (1 command)", "desktop", 0],
+  ]);
+  assert.equal(rows[0].unsized, 'runs commands whose output the CLI adds to every session; a session\'s context view measures the size as "hook context", and /hooks lists them');
+  assert.equal(rows[1].unsized, 'runs a command whose output the CLI adds to every prompt; a session\'s context view measures the size as "hook context", and /hooks lists it');
+  assert.ok(!JSON.stringify(rows).includes('"a"'), "a command's text never rides a row");
+});
+
+test("hooks: an unreadable settings file is a row that says so, never an empty list", () => {
+  for (const settings of [null, ["not", "an", "object"]]) assert.equal(hookSources(settings).hooks, null);
+  const rows = hookRows(desktopInventory({ fs: fsOf({}), memoryRel: null, plugins: [], userMcp: [], hooks: null }));
+  assert.deepEqual(rows.map((r) => [r.path, r.kind, r.unsized, r.scope]), [["settings.json", "context hooks", "settings.json could not be read", "desktop"]]);
+  assert.deepEqual(hookRows(desktopInventory({ fs: fsOf({}), memoryRel: null, plugins: [], userMcp: [] })), [], "a caller that passes none claims none");
+});
+
+test("hooks: the repo's settings files are repo rows, one per file and event, and an unreadable one says so", () => {
+  const s = hookSources("missing", [
+    { path: ".claude/settings.json", json: { hooks: { UserPromptSubmit: [{ hooks: [cmd("a")] }], PostToolUse: [{ hooks: [cmd("b")] }] } } },
+    { path: ".claude/settings.local.json", json: { hooks: { UserPromptSubmit: [{ hooks: [cmd("c"), cmd("d")] }] } } },
+  ]);
+  assert.deepEqual(s.hooks, [], "project hooks are not this desktop's");
+  const here = repoRowsOnThisDesktop([], s);
+  assert.deepEqual(here.map((r) => [r.path, r.kind, r.scope]), [
+    [".claude/settings.json", "context hook UserPromptSubmit (1 command)", undefined],
+    [".claude/settings.local.json", "context hook UserPromptSubmit (2 commands)", undefined],
+  ]);
+  assert.equal(here[0].unsized, hookUnsized({ event: "UserPromptSubmit", commands: 1 }));
+  const bad = hookSources("missing", [{ path: ".claude/settings.json", json: null }, { path: ".claude/settings.local.json", json: "missing" }]);
+  assert.deepEqual(repoRowsOnThisDesktop([], bad).map((r) => [r.path, r.kind, r.unsized]), [[".claude/settings.json", "context hooks", ".claude/settings.json could not be read"]]);
+});
+
+test("hooks: an enabled plugin's hooks.json is rows under its name; a disabled plugin's is never read", () => {
+  const hooksJson = JSON.stringify({ description: "d", hooks: { SessionStart: [{ hooks: [cmd("a")] }], Stop: [{ hooks: [cmd("b")] }] } });
+  const s = desktopSources({ installed: INSTALLED, userSettings: { enabledPlugins: { "off@m": false } }, projectSettings: [], claudeJson: "missing", projectKey: "/repo", relToConfig });
+  const fs = fsOf({ "plugins/cache/kit/hooks/hooks.json": hooksJson, "plugins/cache/off/hooks/hooks.json": hooksJson });
+  const rows = desktopInventory({ fs, memoryRel: null, plugins: s.plugins, userMcp: [], disabledPlugins: s.disabledPlugins, hooks: s.hooks });
+  assert.deepEqual(hookRows(rows).map((r) => [r.path, r.kind, r.scope]), [["plugins/cache/kit/hooks/hooks.json", "context hook SessionStart (1 command, plugin kit)", "desktop"]]);
+  assert.ok(rows.some((r) => r.kind === "plugin off" && r.unsized === PLUGIN_DISABLED), "the plugin itself still says it is off");
+  const broken = desktopInventory({ fs: fsOf({ "plugins/cache/kit/hooks/hooks.json": "{" }), memoryRel: null, plugins: [{ name: "kit", rel: "plugins/cache/kit" }], userMcp: [] });
+  assert.deepEqual(hookRows(broken).map((r) => r.unsized), ["plugins/cache/kit/hooks/hooks.json could not be read"]);
+});
+
+test("hooks: a hook row moves no threshold figure and is counted as a row with no size", () => {
+  const { files } = instructionInventory(fsOf({ "CLAUDE.md": "c".repeat(400) }));
+  const s = hookSources("missing", [{ path: ".claude/settings.json", json: { hooks: { SessionStart: [{ hooks: [cmd("a")] }] } } }]);
+  const here = repoRowsOnThisDesktop(files, s);
+  assert.deepEqual(weighContext(claudeWeightInput(here)), weighContext(claudeWeightInput(files)));
+  assert.match(alwaysOnTotalsWords(here), /1 more row has no size here/);
 });

@@ -52,6 +52,31 @@ test("another tailnet's name is not automatically trusted", () => {
   assert.equal(originHeaderAllowed("https://someone-else.other-tailnet.ts.net"), false);
 });
 
+test("the LAN TLS port: one more port, every refusal still holds there", () => {
+  const lan = "192.168.1.20";
+  const base = { port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net", lanIps: [lan] };
+  try {
+    configureOrigins(base);
+    assert.equal(originHeaderAllowed(`https://${lan}:8771`), false, "no TLS port configured: it is a stranger's port");
+    configureOrigins({ ...base, tlsPort: 8771 });
+    // The Android shell's page is `http://localhost` whichever port it dials: hosts + port 80.
+    assert.equal(checkRequestOrigin({ origin: "http://localhost", host: `${lan}:8771` }).ok, true);
+    assert.equal(checkRequestOrigin({ origin: "capacitor://localhost", host: `${lan}:8771` }).ok, true);
+    assert.equal(checkRequestOrigin({ origin: `https://${lan}:8771`, host: `${lan}:8771` }).ok, true, "a page served from the TLS port itself");
+    // A port, never a name: nothing else widened.
+    assert.equal(checkRequestOrigin({ origin: "https://evil.example.com:8771", host: `${lan}:8771` }).ok, false);
+    assert.equal(checkRequestOrigin({ origin: "http://localhost", host: "evil.example.com:8771" }).ok, false, "DNS rebinding onto the TLS port");
+    assert.equal(checkRequestOrigin({ host: "evil.example.com:8771" }).ok, false);
+    assert.equal(checkRequestOrigin({ origin: "null", host: `${lan}:8771` }).ok, false);
+    assert.equal(checkRequestOrigin({ origin: "https://anything.local:8771", host: `${lan}:8771` }).ok, false, "`*.local` is still no wildcard");
+    assert.equal(checkRequestOrigin({ origin: "https://other.tailnet.ts.net:8771", host: `${lan}:8771` }).ok, false, "`*.ts.net` is not widened");
+    assert.equal(checkRequestOrigin({ origin: `https://${lan}:8772`, host: `${lan}:8771` }).ok, false, "only that port");
+    assert.equal(corsHeaders({ origin: "https://evil.example.com:8771" })["access-control-allow-origin"], undefined);
+  } finally {
+    configureOrigins({ port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net" });
+  }
+});
+
 test("a missing Origin is allowed; the literal string \"null\" is not", () => {
   // Absent = a non-browser client (curl, the e2e scripts, the hook sink).
   // "null" is a real value a sandboxed iframe or a file:// page sends, and it

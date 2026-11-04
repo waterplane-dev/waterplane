@@ -35,6 +35,8 @@ test("passiveAllows: default deny — every other route is refused", () => {
     ["GET", "/api/repos"], ["GET", "/api/devices"], ["POST", "/api/devices/revoke"], ["POST", "/api/pair/mint"],
     ["GET", "/api/transcript"], ["POST", "/api/shell/open"], ["GET", "/api/lan/identity"], ["GET", "/api/peer/job"],
     ["GET", "/api/repos/r1/artifacts/x"], ["GET", "/api/health/extra"], ["GET", "/api/something-new"],
+    // What a desktop waits on a person for: a full device's read, never a kid's phone.
+    ["GET", "/api/attention"], ["HEAD", "/api/attention"],
   ]) assert.equal(passiveAllows(m, p, q(), () => true), false, `${m} ${p}`);
 });
 

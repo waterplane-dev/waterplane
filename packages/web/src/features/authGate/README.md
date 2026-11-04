@@ -17,6 +17,13 @@ connection with `authRequired` and closes it; this feature is the full-screen
   means the host is gated with no password set yet: the card says where to set
   one and offers *retry* instead of a field.
 
+  In the Android shell the form cannot work (the cookie never rides, `hostUrl.ts`), so two cases
+  replace it: sealed sign-ins not opened this run offer *unlock the sign-in* (`unlockSeal`, handed in
+  by App because a feature may not import `appLock`), and any other refusal says the sign-in is gone,
+  in words of its own for a LAN refusal, where a person would otherwise look for the password. Both
+  offer *pair with code*: this card covers Settings. A browser keeps the form. `logic.ts` is the
+  choice and the words.
+
 **Wire frames**: `authRequired` (sets), `welcome` (clears). `auth.state` and
 `welcome.auth` — the Settings → LAN access section's `authState` — stay in App,
 as does the new-password field (`lanPw`): that is settings, not the gate.
@@ -34,6 +41,6 @@ deny-until-set. Icons are `lucide-react`. The unlock button is never greyed out:
 with the field empty a tap SAYS "type the password first", and while a login is
 in flight its label reads "checking…" and a second tap does nothing.
 
-**Tests**: no pure logic here, so no unit test. No e2e script boots a host with
+**Tests**: `logic.test.mjs` pins which card each kind gets. No e2e script boots a host with
 `WATERPLANE_ALLOW_PUBLIC=1` and drives this card today; the host side of the gate is
 `host/auth.ts`'s.

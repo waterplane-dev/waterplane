@@ -224,13 +224,14 @@ The contract and what differs is PROTOCOL.md's "Windows" section. The choices:
 - **Screenshot**: `takeScreenshot` (core `host.ts`) asks Windows through PowerShell for the primary
   display at its real pixel size, as `screencapture -x` does on the Mac.
 
-**Not verified on Windows at all yet** (the peer zenbookj was offline when it was built): the build
-through interop, a real capture, the H.264 encoder (GUIDs and vtable layouts are hand-declared; a
-wrong one fails at the first `config` with the HRESULT in the sentence), real input, that a helper
-started from the `waterplane-host` scheduled task is in the user's session, that stdin EOF reaches the
-Windows process when the host kills the interop shim, and the PowerShell screenshot. Verified: it
-compiles as C# 5 (Mono `mcs -langversion:5`), and under Mono the synthetic source, JPEG, regions,
-stats, dry input and EOF behave per PROTOCOL.md.
+**Verified on Windows** (owner, 2026-11-03: "verified working for me"), on the default Auto preset,
+which is H.264 (the owner picked no preset). The first real run (2026-10-21, Windows 11, synthetic
+source) crashed in H.264 reading the encoder's sequence header (`ReadSequenceHeader` in `H264.cs`).
+`helper-win/` has not changed since, so why that run crashed is unexplained: if H.264 fails again,
+start there. Nothing falls back to JPEG on its own; the Stills preset is the JPEG path. Under Mono
+it also compiles as C# 5
+(`mcs -langversion:5`), and the synthetic source, JPEG, regions, stats, dry input and EOF behave per
+PROTOCOL.md.
 
 ## Not verified until someone is at the Mac (and the phone)
 

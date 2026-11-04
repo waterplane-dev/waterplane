@@ -327,6 +327,10 @@ html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
   font-size: calc(var(--fs-12) * var(--ui-font, 1)); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
+/* A commit's verbs belong to its row: the row's rule moves below them. */
+.git-commit:has(.git-commit-acts) .git-commit-row { border-bottom: 0; }
+.git-commit-acts { padding: 0 var(--sp-14) var(--sp-10); border-bottom: 1px solid var(--line); }
+
 /* Scroll cue: a strip that scrolls sideways shows an accent chevron over a
    fade at whichever edge still has buttons past it, so a cut-off chip reads as
    "more this way" and not as the end of the row. Every scrollbar-less strip is

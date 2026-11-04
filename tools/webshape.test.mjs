@@ -27,6 +27,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { warnLongFiles } from "./longfiles.mjs";
+import { codeLineCount } from "./codelines.mjs";
 import ts from "typescript";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -44,8 +45,9 @@ warnLongFiles("web", SRC);
  */
 const MAX_APP_LINES = 391; // -4 (design round 4): the sheet leave effect left App — the route layer dispatches onLeave itself
 
-/** A feature file is a slice, never a new App. The same number eslint's
- *  `max-lines` warns at — here it fails. */
+/** A feature file is a slice, never a new App. eslint's `max-lines` number,
+ *  counted its way: comments are free (`codeLineCount`). The per-file ratchets
+ *  further down count every line, notes included. */
 const MAX_FEATURE_FILE_LINES = 900;
 
 /** A core module is one of the things there must be ONE of — never the next
@@ -144,7 +146,7 @@ test("every feature sheet is an Overlay the route stack knows, persisted as the 
 });
 
 test(`no feature file is over ${MAX_FEATURE_FILE_LINES} lines`, () => {
-  const fat = featureFiles().map((f) => ({ rel: f.rel, n: lines(f.text) })).filter((f) => f.n > MAX_FEATURE_FILE_LINES);
+  const fat = featureFiles().map((f) => ({ rel: f.rel, n: codeLineCount(f.text, f.rel) })).filter((f) => f.n > MAX_FEATURE_FILE_LINES);
   assert.deepEqual(
     fat.map((f) => `${f.rel}: ${f.n}`), [],
     `A feature file that big is the next App.tsx. Split it inside its folder.`,
@@ -155,7 +157,7 @@ const CORE = join(SRC, "core");
 
 test(`no core file is over ${MAX_CORE_FILE_LINES} lines`, () => {
   const files = existsSync(CORE) ? readdirSync(CORE, { recursive: true }).filter((f) => /\.(ts|tsx)$/.test(f)) : [];
-  const fat = files.map((f) => ({ rel: f, n: lines(readFileSync(join(CORE, f), "utf8")) })).filter((f) => f.n > MAX_CORE_FILE_LINES);
+  const fat = files.map((f) => ({ rel: f, n: codeLineCount(readFileSync(join(CORE, f), "utf8"), f) })).filter((f) => f.n > MAX_CORE_FILE_LINES);
   assert.deepEqual(
     fat.map((f) => `core/${f.rel}: ${f.n}`), [],
     `A core file that big is App.tsx moved one folder down. Split it inside its core/<dir>.`,
@@ -470,7 +472,7 @@ const extWebFiles = () => extWebDirs().flatMap((d) =>
     .map((f) => ({ rel: `${d}/web/${f}`, name: f.split("/").pop(), text: readFileSync(join(EXT, d, "web", f), "utf8") })));
 
 test(`no extension web file is over ${MAX_EXT_FILE_LINES} lines`, () => {
-  const fat = extWebFiles().map((f) => ({ rel: f.rel, n: lines(f.text) })).filter((f) => f.n > MAX_EXT_FILE_LINES);
+  const fat = extWebFiles().map((f) => ({ rel: f.rel, n: codeLineCount(f.text, f.rel) })).filter((f) => f.n > MAX_EXT_FILE_LINES);
   assert.deepEqual(fat.map((f) => `${f.rel}: ${f.n}`), [], `An extension file that big is the next App.tsx. Split it inside its web/ folder.`);
 });
 
@@ -1007,7 +1009,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
-  "webapi/webapiGit.ts": 90, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state
+  "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 110, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut

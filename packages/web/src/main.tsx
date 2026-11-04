@@ -22,7 +22,7 @@ import { AskRepoHost, registerAskRepoShortcuts } from "./AskRepo";
 import { ShortcutCardHost, installShortcutCard } from "./ShortcutCard";
 import { registerComposeShortcut } from "./core/compose/composeShortcut";
 import { UpdateBanner } from "./UpdateBanner";
-import { HaltBanner } from "./core/Banners";
+import { AppLockGate, SealGate, armAppLock, HaltBanner, useSealWaiting } from "./core/Banners";
 import { deviceId, installLinkMeters, startLinkProbes } from "./link";
 import { makeConnection } from "./ws";
 import { startLanRoute } from "./lanLink";
@@ -30,7 +30,7 @@ import { installShellNet } from "./shellNet";
 import { installShellShare } from "./shellShare";
 import { BootGuard, armBootTrap } from "./BootGuard";
 import { HostSetup } from "./HostSetup";
-import { hostConfigured, installHostRouting, isNativeShell } from "./hostUrl";
+import { hostConfigured, installHostRouting, isNativeShell, seedRouteNet } from "./hostUrl";
 import { installHints } from "./hints";
 import { installPrimaryKey } from "./core/layout/primaryKey";
 import { installDownloads } from "./download";
@@ -192,6 +192,7 @@ registerAskRepoShortcuts();
  */
 function Root() {
   const [setup, setSetup] = useState(() => !hostConfigured());
+  const sealWaiting = useSealWaiting();
   // A pairing deep-link `…://pair` link that arrived while the setup screen is up (the first
   // run, typically: installed from the landing page, then its "open in app").
   // It only PREFILLS the pair form — any app can fire that link.
@@ -297,6 +298,8 @@ function Root() {
     return (
       <>
       <ToastLayer />
+      {/* A re-pair is no way past the lock; the very first pairing has nothing to lock. */}
+      {hostConfigured() && <AppLockGate />}
       <HostSetup
         // The first desktop. Adding one reloads into it; the host switcher
         // (`features/hosts`) is where every later one is added or edited.
@@ -317,6 +320,16 @@ function Root() {
         <ToastLayer />
         <UpdateBanner />
         <PassiveScreen onUnlocked={(until) => { setUnlockedUntil(until); drewApp.current = true; setMode("full"); }} />
+      </>
+    );
+  }
+  // The sign-ins are sealed and not open yet: the card alone, because `App` dials on its first
+  // render and a socket with no token is a refusal. Queued words stay where they are, on disk.
+  if (sealWaiting) {
+    return (
+      <>
+        <ToastLayer />
+        <SealGate />
       </>
     );
   }
@@ -390,6 +403,10 @@ function Root() {
       <DemoLine />
       {/* A passive device unlocked by its PIN says until when, and how to lock. */}
       {unlockedUntil && <UnlockedBar until={unlockedUntil} />}
+      {/* Last and beside `App`, never an early return: the socket, the queue
+          and the update must keep running behind the card. Only here, so the
+          pairing and passive screens above never lock. */}
+      <AppLockGate />
     </>
   );
 }
@@ -420,13 +437,17 @@ function PulseProbe() {
 // after the first paint moves the layout under a thumb already travelling.
 installUiScale();
 
-createRoot(document.getElementById("root")!).render(
+// Before the first render, so a locked app never paints a frame of itself.
+armAppLock();
+
+// `plainHostRoute()` is synchronous, so the network is read once before the app can ask it.
+void seedRouteNet().finally(() => createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BootGuard>
       <Root />
     </BootGuard>
   </StrictMode>,
-);
+));
 
 // Register the service worker so the app is installable. Best-effort.
 // updateViaCache:"none" stops the browser from serving sw.js from its HTTP

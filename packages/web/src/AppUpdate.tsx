@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ArrowDownToLine, CheckCircle2, Loader2, RotateCcw, ShieldAlert, Smartphone, XCircle } from "lucide-react";
 import { buildStampText, type BuildStamp } from "@waterplane/shared";
 import { autoApply, autoUpdate, nativeInfo, runningBuildStamp, setAutoApply, setAutoUpdate, updates, type NativeUpdateInfo, type UpdateStatus } from "./webUpdate";
+import { TRUST_BUTTON } from "./updateTrust";
 import { ago } from "./format";
 import { track } from "./usage";
 import { Button } from "./kit/Button";
@@ -116,6 +117,11 @@ export function AppUpdateSection({ onToast, bare }: {
           again by itself — the desktop's next build is taken as usual.
         </SetNote>
       )}
+      {s.phase === "refused" && (
+        <SetNote style={{ color: "var(--warn)" }}>
+          <ShieldAlert size={13} style={{ verticalAlign: "-2px" }} /> {s.message}
+        </SetNote>
+      )}
       {s.phase === "unavailable" && (
         <SetNote>the desktop cannot serve a bundle: {s.message}</SetNote>
       )}
@@ -138,7 +144,13 @@ export function AppUpdateSection({ onToast, bare }: {
             onClick={() => { track("action:appUpdate.apply"); onToast?.("restarting into the new build"); void updates.applyNow(); }}
           >restart into it</Button>
         )}
-        {!!s.available && !fresh && s.phase !== "downloading" && s.phase !== "staged" && (
+        {s.trust && (
+          <Button
+            variant="primary"
+            onClick={() => { track("action:appUpdate.trust"); void updates.settleTrust(); }}
+          >{TRUST_BUTTON[s.trust]}</Button>
+        )}
+        {!!s.available && !fresh && s.phase !== "downloading" && s.phase !== "staged" && s.phase !== "refused" && (
           s.phase === "held" ? (
             <Button
               onClick={() => { track("action:appUpdate.retryHeld"); void updates.download(true); }}

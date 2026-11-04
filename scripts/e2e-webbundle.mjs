@@ -6,12 +6,17 @@
 // over becomes the app the phone RUNS. A manifest that disagrees with the files,
 // or a hash nobody checks, is a half-written bundle replacing a working UI on a
 // device that is nowhere near you.
+//
+// The hashes catch a bad transfer only, so this also pins the signature the
+// phone checks: `sig` verifies over the decoded `signed` bytes with the key
+// `welcome` hands out, and `signed` describes the same bundle as the manifest.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8807;
@@ -49,6 +54,19 @@ async function waitUp() {
     await new Promise((r) => setTimeout(r, 200));
   }
   return false;
+}
+
+/** The `welcome` frame a fresh socket gets. */
+function welcome() {
+  return new Promise((done, fail) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+    ws.on("error", fail);
+    setTimeout(() => fail(new Error("no welcome within 10 s")), 10_000).unref();
+    ws.on("message", (raw) => {
+      const m = JSON.parse(raw.toString());
+      if (m.t === "welcome") { ws.close(); done(m); }
+    });
+  });
 }
 
 function walk(dir) {
@@ -129,6 +147,22 @@ try {
   check(m2.buildId === m.buildId && m2.files.length === m.files.length, "repeat manifest is stable");
   const idx = m.files.find((f) => f.path === "index.html");
   check(idx && idx.size === statSync(join(DIST, "index.html")).size, "sizes come from the real files");
+
+  // ── the signature ───────────────────────────────────────────────────────
+  const w = await welcome();
+  check(typeof w.updateKey === "string" && w.updateKey.length > 0, "welcome hands out the update key");
+  check(w.tlsPort === undefined && w.tlsSpki === undefined, "welcome says nothing about a TLS listener it does not know of");
+  const pub = createPublicKey({ key: Buffer.from(w.updateKey, "base64"), format: "der", type: "spki" });
+  const signedBytes = Buffer.from(m.signed, "base64");
+  const sigBytes = Buffer.from(m.sig, "base64");
+  check(sigBytes.length === 64, "sig is 64-byte P1363");
+  check(verify("sha256", signedBytes, { key: pub, dsaEncoding: "ieee-p1363" }, sigBytes), "sig verifies with the key welcome gave");
+  const body = JSON.parse(signedBytes.toString("utf8"));
+  check(body.v === 1 && body.hostId === w.hostId, "signed names this desktop");
+  check(body.buildId === m.buildId && body.total === m.total, "signed names the build the manifest describes");
+  check(JSON.stringify(body.files) === JSON.stringify(m.files), "signed lists the same files and hashes");
+  check(Number.isInteger(body.gen) && body.gen >= 1, "signed carries a gen");
+  check(m2.sig === m.sig, "a repeat poll is not signed again");
 } catch (e) {
   console.log("FAIL: threw —", e?.message || e);
   failed = true;

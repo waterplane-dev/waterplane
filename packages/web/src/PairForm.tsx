@@ -1,14 +1,23 @@
-import { useState } from "react";
-import { formatPairCode, type PairTarget, type SavedHost } from "@waterplane/shared";
-import { KeyRound, Link2, Loader2, Monitor, Pencil } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BRAND, formatPairCode, isPlainRoute, parsePairInput, type PairTarget, type SavedHost } from "@waterplane/shared";
+import { KeyRound, Link2, Loader2, Monitor, Pencil, Wifi } from "lucide-react";
 import { api } from "./api";
-import { pickDeviceName } from "./deviceToken";
-import { browserKV, switchTo } from "./hosts";
+import { askConfirm } from "./Confirm";
+import { heldTokens, pickDeviceName, sealedMode } from "./deviceToken";
+import { browserKV, readHosts, reloadToLauncher, switchTo } from "./hosts";
 import { deviceModel, deviceName } from "./deviceInfo";
+import { routeContext, tokenWithheld } from "./hostUrl";
 import { lanRouteNow } from "./lanLink";
+import { pinSealed } from "./pairNative";
+import { PAIR_CODE_SENT_PLAIN, PAIR_NOT_RECORDED, PAIR_NOT_SENT, codeMark, codeWentPlain, markCodePlain, pairStep, pairUnreachable } from "./pairPake";
 import {
-  fieldsFromPaste, heldTokenFor, pairLinkSentence, pairTargetOf, readRedeemReply, redeemErrorText, storeRedeemed, type PairFields,
+  PAIR_SEALED_KEPT, fieldsFromPaste, heldTokenFor, pairAddressOf, pairLinkSentence, pairTargetOf, pairedNoRoute, readRedeemReply, redeemErrorText, sealedAsk, storeRedeemed, storeSealed,
+  type PairFields, type StoreResult,
 } from "./pairRedeem";
+import { hasShellTls } from "./sdk/shellTls";
+import { resyncShellLink } from "./shellLink";
+import { currentNet } from "./shellNet";
+import { rewrapAfterPair, unlockSignIns } from "./core/Banners";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { SetNote, SetLine } from "./SettingsKit";
@@ -21,15 +30,20 @@ import { SetNote, SetLine } from "./SettingsKit";
  * The address field also takes a pasted landing URL or deep link, which fills
  * both fields. A form a DEEP LINK filled says so and names the address — any
  * app can fire that link, so nothing is sent until the person taps pair
- * (`pairRedeem.ts` holds the rules; this is the screen).
+ * (`pairRedeem.ts` and `pairPake.ts` hold the rules; this is the screen).
  */
-export function PairForm({ mode, initial, fromLink, onDone }: {
+/** Paired, with no way to the desktop from here: what the receipt says, and `go`, the rest of the tap. */
+export interface PairNoRoute { host: SavedHost; sentence: string; go: () => void }
+
+export function PairForm({ mode, initial, fromLink, onDone, onNoRoute }: {
   mode: "first" | "add";
   initial?: PairTarget | null;
   /** The fields came from a `<scheme>://pair` link, not the person. */
   fromLink?: boolean;
   /** Paired onto a host that is not made active now (no reload). */
   onDone: (host: SavedHost) => void;
+  /** In place of `onDone` when the pairing left no route (`pairedNoRoute`). */
+  onNoRoute: (receipt: PairNoRoute) => void;
 }) {
   const [fields, setFields] = useState<PairFields>({
     address: initial?.base ?? "",
@@ -40,11 +54,23 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
   // A link-filled form opens as one question — this desktop, this code, pair? —
   // with the fields one tap away for a link that got something wrong.
   const [editing, setEditing] = useState(!(fromLink && initial));
-  const target = pairTargetOf(fields);
+  // The link that filled the form, by tap or by paste: `s=1`, `k=` and `l=` live here.
+  const [link, setLink] = useState<PairTarget | null>(initial ?? null);
+  const target = pairTargetOf(fields, link);
+
+  // A shell that says there is no tailnet here: the LAN address that came with the link or the row
+  // is the one that can answer. The person still reads it before anything is sent.
+  useEffect(() => {
+    if (!initial?.lan) return;
+    void currentNet().then((n) => {
+      setFields((f) => (f.address === initial.base ? { ...f, address: pairAddressOf(initial, n) } : f));
+    });
+  }, []);
 
   function setAddress(text: string): void {
     setProblem(null);
     const both = fieldsFromPaste(text);
+    if (both) setLink(parsePairInput(text));
     setFields(both ? { address: both.address, code: formatPairCode(both.code) } : { ...fields, address: text });
   }
 
@@ -53,35 +79,82 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
     setBusy(true);
     setProblem(null);
     try {
-      let got: { status: number; body: unknown };
-      try {
-        const kv0 = browserKV();
-        const held = kv0 ? heldTokenFor(kv0, target.base) : null;
-        got = await api.pair.redeem(target.base, { code: target.code, deviceName: pickDeviceName(deviceName(), deviceModel()) }, held);
-      } catch {
-        setProblem(`Could not reach ${target.base}. Check that Tailscale is connected on this phone and the desktop is awake.`);
-        return;
+      // Sealed and not opened this run: the old sign-in for this desktop is in the blob, and the
+      // host can only retire its ledger row if it is sent. The rewrap after the redeem needs the
+      // blob open as well, so this is the one sheet, asked first.
+      if (sealedMode() && !heldTokens()) {
+        const why = await unlockSignIns();
+        if (why && sealedMode()) { setProblem(why); return; }
       }
-      const reply = readRedeemReply(got.status, got.body);
-      if (!reply.ok) { setProblem(redeemErrorText(reply)); return; }
       const kv = browserKV();
       if (!kv) { setProblem("This phone's storage is not available."); return; }
-      const r = storeRedeemed(kv, reply, target);
+      const row = readHosts(kv).find((h) => h.base === target.base) ?? null;
+      const plain = isPlainRoute(target.base, routeContext(target.base, row, hasShellTls(), await currentNet()));
+      const mark = await codeMark(target.code);
+      if (mark && codeWentPlain(kv, mark, Date.now())) { setProblem(PAIR_CODE_SENT_PLAIN); return; }
+      const name = pickDeviceName(deviceName(), deviceModel());
+      const presented = heldTokenFor(kv, target.base, true);
+      const next = await pairStep(target, plain, { deviceName: name, ...(presented ? { presented } : {}) }, { start: api.pair.pakeStart, finish: api.pair.pakeFinish });
+      if (next.kind === "stop") { setProblem(next.why); return; }
+      if (next.kind === "ask" && !(await askConfirm(next.ask))) { setProblem(PAIR_NOT_SENT); return; }
+      let r: StoreResult;
+      let note: string | undefined;
+      if (next.kind === "sealed") {
+        const ask = sealedAsk(kv, next.reply, target);
+        if (ask && !(await askConfirm(ask))) { setProblem(PAIR_SEALED_KEPT); return; }
+        r = storeSealed(kv, next.reply, target);
+        if (r.ok) {
+          await pinSealed(r.host, next.reply);
+          await resyncShellLink();
+        }
+        note = next.reply.note;
+      } else {
+        // Before the code leaves, because a killed app must not forget it left.
+        if (next.kind === "ask" && mark && !markCodePlain(kv, mark, Date.now())) { setProblem(PAIR_NOT_RECORDED); return; }
+        let got: { status: number; body: unknown };
+        try {
+          // A pinned row's old token is never put in a header on an address that reads plain now.
+          const held = row && tokenWithheld(target.base, row) ? null : heldTokenFor(kv, target.base);
+          got = await api.pair.redeem(target.base, { code: target.code, deviceName: name }, held);
+        } catch {
+          setProblem(pairUnreachable(target.base, plain));
+          return;
+        }
+        const reply = readRedeemReply(got.status, got.body);
+        if (!reply.ok) { setProblem(redeemErrorText(reply)); return; }
+        r = storeRedeemed(kv, reply, target);
+        note = reply.note;
+      }
       if (!r.ok) { setProblem(r.why); return; }
-      if (reply.note) showToast(reply.note);
-      if (!r.isActive && (mode === "first" || activate)) {
+      if (note) showToast(note);
+      // Sealed: the token is in memory only, and the switch below reloads.
+      const stuck = r.sealedPending ? await rewrapAfterPair(r.host.name) : null;
+      const paired = r;
+      const switching = !paired.isActive && (mode === "first" || activate);
+      if (switching && stuck) { setProblem(stuck); return; }
+      const finish = (): void => {
         // Park and reload onto it — the token and identity were written
         // parked, so the boot's restore brings them in with the host.
-        switchTo(r.host.id);
-        return;
-      }
-      if (r.isActive) lanRouteNow("pair");
-      showToast(`paired with ${r.host.name}`);
-      onDone(r.host);
+        if (switching) { switchTo(paired.host.id); return; }
+        // A host address is only ever replaced by a reload.
+        if (paired.isActive && paired.moved && !stuck) { reloadToLauncher(); return; }
+        if (paired.isActive) lanRouteNow("pair");
+        showToast(stuck ?? `paired with ${paired.host.name}`);
+        onDone(paired.host);
+      };
+      const sentence = next.kind === "sealed" && !stuck ? pairedNoRoute(paired.host, target.base, await currentNet()) : null;
+      if (sentence) onNoRoute({ host: paired.host, sentence, go: finish });
+      else finish();
     } finally {
       setBusy(false);
     }
   }
+
+  const lanSwap = target?.lan && target.lan !== target.base && !busy && (
+    <Button className="pair-link-btn" onClick={() => { setProblem(null); setFields({ ...fields, address: target.lan! }); }}>
+      <Wifi size={13} /> no Tailscale here? use {target.lan.replace(/^https?:\/\//, "")}
+    </Button>
+  );
 
   const status = (
     <>
@@ -114,6 +187,7 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
           <Link2 size={12} style={{ verticalAlign: "-2px" }} /> A pairing link filled this in. Nothing is sent until you tap pair —
           if you did not open a link just now, do not.
         </SetNote>
+        {lanSwap}
         {!busy && (
           <Button className="pair-link-btn" onClick={() => setEditing(true)}><Pencil size={13} /> change address or code</Button>
         )}
@@ -129,8 +203,8 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
         </SetNote>
       )}
       <ol className="pair-steps">
-        <li>On a phone already paired, or the desktop's web page: Settings → <b>pair another phone</b>.</li>
-        <li>Scan its QR, tap <b>open the app on this phone</b> there, or type the address and code below.</li>
+        <li>On the desktop, run <code>{BRAND.slug} pair</code>: it prints the address and a code. Or open Settings › <b>pair another phone</b> on the desktop's web page or a phone already paired: it shows a QR.</li>
+        <li>Type the address and code below, or scan the QR with this phone's camera app (this app has no scanner). It opens this app, or a page with <b>Open in app</b>.</li>
       </ol>
       <input
         className="auth-input"
@@ -166,6 +240,7 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
         <SetNote style={{ marginTop: 8 }}>A pasted pairing link fills both fields.</SetNote>
       )}
       {status}
+      {lanSwap}
       {target && !busy && (
         <SetLine style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
           {mode === "first" && <Button variant="primary" className="pair-wide" onClick={() => void pair(true)}><KeyRound size={14} /> pair</Button>}

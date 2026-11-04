@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.2 - 2026-11-04
+
+### New
+
+- **Run the pre-push checks without pushing.** The git view's Sync sheet has a new Run checks button. It runs your repo's own pre-push hook the way a push would, and pushes nothing. Each commit in the not-pushed list is marked with its result. A commit that passed offers Push up to here, which leaves newer commits local. The real push still runs the hook, so a result is only a mark and never blocks you.
+- **The always-on list names the hooks that add to context.** A SessionStart or UserPromptSubmit hook in your settings, the repo's settings files or an enabled plugin now shows as its own row. Before, the list looked complete when it was not.
+
+### Fixed
+
+- **"% of week" no longer reads far too small a share.** On a desktop that does little of the week's work, the share was worked out against the whole account's usage, so a cheap session could trip the red spend mark. It is now refused in words when another paired desktop on the same account has done a large part of the week. An optional per-desktop setting adds up every paired desktop instead.
+- **The incoming count says how old it is.** A checkout that had not fetched for weeks showed ↓0. The git sheet now fetches when it opens, and a count older than a day reads ↓? with its age in words.
+- **Network failures when pulling are one calm notice.** A failed fetch gives its reason, such as a timeout or a transport error. A burst of network failures is one info notice naming every repo. A repo only asks for your attention after three network failures in a row.
+- **Smaller fixes.** On Windows under WSL2 the CPU figure now covers all of Windows and no longer prints "0% in the kernel". The upstream-age note in the git review keeps its height when the branch list opens.
+
 ## 0.9.1 - 2026-11-02
 
 - **Long or odd lines no longer stall the extension.** Reading a markdown file's front matter, or the activity and stats lines of a running session, could slow to a crawl on a very long line with a repeating pattern. These lines are now read in a single pass, so the time depends only on their length. Results for normal input are unchanged.

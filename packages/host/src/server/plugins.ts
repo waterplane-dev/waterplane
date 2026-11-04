@@ -25,6 +25,32 @@ export function hostAppReadiness(ctx: ServerCtx): Promise<AppReadinessReport> {
   return appReadinessReport(ctx.ROOT, (d) => ctx.builds.list(d), (d) => ctx.autopull.config(d));
 }
 
+/**
+ * `api.notifyDone`: every waiting attention item THIS plugin filed (`item.plugin`) under exactly that
+ * (namespaced) tag is resolved — never another plugin's, never a core item (no `plugin`). A change is
+ * broadcast like any handled item, so every phone stops counting it now, not at its next reconnect.
+ */
+export function settlePluginNotice(deps: Pick<ServerCtx, "attention" | "broadcast" | "notificationFeed">, plugin: string, tag: string): number {
+  return settlePluginNotices(deps, plugin, (t) => t === tag);
+}
+
+/**
+ * `api.notifyDoneExcept`: every waiting attention item THIS plugin filed whose (namespaced) tag is not in
+ * `keep` is resolved — a plugin's start clearing what a previous run left behind. Same scoping as above.
+ */
+export function settlePluginNoticesExcept(deps: Pick<ServerCtx, "attention" | "broadcast" | "notificationFeed">, plugin: string, keep: readonly string[]): number {
+  const kept = new Set(keep);
+  return settlePluginNotices(deps, plugin, (t) => t === undefined || !kept.has(t));
+}
+
+/** The one settle: `plugin`'s own waiting items whose tag `which` picks, then one broadcast if any changed. */
+export function settlePluginNotices(deps: Pick<ServerCtx, "attention" | "broadcast" | "notificationFeed">, plugin: string, which: (tag: string | undefined) => boolean): number {
+  const mine = (r: { item: { plugin?: string; tag?: string } }): boolean => r.item.plugin === plugin && which(r.item.tag);
+  const n = deps.attention.resolveWhere(mine, "no longer waiting");
+  if (n) deps.broadcast({ t: "notification.list", items: deps.notificationFeed() });
+  return n;
+}
+
 export function createPlugins(ctx: ServerCtx, ptyHeld: (ws: WebSocket) => boolean): PluginRegistry {
   const plugins: PluginRegistry = new PluginRegistry({
     root: ctx.ROOT, configDir: hostSecretDir(), sessions: ctx.sessions,
@@ -34,6 +60,8 @@ export function createPlugins(ctx: ServerCtx, ptyHeld: (ws: WebSocket) => boolea
     decision: (row) => ctx.decisionLog.add(row),
     meter: (e) => ctx.meter.record(e),
     notify: (kind, p) => ctx.notify(kind, p),
+    notifyDone: (plugin, tag) => { settlePluginNotice(ctx, plugin, tag); }, // `api.notifyDone`
+    notifyDoneExcept: (plugin, keep) => { settlePluginNoticesExcept(ctx, plugin, keep); }, // `api.notifyDoneExcept`
     usage: () => ctx.usage.get(),
     push: (plugin, event, data) => ctx.broadcast({ t: "plugin.push", plugin, event, data }),
     changed: () => ctx.broadcast({ t: "plugin.list", plugins: plugins.views() }),

@@ -75,6 +75,18 @@ const SERIAL = new Map([
   ["e2e-templates.mjs", "a real Gradle build of the android-hello template: 65 s alone and CPU-bound, it ran past the 240 s limit beside five other scripts"],
 ]);
 
+/**
+ * Scripts this runner never starts: they are run by hand, each with its reason. Discovery would
+ * otherwise take them, and the pre-push worktree has no APK, so every push failed on a harness
+ * error (2026-11-04). Even with an APK they do not fit here: both boot one AVD on one console port
+ * and run for longer than TIMEOUT_MS. A skip inside the script would still start them where an
+ * APK exists, as it does in the live checkout. Shape: ["e2e-x.mjs", "why"].
+ */
+const BY_HAND = new Map([
+  ["e2e-android-lan.mjs", "needs a debug APK of this tree and the AVD; outlasts the per-script limit"],
+  ["e2e-android-oldshell.mjs", "needs an older debug APK and the AVD; outlasts the per-script limit"],
+]);
+
 const argv = process.argv.slice(2);
 const filters = argv.filter((a, i) => !a.startsWith("--") && !/^--jobs$/.test(argv[i - 1] ?? ""));
 /** Script name → its path relative to the repo root. */
@@ -90,9 +102,11 @@ for (const id of existsSync(extRoot) ? readdirSync(extRoot).sort() : []) {
     where.set(f, join("packages", "extensions", id, "e2e", f));
   }
 }
-const scripts = [...where.keys()]
+const matched = [...where.keys()]
   .filter((f) => !filters.length || filters.some((x) => f.includes(x)))
   .sort();
+const scripts = matched.filter((f) => !BY_HAND.has(f));
+for (const f of matched.filter((x) => BY_HAND.has(x))) console.log(`[run-e2e] not run here: ${f} (${BY_HAND.get(f)}). By hand: node ${where.get(f)}`);
 
 if (!scripts.length) {
   console.error(`No e2e scripts matched ${filters.join(", ")}`);

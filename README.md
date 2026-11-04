@@ -1,6 +1,7 @@
 # waterplane
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16195/badge)](https://www.bestpractices.dev/projects/16195)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/waterplane-dev/waterplane/badge)](https://scorecard.dev/viewer/?uri=github.com/waterplane-dev/waterplane)
 
 <!-- site:intro -->
 **An IDE, rethought for the phone in the age of agentic coding.** The agent writes the code; what
@@ -49,6 +50,13 @@ top. Every one of them was annoying from a phone, inconvenient, and not somethin
 I tried the other projects that put an agent on a phone, a lot of them; none fitted my requirements
 and the way I work completely. waterplane is what came out of that.
 
+**And many projects at once.** With agents doing the typing, people work on many projects at the
+same time. VS Code gives you one project per window; the Claude Code mobile app gives you one mixed
+list of conversations. waterplane keeps dozens of repos apart and in view at the same time. I run
+coding sessions across many projects with 100+ sessions open, and at peak hundreds of local agents
+at once, on a Mac Studio (M4, 64 GB). It works the same at a smaller scale on any machine where
+Claude Code runs, with little overhead.
+
 Two more things I was not at ease with:
 
 - **Credentials and admin logins permanently within reach of agents.** There is a vault extension
@@ -59,7 +67,7 @@ Two more things I was not at ease with:
   vault makes the attacker's work harder, not impossible.
 - **Remote desktop to a Mac from a phone is miserable.** Every solution I tried was. It was
   surprisingly easy to let Claude build an alternative into waterplane that is actually usable from
-  a phone: the [live desktop view](packages/extensions/desktop/README.md), experimental, macOS,
+  a phone: the [live desktop view](packages/extensions/desktop/README.md), experimental, macOS and Windows,
   shipped off by default.
 <!-- /site:why -->
 

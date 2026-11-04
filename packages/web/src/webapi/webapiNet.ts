@@ -1,7 +1,19 @@
-import type { DeviceListResponse, DeviceRevokeResponse, PairMintResponse, PairRedeemRequest, TailnetPeersResponse, UiUsageDoc } from "@waterplane/shared";
+import type { DeviceListResponse, DeviceRevokeResponse, PairMintResponse, PairRedeemRequest, PakeFinishRequest, PakeStartRequest, TailnetPeersResponse, UiUsageDoc } from "@waterplane/shared";
 import { nfetch, jget, jpost, jpostOk, jdel } from "./webapiFetch";
 import { bgFetch, bgJson } from "./webapiBg";
 import type { SpeedResult, PathKind, SpeedDebug } from "./webapiTypes";
+
+/** A pairing route, to an ABSOLUTE url: the status and whatever body came back; rejects only on transport. */
+async function jpostPair(url: string, req: unknown, held: string | null = null): Promise<{ status: number; body: unknown }> {
+  const r = await nfetch(url, {
+    method: "POST", credentials: "omit", cache: "no-store",
+    headers: held ? { "content-type": "application/json", authorization: `Bearer ${held}` } : { "content-type": "application/json" },
+    body: JSON.stringify(req),
+  }, 10_000);
+  let body: unknown = null;
+  try { body = await r.json(); } catch { /* not JSON */ }
+  return { status: r.status, body };
+}
 
 /** Speed test, net stats, push, pairing, peers, devices. One slice of `api` (see api.ts). */
 export const netApi = {
@@ -104,21 +116,11 @@ export const netApi = {
   pair: {
     /** `passive`: the code pairs a kids'-phone device (`shared/passive.ts`). */
     mint: (passive = false) => jpostOk<PairMintResponse>("/api/pair/mint", passive ? { passive: true } : {}),
-    /** To an ABSOLUTE base — the desktop being paired, which need not be the
-     *  one in force. Resolves with the status and whatever body came back;
-     *  `pairRedeem.readRedeemReply` reads it. Rejects only on transport. */
-    redeem: async (base: string, req: PairRedeemRequest, held: string | null = null): Promise<{ status: number; body: unknown }> => {
-      // `held`: this phone's token for that desktop already (a re-pair) — the
-      // host swaps its old ledger row for the new one (`host/pair.ts`).
-      const r = await nfetch(`${base}/api/pair/redeem`, {
-        method: "POST", credentials: "omit", cache: "no-store",
-        headers: held ? { "content-type": "application/json", authorization: `Bearer ${held}` } : { "content-type": "application/json" },
-        body: JSON.stringify(req),
-      }, 10_000);
-      let body: unknown = null;
-      try { body = await r.json(); } catch { /* not JSON: readRedeemReply says so */ }
-      return { status: r.status, body };
-    },
+    /** `held`: this phone's token for that desktop already, whose ledger row the host retires (`host/pair.ts`). */
+    redeem: (base: string, req: PairRedeemRequest, held: string | null = null) => jpostPair(`${base}/api/pair/redeem`, req, held),
+    /** PAKE (`pairPake.ts`), with no `Authorization` ever: `bearerFor` refuses these paths too. */
+    pakeStart: (base: string, req: PakeStartRequest) => jpostPair(`${base}/api/pair/pake/start`, req),
+    pakeFinish: (base: string, req: PakeFinishRequest) => jpostPair(`${base}/api/pair/pake/finish`, req),
   },
   /**
    * The peer ledger (`host/peers/routes.ts`) of ONE named desktop — an ABSOLUTE

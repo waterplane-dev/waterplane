@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.PowerManager;
 import android.util.Log;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -15,6 +16,14 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The web layer's switch for {@link ShellLinkService} — and the only thing that
@@ -56,6 +65,18 @@ public class ShellLinkPlugin extends Plugin {
         ret.put("notifications", getPermissionState(NOTIFICATIONS) == PermissionState.GRANTED);
         ret.put("batteryExempt", isBatteryExempt());
         ret.put("powerSave", isPowerSave());
+        // `start` takes `links` (every saved desktop, one socket each). A bundle that checks this
+        // knows alerts of the other desktops can reach the shade; an old bundle never asks.
+        ret.put("multiLink", true);
+        call.resolve(ret);
+    }
+
+    /** What this shell's link can do, for a bundle to detect positively: an older shell lacks the
+     *  method. {@code memoryTokens}: {@link #start} takes {@code tokensInMemory}. */
+    @PluginMethod
+    public void caps(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("memoryTokens", true);
         call.resolve(ret);
     }
 
@@ -75,18 +96,60 @@ public class ShellLinkPlugin extends Plugin {
      *                 i.e. exactly what the page's own socket uses.
      * @param protocol `PROTOCOL_VERSION` from `@waterplane/shared`.
      * @param label    what to call the host on the status line; the address.
+     * @param links    optional (`multiLink`): every saved desktop as {@code {hostId,url,label}},
+     *                 the active one FIRST — one socket each. Absent (an older bundle): the one
+     *                 {@code url}, exactly as before. {@code url}/{@code label} still name the
+     *                 active desktop when a list comes too, so an older shell reading only them
+     *                 does the right thing with a newer bundle's call. A row may carry
+     *                 {@code token}: that desktop's own device token (a password-gated one),
+     *                 sealed at rest by {@link ShellLinkTokens} and never in the stored list.
+     * @param wsProtocol optional: the base subprotocol a token rides beside on the socket.
+     * @param tokensInMemory optional: no token touches the disk. The row tokens stay in this
+     *                 process, every sealed copy is deleted, and each such row is stored as
+     *                 {@code tokenHeld}. Absent: sealed at rest, exactly as before.
      */
     @PluginMethod
     public void start(PluginCall call) {
         String url = call.getString("url");
-        if (url == null || !(url.startsWith("ws://") || url.startsWith("wss://"))) {
+        String label = call.getString("label");
+        String linksJson = null;
+        boolean tokensInMemory = call.getBoolean("tokensInMemory", false);
+        // Tokens travel beside the list, never inside the stored JSON (`ShellLinkTokens`).
+        List<ShellLinkSet.Spec> withTokens = Collections.emptyList();
+        JSArray raw = call.getArray("links", null);
+        if (raw != null) {
+            List<ShellLinkSet.Spec> in = new ArrayList<>();
+            for (int i = 0; i < raw.length(); i++) {
+                JSONObject o = raw.optJSONObject(i);
+                if (o != null) in.add(new ShellLinkSet.Spec(o.optString("hostId", null), o.optString("url", null), o.optString("label", null), o.optString("token", null)));
+            }
+            List<ShellLinkSet.Spec> clean = ShellLinkSet.clean(in);
+            if (!clean.isEmpty()) {
+                JSONArray out = new JSONArray();
+                try {
+                    for (ShellLinkSet.Spec sp : clean) {
+                        JSONObject row = new JSONObject().put("hostId", sp.hostId).put("url", sp.url).put("label", sp.label);
+                        if (ShellLinkSet.marksHeld(sp, tokensInMemory)) row.put("tokenHeld", true);
+                        out.put(row);
+                    }
+                } catch (JSONException e) {
+                    call.reject("links unreadable: " + e.getMessage());
+                    return;
+                }
+                linksJson = out.toString();
+                withTokens = clean;
+                // The active desktop is the list's first, whatever the single fields said.
+                url = clean.get(0).url;
+                label = clean.get(0).label;
+            }
+        }
+        if (!ShellLinkSet.isWsUrl(url)) {
             call.reject("a ws:// or wss:// url is required");
             return;
         }
         int protocol = call.getInt("protocol", 1);
-        String label = call.getString("label");
         if (label == null || label.isEmpty()) label = hostOf(url);
-        ShellLinkService.enable(getContext(), url, protocol, label);
+        ShellLinkService.enable(getContext(), url, protocol, label, linksJson, withTokens, call.getString("wsProtocol", null), tokensInMemory);
         // Same shape as status(): describe() knows nothing of the permission,
         // and without it the caller toasts "notifications are blocked" every time.
         JSObject ret = ShellLinkService.describe(getContext());

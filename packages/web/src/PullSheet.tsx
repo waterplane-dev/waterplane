@@ -649,7 +649,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
             }}>
             {rec.install === "failed" ? <RotateCw size={16} />
               : rec.install === "installed" ? <PackageCheck size={16} /> : <PackagePlus size={16} />}
-            {installVerbText(rec.install)}
+            {installVerbText(rec.install, rec.installError)}
           </Button>
         )}
         {/* The per-app switch: every future build of THIS package, by itself.

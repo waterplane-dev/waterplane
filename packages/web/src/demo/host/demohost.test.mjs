@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, promptFingerprint } from "@waterplane/shared";
 import { createDemoHost, restoreDemoHost, NOT_IN_DEMO, RECEIPTS, DURABLE_OPS, assertShippable } from "./index.ts";
 import { HANDLERS } from "./handlers.ts";
+import { NO_DESKTOP } from "./builds.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../../../../..");
@@ -113,13 +114,52 @@ test("every refused message ends its sender's wait with its own receipt, or a to
 
 test("a tier-B op re-sent with the same ackId is re-acked from the ledger, identically", () => {
   const { conn, frames, host } = harness();
-  conn.receive({ t: "build.run", repoDir: "todo", ackId: "k1" });
-  conn.receive({ t: "build.run", repoDir: "todo", ackId: "k1" });
+  conn.receive({ t: "capture.run", repoDir: "todo", ackId: "k1" });
+  conn.receive({ t: "capture.run", repoDir: "todo", ackId: "k1" });
   const acks = frames().filter((m) => m.t === "op.ack");
   assert.equal(acks.length, 2);
-  assert.deepEqual(acks[0], { t: "op.ack", ackId: "k1", ok: false, reason: HANDLERS["build.run"].reason });
+  assert.deepEqual(acks[0], { t: "op.ack", ackId: "k1", ok: false, reason: HANDLERS["capture.run"].reason });
   assert.deepEqual(acks[1], acks[0]);
   assert.deepEqual(Object.keys(host.snapshot().acks), ["k1"]);
+});
+
+test("builds: with no fixture the demo refuses and lists nothing, so the shipped demo is unchanged", () => {
+  const { conn, frames } = harness();
+  conn.receive({ t: "build.list", repoDir: "todo" });
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "b", ackId: "k1" });
+  assert.deepEqual(frames(), [
+    { t: "build.list", repoDir: "todo", builds: [], runs: [] },
+    { t: "op.ack", ackId: "k1", ok: false, reason: NO_DESKTOP },
+  ]);
+});
+
+test("builds: a fixture's fire names its run, lists it, and a replay runs nothing twice", () => {
+  const { conn, frames, host } = harness();
+  host.faults.builds({ repoDir: "todo", list: [{ id: "b", name: "Debug", cmd: "make" }, { id: "no", name: "Docs", cmd: "docs" }], runs: [], refuse: { no: "working dir not found: docs" } });
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "b", ackId: "k1" });
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "b", ackId: "k1" });
+  const [run, ack, again] = frames();
+  assert.equal(run.t, "build.run");
+  assert.equal(run.run.status, "running");
+  assert.equal(ack.runId, run.run.runId);
+  assert.deepEqual(again, ack);
+  conn.receive({ t: "build.list", repoDir: "todo" });
+  assert.deepEqual(frames().at(-1).runs.map((r) => r.runId), [run.run.runId]);
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "no", ackId: "k2" });
+  assert.equal(frames().at(-1).reason, "working dir not found: docs");
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "gone", ackId: "k3" });
+  assert.equal(frames().at(-1).reason, "unknown build");
+});
+
+test("faults.emit reaches a socket past a drop rule, and a dropped receipt stays in the ledger", () => {
+  const { conn, frames, host } = harness();
+  host.faults.builds({ repoDir: "todo", list: [{ id: "b", name: "Debug", cmd: "make" }], runs: [] });
+  host.faults.set([{ kind: "drop", match: { t: "op.ack" } }, { kind: "drop", match: { t: "build.run" } }]);
+  conn.receive({ t: "build.run", repoDir: "todo", buildId: "b", ackId: "k1" });
+  assert.deepEqual(frames(), []);
+  const receipt = host.snapshot().acks.k1;
+  host.faults.emit(receipt);
+  assert.deepEqual(frames(), [receipt]);
 });
 
 test("hello is answered with welcome at this protocol and the persisted boot id", () => {

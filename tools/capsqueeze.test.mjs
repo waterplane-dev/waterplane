@@ -8,7 +8,15 @@ const diffOf = (removed) => ["--- a/x.ts", "+++ b/x.ts", "@@ -1 +1 @@", ...remov
 
 test("notes-only trim into the cap is refused", () => {
   assert.equal(squeezeDecision(body(903), body(900), diffOf(["// why", "", " * more"]), CAP), true);
-  assert.match(squeezeMessage("a.ts"), /splitting a\.ts by subject \(refactoring skill\), not by deleting its notes/);
+  assert.match(squeezeMessage("a.ts"), /comments do not count toward the cap, so keep its notes; to make room, split a\.ts by subject \(refactoring skill\)/);
+});
+test("near the cap is in code lines: 700 of code and 200 of notes may lose a note", () => {
+  const file = (notes) => body(notes, true) + body(700);
+  assert.equal(squeezeDecision(file(200), file(190), diffOf(["// why"]), CAP), false);
+});
+test("a comment trim near the cap is refused though the counted number does not move", () => {
+  const file = (notes) => body(notes, true) + body(890);
+  assert.equal(squeezeDecision(file(30), file(20), diffOf(["// why"]), CAP), true);
 });
 test("code removal is allowed", () => {
   assert.equal(squeezeDecision(body(903), body(900), diffOf(["// why", "const x = 1;"]), CAP), false);

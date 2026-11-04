@@ -1,4 +1,4 @@
-import type { DictateAnswer, DictateStatus, HostStat } from "@waterplane/shared";
+import { parseWaitingSummary, timedFetch, type DictateAnswer, type DictateStatus, type HostStat, type WaitingSummary } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import { rootApi } from "./webapiRoot";
 import type { FileEntry, UploadError } from "./webapiTypes";
@@ -123,6 +123,22 @@ export const hostApi = {
       xhr.onabort = () => { done(); reject(new DOMException("aborted", "AbortError")); };
       xhr.send(wav);
     }),
+  /**
+   * What ANOTHER saved desktop waits on the person for (`GET /api/attention`, `shared/waiting.ts`)
+   * — the ONLY cross-origin API call in the client, so it is spelled with that desktop's own
+   * `base` (the patched fetch sends this page's token only to the host in force, and keeps the
+   * explicit `authorization` given here: `bearerForSaved`'s, that desktop's parked token). Raw
+   * `timedFetch`, not `nfetch`: a background poll must not blink the activity bar.
+   * `summary` null on a non-2xx or an answer that is not a summary — never a 0.
+   */
+  waitingAt: async (base: string, auth: string | null): Promise<{ status: number; summary: WaitingSummary | null }> => {
+    const headers: Record<string, string> = auth ? { authorization: auth } : {};
+    const r = await timedFetch(`${base}/api/attention`, { headers, cache: "no-store", credentials: "omit" }, 8000);
+    if (!r.ok) return { status: r.status, summary: null };
+    let body: unknown = null;
+    try { body = await r.json(); } catch { /* not JSON: absent */ }
+    return { status: r.status, summary: parseWaitingSummary(body) };
+  },
   /** Push text onto the desktop host's system clipboard (phone→desktop). */
   setClipboard: (text: string) =>
     jpost<{ ok: boolean; chars?: number; error?: string }>("/api/host/clipboard", { text }),

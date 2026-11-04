@@ -1,5 +1,6 @@
 import { nativePullSupported, nativeSetAuto, onNativePullChange } from "../nativePull";
-import { noNetwork, pumpEligible, strandedDownload } from "../downloadState";
+import { apkFetchRefusal, noNetwork, pumpEligible, strandedDownload } from "../downloadState";
+import { plainDownloadRoute } from "../hostUrl";
 import { linkOnline } from "../link";
 import type { PullRecord } from "./pullTypes";
 import { STALL_MS, MAX_ATTEMPTS, BACKOFF, TICK_MS, autoPull } from "./pullConsts";
@@ -127,6 +128,8 @@ export function pullWatchdog(this: PullManager): void {
 export async function pullRun(this: PullManager, id: string): Promise<void> {
   const rec = this.records[id];
   if (!rec) return;
+  const refused = apkFetchRefusal(rec.item, plainDownloadRoute());
+  if (refused) { this.patch(id, { state: "failed", error: refused, rate: undefined }); return; }
   const before = rec.received;
   this.patch(id, { state: "downloading", error: undefined, nextRetryAt: undefined, lastProgressAt: Date.now() });
   const bg = await this.startBackgroundFetch(rec);

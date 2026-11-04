@@ -5,6 +5,28 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.18
+
+### New
+
+- **Another desktop that is waiting on you is named on the launcher.** A chip beside the desktop key shows what is waiting elsewhere. One tap switches to that desktop and lands on the item. The background connection now watches every saved desktop, and an alert starts with the desktop's name.
+- **Pair and use a desktop on Wi-Fi without Tailscale.** Pairing by code is sealed, so the code never crosses the network in the clear. The phone pins the desktop's key and refuses a swapped one in words. Over-the-air updates are signed by the desktop and checked on the phone.
+- **Lock the app with your fingerprint or screen lock.** Saved sign-ins can be sealed behind the same prompt. Settings says what locking costs each desktop before you choose, and offers a way out if the seal gets stuck.
+- **Run the pre-push checks without pushing.** In the git view, Run checks shows a verdict on each unpushed commit. A commit that passed offers Push up to here, which leaves newer commits local.
+- **The git sheet says how old the incoming count is, and fetches when it opens.** A stale zero now reads ↓? instead of claiming you are up to date.
+- **The first screen says what the app is.** It tells you the desktop half comes first and gives the pair command. It also says to scan the QR with the phone's camera app.
+- **Plain HTTP addresses are warned about.** The phone refuses fingerprints and over-the-air updates there and says why.
+- **The queue strip folds away.** Queued, sending and not-delivered rows go behind the corner button. A row that is moving keeps the fold, and a new row or a failure brings it back.
+
+### Fixed
+
+- **The "% of week" no longer reads wildly high on a desktop that does little of the week's work.** It refuses a figure that a paired desktop has outspent, and says so where the share would be. Settings can count every paired desktop instead.
+- **A plan with no 5-hour window says so in one row** instead of showing an empty bar and a complaint about a missing reset time.
+- **Reconnecting to a desktop without voice dictation no longer crashes the page.**
+- **A signing-key conflict on an app install no longer offers a retry that cannot work.** The card explains the conflict, and the button says to uninstall the old copy first and what that costs in data.
+- **A network failure while pulling is one info notice naming every repo.** A repo is filed as needing you only after three failures in a row, and a failed fetch says why.
+- **The upstream-age note in the git sheet keeps its height when the branch list opens.**
+
 ## 0.1.17
 
 ### Fixed

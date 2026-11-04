@@ -88,7 +88,7 @@ export function fakeApi(opts = {}) {
   const root = mkdtempSync(join(tmpdir(), `${id}-plugin-test-`));
   const calls = {
     backend: [], onHook: [], setStatus: [], onSettings: [], on: [], setBadge: [], decision: [], ruleAllows: [], bind: [], log: [],
-    seedSettings: [], suggest: [], answer: [], meter: [], notify: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
+    seedSettings: [], suggest: [], answer: [], meter: [], notify: [], notifyDone: [], notifyDoneExcept: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
     offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFix: [], sessionOf: [],
   };
   const screens = new Map();
@@ -145,6 +145,8 @@ export function fakeApi(opts = {}) {
     decision: (row) => { calls.decision.push(row); },
     meter: (c) => { calls.meter.push(c); },
     notify: (n) => { calls.notify.push(n); },
+    notifyDone: (tag) => { calls.notifyDone.push(tag); },
+    notifyDoneExcept: (keep) => { calls.notifyDoneExcept.push([...keep]); },
     claudeUsage: () => null,
     repo: async () => null,
     setupCheck: (fn) => reg(calls.setupCheck, fn),

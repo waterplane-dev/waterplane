@@ -87,6 +87,60 @@ summary:
   and as the WebSocket subprotocol `waterplane-tok.<tok>` on the upgrade (the host
   echoes only the base protocol, never the token). No token is valid while
   no password is set.
+  On the phone the page keeps its tokens in the app's private localStorage; the
+  APK's background link keeps a second copy of each gated desktop's token so it
+  can reconnect with the app swiped away, AES-256-GCM sealed under a non-exportable
+  Android Keystore key (`ShellLinkTokens`), bound to that desktop's id and address,
+  sent only to that desktop's saved tailnet address, deleted when the desktop is
+  removed, the token is refused or the link is switched off. **Stated residual:**
+  the key needs no user authentication, because nobody is holding the phone when
+  the service reconnects, so this protects against a copied file, not against code
+  running as this app. That residual holds only while the phone's sign-ins are not
+  locked: with *lock the desktop sign-ins* on (next bullet), the link keeps no copy at rest.
+- **Sealed sign-ins (optional, off by default).** Settings › Connection ›
+  *lock the desktop sign-ins* (Android app) puts this phone's device tokens in one
+  blob under a Keystore key that each use opens with the fingerprint, or on a newer
+  shell the phone's PIN, and removes the plaintext. **It guards against a copy of
+  the app's storage (a backup, a pulled file), not against a hand holding the
+  unlocked phone** (that is the app lock, and the process holds the tokens in plaintext
+  memory while running). A desktop with no password has no token, so there is nothing
+  to lock for it. The background link, per APK: a newer app keeps each token in
+  memory only (alerts continue after a swipe-away until the phone restarts or
+  Android stops the app, then "locked — open the app"); an older app is handed no
+  token, so alerts from gated desktops wait until the app is opened. Nothing on the
+  host changes. **Stated residuals:** a token the desktop revoked stays in the blob
+  until the next rewrap; a stray bare token that belongs to no saved desktop can stay
+  plaintext (the row says so); passive (kids') tokens are not sealed; on an older
+  app the start prompt is the fingerprint only, and on a plain-HTTP route that app
+  refuses the key, so its card stays until the route is the tailnet or HTTPS (the row
+  refuses to lock in that state, and the host setup form refuses to save a plain
+  address while that app has both locks on); the recents thumbnail is as before; and a lost key
+  (screen lock removed, or a new fingerprint on a fingerprint-only key) loses the
+  sign-ins, so a tailnet-gated desktop must be paired again. A missing sensor never
+  counts as a lost key, and a lost one's blob is set aside on the phone
+  (`tokenSealDead`), not deleted; nothing restores it yet, and the next lock's new key
+  makes it unreadable. A key that is dead but not worded as such by an OEM stays a
+  refusal, and the person's way out is *forget the locked sign-ins* (confirmed, behind
+  the app lock): it discards the blob by hand, which gives a stranger nothing. "Nothing
+  connects before the unlock" is true of the socket only: tokenless HTTP, such as the
+  app-update check, runs first, carrying no token.
+- **App lock (optional, off by default).** The Android app can require the
+  phone's fingerprint, or on a newer shell its PIN, before it shows its screen
+  (Settings › Connection › *lock this app*). **It is a hold-the-phone defence at
+  UI level and nothing more.** No host route, token, gate or wire message changes;
+  deny-until-set, token rotation, the passive allowlist and the origin checks are
+  untouched, and **the device token's storage is unchanged** unless *lock the desktop
+  sign-ins* is on (localStorage, plus the sealed copy above). The page stays mounted behind an opaque card. Stated
+  residuals: anyone who has the phone's PIN passes it (the PIN fallback, or by
+  enrolling a finger); the recents thumbnail, and the frame the WebView shows on
+  wake before the page's JS runs, still show the last screen. The lock fails
+  closed: a cancelled, failed, locked-out or unrecognised refusal never opens the
+  app, at any repeat count. It opens and switches itself off (saying so) only when
+  the phone's own credential had to change the key, the app's saved check is
+  unreadable, or a fresh status read confirms no sensor or nothing to check with.
+  So on an old APK with a dead sensor that still reports hardware, or on a plain
+  HTTP route (where the old APK's key use is refused), the way out is a newer APK,
+  another route (the tailnet or HTTPS), or clearing the app's data.
 - **LAN identity.** `<state dir>/lan-identity.json` (0600) holds a `hostId`
   and a secret. `GET /api/lan/identity` hands them out to loopback and
   Tailscale callers ONLY — refused (403) for every other peer kind before the
@@ -97,8 +151,137 @@ summary:
   the thing answering at a LAN address holds the secret; it cannot resist an
   **active relay** on the person's own Wi-Fi that forwards the probe to the
   real desktop and then reads the plain-HTTP traffic (the token included).
+  With the token that relay can drive the desktop. It could also answer the app
+  with a forged page. So the Android app asks of every route whether it is
+  *protected* (`isPlainRoute` in shared, mirrored natively by `ShellRoute.java`),
+  and on one that is not it refuses every fingerprint use, every over-the-air
+  update and every app download or install, and warns in the address form, the
+  health sheet, the strip ("LAN, not protected") and a toast.
+  **The protected-route rule.** A route is protected only if it is exactly one
+  of: loopback; a Tailscale address or MagicDNS name over `http`, or `https` to a
+  `*.ts.net` name, unless a newer app reports that the phone has no tailnet
+  (then a tailnet name proves nothing: with Tailscale off, `100.x` goes to the
+  Wi-Fi gateway); the desktop's own TLS address on a newer app that holds its
+  pin; or an `https` address the person typed themselves. Everything else is
+  plain, **whatever its scheme**: a relay with a public certificate for its own
+  name passes `https` validation. A reply from a desktop that has not proved
+  itself (anything not sealed by the pairing code, or not received over a
+  protected route) never sets a saved desktop's address, key, pin or identity,
+  so a relay cannot walk a row onto itself. **Stated residuals:** a row saved
+  by an older app may already hold an address someone planted (a non-`ts.net`
+  `https` one reads as plain and the app opens an empty field to retype it; a
+  planted `ts.net` or `100.x` one cannot be told apart); and a person who taps
+  "pair" on a pairing link someone else made pairs with whoever made it (the
+  confirm says so). A browser on plain HTTP has no such defence, because the page
+  itself is what arrives unprotected, and the token is still exposed to the
+  relay. An older app keeps the older answer (tailnet and HTTPS only).
   Plain HTTP on a LAN has no defence against a man in the middle; if that
   network is not trusted, do not enable `WATERPLANE_ALLOW_PUBLIC`.
+- **LAN TLS and the pin** (`packages/host/src/lantls.ts`). Only where
+  `WATERPLANE_ALLOW_PUBLIC=1` already binds LAN addresses, the host also
+  listens on `WATERPLANE_TLS_PORT` (default port + 1) on those same addresses
+  with the same handler and the same gate, so a caller there is still peer kind
+  `lan` and needs its token. Off with `WATERPLANE_TLS=0`; never on loopback or
+  the tailnet; nothing without the opt-in. The key is P-256 in
+  `<state dir>/lan-tls.json` (0600), kept across restarts; the certificate is
+  self-signed and re-issued on the same key when the addresses change, so the
+  phone's pin (SHA-256 of the key) survives. The app stores the pin per desktop
+  and enforces it in the WebView, the background link and the pull service; a
+  desktop with a pin is then never reached over plain HTTP on a LAN address.
+  A self-signed port does not serve the web app (it answers a notice page): a
+  browser click-through would look protected and is not. With
+  `WATERPLANE_TLS_CERT` + `WATERPLANE_TLS_KEY` (a person's own leaf from a CA;
+  a self-signed one is read as self-signed) it serves the app, and the pin
+  follows that leaf. **What the pin does not defend:** the
+  WebView's handler runs only when validation fails, so a certificate valid
+  under a CA the phone trusts would skip the pin inside the WebView (pinned
+  addresses are private IPs and `.local` names, which public CAs do not issue,
+  and the app trusts no user-added CA); a first install of the APK over the
+  network (Android accepts any signature then); code already running in the
+  page; a browser; and dropping packets. The pin is a property of a newer APK:
+  a shipped one learns it and ignores it, and stays on plain LAN with the
+  warnings. The way out of a pinned desktop whose TLS port is off is a
+  confirmed "use plain HTTP for this desktop" on its row; nothing does it
+  by itself. The spike behind this (measured on two emulator WebViews only)
+  is in `docs/notes/protocol-and-security.md`. **None of this has been tried on
+  a real phone yet.**
+- **Signed updates** (`packages/host/src/updatekey.ts`, `webbundle.ts`,
+  `packages/web/src/updateTrust.ts`, `ShellBundleVerify.java`). Each desktop
+  signs its web bundle's manifest with its own P-256 key
+  (`<state dir>/update-key.json`, 0600), not a project key: people build their
+  own bundles, and a private key shipped to every desktop is no key. The
+  manifest carries `signed` (hostId, build id, `gen`, the file list with hashes)
+  and `sig`. A phone learns the desktop's public key from `welcome` only when
+  the delivering socket's address was protected (above), so a relay cannot
+  hand it one. Once a phone holds a key, an update that is unsigned, badly
+  signed, for another desktop or older than the last it took (`gen`, which
+  rises when the served build id changes, so a real revert still works) is
+  refused and nothing is written. The check runs in the page (works on a
+  shipped APK) and again natively on a newer one, which also asks in its own
+  dialog the first time it sees a desktop's key, a changed key, or a
+  restored desktop; page code cannot tap it. A new key (a wiped state dir) or a
+  lower `gen` (a restored one) waits for that answer. **What it does not do:** a
+  signature proves the bundle came from the desktop you paired, never that
+  its code is good. **A hostile desktop can still ship anything**, and a
+  paired host stays fully trusted (last section). A passive (kids') phone opens
+  no socket, so it never learns a key and takes updates as before, over a
+  route that is protected or it would take none. A shipped APK without the
+  native check has the page's check only, so page code that is already
+  compromised can still persist a bundle there. A desktop that cannot read or
+  write its key file serves the bundle unsigned (logged once): a phone that
+  holds a key then refuses it and says to update or repair the desktop.
+- **Pairing with no tailnet** (`pairpake.ts`, `shared/pake.ts`). A phone
+  pairs by CPace over ristretto255 keyed by the 8-character code, on the plain
+  port: the phone proves it knows the code first, the host answers with a
+  sealed reply (token, `hostId`, TLS pin, update key, LAN identity), and the
+  seal authenticates the host. A relay gets one online guess per attempt; an
+  impostor host answering `start` gets at most five, one per share it sends,
+  which is all a phone will answer. A real host offers the five newest open
+  codes, each confirm checked against all of them in constant time, so with
+  more than five open an older code never pairs this way: its phone is told
+  the desktop does not know that code and to show a new QR, which then works,
+  and the attempt counts as a miss against the five offered. A session lives
+  60 s and is deleted on its first `finish`.
+  10 wrong confirms close a code *for this pairing only*: it still redeems over
+  the tailnet, so a device on the Wi-Fi can stop an encrypted pairing (as
+  dropping packets does) but cannot burn a code meant for the tailnet. The
+  desktop refuses with no password set. **A code never crosses a plain socket
+  and lives:** on one that is not loopback, the tailnet, `tailscale serve` or
+  TLS, `/pair/<code>` and `/pair/<code>/apk` burn the code and show a page with
+  no link and no APK; a LAN-only desktop's screen shows the deep-link QR, which
+  goes camera to app. A code already sent plain is dead on that phone. The
+  link also carries a 128-bit commitment to the key and pin, which the seal
+  must match. **Stated residuals:** a person who accepts the question that
+  appears for an older desktop (it cannot tell an old desktop from someone
+  blocking encrypted pairing) spends that code and token in the clear, as
+  before; a relay can fill the miss count and stop pairing; whether every
+  camera app opens the waterplane link is unverified, and the typed code runs the
+  same protocol; the first APK install over the network is unprotected.
+  `waterplane pair` prints the update key's fingerprint beside the code.
+- **Read ticket** (`auth.ts`, `POST /api/auth/read-ticket`). An image tag or a
+  download link cannot carry a bearer, so a phone with no tailnet could not
+  load them. A signed device token buys a one-hour ticket (HMAC of device id,
+  scope and expiry; the key lives in memory, so a restart voids every
+  ticket) that is accepted as `?wt=` **only** on the two opaque read routes
+  (`OPAQUE_READ_ROUTES`), **only** over the TLS socket, GET/HEAD only, only
+  while the device row exists, and held to the row's scope (a passive phone's
+  ticket gets what a passive token gets). Access logs, shares and copies
+  strip `wt`. A ticket in a URL is a credential for those two read routes for
+  up to an hour: do not paste such a URL.
+- **A phone with Tailscale off.** It reaches the desktop only on the Wi-Fi.
+  A shipped APK stays on plain LAN with name-based trust as before, except
+  that an update key it already holds still refuses a forged bundle. A newer
+  APK pairs by code, holds the pin and goes over TLS. A phone that never
+  learned a pin cannot tell a relay from the desktop on the first
+  plain contact; pairing by code is the fix. The password-change case: tokens
+  rotate as before, so a LAN-only phone must pair again, and its gate says so
+  rather than asking for a password that cannot work there.
+  On a shell that enforces pins, a page that knows Tailscale is off sends no
+  device token to a tailnet address, pinned or not, since only the Wi-Fi can
+  answer it. Until the shell's first network reading it holds the token back on
+  those addresses and learns no pin, for at most 8 seconds; a shell silent past
+  that falls to trust by name. The background link is not covered on an unpinned
+  row: it sends its token to the address it holds, as before.
 - **Pairing codes** (`packages/host/src/pair.ts`). `POST /api/pair/mint`
   sits behind the normal gate; the 8-character code lives 10 minutes, is kept
   in memory only as its sha256 (a restart invalidates every outstanding one),
@@ -169,19 +352,20 @@ summary:
   The shell does not inherit the daemon's API keys and key files
   (`*_API_KEY`, `*_KEY_FILE`, `*_KEYCHAIN` are unset in the pane), and its
   commands are never written to the session's prompt history.
-- **Live desktop** (`packages/extensions/desktop`, macOS, experimental). Watching is a
+- **Live desktop** (`packages/extensions/desktop`, macOS, and Windows with the host in WSL; experimental). Watching is a
   stream on the same device-token socket and widens no gate. **Control is
   arbitrary input on the desktop** (clicks and keys reach every app, password
   managers and a logged-in terminal included), so it carries the same trust as
   the PTY and is a separate setting, **off by default**. It is gated on the
   host, not only on the phone: with it off, `stream.input` is dropped before it
-  reaches the helper, and with it on it still needs the macOS Accessibility
-  grant. A peer token never reaches a stream (`/api/peer/*` only), and no job,
-  schedule or peer desktop opens a desktop stream. The helper `wp-desktop` runs
-  as the desktop user, is signed with a stable identifier and holds only the
-  Screen Recording and Accessibility grants a person gave it at the Mac (it asks
-  macOS only when a person taps Fix on a setup row), and capture runs only while a
-  view is open. macOS shows its own recording indicator the whole time.
+  reaches the helper, and with it on a Mac still needs the macOS Accessibility
+  grant. Windows asks no app for a grant, so there the host's switch is the only
+  gate. A peer token never reaches a stream (`/api/peer/*` only), and no job,
+  schedule or peer desktop opens a desktop stream. The helper `wp-desktop` runs as the desktop user and capture runs only while a
+  view is open. On a Mac it is signed with a stable identifier and holds only the
+  Screen Recording and Accessibility grants a person gave it there (it asks macOS
+  only when a person taps Fix on a setup row), and macOS shows its own recording
+  indicator the whole time. Windows shows no such indicator.
 - **Browser origins** (`packages/host/src/origin.ts`). Every `/api/*` request
   and WebSocket upgrade is checked on `Origin` and `Host`; only `http`/`https`
   origins naming this machine on a port it serves pass, plus exactly one
@@ -386,10 +570,10 @@ do so anyway, e.g.:
   running the daemon.
 - **A paired host is fully trusted by the Android shell.** The app's UI
   updates over the air from the host it is paired with
-  (`packages/web/src/webUpdate.ts`); the manifest's sha256 hashes come from
-  that same host, so they catch corruption, not a hostile host. A host you
-  pair with can ship JS that runs with the shell's native plugins. Pair only
-  with desktops you control.
+  (`packages/web/src/webUpdate.ts`). Its bundles are signed with a per-desktop
+  key the phone pins over a protected route, which stops a relay on the network,
+  never the desktop itself: a host you pair with can ship JS that runs with the
+  shell's native plugins. Pair only with desktops you control.
 
 If you're not sure whether something is in scope, report it privately anyway
 and let us sort it out together — a false positive costs us a few minutes; a

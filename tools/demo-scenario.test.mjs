@@ -10,7 +10,7 @@ import { buildScenario, findLeaks, ScrubError, CLOCK_START } from "./demo-scenar
 
 const ROOT = "/var/folders/ab/xyz/T/waterplane-x-1";
 const b64 = (s) => Buffer.from(s).toString("base64");
-const welcome = { t: "welcome", protocol: PROTOCOL_VERSION, bootId: "7d64ef77-cfa3-4903-983d-205ee605a87f", tailscaleIp: "100.71.1.2", lanIps: ["192.168.0.5"], root: ROOT, port: 53538, hostName: "box", hostId: "abc", auth: { enabled: true } };
+const welcome = { t: "welcome", protocol: PROTOCOL_VERSION, bootId: "7d64ef77-cfa3-4903-983d-205ee605a87f", tailscaleIp: "100.71.1.2", lanIps: ["192.168.0.5"], root: ROOT, port: 53538, hostName: "box", hostId: "abc", auth: { enabled: true }, updateKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE".repeat(2), tlsPort: 53539, tlsSpki: "ab".repeat(32) };
 const rec = (extra = []) => [
   { at: 1e12 + 1000, dir: "out", msg: welcome },
   { at: 1e12 + 1001, dir: "out", msg: { t: "usage.status", usage: { pct: 41 } } },
@@ -27,6 +27,7 @@ test("a clean recording scrubs: welcome redacted, denylisted frame dropped, root
   assert.equal(hs[0].root, "demo");
   assert.equal(hs[0].tailscaleIp, null);
   assert.deepEqual(hs[0].lanIps, []);
+  for (const k of ["updateKey", "tlsPort", "tlsSpki"]) assert.ok(!(k in hs[0]), `${k} is this desktop's own, and the demo has no LAN link`);
   assert.ok(!JSON.stringify(scenario).includes("usage.status"));
   const created = scenario.script.map((e) => e.event.msg).find((m) => m.t === "session.created");
   assert.equal(created.session.id, "s1");

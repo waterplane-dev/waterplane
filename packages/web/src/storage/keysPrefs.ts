@@ -110,6 +110,12 @@ export const LS_PREFS = {
    */
   hostSwitchFailed: lsKey("hostSwitchFailed"),
   /**
+   * Where to land after a host switch a tap asked for (`hosts.ts` `switchTo(id, open)`): one
+   * `shellOpen` string (`plugin:<id>`, a session id). Written beside the switch marker, read once
+   * and deleted by the hosts feature's boot, which hands it to `window.shellOpen`.
+   */
+  hostOpenAfter: lsKey("hostOpenAfter"),
+  /**
    * Hosts removed from the list whose parked keys are still on this phone.
    * Re-adding the same address reuses the id, which is what brings the
    * parked drafts and queue back (`hosts.ts` `addHost`).
@@ -122,11 +128,24 @@ export const LS_PREFS = {
    */
   deviceToken: lsKey("deviceToken"), passive: lsKey("passive"), // "1": that token is a passive one (`passiveMode.ts`)
   /**
+   * The sealed sign-ins (`tokenVault.ts`): `{ v, ct, nonce, hosts }`, every full token this phone
+   * holds under the Keystore key, and `"1"` while that mode is on. DEVICE-scoped: one blob for all
+   * desktops, so a host switch never moves it. Kept by the hard reset (`resetKeys.ts`), never synced.
+   */
+  tokenSeal: lsKey("tokenSeal"), tokenSealOn: lsKey("tokenSealOn"),
+  /**
+   * Beside them, same scope and same keep. `tokenSealDead`: the blob of a seal the phone retired,
+   * set aside and never read by the app, so a wrong verdict has not destroyed the last copy.
+   * `tokenSealAuth`: `"any"`/`"biometric"`, what opens the key, as `generate` said when it made it.
+   */
+  tokenSealDead: lsKey("tokenSealDead"), tokenSealAuth: lsKey("tokenSealAuth"),
+  /**
    * The active host's LAN identity `{hostId, secret}` (`GET /api/lan/identity`,
    * read over the tailnet) — what a LAN address must prove it knows before this
    * phone sends it anything (`lanRoute.ts`). HOST-scoped, like the token.
    */
   lanIdentity: lsKey("lanIdentity"),
+  pairCodesSent: lsKey("pairCodesSent"),
 
   // ── Properties of the LINK (never synced — see SYNCED_SETTING_KEYS) ────
   /** Data saver: skip thumbnails and prefetch. `bgFresh`: the hidden app's catch-up (`core/term/bgFresh.ts`). */

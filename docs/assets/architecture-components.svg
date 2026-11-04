@@ -60,7 +60,7 @@
   <text class="s" x="326" y="384">contract.ts (IntentCore) is the hub:</text>
   <text class="s" x="326" y="400">ladder, fire, clock, disk, requeue</text>
   <rect class="box" x="36" y="434" width="538" height="60" rx="7"/>
-  <text class="t" x="50" y="456">flat modules (~120 files)</text>
+  <text class="t" x="50" y="456">flat modules (~200 files)</text>
   <text class="s" x="50" y="476">deliver, answergate, backlog, files, fanout, ctxlog, tokenstats, prompt, limit</text>
   <rect class="box" x="36" y="502" width="538" height="76" rx="7"/>
   <text class="t" x="50" y="524">leaves</text>
@@ -82,7 +82,7 @@
   <text class="t" x="640" y="284">sdk/ = @waterplane/sdk — the one import a feature needs</text>
   <text class="s" x="640" y="304">CoreApi, FeatureManifest, createStore, hooks, ledgers, pluginClient</text>
   <rect class="box" x="626" y="330" width="538" height="76" rx="7"/>
-  <text class="t" x="640" y="352">features/&lt;name&gt;/ (~31)</text>
+  <text class="t" x="640" y="352">features/&lt;name&gt;/ (~44)</text>
   <text class="s" x="640" y="372">backlog, build, capture, context, fanout, queue, setup, tokens, pull …</text>
   <text class="s" x="640" y="389">each: index.ts (its manifest), store, actions, logic, README</text>
   <rect class="box" x="626" y="414" width="538" height="60" rx="7"/>
