@@ -5,6 +5,25 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.19
+
+### New
+
+- **A changed Markdown file can be shown rendered and edited from its diff.** The diff gets a rendered mode and a pencil. Back from the file lands on that diff, re-read, in the mode you left it.
+- **A repo can be shown under a name you choose.** Set it from the repo's menu with "shown as…". It appears on every device in the launcher, tabs, Start sheets, pickers, search and push titles. Folders, ids and paths keep their own names.
+- **Every reading on the connection strip has a chart behind its tap.** The health sheet charts ping, route, connection, unsaved items, and sends and data by source over 1h, 24h, 7d and 30d. Drops, route moves and what is waiting are listed, and time the app was off screen shows as not measured.
+- **The connection charts share one sticky range control.** It says once how to read a value and what not measured looks like. A chart waits for three measured minutes before it draws.
+- **A crash finding can be sent to a session to be fixed.** Every finding names its source.
+- **The context sheet's head scrolls away with its charts on a phone.** The conversation name and the two doors no longer hold a quarter of the screen. They sit on one gutter with the charts.
+- **The launcher's top gets a drag grip once it needs a second line, and the agent list gets the header's grip.** A shortened agent list scrolls.
+
+### Fixed
+
+- **A session that was retried no longer looks like the retry failed.** "Retried (2/8), waiting for the reply" clears as soon as the first reply arrives, not at the end of the turn.
+- **Subagents of a dynamic workflow are now counted everywhere.** One session showed 2 agents and $22 when 83 agents and about $207 had been spent. Each agent's row says what it was launched to do.
+- **The context charts no longer slope between readings.** The window holds and steps at each request, and a compaction drops straight to its measured size instead of reading as an hour of draining.
+- **A message was sometimes not delivered when ultracode was on.** The composer's labelled top rule was not recognised, so text that matched the proposal was taken as already typed and sent as an empty box.
+
 ## 0.1.18
 
 ### New

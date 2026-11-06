@@ -83,7 +83,7 @@ const H = 16;
 
 /** Ask App for the health sheet, at a section. Stops the event so a segment tap
  *  doesn't also fire the strip's own generic open behind it. */
-function openHealth(focus: "link" | "currency" | "data" | "sends", e?: { stopPropagation(): void }): void {
+function openHealth(focus: "link" | "route" | "currency" | "data" | "sends", e?: { stopPropagation(): void }): void {
   e?.stopPropagation();
   try { window.dispatchEvent(new CustomEvent("app:open-nethealth", { detail: { focus } })); } catch { /* no DOM */ }
 }
@@ -260,8 +260,8 @@ function Saved({ outstanding, ever, stuck }: { outstanding: number; ever: boolea
 /**
  * Which way the desktop is reached: its LAN address or the tailnet
  * (`lanLink.ts`). An icon and a word — the WHY is a sentence, and a sentence
- * does not fit 22 px, so the tap opens the health sheet's link section, which
- * prints it. Nothing drawn until the route is known.
+ * does not fit 22 px, so the tap opens the health sheet's route section, which
+ * prints it and charts the route over time. Nothing drawn until the route is known.
  */
 function RouteChip() {
   const route = useHostRoute();
@@ -269,7 +269,7 @@ function RouteChip() {
   const lan = route.route === "lan";
   return (
     <span className={`np-route${lan ? " np-route-lan" : ""}`} role="button" data-hint="net.pulse.route"
-      onClick={(e) => openHealth("link", e)}>
+      onClick={(e) => openHealth("route", e)}>
       {lan ? <Router size={10} aria-hidden="true" /> : <Globe size={10} aria-hidden="true" />}
       <span>{plainHostRoute() ? (lan ? "LAN, not protected" : "not protected") : lan ? "LAN" : "tailnet"}</span>
     </span>

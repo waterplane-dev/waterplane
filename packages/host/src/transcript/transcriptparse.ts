@@ -6,7 +6,7 @@ import { costOf, normalizeModel } from "@waterplane/shared";
 import { MAX_TURNS, TOOL_INPUT_CAP, TOOL_RESULT_CAP, TEXT_CAP, oneLine, summarize } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 import { firstSightIn, usageRecordOf } from "../ctxlog/usagerecord.js";
-import { agentsMtime, attachAgentSpend, noteRetired } from "../turnagents.js";
+import { agentsMtime, attachAgentSpend, noteRetired, noteWorkflowLaunch } from "../turnagents.js";
 import { localCommandOf, localOutputOf, promptOf, queuedPromptOf, readLog, resultText } from "./transcriptlog.js";
 import { BOX_ANSWER_LEAD, absorbedOpeners, boxAnswerTable, cliHeldTable, noteQueueOp } from "./transcriptturns.js";
 import type { BoxAnswer, CliHeld } from "./transcriptturns.js";
@@ -126,6 +126,8 @@ export function parseTranscript(
   let cum: number | null = log.partial ? null : 0;
   /** Agent id → when the parent last recorded it stopping (`turnagents.ts`). */
   const retired = new Map<string, number>();
+  /** `wf_…` → the Workflow call that launched it (`turnagents.ts`). */
+  const workflows = new Map<string, string>();
 
   for (const raw of log.lines) {
     const ln = raw.trim();
@@ -133,6 +135,7 @@ export function parseTranscript(
     let rec: any;
     try { rec = JSON.parse(ln); } catch { continue; }
     noteRetired(ln, ts(rec?.timestamp) ?? 0, retired);
+    noteWorkflowLaunch(rec, workflows);
     const type = rec?.type;
     if (type !== "user" && type !== "assistant") {
       if (noteQueueOp(rec, held)) continue;
@@ -272,7 +275,7 @@ export function parseTranscript(
   }
 
   for (const t of turns) t.summary = summarize(t.blocks);
-  attachAgentSpend(turns, path, retired, log.partial);
+  attachAgentSpend(turns, path, retired, log.partial, Date.now(), workflows);
   const dropped = Math.max(0, turns.length - MAX_TURNS);
   const kept = dropped ? turns.slice(dropped) : turns;
 

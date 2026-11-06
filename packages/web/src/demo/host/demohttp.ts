@@ -8,7 +8,7 @@
  *
  * `/api/health` stays in index.ts — it belongs to the disconnect fault.
  */
-import { ASK_RULE_BACKENDS, PRICES_AS_OF, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
+import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
 import { demoHealthIndex } from "./healthindex.ts";
@@ -59,6 +59,22 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   const q = req.query ?? {};
 
   if (path === "/api/repos" && method === "GET") return json({ targets: m.repos ?? [] });
+  // A repo's shown name: kept on the model for this run, on every worktree of the clone, as the
+  // real host does (`host/reponames.ts`). A label only; the demo's ids and paths never move.
+  if (path === "/api/repodisplayname" && method === "PUT") {
+    const b = (req.body ?? {}) as { id?: unknown; name?: unknown };
+    const targets = (m.repos ?? []) as RepoTarget[];
+    const t = targets.find((r) => r.id === b.id);
+    if (!t) return json({ ok: false, error: "That is not one of the demo's repos." }, 404);
+    if (!t.isPrimary) return json({ ok: false, error: "A name belongs to the repo — set it on its main checkout, not a worktree." }, 400);
+    const c = cleanRepoDisplayName(b.name);
+    if (!c.ok) return json({ ok: false, error: c.error }, 400);
+    for (const r of targets) {
+      if (r.repoName !== t.repoName || r.where !== t.where) continue;
+      if (c.value) r.displayName = c.value; else delete r.displayName;
+    }
+    return json({ ok: true, name: c.value });
+  }
   // The demo root holds only its repos: the rescan finds no folder without git.
   if (path === "/api/plainfolders" && method === "GET") return json({ folders: [] });
 

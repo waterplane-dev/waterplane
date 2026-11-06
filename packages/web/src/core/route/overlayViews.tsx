@@ -12,7 +12,7 @@ import { SheetGuard } from "../../BootGuard";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { handleNotif } from "../../features/notifications";
-import { annotate, attachForInbox, openBrowseFor, openGalleryForSend } from "../../features/images";
+import { annotate, attachForInbox, openBrowseFor, openGalleryForSend, RepoFileSheet } from "../../features/images";
 import { SettingsSheet } from "../settings/SettingsSheet";
 import { SendSheetEntry } from "../send/SendSheetEntry";
 import { featureSheets } from "../sheets";
@@ -158,6 +158,7 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
           onAskAgent={gitRepo ? (f) => sendCore.openSend(gitFailSeed(f, gitRepo)) : undefined}
           stored={gitRepo?.gitFailed} failures={gitRepo?.gitFailures} onDone={handleNotif}
           onBrowse={() => openBrowseFor(gitId, "git")}
+          fileSheet={gitRepo ? (f, close) => <RepoFileSheet repoId={gitId} repoName={gitRepo.repoName} path={f.path} edit={f.edit} onClose={close} /> : undefined}
           // The repo and the tapped failure are the git route ENTRY's (`gitLanding.ts`): the close
           // is a Back onto an entry that holds neither; covering it with Send or the file tree,
           // and Back to it again, keeps both.

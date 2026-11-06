@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  acceptRefusal, acceptRequest, cutElsewhereWords, acceptedLine, digestHead, exposureCut, exposureMeta, inExposureMainList,
+  acceptRefusal, acceptRequest, cutElsewhereWords, acceptedLine, digestHead, exposureCut, exposureMeta, exposureSource, inExposureMainList,
   untilChoices, untilVersionOffered, untilWords,
 } from "./exposureWords.ts";
 
@@ -35,8 +35,16 @@ test("words", () => {
   assert.equal(untilWords({ change: true }), "until the reading changes");
   assert.equal(untilWords(undefined), "for good");
   const e = { key: "k", name: "n", measure: "m", subject: "s", level: "alert", sources: ["osv", "npm"], severity: "high", threshold: "any high advisory", since: "2026-10-20T10:00:00Z" };
-  assert.equal(exposureMeta(e), "any high advisory · high · from osv, npm · since 2026-10-20");
+  assert.equal(exposureMeta(e), "any high advisory · high · since 2026-10-20");
   assert.equal(exposureMeta({ ...e, threshold: undefined, severity: undefined, since: undefined, sources: [] }), "");
+});
+
+test("exposureSource names where a row came from, and says nothing for a row with no source", () => {
+  const e = { key: "k", name: "n", measure: "D3", subject: "s", level: "alert", sources: ["era"] };
+  assert.equal(exposureSource(e), "Source: Garmin's ERA crash reports from people's devices, read by the exposure watch on this desktop.");
+  // A name the table does not know is the collector's own word, never a guess.
+  assert.match(exposureSource({ ...e, sources: ["npm audit package-lock.json", "osv"] }), /^Source: npm audit package-lock\.json, the OSV advisory database, read/);
+  assert.equal(exposureSource({ ...e, sources: [] }), null);
 });
 
 test("acceptedLine", () => {

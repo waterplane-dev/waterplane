@@ -19,6 +19,7 @@ import { changedCountsWithin, gitRunningIn } from "../git.js";
 import { buildFailedFor, gitFailuresFor } from "../attentionstore.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
 import { setupPrefsStore } from "../setupprefs.js";
+import { repoNamesStore } from "../reponames.js";
 import { askRulesStore } from "../askrules.js";
 import { ASK_RULES_SCOPE, browserOriginRefusal, confirmGate } from "../confirmgate.js";
 import { hostChecks, hostFixes } from "../plugins/setupcontrib.js";
@@ -275,7 +276,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     for (const t of targets) {
       if (allowed && !allowed.has(t.id)) continue;
       const { files } = await discoverArtifactsAsync(t.worktreePath, { scope, sinceSeconds: since, query, kind: fkind, limit, includeInbox: true });
-      for (const f of files) hits.push({ repoId: t.id, repoName: t.repoName, branch: t.branch, ...f });
+      for (const f of files) hits.push({ repoId: t.id, repoName: t.displayName || t.repoName, branch: t.branch, ...f });
     }
     hits.sort((a, b) => b.mtime - a.mtime);
     json(res, { hits: hits.slice(0, limit), truncated: hits.length > limit });
@@ -422,6 +423,21 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       ...(typeof template === "string" && template ? { template: template as TemplateId } : {}),
     });
     json(res, r, "error" in r ? 400 : 200);
+    return true;
+  }),
+  // The name a person gave a repo to be SHOWN as. A label only (`reponames.ts`): it is set on
+  // the clone's PRIMARY checkout, it moves no id, path or key, and `name: null` (or empty) puts
+  // the folder's name back. A bad name is a 400 in words, stored as nothing. Not in `passive.ts`:
+  // a passive (kids') token is refused it by default, which is right for a write.
+  route("PUT", "/api/repodisplayname", async ({ req, res }, ctx) => {
+    const { id, name } = await readJson(req);
+    const target = await findTarget(ctx.root, String(id || ""));
+    if (!target) { json(res, { ok: false, error: "That repo is not on this desktop." }, 404); return true; }
+    if (!target.isPrimary) { json(res, { ok: false, error: "A name belongs to the repo — set it on its main checkout, not a worktree." }, 400); return true; }
+    const store = repoNamesStore();
+    if (!store) { json(res, { ok: false, error: "This desktop keeps no repo names." }, 503); return true; }
+    const r = store.set(target.worktreePath, name);
+    json(res, r, r.ok ? 200 : 400);
     return true;
   }),
   // Folders under the root that rescan skipped for having no `.git` — asked by the

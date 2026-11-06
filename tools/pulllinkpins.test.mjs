@@ -43,7 +43,7 @@ const LINK = [
   "PulseSource:type", "PulseSummary:type", "SyncPart:type", "TrafficDir:type", "deviceId:value",
   "fmtMs:value", "fmtRate:value", "fmtSince:value", "fmtTotal:value", "installLinkMeters:value",
   "labelForUrl:value", "lastSyncEver:value", "linkOnline:value", "linkSnapshot:value",
-  "linkStatus:value", "linkVerdict:value", "netBegin:value", "noteAckTimeout:value",
+  "flushLinkSeries:value", "linkStatus:value", "readLinkSeries:value", "syncParts:value", "linkVerdict:value", "netBegin:value", "noteAckTimeout:value",
   "noteHostSeen:value", "noteLinkStatus:value", "noteOutstanding:value", "noteReload:value",
   "noteRtt:value", "noteSendConfirmed:value", "noteSendExpired:value", "noteSendFailed:value",
   "noteStuckSends:value", "noteSynced:value", "noteTraffic:value", "pulseEnabled:value",

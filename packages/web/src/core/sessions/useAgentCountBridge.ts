@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { SessionInfo } from "@waterplane/shared";
 import { agentLevel, agentWarnText, countAgents, levelRose, noteAgentCount, type AgentLevel } from "../../agentCount";
 import { sessionStatus } from "../../sessionFacts";
-import { tabLabel } from "../../sessionTabs";
+import { shownRepo, tabLabel } from "../../sessionTabs";
 import type { BackendList } from "../../backendCaps";
 import { showToast } from "../../toast";
 import { usePref } from "../prefs";
@@ -29,7 +29,7 @@ export function useAgentCountBridge(ctx: UseAgentCountBridgeCtx) {
     const rows = sessions.map((s) => {
       const repo = sessionRepoName(s);
       return {
-        id: s.id, label: tabLabel(s, repo), repo,
+        id: s.id, label: tabLabel(s, repo, shownRepo(repo)), repo,
         working: !s.idle && sessionStatus(s, backends) === "coding",
         agents: s.running ? (s.agents ?? []).map((a) => ({ what: a.what, model: a.model, startedAt: a.startedAt })) : [],
       };

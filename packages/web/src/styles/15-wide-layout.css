@@ -192,7 +192,9 @@ html[data-layout="wide"] .ws-side :is(.row-meta, .repo-sub, .row-tags) { min-wid
    counted the strips twice and pushed the head 62px down over the sheet's
    first row (the annotator's whole toolbar). */
 html[data-layout="wide"] .ws-panel > .sheet > .sheet-head,
-html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+html[data-layout="wide"] .ws-panel > .sheet > .sheet-scroll > .sheet-head,
+html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head,
+html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-scroll > .sheet-head { position: sticky; top: 0; z-index: 3; }
 
 /* The sidebar's session card is the PHONE's card (the grid in the base
    rules: prompt left; verbs, outline and chart stacked on the right; chips

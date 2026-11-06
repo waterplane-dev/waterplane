@@ -105,3 +105,14 @@ The usage week navigation buttons are neatly placed at the chart's edges and not
 - asked: 2026-10-30
 - shipped: 1aea1986
 
+### R-layout-026 · shipped
+The reader's list of running agents is shortened by a drag grip like the header's; a shortened list scrolls, and a tap shows all of it.
+- asked: 2026-11-05
+
+### R-layout-027 · shipped
+Once the launcher's closed top section needs a second line, a drag grip under it shortens that section, down to the first line; a tap shows all of it.
+- asked: 2026-11-05
+
+### R-layout-028 · shipped
+On a phone, the context window & cost screen's head, conversation name and door buttons scroll away with the charts, so the charts get the whole screen; a desktop side panel keeps its head (R-ui-075).
+- asked: 2026-11-06

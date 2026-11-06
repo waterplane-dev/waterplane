@@ -14,11 +14,13 @@
  */
 export const CHROME_STEP_PX = 16;
 
-/** The cap a drag of `dy` px from `startPx` leaves, or null once it reaches the content. */
-export function chromeCapAfter(startPx: number, dy: number, naturalPx: number): number | null {
+/** The cap a drag of `dy` px from `startPx` leaves, or null once it reaches the
+ *  content. `floorPx` is the least a frame may shrink to: the launcher keeps its
+ *  first row, which holds the only way to the menu. */
+export function chromeCapAfter(startPx: number, dy: number, naturalPx: number, floorPx = 0): number | null {
   const v = Math.round(startPx + dy);
-  if (v >= naturalPx) return null;
-  return Math.max(0, v);
+  if (v >= naturalPx || floorPx >= naturalPx) return null;
+  return Math.max(floorPx, v);
 }
 
 /** A stored value read back: a positive finite number, else no cap. */

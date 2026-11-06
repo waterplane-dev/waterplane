@@ -557,3 +557,5 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .sess-chrome-grip.capped { height: 14px; }
 .sess-chrome-grip.capped::after { display: none; }
 .sess-chrome-grip:is(:focus-visible, :active)::after { background: var(--accent); }
+/* The launcher's grip says it in words: what it cuts can be a banner. */
+.sess-chrome-grip.worded { height: 20px; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }

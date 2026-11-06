@@ -164,3 +164,53 @@ test("an agent that cannot be placed withholds every running total, not its neig
   assert.equal(a.cumAgentCostUsd, undefined);
   assert.ok(a.cumCostUsd > 0, "the conversation's own total is still a measurement");
 });
+
+// ── A dynamic workflow's agents, one directory further down ─────────────────
+
+const wfCall = (ms, id) => ({ type: "assistant", uuid: `c${ms}`, timestamp: iso(ms),
+  message: { id: `mc${ms}`, model: "claude-opus-5-5", role: "assistant", usage: U(1, 1, 0, 0),
+    content: [{ type: "tool_use", id, name: "Workflow", input: { script: "x" } }] } });
+const wfLaunched = (ms, id, runId) => ({ type: "user", uuid: `r${ms}`, timestamp: iso(ms),
+  toolUseResult: { status: "async_launched", runId },
+  message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: "Workflow launched in background." }] } });
+function withWorkflow(records, wf, agents, journal = []) {
+  const p = withAgents(records, {});
+  const dir = join(p.replace(/\.jsonl$/, ""), "subagents", "workflows", wf);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "journal.jsonl"), journal.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  for (const [id, a] of Object.entries(agents)) {
+    writeFileSync(join(dir, `agent-${id}.meta.json`), JSON.stringify({ agentType: "workflow-subagent" }));
+    writeFileSync(join(dir, `agent-${id}.jsonl`), a.records.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    if (a.mtime) utimesSync(join(dir, `agent-${id}.jsonl`), a.mtime / 1000, a.mtime / 1000);
+  }
+  return p;
+}
+
+test("a workflow's agents land on the turn of the Workflow call, off its launch record", () => {
+  const p = withWorkflow([
+    user(T0, "review it"), wfCall(T0 + 1, "tw1"), wfLaunched(T0 + 2, "tw1", "wf_1"), reply(T0 + 3, "m1", U(10, 100, 0, 5000)),
+    user(T0 + 10, "next"), reply(T0 + 11, "m2", U(10, 100, 5000, 0)),
+  ], "wf_1", { aaa: { mtime: OLD, records: [reply(T0 + 5, "x1", U(10, 1000, 0, 20000), "claude-opus-5-5")] } });
+  const [a, b] = parseTranscript(p, "/repo").turns;
+  assert.ok(a.agentCostUsd > 0);
+  assert.equal(a.agentsRunning, undefined, "silent for an hour — over");
+  assert.equal(b.cumAgentCostUsd, a.agentCostUsd, "placed, so the running total stands");
+});
+
+test("a workflow agent runs until its journal says it ended", () => {
+  const now = Date.now();
+  const mk = (journal) => withWorkflow([
+    user(T0, "review it"), wfCall(T0 + 1, "tw1"), wfLaunched(T0 + 2, "tw1", "wf_1"), reply(T0 + 3, "m1", U(10, 100, 0, 5000)),
+  ], "wf_1", { aaa: { mtime: now, records: [reply(T0 + 5, "x1", U(10, 1000, 0, 20000), "claude-opus-5-5")] } }, journal);
+  const started = { type: "started", key: "k1", agentId: "aaa" };
+  assert.equal(parseTranscript(mk([started]), "/repo").turns[0].agentsRunning, 1);
+  assert.equal(parseTranscript(mk([started, { type: "result", key: "k1" }]), "/repo").turns[0].agentsRunning, undefined);
+});
+
+test("a workflow whose launch the log does not hold withholds the running total, not the agents", () => {
+  const p = withWorkflow([user(T0, "go"), reply(T0 + 3, "m1", U(10, 100, 0, 5000))], "wf_1",
+    { aaa: { mtime: OLD, records: [reply(T0 + 5, "x1", U(10, 1000, 0, 20000), "claude-opus-5-5")] } });
+  const [a] = parseTranscript(p, "/repo").turns;
+  assert.equal(a.agentCostUsd, undefined);
+  assert.equal(a.cumAgentCostUsd, undefined);
+});

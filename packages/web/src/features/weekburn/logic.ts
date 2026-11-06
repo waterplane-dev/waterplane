@@ -100,7 +100,7 @@ export function howItWorks(a: { start: string | null; maxPerRepo: number | null;
 
 export type TaskMode = "health" | "own";
 
-export interface BurnRepo { worktreePath: string; repoName: string; branch: string; isPrimary: boolean; where?: string }
+export interface BurnRepo { worktreePath: string; repoName: string; branch: string; isPrimary: boolean; where?: string; displayName?: string }
 export interface BurnRow { dir: string; title: string; where?: string }
 
 /**
@@ -117,7 +117,7 @@ export function burnRows(repos: readonly BurnRepo[], picked: readonly string[]):
   const local = twinWheres(repos.filter((r) => r.isPrimary).map((r) => ({ name: r.repoName, dir: r.worktreePath })));
   const rows: BurnRow[] = shown.map((r) => {
     const where = r.where ?? (r.isPrimary ? local.get(r.worktreePath) : undefined);
-    const name = repoLabel({ repoName: r.repoName, where });
+    const name = repoLabel({ repoName: r.displayName || r.repoName, where }); // the name it is SHOWN under; the twin test above stays on the folder
     return { dir: r.worktreePath, title: r.isPrimary ? name : `${name} · ${r.branch}`, ...(where ? { where: r.worktreePath } : {}) };
   });
   return { rows, hidden: repos.length - shown.length };

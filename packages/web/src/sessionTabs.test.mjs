@@ -319,3 +319,13 @@ test("Ctrl+E opens the list; ⌘E, Alt, Shift and an IME pick do not", () => {
   assert.equal(isTabsListPress(k({ ctrlKey: true, isComposing: true })), false);
   assert.equal(isTabsListPress(k({ ctrlKey: true, key: "w" })), false);
 });
+
+test("a tab that IS its repo says the name it is shown under; the prefix test stays on the folder", () => {
+  // Stored titles lead with the FOLDER's name; only a label that is the repo itself is reworded.
+  assert.equal(tabLabel({ title: "myapp · main" }, "myapp", "waterplane"), "waterplane");
+  assert.equal(tabLabel({ title: "myapp" }, "myapp", "waterplane"), "waterplane");
+  assert.equal(tabLabel({ title: "myapp · fix-ui" }, "myapp", "waterplane"), "fix-ui");
+  assert.equal(tabLabel({ tabTitle: "tab strip", title: "myapp · main" }, "myapp", "waterplane"), "tab strip");
+  // Nobody gave it a name: byte-identical to before.
+  assert.equal(tabLabel({ title: "myapp · main" }, "myapp"), "myapp");
+});

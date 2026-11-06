@@ -29,7 +29,7 @@ export { featureSheetId, type FeatureSheetId } from "../routing.ts";
 export { pluginClient, type PluginClient } from "./pluginClient.ts";
 /** The demo seam: `isDemo()` and a plugin's registered fixture (`registerDemoPlugin`; see `demoPlugin.ts`). */
 export { isDemo, registerDemoPlugin, demoPluginPushes, type DemoPlugin } from "./demoPlugin.ts";
-export { extStorage, type ExtStorage } from "./extStorage.ts";
+export { extDeviceStorage, extStorage, type ExtStorage } from "./extStorage.ts";
 /** Is an extension switched on (`useExtensionEnabled`/`isExtensionEnabled`, by its manifest id),
  *  and where its downloaded assets are cached and served (`extAssetCacheName`, `extAssetUrl`). */
 export { EXT_CACHE_PREFIX, extAssetCacheName, extAssetUrl, isExtensionEnabled, useExtensionEnabled, watchExtensionEnabled } from "./extensions.ts";

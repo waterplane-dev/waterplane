@@ -28,6 +28,7 @@ import { createAgentWatch } from "../agentwatch.js";
 import { isMarkdownPath, readsInline } from "../files.js";
 import { stripFresh } from "./scan.js";
 import { forgetRules } from "../answergate.js";
+import { shownTitleForCwd } from "../reponames.js";
 import { targetId } from "../repos.js";
 import { detectPrompt, dialogEvidence, dialogStillUp, stripAnsi } from "../prompt.js";
 import { looksLikeQuestion, questionText } from "../question.js";
@@ -114,7 +115,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
   // A follow-up flag nobody tapped (a launch option on finishing, or the session's
   // agent): one push saying who and why. A hand flag never gets here (`roster.ts`).
   ctx.sessions.on("followUp", (info: SessionInfo, f: FollowUp) => {
-    const p = followUpPushText(f, info.tabTitle || info.title);
+    const p = followUpPushText(f, shownTitleForCwd(info.cwd, info.tabTitle || info.title));
     // The launch option ("flag when done") is a receipt, so info; the session's own agent asking is attention.
     if (p) ctx.notify("followup", { ...p, sessionId: info.id, tag: `followup-${info.id}`, key: `followup:${info.id}`, ...(f.by === "launch" ? { level: "info" as const } : {}) });
   });
@@ -178,7 +179,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
   ctx.sessions.on("awaiting", (id: string) => {
     const s = ctx.sessions.get(id);
     ctx.notify("prompt", {
-      title: `${s?.title ?? "Session"} needs you`,
+      title: `${s ? shownTitleForCwd(s.cwd, s.title) : "Session"} needs you`,
       body: "A dialog is open in the CLI — open the session to answer.",
       sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}`,
     });
@@ -188,7 +189,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
   ctx.sessions.on("prompt", (id: string, prompt: DetectedPrompt) => {
     const s = ctx.sessions.get(id);
     const opts = prompt.options.map((o) => `${o.index}. ${o.label}`).join("  ");
-    ctx.notify("prompt", { title: `${s?.title ?? "Session"} needs you`, body: `${prompt.question}\n${opts}`, sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}` });
+    ctx.notify("prompt", { title: `${s ? shownTitleForCwd(s.cwd, s.title) : "Session"} needs you`, body: `${prompt.question}\n${opts}`, sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}` });
 
     // Plugins hear about every box (docs/notes/plugins.md). `blocked` is the
     // core's gate verdict, precomputed; answering goes through that gate.
@@ -273,7 +274,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     }
     if (info.asking) {
       ctx.notify("prompt", {
-        title: `Needs your decision · ${info.title}`,
+        title: `Needs your decision · ${shownTitleForCwd(info.cwd, info.title)}`,
         body: info.asking.text,
         sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}`,
       });
@@ -288,7 +289,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
       const still = [n ? `${n} agent${n === 1 ? "" : "s"}` : "", info.shells ? "shells" : ""].filter(Boolean).join(" + ");
       ctx.notify("idle", {
         title: still ? `Turn finished · ${still} still running` : "Turn finished",
-        body: info.title, sessionId: id, tag: `idle-${id}`,
+        body: shownTitleForCwd(info.cwd, info.title), sessionId: id, tag: `idle-${id}`,
       });
     }
 
@@ -311,7 +312,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
           title: `Outbox: ${f.name}`,
           // The verb has to match what the tap DOES: a report opens in the
           // phone's viewer, an APK is a transfer (web `openNotif`).
-          body: `${ctx.fmtSize(f.size)} · ${info.title} — ${readsInline(f.relPath) ? "tap to read" : "tap to download"}`,
+          body: `${ctx.fmtSize(f.size)} · ${shownTitleForCwd(info.cwd, info.title)} — ${readsInline(f.relPath) ? "tap to read" : "tap to download"}`,
           sessionId: id,
           // Keyed on the FILE, not the session that happened to notice it. A tag
           // is what makes a re-show replace rather than stack, and with the
@@ -340,7 +341,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
       if (!pics.length) return;
       const names = pics.slice(0, 3).map((f) => f.name).join(", ");
       ctx.notify("image", {
-        title: `New image${pics.length > 1 ? `s (${pics.length})` : ""} · ${info.title}`,
+        title: `New image${pics.length > 1 ? `s (${pics.length})` : ""} · ${shownTitleForCwd(info.cwd, info.title)}`,
         body: names + (pics.length > 3 ? "…" : ""),
         sessionId: id,
         tag: `image-${id}`,
@@ -388,7 +389,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     const tail = owed ? " It will be interrupted once a running turn shows on its screen." : "";
     console.log(`${logTag} session budget hit · ${id} · ${esc.why}${owed ? " (owed — retried while over)" : ""}`);
     ctx.notify("limit", {
-      title: `Session budget hit · ${info.title}`,
+      title: `Session budget hit · ${shownTitleForCwd(info.cwd, info.title)}`,
       body: `${sessionBudgetText(b.verdict)}. ${sessionBudgetHoldText(b.cfg)} ${esc.why}${tail}`,
       sessionId: id, tag: `session-budget:${id}`, level: "attention", key: `budget:${id}`,
     });
@@ -400,7 +401,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     if (!esc.sent) return;
     console.log(`${logTag} session budget hit · ${id} · ${esc.why} (owed Esc, sent late)`);
     ctx.notify("limit", {
-      title: `Session budget · ${info.title} interrupted`,
+      title: `Session budget · ${shownTitleForCwd(info.cwd, info.title)} interrupted`,
       body: `${sessionBudgetText(b.verdict)}. ${esc.why} ${sessionBudgetHoldText(b.cfg)}`,
       sessionId: id, tag: `session-budget:${id}`, level: "attention", key: `budget:${id}`,
     });

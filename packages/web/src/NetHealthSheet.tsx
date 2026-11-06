@@ -22,14 +22,16 @@
  * coming back, deliveries the host could not confirm, or the app being reloaded
  * out from under the queue.
  */
-import { PLAIN_ROUTE_WARNING, stateRel } from "@waterplane/shared";
+import { PLAIN_ROUTE_WARNING, SYNCED_SETTING_KEYS, stateRel } from "@waterplane/shared";
 import { useEffect, useRef, useState } from "react";
 import { Activity, CircleCheck, CloudUpload, Globe, ListOrdered, RotateCcw, KeyRound, Router, Settings2 } from "lucide-react";
 import { readStorageState, storageState, type StorageState } from "./persist";
 import {
   PULSE_CAP, fmtMs as ms, fmtRate, fmtSince as since, fmtTotal, lastSyncEver, linkVerdict,
-  resetLinkWindow, summarize, useLink, whenText, type HostLinkStats, type LinkSnapshot,
+  resetLinkWindow, summarize, syncParts, useLink, whenText, type HostLinkStats, type LinkSnapshot,
 } from "./link";
+import { ConnectionHistory, DataHistory, HeldHistory, PingHistory, RangeBar, RouteHistory, SendsHistory, useLinkHistory } from "./NetHealthCharts";
+import { syncStateOf } from "./syncState";
 import { dur, fmtStorage } from "./format";
 import { api } from "./api";
 import { SheetHead } from "./Sheet";
@@ -49,7 +51,7 @@ const ICON = 16;
  *  segment names what it is about and the sheet goes there. `sends` is the red
  *  slot, and the section it lands on is the only one on this screen with names
  *  in it. */
-export type NetHealthFocus = "sends" | "link" | "currency" | "data";
+export type NetHealthFocus = "sends" | "link" | "route" | "currency" | "data";
 
 interface Props {
   onClose: () => void;
@@ -65,6 +67,8 @@ interface Props {
    * report on a problem that is being handled. So the count is a button.
    */
   notDelivered: number;
+  /** The sends still on their way, oldest first: what "1 unsaved" is. */
+  heldSends: readonly { ackId: string; text: string; cwd: string; ts: number }[];
   /** Section to scroll to and flash on open (see `NetHealthFocus`). */
   focus?: NetHealthFocus;
   /**
@@ -111,7 +115,7 @@ function Stat({ label, value, note, onClick, title }: { label: string; value: st
     : <div className="nh-stat" title={title}>{body}</div>;
 }
 
-export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity, onOpenStorage, focus }: Props) {
+export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOpenActivity, onOpenStorage, focus }: Props) {
   const [host, setHost] = useState<HostLinkStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [armed, setArmed] = useState(false); // two-tap guard on reset
@@ -141,6 +145,15 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
     const t = window.setTimeout(() => el.classList.remove("nh-flash"), 1400);
     return () => window.clearTimeout(t);
   }, [focus]);
+  // The charts above the target arrive after the first scroll and push it down,
+  // so the landing is taken again once they have drawn.
+  const history = useLinkHistory();
+  const drawn = history.rows != null;
+  useEffect(() => {
+    if (!drawn || !focus) return;
+    const f = requestAnimationFrame(() => requestAnimationFrame(() => focusRef.current?.scrollIntoView({ block: "start" })));
+    return () => cancelAnimationFrame(f);
+  }, [drawn, focus]);
   const [store, setStore] = useState<StorageState>(() => storageState());
 
   async function load() {
@@ -181,6 +194,10 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
   // is current), but the number being asked for is when the last one happened,
   // which outlives the socket.
   const syncAge = sync.syncedAt ?? lastSyncEver();
+  const parts = syncParts();
+  const heldSettings = SYNCED_SETTING_KEYS
+    .filter((k) => { const p = syncStateOf(k).phase; return p === "pending" || p === "offline"; })
+    .map((k) => k.slice(k.indexOf(".") + 1));
   const pulseSum = summarize(pulse.samples);
   const probes = pulse.samples.length;
   const codes = Object.entries(host?.sockets.closeCodes ?? {}).sort((a, b) => b[1] - a[1]);
@@ -191,6 +208,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
         <Button title="re-read the host's own counters" onClick={() => void load()}><RotateCcw size={ICON} /></Button>
       </SheetHead>
       <div className="sheet-body">
+        <RangeBar h={history} />
         <p className={`nh-verdict nh-${v.tone}`}>{v.text}</p>
         {stuck > 0 && (
           <SetLine>
@@ -201,11 +219,6 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
           </SetLine>
         )}
 
-        {/* The one part of this screen that is a decision rather than a
-            reading, and the only one with names in it. Rendered whenever there
-            is anything to show, regardless of which verdict won above — a slow
-            link and four dead prompts can be true at the same time, and the
-            prompts are what matter. */}
         {/* The one part of this screen that is a decision rather than a
             reading. It used to BE the list — a second ledger, clipped to two
             hundred characters a row, that existed only because the queue
@@ -243,6 +256,15 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               waiting on this device{notDelivered > 0 ? " — except the sends below, which stopped and will not go on their own" : ""}.
             </SetNote>
           )}
+          {heldSends.length > 0 && (
+            <ul className="lc-held">
+              {heldSends.slice(0, 6).map((e) => (
+                <li key={e.ackId}>{e.text.slice(0, 120)}<small>{e.cwd.split("/").pop()} · waiting {dur(e.ts)}</small></li>
+              ))}
+            </ul>
+          )}
+          {heldSettings.length > 0 && <SetNote as="span">Settings still to push: {heldSettings.join(", ")}.</SetNote>}
+          <HeldHistory h={history} />
         </section>
 
         {notDelivered > 0 && (
@@ -264,6 +286,40 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
 
         <section className="set-group" ref={focus === "link" ? focusRef : undefined}>
           <h3 className="set-title">Link right now</h3>
+          <PingHistory h={history} />
+          <div className="nh-stats">
+            <Stat label="socket" value={link.status} note={pulse.enabled ? undefined : "strip is off — no probes running"} />
+            {/* A miss and "no probes yet" are different facts and used to print
+                the same dash — next to a median that was plainly measured, the
+                dash read as a broken reading rather than as the last probe
+                getting no answer. */}
+            <Stat label="last ping"
+              value={pulseSum.last != null ? ms(pulseSum.last) : probes ? "no reply" : "—"}
+              note={pulseSum.last == null && probes ? "the newest probe timed out" : undefined} />
+          </div>
+          {!pulse.enabled && (
+            <SetLine>
+              <Button onClick={() => openSettingsAt("net-pulse")}>
+                <Settings2 size={ICON} /> turn the connection strip on
+              </Button>
+            </SetLine>
+          )}
+          <details className="hint-more">
+            <summary>how this is measured</summary>
+            <SetNote as="span">
+              Probes go out every 3 s while the app is on screen and are kept as the last {PULSE_CAP}; a phone in
+              a pocket measures nothing, so this window is a count of pings, not a stretch of time. An
+              unanswered probe is its own kind of event — a link losing one ping in four feels nothing like a
+              slow one, and only the first eats prompts — so it is counted here rather than folded into the
+              median. It is a ping, though, not a prompt: nothing you typed was lost because one went
+              missing, which is why the strip draws them in the graph and no longer spells them out. This
+              readout never acts: a missed probe reconnects nothing.
+            </SetNote>
+          </details>
+        </section>
+
+        <section className="set-group" ref={focus === "route" ? focusRef : undefined}>
+          <h3 className="set-title">Route</h3>
           {route && (
             <SetNote className="nh-route">
               {route.route === "lan" ? <Router size={14} aria-hidden="true" /> : <Globe size={14} aria-hidden="true" />}
@@ -290,51 +346,12 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
           {/* The detail behind the strip's dot, graph and loss count. The strip
               has 22 px and can only show the shape; the numbers it is drawn
               from belong here, next to the window they are true over. */}
-          <div className="nh-stats">
-            <Stat label="socket" value={link.status} note={pulse.enabled ? undefined : "strip is off — no probes running"} />
-            {/* A miss and "no probes yet" are different facts and used to print
-                the same dash — next to a median that was plainly measured, the
-                dash read as a broken reading rather than as the last probe
-                getting no answer. */}
-            <Stat label="last ping"
-              value={pulseSum.last != null ? ms(pulseSum.last) : probes ? "no reply" : "—"}
-              note={pulseSum.last == null && probes ? "the newest probe timed out" : undefined} />
-            {/* The median is of the replies only, so with misses in the window
-                the note counts those, not every probe sent. */}
-            <Stat label="median ping" value={ms(pulseSum.median ?? undefined)}
-              note={!probes ? undefined
-                : pulseSum.misses ? `over the ${probes - pulseSum.misses} replies of the last ${probes} probes`
-                : `over the last ${probes} probe${probes > 1 ? "s" : ""}`} />
-            {/* The count the strip used to carry, in the one place it can be
-                read next to the window it is true over. It came off the strip
-                because a lost ping costs nothing — nothing typed goes missing
-                because a probe went unanswered — and a red sentence that means
-                "no action required" in the app's most valuable 22 px teaches
-                people to ignore red. It is still a real reading of the link,
-                which is why it is still here and still separate from the
-                median. */}
-            <Stat
-              label="unanswered pings"
-              value={`${pulseSum.misses}`}
-              note={pulseSum.misses ? `of the last ${probes} — drawn, never averaged` : "every probe came back"}
-            />
-          </div>
-          {!pulse.enabled && (
-            <SetLine>
-              <Button onClick={() => openSettingsAt("net-pulse")}>
-                <Settings2 size={ICON} /> turn the connection strip on
-              </Button>
-            </SetLine>
-          )}
-          <SetNote as="span">
-            Probes go out every 3 s while the app is on screen and are kept as the last {PULSE_CAP}; a phone in
-            a pocket measures nothing, so this window is a count of pings, not a stretch of time. An
-            unanswered probe is its own kind of event — a link losing one ping in four feels nothing like a
-            slow one, and only the first eats prompts — so it is counted here rather than folded into the
-            median. It is a ping, though, not a prompt: nothing you typed was lost because one went
-            missing, which is why the strip draws them in the graph and no longer spells them out. This
-            readout never acts: a missed probe reconnects nothing.
-          </SetNote>
+          <RouteHistory h={history} />
+        </section>
+
+        <section className="set-group">
+          <h3 className="set-title">Sends over time</h3>
+          <SendsHistory h={history} />
         </section>
 
         <section className="set-group">
@@ -374,6 +391,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
 
         <section className="set-group" ref={focus === "currency" ? focusRef : undefined}>
           <h3 className="set-title">Currency</h3>
+          <ConnectionHistory h={history} />
           {/* Not "is the socket up" — whether what the screens are drawing is
               true. The app deliberately keeps rendering from snapshots when the
               host is unreachable, so the age of those snapshots is a fact it
@@ -389,6 +407,8 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               value={syncAge == null ? "never" : `${dur(syncAge)} ago`}
               note={syncAge == null ? "no session list + repo listing yet" : whenText(syncAge)}
             />
+            <Stat label="session list" value={parts.sessions ? `${dur(parts.sessions)} ago` : "never"} note={parts.sessions ? whenText(parts.sessions) : undefined} />
+            <Stat label="repo listing" value={parts.repos ? `${dur(parts.repos)} ago` : "never"} note={parts.repos ? whenText(parts.repos) : undefined} />
           </div>
           {sync.online && sync.syncedAt == null && (
             <SetNote as="p">
@@ -396,31 +416,38 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               lists on screen are from before the reconnect.
             </SetNote>
           )}
-          <SetNote as="span">
-            “Last connected” is the newest frame the desktop actually sent, not the last time the socket
-            claimed to be open — a tunnel can die under a socket that still reads as connected. A full sync
-            is both halves the main screen is built from: the session list, pushed over the socket, and the
-            repo listing, which is a separate HTTP call and can be stale on its own. The time shown is the
-            older of the two, because that is when everything on screen was last current.
-          </SetNote>
+          <details className="hint-more">
+            <summary>how this is measured</summary>
+            <SetNote as="span">
+              “Last connected” is the newest frame the desktop actually sent, not the last time the socket
+              claimed to be open — a tunnel can die under a socket that still reads as connected. A full sync
+              is both halves the main screen is built from: the session list, pushed over the socket, and the
+              repo listing, which is a separate HTTP call and can be stale on its own. The time shown is the
+              older of the two, because that is when everything on screen was last current.
+            </SetNote>
+          </details>
         </section>
 
         <section className="set-group" ref={focus === "data" ? focusRef : undefined}>
-          <h3 className="set-title">Data moved — last {since(traf.since)}</h3>
+          <h3 className="set-title">Data moved</h3>
           {/* Volume, not quality. Everything above says how the link BEHAVES;
               this says what it cost, which is the question a metered connection
               makes people ask and which nothing here could answer. */}
+          <DataHistory h={history} />
           <div className="nh-stats">
-            <Stat label="downloaded" value={fmtTotal(traf.down)} note={fmtRate(traf.downRate) ? `${fmtRate(traf.downRate)} right now` : undefined} />
-            <Stat label="uploaded" value={fmtTotal(traf.up)} note={fmtRate(traf.upRate) ? `${fmtRate(traf.upRate)} right now` : undefined} />
+            <Stat label={`downloaded in ${since(traf.since)}`} value={fmtTotal(traf.down)} note={fmtRate(traf.downRate) ? `${fmtRate(traf.downRate)} right now` : undefined} />
+            <Stat label={`uploaded in ${since(traf.since)}`} value={fmtTotal(traf.up)} note={fmtRate(traf.upRate) ? `${fmtRate(traf.upRate)} right now` : undefined} />
           </div>
-          <SetNote as="span">
-            Counted in this app: requests by their declared length (so gzip is already off it), images and
-            other page loads by what actually came off the network — a thumbnail served from the on-device
-            cache costs nothing here, correctly — and socket frames as their payload before compression,
-            which over-states a busy terminal. Files a background download fetched while the app was closed
-            are not in here. It is a usage readout, not a bill.
-          </SetNote>
+          <details className="hint-more">
+            <summary>how this is measured</summary>
+            <SetNote as="span">
+              Counted in this app: requests by their declared length (so gzip is already off it), images and
+              other page loads by what actually came off the network — a thumbnail served from the on-device
+              cache costs nothing here, correctly — and socket frames as their payload before compression,
+              which over-states a busy terminal. Files a background download fetched while the app was closed
+              are not in here. It is a usage readout, not a bill.
+            </SetNote>
+          </details>
         </section>
 
         <section className="set-group">

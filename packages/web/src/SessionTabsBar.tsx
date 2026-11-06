@@ -10,7 +10,7 @@ import { FilterBar, SearchBox } from "./kit";
 import { useHasKeyboard } from "./ShortcutCard";
 import { registerShortcut } from "./shortcuts";
 import {
-  askTabAttach, askTabClose, askTabFile, filterStrip, isTabsListPress, fileTabKey, fileTabLabel, setFilePinned, tabCloseAsk, tabStripHeight, useSessionTabs,
+  askTabAttach, askTabClose, askTabFile, filterStrip, isTabsListPress, fileTabKey, fileTabLabel, setFilePinned, shownRepo, tabCloseAsk, tabStripHeight, useSessionTabs,
   type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
@@ -334,7 +334,7 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
                   <FileText size={16} className="stab-fico" aria-hidden="true" />
                   <span className="stab-row-text">
                     <span className="stab-row-label">{fileTabLabel(f.path)}</span>
-                    <span className="stab-row-sub">{f.repo || "file"} · pinned file · {f.path}</span>
+                    <span className="stab-row-sub">{f.repo ? shownRepo(f.repo) : "file"} · pinned file · {f.path}</span>
                   </span>
                 </li>
               );
@@ -347,7 +347,7 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
                   : <span className="stab-led" aria-hidden="true" />}
                 <span className="stab-row-text">
                   <span className="stab-row-label">{t.label}<TabMarks sessionId={t.id} size={13} /></span>
-                  <span className="stab-row-sub">{t.repo} · {STATUS_LABEL[t.status]}</span>
+                  <span className="stab-row-sub">{shownRepo(t.repo)} · {STATUS_LABEL[t.status]}</span>
                 </span>
                 <button className="stab-x" aria-label={`close ${t.label}`} title="close this session"
                   onClick={(e) => { e.stopPropagation(); void close(t); }}>
@@ -408,7 +408,7 @@ function Tab({ t, active }: { t: SessionTab; active: boolean }) {
       role="tab"
       aria-selected={active}
       data-hint="session.tabs"
-      title={`${t.label} — ${t.repo} · ${STATUS_LABEL[t.status]}`}
+      title={`${t.label} — ${shownRepo(t.repo)} · ${STATUS_LABEL[t.status]}`}
       onClick={() => askTabAttach(t.id)}
     >
       {/* One glyph slot, five states. The spinner is the launcher badge's own
@@ -445,7 +445,7 @@ function FileTabView({ f, active }: { f: FileTab; active: boolean }) {
       role="tab"
       aria-selected={active}
       data-hint="session.tabs"
-      title={`${f.path} — ${f.repo || "file"} · pinned file`}
+      title={`${f.path} — ${f.repo ? shownRepo(f.repo) : "file"} · pinned file`}
       onClick={() => askTabFile(f)}
     >
       <FileText size={11} className="stab-fico" aria-hidden="true" />

@@ -40,9 +40,10 @@ examples/**
 
 # ---- repo plumbing ----------------------------------------------------------
 .github/**
-# Only the skills under .claude/ travel. .claude/outbox, inbox, worktrees and any
+# Only the skills and agents under .claude/ travel. .claude/outbox, inbox, worktrees and any
 # .patch there are phone/session plumbing and are never listed.
 .claude/skills/**
+.claude/agents/**
 
 # ---- root files -------------------------------------------------------------
 /README.md
@@ -128,6 +129,14 @@ deploy/release-pubkey.pem
 !packages/extensions/vault/docs/*-PLAN.md
 !packages/extensions/vault/docs/FOLLOWUPS-REVIEW.md
 !packages/extensions/vault/spike/**
+# Downscoping (a recipe that runs the owner's almighty login against a provider) stays PRIVATE
+# (owner decision, 2026-11-04), flip or not. The host loads it by FOLDER (host/extload.mts), the phone
+# by glob (web/extras.ts), wp-secret by file name: absent, nothing else notices.
+!packages/extensions/vault/host/downscope/**
+!packages/extensions/vault/shared/downscope/**
+!packages/extensions/vault/web/downscope/**
+!packages/extensions/vault/cli/commands/downscope.mjs
+!packages/extensions/vault/test/*downscope*
 # The disk-space extension (deletes caches, build output and models on this desktop)
 # stays PRIVATE (owner decision, 2026-10-07): a tool for this machine, not the project.
 # Public code names none of it (diskspace/publictree.json).

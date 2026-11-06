@@ -131,3 +131,27 @@ test("extStorage: an extension's keys are built, per plugin, host-scoped, and re
     globalThis.localStorage = prev;
   }
 });
+
+test("extDeviceStorage: a device corner — a host switch neither parks nor replaces it (the vault's aad floor, keyed by vault id, must read the same on every saved entry of a desktop)", async () => {
+  const { extStorage, extDeviceStorage } = await import("./extStorage.ts");
+  const { EXT_DEVICE_PREFIX, HOST_KEY_PREFIXES, isDeviceKey } = await import("../storage.ts");
+  const { planHostSwitch } = await import("@waterplane/shared");
+  const mem = new Map();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => { mem.set(k, String(v)); }, removeItem: (k) => { mem.delete(k); },
+  };
+  try {
+    extDeviceStorage("vault").write("aadFloors", { "v-1": 2 });
+    extStorage("vault").write("aadFloors", { "v-1": 9 }); // the host corner of the same name is another key
+    const dev = [...mem.keys()].find((k) => k.startsWith(EXT_DEVICE_PREFIX));
+    assert.ok(dev, "written under the device prefix");
+    assert.ok(isDeviceKey(dev));
+    assert.equal(HOST_KEY_PREFIXES.includes(EXT_DEVICE_PREFIX), false);
+    const ops = planHostSwitch([...mem.keys()], isDeviceKey, "aaaa1111", "bbbb2222");
+    for (const op of ops) assert.notEqual(op.from ?? op.key, dev, "a switch never copies or removes the device key");
+    assert.deepEqual(extDeviceStorage("vault").read("aadFloors", null), { "v-1": 2 });
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});

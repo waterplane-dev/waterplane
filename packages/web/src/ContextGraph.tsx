@@ -44,6 +44,7 @@ import {
   spendSparkTitle, stackBands, USED,
   type AgentLane, type ModelSlots, type Plot, type SpendFacts, type StackSeries,
 } from "./contextPlot";
+import { agentsEnd, heldSamples } from "./contextPlot/cplotHold";
 import { MODEL_SLOT, SLOT } from "./kit/chart/TokenComposition";
 import { REST_SLOT } from "./modelHue";
 
@@ -358,6 +359,7 @@ export function ContextChart({ samples, events, windowTok, autoCompactTok, autoC
   }, [p, samples, width, setHover]);
 
   const yTicks = p.yTicks;
+  const drawn = heldSamples(samples, events, agentsEnd(agents));
   // Placed by PIXEL and read back through the axis's inverse, not by dividing
   // the time span. On a compressed axis the two are different: half-way
   // through a two-day span is inside the break, so `t0 + span/2` drew the
@@ -385,8 +387,8 @@ export function ContextChart({ samples, events, windowTok, autoCompactTok, autoC
           are what it was made of, and a 2 px stroke over the seam is also what
           keeps the top band's edge crisp where it meets the axis. */}
       {bands
-        ? <StackFills p={p} samples={samples} series={bands} />
-        : <path d={areaPath(p, samples)} fill={CTX_SERIES} fillOpacity={0.14} />}
+        ? <StackFills p={p} samples={samples} drawn={drawn} series={bands} />
+        : <path d={areaPath(p, drawn)} fill={CTX_SERIES} fillOpacity={0.14} />}
       {/* Each agent's OWN window, thin and in ink so the parent's line stays
           the reading this chart is about — but on the same axis, because a
           parent at 31% over an agent at 97% is the fact a fan-out hides. */}
@@ -394,7 +396,7 @@ export function ContextChart({ samples, events, windowTok, autoCompactTok, autoC
         <path key={`a${l.id}`} d={l.d} fill="none" stroke="var(--fg)" strokeOpacity={0.45}
           strokeWidth={1.25} strokeLinejoin="round" strokeLinecap="round" />
       ))}
-      <path d={linePath(p, samples)} fill="none" stroke={CTX_SERIES} strokeWidth={2}
+      <path d={linePath(p, drawn)} fill="none" stroke={CTX_SERIES} strokeWidth={2}
         strokeLinejoin="round" strokeLinecap="round" />
 
       {/* Where the axis was compressed. Drawn, never hidden: the strip is
@@ -536,6 +538,8 @@ export function SpendChart({ samples, events, facts, width, height = 96, bands, 
   const span = p.t1 - p.t0;
   const xTicks = [0, 0.5, 1].map((f) => p.tx(p.x + f * p.w));
   const band = facts.agents != null ? agentSpendBand(p, samples, agentCum) : { area: "", top: "" };
+  // A compaction empties the window, never the bill: no events here.
+  const drawn = heldSamples(samples, [], agentsEnd(agents));
   return (
     <svg className="ctx-chart" width={width} height={height} viewBox={`0 0 ${width} ${height}`}
       role="img" aria-label="tokens spent over time">
@@ -545,8 +549,8 @@ export function SpendChart({ samples, events, facts, width, height = 96, bands, 
       ))}
 
       {bands
-        ? <StackFills p={p} samples={samples} series={bands} />
-        : <path d={areaPath(p, samples, USED)} fill={CTX_SERIES} fillOpacity={0.14} />}
+        ? <StackFills p={p} samples={samples} drawn={drawn} series={bands} />
+        : <path d={areaPath(p, drawn, USED)} fill={CTX_SERIES} fillOpacity={0.14} />}
       {/* The subagents' spend, ON TOP of the parent's: the same grey ink as
           their windows above (no fifth hue), step-held at their own
           timestamps, its top edge ending on the dashed whole-session total. */}
@@ -554,7 +558,7 @@ export function SpendChart({ samples, events, facts, width, height = 96, bands, 
         <path d={band.area} fill="var(--fg)" fillOpacity={0.16} />
         <path d={band.top} fill="none" stroke="var(--fg)" strokeOpacity={0.5} strokeWidth={1.25} strokeLinejoin="round" />
       </>}
-      <path d={linePath(p, samples, USED)} fill="none" stroke={CTX_SERIES} strokeWidth={2}
+      <path d={linePath(p, drawn, USED)} fill="none" stroke={CTX_SERIES} strokeWidth={2}
         strokeLinejoin="round" strokeLinecap="round" />
 
       {/* The same breaks as the chart above, drawn the same way: the two share
@@ -608,14 +612,16 @@ export function SpendChart({ samples, events, facts, width, height = 96, bands, 
  * or model across a toggle rather than re-keying by position and animating one
  * series into another.
  */
-function StackFills({ p, samples, series }: { p: Plot; samples: ContextSample[]; series: StackSeries[] }) {
-  const bands = stackBands(p, samples, series);
+function StackFills({ p, samples, drawn, series }: { p: Plot; samples: ContextSample[]; drawn: ContextSample[]; series: StackSeries[] }) {
+  const bands = stackBands(p, drawn, series);
+  // The title's total is the readings', never the held points' (`heldSamples`).
+  const totals = stackBands(p, samples, series);
   return (
     <g>
-      {bands.map((b) => b.d && (
+      {bands.map((b, i) => b.d && (
         <path key={b.key} d={b.d} fill={SLOT[b.slot] ?? MODEL_SLOT[REST_SLOT]}
           fillOpacity={0.85} stroke="var(--panel)" strokeWidth={0.75} strokeOpacity={0.6}>
-          <title>{`${b.name}: ${fmtTokens(b.total)}`}</title>
+          <title>{`${b.name}: ${fmtTokens(totals[i].total)}`}</title>
         </path>
       ))}
     </g>
@@ -733,7 +739,7 @@ export function AgentLanesChart({ samples, events, agents, slots, width, onPick,
               fillOpacity={picked && !on ? 0.55 : 0.9}
               stroke={on ? "var(--accent)" : b.dearest ? "var(--fg)" : "none"} strokeWidth={on ? 2 : 1}
               strokeOpacity={b.open && !on ? 0.5 : 1}>
-              <title>{`${b.run.type ?? "agent"} · ${fmtTokens(b.run.tok)}${b.run.running ? " · still running" : ""}`}</title>
+              <title>{`${b.run.what ?? b.run.type ?? "agent"} · ${fmtTokens(b.run.tok)}${b.run.running ? " · still running" : ""}`}</title>
             </rect>
           </g>
         );

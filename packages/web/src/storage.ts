@@ -87,6 +87,14 @@ export const EXT_PREFIX = lsKey("ext.");
 export const extKey = (pluginId: string, name: string): string => `${EXT_PREFIX}${pluginId}.${name}`;
 
 /**
+ * An extension's DEVICE-scoped corner (`extDeviceStorage`): `<prefix>extdev.<pluginId>.<name>`. For what is about
+ * this phone, not a desktop — the vault's aad floor is a number per VAULT ID, and a second saved entry for the same
+ * desktop (IP vs MagicDNS name) must not start it from zero. A host switch never parks it (`isDeviceKey`).
+ */
+export const EXT_DEVICE_PREFIX = lsKey("extdev.");
+export const extDeviceKey = (pluginId: string, name: string): string => `${EXT_DEVICE_PREFIX}${pluginId}.${name}`;
+
+/**
  * The demo's persisted fake desktop, one key per scenario (`demo/transport.ts`).
  *
  * In **sessionStorage**, never localStorage — so it is not in `KEY_SCOPE` and a
@@ -154,7 +162,7 @@ export const KEY_SCOPE = {
   sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", wheelHidden: "host",
   // how this phone is held and read
   toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
-  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
+  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", agentListH: "device", launcherChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
   readerZoom: "device", scrollZoom: "device", gitZoom: "device", gitExplainFoci: "device", gitExplainNote: "device", gitExplainLast: "device", textDumpWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device", notifInfoNote: "device", whatsNewSeen: "device",
@@ -183,7 +191,7 @@ export const HOST_KEY_PREFIXES: readonly string[] = [TR_SEEN_PREFIX, EXT_PREFIX]
 /** The predicate `planHostSwitch` is handed. An UNREGISTERED prefixed key (an
  *  older build's, a built one) is a host key: parked, never lost. */
 export function isDeviceKey(key: string): boolean {
-  return DEVICE_KEYS.has(key);
+  return DEVICE_KEYS.has(key) || key.startsWith(EXT_DEVICE_PREFIX);
 }
 
 /** The synced half, as a set, checked against the shared allow-list at load: a key renamed here

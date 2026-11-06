@@ -377,6 +377,10 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
   const undated = agentUndatedText(agents, doc?.agentTok);
   return (
     <div className="sheet">
+      {/* ONE scroller from the head down: the charts are tall and the phone is short, so the head,
+          the name and the doors leave with the first swipe. A desktop side panel pins its head
+          inside this scroller (R-ui-075). */}
+      <div className="sheet-scroll">
       <SheetHead title={<><BarChart3 size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Context window &amp; cost</>} onClose={onClose}>
         {/* Chrome: re-reads the DOCUMENT. While a read is in flight the glyph
             SAYS so and the handler returns early — never `disabled`. Keyed on
@@ -389,7 +393,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
       </SheetHead>
 
       {/* WHICH conversation, and nothing else — the method caption is at the foot. */}
-      <Hint>{title}</Hint>
+      <Hint className="ctx-name">{title}</Hint>
       {doorsRow}
       {!onOpenSetup && setupCant && <Unavailable cants={[{ label: "repo readings", reason: setupCant }]} />}
 
@@ -664,6 +668,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
           </details>
         </div>
       )}
+      </div>
     </div>
   );
 }

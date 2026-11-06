@@ -17,6 +17,15 @@
    note did exactly that on the phone. Every prose `.empty` on that sheet
    carries this too. */
 .empty.ctx-note { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); }
+
+/* The context sheet's two doors under the title (`ContextSheet.tsx`): navigation, so a plain
+   action row, never a `.ts-filter`. Wraps at 390 px rather than running off the sheet.
+   The name, the doors and the age line read as ONE block on the sheet's own ground, on the
+   charts' 12px gutter: as a footer bar `.sheet-actions` drew a panel band whose bottom edge
+   the buttons sat on, and the name and age line stood 2px further in than everything else. */
+.ctx-name { padding: var(--sp-10) var(--sp-12) 0; }
+.ctx-doors { flex-wrap: wrap; padding: var(--sp-8) var(--sp-12) var(--sp-4); background: none; border-top: 0; }
+.ctx-doors ~ .empty-stale { padding: var(--sp-4) var(--sp-12) 0; }
 .ctx-cost .ctx-cost-more { padding: var(--sp-8) 0 0; }
 
 /* ── The all-sessions screen's boxes (TokenInsights.tsx) ──────────────────────

@@ -127,7 +127,7 @@ const ORDER = [
   "useTermFeed", "useComposeDraft", "usePref", "usePref", "useSchedules", "usePullRecords",
   "useActivityFiled", "useActivityConfirmedDone", "useGitRoute", "useBacklog", "useRepoColors",
   "useEffect:installSettingsSync[]", "useUsedOrderSnapshot", "useUsage", "useBilling", "useQueue", "useLaunch", "useSend",
-  "useCompose", "useSessionChrome", "useTransportIndex", "useEffect:setDocTitle[focusRepo]", "useViewport",
+  "useCompose", "useSessionChrome", "useTransportIndex", "useEffect:setDocTitle[focusRepo,repos]", "useViewport",
   "useEffect:setInterval[]", "useEffect:track[overlay]", "useEffect:on[]", "useEffect:refreshRepos[status]",
   "useEffect:refreshRepos[activeId,active?.idle]", "useEffect:refreshRepos[activeId]", "useEffect:refreshRepos[overlay]", "useGitBusyRefresh", "useEffect:refreshRepos[activeId]", "useEffect:attach[bl.items,sessions]", "useCostNotices",
   "useEffect:setCanInstall[]", "useEffect:startLinkReporting[]",

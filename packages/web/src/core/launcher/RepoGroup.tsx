@@ -6,7 +6,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel } from "@waterplane/shared";
+import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel, withShownName } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
 import { isBudgetHeld } from "../../sendIntent";
 import { intentRowKey } from "../../activityRows";
@@ -31,6 +31,7 @@ import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
 import { openingText, openingTitle, queuedChipCut, setupMenuLabel, setupMenuTitle, setupTitle } from "./model";
 import { SessionRow } from "./SessionRow";
+import { RepoShownAs } from "./RepoShownAs";
 import { ExtBoundary } from "../ExtBoundary";
 import { shellBackend } from "../../backendCaps";
 import { repoActions, repoChips } from "../extensionPoints";
@@ -58,6 +59,8 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
     repoMenu, setRepoMenu, setCloseAllPick,
   } = m;
   const n = groupSessions.length;
+  // The group's KEY is `repoName` (colour, fold, filters, focus); WORDS say `shown` (`repoShown`).
+  const shown = m.shownOf(repoName);
   const main = primaryRepo(repoName);
   const wts = worktreesOf(repoName);
   const wt = wts.length;
@@ -125,12 +128,12 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           onto a second line while those two stay top-right. */}
       <div className="repo-group-line">
       <button className="repo-group-toggle"
-        title={idle ? `${collapsed ? "show" : "hide"} — no session open in ${repoName}`
+        title={idle ? `${collapsed ? "show" : "hide"} — no session open in ${shown}`
           : collapsed ? `show ${n} session${n === 1 ? "" : "s"}${wt > 0 ? ` and ${wt} worktree${wt === 1 ? "" : "s"}` : ""}`
           : `hide ${n} session${n === 1 ? "" : "s"}${wt > 0 ? ` and ${wt} worktree${wt === 1 ? "" : "s"}` : ""}`}
         onClick={foldToggle}>
         {collapsed ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
-        <span>{repoName}</span>
+        <span>{shown}</span>
       </button>
       <span className="repo-group-acts">
         {/* Repo-level affordances, mirrored from where they already live: the
@@ -144,7 +147,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           // landed on an empty grid — the badge said 42, the sheet said 0.
           // Carry the scope AND the window the number came from.
           <button className={`focus-btn${main.outboxCount > 0 ? " count" : ""}`}
-            title={main.outboxCount > 0 ? `${main.outboxCount} new outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${repoName}`}
+            title={main.outboxCount > 0 ? `${main.outboxCount} new outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${shown}`}
             onClick={() => { track("action:repo.files.header"); main.outboxCount > 0 ? openOutboxFor(main.id) : openGalleryFor(main.id); }}>
             <Images size={15} />{main.outboxCount > 0 && main.outboxCount}
           </button>
@@ -171,7 +174,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             always-on 42px buttons need ~300px, which on a phone
             left no room for the name and broke the strip onto a
             line of its own under every header. */}
-        {main && <BuildHeaderButton repo={main} repoName={repoName} />}
+        {main && <BuildHeaderButton repo={main} repoName={shown} />}
       </span>
       </div>
       <span className="repo-group-pin">
@@ -179,7 +182,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === repoName ? null : repoName)); }}><MoreHorizontal size={17} /></button>
         {n > 0 && (
           <button className="focus-btn danger"
-            title={`close sessions in ${repoName} — review the ${n} here, cut by state, idle time, or what is still running underneath`}
+            title={`close sessions in ${shown} — review the ${n} here, cut by state, idle time, or what is still running underneath`}
             onClick={() => setCloseAllPick(repoName)}><X size={18} /></button>
         )}
       </span>
@@ -224,13 +227,13 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           return (
             <span className="repo-start">
               <button className={`repo-start-btn${idle && !collapsed ? " lead" : ""}`}
-                title={opening ? `new session in ${repoName} · ${main.branch}, another one now — ${openingTitle(opening)}`
-                  : `new session in ${repoName} · ${main.branch}, opened now`}
+                title={opening ? `new session in ${shown} · ${main.branch}, another one now — ${openingTitle(opening)}`
+                  : `new session in ${shown} · ${main.branch}, opened now`}
                 onClick={() => { track("action:repo.new.header"); openRepo(main); }}>
                 <Plus size={15} />now
               </button>
               <button className="repo-start-btn"
-                title={`words for a new session in ${repoName} — held until the repo is free, or on a clock you pick`}
+                title={`words for a new session in ${shown} — held until the repo is free, or on a clock you pick`}
                 onClick={() => { track("action:repo.send"); enterLater(main.worktreePath); }}>
                 <Plus size={15} />later
               </button>
@@ -244,12 +247,12 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             There is no session-total chip: the owner cut it as not
             worth its width — the status chips beside it already
             split the same rows, and focus is in the ··· menu. */}
-        {n === 0 && main && branchLabel(main) && <span className="repo-group-branch" title={`${repoBranchLabel(main)} — nothing running`}>{branchLabel(main)}</span>}
+        {n === 0 && main && branchLabel(main) && <span className="repo-group-branch" title={`${repoBranchLabel(withShownName(main))} — nothing running`}>{branchLabel(main)}</span>}
         {/* A count on a control is a filter: the worktree rows under this
             header, plus any session running in one, and nothing else. */}
         {wt > 0 && (
           <button className={`repo-group-stat wt${statusFilterActive("worktrees", repoName) ? " on" : ""}`}
-            title={`${wt} open worktree${wt > 1 ? "s" : ""} in ${repoName} — tap to show only those`}
+            title={`${wt} open worktree${wt > 1 ? "s" : ""} in ${shown} — tap to show only those`}
             onClick={() => toggleStatusFilter("worktrees", repoName)}>
             <GitBranch size={13} />{wt}
           </button>
@@ -279,7 +282,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           // danger colour, one under the warn line or a called drop the warn
           // colour, a called rise the calm one; otherwise a plain readout. The tap
           // opens the readings sheet, whose first section is this number.
-          const hc = main ? healthChip(main.healthIndex, repoName, isoWeekOf(new Date().toISOString().slice(0, 10))) : null;
+          const hc = main ? healthChip(main.healthIndex, shown, isoWeekOf(new Date().toISOString().slice(0, 10))) : null;
           if (!main || !hc) return null;
           const Arrow = hc.arrow === "down" ? ArrowDown : hc.arrow === "up" ? ArrowUp : hc.arrow === "flat" ? Minus : null;
           return (
@@ -312,27 +315,27 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         {/* The per-repo twins of the launcher's attention chips — the same
             component and the same `sessionStatus` buckets; here a tap is the
             launcher's filter on this repo, so it shows exactly these rows. */}
-        <AttentionChip kind="blocked" n={att.blocked} repo={repoName} on={statusFilterActive("blocked", repoName)}
+        <AttentionChip kind="blocked" n={att.blocked} repo={shown} on={statusFilterActive("blocked", repoName)}
           onClick={() => toggleStatusFilter("blocked", repoName)} />
-        <AttentionChip kind="wait" n={att.wait} repo={repoName} on={statusFilterActive("wait", repoName)}
+        <AttentionChip kind="wait" n={att.wait} repo={shown} on={statusFilterActive("wait", repoName)}
           replies={!!waitingRepliesByRepo.get(repoName)} onClick={() => toggleStatusFilter("wait", repoName)} />
         {att.coding > 0 && (
           <button className={`repo-group-stat coding${statusFilterActive("coding", repoName) ? " on" : ""}`}
-            title={`${att.coding} session${att.coding > 1 ? "s" : ""} in ${repoName} working — tap to show only those`}
+            title={`${att.coding} session${att.coding > 1 ? "s" : ""} in ${shown} working — tap to show only those`}
             onClick={() => toggleStatusFilter("coding", repoName)}>
             <Loader size={13} className="spin" />{att.coding}
           </button>
         )}
         {att.done > 0 && (
           <button className={`repo-group-stat done${statusFilterActive("done", repoName) ? " on" : ""}`}
-            title={`${att.done} session${att.done > 1 ? "s" : ""} in ${repoName} idle — turn finished; tap to show only those`}
+            title={`${att.done} session${att.done > 1 ? "s" : ""} in ${shown} idle — turn finished; tap to show only those`}
             onClick={() => toggleStatusFilter("done", repoName)}>
             <Check size={13} />{att.done}
           </button>
         )}
         {att.exited > 0 && (
           <button className={`repo-group-stat exited${statusFilterActive("exited", repoName) ? " on" : ""}`}
-            title={`${att.exited} exited session${att.exited > 1 ? "s" : ""} in ${repoName} — tap to show only those`}
+            title={`${att.exited} exited session${att.exited > 1 ? "s" : ""} in ${shown} — tap to show only those`}
             onClick={() => toggleStatusFilter("exited", repoName)}>
             <CircleSlash size={11} />{att.exited}
           </button>
@@ -362,7 +365,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           const held = intents.filter((i) => keySet.has(intentRowKey(i.id)) && isBudgetHeld(i, heldNow, intentById)).length;
           return (
             <button className="repo-group-stat queued"
-              title={`${q} command${q > 1 ? "s" : ""} waiting to run in ${repoName} — on this phone or held by the desktop${held ? `; ${held} held by the usage budget` : ""}. Tap to show only those.`}
+              title={`${q} command${q > 1 ? "s" : ""} waiting to run in ${shown} — on this phone or held by the desktop${held ? `; ${held} held by the usage budget` : ""}. Tap to show only those.`}
               onClick={() => {
                 // When every row counted is this repo's queued
                 // WORK in one checkout, the tap opens its backlog
@@ -376,11 +379,11 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
                 const cut = queuedChipCut(keys, intents);
                 if (cut.kind === "backlog") {
                   track("action:repo.queued.backlog");
-                  openBacklogCut(cut.cwd, cut.ids, `the ${q} waiting in ${repoName}`);
+                  openBacklogCut(cut.cwd, cut.ids, `the ${q} waiting in ${shown}`);
                   return;
                 }
                 track("action:repo.queued.open");
-                openActivity({ keys, label: `the ${q} waiting in ${repoName}` });
+                openActivity({ keys, label: `the ${q} waiting in ${shown}` });
               }}>
               <Hourglass size={12} />{q}{queuedChipHeld(q, held)}
             </button>
@@ -406,10 +409,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           const words = horizonWords(rc.horizon);
           return (
             <button className="repo-group-stat"
-              title={`${n} thing${n > 1 ? "s" : ""} on a clock in ${repoName}${words ? ` — ${words}` : ""}. Tap to show only those.`}
+              title={`${n} thing${n > 1 ? "s" : ""} on a clock in ${shown}${words ? ` — ${words}` : ""}. Tap to show only those.`}
               onClick={() => {
                 track("action:repo.clocks.open");
-                openScheduleCut(rc.ids, repoClocksLabel(repoName, n), main?.worktreePath);
+                openScheduleCut(rc.ids, repoClocksLabel(shown, n), main?.worktreePath);
               }}>
               <CalendarClock size={12} />{n}
             </button>
@@ -425,7 +428,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           const st = starredByRepo.get(repoName) ?? 0;
           return (
             <button className={`repo-group-stat starred${statusFilterActive("starred", repoName) ? " on" : ""}`}
-              title={`${st} starred session${st > 1 ? "s" : ""} in ${repoName} — tap to show only those`}
+              title={`${st} starred session${st > 1 ? "s" : ""} in ${shown} — tap to show only those`}
               onClick={() => toggleStatusFilter("starred", repoName)}>
               <Star size={12} fill="currentColor" />{st}
             </button>
@@ -438,7 +441,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           if (!fl) return null;
           return (
             <button className={`repo-group-stat fu-${fl.tone}${statusFilterActive("followup", repoName) ? " on" : ""}`}
-              data-hint="session.followup" title={flaggedChipTitle(fl.n, repoName)}
+              data-hint="session.followup" title={flaggedChipTitle(fl.n, shown)}
               onClick={() => toggleStatusFilter("followup", repoName)}>
               <Flag size={12} fill="currentColor" />{fl.n}
             </button>
@@ -482,6 +485,8 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           {main && <button className="more-act" title="what this repo downloads to this phone by itself"
             onClick={() => { track("action:repo.pullrules"); setRepoMenu(null); openPullRules(main.worktreePath); }}><Download size={ICON} />download rules</button>}
           {main && <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />branch</button>}
+          {/* The name this repo wears on the phone (`RepoShownAs`): per repo, so it is HERE and not in Settings. */}
+          {main && <RepoShownAs repo={main} onSaved={() => { setRepoMenu(null); refreshRepos(); }} />}
           {main && <button className="more-act" data-hint="repo.hide" onClick={() => { track("action:repo.hide"); setRepoMenu(null); toggleHideRepo(main.id); }}><EyeOff size={ICON} />hide</button>}
           {main && <RepoHealthMenuItem repo={main} onOpen={() => { setRepoMenu(null); openRepoHealth(main); }} />}
           {main && <OptInMenuItem onOpen={() => { track("action:repo.optins"); setRepoMenu(null); openSetup(main.id, { region: "optins" }); }} />}
@@ -506,7 +511,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             stranger, not as part of the group it sits in. */}
         <RowTitle><span className="wt-branch">{t.branch.replace(/^worktree-/, "")}</span></RowTitle>
         <RowSub className="repo-sub">
-          <span className="repo-branch wt-of"><GitBranch size={12} />worktree of <b>{repoName}</b></span>
+          <span className="repo-branch wt-of"><GitBranch size={12} />worktree of <b>{shown}</b></span>
           {(() => {
             const o = openingCwds.get(t.worktreePath);
             return o ? (

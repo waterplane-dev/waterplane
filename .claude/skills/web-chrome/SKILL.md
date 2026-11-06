@@ -36,7 +36,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   `useRoute` move. **Closing a sheet is exactly ONE Back** (`routeStep`), and so is leaving a session whose entry underneath is the launcher; a sheet that clears its focus on leave declares `SheetDef.keep` (`sdk/types.ts`) so Back restores its cut (backlog, schedule, cliHealth, nethealth, localrt, pull): the arrow lands where the
   gesture does, so a sheet opened from a sheet closes to that sheet. **A sub-view with its own back
   arrow (an opened file, an editor, a detail pane) calls `useBackStep(open, close)`** or the swipe
-  pops the whole sheet — `tools/backstep.test.mjs` enforces it. Never wire it to a close that
+  pops the whole sheet — `tools/backstep.test.mjs` enforces it. **A new door is a row in `scripts/ui/journey-back-lands.mjs`**, which really taps it and takes Back both ways (`npm run test:ui back-lands`, run before committing per `CLAUDE.md`). Never wire it to a close that
   DISCARDS typed words (`PadSheet`'s editor is exempt for that). Features get it from `sdk`.
 - `resumeRoute.ts` — **landing back where you were when a NEW BUNDLE replaces the running one.** The route is remembered on every change and put back before React mounts, **only when ARMED** by
   `webUpdate.ts` (stage / apply / revert) and consumed once: an ordinary launch still opens the
@@ -64,7 +64,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   writer; sections are `pulse` (**misses are drawn, never averaged**; it **observes and never
   steers**), `traffic` (measured by **patching the transports, never call sites**), `sync` (**last
   connected is the newest INBOUND FRAME**, never `readyState`) and `log`. Persisted, because **the
-  reload IS a data point**. **Every reading is its own tap target and its own hint.**
+  reload IS a data point**. **Every reading is its own tap target and its own hint.** **Every reading has more behind its tap**: one row a minute in IDB `linkseries` (`linkSeries.ts` pure, `linkSeriesStore.ts`, 30 days, no timer of its own), drawn by `NetHealthCharts.tsx`; a minute with no row is NOT MEASURED, never zero.
 - `hostRoute.ts` — how the active host is reached right now (LAN or tailnet) plus the one sentence
   why, as a store with ONE writer (`lanLink.ts`, `web-config`). Read by `NetPulseBar.tsx`, the
   health sheet and `features/hosts`' door and switcher sheet — never re-derived at any of those
@@ -152,7 +152,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   order, same-repo rows kept contiguous and a companion shell glued under its session (`glueCompanions`, applied in `model.ts`). The local/external switch is a menu entry, not
   a segmented bar, but WHICH view is showing stays on screen. **A row opens into the READER too**
   (`openReader`): read mode set BEFORE the attach, outline fired after — and `attach` CLEARS `readerCmd`, or a verb fired in one session
-  re-fires over the next reader that mounts.
+  re-fires over the next reader that mounts. **A repo may be SHOWN under another name** (`RepoTarget.displayName`, host-stored; set in that repo's own ⋯ menu, `RepoShownAs.tsx`): `repoLabel` stays the KEY (group, fold, focus, filters, colour, `?repo=`), `repoShown`/`m.shownOf`/`sessionTabs.shownRepo` are the ONLY words to print, a stored session title is reworded at draw time (`shownTitleOf`/`shownTitleIn`) and never rewritten, and a search finds either name (`repoNameMatches`). Nothing sets it by itself.
 - **`CloseSheet.tsx` + `closeModel.ts`** (`core/launcher`) — the bulk
   close as seven combinable FACETS (state, idle-for, open-for, underneath, words at stake, conversation,
   repo): facets AND, options within one OR, every chip cross-counted against the OTHER active facets

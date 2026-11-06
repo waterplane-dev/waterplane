@@ -111,6 +111,45 @@ test("the switch off stops the probing and KEEPS the stall; a cancelled probe do
   assert.deepEqual(writes, []);
 });
 
+test("a retry ANSWERED mid-turn clears the line there and then; a give-up later in that turn keeps its tries", async (t) => {
+  process.env.CLAUDE_CONFIG_DIR = join(root, "claude");
+  t.after(() => { delete process.env.CLAUDE_CONFIG_DIR; });
+  const conv = "0b6d1f7e-3c1a-4f0e-9a55-1f2e7c9d4a10";
+  const dir = claudeProjectDir(root);
+  mkdirSync(dir, { recursive: true });
+  const log = join(dir, conv + ".jsonl");
+  const E = "API " + "Error: ";
+  const giveUp = { type: "assistant", timestamp: new Date().toISOString(), isApiErrorMessage: true, error: "server_error",
+    message: { model: "<synthetic>", role: "assistant", content: [{ type: "text", text: E + "Can't reach the API server (ENOTFOUND)" }] } };
+  const reply = { type: "assistant", timestamp: new Date().toISOString(), message: { model: "claude-opus", role: "assistant", content: [{ type: "text", text: "on it" }] } };
+  writeFileSync(log, JSON.stringify(giveUp) + "\n");
+
+  const { slice, s } = rig();
+  t.after(() => slice.clear(s));
+  s.info.claudeSessionId = conv;
+  s.info.turnStartedAt = 1000;
+  s.turnActive = true;
+  s.info.netRetry = { state: "sent", attempt: 2, max: 8, nextAt: null, error: "x", at: 1 };
+  const look = () => slice["netWave"]().settle("s1", 5000);
+
+  assert.equal(look(), "wait", "the give-up is still the newest row: nothing answered yet");
+  assert.equal(s.info.netRetry?.state, "sent");
+
+  writeFileSync(log, JSON.stringify(giveUp) + "\n" + JSON.stringify(reply) + "\n");
+  assert.equal(look(), "resumed");
+  assert.equal(s.info.netRetry, null, "the line is gone while the turn still runs");
+
+  // The same turn dies again: on up the ladder, never back to try 1.
+  assert.equal(slice["schedule"](s, Date.now(), "x").net, "retrying");
+  assert.equal(s.info.netRetry.attempt, 2);
+
+  // A later turn owes nothing to that episode.
+  slice["cancel"](s, "test");
+  s.info.turnStartedAt = 2000;
+  slice["schedule"](s, Date.now(), "x");
+  assert.equal(s.info.netRetry.attempt, 0);
+});
+
 test("on re-attach, a log still ending on a give-up nobody typed after is ADOPTED as a stall and probed", async (t) => {
   process.env.CLAUDE_CONFIG_DIR = join(root, "claude");
   t.after(() => { delete process.env.CLAUDE_CONFIG_DIR; });

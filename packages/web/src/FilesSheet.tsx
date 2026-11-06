@@ -54,6 +54,9 @@ interface Props {
    *  it (the readings' longest-files tape). Closing that file then closes the
    *  sheet — the reader came for the file, not for its folder. */
   initialFile?: string;
+  /** Open that named file straight into the editor (the git diff's pencil). A file the host will
+   *  not let this phone edit opens for reading, and its hint says why. */
+  initialEdit?: boolean;
   onClose: () => void;
 }
 
@@ -68,7 +71,7 @@ function statusLabel(code: string): string {
   return "modified";
 }
 
-export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemarks, initialFile, onClose }: Props) {
+export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemarks, initialFile, initialEdit, onClose }: Props) {
   const [dir, setDir] = useState(() =>
     initialFile && initialFile.includes("/") ? initialFile.slice(0, initialFile.lastIndexOf("/")) : "");
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +182,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
     return (
       <FileView
         repoId={repoId} repoName={repoName ?? ""} file={open} socketOpen={socketOpen}
+        initialEdit={!!initialEdit && open.path === initialFile}
         onReopen={async () => { try { setOpen(await api.treeFile(repoId, open.path)); } catch { /* keep what we have */ } }}
         onInsertPath={onInsertPath}
         onRemarks={onRemarks}
@@ -274,6 +278,7 @@ interface ViewProps {
   repoName: string;
   file: TreeFile;
   socketOpen: boolean;
+  initialEdit: boolean;
   onReopen: () => Promise<void>;
   onInsertPath: (relPath: string) => void;
   onRemarks?: (relPath: string, text: string) => boolean;
@@ -282,8 +287,8 @@ interface ViewProps {
   onClose: () => void;
 }
 
-function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, onRemarks, onOpenPath, onClose }: ViewProps) {
-  const [editing, setEditing] = useState(false);
+function FileView({ repoId, repoName, file, socketOpen, initialEdit, onReopen, onInsertPath, onRemarks, onOpenPath, onClose }: ViewProps) {
+  const [editing, setEditing] = useState(() => initialEdit && file.editable);
   /** Pinned to the tab strip — read off the strip's own store, so an × on the
    *  strip flips this button too. */
   const pinKey = fileTabKey({ repoId, path: file.path });

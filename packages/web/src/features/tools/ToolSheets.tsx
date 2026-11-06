@@ -67,6 +67,7 @@ export function NetHealthToolSheet() {
   const entries = useQueueEntries();
   return <NetHealthSheet onClose={() => core.nav.close("nethealth")} onToast={core.say.toast} focus={focus}
     notDelivered={entries.filter((e) => e.status === "failed").length}
+    heldSends={entries.filter((e) => e.status === "queued" || e.status === "pending").sort((a, b) => a.ts - b.ts)}
     onOpenStorage={() => { core.say.track("overlay:storage"); core.nav.open("storage"); }}
     // The list this sheet used to draw is Activity's now — one row per send
     // for its whole life, un-clipped, with the repo it was written for.

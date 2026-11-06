@@ -12,7 +12,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExternalSession, Intent, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { HORIZON_LABEL, horizonLead, horizonWords, repoLabel } from "@waterplane/shared";
+import { HORIZON_LABEL, horizonLead, horizonWords, repoLabel, repoShown } from "@waterplane/shared";
 import { createStore, useStore, type Store } from "../../sdk";
 import { COLLAPSED_REPOS_KEY, SESSION_DRAG_MS, SESSION_ORDER_KEY, loadCollapsedRepos, loadSessionOrder } from "../../localState";
 import { matchesFilterKind, resumeIdOf, sessionStatus, type SessionFilter } from "../../sessionFacts";
@@ -33,7 +33,7 @@ import { stripRows } from "../../downloadState";
 import type { LauncherProps } from "./types";
 import {
   type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, activityOpenKeys, repoGroupsOf,
-  repoOfCwd, rollupByRepo, rollupTotal, sessionRepoLabelIn, sessionRepoNameIn, sessionRowBranchIn, sessionRowTitleIn,
+  repoOfCwd, rollupByRepo, rollupTotal, sessionRepoLabelIn, sessionRepoNameIn, sessionRepoShownIn, sessionRowBranchIn, sessionRowTitleIn,
   sessionNumbersOf, sortSessions, starredByRepoOf,
 } from "./model";
 import { flaggedByRepoOf, flaggedTotalOf } from "../sessions/followUpFacts";
@@ -149,7 +149,7 @@ export function useLauncherModel(p: LauncherProps) {
   // and "garmin"), and "n of N" under it counts against the same unfiltered list.
   const shownSessions = useMemo(
     () => filterSessions(sortedSessions, statusFilter, (s, k) => k === "worktrees" ? repoForCwd(s.cwd)?.isPrimary === false : matchesFilterKind(s, k, p.backends), sessionRepoName)
-      .filter((s) => !textOn || matchesText(textQuery, [s.tabTitle, s.title, s.firstPrompt, s.lastPrompt, s.pinnedPrompt, sessionRepoName(s), sessionRowBranch(s)])),
+      .filter((s) => !textOn || matchesText(textQuery, [s.tabTitle, s.title, s.firstPrompt, s.lastPrompt, s.pinnedPrompt, sessionRepoName(s), sessionRepoShownIn(repos, s), sessionRowBranch(s)])),
     [sortedSessions, statusFilter, repos, textQuery, p.backends], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd`/`sessionRepoName`/`sessionRowBranch` are per-render closures over `repos`
   );
 
@@ -267,6 +267,14 @@ export function useLauncherModel(p: LauncherProps) {
     if (next.has(name)) next.delete(name); else next.add(name);
     persistCollapsedRepos(next);
   }
+  /** What to PRINT for a repo group: the name a person gave it, else the folder's. The group's KEY
+   *  (colour, collapse, focus, filters) stays `repoLabel` — this is for words only (`repoShown`). */
+  const shownByKey = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const r of repos) out.set(repoLabel(r), repoShown(r));
+    return out;
+  }, [repos]);
+  const shownOf = (name: string) => shownByKey.get(name) ?? name;
   /** The repo's primary checkout (main worktree) — target of the header's "new session". */
   const primaryRepo = (name: string): RepoTarget | null => repos.find((r) => repoLabel(r) === name && r.isPrimary) ?? null;
   /** The repo's other checkouts, listed under its header. */
@@ -306,7 +314,7 @@ export function useLauncherModel(p: LauncherProps) {
     // when its own NAME matches — "garmin" finds the repo, not only its rows.
     () => repoGroupsOf(shownSessions, visibleRepos, !!statusFilter || textOn, sessionRepoName,
       statusFilter?.status === "worktrees" && statusFilter.repo ? [statusFilter.repo]
-        : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [repoLabel(r), r.branch])).map((r) => repoLabel(r)) : [],
+        : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [repoLabel(r), r.displayName, r.branch])).map((r) => repoLabel(r)) : [],
       openByRepo),
     [shownSessions, visibleRepos, statusFilter, repos, textQuery, openByRepo], // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` closes over `repos`, `textOn` derives from `textQuery`
   );
@@ -551,7 +559,7 @@ export function useLauncherModel(p: LauncherProps) {
     // names
     repoForCwd, sessionRepo, sessionRepoName, sessionRepoLabel, sessionRowBranch, sessionRowTitle,
     // the list
-    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf,
+    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf, shownOf,
     attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, blockedTotal, codingTotal,
     starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,

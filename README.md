@@ -208,8 +208,9 @@ HTTPS + MagicDNS in the tailnet admin console once, then open `https://<machine>
 tailscale serve --bg --https=443 http://127.0.0.1:8770
 ```
 
-Or use the Android app, which needs no HTTPS: the APK is on the
-[latest release](https://github.com/waterplane-dev/waterplane/releases/latest).
+Or use the Android app, which needs no HTTPS: get it on
+[Google Play](https://play.google.com/store/apps/details?id=dev.waterplane.app), or download the
+APK from the [latest release](https://github.com/waterplane-dev/waterplane/releases/latest).
 
 Windows, Docker, agent install, notifications, a second phone or desktop, the background service,
 updating and every environment variable: [docs/install.md](docs/install.md).

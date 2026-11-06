@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.3 - 2026-11-06
+
+### New
+
+- **Render a changed Markdown file and edit it from its diff.** The diff has a rendered mode and a pencil. The file opens over the diff, so Back lands on that diff, re-read, in the mode you left it.
+- **A repo can be shown under a name you choose.** Set it from the repo's own menu ("shown as…"). The name is stored on the host and shown on every device: launcher, tabs, Start sheets, pickers, search and push titles. The folder keeps its name, so nothing has to move to rename it.
+- **Every reading on the connection strip has a chart behind its tap.** The health sheet charts ping, route, connection, unsaved items, sends and data by source over 1h, 24h, 7d or 30d. Drops, route moves and what is waiting are listed. Time the app was off screen is drawn as not measured. One sticky range control replaces seven pickers.
+- **A crash finding can go to a session to be fixed.** Every finding now names its source.
+- **The agent list and launcher have a drag grip.** A shortened agent list scrolls.
+
+### Fixed
+
+- **The context chart no longer slopes.** The window and the running total change only at a request, but the charts joined readings with straight lines, so a compaction read as an hour of draining. Both charts now hold a value until the next reading and drop at a compaction. The scrub and every total keep the real readings.
+- **A dynamic workflow's agents are now counted.** They were in no figure: one session read 2 agents and $22 with 83 agents and about $207 spent. They now land on the turn of their Workflow call, and a row reads by what the agent was launched to do.
+- **A retry line clears once the session answers.** "Retried (2/8), waiting for the reply" stayed up for the whole retried turn, so a working session looked like a failed retry. It now clears at the first reply.
+- **A message sent with ultracode on is no longer left unsubmitted.** The labelled top rule of the composer was not recognised, so the words were read as already typed.
+- **Smaller fixes.** The context sheet's name, buttons and age line sit on one edge, and its head scrolls away with the charts on a phone.
+
 ## 0.9.2 - 2026-11-04
 
 ### New

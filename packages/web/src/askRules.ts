@@ -102,9 +102,9 @@ export function withOffIn(rules: readonly AskRule[], id: string, path: string, o
 }
 
 /** A repo path as a person reads it: the repo's name when the phone knows it, else the last segment. */
-export function repoLabel(path: string, repos: readonly { worktreePath: string; repoName: string; branch?: string; isPrimary?: boolean }[]): string {
+export function repoLabel(path: string, repos: readonly { worktreePath: string; repoName: string; displayName?: string; branch?: string; isPrimary?: boolean }[]): string {
   const r = repos.find((x) => x.worktreePath === path);
-  if (r) return r.isPrimary === false && r.branch ? `${r.repoName} (${r.branch})` : r.repoName;
+  if (r) { const name = r.displayName || r.repoName; return r.isPrimary === false && r.branch ? `${name} (${r.branch})` : name; }
   return path.split("/").filter(Boolean).pop() ?? path;
 }
 

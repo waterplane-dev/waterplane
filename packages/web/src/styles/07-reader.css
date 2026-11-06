@@ -93,6 +93,10 @@
 .tr-agent { color: var(--muted); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .tr-agent .tr-live-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-agent svg { flex: 0 0 auto; opacity: .8; }
+/* The rows as a frame the grip under it shortens (`useDragCap.ts`). A shortened
+   list scrolls rather than clips: every agent stays reachable. */
+.tr-agent-list { flex: 0 0 auto; min-height: 0; }
+.tr-agent-list.capped { overflow-y: auto; overscroll-behavior: contain; }
 /* Same signal repeated at the tail, where a reader following the conversation is
    already looking. */
 .tr-inflight { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-10) 0; }

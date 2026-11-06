@@ -163,3 +163,7 @@ Pre-push checks run without a push: the git view's and the Sync sheet's *Run che
 ### R-git-034 · built
 The history's not-pushed list marks each commit the checks judged, passed or failed, and how long ago. Where the repo says its hook tests the pushed commit (git config `waterplane.prePushTestsCommit`), any outgoing commit can be checked by itself and a passed one offers *Push up to here (N)*, sending it and the older commits and leaving newer ones local. Where the hook tests the working tree, only the newest commit can be checked, a run over uncommitted changes marks nothing, and the list says why there is no partial push. In PR mode a partial push is refused in words.
 - asked: 2026-11-04 — "select one of these commits and say everything until this commit. Now push and just leave out the other two or three more newer commits"
+
+### R-git-035 · built
+A changed Markdown file's diff also offers it rendered, and any changed text file still on disk can be opened for editing from its diff. Back, after a save or not, lands on that diff in the mode it was left, read again.
+- asked: before 2026-11-05 — a task given to GitHub Copilot; its wording was not kept

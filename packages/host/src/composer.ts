@@ -23,8 +23,14 @@ import { SLICE_MIN, screenEcho, squash, type EchoRule } from "./echo.js";
  * file asks "has this dialog been ANSWERED", so its notion of a composer row is
  * and should be loose; this file asks "is this the box the user is typing
  * into", where the same looseness is the bug (see `COMPOSER_CURSOR_RE`).
+ *
+ * The opening rule may wear a label at its right end: `──────── ultracode ─`,
+ * for as long as ultracode is on. Refusing that shape placed no box at all, so
+ * every read of the composer answered "no opinion" — and a dim proposal equal
+ * to the words being sent read as "already typed": nothing typed, five Returns
+ * into an empty box, `unsubmitted` (live, 2026-11-06).
  */
-export const COMPOSER_RULE_RE = /^[\u2500\u2501\u2504\u2505\u2508\u2509]{20,}$/;
+export const COMPOSER_RULE_RE = /^[\u2500\u2501\u2504\u2505\u2508\u2509]{20,}(?:\s+\S(?:.*\S)?\s+[\u2500\u2501\u2504\u2505\u2508\u2509]{1,4})?$/;
 
 /**
  * The composer's input row: `❯` and then whitespace — NBSP included,

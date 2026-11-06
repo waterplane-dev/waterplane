@@ -138,7 +138,7 @@ function CloseRow({ s, repoLabel, kept, onToggleKeep, statusOf, now, timedAt, ba
 export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const { send } = p.conn;
   const {
-    closeAllPick, setCloseAllPick, closeKeepStar, setCloseKeepStar, visibleSessions, sessionRepoName,
+    closeAllPick, setCloseAllPick, closeKeepStar, setCloseKeepStar, visibleSessions, sessionRepoName, shownOf,
   } = m;
   const open = closeAllPick !== null;
   useBackStep(open, () => setCloseAllPick(null));
@@ -198,13 +198,13 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     // OTHER open phone (`features/shells/store.ts`).
     for (const s of sendList) { noteSessionClosing(s.id); send({ t: "session.remove", id: s.id }); }
     setCloseAllPick(null);
-    showToast(closeToast(sendList.length, shells, sparedStars > 0 ? markedHere : "", repo));
+    showToast(closeToast(sendList.length, shells, sparedStars > 0 ? markedHere : "", repo ? shownOf(repo) : repo));
   }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 30, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <Sheet
-        title={repo ? `Close sessions in ${repo}?` : "Close sessions?"}
+        title={repo ? `Close sessions in ${shownOf(repo)}?` : "Close sessions?"}
         icon={<X size={ICON} />}
         onClose={() => setCloseAllPick(null)}
         footer={
@@ -277,7 +277,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           labels={CONVO_LABEL} onToggle={(o) => set("convo", toggled(facets.convo, o))} />
         {!repo && repoNames.length > 1 && (
           <FacetRow label="Repo" options={repoNames} counts={counts.repo} active={facets.repo}
-            labels={Object.fromEntries(repoNames.map((n) => [n, n]))} onToggle={(o) => set("repo", toggled(facets.repo, o))} />
+            labels={Object.fromEntries(repoNames.map((n) => [n, shownOf(n)]))} onToggle={(o) => set("repo", toggled(facets.repo, o))} />
         )}
         </div>
 
@@ -288,7 +288,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           <Empty>Nothing here matches every facet ticked above.</Empty>
         ) : (
           cut.map((s) => (
-            <CloseRow key={s.id} backends={p.backends} s={s} repoLabel={repo ? undefined : sessionRepoName(s)} kept={isKept(s.id, kept, timed)}
+            <CloseRow key={s.id} backends={p.backends} s={s} repoLabel={repo ? undefined : shownOf(sessionRepoName(s))} kept={isKept(s.id, kept, timed)}
               onToggleKeep={() => toggleKeep(s.id)} statusOf={ctx.statusOf} now={now} timedAt={timedAt.get(s.id)} />
           ))
         )}

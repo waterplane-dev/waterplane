@@ -110,7 +110,7 @@ export function agentConcurrency(agents: AgentRun[]): number {
 export function agentReadout(a: AgentRun, models: string[] | undefined, span: number): string {
   const who = models && a.model != null ? models[a.model] : null;
   return [
-    a.type ?? "agent",
+    a.what ?? a.type ?? "agent",
     who ? modelLabel(who) : null,
     a.running
       ? `started ${fmtAxisTime(a.at, span)} · still running, last wrote ${fmtAxisTime(a.endAt, span)}`

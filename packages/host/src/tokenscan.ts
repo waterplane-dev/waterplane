@@ -77,10 +77,12 @@ const SLICE_MS = 8;
 const breathe = () => new Promise<void>((r) => setImmediate(r));
 
 /** Every `.jsonl` under a project directory, as paths RELATIVE to it. Depth is
- *  capped: the CLI nests one level (`<conversation>/subagents/`), and a cap is
- *  cheaper than trusting a directory tree we do not own. */
+ *  capped, which is cheaper than trusting a directory tree we do not own, but
+ *  must reach the deepest logs the CLI writes:
+ *  `<conversation>/subagents/workflows/<wf_…>/agent-<id>.jsonl`, four down.
+ *  One short, every workflow's spend was missing from every total. */
 export async function walkLogs(dir: string, rel = "", depth = 0): Promise<string[]> {
-  if (depth > 3) return [];
+  if (depth > 4) return [];
   let ents;
   try { ents = await readdir(dir, { withFileTypes: true }); } catch { return []; }
   const out: string[] = [];

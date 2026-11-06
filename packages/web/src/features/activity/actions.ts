@@ -6,7 +6,7 @@
  * `act` on purpose: a re-aim needs an ANSWER, which the sheet asks inline
  * with the shared `RepoPicker`.
  */
-import { intentKind, isTimedWorkRow, repoLabel } from "@waterplane/shared";
+import { intentKind, isTimedWorkRow, repoShown } from "@waterplane/shared";
 import { bulkLines, entryProse, queueRowKey, type ActivityActionId, type ActivityRow } from "../../activityRows";
 import { scheduleRemovedToast } from "../../clockCuts";
 import { scheduleRuleLabel } from "../../backlogFilter";
@@ -21,7 +21,7 @@ import { BL_OFFLINE, HELD_OFFLINE, refireSummary, runLane, runNowToast } from ".
 import { confirmedDone, filed, focus, pullList, type ActivityFocus } from "./store";
 import { SHEET } from "../../sheetNames";
 
-const repoNameOf = (c: CoreApi, cwd: string) => { const r = c.world.repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); };
+const repoNameOf = (c: CoreApi, cwd: string) => { const r = c.world.repoForCwd(cwd); return r ? repoShown(r) : baseName(cwd); };
 
 // ── Doors ────────────────────────────────────────────────────────────
 

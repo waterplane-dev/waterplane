@@ -160,7 +160,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
         {tab === "worktree" && (
           <>
             <select className="search" value={repoId} onChange={(e) => setRepoId(e.target.value)}>
-              {primaryRepos.map((r) => <option key={r.id} value={r.id}>{r.repoName}</option>)}
+              {primaryRepos.map((r) => <option key={r.id} value={r.id}>{r.displayName || r.repoName}</option>)}
             </select>
             <input className="search" placeholder="new branch name" value={branch} onChange={(e) => setBranch(e.target.value)} />
           </>

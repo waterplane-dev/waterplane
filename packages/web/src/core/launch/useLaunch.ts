@@ -23,7 +23,8 @@
  */
 import { createElement, useRef, useState } from "react";
 import type { BackendInfo, LaunchOpts, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
-import { repoBranchLabel } from "@waterplane/shared";
+import { repoBranchLabel, shownTitleIn } from "@waterplane/shared";
+import { repoStartTitle } from "./startTitle.ts";
 import { newAckId } from "../../outbox.ts";
 import { loadLaunch, saveReposSnap } from "../../localState.ts";
 import { askConfirm } from "../../Confirm.tsx";
@@ -268,9 +269,11 @@ export function useLaunch(deps: LaunchDeps) {
       // started from — the whole point of that sheet is that they differ. The
       // wrapper matters most for `openRepo`, whose `run` goes to
       // `openRepoWith` and never re-enters this helper.
+      // The words say the repo as it is shown; `title` stays what the caller named the session.
+      const said = shownTitleIn(deps.repos, title);
       setLaunchAskFor({
-        title,
-        run: (l, b) => { if (!hostedGate(title, l, run, opts.onCancel, b)) run(l, b); },
+        title: said,
+        run: (l, b) => { if (!hostedGate(said, l, run, opts.onCancel, b)) run(l, b); },
         onCancel: opts.onCancel,
         budget: opts.budget,
       });
@@ -282,7 +285,7 @@ export function useLaunch(deps: LaunchDeps) {
     // files to that operator, and stopping the continuation to warn about
     // something that has already happened is a dialog with nothing behind it.
     if (opts.resume) return false;
-    return hostedGate(title, opts.launch, run, opts.onCancel, undefined);
+    return hostedGate(shownTitleIn(deps.repos, title), opts.launch, run, opts.onCancel, undefined);
   }
   /**
    * "Does this launch need the hosted notice first?" — the deferral half.
@@ -396,8 +399,8 @@ export function useLaunch(deps: LaunchDeps) {
     // Asked BEFORE the pending screen, not after: the screen is the session, and
     // one that appears while the question is still up is a session already
     // started under the defaults the question exists to override.
-    const name = repoBranchLabel(t);
-    if (askLaunchFirst(name, { launch }, (l, b) => openRepoWith(t, l, b ?? undefined))) return;
+    // The sheet SAYS the repo as it is shown ("Start waterplane"): `askLaunchFirst` does that rewording, once, from the folder-named title.
+    if (askLaunchFirst(repoStartTitle(t), { launch }, (l, b) => openRepoWith(t, l, b ?? undefined))) return;
     openRepoWith(t, launch);
   }
   /** The rest of `openRepo`, once the launch is settled — by the defaults, or by

@@ -19,3 +19,10 @@ test("askRepoRows: prefix before substring, primary before worktree, branches se
   assert.deepEqual(askRepoRows(repos, "KEYS").map((x) => x.id), ["usher:fix-keys"]);
   assert.deepEqual(askRepoRows(repos, "zzz"), []);
 });
+
+test("askRepoRows: either name finds the repo — the folder's and the one it is shown under", () => {
+  const named = [{ ...r("myapp", "main"), displayName: "waterplane" }, r("ciqkit", "main")];
+  assert.deepEqual(askRepoRows(named, "water").map((x) => x.id), ["myapp:main"]);
+  assert.deepEqual(askRepoRows(named, "mya").map((x) => x.id), ["myapp:main"]);
+  assert.deepEqual(askRepoRows(named, "ciq").map((x) => x.id), ["ciqkit:main"]);
+});

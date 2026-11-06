@@ -127,6 +127,10 @@ export interface AgentRun {
    *  project's own agent. Absent when that file was missing or unreadable,
    *  which costs a label and never the row. */
   type?: string;
+  /** What it was launched to do, its `.meta.json`'s description ("review crypto
+   *  r5"): the row's name, since every agent of a workflow has the same `type`.
+   *  Absent when none was written, and from an older host. */
+  what?: string;
   /** Everything that log spent: input, cache reads and writes, and output. */
   tok: number;
   /** At list prices, USD. Absent when its model has no published rate — never

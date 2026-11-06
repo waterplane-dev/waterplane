@@ -1123,10 +1123,47 @@ test("the dearest agents: dollars lead, unpriced follow by tokens, absent stays 
   assert.deepEqual(agentTop([], models), []);
 });
 
+test("an agent reads by what it was launched to do: a workflow's all share one type", () => {
+  const a = run(1, 0, { id: "w", tok: 100, type: "workflow-subagent", what: "review crypto r5" });
+  assert.equal(agentTop([a], ["claude-opus-5"])[0].type, "review crypto r5");
+  assert.match(agentReadout(a, ["claude-opus-5"], 60_000), /^review crypto r5 · /);
+});
+
 import { autoCompactSetText as setTextOf } from "./contextPlot/cplotCompactSet.ts";
+import { agentsEnd, heldSamples } from "./contextPlot/cplotHold.ts";
 
 test("autoCompactSetText names a source this build does not know", () => {
   // `autoCompactSet.source` rides on the host's context spark.
   const text = setTextOf({ tokens: 400000, source: "someFutureSource" });
   assert.doesNotMatch(text, /undefined/);
+});
+
+// ── Held, never sloped (`cplotHold.ts`) ─────────────────────────────────────
+
+const held = (t, tok, kinds) => ({ t, tok, used: tok, ...(kinds ? { kinds } : {}) });
+
+test("a reading holds until the next one, and the step is at the next one", () => {
+  const out = heldSamples([held(0, 100), held(10, 300)], []);
+  assert.deepEqual(out.map((s) => [s.t, s.tok]), [[0, 100], [10, 100], [10, 300]]);
+});
+
+test("a compaction drops the window at its own instant, to the size it measured", () => {
+  const out = heldSamples([held(0, 300_000, [0, 0, 200_000, 100_000]), held(100, 76_000)],
+    [{ t: 40, kind: "compact", postTok: 21_000 }]);
+  assert.deepEqual(out.map((s) => [s.t, s.tok]), [[0, 300_000], [40, 300_000], [40, 21_000], [100, 21_000], [100, 76_000]]);
+  assert.deepEqual(out[2].kinds.map(Math.round), [0, 0, 14_000, 7_000], "the split keeps its shares, and sums to the size");
+});
+
+test("a compaction with no measured size claims nothing: the fall waits for the next reading", () => {
+  const out = heldSamples([held(0, 300), held(100, 76)], [{ t: 40, kind: "compact" }, { t: 50, kind: "rebuild", postTok: 1 }]);
+  assert.deepEqual(out.map((s) => [s.t, s.tok]), [[0, 300], [100, 300], [100, 76]]);
+});
+
+test("the last reading stands while agents run past it, and only that far", () => {
+  assert.deepEqual(heldSamples([held(0, 100)], [], 50).map((s) => [s.t, s.tok]), [[0, 100], [50, 100]]);
+  assert.deepEqual(heldSamples([held(90, 100)], [], 50).map((s) => s.t), [90]);
+  assert.deepEqual(heldSamples([held(0, 100)], []).map((s) => s.t), [0]);
+  assert.deepEqual(heldSamples([], [], 50), []);
+  assert.equal(agentsEnd([{ endAt: 5 }, { endAt: 9 }]), 9);
+  assert.equal(agentsEnd([]), undefined);
 });

@@ -83,11 +83,11 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             (styles.css) and this line shares its row with the status chip. */}
         <span className="row-head">
         {/* Its number among this repo's OPEN sessions, from 0 (`sessionNumbersOf`). */}
-        {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${repoName}`}>{sessionNumbers.get(s.id)}</span>}
+        {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${m.shownOf(repoName)}`}>{sessionNumbers.get(s.id)}</span>}
         {sessionRowBranch(s) && <RowTitle>{sessionRowBranch(s)}</RowTitle>}
         {sessionName(s)
           ? <SessionName s={s} />
-          : !sessionRowBranch(s) && <RowTitle>{sessionRepoName(s)}</RowTitle>}
+          : !sessionRowBranch(s) && <RowTitle>{m.shownOf(sessionRepoName(s))}</RowTitle>}
         {/* One meta line, not one line per fact: as separate
             `flex-basis: 100%` spans "default" and "2d" ate two
             full rows of a phone screen each. And not a line of its

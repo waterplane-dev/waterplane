@@ -33,7 +33,7 @@
  * is `SessionTabsBar.tsx`.
  */
 import { useEffect, useRef, useState } from "react";
-import { glueCompanions, trimDefaultBranch } from "@waterplane/shared";
+import { glueCompanions, repoLabel, repoShown, trimDefaultBranch } from "@waterplane/shared";
 // Type-only, so `node --test` running straight over this file never has to load
 // a `.tsx`: what a tab's state IS belongs to `sessionFacts.tsx` and may not be
 // a second opinion held here.
@@ -339,7 +339,7 @@ export function cleanTabOrder(raw: unknown): TabOrder {
  * one word, or that names something else, is passed through whole rather than
  * cut at the first separator it happens to contain.
  */
-export function tabLabel(s: { tabTitle?: string; title: string }, repo: string): string {
+export function tabLabel(s: { tabTitle?: string; title: string }, repo: string, shown: string = repo): string {
   const derived = (s.tabTitle ?? "").trim();
   if (derived) return derived;
   // `myapp · main` is `myapp` before the prefix is looked for, or the strip spends
@@ -347,8 +347,21 @@ export function tabLabel(s: { tabTitle?: string; title: string }, repo: string):
   const title = trimDefaultBranch(s.title);
   const prefix = `${repo} · `;
   if (repo && title.startsWith(prefix) && title.length > prefix.length) return title.slice(prefix.length);
-  return title || repo || "session";
+  // The stored title leads with the FOLDER's name; a tab whose label IS the repo says the name it is
+  // shown as (`shown`, = `repo` when nobody gave one). The prefix test above stays on the folder name.
+  const label = title || repo || "session";
+  return label === repo ? shown : label;
 }
+
+/**
+ * The repo names a tab or its list row may print instead of the KEY (`SessionTab.repo`, the
+ * colour's input): the name a person gave a repo, else the key itself. A module value like
+ * `format.ts`'s `repoHue` — the strip is mounted beside `App` and cannot read its repos — set by
+ * the strip's one writer (`noteSessionTabs`, fed its repos by `useTabStripBridge`) just before it emits, so
+ * the render that the emit causes already reads it. Words only; nothing is looked up by a shown name.
+ */
+let shownRepos: ReadonlyMap<string, string> = new Map();
+export function shownRepo(key: string): string { return shownRepos.get(key) ?? key; }
 
 /**
  * The strip, left to right.
@@ -471,8 +484,8 @@ export function filterStrip(all: readonly StripTab[], query: string, statusWord:
   if (!words.length) return [...all];
   return all.filter((x) => {
     const hay = (x.kind === "file"
-      ? `${fileTabLabel(x.file.path)} ${x.file.repo} pinned file ${x.file.path}`
-      : `${x.tab.label} ${x.tab.repo} ${statusWord(x.tab.status)}`).toLowerCase();
+      ? `${fileTabLabel(x.file.path)} ${x.file.repo} ${shownRepo(x.file.repo)} pinned file ${x.file.path}`
+      : `${x.tab.label} ${x.tab.repo} ${shownRepo(x.tab.repo)} ${statusWord(x.tab.status)}`).toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }
@@ -655,8 +668,11 @@ function emit(): void {
  * the only place that needs to know a session went away — there is no second
  * listener watching the session list for removals.
  */
-export function noteSessionTabs(next: readonly SessionTab[], active: string | null): void {
-  tabs = [...next];
+export function noteSessionTabs(next: readonly SessionTab[], active: string | null, repos: readonly { repoName: string; where?: string; displayName?: string }[] = []): void {
+  // The names the strip may PRINT for each repo key, set before the emit below re-renders it. A tab whose
+  // label IS its repo (a primary on its default branch) says the shown name too; the key (`repo`) is untouched.
+  shownRepos = new Map(repos.map((r) => [repoLabel(r), repoShown(r)]));
+  tabs = next.map((t) => (t.label === t.repo && shownRepos.has(t.repo) ? { ...t, label: shownRepos.get(t.repo)! } : t));
   activeId = active;
   const ids = tabs.map((t) => t.id);
   const opens = readOwnOpens();

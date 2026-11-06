@@ -69,7 +69,7 @@ import { Sheet } from "./Sheet";
 import { Empty } from "./Empty";
 import { loadPresets, remedyFor, type Preset } from "./presets";
 import {
-  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb, patchFindings, patchIds, remedyPrompt, setupRows,
+  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb, offersAgent, patchFindings, patchIds, remedyPrompt, setupRows,
 } from "./setupRemedy";
 import { ConfirmButton } from "./Confirm";
 import { ContextLimitsEditor } from "./ContextLimits";
@@ -91,7 +91,7 @@ import { Hint } from "./kit/Hint";
 import { AlwaysOnRows, type SessionDoor } from "./AlwaysOnRows";
 import { AcceptControl, AcceptedSection, StaleMarksSection, DigestGroup, TriageControl } from "./ExposureAccept";
 import {
-  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, inExposureMainList,
+  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, exposureSource, inExposureMainList,
   clearTriageRequest, WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
   WATCH_RECHECK_LABEL, WATCH_RECHECK_RUNNING, WATCH_RECHECK_TITLE, watchRecheckFailed,
 } from "./exposureWords";
@@ -534,7 +534,7 @@ function SetupRegion({
     // with no host patch gets the prompt built from its own words.
     // A thing to CONSIDER keeps its remedy: it is a suggestion you
     // can take, it is only never counted.
-    const open = (isSetupFinding(c) || isSetupConsider(c)) && !c.fix;
+    const open = (isSetupFinding(c) || isSetupConsider(c)) && offersAgent(c);
     const rem = open && canAsk ? remedyFor(c.id, presets) : null;
     const ask = open && canAsk && repo
       ? rem
@@ -553,10 +553,12 @@ function SetupRegion({
     const twin = c.id === "context-weight"
       ? <WeightTwin claudeMd={claudeMdSeries} desc={descSeries} workingTree={c.alwaysOnChars ?? null} />
       : null;
-    // An exposure finding: the line it crossed and where it was read, then Accept….
+    // An exposure finding: the line it crossed, where it came from, then Accept….
+    const xpSource = c.exposure ? exposureSource(c.exposure) : null;
     const xp = c.exposure
       ? <>
           <div className="check-detail check-detail-quiet">{exposureMeta(c.exposure)}</div>
+          {xpSource && <div className="check-detail check-detail-quiet">{xpSource}</div>}
           <AcceptControl check={c} onAccept={onAccept} />
           <TriageControl check={c} onMark={onMark} />
         </>

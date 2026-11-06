@@ -69,9 +69,10 @@ The project has no known vulnerable dependencies; any advisory that cannot apply
 - asked: 2026-10-29
 - shipped: 62ceb852, f90544c3
 
-### R-security-015 · requested
+### R-security-015 · shipped
 The project has an OpenSSF best-practices entry that the maintainer creates and fills in, so the CII-Best-Practices check can pass.
 - asked: 2026-10-29
+- shipped: e6db687a, ca26b5fd
 
 ### R-security-016 · shipped
 Artifact listing never follows a symlink that escapes the repository, and every artifact walk applies the same containment rule.

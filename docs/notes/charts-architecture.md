@@ -73,3 +73,15 @@ over five prop combinations, byte-identical before and after.
 
 `tools/webshape.test.mjs` ratchets the three facades and lists every file in the four folders once
 with its own cap (none over 500). `tools/plotpins.test.mjs` is the golden above.
+
+## `cplotHold.ts`: why the big charts hold and step
+
+A conversation's window and its running total change only at a request, so a straight line between
+two readings draws a slide that never happened. Long gaps used to hide this behind an axis break.
+Agents' own times now keep those gaps on the axis, because the parent log is silent during a
+fan-out, and on 2026-11-04 a compaction at 14:07 read as two hours of the window draining from
+316k, with the next reading at 15:17. `heldSamples` holds each reading to the next one, drops at a
+compaction's own instant to its measured `postTok` (a compaction with no size waits for the next
+reading), and carries the last reading to the last agent write. The held points feed the paths
+only. The scrub, the legends and every total keep the real readings. The row sparks still join
+their readings straight.

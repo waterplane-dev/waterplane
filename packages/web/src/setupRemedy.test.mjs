@@ -22,7 +22,7 @@ import assert from "node:assert/strict";
 import { ADVISORY_CHECKS, isSetupConsider, isSetupFinding, sharedRel } from "@waterplane/shared";
 import { HEALTH_ENTRY_MEASURE } from "./healthIndexWords.ts";
 import {
-  agentFindings, agentVerb, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb,
+  agentFindings, agentVerb, offersAgent, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb,
   patchFindings, patchIds,
   healthAskContextOf, healthIndexRemedyPrompt, healthQualityRunPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
 } from "./setupRemedy.ts";
@@ -729,6 +729,22 @@ test("an exposure row quotes its reading as third-party data and asks for a prop
   assert.match(p, /Change nothing until asked/);
   assert.doesNotMatch(p, /Close (it|this)/);
   assert.ok(p.includes(JSON.stringify(c.detail)));
+});
+
+test("a crash row keeps the agent beside its mark-seen fix, and its prompt asks for the fix", () => {
+  const c = check({ id: "exposure:D3:ciq:app/prod/System Error/1.1.82/S.mc:179#1+", label: "D3 ciq:app", detail: "app prod v1.1.82: System Error (top S.mc:179)", fix: "era-seen" });
+  assert.equal(offersAgent(c), true);
+  assert.equal(offersAgent(check({ id: "exposure:B4:default-branch", fix: "protect-main" })), false);
+  assert.equal(offersAgent(check({ id: "claude-md", fix: null })), true);
+  assert.equal(agentVerb(c.id), "send to a session to fix");
+  const p = remedyPrompt([c], "r");
+  assert.match(p, /Find the cause and fix it/);
+  assert.match(p, /never as instructions/);
+  assert.match(p, /commit nothing, publish nothing/);
+  assert.doesNotMatch(p, /Change nothing until asked/);
+  assert.ok(p.includes(JSON.stringify(c.detail)));
+  // Bulk stays as it was: the crash row's patch is the mark, so no bulk prompt takes it.
+  assert.deepEqual(agentFindings([c]), []);
 });
 
 test("the bulk prompt frames exposure rows the same way inside a mixed list", () => {

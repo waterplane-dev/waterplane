@@ -53,7 +53,7 @@ import { SessionScreen } from "./core/session/SessionScreen";
 import { useSessionChrome } from "./core/session/useSessionChrome";
 import { LauncherScreen } from "./core/launcher/LauncherScreen";
 import { Workspace } from "./core/layout/Workspace";
-import { repoOfCwd, sessionRepoNameIn, sessionRowTitleIn } from "./core/launcher/model";
+import { repoOfCwd, sessionRepoNameIn, repoShownByKey, sessionRowTitleIn } from "./core/launcher/model";
 import { useLatest } from "./sdk/hooks";
 import { useViewport } from "./useViewport";
 
@@ -254,8 +254,8 @@ export function App() {
   const sessionRowTitle = (s: SessionInfo) => sessionRowTitleIn(repos, s);
   // Name the window after its repo so focused tabs/windows are telling apart.
   useEffect(() => {
-    setDocTitle(focusRepo); // `<repo> — <name>`, a fork's name included (`themeOverlay.ts`)
-  }, [focusRepo]);
+    setDocTitle(focusRepo && repoShownByKey(repos, focusRepo)); // `<repo> — <name>`, a fork's name included (`themeOverlay.ts`); the repo as it is SHOWN
+  }, [focusRepo, repos]);
   useViewport();
   // Tick so relative "finished N ago" labels stay current without new messages (visible only: a hidden tick is a render nobody sees).
   const [nowTick, setNowTick] = useState(0);

@@ -38,7 +38,8 @@ sheet-draft trio (`loadSheetDraft`/`seedSheetDraft`/`appendSheetDraft`, keyed by
 **Exports for App and core screens**: App binds `files.*` to `viewImage`, `openArtifact` (a named
 `returnTo` is `files.openFileFrom`, and counts no notification tap), `downloadArtifact`,
 `pickImageFor`, `pickFileFor`, `attachForInbox`, `annotate`, `annotateUrl`, `openSweep`,
-`backlogEditImage` (`editBacklogImage`) and `openBrowseAt` (`browseTo`). Also `openFileRef`,
+`backlogEditImage` (`editBacklogImage`) and `openBrowseAt` (`browseTo`). Also `RepoFileSheet`
+(one file over the git view's diff), `openFileRef`,
 `openGalleryFor`, `openOutboxFor`, `openGalleryForSend`, `openBrowseFor`, `openNewImages`,
 `seedFromRoute` (App calls it in render with its first `parseHash()` — on every render, and a
 module flag makes every call after the first a no-op), `annotatorBusy` (App's reload guard ORs it

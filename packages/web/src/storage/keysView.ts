@@ -71,6 +71,8 @@ export const LS_VIEW = {
   wideBesideW: lsKey("wideBesideW"), // the annotator column beside the session (`BesideGrip.tsx`), px; absent = half the room
   widePanelW: lsKey("widePanelW"), // the wide side panel (`.ws-panel`, `BesideGrip.tsx`), px; absent = CSS default
   sessChromeH: lsKey("sessChromeH"), // the session header + status line's dragged height cap (`chromeCap.ts`), px; absent = all of it
+  launcherChromeH: lsKey("launcherChromeH"), // the launcher's top bar + strips, dragged height cap (`LauncherChrome.tsx`), px; absent = all of it
+  agentListH: lsKey("agentListH"), // the reader's agent list, dragged height cap (`useDragCap.ts`), px; absent = all of it
   /** Drop the keyboard after a send · the hold card (`ShortcutCard.tsx`): "0" off, absent = on + toast unsaid. */
   closeKbOnSend: lsKey("closeKbOnSend"), shortcutCard: lsKey("shortcutCard"),
   busySend: lsKey("busySend"), // Send on a working session: "" ask, else the remembered "now"/"idle"

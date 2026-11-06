@@ -10,12 +10,9 @@ packages/host/test/claudeendpoint.test.mjs:23:88d662a4be  # anthropic-key fixtur
 packages/host/test/clihealth.test.mjs:93:fafbaed40c  # openai-key fixture
 packages/host/test/clihealth.test.mjs:97:2c4cd6cf37  # openai-key fixture
 scripts/e2e-demorecord.mjs:50:efb769abcb  # anthropic-key fixture
-tools/demo-scenario.test.mjs:47:2cc559d440  # anthropic-key fixture
 packages/host/test/origin.test.mjs:21:83c1f18aa9  # ts-net-name fixture
 packages/host/test/origin.test.mjs:27:929a3855a3  # ts-net-name fixture
 packages/host/test/origin.test.mjs:52:3ecc5a0bba  # ts-net-name fixture
-packages/host/test/pairing.test.mjs:228:c1c75715f5  # tailscale-ip fixture
-packages/host/test/pairing.test.mjs:285:01b1bd3082  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:23:d677af191b  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:32:caed6e5c4d  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:216:3008aa1723  # tailscale-ip fixture
@@ -34,13 +31,9 @@ packages/web/src/features/hostTools/logic.test.mjs:23:2939d41ce8  # ts-net-name 
 packages/web/src/features/hostTools/logic.test.mjs:24:b254f90962  # ts-net-name fixture
 packages/web/src/features/hosts/logic.test.mjs:51:ada2f16912  # ts-net-name fixture
 packages/web/src/features/hosts/logic.test.mjs:56:4a0406807a  # ts-net-name fixture
-packages/web/src/pairRedeem.test.mjs:45:63373f31d1  # ts-net-name fixture
-packages/web/src/pairRedeem.test.mjs:46:17912d0da0  # ts-net-name fixture
-packages/web/src/pairRedeem.test.mjs:51:389e5a6a22  # ts-net-name fixture
 scripts/e2e-agentintent.mjs:153:c1d20ebb83  # tailscale-ip fixture
 scripts/release/public-lib.test.mjs:90:9d58e0b970  # tailscale-ip fixture
 scripts/release/public-lib.test.mjs:93:d0ab2b6062  # ts-net-name fixture
-tools/demo-scenario.test.mjs:13:a737d35612  # tailscale-ip fixture
 - `docs/analysis/assess.md` (1): `docs/notes/host.md:4382`
 - `docs/analysis/backends-design.md` (5): `.claude/skills/host-core/SKILL.md:231`, `docs/notes/architecture.md:90`, `docs/notes/architecture.md:90`, `docs/notes/host.md:5039`, `docs/notes/host.md:5137`
 - `docs/analysis/demo-mode-plan.md` (1): `CLAUDE.md:38`
@@ -67,9 +60,7 @@ tools/demo-scenario.test.mjs:13:a737d35612  # tailscale-ip fixture
 - `docs/prompts` (2): `docs/prompts/prompt-log-raw.md`, `docs/prompts/prompt-log-summary.md`
 - `packages/extensions` (86)
 - `scripts` (1): `scripts/sync-gemini-key.sh`
-scripts/claude-stub-tui.mjs:593:f51ec33f39  # openai-key fixture
 scripts/e2e-clihealth.mjs:162:dc0a0b6b4b  # openai-key fixture
-packages/host/test/passive.test.mjs:62:5813271df0  # tailscale-ip fixture
 packages/host/test/pluginstreams.test.mjs:493:c362911efb  # tailscale-ip fixture
 packages/web/src/features/hosts/logic.test.mjs:89:0251066234  # ts-net-name fixture
 scripts/e2e-passive.mjs:116:239cdea170  # tailscale-ip fixture
@@ -77,24 +68,13 @@ scripts/release/public-lib.test.mjs:215:422e825151  # session-url fixture
 # The one real address allowed here, on purpose: owner decision 2026-10-17, the privacy pages
 # name the owner's personal email as the GDPR Art. 13 contact (a public issue is not a private
 # channel). Nowhere else; SECURITY.md stays address-free.
-site/game-privacy.html:43:2bf2ef5834  # personal-email, privacy contact (owner decision)
-site/privacy.html:115:2bf2ef5834  # personal-email, privacy contact (owner decision)
 tools/screenfixtures.test.mjs:234:8cd7a354b3  # anthropic-key: a made-up key the leak scan must catch
 # 0.1.5: made-up ts.net names and 100.64/100.80 test addresses (origin, net, passive, securityfixes, reach dashboard), and a session id in a requirement's source line
 docs/requirements/images.md:74:4edd0f63ff
-packages/host/src/origin.ts:247:586fd92a28
 packages/host/test/net.test.mjs:7:cb86471a1a
-packages/host/test/origin.test.mjs:144:6e626b1538
-packages/host/test/origin.test.mjs:145:7ae359aa9a
-packages/host/test/origin.test.mjs:148:434ab82865
-packages/host/test/origin.test.mjs:154:1c61bb6814
-packages/host/test/origin.test.mjs:155:bae543f995
-packages/host/test/origin.test.mjs:161:042a9016ee
-packages/host/test/passive.test.mjs:76:5813271df0
 packages/host/test/securityfixes.test.mjs:92:21a8975db4
 packages/host/test/securityfixes.test.mjs:93:21744bef01
 packages/host/test/securityfixes.test.mjs:96:e744027cd7
-tools/reachdashboard.test.mjs:15:a6d61ba3db
 docs/requirements/connection.md:131:e25b65e0a3
 docs/requirements/connection.md:132:c6c23715a0  # session-id: a requirement's source session, like :131
 docs/requirements/connection.md:133:42f99aab32  # session-id: a requirement's source session, like :131
@@ -102,4 +82,117 @@ scripts/claude-stub-tui.mjs:622:f51ec33f39
 packages/shared/test/redos.test.mjs:65:dac67073a9
 packages/shared/test/redos.test.mjs:66:9be5ca044b
 packages/shared/test/redos.test.mjs:68:a1eea231f0
-packages/extensions/vault/host/gcp.mts:23:ba54aa38f8  # generic-api-key: gcloud SDK public OAuth client "secret" (public by design)
+# Reviewed 2026-11-04 (0.1.18): made-up ts.net names and 100.64/10 addresses, none of them this tailnet; the update-signature vectors (public keys and signatures only); a fixed PAKE vector; the base64 of "not a key"; the known fake Anthropic key, moved a line; origin.ts's evil.ts.net comment, moved from 247.
+tools/demo-scenario.test.mjs:48:2cc559d440  # fixture
+packages/app/android/app/src/test/resources/update-signature-vector.json:3:73179fef25  # fixture
+packages/host/test/updatekey.test.mjs:113:c70147af69  # fixture
+packages/shared/test/fixtures/update-signature-vector.json:3:2b800aa24b  # fixture
+packages/shared/test/pake.test.mjs:63:3accd090d0  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:43:eb67b1163e  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:47:c1844156eb  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:54:27c6e59d4d  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:66:10f2a5eb1c  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:67:e7947c4d76  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:69:c6c2596765  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:77:10f2a5eb1c  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:78:e7947c4d76  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:79:016fc30a4a  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:80:32395adc33  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:87:2d3c89ab97  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:89:f08600aa66  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:123:06448746e6  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:124:f1ac05fd0b  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:125:fba05a5b27  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:133:f093f3211a  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:135:49b6befab5  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:139:ebe7192ad8  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:143:bb160a56d8  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:150:a9b7e983f5  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:151:23e1df4e22  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:153:caba48c4ec  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:169:429c27b8ee  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:170:45272a4975  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:175:ddb0521829  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:178:ef29883dfc  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:179:f6f29d27d4  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:180:d1b2a68ee9  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:186:06448746e6  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:187:bba8900724  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:189:7781d72caa  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:190:2f506f26cc  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:191:92c5eca4af  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:196:ba4ae16143  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:197:ebebe8550c  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:198:b6531b71f7  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:204:860e0de0d8  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:211:3a627a27dc  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:212:b8d4c4bdcb  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:213:5e432b47c6  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellLinkSetTest.java:220:d329bdc1a3  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:47:8c048cafb9  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:48:34806fbfe3  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:49:70492797c6  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:90:740aa288c4  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:91:a5b86589d4  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:130:6517b26eec  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:138:af9d9ccc9a  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:152:f97c4b9917  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:170:b0375754e5  # fixture
+packages/app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java:181:06195207d5  # fixture
+packages/host/src/origin.ts:250:586fd92a28  # fixture
+packages/host/test/origin.test.mjs:57:da85d6311f  # fixture
+packages/host/test/origin.test.mjs:76:042a9016ee  # fixture
+packages/host/test/origin.test.mjs:169:6e626b1538  # fixture
+packages/host/test/origin.test.mjs:170:7ae359aa9a  # fixture
+packages/host/test/origin.test.mjs:173:434ab82865  # fixture
+packages/host/test/origin.test.mjs:179:1c61bb6814  # fixture
+packages/host/test/origin.test.mjs:180:bae543f995  # fixture
+packages/host/test/origin.test.mjs:186:042a9016ee  # fixture
+packages/host/test/pairing.test.mjs:215:3e0dfcd34f  # fixture
+packages/host/test/pairing.test.mjs:229:c1c75715f5  # fixture
+packages/host/test/pairing.test.mjs:286:01b1bd3082  # fixture
+packages/host/test/pairpake.test.mjs:23:ab343fe329  # fixture
+packages/host/test/pairpake.test.mjs:556:557ee9b3f3  # fixture
+packages/host/test/pairpake.test.mjs:557:d4f74ce916  # fixture
+packages/host/test/pairpake.test.mjs:559:a5167674d8  # fixture
+packages/host/test/pairpake.test.mjs:559:3c79673d9d  # fixture
+packages/host/test/passive.test.mjs:78:5813271df0  # fixture
+packages/shared/test/hosturl.test.mjs:74:69c1f99ca3  # fixture
+packages/shared/test/hosturl.test.mjs:74:102bb0d7a1  # fixture
+packages/shared/test/hosturl.test.mjs:75:7ef2da2b05  # fixture
+packages/shared/test/hosturl.test.mjs:102:8d373f57ca  # fixture
+packages/shared/test/hosturl.test.mjs:109:2c9a155a14  # fixture
+packages/shared/test/hosturl.test.mjs:119:8ebfb7f6be  # fixture
+packages/shared/test/hosturl.test.mjs:134:1163c5f068  # fixture
+packages/shared/test/hosturl.test.mjs:141:7f7202898b  # fixture
+packages/web/src/hostUrl.test.mjs:95:3663c34703  # fixture
+packages/web/src/hostUrl.test.mjs:213:3ea9dc11e3  # fixture
+packages/web/src/hostUrl.test.mjs:218:1689d478b3  # fixture
+packages/web/src/hosts.test.mjs:539:577acbb32e  # fixture
+packages/web/src/lanRoute.test.mjs:288:05dd719edf  # fixture
+packages/web/src/lanRoute.test.mjs:326:03c84c188e  # fixture
+packages/web/src/nativeKeystore.test.mjs:74:6d5630d17e  # fixture
+packages/web/src/pairRedeem.test.mjs:46:63373f31d1  # fixture
+packages/web/src/pairRedeem.test.mjs:47:17912d0da0  # fixture
+packages/web/src/pairRedeem.test.mjs:52:389e5a6a22  # fixture
+packages/web/src/pairRedeem.test.mjs:225:bf28617b68  # fixture
+packages/web/src/pairRedeem.test.mjs:236:497c1b2d40  # fixture
+packages/web/src/pairRedeem.test.mjs:238:99f1f2fa8f  # fixture
+packages/web/src/pairRedeem.test.mjs:263:cd9e49a051  # fixture
+packages/web/src/pairRedeem.test.mjs:554:ba737649de  # fixture
+packages/web/src/shellLinkSet.test.mjs:9:ae1d16c5c9  # fixture
+packages/web/src/shellLinkSet.test.mjs:12:d9dbc5cc2d  # fixture
+packages/web/src/shellLinkSet.test.mjs:18:2372db9abb  # fixture
+packages/web/src/shellLinkSet.test.mjs:19:c986f0de57  # fixture
+packages/web/src/shellLinkSet.test.mjs:20:b3becbbcda  # fixture
+packages/web/src/shellLinkSet.test.mjs:21:d2eeff1b3a  # fixture
+packages/web/src/shellLinkSet.test.mjs:23:58e2f4a6ed  # fixture
+packages/web/src/shellLinkSet.test.mjs:40:ae1d16c5c9  # fixture
+packages/web/src/shellLinkSet.test.mjs:50:e648fa3720  # fixture
+packages/web/src/shellLinkSet.test.mjs:59:c7b042f653  # fixture
+packages/web/src/shellLinkSet.test.mjs:60:77d8885584  # fixture
+packages/web/src/shellLinkSet.test.mjs:75:ae1d16c5c9  # fixture
+packages/web/src/updateTrust.test.mjs:209:305c953a46  # fixture
+packages/web/src/updateTrust.test.mjs:210:f8990b593b  # fixture
+packages/web/src/updateTrust.test.mjs:270:ae4aa3284e  # fixture
+tools/demo-scenario.test.mjs:13:665f6bbd32  # fixture

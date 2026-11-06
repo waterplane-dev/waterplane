@@ -7,6 +7,7 @@
  * and the sheet are not features and may not import one.
  */
 import { createStore, useStore } from "./sdk";
+import { seriesRoute } from "./link/linkSeriesStore";
 
 /** How the active host is reached: its LAN address or the tailnet. `trouble`: a pinned desktop that
  *  cannot be reached, whose screens offer pairing by code beside the sentence. */
@@ -17,6 +18,7 @@ export const hostRoute = createStore<HostRouteView | null>(null);
 
 export function setHostRoute(r: HostRouteView | null): void {
   hostRoute.set(r);
+  seriesRoute(r?.route);
 }
 
 export function useHostRoute(): HostRouteView | null {

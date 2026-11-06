@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import {
   closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
   openCountByRepo, queuedChipCut, queuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
-  starredSpared, closeMarked, isCloseSpared, markedWords,
+  starredSpared, closeMarked, isCloseSpared, markedWords, sessionRepoShownIn, repoShownByKey,
 } from "./model.ts";
 
 const repoOf = (s) => s.cwd.split("/").pop();
@@ -237,4 +237,19 @@ test("the activity count: unsettled sends plus desktop rows that wait on a perso
   ];
   const keys = activityOpenKeys(outbox, intents, new Set(["queue:q4", "intent:d1"]));
   assert.deepEqual(keys, ["queue:q1", "queue:q2", "intent:g1", "intent:a1"]);
+});
+
+test("a shown name is words only: the group key, the colour key and the lookup stay on the folder name", () => {
+  const named = [repo("myapp", "/dev/myapp", { displayName: "waterplane" }), repo("ciqkit", "/dev/ciqkit")];
+  const s = ses("a", "/dev/myapp", 1);
+  assert.equal(sessionRepoNameIn(named, s), "myapp");
+  assert.equal(sessionRepoShownIn(named, s), "waterplane");
+  assert.equal(sessionRepoShownIn(named, ses("b", "/dev/ciqkit", 2)), "ciqkit");
+  assert.equal(sessionRepoShownIn(named, ses("c", "/x/elsewhere", 3)), "elsewhere");
+  assert.equal(repoShownByKey(named, "myapp"), "waterplane");
+  assert.equal(repoShownByKey(named, "nobody"), "nobody");
+  // A sheet head with no branch to say falls back to the repo AS SHOWN.
+  assert.equal(sessionRowTitleIn(named, s), "waterplane");
+  // The groups are still made by the folder name.
+  assert.deepEqual(repoGroupsOf([s], named, false, (x) => sessionRepoNameIn(named, x)).map((g) => g.repoName).sort(), ["ciqkit", "myapp"]);
 });

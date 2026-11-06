@@ -301,13 +301,17 @@
 .row-chip.warn:active { background: var(--warn-tint-hi); }
 /* The overflow line: full width under its row, so opening it never reflows the
    columns above it. */
-.row-more { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-8) var(--sp-14) var(--sp-10); background: var(--sub); border-top: 1px solid var(--line); }
+.row-more { flex: 0 0 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-8) var(--sp-14) var(--sp-10); background: var(--sub); border-top: 1px solid var(--line); }
 .more-act {
   display: inline-flex; align-items: center; gap: var(--sp-6);
   background: var(--panel); color: var(--fg); border: 1px solid var(--line);
   border-radius: var(--r-8); padding: var(--sp-6) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); cursor: pointer;
 }
 .more-act:active { background: var(--raise); }
+/* A menu entry that prints a name a person typed ("shown as <name>"): it never grows past the menu's
+   own width — the name takes the room that is left and ends in an ellipsis, like every other printer. */
+.more-act.names { max-width: 100%; min-width: 0; }
+.more-act.names > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The menu's own view selector (local/external): the entry for the view you are
    already in is marked, because a menu that switches between two things and
    looks identical either way cannot say which one is showing. */
@@ -545,6 +549,13 @@
 .dw-cap { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: 0 var(--sp-4) var(--sp-6); }
 .dw-lines { display: grid; grid-template-columns: auto max-content; }
 .dw-t { white-space: pre; padding: 0 var(--sp-4); }
+/* The caption takes `.viewer-doc-body`'s inset, so words and caption share one left edge. */
+.git-rendered { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--well); }
+.git-rendered .dw-cap { padding: var(--sp-10) var(--sp-14) 0; }
+/* Five chips on a Markdown diff: one row that scrolls, or `rendered` wraps alone onto a second. */
+.git-modes { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.git-modes::-webkit-scrollbar { display: none; }
+.git-modes .key { flex: 0 0 auto; }
 .ts-filter + .diff { margin-top: var(--sp-6); }
 
 /* The desktop-CLI update strip and the plain-HTTP warning (App.tsx's

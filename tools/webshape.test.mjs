@@ -647,6 +647,7 @@ const TV_SPLIT_FILES = {
   "transcript/TvBlocks.tsx": 100,
   "transcript/TvFindBar.tsx": 60,
   "transcript/TvOutline.tsx": 40,
+  "transcript/TvAgents.tsx": 60,
   "transcript/TvStrips.tsx": 100,
   "transcript/TvTail.tsx": 110,
   "transcript/TvTurn.tsx": 171,
@@ -843,6 +844,8 @@ const PULLLINK_SPLIT_FILES = {
   "link/linkMeters.ts": 175,
   "link/linkOps.ts": 85,
   "link/linkPulse.ts": 165,
+  "link/linkSeries.ts": 270, // the minute rows: binning, drops, route moves (pure)
+  "link/linkSeriesStore.ts": 110, // the same rows on disk
   "link/linkStalls.ts": 180, // the stall record: context, fetch/XHR register, the socket sender
   "link/linkStatus.ts": 80,
   "link/linkStore.ts": 120,
@@ -897,6 +900,7 @@ const CHART_SPLIT_FILES = {
   "contextPlot/cplotAgentTop.ts": 70,
   "contextPlot/cplotAgents.ts": 180,
   "contextPlot/cplotCompactSet.ts": 45,
+  "contextPlot/cplotHold.ts": 60,
   "contextPlot/cplotAxis.ts": 275,
   "contextPlot/cplotModels.ts": 130,
   "contextPlot/cplotPaths.ts": 195,
@@ -1013,7 +1017,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 110, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut
-  "webapi/webapiRepos.ts": 54, // +plainFolders/initPlainFolder, rescan names a folder with no git
+  "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
   "webapi/webapiStats.ts": 85,

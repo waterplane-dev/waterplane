@@ -70,7 +70,7 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
           ...(s.companionOf ? { companionOf: s.companionOf } : {}),
         };
       }),
-      activeId,
+      activeId, repos,
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`; re-run is driven by sessions, activeId, repos and backends
   }, [sessions, activeId, repos, backends]);

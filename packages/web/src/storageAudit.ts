@@ -142,6 +142,10 @@ const ROWS: readonly RowSpec[] = [
   },
   // ── the only copy on this phone ──────────────────────────────────────────
   {
+    id: "linkseries", store: "linkseries", label: "connection history", kind: "keep",
+    cost: "The connection charts start again from now. Nobody else has a copy of what they showed.",
+  },
+  {
     id: "screenlog", store: "screenlog", label: "terminal scrollback", kind: "keep",
     cost: "The lines that scrolled off the TUI are not on the wire — the desktop cannot send them again. Panning up stops working for these sessions.",
   },
@@ -278,6 +282,7 @@ export async function clearRow(row: StoreUse): Promise<{ ok: boolean; note?: str
     case "artifacttext": case "tree": case "ctxseries": case "tokenstats":
       return { ok: await forgetCacheStore(row.id) };
     case "pty": return { ok: await idbClear("pty") };
+    case "linkseries": return { ok: await idbClear("linkseries") };
     default: return { ok: false, note: "this screen does not know how to clear that." };
   }
 }

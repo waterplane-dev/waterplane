@@ -42,7 +42,7 @@ function installResourceMeter(): void {
         const kind = e.initiatorType;
         if (kind === "fetch" || kind === "xmlhttprequest" || kind === "beacon") continue;
         const n = e.transferSize || e.encodedBodySize || 0;
-        if (n > 0) noteTraffic("down", n);
+        if (n > 0) noteTraffic("down", n, "page");
       }
     });
     // `buffered` so the shell's own boot assets are in the total rather than
@@ -72,14 +72,14 @@ export function installLinkMeters(): void {
     const orig = globalThis.fetch.bind(globalThis);
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const up = bodyBytes(init?.body);
-      if (up != null) noteTraffic("up", up);
+      if (up != null) noteTraffic("up", up, "request");
       const res = await orig(input as RequestInfo, init);
       // `content-length` only. The alternative — wrapping the body stream to
       // count it as it is read — means rebuilding the Response, which loses
       // `url`/`redirected` for every caller in the app to buy a number for the
       // rare chunked reply. The host sets the header on every route it serves.
       const len = Number(res.headers.get("content-length"));
-      if (Number.isFinite(len) && len > 0) noteTraffic("down", len);
+      if (Number.isFinite(len) && len > 0) noteTraffic("down", len, "request");
       return res;
     }) as typeof fetch;
   } catch { /* exotic environment with a frozen global — no counting, nothing else changes */ }
@@ -93,22 +93,22 @@ export function installLinkMeters(): void {
       let sentSoFar = 0;
       try {
         this.upload?.addEventListener("progress", (e: ProgressEvent) => {
-          if (e.loaded > sentSoFar) { noteTraffic("up", e.loaded - sentSoFar); sentSoFar = e.loaded; }
+          if (e.loaded > sentSoFar) { noteTraffic("up", e.loaded - sentSoFar, "request"); sentSoFar = e.loaded; }
         });
       } catch { /* no upload object — fall through to the size below */ }
       let gotSoFar = 0;
       try {
         this.addEventListener("progress", (e: ProgressEvent) => {
-          if (e.loaded > gotSoFar) { noteTraffic("down", e.loaded - gotSoFar); gotSoFar = e.loaded; }
+          if (e.loaded > gotSoFar) { noteTraffic("down", e.loaded - gotSoFar, "request"); gotSoFar = e.loaded; }
         });
         this.addEventListener("loadend", () => {
           // A small JSON reply can finish without ever firing `progress`; take
           // the header then, and only for what the progress events missed.
           const len = Number(this.getResponseHeader?.("content-length"));
-          if (Number.isFinite(len) && len > gotSoFar) noteTraffic("down", len - gotSoFar);
+          if (Number.isFinite(len) && len > gotSoFar) noteTraffic("down", len - gotSoFar, "request");
           if (sentSoFar === 0) {
             const n = bodyBytes(body as unknown);
-            if (n != null) noteTraffic("up", n);
+            if (n != null) noteTraffic("up", n, "request");
           }
         });
       } catch { /* best effort */ }

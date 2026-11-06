@@ -39,7 +39,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [metrics](metrics.md) | 10 | 38 | 0 |
 | [models](models.md) | 5 | 11 | 0 |
 | [monitoring](monitoring.md) | 1 | 5 | 0 |
-| [navigation](navigation.md) | 1 | 18 | 0 |
+| [navigation](navigation.md) | 2 | 18 | 0 |
 | [notifications](notifications.md) | 1 | 21 | 0 |
 | [offline](offline.md) | 4 | 6 | 0 |
 | [onboarding](onboarding.md) | 4 | 23 | 0 |

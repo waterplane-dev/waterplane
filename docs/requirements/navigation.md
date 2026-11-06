@@ -90,3 +90,7 @@ Screens can tell a real close apart from being covered by another screen, so onL
 - asked: 2026-10-30
 - shipped: c3d30037
 
+
+### R-navigation-020 · requested
+A repo can be shown under a name a person gives it (the product is waterplane, the folder keeps an older name), set from that repo's own "⋯" menu, kept on the desktop so every device agrees, and absent meaning the folder name. The name changes only what is SHOWN: tabs and the tab list, launcher groups and rows, "Start …", repo pickers, sheet headings, search results, notifications and the window title. Every id, path, API parameter, vault repo entry, stored key, repo colour and group/fold key stays on the folder name, and a search finds the repo by either name. Nothing sets it by itself: a desktop starts with no names, and setting `usmc` to `waterplane` is one person's tap on "shown as…".
+- asked: 2026-11-04

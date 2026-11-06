@@ -34,7 +34,7 @@ function wire(msg: ClientMessage): string {
   // an age on the phone's own clock, so the stamp must not include time spent
   // waiting in `this.queue` for a socket to open.
   const s = encode(withSentAt(msg, Date.now()));
-  noteTraffic("up", s.length);
+  noteTraffic("up", s.length, "socket");
   return s;
 }
 
@@ -482,8 +482,8 @@ export class HostConnection {
       // counted by its bytes, header included — video is most of what a live
       // desktop moves, and a ↓ meter that skipped it would be the one lie here.
       const binary = typeof ev.data !== "string";
-      if (!binary) noteTraffic("down", ev.data.length);
-      else noteTraffic("down", binaryBytes(ev.data));
+      if (!binary) noteTraffic("down", ev.data.length, "socket");
+      else noteTraffic("down", binaryBytes(ev.data), "socket");
       // Same event, the other reading: an inbound frame is the newest proof the
       // desktop is there, which is what "last connected" means (`netsync.ts`).
       // An open `readyState` is not — it survives a tunnel that has already died.

@@ -1,10 +1,10 @@
 /** What the Task tool's subagents spent: agentUsage and its roster, cumulative and live folds. Moved from ctxlog.ts. */
-import { readdirSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRun, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
 import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOf, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
-import { readMeta } from "../agents.js";
+import { agentLogId, agentLogs, readMeta } from "../agents.js";
 import { SEEN_CAP, SKILL_BODY, readRange, pushSkill, skillLoadOf } from "./ctxcursor.js";
 import { usageRecordOf } from "./usagerecord.js";
 
@@ -39,6 +39,9 @@ import { usageRecordOf } from "./usagerecord.js";
  * only be assigned where both halves are in hand, which is `withAgentRuns`, and
  * until then the id travels whole.
  */
+/** A launch description is one line; a longer one is not a row label. */
+const AGENT_WHAT_MAX = 80;
+
 export interface AgentRunRaw extends Omit<AgentRun, "model"> {
   modelId?: string;
 }
@@ -287,13 +290,12 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
     : { dir, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
   let names: string[];
   try {
-    names = readdirSync(dir);
+    names = agentLogs(dir);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { dir, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
     return null;
   }
   for (const name of names) {
-    if (!name.startsWith("agent-") || !name.endsWith(".jsonl")) continue;
     const path = join(dir, name);
     let st;
     try { st = statSync(path); } catch { continue; }
@@ -325,12 +327,15 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
     // and stays IN the total. It was real spend; it is not a dated event, and
     // the chart it would join has a time axis. Absent beats placed wrongly.
     if (!f.firstAt) continue;
-    const id = name.slice("agent-".length, -".jsonl".length);
-    const type = readMeta(join(dir, `${name.slice(0, -".jsonl".length)}.meta.json`)).agentType;
+    const id = agentLogId(name);
+    const meta = readMeta(join(dir, `${name.slice(0, -".jsonl".length)}.meta.json`));
+    const type = meta.agentType;
+    const what = meta.description?.trim().slice(0, AGENT_WHAT_MAX);
     runs.push({
       id, at: f.firstAt, endAt: f.lastAt || f.firstAt, tok: f.tok,
       ...(f.model ? { modelId: f.model } : {}),
       ...(type ? { type } : {}),
+      ...(what ? { what } : {}),
       // Absent, never 0: an agent on a model with no published rate has an
       // unknown cost, and a bar labelled $0 claims it was free.
       ...(f.cost.total > 0 ? { costUsd: f.cost.total } : {}),
@@ -432,7 +437,7 @@ export function liveAgentOf(use: AgentUsage, now: number): { tok: number; at: nu
   if (!best) return null;
   const base = best.name.slice(0, -".jsonl".length);
   const type = readMeta(join(use.dir, `${base}.meta.json`)).agentType;
-  return { tok: best.tok, at: best.at, id: base.slice("agent-".length), ...(type ? { type } : {}) };
+  return { tok: best.tok, at: best.at, id: agentLogId(best.name), ...(type ? { type } : {}) };
 }
 
 /**

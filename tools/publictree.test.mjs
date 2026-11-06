@@ -152,3 +152,20 @@ test("the comment stripper keeps strings and blanks comments", () => {
   assert.match(s, /`x\/\*y\*\/`/);
   assert.equal(s.split("\n").length, 3, "line structure is kept");
 });
+
+test("downscoping stays private whether or not the vault is flipped, and no file the flip would publish names it", () => {
+  // The flip is one deleted line (`!packages/extensions/vault/**`). Simulate it: with that line gone, the carve-outs after it must still hold,
+  // and what the flip DOES publish must not reach for the carved-out folders (they are loaded by folder, glob and file name, never by name).
+  const flipped = parseAllowlist(ALLOW.split("\n").filter((l) => l.trim() !== "!packages/extensions/vault/**").join("\n"));
+  const vault = tracked.filter((p) => p.startsWith("packages/extensions/vault/"));
+  const carved = vault.filter((p) => /(^|\/)downscope(\.|\/)|downscope[^/]*$/.test(p) && !p.endsWith(".md"));
+  if (!carved.length) return; // a public copy has none of it
+  assert.deepEqual(carved.filter((p) => classify(p, flipped).included), [], "a flip must not publish downscoping");
+  assert.ok(!classify("packages/extensions/vault/docs/DOWNSCOPE-PLAN.md", flipped).included, "its plan stays private too (the *-PLAN.md line)");
+  const named = [];
+  for (const p of vault) {
+    if (!SRC.test(p) || !classify(p, flipped).included) continue;
+    if (/downscope/i.test(stripComments(readFileSync(join(ROOT, p), "utf8")))) named.push(p);
+  }
+  assert.deepEqual(named, [], "a vault file the flip would publish names downscoping in code");
+});

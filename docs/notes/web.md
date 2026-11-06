@@ -9428,3 +9428,28 @@ The owner, who wrote every piece of it, could not tell from the Apps screen whet
 So the screen is one card per app, in three steps a person asks in order: does the desktop **build** it, does it **download** to this phone by itself, does it **install** by itself. `appSteps.ts` words `appReady.ts`'s checklist as those steps, the headline and the one fix for the first step that stops; the card puts that fix on a button — including turning the repo's download rule on in place, which used to need Downloads › rules. The switch is one button with one name (*install by itself*), and turning it on also turns the repo's downloads on when they are known off: two settings that only ever make sense together, set by one tap that says both. The rule write merges onto the rule the phone READ (`pull.get`) and refuses to write defaults over an unread one — its patterns are typed words.
 
 Removed: the *setup* tab (it IS the card now), the *ready* tab (a filter chip, *waiting to install · N*, whose number and rows are one `appsCut`), the fold-away list of quiet-install rules (each card states the ones that apply to it), and the row tap that flipped the switch without saying so. The install log is the *history* tab, moved whole into `AppsHistory.tsx`. The native-shell reads (`installStatus`, `installSources`) moved into `useInstallCaps.ts`: they ask the phone, not the host, and the hand-rolled-read ratchet (`webshape.test.mjs`) counts files that call the host.
+
+## A repo shown under another name — `RepoShownAs.tsx`, `reponames.ts` (2026-11-04)
+
+The product is called waterplane and its folder kept an older name, so the phone — tabs, launcher, *Start …* — said the old name everywhere. Moving the folder is the riskier fix (discovery would list both, every stored path and vault entry names it), so a repo gets a **display name** instead: `RepoTarget.displayName`, absent = the folder's.
+
+**Where it is set.** In that repo's own "⋯" menu, *shown as…* (`core/launcher/RepoShownAs.tsx`) — per repo, so not in Settings. The field starts as the stored name (never seeded), only *save* writes (`PUT /api/repodisplayname`), a refused name (too long, a line break) is said in words and the typed words stay, and words typed but not saved are kept per repo for the life of the page (`DRAFTS`: a closed menu must not delete the last copy). *use "<folder>"* puts the folder name back. The write is the clone's PRIMARY checkout only; every worktree of the clone carries the same name, set in `repos.ts`' scan from `host/reponames.ts` (`<state dir>/repo-names.json`, keyed by realpath).
+
+**What it changes — words only.** `repoLabel` (folder name, `· where` for a twin) stays the KEY: launcher groups, folds, focus, filters, `?repo=`, the repo colour (a hash of the folder name) and the tab's `repo` all still read it. `repoShown` / `withShownName` / `m.shownOf` / `sessionTabs.shownRepo` are the only wordings to print. A stored session title leads with the folder name (`usmc · main`) and is never rewritten: it is reworded when DRAWN (`shownTitleOf`, `shownTitleIn`) — the session header, the tab whose label is the repo, the Start sheet — and when a push is SENT (`shownTitleForCwd`, off the last scan). `createOp`'s title stays the folder's.
+
+**Search finds either name**: the launcher's quick filter and `askRepoRows` match the folder name and the display name (`repoNameMatches`).
+
+**Not done by anything but a tap.** No migration, no default and no "looks like the product's name" guess writes a name; a new desktop has none. Passive tokens are refused the route by default (`passive.ts`). Stats screens that label by the ledger's own repo label (token stats) still say the folder name: their label is the ledger's key.
+
+## The strip's readings over time — `linkSeries.ts`, `linkSeriesStore.ts`, `NetHealthCharts.tsx` (2026-11-06)
+
+The owner's rule: everything the connection strip shows small has meaningfully more behind its tap.
+The link store could not serve that, because it keeps 90 pings and running totals, so "when, how long,
+on what" had no data. `linkSeriesStore.ts` keeps one row a minute in IDB `linkseries` for 30 days;
+IndexedDB because localStorage is shared with the send outbox. It has no timer: a row rolls when
+something is noted and is written when the minute turns or the page goes out of sight. A minute with
+no row is NOT MEASURED, a phone in a pocket, drawn as its own mark and never as zero or offline.
+Drops are runs of adjacent minutes holding a no-socket probe, so one is never stretched across a
+pocket. Bytes carry their source (`noteTraffic`'s third argument) because a total without a split
+cannot answer "on what". The sheet's landing is taken twice: the charts arrive after the first scroll
+and push the target down.

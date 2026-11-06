@@ -37,7 +37,7 @@ hook down reorders effects. The model `m` is `{...props, ...liveReading, ...stat
 | `transcript/tvLive.ts` | `liveReading`: dead > blocked > waiting > working > agents > shells > idle |
 | `transcript/useTranscriptView.ts` | the one hook |
 | `transcript/tvParts.tsx` | `Collapse`, `ToolRow` (one tool call, lite or full) |
-| `transcript/TvFindBar.tsx` `TvStrips.tsx` `TvOutline.tsx` | find/unread bar; live strip, agent rows, cached notice; outline |
+| `transcript/TvFindBar.tsx` `TvStrips.tsx` `TvAgents.tsx` `TvOutline.tsx` | find/unread bar; live strip, cached notice; agent rows and their grip; outline |
 | `transcript/TvTurn.tsx` `TvBlocks.tsx` | one turn (head, prompt, notes, foot); its blocks and folded tool runs |
 | `transcript/TvTail.tsx` | the open question card, the in-flight card |
 

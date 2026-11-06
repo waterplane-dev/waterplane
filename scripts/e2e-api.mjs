@@ -46,6 +46,28 @@ bootWait(PORT, 900, async () => {
     repos = (await j("/api/repos")).targets;
     check(repos.length === 2, "worktree shows as second target");
 
+    // The name a repo is SHOWN under (`reponames.ts`): a label on the clone's primary checkout, carried
+    // by every worktree of it, moving no id, path or folder name — and not seeded by anything.
+    check(repos.every((t) => t.displayName === undefined), "no display name until a person sets one");
+    const putName = (rid, name, headers = {}) => fetch(`${base}/api/repodisplayname`, { method: "PUT", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ id: rid, name }) });
+    const wtId = repos.find((t) => !t.isPrimary).id;
+    const refusedWt = await putName(wtId, "elsewhere");
+    check(refusedWt.status === 400 && /main checkout/.test((await refusedWt.json()).error), "a worktree cannot carry the name — the repo does");
+    const refusedLong = await putName(id, "x".repeat(41));
+    check(refusedLong.status === 400 && /at most 40/.test((await refusedLong.json()).error), "a too-long name is refused in words");
+    check((await putName("nope", "x")).status === 404, "an unknown repo is a 404");
+    const crossOrigin = await putName(id, "evil", { origin: "https://evil.example" });
+    check(crossOrigin.status === 403, `a cross-origin page cannot set it (got ${crossOrigin.status})`);
+    const nameRes = await (await putName(id, "  Demo App  ")).json();
+    check(nameRes.ok === true && nameRes.name === "Demo App", "the primary takes a trimmed name");
+    repos = (await j("/api/repos")).targets;
+    check(repos.length === 2 && repos.every((t) => t.displayName === "Demo App" && t.repoName === "demo"), "every worktree of the clone shows it; repoName stays the folder's");
+    check(repos.find((t) => t.isPrimary).id === id, "the repo id did not move");
+    const cleared = await (await putName(id, "")).json();
+    check(cleared.ok === true && cleared.name === null, "an empty name puts the folder name back");
+    repos = (await j("/api/repos")).targets;
+    check(repos.every((t) => t.displayName === undefined), "cleared: no display name on any target");
+
     // upload to inbox (raw + X-File-Name)
     const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"); // tiny png header-ish
     const up = await fetch(`${base}/api/repos/${id}/inbox`, { method: "POST", headers: { "x-file-name": "shot.png", "content-type": "image/png" }, body: png }).then((r) => r.json());

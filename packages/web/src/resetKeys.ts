@@ -4,7 +4,7 @@
  * which still owns every key they name.
  */
 import { HOST_PARK_PREFIX, LEGACY_STORAGE_PREFIXES } from "@waterplane/shared";
-import { LS } from "./storage.ts";
+import { EXT_DEVICE_PREFIX, LS } from "./storage.ts";
 
 /**
  * What "reset UI settings to default" forgets: how THIS phone draws the app —
@@ -65,6 +65,10 @@ export const RESET_KEEP_PREFIXES: readonly string[] = [
   // The app lock. A crash screen can sit in front of the lock card, and a reset that dropped these
   // would be a way to switch the lock off with nobody at the sensor.
   LS.appLock, LS.appLockBlob,
+  // An extension's device corner (`extDeviceStorage`): the vault's aad floor lives here, the phone's memory that a vault.json from
+  // before the last complete sweep must be refused. A reset that dropped it would let a same-user agent's older copy be accepted again
+  // with nobody told — the same shape as the lock above.
+  EXT_DEVICE_PREFIX,
   // Everything under an OLDER brand's prefix, and the marks that say it was
   // copied. Until the copy has run, a legacy key is the only copy of a draft;
   // after it, dropping the mark would run the copy again and bring back a

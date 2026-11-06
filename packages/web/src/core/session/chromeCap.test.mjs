@@ -23,3 +23,9 @@ test("chromeCapOf: junk reads as no cap", () => {
   assert.equal(chromeCapOf("120"), 120);
   assert.equal(chromeCapOf("0"), 0);
 });
+
+test("chromeCapAfter: a floor is the least it shrinks to, and a frame no taller than the floor has no cap", () => {
+  assert.equal(chromeCapAfter(150, -500, 200, 60), 60);
+  assert.equal(chromeCapAfter(150, -20, 200, 60), 130);
+  assert.equal(chromeCapAfter(60, -20, 60, 60), null);
+});

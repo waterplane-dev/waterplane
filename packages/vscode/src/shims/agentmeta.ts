@@ -2,14 +2,16 @@
  * `agents.ts`'s `readMeta`, as the extension bundles it.
  *
  * `ctxlog/ctxagents.ts` (bundled verbatim: the subagents' spend, roster and running total) imports
- * exactly one thing from `../agents.js` — `readMeta`, for an agent's label. The real module also
- * imports `./proc.js` → `node:child_process`, and an extension that says "nothing spawned" must not
- * ship a process launcher it never uses. `esbuild.mjs` redirects that one import here.
+ * `readMeta` from `../agents.js` for an agent's label, and the log listing, which is the host's own
+ * `agentlogs.ts` re-exported below. The real module also imports `./proc.js` → `node:child_process`, and an extension that says "nothing spawned" must not
+ * ship a process launcher it never uses. `esbuild.mjs` redirects that import here.
  *
  * Same contract as the host's: an unreadable, oversized or malformed meta file is `{}` — a lost
  * label, never a lost agent. Cached on size + mtime because it is asked once per agent per poll.
  */
 import { readFileSync, statSync } from "node:fs";
+
+export { agentLogId, agentLogs } from "../../../host/src/agentlogs.js";
 
 export interface MetaFile { agentType?: string; description?: string; model?: string }
 

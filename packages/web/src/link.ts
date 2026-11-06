@@ -59,8 +59,9 @@ export { PULSE_CAP, pulseEnabled, setPulseEnabled, startLinkProbes, summarize } 
 export type { PulseSource, PulseSummary } from "./link/linkPulse";
 export { linkOnline, linkStatus, noteLinkStatus } from "./link/linkStatus";
 export { linkSnapshot, subscribeLink, useLink } from "./link/linkStore";
-export { lastSyncEver, noteHostSeen, noteSynced, syncSnapshot, whenText } from "./link/linkSync";
+export { lastSyncEver, noteHostSeen, noteSynced, syncParts, syncSnapshot, whenText } from "./link/linkSync";
 export { fmtRate, fmtTotal, noteTraffic, trafficSnapshot } from "./link/linkTraffic";
+export { flushLinkSeries, readLinkSeries } from "./link/linkSeriesStore";
 export type { TrafficDir } from "./link/linkTraffic";
 export type { LinkLog, LinkPulse, LinkSnapshot, LinkStatus, LinkSync, LinkTraffic, NetOp, PulseSample, SyncPart } from "./link/linkTypes";
 export { fmtMs, fmtSince, linkVerdict } from "./link/linkVerdict";

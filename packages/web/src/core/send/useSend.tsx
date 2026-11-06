@@ -23,7 +23,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   budgetReasonText, describeRule, ruleRecurs, scheduleActionText, typedName, DEFAULT_GRACE_MIN, DRAFT_KEPT_TOAST, DRAFT_REFUSED_TOAST,
-  repoBranchLabel, repoLabel,
+  repoBranchLabel, repoShown,
 } from "@waterplane/shared";
 import type {
   ClientMessage, Intent, IntentDraft, IntentPatch, IntentTarget, LaunchOpts, RepoTarget, ScheduleEntry, SessionBudget, SessionInfo, UsageInfo,
@@ -155,7 +155,7 @@ export function useSend(deps: SendDeps) {
     const repoNames = [...new Set(ids.flatMap((id) => {
       const cwd = intents.find((x) => x.id === id)?.cwd;
       const repo = cwd ? repoForCwd(cwd) : null;
-      const name = repo ? repoLabel(repo) : cwd ? baseName(cwd) : "";
+      const name = repo ? repoShown(repo) : cwd ? baseName(cwd) : "";
       return name ? [name] : [];
     }))];
     // The *held until* clause only when the budget holds one of THESE rows — a
@@ -489,7 +489,7 @@ export function useSend(deps: SendDeps) {
        */
       const timed = i.target.kind === "repo" && !ruleRecurs(i.when.rule);
       const at = repoForCwd(i.target.kind === "repo" ? i.target.cwd : "");
-      const where = timed ? ` in ${at ? repoLabel(at) : "that repo"}` : "";
+      const where = timed ? ` in ${at ? repoShown(at) : "that repo"}` : "";
       // A timed one-off is a backlog row under the entry's own id: once the list
       // holds it, the slot check may ask about the rows it runs beside.
       if (timed && i.target.kind === "repo") expectSlotAsk(entry.id, i.target.cwd);

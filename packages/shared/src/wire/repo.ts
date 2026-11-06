@@ -166,6 +166,11 @@ export interface RepoTarget {
    *  `repoLabel`, never print `repoName` alone where a person picks a repo.
    *  ABSENT = no twin (or an older host). */
   where?: string;
+  /** The name a person gave this repo to be SHOWN instead of its folder's (`repoShown`).
+   *  Host-stored per clone, so every device agrees; the same on every worktree of the clone.
+   *  Display only: ids, paths, group keys and colours stay on `repoName`. ABSENT = show the
+   *  folder name (nobody set one, or an older host). */
+  displayName?: string;
   /** Outbox artifacts dropped since this repo's outbox was last opened — the
    *  "something to look at" badge. The inbox is deliberately NOT counted: it
    *  holds what the phone itself uploaded. */

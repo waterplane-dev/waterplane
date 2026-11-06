@@ -189,7 +189,7 @@ npm run build
 npm start</code></pre>
 <p><code>npm run doctor</code> (or <code>waterplane doctor</code>) is the first thing to re-run when something misbehaves: it names what is wrong and what to type. The host lists the git repos under <code>~/dev</code> (or <code>WATERPLANE_ROOT</code>; the doctor says which folder) and prints its address. Plain <code>http://100.x.y.z:8770</code> works for a first look; for install, push and clipboard on the phone, enable HTTPS + MagicDNS in the tailnet admin console once, then open <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code>:</p>
 <pre><code>tailscale serve --bg --https=443 http://127.0.0.1:8770</code></pre>
-<p>Or use the Android app, which needs no HTTPS: the APK is on the <a href="https://github.com/waterplane-dev/waterplane/releases/latest">latest release</a>.</p>
+<p>Or use the Android app, which needs no HTTPS: get it on <a href="https://play.google.com/store/apps/details?id=dev.waterplane.app">Google Play</a>, or download the APK from the <a href="https://github.com/waterplane-dev/waterplane/releases/latest">latest release</a>.</p>
 <p>Windows, Docker, agent install, notifications, a second phone or desktop, the background service, updating and every environment variable: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md">docs/install.md</a>.</p>
   </div>
   <figure class="phone"><img src="assets/setup.gif" width="540" height="1280" loading="lazy" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></figure>

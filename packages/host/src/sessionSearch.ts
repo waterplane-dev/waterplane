@@ -15,6 +15,7 @@
  * for "prompts". That part needs the sessions.
  */
 import { basename } from "node:path";
+import { shownTitleForCwd } from "./reponames.js";
 import type { HistoryEntry, SessionSearchMatch, SessionSearchResult } from "@waterplane/shared";
 
 /** Context lines each side of a hit, so a match reads in place. */
@@ -108,6 +109,7 @@ export function searchResult(
   if (total <= 0) return null;
   return {
     id: t.id, title: t.title, cwd: t.cwd,
-    repoLabel: basename(t.cwd), running: t.running, matches, total,
+    // `repoLabel` is the repo as it is SHOWN (`reponames.ts`), words only.
+    repoLabel: shownTitleForCwd(t.cwd, basename(t.cwd)), running: t.running, matches, total,
   };
 }

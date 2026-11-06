@@ -9,7 +9,7 @@
  */
 import { useMemo, useSyncExternalStore } from "react";
 import type { BacklogItem } from "@waterplane/shared";
-import { itemHeadline, repoBranchLabel, sessionPickLabel } from "@waterplane/shared";
+import { itemHeadline, repoBranchLabel, sessionPickLabel, withShownName } from "@waterplane/shared";
 import {
   assessableInCut, backlogCounts, clockGroups, focusRunWords, hasBacklogFilter, hiddenByArchive, matchesBacklogFilter,
   nameableInCut, realLabel, retimeEligible, clockPicks, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
@@ -150,7 +150,7 @@ export function useBacklogCuts(
   // Distinct repoDirs across items, labeled via matching RepoTarget when available.
   const repoLabel = (dir: string) => {
     const r = p.repos.find((r) => r.worktreePath === dir);
-    return r ? repoBranchLabel(r) : dir.split(/[/\\]/).filter(Boolean).pop() || dir;
+    return r ? repoBranchLabel(withShownName(r)) : dir.split(/[/\\]/).filter(Boolean).pop() || dir;
   };
   // Scope to the selected repo only — there is no combined "all repos" view.
   //

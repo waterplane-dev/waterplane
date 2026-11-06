@@ -14,12 +14,12 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFixture } from "./fixtures/tokenscan.mjs";
 import { TokenStatsStore } from "../dist/tokenstats.js";
-import { summarizeLog } from "../dist/tokenscan.js";
+import { summarizeLog, walkLogs } from "../dist/tokenscan.js";
 
 process.env.TZ = "UTC";
 const expected = JSON.parse(readFileSync(new URL("./fixtures/tokenscan.expected.json", import.meta.url), "utf8"));
@@ -168,4 +168,12 @@ test("an assistant line with a missing or unparseable timestamp lands under the 
   const files = { "-r": { conv: s } };
   assert.equal(undatedRecords(files), 2);
   assert.equal(undatedRecords(files, mtime + 1), 0, "a span opened after the log was written misses none");
+});
+
+test("the walk reaches a dynamic workflow's agents, the deepest logs the CLI writes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-tokenscan-walk-"));
+  const deep = join(dir, "conv", "subagents", "workflows", "wf_1");
+  mkdirSync(deep, { recursive: true });
+  writeFileSync(join(deep, "agent-a.jsonl"), "{}\n");
+  assert.deepEqual(await walkLogs(dir), ["conv/subagents/workflows/wf_1/agent-a.jsonl"]);
 });

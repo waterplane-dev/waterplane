@@ -9,6 +9,7 @@ import { ann, browseAim, collage, swipe, sweepFor } from "./store";
 import { bootImages, inActiveRepo, openBrowseAt, onSessionImages, openBrowseHere, openGalleryHere, pickFileFor, pickImageFor } from "./actions";
 import { CombineSheet, MarkUpSheet, ViewerSheet } from "./ImageSheets";
 import { FileTreeSheet, GallerySheet, SweepEntrySheet } from "./GalleryEntry";
+export { RepoFileSheet } from "./GalleryEntry";
 import { InboxToolbarItem } from "./NewImages";
 import { TAB_FILE_EVENT, type FileTab } from "../../sessionTabs";
 

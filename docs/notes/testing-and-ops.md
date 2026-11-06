@@ -1004,6 +1004,19 @@ and `styledump.mjs --diff <before> <after>` names each element and property that
 mean the cascade resolved the same on those screens; states nobody puts the page in (`:active`, `:hover`)
 and other pseudo-elements stay the reader's to reason about.
 
+## Screen review is an agent because a script cannot judge fit
+
+Recurring work here is scripted when it is deterministic, so custom agents stayed out until something
+needed judgment. Whether a new screen fits its neighbours does: the rules exist (`ux`, the kit, the
+slop list), and new screens still came out slightly off, because the session that built one is too close
+to it. `.claude/agents/screen-review.md` is a fresh Sonnet reader that renders the screen beside a
+neighbour and reports. A builder agent was rejected: same skills and model, so the same misses, and it
+would lose the conversation that says what the screen is for.
+
+Back is the opposite case. It is deterministic, so it is a journey, not an agent:
+`scripts/ui/journey-back-lands.mjs` taps each door and takes Back by the arrow and by `history.back()`.
+Two injected bugs, one per way of going back, were each caught when it was added (2026-11-04).
+
 ## The demo terminal is drawn like the real CLI
 
 The docs gifs film the in-app demo, whose "PTY" is a string the fake host writes. Scenarios used to

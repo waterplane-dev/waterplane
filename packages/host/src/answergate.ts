@@ -36,6 +36,7 @@ import type { DecisionLogEntry, DetectedPrompt } from "@waterplane/shared";
 import { questionWindow } from "./question.js";
 import { askRuleHit, askRulesForCwd } from "./askrules.js";
 import { recordSent } from "./sentlog.js";
+import { shownTitleForCwd } from "./reponames.js";
 import type { Notify } from "./notifytypes.js";
 
 /** Squash to a whitespace-free, lowercase view — the TUI renders without spaces. */
@@ -152,7 +153,7 @@ export async function gateAnswer(
     ...(failed ? { error: failed } : {}),
   });
   if (!ok) return { ok: false, reason: failed ?? "the answer could not be typed" };
-  deps.notify("autofire", { title: `Answered by ${plugin.name} · ${s.title}`, body: `Chose ${choice}. ${label}${why ? ` — ${why}` : ""}`, sessionId, tag: `autofire-${sessionId}` });
+  deps.notify("autofire", { title: `Answered by ${plugin.name} · ${shownTitleForCwd(s.cwd ?? "", s.title)}`, body: `Chose ${choice}. ${label}${why ? ` — ${why}` : ""}`, sessionId, tag: `autofire-${sessionId}` });
   return { ok: true };
 }
 
@@ -362,6 +363,6 @@ export function gateRule(
     options: [], outcome: "answered", choice: null, answer: rule.label,
     rationale: `The rule a person tapped at ${new Date(rule.at).toISOString()} ("don't ask again", this session only); use ${rule.uses}.${why ? ` ${why}` : ""}`,
   });
-  deps.notify("autofire", { title: `Allowed by a rule · ${s.title}`, body: rule.label.slice(0, 300), sessionId, tag: `autofire-${sessionId}` });
+  deps.notify("autofire", { title: `Allowed by a rule · ${shownTitleForCwd(s.cwd ?? "", s.title)}`, body: rule.label.slice(0, 300), sessionId, tag: `autofire-${sessionId}` });
   return { ok: true };
 }

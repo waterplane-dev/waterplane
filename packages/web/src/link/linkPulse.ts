@@ -2,6 +2,7 @@ import { LS, lsBool, lsSetBool } from "../storage";
 import type { LinkStatus, PulseSample } from "./linkTypes";
 import { noteLinkStatus, status } from "./linkStatus";
 import { emit, invalidate } from "./linkBus";
+import { seriesProbe } from "./linkSeriesStore";
 
 /**
  * Round-trip time, sampled continuously and kept as a short rolling window so it
@@ -82,6 +83,7 @@ export function setPulseEnabled(on: boolean): void {
 }
 
 function push(s: PulseSample): void {
+  seriesProbe(s.ms, status === "open");
   samples.push(s);
   if (samples.length > PULSE_CAP) samples.splice(0, samples.length - PULSE_CAP);
   invalidate("pulse");

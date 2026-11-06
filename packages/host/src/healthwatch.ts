@@ -301,7 +301,7 @@ export class HealthWatch {
 export function createHealthWatch(root: string, notify: HealthWatchDeps["notify"]): HealthWatch {
   return new HealthWatch({
     root, notify,
-    repos: async () => (await discoverTargets(root)).filter((t) => t.isPrimary).map((t) => ({ id: t.id, repoName: t.repoName, worktreePath: t.worktreePath })),
+    repos: async () => (await discoverTargets(root)).filter((t) => t.isPrimary).map((t) => ({ id: t.id, repoName: t.displayName || t.repoName /* the name a push SAYS; the id is the key */, worktreePath: t.worktreePath })),
     refresh: async (wt) => {
       // A repo's own committed engine never runs unapproved: skip, don't throw.
       // (The bundled engine's refresh drops the repo's own commands by itself.)

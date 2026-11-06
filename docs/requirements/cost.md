@@ -111,3 +111,12 @@ Plugin spend whose day cannot be placed in the period's time zone is shown as ab
 - asked: 2026-10-28
 - shipped: 23ad4de7
 
+### R-cost-023 · shipped
+Every figure that counts subagents counts a dynamic workflow's agents too: the session total, the spend chart, the lanes and the dearest-agents list, each turn's agent spend, and the all-sessions and cost-window ledgers. An agent's row reads by what it was launched to do.
+- asked: 2026-11-04 (owner, of a phone screenshot: 4 agents running over a Subagents section listing 2 that were not them; the session read $22 with about $207 spent)
+- shipped: `agentLogs` in `agents.ts`, pinned by `ctxlog.test.mjs`, `turncost.test.mjs` and `tokenscan.test.mjs`
+
+### R-cost-024 · shipped
+A conversation's window and spend are drawn as they move: held between requests and stepping at each one, a compaction dropping at its own instant to the size it measured, and the last reading standing for as long as agents run past it. No chart shows a slide that never happened.
+- asked: 2026-11-04 (owner, of a phone screenshot: the window sloping down for an hour around a compaction, and stopping an hour before the axis did)
+- shipped: `heldSamples` in `contextPlot/cplotHold.ts`, pinned by `contextPlot.test.mjs`

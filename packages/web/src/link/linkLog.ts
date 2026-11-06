@@ -5,6 +5,7 @@ import { status } from "./linkStatus";
 import { emit, invalidate } from "./linkBus";
 import { buckets } from "./linkTraffic";
 import { noteStallPong } from "./linkStalls";
+import { seriesGaveUp, seriesHeld, seriesSent } from "./linkSeriesStore";
 
 /**
  * The phone's half of `host/netstats.ts`.
@@ -67,6 +68,7 @@ export function noteReload(): void {
  *  that matches the user's complaint ("it took how long?"), not the wire time. */
 export function noteSendConfirmed(queuedMs: number): void {
   doc.log.sent++;
+  seriesSent(queuedMs);
   sample(doc.log.send, queuedMs);
   doc.log.queuedMaxMs = Math.max(doc.log.queuedMaxMs, Math.round(queuedMs));
   persist();
@@ -76,7 +78,7 @@ export function noteSendConfirmed(queuedMs: number): void {
 /** A send gave up. One call per row, whatever killed it — the names and the
  *  words stay on the row in the send queue, which this deliberately knows
  *  nothing about (the roll-up is POSTed to the host; prompt text never is). */
-export function noteSendFailed(): void { doc.log.failed++; persist(); invalidate("log"); }
+export function noteSendFailed(): void { doc.log.failed++; seriesGaveUp(); persist(); invalidate("log"); }
 
 /** …and it was the attempts cap that killed it. A subset of `failed`, counted
  *  alongside it and never instead of it. */
@@ -177,6 +179,7 @@ export function noteOutstanding(n: number): void {
   const v = Math.max(0, n | 0);
   if (v === outstanding) return;
   outstanding = v;
+  seriesHeld(v);
   if (v > 0) everOutstanding = true;
   invalidate("sends");
   emit();

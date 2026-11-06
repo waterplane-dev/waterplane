@@ -54,8 +54,7 @@ test("words in the composer do not move the reading", () => {
 });
 
 test("the ultracode label on the composer's top rule does not blind the reader", () => {
-  // `──── ultracode ─` is not a bare rule — delivery's composer anchor
-  // (`echo.ts`) does not accept it; this reader must.
+  // `──── ultracode ─` is not a bare rule, and this reader must take it.
   const f = composerFrame(fx("ultracode-on").split("\n"));
   assert.ok(f);
   assert.equal(f.label, "ultracode");

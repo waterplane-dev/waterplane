@@ -32,11 +32,11 @@
  * that cannot be placed withholds every running total, because a total missing
  * it would read as complete.
  */
-import { readdirSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_LIVE_MS, normalizeModel, type TranscriptTurn } from "@waterplane/shared";
-import { agentUsage, type AgentUsage } from "./ctxlog.js";
-import { readMeta } from "./agents.js";
+import { agentUsage, type AgentFile, type AgentUsage } from "./ctxlog.js";
+import { agentLogId, agentLogs, agentLogWorkflow, PARENT_TAIL, readMeta, readTail, readWorkflowJournal, type WorkflowJournal } from "./agents.js";
 
 /** Per-directory ledgers, kept so a poll re-reads only the agent logs that
  *  grew — `agentUsage` is incremental given its previous result. */
@@ -54,10 +54,9 @@ export function subagentsDirOf(logPath: string): string {
 export function agentsMtime(logPath: string): number {
   const dir = subagentsDirOf(logPath);
   let names: string[];
-  try { names = readdirSync(dir); } catch { return 0; }
+  try { names = agentLogs(dir); } catch { return 0; }
   let max = 0;
   for (const n of names) {
-    if (!n.startsWith("agent-") || !n.endsWith(".jsonl")) continue;
     try { max = Math.max(max, statSync(join(dir, n)).mtimeMs); } catch { /* vanished */ }
   }
   return max;
@@ -80,6 +79,22 @@ export function noteRetired(line: string, at: number, into: Map<string, number>)
   }
 }
 
+/**
+ * `wf_… → the Workflow call that launched it`, off the launch's own tool_result
+ * record. A workflow's agents name no `toolUseId` in their meta files, so this
+ * is the lookup that puts them on a turn. Read off the structured `toolUseResult`
+ * and never the text: a tool result that merely quotes a launch receipt is not one.
+ */
+export function noteWorkflowLaunch(rec: unknown, into: Map<string, string>): void {
+  const r = rec as { toolUseResult?: { runId?: unknown }; message?: { content?: unknown } } | null;
+  const runId = r?.toolUseResult?.runId;
+  if (typeof runId !== "string" || !runId.startsWith("wf_")) return;
+  const content = r?.message?.content;
+  if (!Array.isArray(content)) return;
+  const res = content.find((b) => b?.type === "tool_result" && typeof b.tool_use_id === "string");
+  if (res) into.set(runId, res.tool_use_id);
+}
+
 interface Meta { toolUseId?: string; parentAgentId?: string; requestShape?: string }
 
 /**
@@ -94,6 +109,7 @@ export function attachAgentSpend(
   retired: Map<string, number>,
   partial: boolean,
   now = Date.now(),
+  workflows: Map<string, string> = new Map(),
 ): void {
   const dir = subagentsDirOf(logPath);
   const use = agentUsage(dir, cache.get(dir) ?? null);
@@ -108,16 +124,30 @@ export function attachAgentSpend(
   for (const t of turns) {
     for (const b of t.blocks) {
       if (b.kind !== "tool") continue;
-      if (b.name === "Task" || b.name === "Agent") turnOfCall.set(b.id, t);
+      if (b.name === "Task" || b.name === "Agent" || b.name === "Workflow") turnOfCall.set(b.id, t);
       if (b.ok !== undefined) answered.add(b.id);
     }
   }
 
   const metas = new Map<string, Meta>();
-  for (const name of use.files.keys()) {
-    const id = name.slice("agent-".length, -".jsonl".length);
-    metas.set(id, readMeta(join(dir, `agent-${id}.meta.json`)) as Meta);
+  const fileOf = new Map<string, AgentFile>();
+  for (const [name, f] of use.files) {
+    const id = agentLogId(name);
+    metas.set(id, readMeta(join(dir, `${name.slice(0, -".jsonl".length)}.meta.json`)) as Meta);
+    fileOf.set(id, f);
   }
+  /** A workflow's agent gets no notification of its own: its journal says when
+   *  it ended, and only an agent still writing is worth reading one for. */
+  const journals = new Map<string, WorkflowJournal>();
+  const workflowEnded = (wf: string, id: string): boolean => {
+    let j = journals.get(wf);
+    if (!j) {
+      j = readWorkflowJournal(readTail(join(dir, "workflows", wf, "journal.jsonl"), PARENT_TAIL));
+      journals.set(wf, j);
+    }
+    const key = j.agentKey.get(id);
+    return key !== undefined && j.ended.has(key);
+  };
   /** The top-level agent an agent descends from; itself when it is one. Null
    *  on a broken or cyclic chain. */
   const rootOf = (id: string): string | null => {
@@ -144,14 +174,17 @@ export function attachAgentSpend(
   const perTurn = new Array<number>(turns.length).fill(0);
   const seenCalls = new Set<string>();
   for (const [name, f] of use.files) {
-    const id = name.slice("agent-".length, -".jsonl".length);
+    const id = agentLogId(name);
+    const wf = agentLogWorkflow(name);
     const root = rootOf(id);
-    const call = root ? metas.get(root)?.toolUseId : undefined;
+    const call = wf ? workflows.get(wf) : root ? metas.get(root)?.toolUseId : undefined;
     const t = call ? turnOfCall.get(call) : undefined;
     if (!t || !root) { if (f.tok > 0) unplaced = true; continue; }
     if (call) seenCalls.add(call);
-    const rootFile = use.files.get(`agent-${root}.jsonl`);
-    const live = root === id
+    const rootFile = fileOf.get(root);
+    const live = wf
+      ? now - f.mtime <= AGENT_LIVE_MS && !workflowEnded(wf, id)
+      : root === id
       ? runningTop(id, f.mtime)
       : now - f.mtime <= AGENT_LIVE_MS && !!rootFile && runningTop(root, Math.max(rootFile.mtime, f.mtime));
     if (live) t.agentsRunning = (t.agentsRunning ?? 0) + 1;

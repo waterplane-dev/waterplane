@@ -5,6 +5,7 @@ import { twinWheres, type RepoTarget } from "@waterplane/shared";
 import { RUNNING_IN_WSL, wslMountPath } from "./branddirs.js";
 import { env } from "./env.js";
 import { execFileP as pexec } from "./proc.js";
+import { displayNameOf, noteScannedNames } from "./reponames.js";
 
 
 export function targetId(worktreePath: string): string {
@@ -195,6 +196,12 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
   // rewrite leftover). Every worktree of a clone carries its clone's `where`.
   const wheres = twinWheres([...cloneOf].map(([t, dir]) => ({ name: t.repoName, dir })));
   for (const [t, dir] of cloneOf) { const w = wheres.get(dir); if (w) t.where = w; }
+  // The name a person gave a clone to be SHOWN as (`reponames.ts`), keyed by its primary
+  // checkout and carried by every worktree of it. Display only: `repoName` is untouched.
+  const primaryOf = new Map<string, string>();
+  for (const [t, dir] of cloneOf) if (t.isPrimary) primaryOf.set(dir, t.worktreePath);
+  for (const [t, dir] of cloneOf) { const n = displayNameOf(primaryOf.get(dir) ?? ""); if (n) t.displayName = n; }
+  noteScannedNames(root, targets);
   return targets;
 }
 

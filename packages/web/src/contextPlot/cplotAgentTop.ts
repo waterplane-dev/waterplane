@@ -10,7 +10,7 @@ import { modelLabel } from "./cplotModels.ts";
 export interface AgentTopRow {
   run: AgentRun;
   id: string;
-  /** `type`, or "agent" when its meta file named none. */
+  /** What it was launched to do; else its `type`; else "agent". */
   type: string;
   /** The model's alias; null when no record named one. */
   model: string | null;
@@ -44,7 +44,7 @@ export function agentTop(agents: AgentRun[], models: string[] | undefined, n = 5
       return {
         run,
         id: run.id,
-        type: run.type ?? "agent",
+        type: run.what ?? run.type ?? "agent",
         model: who ? modelLabel(who) : null,
         turns: run.turns && run.turns > 0 ? run.turns : null,
         peakTok: run.peakTok && run.peakTok > 0 ? run.peakTok : null,

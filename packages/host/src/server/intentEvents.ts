@@ -30,6 +30,7 @@ import {
   isScheduleRow,
 } from "../intents/adapters.js";
 import type { ServerCtx } from "./ctx.js";
+import { shownTitleForCwd } from "../reponames.js";
 
 /** Everything `createSnapshots` built; `main.ts` assigns each into `ctx`. */
 export type Snapshots = ReturnType<typeof createSnapshots>;
@@ -138,7 +139,7 @@ export function wireIntentEvents(ctx: ServerCtx): void {
           // It went without files. Say so loudly: the prompt inside that session
           // still tells the agent to look at a path that is not there.
           ctx.notify("info", {
-            title: `Session opened · ${basename(i.cwd)}`,
+            title: `Session opened · ${shownTitleForCwd(i.cwd, basename(i.cwd))}`,
             body: `opened without ${i.missing.length === 1 ? basename(i.missing[0]) : `${i.missing.length} files`}`,
             sessionId: i.sessionId, tag: `launch-${i.id}`,
           });
@@ -148,7 +149,7 @@ export function wireIntentEvents(ctx: ServerCtx): void {
       if (i.state === "failed") {
         console.log(`${logTag} launch FAILED · ${basename(i.cwd)}: ${res.detail}`);
         ctx.notify("info", {
-          title: `Session never opened · ${basename(i.cwd)}`,
+          title: `Session never opened · ${shownTitleForCwd(i.cwd, basename(i.cwd))}`,
           body: `${res.detail}. The words are still here — the row keeps them.`,
           tag: `launch-${i.id}`,
         });

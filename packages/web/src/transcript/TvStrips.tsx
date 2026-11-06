@@ -1,6 +1,7 @@
-import { Bot, CloudOff } from "lucide-react";
+import { CloudOff } from "lucide-react";
 import { agoText } from "../useRemoteResource";
 import { clock } from "../transcriptUtil";
+import { TvAgents } from "./TvAgents";
 import { since } from "./tvRows";
 import type { TvModel } from "./useTranscriptView";
 
@@ -52,14 +53,7 @@ export function TvStrips({ m }: { m: TvModel }) {
           fact) — but never as a claim of freshness: with the link down the
           strip above already says "last known", and these rows are part of that
           same snapshot. */}
-      {agents.map((a) => (
-        <div className="tr-status tr-agent" key={a.id} title={a.type ? `${a.type}${a.model ? ` · ${a.model}` : ""}` : undefined}>
-          <Bot size={13} />
-          <span className="tr-live-what">{a.what}</span>
-          {a.doing && <span className="tr-live-line">{a.doing}</span>}
-          <span className="tr-live-ago">{since(a.startedAt, now)}</span>
-        </div>
-      ))}
+      {agents.length > 0 && <TvAgents agents={agents} now={now} />}
 
       {/* Sticky, not a one-shot toast — stays up for as long as what's on
           screen is stale, and disappears the moment a fetch actually lands.

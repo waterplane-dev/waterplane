@@ -78,6 +78,7 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p.startsWith("deploy/"),                  // plist template, npm placeholder
   (p) => p === ".env.example",                     // the documented list of every knob, by its full name
   (p) => p === ".gitignore",                       // the state dir, current and legacy
+  (p) => p === "packages/extensions/vault/scripts/unseal-catalog.mjs", // a standalone script for an older release that no longer has the build: plain node, cannot import BRAND
   (p) => p.endsWith("/waterplane-plugin.json"),     // a plugin manifest's "env" names the knobs api.env() may read; JSON cannot import BRAND
   (p) => p === ".waterplane-shared/builds.json",   // build buttons: shell commands in JSON, cannot import BRAND
   (p) => p.startsWith("brand/"),                   // the logo kit's sources (wordmark text, hero)
@@ -92,6 +93,9 @@ const CURRENT_NAME_ALLOWED = [
   // modules under its cli/ dir): it cannot import the TS BRAND and finds the state dir by
   // the same rule as branddirs.ts. The vault's vendored Python client (cli/client/*.py) likewise.
   (p) => /^packages\/extensions\/[^/]+\/cli\/(?:[^/]+\/)*[^/]+\.(?:mjs|py)$/.test(p),
+  // The vault's downscoping plan is a pure module shared by the host and the phone bundle, which stays free of imports: the
+  // names it writes into a provider (a budget, a service account display name) are the product name on purpose.
+  (p) => p === "packages/extensions/vault/shared/downscope/plan.mts",
   // The release train (private, kept out of the public snapshot): a shell script and a script
   // run before anything is built, naming the public repo, the sibling clones and the state file.
   (p) => p === "scripts/release/train.sh" || p === "scripts/release/train-bump.mjs",

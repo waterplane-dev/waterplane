@@ -56,6 +56,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   **The row's spend chip is MONEY**: `costChip(spark.costUsd) ?? usageChip(spark.usageTok) ??
   fmtTokensFine(end)`, every rung ABSENT rather than zero (rules: shared `sessioncost/`, skill
   `shared`); tokens move into the title with `costText`; the curve stays in tokens.
+  **The two big charts draw `heldSamples` (`cplotHold.ts`), never the readings raw**: a window moves only at a request, so it holds and steps, a compaction drops at its own instant, and the last reading stands to `agentsEnd`; the scrub and every total keep the real readings.
   **`stackBands` geometry, four rules**: the LINE stays and the stack's top edge IS it · the context
   chart stacks only the three kinds that ARE context · the spend chart stacks `cum`, never a cumsum
   of `kinds` over THINNED samples · bands in palette order, bottom first, accumulated in VALUE space.

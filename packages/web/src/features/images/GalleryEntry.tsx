@@ -101,3 +101,22 @@ export function FileTreeSheet() {
     onRemarks={(_rel, text) => remarksToChat(target.id, text)}
     onClose={closeBrowse} />;
 }
+
+/**
+ * One repo file drawn inside a screen that named it, without the `browse` route: the git view's
+ * diff stays mounted behind its state, and `onClose` is that screen's own step back.
+ */
+export function RepoFileSheet({ repoId, repoName, path, edit, onClose }: {
+  repoId: string;
+  repoName: string;
+  path: string;
+  edit: boolean;
+  onClose: () => void;
+}) {
+  const c = useCore();
+  return <FilesSheet key={path} repoId={repoId} repoName={repoName} initialFile={path} initialEdit={edit}
+    socketOpen={c.conn.status === "open"}
+    onInsertPath={insertFromGallery}
+    onRemarks={(_rel, text) => remarksToChat(repoId, text)}
+    onClose={onClose} />;
+}

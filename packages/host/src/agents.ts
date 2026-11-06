@@ -34,6 +34,7 @@
  */
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { WORKFLOW_DIR_RE } from "./agentlogs.js";
 import type { SessionAgent, SourceAgent, SourceSession } from "@waterplane/shared";
 import type { BackendDescriptor } from "./backends/types.js";
 import { claudeConfigDir, claudeProjectDir } from "./claudeconfig.js";
@@ -55,7 +56,7 @@ const STALE_MS = Number(env("AGENT_STALE_MS") || 10 * 60_000);
 /** Tail of the PARENT log scanned for task-notifications. The end of a
  *  still-running agent's life is by definition recent, so a bounded tail is
  *  enough and a full re-read of tens of MB is not on the table. */
-const PARENT_TAIL = 256 * 1024;
+export const PARENT_TAIL = 256 * 1024;
 /** Tail of an AGENT log scanned for what it is doing right now. */
 const AGENT_TAIL = 24 * 1024;
 /** A pathological fan-out must not turn a status update into a wall of rows. */
@@ -210,7 +211,6 @@ export function subagentsDir(cwd: string, conversationId: string): string {
  * signal: `started` names an agent against a key, and a record for that key that
  * is not `started` — `result`, or a type that says it failed — is its end.
  */
-const WORKFLOW_DIR_RE = /^wf_[A-Za-z0-9_-]+$/;
 /** A journal record that ends the agent its key names, besides `result`. */
 const WORKFLOW_END_RE = /error|fail|cancel|abort|kill|stop/i;
 /** The parent's launch receipt: the task id the workflow's notification will
@@ -219,6 +219,8 @@ const WORKFLOW_END_RE = /error|fail|cancel|abort|kill|stop/i;
 const WORKFLOW_LAUNCH_RE = /Task ID: ([A-Za-z0-9_-]+)\\n[\s\S]*?Transcript dir: [^"]*?\/subagents\/workflows\/(wf_[A-Za-z0-9_-]+)/;
 
 export interface WorkflowJournal { agentKey: Map<string, string>; ended: Set<string> }
+
+export { agentLogId, agentLogs, agentLogWorkflow } from "./agentlogs.js";
 
 /** `agentId → key` for every agent the journal saw start, and the keys that ended.
  *  An unreadable line costs that line; an unreadable journal answers nothing

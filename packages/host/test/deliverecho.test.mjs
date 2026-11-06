@@ -254,6 +254,34 @@ test("our words drawn DIM in an empty box are the CLI's proposal, not a copy alr
   assert.ok(h.echo(), "and the echo of what was typed was seen");
 });
 
+test("with ultracode on, our words drawn DIM are still the CLI's proposal: the labelled rule is a composer", async () => {
+  // Live, 2026-11-06, twice in a row: ultracode labels the composer's top rule,
+  // the anchor refused that shape, so no box was placed and the hint check had
+  // no opinion. The dim proposal then read as "already typed": nothing typed,
+  // five Returns into an empty box, `unsubmitted`.
+  const labelled = (screen) => {
+    const rows = screen.split("\n");
+    const at = rows.findIndex((r) => r.startsWith("❯"));
+    rows[at - 1] = `${"─".repeat(66)} ultracode ─`;
+    return rows.join("\n");
+  };
+  store();
+  const sessions = fakeSessions({ hooked: true });
+  let hint = TEXT;
+  const shown = () => sessions.state.composer || hint;
+  sessions.screenText = async () => labelled(tornScreen(shown()));
+  sessions.screenCells = async () => {
+    const plain = labelled(tornScreen(shown())).split("\n");
+    const lit = labelled(tornScreen(sessions.state.composer)).split("\n");
+    return plain.map((text, i) => ({ text, spans: [], undimmed: lit[i] }));
+  };
+  const write = sessions.write;
+  sessions.write = (id, data) => { if (data !== "\r") hint = ""; write(id, data); };
+  const result = await deliverPrompt(sessions, "s1", TEXT, "prompt", { watch: false });
+  assert.equal(result, "ok");
+  assert.equal(sessions.state.writes.filter((w) => w === TEXT).length, 1, "the words were TYPED, not assumed");
+});
+
 test("a composer that already holds text we cannot tell from ours records NOTHING", async (t) => {
   // A rival delivery into the same session whose text shares our fourteen-
   // character head — which is what a re-send looks like. The verdict is

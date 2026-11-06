@@ -1,5 +1,7 @@
 import type { LinkTraffic } from "./linkTypes";
 import { doc, persist } from "./linkDoc";
+import type { TrafficVia } from "./linkSeries";
+import { seriesBytes } from "./linkSeriesStore";
 
 /**
  * The two rates right now, and the two totals since the counter was last reset.
@@ -65,10 +67,11 @@ const startedAt = Date.now();
  * nothing rather than a guess, and a NaN from a malformed header must not turn
  * a total into `NaN` for the rest of the session.
  */
-export function noteTraffic(dir: TrafficDir, bytes: number): void {
+export function noteTraffic(dir: TrafficDir, bytes: number, via: TrafficVia): void {
   if (!Number.isFinite(bytes) || bytes <= 0) return;
   const n = Math.round(bytes);
   if (dir === "up") doc.traffic.up += n; else doc.traffic.down += n;
+  seriesBytes(dir, via, n);
   const slot = Math.floor(Date.now() / BUCKET_MS);
   const b = buckets[slot % BUCKETS];
   if (b.slot !== slot) { b.slot = slot; b.up = 0; b.down = 0; }

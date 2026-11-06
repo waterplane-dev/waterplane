@@ -602,6 +602,26 @@ test("a conversation log past the 24 MB read cap is read WHOLE: its first turn i
   assert.equal(doc.truncated, false);
 });
 
+test("a dynamic workflow's agents are in the total and on the roster, named by their description", () => {
+  // Measured: 2 agents and 9.9M on the sheet, 81 more and 204M one directory down.
+  const dir = agentDir({ "agent-task.jsonl": [agentTurn(T0, "t1", 10_000)] });
+  const wf = join(dir, "workflows", "wf_abc-1");
+  mkdirSync(wf, { recursive: true });
+  writeFileSync(join(wf, "agent-rev.jsonl"), agentTurn(T0 + 1_000, "r1", 40_000) + "\n");
+  writeFileSync(join(wf, "agent-rev.meta.json"), JSON.stringify({ agentType: "workflow-subagent", description: "review crypto r5" }));
+  writeFileSync(join(wf, "journal.jsonl"), JSON.stringify({ type: "started", key: "k", agentId: "rev" }) + "\n");
+  mkdirSync(join(dir, "workflows", "not-a-run"));
+  writeFileSync(join(dir, "workflows", "not-a-run", "agent-x.jsonl"), agentTurn(T0, "x1", 99_000) + "\n");
+  const use = agentUsage(dir, null);
+  assert.equal(use.tok, 10_300 + 40_300);
+  assert.equal(use.logs, 2);
+  const rev = use.runs.find((r) => r.id === "rev");
+  assert.equal(rev.what, "review crypto r5");
+  assert.equal(rev.type, "workflow-subagent");
+  assert.equal(liveAgentOf(use, T0 + 2_000).id, "rev", "the id, never the path it sits under");
+  assert.equal(agentUsage(dir, use).tok, use.tok, "a second poll re-reads nothing");
+});
+
 test("an agent log past the 24 MB read cap is counted from its FIRST record, not its tail", () => {
   // Measured: a 246 MB implementer log read from its last 24 MB put 307M on
   // the screen for 786M spent. The head of the log is the part a tail drops.

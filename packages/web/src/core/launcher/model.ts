@@ -11,7 +11,7 @@
  * second copy of the rule.
  */
 import type { Intent, RepoSetupState, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow, repoLabel } from "@waterplane/shared";
+import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow, repoLabel, repoShown } from "@waterplane/shared";
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
@@ -54,6 +54,11 @@ export const repoOfCwd = (repos: readonly RepoTarget[], cwd: string): RepoTarget
 /** The repo NAME a session belongs to — the group it is listed under. `repoLabel`, so two clones
  *  with one folder name are two groups (`ciqkit · garmin/`), never one that opens in either. */
 export const sessionRepoNameIn = (repos: readonly RepoTarget[], s: { cwd: string }) => { const r = repoOfCwd(repos, s.cwd); return r ? repoLabel(r) : baseName(s.cwd); };
+/** The same repo as it is SHOWN — the name a person gave it, else its folder's (`repoShown`). Words only:
+ *  the group key, the colour and every lookup stay on `sessionRepoNameIn`. */
+export const sessionRepoShownIn = (repos: readonly RepoTarget[], s: { cwd: string }) => { const r = repoOfCwd(repos, s.cwd); return r ? repoShown(r) : baseName(s.cwd); };
+/** A group KEY (`repoLabel`) → the words for it: the repo's shown name, else the key itself. */
+export const repoShownByKey = (repos: readonly RepoTarget[], key: string) => { const r = repos.find((x) => repoLabel(x) === key); return r ? repoShown(r) : key; };
 /** `repo · branch`, for a row's own gist fallback. */
 export const sessionRepoLabelIn = (repos: readonly RepoTarget[], s: SessionInfo) => { const r = repoOfCwd(repos, s.cwd); return r ? `${repoLabel(r)} · ${r.branch}` : baseName(s.cwd); };
 // Within the live list rows are grouped under a repo header, so repeating the
@@ -70,7 +75,7 @@ export const sessionRowBranchIn = (repos: readonly RepoTarget[], s: SessionInfo)
  *  Never empty: the branch when it is worth saying, else the derived name,
  *  else the repo. In the list the two are drawn side by side instead. */
 export const sessionRowTitleIn = (repos: readonly RepoTarget[], s: SessionInfo) =>
-  sessionRowBranchIn(repos, s) || (s.tabTitle ?? "").trim() || sessionRepoNameIn(repos, s);
+  sessionRowBranchIn(repos, s) || (s.tabTitle ?? "").trim() || sessionRepoShownIn(repos, s);
 
 // ── Chip words ─────────────────────────────────────────────────────────────
 /** How an in-flight open reads on a chip: what it is doing, and how many. */

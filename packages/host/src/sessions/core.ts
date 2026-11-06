@@ -334,6 +334,8 @@ export interface Session {
   netRecheck?: NodeJS.Timeout | null;
   netWriting?: boolean;
   netSentAt?: number;
+  /** The tries of an episode a served row closed mid-turn, good for that `turn` only (`apiretry.ts`'s `served`). */
+  netServed?: { attempt: number; turn: number | undefined };
   /**
    * The give-up latch, per recovery lane (`recover/giveuplatch.ts`): `wall` once
    * the `gaveup` notification has been sent for the block this session is in,

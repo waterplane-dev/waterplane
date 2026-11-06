@@ -63,6 +63,8 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
     return out.sort((a, b) => a.localeCompare(b));
   }, [repos]);
 
+  // The colour is picked and stored by the FOLDER name; the row SAYS the name the repo is shown under.
+  const said = (name: string) => repos.find((r) => r.repoName === name && r.displayName)?.displayName ?? name;
   const clashes = useMemo(() => repoColorClashes(names, cfg), [names, cfg]);
   const clashed = useMemo(() => new Set(clashes.flat()), [clashes]);
   const ring = paletteById(cfg.palette);
@@ -74,7 +76,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
   function pick(name: string, hue: number | null) {
     saveRepoColors(setRepoColor(repoColors(), name, hue));
     track(hue == null ? "action:repocolor.clear" : "action:repocolor.pick");
-    showToast(hue == null ? `${name} — back to the ring’s colour` : `${name} recoloured`);
+    showToast(hue == null ? `${said(name)} — back to the ring’s colour` : `${said(name)} recoloured`);
   }
 
   return (
@@ -161,7 +163,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
                     title={`${name} — hue ${Math.round(hue)}°${pinned ? ", pinned by you" : ", from the ring"}`}
                     onClick={() => setOpenFor(open ? null : name)} />
                   <div className="rc-gist">
-                    <div className="rc-name">{name}</div>
+                    <div className="rc-name">{said(name)}</div>
                     <div className="rc-sub">
                       {pinned ? "your colour" : "from the ring"}
                       {clashed.has(name) ? " · shared with another repo" : ""}

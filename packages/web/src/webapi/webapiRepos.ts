@@ -1,6 +1,6 @@
 import type { OnboardAnswers, OnboardConsent, OnboardJob, OnboardPlan, WorktreeLeftover } from "@waterplane/shared";
 import { abs } from "../hostUrl";
-import { jget, jpost } from "./webapiFetch";
+import { jget, jpost, nfetch } from "./webapiFetch";
 
 /** Creating folders, repos, worktrees and onboarding; the `<img src>` URLs. One slice of `api` (see api.ts). */
 export const reposApi = {
@@ -11,6 +11,21 @@ export const reposApi = {
       "/api/repo",
       { parent, name, setup: opts.setup !== false, description: opts.description },
     ),
+  /**
+   * The name to SHOW for a repo instead of its folder's (`host/reponames.ts`), set on its primary
+   * checkout; `null` puts the folder's name back. A label only. The host's refusal comes back in
+   * words as `ok:false` + `error`, which is the sentence the editor shows.
+   */
+  setRepoDisplayName: (repoId: string, name: string | null) =>
+    nfetch("/api/repodisplayname", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: repoId, name }),
+    }).then(async (r) => {
+      let j: { ok?: boolean; error?: string; name?: string | null } = {};
+      try { j = await r.json(); } catch { /* no body */ }
+      return r.ok && j.ok ? { ok: true as const, name: j.name ?? null } : { ok: false as const, error: j.error || `${r.status} /api/repodisplayname` };
+    }),
   /** Folders straight under the root that rescan skipped for having no `.git` (`host/repos.ts` plainFolders). */
   plainFolders: () => jget<{ folders: { name: string; path: string }[] }>("/api/plainfolders"),
   /** `git init` in one of those folders — the host refuses any path it did not just list. */

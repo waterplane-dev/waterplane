@@ -13,7 +13,7 @@ import {
   BarChart3, Bot, Check, ChevronLeft, ChevronsDownUp, Clock, Gauge, Hourglass, List, Loader, Menu, Pencil, Plus,
   Sigma, Sparkles, SquareTerminal, Unplug, X,
 } from "lucide-react";
-import { repoBranchLabel, trimDefaultBranch, usageChip, usageText, weekShareText } from "@waterplane/shared";
+import { repoBranchLabel, shownTitleOf, withShownName, trimDefaultBranch, usageChip, usageText, weekShareText } from "@waterplane/shared";
 import type { BackendInfo, ClientMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { HeaderCmd } from "../../headerCmds";
 import type { Overlay } from "../../routing";
@@ -144,7 +144,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
           bar. */}
       <header className="topbar sess-top" style={repoAccentStyle(sessionRepoName(active))}>
         <button className="back" onClick={() => setActiveId(null)}><ChevronLeft size={24} /></button>
-        <div className="brand">{trimDefaultBranch(active.title) || active.title}<RowSub className={backendMark(backends, active.backend) ? "row-foreign" : undefined}> {launchLabel(liveLaunch(active), backendMark(backends, active.backend), backends)}</RowSub><HostNameTag /><ToldNotice key={active.id} active={active} backends={backends} /><AskRulesNotice key={`ar:${active.id}`} active={active} backends={backends} />
+        <div className="brand">{shownTitleOf(repoForCwd(active.cwd), trimDefaultBranch(active.title) || active.title)}<RowSub className={backendMark(backends, active.backend) ? "row-foreign" : undefined}> {launchLabel(liveLaunch(active), backendMark(backends, active.backend), backends)}</RowSub><HostNameTag /><ToldNotice key={active.id} active={active} backends={backends} /><AskRulesNotice key={`ar:${active.id}`} active={active} backends={backends} />
           {/* The name the desktop derived for this session, IN FULL and on its
               own line — the tab strip has ~85 px for it and clips, and this is
               the screen you land on, where the words are worth having whole.
@@ -368,7 +368,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
       </header>
       {pending && (
       <div className="sess-status">
-        <RowSub>{repoForCwd(active.cwd) ? repoBranchLabel(repoForCwd(active.cwd)!) : active.cwd}</RowSub>
+        <RowSub>{repoForCwd(active.cwd) ? repoBranchLabel(withShownName(repoForCwd(active.cwd)!)) : active.cwd}</RowSub>
         <RowSub>
           {isLaterId(active.id) ? <><Hourglass size={11} /> starts when its backlog item runs</> : <>
           <Loader size={11} className={pendingEntry?.status === "failed" ? "" : "spin"} />{" "}

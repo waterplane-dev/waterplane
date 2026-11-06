@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, FolderTree, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, FolderTree, Pencil, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import type { GitBranch, GitFile, GitPushProgress, GitPushState, GitStatus } from "@waterplane/shared";
 import { api, copyText } from "./api";
 import { track } from "./usage";
@@ -10,7 +10,7 @@ import { ConfirmButton, askConfirm } from "./Confirm";
 import { Empty } from "./Empty";
 import { ZoomPair } from "./ZoomPair";
 import { GitMediaDiff, isMediaDiff } from "./GitMediaDiff";
-import { GitTextDiff } from "./GitTextDiff";
+import { GitTextDiff, initialDiffMode, type DiffMode } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GitExplain } from "./GitExplain";
 import { clearFailureFocus, gitNoRepoWords, storedFailure, storedFailureWords, takeExplainLanding, useFailureFocus } from "./gitLanding";
@@ -36,6 +36,10 @@ interface Props {
   onAskAgent?: (f: GitFailure) => void;
   /** The repo's file tree; closing it lands back here. Absent ⇒ no button. */
   onBrowse?: () => void;
+  /** One file of this repo, drawn OVER the diff it was opened from rather than routed to: leaving
+   *  this screen would drop the diff and its mode, and an edit is judged against that diff.
+   *  Absent ⇒ no pencil, and a rendered link opens nothing. */
+  fileSheet?: (file: { path: string; edit: boolean }, onClose: () => void) => ReactNode;
   onClose: () => void;
   /** The host's stored failure of the last pull/push here (`RepoTarget.gitFailed`), kept
    *  across restarts and devices; shown when this screen holds no failure note of its own. */
@@ -143,13 +147,18 @@ export function GitNoRepo({ focus, list, session, onClose }: { focus: string | n
 }
 
 /** Review changed files, view diffs, stage, commit, pull and push from the phone. */
-export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestStored, failures, onDone }: Props) {
+export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stored: newestStored, failures, onDone }: Props) {
   // The failure a notification tap put this screen on (`gitLanding.ts`): the screen's own
   // state, read on every mount and re-read when a tap re-targets it while open.
   const tappedFailure = useFailureFocus(repoId);
   const stored = storedFailure(failures, newestStored, tappedFailure);
   const [openFile, setOpenFile] = useState<GitFile | null>(null);
   const [diff, setDiff] = useState<string>("");
+  /** Here, not in `GitTextDiff`: that unmounts under `fileOver`, and Back comes back to this mode. */
+  const [diffMode, setDiffMode] = useState<DiffMode>(initialDiffMode);
+  const [fileOver, setFileOver] = useState<{ path: string; edit: boolean } | null>(null);
+  /** Bumped when `fileOver` closes: the file may have been saved, so the diff is read again. */
+  const [diffRead, setDiffRead] = useState(0);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -285,7 +294,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
     if (!openFile || isMediaDiff(openFile.path)) return;
     setDiff("loading…");
     api.gitDiff(repoId, openFile.path, openFile.staged).then((d) => setDiff(d || "(no textual diff)"));
-  }, [openFile, repoId]);
+  }, [openFile, repoId, diffRead]);
 
   async function toggleStage(f: GitFile) {
     track("action:git.stage");
@@ -506,6 +515,8 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
 
   // Back — the gesture as much as the arrow — closes this step, not the sheet.
   useBackStep(openFile !== null, () => setOpenFile(null));
+  const closeFileOver = () => { setFileOver(null); setDiffRead((n) => n + 1); refresh(); };
+  useBackStep(fileOver !== null, closeFileOver);
   useBackStep(logFocus !== null, () => setLogFocus(null));
   useBackStep(explaining, () => setExplaining(false));
 
@@ -519,13 +530,25 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
   }
 
   // ── Single-file diff view ───────────────────────────────────────────
+  if (fileOver && fileSheet) return <>{fileSheet(fileOver, closeFileOver)}</>;
+
   if (openFile) {
     return (
       <div className="sheet">
-        <SheetHead title={openFile.path} brandClass="mono" onClose={() => setOpenFile(null)}>{zoomPair}</SheetHead>
+        <SheetHead title={openFile.path} brandClass="mono" onClose={() => setOpenFile(null)}>
+          {!isMediaDiff(openFile.path) && fileSheet && label(openFile) !== "deleted" && (
+            <Button title="open this file in edit mode" onClick={() => {
+              track("action:git.edit");
+              setFileOver({ path: openFile.path, edit: true });
+            }}><Pencil size={16} /></Button>
+          )}
+          {zoomPair}
+        </SheetHead>
         {isMediaDiff(openFile.path)
           ? <GitMediaDiff repoId={repoId} path={openFile.path} staged={openFile.staged} />
-          : <GitTextDiff repoId={repoId} path={openFile.path} staged={openFile.staged} diff={diff} zoomFont={zoomFont} />}
+          : <GitTextDiff repoId={repoId} path={openFile.path} staged={openFile.staged} diff={diff} zoomFont={zoomFont}
+              mode={diffMode} onMode={setDiffMode}
+              onOpenPath={fileSheet ? (path) => setFileOver({ path, edit: false }) : undefined} />}
       </div>
     );
   }
@@ -673,7 +696,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored: newestS
         </Empty>
         {status?.files.map((f) => (
           <Row key={f.path + f.code} kind="wrap">
-            <Row as="button" kind="grow" onClick={() => { track("action:git.diff"); setOpenFile(f); }}>
+            <Row as="button" kind="grow" onClick={() => { track("action:git.diff"); setDiffMode(initialDiffMode()); setOpenFile(f); }}>
               <span className={`gstat g-${label(f)}`}>{label(f)}</span>
               <RowTitle className="mono">{f.from ? `${f.from} → ${f.path}` : f.path}</RowTitle>
             </Row>

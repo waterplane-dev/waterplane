@@ -37,6 +37,8 @@ test("passiveAllows: default deny — every other route is refused", () => {
     ["GET", "/api/repos/r1/artifacts/x"], ["GET", "/api/health/extra"], ["GET", "/api/something-new"],
     // What a desktop waits on a person for: a full device's read, never a kid's phone.
     ["GET", "/api/attention"], ["HEAD", "/api/attention"],
+    // The name a repo is shown under (`reponames.ts`): a write, and a kid's phone has no repo screen to set it from.
+    ["PUT", "/api/repodisplayname"],
   ]) assert.equal(passiveAllows(m, p, q(), () => true), false, `${m} ${p}`);
 });
 

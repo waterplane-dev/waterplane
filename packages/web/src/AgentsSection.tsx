@@ -5,6 +5,7 @@ import { usePref } from "./core/prefs";
 import { SysGraph } from "./SysGraph";
 import { roomyCeiling } from "./graphGeom";
 import { dur } from "./format";
+import { shownRepo } from "./sessionTabs";
 import { SetNote } from "./SettingsKit";
 
 /**
@@ -67,7 +68,7 @@ export const AgentsSection = forwardRef<HTMLElement, { onOpenSession?: (id: stri
                   {r.working ? "its own turn" : ""}
                 </span>
                 <ChevronRight size={14} aria-hidden="true" className="lrt-agent-go" />
-                <span className="lrt-vram">{r.repo}</span>
+                <span className="lrt-vram">{shownRepo(r.repo)}</span>
                 {r.agents.map((a, i) => (
                   <span className="lrt-vram" key={i}>
                     · {a.what}{a.model ? ` (${a.model})` : ""} — running {dur(a.startedAt)}

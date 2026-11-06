@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BRAND, HOST_PARK_PREFIX, LEGACY, SYNCED_SETTING_KEYS, isHostScopedKey, parkedKeyFor } from "@waterplane/shared";
 
-import { DEVICE_KEYS, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, readHealthAxis, trSeenKey } from "./storage.ts";
+import { DEVICE_KEYS, EXT_DEVICE_PREFIX, extDeviceKey, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, readHealthAxis, trSeenKey } from "./storage.ts";
 import { RESET_KEEP_PREFIXES, UI_RESET_KEYS } from "./resetKeys.ts";
 
 test("every registry key is classified, and nothing else is", () => {
@@ -95,4 +95,10 @@ test("the sealed sign-ins are device keys, never synced, never reset, and the ha
     assert.ok(!UI_RESET_KEYS.includes(k), k);
     assert.ok(RESET_KEEP_PREFIXES.some((p) => LS[k].startsWith(p)), `${k}: a crash recovery would delete the last copy of every token`);
   }
+});
+
+test("the hard reset keeps an extension's device corner: the vault's aad floor is a security anchor", () => {
+  const key = extDeviceKey("vault", "aadFloors");
+  assert.ok(RESET_KEEP_PREFIXES.some((p) => key.startsWith(p)), "a crash recovery's reset button would silently erase the aad floor");
+  assert.ok(RESET_KEEP_PREFIXES.includes(EXT_DEVICE_PREFIX));
 });

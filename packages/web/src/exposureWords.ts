@@ -48,14 +48,47 @@ export function digestHead(n: number): string {
 }
 export const acceptedHead = (n: number): string => `Accepted (${n})`;
 
-/** The card's meta line: the line it crossed, how bad, where it was read, since when. */
+/** The card's meta line: the line it crossed, how bad, since when. Where it came from is `exposureSource`. */
 export function exposureMeta(e: Exposure): string {
   const parts: string[] = [];
   if (e.threshold) parts.push(e.threshold);
   if (e.severity) parts.push(e.severity);
-  if (e.sources.length) parts.push(`from ${e.sources.join(", ")}`);
   if (e.since) parts.push(`since ${e.since.slice(0, 10)}`);
   return parts.join(" · ");
+}
+
+/**
+ * The collector's source names (`tools/exposure/`) in words a person can place. A name not listed
+ * here is printed as it arrived: the collector's own word beats a guess.
+ */
+const SOURCE_WORDS: Record<string, string> = {
+  era: "Garmin's ERA crash reports from people's devices",
+  osv: "the OSV advisory database",
+  dependabot: "GitHub's Dependabot alerts",
+  "secret scanning": "GitHub's secret scanning",
+  "code scanning": "GitHub's code scanning",
+  "openssf scorecard": "OpenSSF Scorecard",
+  "github branch rules": "GitHub's branch rules",
+  "github actions settings": "GitHub's Actions settings",
+  "Play Developer Reporting": "Google Play's crash and ANR reporting",
+  "build-files": "this repo's build files",
+  "repo files": "this repo's files",
+  lockfile: "this repo's lockfile",
+  marketplace: "the VS Code Marketplace listing",
+  "npm view": "the npm registry",
+  "npm-verify": "npm's package verification",
+  "release assets": "the GitHub release's assets",
+  apksigner: "the APK's signature",
+  rdap: "the domain's RDAP record",
+  http: "a live request to the URL",
+  manual: "your own confirmation",
+};
+
+/** The card's source line, or null for a row that names no source (`unreachable` rows). */
+export function exposureSource(e: Exposure): string | null {
+  if (!e.sources.length) return null;
+  const words = e.sources.map((s) => (Object.hasOwn(SOURCE_WORDS, s) ? SOURCE_WORDS[s] : s));
+  return `Source: ${words.join(", ")}, read by the exposure watch on this desktop.`;
 }
 
 type Until = Accepted["until"] | ComplianceAcceptRequest["until"];

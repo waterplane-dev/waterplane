@@ -50,7 +50,7 @@ import { createBillingWire } from "./server/billingwire.js";
 import { backendInfos, claudeBackend, primeBackendModels } from "./backends/index.js";
 import { initThumbs } from "./thumbs.js";
 import { dispatch } from "./routes/index.js";
-import { installChecklistStores } from "./setupprefs.js"; import { AskRulesStore, setAskRulesStore } from "./askrules.js";
+import { installChecklistStores } from "./setupprefs.js"; import { installRepoNames } from "./reponames.js"; import { AskRulesStore, setAskRulesStore } from "./askrules.js";
 import { installSessionModels } from "./localrt.js";
 import { startLocalUsage } from "./localusage.js";
 import { createClients } from "./server/clients.js";
@@ -128,6 +128,8 @@ ctx.setupWatch = setupWatch;
  *  the pre-override behaviour and the right answer for a tool that never booted
  *  a daemon. */
 installChecklistStores(ROOT);
+/** The names a person gave repos to be shown as (`reponames.ts`): display only, before the first scan. */
+installRepoNames(ROOT);
 
 /** Who is connected and how anything reaches them — sockets, `send`/`broadcast`,
  *  auth re-evaluation, the watched set, the notification feed and `notify()`.

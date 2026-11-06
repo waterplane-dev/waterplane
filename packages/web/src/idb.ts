@@ -88,7 +88,7 @@ function afterMigration(db: IDBDatabase): Promise<IDBDatabase> {
   const copy = copyLegacyStores(db, thisLegacyDbNames()).catch(() => { /* best-effort */ });
   return Promise.race([copy, new Promise((r) => setTimeout(r, MIGRATE_WAIT_MS))]).then(() => db);
 }
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 
 function upgrade(db: IDBDatabase) {
   if (!db.objectStoreNames.contains("transcripts")) db.createObjectStore("transcripts");
@@ -156,6 +156,10 @@ function upgrade(db: IDBDatabase) {
   // registers no service worker and a plain-http page has no Cache API at all. Re-fetchable, but
   // megabytes; the extension's own row deletes them when it is switched off.
   if (!db.objectStoreNames.contains("extassets")) db.createObjectStore("extassets");
+  // v14 — the connection strip's readings, one row per minute, keyed by epoch minute
+  // (`link/linkSeriesStore.ts`). A record, and nobody else has a copy; losing it costs only the
+  // charts their past. Pruned to thirty days by its writer.
+  if (!db.objectStoreNames.contains("linkseries")) db.createObjectStore("linkseries");
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;

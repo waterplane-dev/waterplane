@@ -7,7 +7,7 @@ import { PromptPair } from "../../PromptPair";
 import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
 import { useState } from "react";
 import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Trash2, X, XCircle } from "lucide-react";
-import { branchLabel, repoLabel, trimDefaultBranch } from "@waterplane/shared";
+import { branchLabel, repoShown, trimDefaultBranch } from "@waterplane/shared";
 import { ConfirmButton } from "../../Confirm";
 import { SessionName } from "../../SessionName";
 import { ago, repoAccentStyle } from "../../format";
@@ -324,7 +324,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           {hiddenRepos.map((t) => (
             <div key={t.id} className={`row-wrap ${t.isPrimary ? "" : "row-wt"}`}>
               <Row as="button" kind="grow" onClick={() => openRepo(t)}>
-                <RowTitle>{t.isPrimary ? repoLabel(t) : <span className="wt-branch">{t.branch}</span>}</RowTitle>
+                <RowTitle>{t.isPrimary ? repoShown(t) : <span className="wt-branch">{t.branch}</span>}</RowTitle>
                 {(t.isPrimary ? branchLabel(t) : "worktree") && <RowSub>{t.isPrimary ? branchLabel(t) : "worktree"}</RowSub>}
               </Row>
               <button className="row-act" title="show repo" onClick={() => toggleHideRepo(t.id)}><Eye size={ICON} /></button>

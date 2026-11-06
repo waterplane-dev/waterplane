@@ -44,6 +44,11 @@
  * while stalled; the switch off, the halt, a wall or a person typing stops it
  * the way they stop the ladder.
  *
+ * A retry that is ANSWERED ends the episode there and then (`served`), not at
+ * its turn end: the first served row in the log clears the line while the turn
+ * still runs. The tries are kept for that turn, so a give-up later in it carries
+ * on up the ladder rather than starting over.
+ *
  * Dismissing the session's line (`session.netRetryCancel` on a `gaveup`) only
  * HIDES it (`dismissed`): the stall stands, so the silence ceiling still
  * leaves the work alone. Cancelling a probe stops the probing; the stall
@@ -363,7 +368,10 @@ export class NetRetrySlice {
   /** Arm the next rung (`retrying`), or stop at the cap (`gaveup`); null ⇒ a wall outranks. */
   private schedule(s: Session, at: number, error: string): TurnEndNet | null {
     const prev = s.info.netRetry;
-    const attempt = prev && prev.state === "sent" ? prev.attempt : 0;
+    // A served row may have closed the episode earlier in THIS turn (`served`):
+    // its tries still count, or a flapping network never reaches the cap.
+    const kept = s.netServed?.turn === s.info.turnStartedAt ? s.netServed?.attempt : undefined;
+    const attempt = prev && prev.state === "sent" ? prev.attempt : kept ?? 0;
     // A stall probe's own give-up is never a ladder rung: back to the stall.
     // (Its OWN probe: one lent by a stalled holder is no stall of this session's.)
     const delay = this.ownProbe(s) ? null : netRetryDelay(attempt, NET_RETRY_MAX, NET_RETRY_LADDER_MS);
@@ -497,6 +505,23 @@ export class NetRetrySlice {
     if (res === "gone" && s.info.netRetry?.state === "sent") this.gate.release(id, "gone");
   }
 
+  /**
+   * Our `continue` was answered: a served row is in the log while its turn still
+   * runs. That turn can go on for many minutes, and a line saying "waiting for
+   * the reply" over a session visibly working reads as a retry that failed. So
+   * the episode ends here, not at the turn end; if this same turn gives up
+   * again, `schedule` carries the tries on. The verdict goes first: `set(null)`
+   * drops the slot as `gone`, which would prove nothing to the rest of the wave.
+   */
+  private served(s: Session): void {
+    const n = s.info.netRetry!;
+    this.verdict(s, "resumed");
+    s.netServed = { attempt: n.attempt, turn: s.info.turnStartedAt };
+    this.clearTimers(s);
+    console.log(`${logTag} net retry answered · ${s.info.title} (${s.info.id}) · after ${n.attempt} ${n.attempt === 1 ? "try" : "tries"}`);
+    this.set(s, null);
+  }
+
   /** A verdict on the probe in flight (a no-op for a session the gate did not let through). */
   private verdict(s: Session, why: WaveVerdict): void {
     this.gate.release(s.info.id, why);
@@ -571,7 +596,7 @@ export class NetRetrySlice {
       settle: (id, elapsed) => {
         const s = this.core.sessions.get(id);
         if (!s || !s.info.running || s.info.netRetry?.state !== "sent") return "gone";
-        if (s.info.claudeSessionId && readNetLog(transcriptPath(s.info.cwd, s.info.claudeSessionId)).state === "clear") return "resumed";
+        if (s.info.claudeSessionId && readNetLog(transcriptPath(s.info.cwd, s.info.claudeSessionId)).state === "clear") { this.served(s); return "resumed"; }
         return elapsed >= WAVE_SETTLE_MAX_MS ? "timeout" : "wait";
       },
     };

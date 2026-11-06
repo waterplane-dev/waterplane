@@ -11,7 +11,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { useBackStep } from "../../backStep";
 import { Archive, ArrowDownUp, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
-import { BRAND, branchLabel, repoLabel } from "@waterplane/shared";
+import { BRAND, branchLabel, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
@@ -25,6 +25,7 @@ import { track } from "../../usage";
 import { RISKY_PERM_MODES } from "../settings/permModes";
 import { CliHealthChip } from "../../features/cliHealth";
 import { useUsageFace } from "../../features/tokens";
+import { LauncherChrome } from "./LauncherChrome";
 import { UsageChip } from "./UsageChip";
 import { BellButton } from "../../features/notifications";
 import { openDecisions } from "../../features/plugins";
@@ -121,10 +122,11 @@ export function LauncherScreen(p: LauncherProps) {
 
   return (
     <div className="screen">
+      <LauncherChrome off={navMenu}>
       <header className="topbar">
         {focusRepo ? (
           <div className="brand brand-focus" style={repoAccentStyle(focusRepo)}>
-            <Logo size={32} label="" /><span>{focusRepo}</span>
+            <Logo size={32} label="" /><span>{m.shownOf(focusRepo)}</span>
             <button className="focus-clear" title="exit repo focus — show all repos" onClick={clearFocus}><X size={14} /></button>
           </div>
         ) : (
@@ -322,6 +324,7 @@ export function LauncherScreen(p: LauncherProps) {
             the offline card names it as the last known host. */}
       </header>
       {p.banners}
+      </LauncherChrome>
 
       {tab === "home" && (
         <div className="list" ref={listRef} onScroll={(e) => { launcherScroll.top = e.currentTarget.scrollTop; }}>
@@ -552,7 +555,7 @@ export function LauncherScreen(p: LauncherProps) {
             <div className="list">
               {visibleRepos.map((t) => (
                 <Row key={t.id} as="button" onClick={() => { setShotPick(false); void takeShot(t.id); }}>
-                  <RowTitle>{repoLabel(t)}</RowTitle>
+                  <RowTitle>{repoShown(t)}</RowTitle>
                   {branchLabel(t) && <RowSub>{branchLabel(t)}</RowSub>}
                 </Row>
               ))}

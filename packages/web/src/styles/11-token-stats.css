@@ -607,10 +607,6 @@ button.ts-lim-used { cursor: pointer; }
 .agent-warn { margin-top: var(--sp-8); }
 .agent-warn-row { padding-left: 0; padding-right: 0; }
 
-/* The context sheet's two doors under the title (`ContextSheet.tsx`): navigation, so a plain
-   action row, never a `.ts-filter`. Wraps at 390 px rather than running off the sheet. */
-.ctx-doors { flex-wrap: wrap; padding: var(--sp-4) var(--sp-12) 0; }
-
 /* "What every turn carries" (`CarriedSection.tsx`): one row per part, label left, its figure
    right-aligned; a long label or path wraps instead of pushing the number off a phone. */
 .carried-list, .carried-files { list-style: none; margin: 0; padding: 0; }

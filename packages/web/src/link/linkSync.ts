@@ -65,6 +65,9 @@ export function syncSnapshot(): LinkSync {
   return { online, connectedSince, lastSeenAt: doc.sync.lastSeenAt || null, syncedAt, pending };
 }
 
+/** When each half last landed, for the sheet: the strip only ever says the older. */
+export function syncParts(): Record<SyncPart, number> { return doc.sync.parts; }
+
 /** The last full sync ignoring whether it is still current — what the health
  *  sheet shows while offline, where "null because the socket is down" would
  *  throw away the one number being asked for. */

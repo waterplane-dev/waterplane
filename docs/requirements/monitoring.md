@@ -29,3 +29,6 @@ The phone's exposure watch shows CodeQL code-scanning findings alongside Dependa
 - asked: 2026-11-02
 - shipped: a7475671
 
+### R-monitoring-007 · shipped
+A crash finding on the phone's watch list can be sent to a session for an agent to find the cause and fix it, and every watch finding says in plain words where it came from.
+- asked: 2026-11-05

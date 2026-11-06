@@ -17,7 +17,7 @@ import {
 import { sendModeToast } from "../../composeSend";
 import { ensureMtime, knownMtime } from "../../fileMtime";
 import { pickThumbWidth, sized } from "../../media";
-import { budgetReasonText, fmtWhen, repoLabel, scheduleIdFromOrigin, type WeekBurnStatus } from "@waterplane/shared";
+import { budgetReasonText, fmtWhen, repoShown, scheduleIdFromOrigin, type WeekBurnStatus } from "@waterplane/shared";
 import { useRemoteResource } from "../../useRemoteResource";
 import { weekBurnLine } from "../../automationLines";
 import { useCore, usePref, useStore } from "../../sdk";
@@ -213,7 +213,7 @@ export function BacklogSheet() {
         onOpenCut: (repoDir, ids, label) => openBacklogCut(repoDir, ids, label),
         weekBurnText: (repoDir) => weekBurnLine({
           repoDir, weekburn: burn.state === "fresh" ? burn.data : null, when: fmtWhen,
-          repoName: (d) => { const r = visibleRepos.find((x) => x.worktreePath === d); return r ? repoLabel(r) : d.split(/[/\\]/).filter(Boolean).pop() || d; },
+          repoName: (d) => { const r = visibleRepos.find((x) => x.worktreePath === d); return r ? repoShown(r) : d.split(/[/\\]/).filter(Boolean).pop() || d; },
         })?.text ?? null,
         renderRetime: core.send.renderRetime,
         onClose: () => core.nav.close("backlog"),

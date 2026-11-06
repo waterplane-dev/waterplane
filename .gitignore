@@ -18,6 +18,8 @@ dist-demo/
 # are the on-demand half of CLAUDE.md and carry rules this repo depends on.
 .claude/*
 !.claude/skills/
+# Project subagents: recurring judgment work that a script cannot do.
+!.claude/agents/
 # The edit-time guard hook (scripts/guards/) — a check every session here runs.
 !.claude/settings.json
 .usmc

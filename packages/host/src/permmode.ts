@@ -46,9 +46,9 @@ const PLAIN_RULE_RE = /^[─━]{20,}$/;
 
 /**
  * The composer's OPENING border, which may carry a label at its right end:
- * `──────── ultracode ─` (2.1.293, ultracode on). `composer.ts`'s composer anchor
- * does not accept this shape — this one must, or turning ultracode on would
- * blind the mode reader.
+ * `──────── ultracode ─` (2.1.293, ultracode on). This one must accept that
+ * shape, or turning ultracode on would blind the mode reader; `composer.ts`'s
+ * `COMPOSER_RULE_RE` accepts it too, for the same reason.
  */
 const TOP_RULE_RE = /^[─━]{4,}(?:\s+(\S(?:.*\S)?)\s+[─━]{1,4})?$/;
 

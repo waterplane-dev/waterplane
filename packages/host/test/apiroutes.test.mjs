@@ -91,6 +91,8 @@ const ROUTES = [
   "POST /api/push/unsubscribe",
   "POST /api/folder",
   "POST /api/repo",
+  // A repo's SHOWN name (`reponames.ts`): a label only, set on the primary checkout.
+  "PUT /api/repodisplayname",
   "GET /api/plainfolders",
   "POST /api/plainfolders/init",
   "POST /api/clone",
