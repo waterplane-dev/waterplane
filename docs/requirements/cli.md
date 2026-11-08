@@ -44,7 +44,7 @@ The CLI closes its background shells when it exits.
 
 
 ### R-cli-010 · shipped
-A shortcut the CLI names on screen (the footer's "shift+tab to cycle", a picker's "s for this session only") that the special-keys row lacks appears as a one-tap key at the head of that row, sends the raw key, and is gone when the screen stops naming it.
+A shortcut the CLI names on screen (the footer's "shift+tab to cycle", a picker's "s for this session only") that the special-keys row lacks appears as a one-tap key at the head of that row — shift+tab at the very end of it instead, past the CLI button — sends the raw key, and is gone when the screen stops naming it.
 - asked: 2026-10-20
 - shipped: a54f2370
 

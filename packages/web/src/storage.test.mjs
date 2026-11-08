@@ -49,7 +49,7 @@ test("the plan's device keys are device keys", () => {
 test("the plan's host keys — and every store of words in flight — are host keys", () => {
   const host = [
     "outbox", "compose", "composeDrafts", "composeOutbox", "composeSheets", "deadUploads", "dictations",
-    "pendingStars", "pullState", "slashCache", "fileMtimes", "artMarks", "newImages", "syncTs", "cmdHistory",
+    "pendingStars", "pullState", "slashCache", "fileMtimes", "artMarks", "filesDir", "newImages", "syncTs", "cmdHistory",
     "sessionOrder", "collapsedRepos", "backlogDraft", "fanoutText", "sendMemory", "launchLast", "notifSeen",
     "costNoticed", "agentNoticed", "pluginList", "localRt", "tabOpens", "tabOpensShared", "tabOrderShared", "routeLast", "routeResume", "usage",
     "netlog", "netTraffic", "netSync", "upKbps", "webUpdateStaged", "pad",

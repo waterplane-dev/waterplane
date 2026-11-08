@@ -1,8 +1,8 @@
 # Text in marks (`ocr`)
 
 Reads the words under a highlight, box or circle you draw on a picture in the annotator, **on the
-phone**, in English and German, so the note to the agent says `box around "…"` (R-images-015). Nothing
-is sent to the desktop or a cloud model for it (R-images-012).
+phone**, in English and German, so the note to the agent says `box around "…"`. Nothing
+is sent to the desktop or a cloud model for it.
 
 Optional and **off by default** (`deploy/ship.json`: ships, off). Switch it on in Settings › Tools &
 diagnostics › plugins. Switching it on downloads the reader once from your own desktop and keeps it

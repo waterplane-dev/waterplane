@@ -165,6 +165,18 @@ export function npmAudit(cwd) {
   }
 }
 
+/** npm's provenance attestations of one version. 404 is `ok` with data null (no attestation); any other failure is unreachable. */
+export async function npmAttestation(pkg, ver) {
+  const r = await http(`https://registry.npmjs.org/-/npm/v1/attestations/${pkg.replaceAll("/", "%2f")}@${ver}`);
+  return r.ok ? r : { ...r, unreachable: true };
+}
+
+/** Does the repo at `dir` have the git tag `tag` (by name)? `ok` with a boolean; unreachable when git could not run. */
+export function gitHasTag(dir, tag) {
+  const r = run("git", ["-C", dir, "rev-parse", "-q", "--verify", `refs/tags/${tag}`], { timeout: 15_000 });
+  return r.ok ? ok(r.data.status === 0) : fail(r.why, true);
+}
+
 /** `npm view <pkg> --json`. */
 export function npmView(pkg) {
   const r = run("npm", ["view", pkg, "--json"], { timeout: 60_000 });

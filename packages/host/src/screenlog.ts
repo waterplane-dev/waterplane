@@ -130,6 +130,11 @@ export class SessionScreenLog {
    * overlapping repaint — measured on claude 2.1.267 during a `/compact`, where
    * "Compacting conversation…" was on screen for two minutes and matched
    * nothing in the bytes. The grid has one copy of each character, in order.
+   *
+   * Every read here stops at `term.cols`. A narrowed ALTERNATE buffer keeps its
+   * rows at the old length (xterm trims them only where it reflows), so a whole
+   * row hands back cells past the pane's edge: an 80-column frame's tail read
+   * after a recap drawn at 54, which is how `…echo exit $?` became a question.
    */
   gridText(rows = 0): string {
     if (this.disposed) return "";
@@ -140,7 +145,7 @@ export class SessionScreenLog {
       const out: string[] = [];
       for (let i = from; i < buf.viewportY + this.term.rows; i++) {
         const line = buf.getLine(i);
-        out.push(line ? line.translateToString(true).replace(/\s+$/, "") : "");
+        out.push(line ? line.translateToString(true, 0, this.term.cols).replace(/\s+$/, "") : "");
       }
       return out.join("\n");
     } catch { return ""; }   // a read that throws costs one sample, never the session
@@ -225,7 +230,7 @@ export class SessionScreenLog {
       const grid: string[] = [];
       for (let i = buf.viewportY; i < buf.viewportY + this.term.rows; i++) {
         const line = buf.getLine(i);
-        grid.push(line ? line.translateToString(true).replace(/\s+$/, "") : "");
+        grid.push(line ? line.translateToString(true, 0, this.term.cols).replace(/\s+$/, "") : "");
       }
       this.state = absorbScreen(this.state, grid, SCREENLOG_MAX_LINES);
     } catch { /* a read that throws costs one sample, never the session */ }

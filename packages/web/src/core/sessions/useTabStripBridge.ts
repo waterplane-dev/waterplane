@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
-import { TAB_ATTACH_EVENT, TAB_CLOSE_EVENT, adoptOpens, noteSessionTabs, refreshTabs, tabLabel } from "../../sessionTabs";
+import { TAB_ATTACH_EVENT, TAB_CLOSE_EVENT, adoptOpens, noteSessionTabs, refreshTabs, tabFacts, tabLabel } from "../../sessionTabs";
 import { onAdopt, onSettingsChange } from "../../settings";
 import { LS } from "../../storage";
 import { watchSaverForTabs } from "./tabsSyncSaver";
 import { sessionStatus } from "../../sessionFacts";
+import { turnTally } from "./tags";
 import type { BackendList } from "../../backendCaps";
 import type { TermFeed } from "../term/useTermFeed";
 import type { SessionVerbs } from "./useSessionVerbs";
@@ -47,8 +48,7 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
    * sessions exist", and no listener of its own watching for removals (the
    * store prunes its open counts off this same call).
    *
-   * The label is `tabLabel`'s decision, not this component's: the host's ≤3-word
-   * `tabTitle` when it has derived one, the session's own title otherwise.
+   * The label is `tabLabel`'s decision, not this component's.
    *
    * Published with the strip switched OFF too: Ctrl+E's list reads this same
    * store, and an empty one made the chord a silent no-op there. The strip's
@@ -62,11 +62,11 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
           id: s.id,
           label: tabLabel(s, repo),
           repo,
-          // The strip holds no opinion of its own about what a session is doing
-          // — this is the same call the row badge, the repo roll-up and the
-          // status filter make (`sessionFacts.tsx`).
+          // The same call the row badge, the repo roll-up and the status filter
+          // make (`sessionFacts.tsx`): the strip holds no opinion of its own.
           status: sessionStatus(s, backends),
           createdAt: s.createdAt,
+          ...tabFacts(s, turnTally(s)),
           ...(s.companionOf ? { companionOf: s.companionOf } : {}),
         };
       }),

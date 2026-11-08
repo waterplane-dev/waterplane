@@ -29,10 +29,12 @@ it never silently does nothing, never retries forever, and is never a greyed-out
 - asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
 - shipped: demo-mode WP2b + WP5a (tier-B verdicts reach the screen as text: build save and session fork toast the reason; build scan answers empty instead of a spinner)
 
-### R-demo-006 · requested
+### R-demo-006 · shipped
 A Google Play reviewer can open the APK and use it through the demo without any desktop, and the
 store listing's app-access note tells them how.
 - asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: b902ba4a, e59348c6
+- note: The note is pasted into Play Console by the owner.
 
 ### R-demo-007 · shipped
 Every user journey in the docs has a gif or screenshot produced from the demo by a script, so the

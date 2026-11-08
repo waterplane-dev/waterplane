@@ -10,13 +10,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import webpush from "web-push";
+import { pushTransport } from "../dist/pushsend.js";
 import { PushManager, pushPayloadText, pushPayloadFit, PUSH_BUDGET, PUSH_FLOOR } from "../dist/push.js";
 
 const dirs = [];
-const realSend = webpush.sendNotification;
+const realSend = pushTransport.sendNotification;
 const realWarn = console.warn;
-after(() => { webpush.sendNotification = realSend; console.warn = realWarn; for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+after(() => { pushTransport.sendNotification = realSend; console.warn = realWarn; for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 function manager() {
   const d = mkdtempSync(join(tmpdir(), "pushsize-")); dirs.push(d);
@@ -53,7 +53,7 @@ test("a 413 is retried once with a smaller payload, and said in the log", async 
   const sent = [];
   const warned = [];
   console.warn = (...a) => warned.push(a.join(" "));
-  webpush.sendNotification = async (_sub, body) => {
+  pushTransport.sendNotification = async (_sub, body) => {
     sent.push(body);
     if (sent.length === 1) throw Object.assign(new Error("too large"), { statusCode: 413 });
   };
@@ -69,7 +69,7 @@ test("a push the service refuses for any other reason is said in the log, and th
   const warned = [];
   console.warn = (...a) => warned.push(a.join(" "));
   let calls = 0;
-  webpush.sendNotification = async () => { calls++; throw Object.assign(new Error("boom"), { statusCode: 500 }); };
+  pushTransport.sendNotification = async () => { calls++; throw Object.assign(new Error("boom"), { statusCode: 500 }); };
   await m.notify(item("hi"));
   assert.equal(calls, 1);
   assert.ok(warned.some((w) => /500/.test(w) && /push\.example\.test/.test(w)), warned.join("\n"));
@@ -85,7 +85,7 @@ test("a 413 refused again at the floor is said in the log, and not retried a thi
   const warned = [];
   console.warn = (...a) => warned.push(a.join(" "));
   let calls = 0;
-  webpush.sendNotification = async () => { calls++; throw Object.assign(new Error("too large"), { statusCode: 413 }); };
+  pushTransport.sendNotification = async () => { calls++; throw Object.assign(new Error("too large"), { statusCode: 413 }); };
   await m.notify(item("x".repeat(3000)));
   assert.equal(calls, 2);
   assert.ok(warned.length >= 2, warned.join("\n"));
@@ -139,7 +139,7 @@ test("notify sends the fitted payload and says what it dropped; never sends one 
   const sent = [];
   const warned = [];
   console.warn = (...a) => warned.push(a.join(" "));
-  webpush.sendNotification = async (_sub, body) => { sent.push(body); };
+  pushTransport.sendNotification = async (_sub, body) => { sent.push(body); };
   await m.notify(fileItem("d/".repeat(3000) + "app.apk"));
   assert.equal(sent.length, 1);
   assert.ok(bytes(sent[0]) <= PUSH_BUDGET);

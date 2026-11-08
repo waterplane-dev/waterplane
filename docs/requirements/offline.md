@@ -20,11 +20,12 @@ Images, including cached images and full-screen thumbnails, display correctly an
 - asked: 2026-09-11
 
 ### R-offline-006 · requested
-Responsive layout behavior from offline mode also works in online mode.
+The repo group header in the live sessions list and the repo row in the repos list show counts and actions the same way, using the more responsive layout, online and offline.
 
-### R-offline-007 · requested
+### R-offline-007 · shipped
 With no connection the phone shows the latest known remote status, and it stays viewable offline.
 - asked: 2026-10-12, 2026-10-13
+- shipped: 1bfe6427, 8a51a166
 
 ### R-offline-008 · shipped
 The build sheet and the schedule sheet state when their list was last confirmed from the host.

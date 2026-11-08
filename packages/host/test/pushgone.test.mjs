@@ -12,14 +12,14 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import webpush from "web-push";
+import { pushTransport } from "../dist/pushsend.js";
 import * as push from "../dist/push.js";
 
 const { PushManager } = push;
 const dirs = [];
-const realSend = webpush.sendNotification;
+const realSend = pushTransport.sendNotification;
 const realWarn = console.warn;
-after(() => { webpush.sendNotification = realSend; console.warn = realWarn; for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+after(() => { pushTransport.sendNotification = realSend; console.warn = realWarn; for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 let warned;
 beforeEach(() => { warned = []; console.warn = (...a) => warned.push(a.join(" ")); });
@@ -54,7 +54,7 @@ for (const code of [403, 401]) {
   test(`a ${code} is counted, not acted on: the subscription stays and the line says what heals it`, async () => {
     const { m } = clocked();
     let calls = 0;
-    webpush.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
+    pushTransport.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
     await m.notify(item);
     await m.notify(item);
     assert.equal(calls, 2, "kept: the second notify still sends");
@@ -67,7 +67,7 @@ for (const code of [403, 401]) {
   test(`a ${code} that persists (3 refusals over 24 h) removes the subscription, with one line saying re-enable`, async () => {
     const { m, clock } = clocked();
     let calls = 0;
-    webpush.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
+    pushTransport.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
     await m.notify(item);                 // 1st, t0
     clock.t += 2 * HOUR; await m.notify(item);   // 2nd
     clock.t += 2 * HOUR; await m.notify(item);   // 3rd, but only 4 h in: kept
@@ -84,20 +84,20 @@ for (const code of [403, 401]) {
 test("three key refusals in a burst are not enough: the span must reach 24 h", async () => {
   const { m } = clocked();
   let calls = 0;
-  webpush.sendNotification = async (...a) => { calls++; return refuse(403)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuse(403)(...a); };
   for (let i = 0; i < 6; i++) await m.notify(item);
   assert.equal(calls, 6);
 });
 
 test("the refusal count survives a restart of the host", async () => {
   const a = clocked();
-  webpush.sendNotification = refuse(403);
+  pushTransport.sendNotification = refuse(403);
   await a.m.notify(item);
   a.clock.t += 12 * HOUR; await a.m.notify(item);
   const b = clocked(a.dir);
   b.clock.t = a.clock.t + 13 * HOUR;
   let calls = 0;
-  webpush.sendNotification = async (...x) => { calls++; return refuse(403)(...x); };
+  pushTransport.sendNotification = async (...x) => { calls++; return refuse(403)(...x); };
   await b.m.notify(item);              // 3rd, 25 h after the first, in a new process: removed
   await b.m.notify(item);
   assert.equal(calls, 1, "removed on the third refusal, counted across the restart");
@@ -106,7 +106,7 @@ test("the refusal count survives a restart of the host", async () => {
 test("a successful send resets the count", async () => {
   const { m, clock } = clocked();
   let calls = 0, ok = false;
-  webpush.sendNotification = async (...a) => { calls++; if (ok) return {}; return refuse(403)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; if (ok) return {}; return refuse(403)(...a); };
   await m.notify(item);
   clock.t += 12 * HOUR; await m.notify(item);
   ok = true; clock.t += 1 * HOUR; await m.notify(item);  // the host's config was fixed
@@ -121,7 +121,7 @@ test("a successful send resets the count", async () => {
 test("a 404/410 removes the subscription quietly, as before", async () => {
   const { m } = manager();
   let calls = 0;
-  webpush.sendNotification = async (...a) => { calls++; return refuse(410)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuse(410)(...a); };
   await m.notify(item);
   await m.notify(item);
   assert.equal(calls, 1);
@@ -131,7 +131,7 @@ test("a 404/410 removes the subscription quietly, as before", async () => {
 test("a 410 on the 413 retry removes the subscription too", async () => {
   const { m } = manager();
   let calls = 0;
-  webpush.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 413 : 410)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 413 : 410)(...a); };
   await m.notify({ ...item, body: "x".repeat(3000) });
   assert.equal(calls, 2);
   await m.notify(item);
@@ -141,7 +141,7 @@ test("a 410 on the 413 retry removes the subscription too", async () => {
 test("a 403 on the 413 retry is counted like any other key refusal", async () => {
   const { m } = clocked();
   let calls = 0;
-  webpush.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 413 : 403)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 413 : 403)(...a); };
   await m.notify({ ...item, body: "x".repeat(3000) });
   assert.equal(calls, 2);
   await m.notify(item);
@@ -152,7 +152,7 @@ for (const code of [429, 503, undefined]) {
   test(`a transient refusal (${code ?? "network"}) keeps the subscription, and repeating it logs once per window`, async () => {
     const { m } = manager();
     let calls = 0;
-    webpush.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
+    pushTransport.sendNotification = async (...a) => { calls++; return refuse(code)(...a); };
     await m.notify(item);
     await m.notify(item);
     await m.notify(item);
@@ -164,7 +164,7 @@ for (const code of [429, 503, undefined]) {
 test("a different transient refusal from the same subscription is its own line", async () => {
   const { m } = manager();
   let calls = 0;
-  webpush.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 503 : 429)(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuse(calls === 1 ? 503 : 429)(...a); };
   await m.notify(item);
   await m.notify(item);
   assert.equal(warned.length, 2, warned.join("\n"));
@@ -173,7 +173,7 @@ test("a different transient refusal from the same subscription is its own line",
 test("a network error is logged once per window by its code, not its message (which names an IP)", async () => {
   const { m } = clocked();
   let calls = 0;
-  webpush.sendNotification = async () => {
+  pushTransport.sendNotification = async () => {
     calls++;
     throw Object.assign(new Error(`connect ETIMEDOUT 142.250.0.${calls}:443`), { code: "ETIMEDOUT" });
   };
@@ -189,14 +189,14 @@ test("a network error is logged once per window by its code, not its message (wh
 test("the once-an-hour log memory forgets entries past the window", async () => {
   const { m, clock } = clocked();
   let calls = 0;
-  webpush.sendNotification = async () => { calls++; throw Object.assign(new Error("x"), { statusCode: 500 + (calls % 50) }); };
+  pushTransport.sendNotification = async () => { calls++; throw Object.assign(new Error("x"), { statusCode: 500 + (calls % 50) }); };
   for (let i = 0; i < 20; i++) { await m.notify(item); clock.t += 2 * HOUR; }
   assert.equal(warned.length, 20);
   assert.ok(m.lastLogged.size <= 1, `kept ${m.lastLogged.size} stale entries`);
 });
 
 // A 401/403 caused by THIS host's clock being wrong (the VAPID JWT's `exp` is built from it) is
-// not the subscription's fault: the push service's own `Date` header (web-push's WebPushError
+// not the subscription's fault: the push service's own `Date` header (PushRefused's
 // carries the response `headers`) says so. Past `PUSH_CLOCK_SKEW_MS` the refusal is never counted
 // toward removal, and is logged once an hour naming the skew in minutes (design round 5).
 const refuseAt = (statusCode, date) => async () => {
@@ -207,7 +207,7 @@ test("a key refusal while the host's clock is off by more than the bound is neve
   const { m, clock } = clocked();
   let calls = 0;
   // The service's clock is 3 hours ahead of the host's.
-  webpush.sendNotification = async (...a) => { calls++; return refuseAt(403, new Date(clock.t + 3 * HOUR).toUTCString())(...a); };
+  pushTransport.sendNotification = async (...a) => { calls++; return refuseAt(403, new Date(clock.t + 3 * HOUR).toUTCString())(...a); };
   for (let i = 0; i < 4; i++) { await m.notify(item); clock.t += 10 * HOUR; }
   await m.notify(item);
   assert.equal(calls, 5, "kept past 3 refusals over 40 h: none of them counted");
@@ -220,7 +220,7 @@ test("a key refusal while the host's clock is off by more than the bound is neve
 
 test("the skew line is logged once an hour, not once per notify", async () => {
   const { m, clock } = clocked();
-  webpush.sendNotification = async () => refuseAt(401, new Date(clock.t - 2 * HOUR).toUTCString())();
+  pushTransport.sendNotification = async () => refuseAt(401, new Date(clock.t - 2 * HOUR).toUTCString())();
   await m.notify(item);
   clock.t += 10 * 60_000; await m.notify(item);
   clock.t += 10 * 60_000; await m.notify(item);
@@ -234,7 +234,7 @@ test("a Date header within the bound, or none, or an unparseable one, counts the
   for (const date of [(t) => new Date(t + 2 * 60_000).toUTCString(), () => undefined, () => "not a date"]) {
     const { m, clock } = clocked();
     let calls = 0;
-    webpush.sendNotification = async (...a) => { calls++; return refuseAt(403, date(clock.t))(...a); };
+    pushTransport.sendNotification = async (...a) => { calls++; return refuseAt(403, date(clock.t))(...a); };
     await m.notify(item);
     clock.t += 2 * HOUR; await m.notify(item);
     clock.t += 23 * HOUR; await m.notify(item);  // 3rd, 25 h after the first: removed

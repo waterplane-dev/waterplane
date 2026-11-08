@@ -20,8 +20,9 @@ AI setup button executes its prompt, with AI assistance available in dialogue se
 - shipped: b87535a
 
 ### R-automation-006 · requested
-Scheduler provides simple date/time selection, not a complex interface, including calendar week navigation, a 5-minute time option, and a 'later' dialog whose confirm button is relabelled save for the chosen date/time.
+Choosing later needs only a date and time picked in the same dialog it started from, and the confirm button reads Save for that date and time. The schedule view can step through calendar weeks.
 - asked: 2026-09-11
+- note: The 5-minute option was the update-banner snooze (shipped, c74402fe), not the scheduler. Save-for label exists (469c9837); quick time chips exist; calendar week stepping not found.
 
 ### R-automation-007 · shipped
 Scheduling supports relative times based on session-reset and weekly-window boundaries, with conditional (percentage-headroom) execution and notifications when conditions aren't met.
@@ -60,9 +61,11 @@ Scheduled tasks and backlog items stay synchronized as one list.
 - asked: 2026-09-18
 - shipped: 58066b0
 
-### R-automation-015 · requested
-System tracks which scheduled items for today were worked on.
+### R-automation-015 · shipped
+A scheduled item that did not run when due is recorded as missed and the row says run or missed, so nothing scheduled is lost silently.
 - asked: 2026-09-17
+- shipped: ff364552
+- note: The ask was a one-off check of that day's items; this records the lasting end state.
 
 ### R-automation-016 · requested
 Backlog displays items from all repos, including Garmin.
@@ -178,9 +181,10 @@ Jobs scheduled on the host start and run even when the phone is off; the phone i
 - asked: 2026-10-04, 2026-10-05
 - shipped: b7fea804
 
-### R-automation-039 · requested
-A custom time input is available wherever a time has to be chosen.
+### R-automation-039 · shipped
+The send sheet's 'how long before' the reset takes a typed lead beside its presets (e.g. 45m, 4h, 1h30), like the headroom row's 'another' field.
 - asked: 2026-10-08
+- shipped: 10498756
 
 ### R-automation-040 · shipped
 The Build sheet has an additional entry that generates everything in one action.
@@ -287,9 +291,10 @@ Scheduled items with their own budget and no budget condition fire at their sche
 Agent authority (what an agent may cause, such as spending, deploying, pushing to main or sending mail) is a separate feature from vault secret protection, with its own UI and decisions, and never appears on vault approval cards.
 - asked: 2026-10-15, 2026-10-15
 
-### R-automation-061 · requested
-A button lets the user re-trigger a run when nothing is running.
+### R-automation-061 · shipped
+A vault rewire that nothing is running for (no row, no report after an hour, or its row canceled) offers a 'send it again' button instead of only 'mark it yourself'.
 - asked: 2026-10-16
+- shipped: 31a5f524
 
 ### R-automation-062 · shipped
 While a build tool entry runs in a repo, its header button shows a busy indicator, like the git button during a push.
@@ -297,33 +302,39 @@ While a build tool entry runs in a repo, its header button shows a busy indicato
 - shipped: c4e08626
 
 ### R-automation-063 · requested
-Scheduled work items, including the midnight run, appear in the waterplane schedule.
+Work the person asks to be scheduled for later is posted in waterplane's own schedule, so it shows on the phone, never held only inside an agent session.
 - asked: 2026-10-18
 
 
-### R-automation-064 · requested
+### R-automation-064 · shipped
 Each week the person picks the repos for the week-end burn, and that pick is the approval: it covers only the week it was made for, a new week starts with no picks, and "repeat each week" only asks again (push and one-tap "same as last week"), never runs last week's repos by itself.
 - asked: 2026-10-24
+- shipped: ac6d9926, 2d7ce5f9, 3bea7a21
 
-### R-automation-065 · requested
+### R-automation-065 · shipped
 The week-end burn posts one small improvement package per picked repo at a time, the next only after the previous settles, up to a per-repo weekly cap. Each package makes one focused change, runs the repo's tests and commits only if they pass; the weekly budget cap is lifted for these rows only.
 - asked: 2026-10-24
+- shipped: 2d7ce5f9, ac6d9926
 
-### R-automation-066 · requested
+### R-automation-066 · shipped
 The week-end burn stops posting once the week reaches its stop line (default 95%) or the weekly reset is under 20 minutes away; rows already running finish. A missing or stale weekly reading posts nothing, and a non-subscription account is told the feature does not apply.
 - asked: 2026-10-24
+- shipped: ac6d9926, 2d7ce5f9
 
-### R-automation-067 · requested
+### R-automation-067 · shipped
 The week-end burn starts early enough, from the measured weekly points one 5-hour window can burn, to use the week's budget before the reset, never before now. With no measured full window it starts a day before the reset and says so in one sentence the phone and host both print.
 - asked: 2026-10-24
+- shipped: ac6d9926
 
-### R-automation-068 · requested
+### R-automation-068 · shipped
 When the person has not picked repos and is on pace to leave a large part of the week unused, one push per week offers the week-end burn and opens its sheet; a repeating burn gets the same push to pick the week's repos.
 - asked: 2026-10-24
+- shipped: ac6d9926, 2d7ce5f9
 
-### R-automation-069 · requested
+### R-automation-069 · shipped
 A weekly pass over the week-end burn rows, and only those, lifts the weekly and session budget caps for them until the weekly reset.
 - asked: 2026-10-24
+- shipped: 2d7ce5f9
 
 ### R-automation-070 · shipped
 The schedules sheet is called Automation. Its "Runs on its own, no clock" block, drawn above the cards (never as the list's tail, where it was missed and read as one more card), lists what else this desktop starts by itself — backlog auto with the rows it will start next, the repo's auto-download rule, the week-end burn, peer jobs waiting here — one sentence and one door each, to where that thing is managed; per repo when the sheet is cut to one repo. A count opens exactly those rows; a source the phone has not read draws no line.
@@ -346,9 +357,10 @@ The week-end burn sheet scrolls so every repo is reachable, and two clones with 
 - shipped: b5dbb527
 
 
-### R-automation-075 · requested
+### R-automation-075 · shipped
 The week-end burn sheet says how it works in numbered steps (when sessions start, what each is told, that it commits only on passing tests and pushes nothing, when it stops), and the person controls what goes into the prompt: their own instructions in place of the weakest-health-reading default, an extra line per repo, and the exact prompt each ticked repo's sessions get, shown before anything runs. The safety rules (one change, tests, commit, never push) are always added. The stop line is a dot choice, not a filled button.
 - asked: 2026-10-29
+- shipped: e8d9cf49
 
 ### R-automation-076 · shipped
 The week-end burn and a repo's backlog link both ways: a row the burn wrote says "from the week-end burn" and opens the burn; the repo's backlog says what the burn is doing there, counts the burn's rows (the count opens exactly those) and opens the burn sheet; each repo row in the burn sheet opens that repo's backlog cut to the burn's rows.

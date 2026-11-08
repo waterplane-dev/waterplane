@@ -86,7 +86,7 @@ export function checkCliSuggestion(core: SessionCore, s: Session): void {
   s.hintRead = plain;
   void core.screenCells(s.info.id, rows.length).then((cells) => {
     if (s.hintRead !== plain || s.turnActive) return; // the screen moved on while this rendered
-    setCliSuggestion(core, s, cliSuggestionOf(rows, cells.map((r) => r.undimmed)));
+    setCliSuggestion(core, s, cliSuggestionOf(cells.map((r) => r.text), cells.map((r) => r.undimmed)));
   }).catch(() => { /* no reading — leave what is published */ });
 }
 

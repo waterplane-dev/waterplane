@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { convoStart, fmtSize, fmtStorage, baseName, inactiveMs, inactivityKnown, when } from "./format.ts";
+import { convoStart, fmtSize, fmtStorage, baseName, inactiveMs, inactivityKnown, stalenessNote, when } from "./format.ts";
 
 // ── The two byte formatters ───────────────────────────────────────────────
 //
@@ -235,4 +235,35 @@ test("agoText and seenAgo are one phrasing", () => {
   assert.equal(agoText(120_000), "2 min ago");
   assert.equal(agoText(3 * 3_600_000), "3 h ago");
   assert.equal(agoText(72 * 3_600_000), "3 d ago");
+});
+
+// ── The sentence above cached rows ────────────────────────────────────────
+//
+// A cached copy is on screen during every read, so `state === "cached"` alone
+// says nothing about the link. It said "the link is down" under a strip reading
+// 185 ms (owner's screenshot, 2026-11-07).
+
+test("stalenessNote blames the link only when the link is down", () => {
+  const age = 28 * 60_000;
+  const says = (extra) => stalenessNote({ state: "cached", age, ...extra });
+  assert.match(says({ gap: "link" }), /^Cached listing from .* the link is down/);
+  for (const extra of [{}, { inflight: true }, { gap: "no-answer" }, { error: "403 forbidden" }]) {
+    assert.doesNotMatch(says(extra), /link is down/);
+  }
+});
+
+test("stalenessNote: a running read says so, whatever the last one ended as", () => {
+  const n = stalenessNote({ state: "cached", age: 60_000, inflight: true, gap: "no-answer", error: "nope" });
+  assert.match(n, /checking the desktop/);
+});
+
+test("stalenessNote keeps a refusal apart from no answer, and names the host's words", () => {
+  assert.match(stalenessNote({ state: "cached", age: 60_000, error: "403 forbidden" }), /refused a fresh read \(403 forbidden\)/);
+  assert.match(stalenessNote({ state: "cached", age: 60_000, gap: "no-answer" }), /did not answer/);
+});
+
+test("stalenessNote is absent unless the rows are cached with a known age", () => {
+  assert.equal(stalenessNote({ state: "fresh", age: 60_000 }), null);
+  assert.equal(stalenessNote({ state: "cached", age: null }), null);
+  assert.equal(stalenessNote({ state: "cached" }), null);
 });

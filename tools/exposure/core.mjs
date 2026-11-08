@@ -111,12 +111,16 @@ export function a4Findings(prevReadings, currentInstallScripts) {
   return out;
 }
 
-/** B2-B6 (and C1.*) alert findings for every value that changed since the last run; no baseline => []. */
+/** Readings kept for the next run but not diffed here: a collector judges the change itself. */
+const JUDGED_SETTINGS = new Set(["C1.distTags"]);
+
+/** B2-B6 (and C1.maintainers) alert findings for every value that changed since the last run; no baseline => []. */
 export function settingChanges(prevSettings, settings) {
   if (!prevSettings) return [];
   const out = [];
   for (const [name, now] of Object.entries(settings ?? {})) {
     if (!(name in prevSettings) || prevSettings[name] === now) continue;
+    if (JUDGED_SETTINGS.has(name)) continue; // judged by its own check (C1.distTags: latestChangeVerdict)
     const measure = name.split(".")[0];
     out.push({
       key: findingKey({ measure, subject: name }), measure, subject: name, level: "alert",

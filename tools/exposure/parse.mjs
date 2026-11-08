@@ -623,6 +623,64 @@ export function eolFindings(cycles, product, minMajor, now = new Date()) {
 /** Maintainer names, sorted, from `["name <mail>"]` or `[{name}]`. */
 const maintainerNames = (m) => (m ?? []).map((x) => (typeof x === "string" ? x.replace(/\s*<.*$/, "") : x?.name)).filter(Boolean).sort();
 
+/** `owner/name` of a repository URL / git URI (`https://github.com/o/r`, `git+https://github.com/o/r@refs/...`, `o/r`), or null. */
+function repoSlug(u) {
+  let t = String(u ?? "").trim();
+  if (t.startsWith("git+")) t = t.slice(4);
+  for (const p of ["https://github.com/", "http://github.com/"]) if (t.startsWith(p)) t = t.slice(p.length);
+  const at = t.indexOf("@");
+  if (at >= 0) t = t.slice(0, at);
+  if (t.endsWith("/")) t = t.slice(0, -1);
+  if (t.endsWith(".git")) t = t.slice(0, -4);
+  const parts = t.split("/");
+  return parts.length === 2 && parts[0] && parts[1] && !/\s/.test(t) ? t : null;
+}
+
+/**
+ * Who built a package version, from `GET /-/npm/v1/attestations/<pkg>@<ver>`: the SLSA provenance
+ * statement's `{repo: "owner/name", workflow, ref}` (v1 `externalParameters.workflow`, or v0.2
+ * `invocation.configSource`), or null when there is none / it does not parse. Signatures are NOT checked.
+ */
+export function attestationIdentity(json) {
+  for (const a of Array.isArray(json?.attestations) ? json.attestations : []) {
+    if (!String(a?.predicateType ?? "").includes("slsa.dev/provenance")) continue;
+    let st;
+    try { st = JSON.parse(Buffer.from(String(a?.bundle?.dsseEnvelope?.payload ?? ""), "base64").toString("utf8")); } catch { continue; }
+    const pr = st?.predicate;
+    const w = pr?.buildDefinition?.externalParameters?.workflow;
+    if (w) {
+      const repo = repoSlug(w.repository);
+      if (repo && w.path && w.ref) return { repo, workflow: String(w.path), ref: String(w.ref) };
+    }
+    const cs = pr?.invocation?.configSource;
+    if (cs?.uri) {
+      const repo = repoSlug(cs.uri), at = String(cs.uri).indexOf("@"), ref = at >= 0 ? String(cs.uri).slice(at + 1) : "";
+      if (repo && cs.entryPoint && ref) return { repo, workflow: String(cs.entryPoint), ref };
+    }
+  }
+  return null;
+}
+
+/**
+ * C1: npm's `latest` moved prev -> next. EXPECTED (a digest finding) only when it moved forward, the
+ * local repo has tag v<next>, and the SLSA attestation names the expected repo + workflow at
+ * refs/tags/v<next>; anything else is an alert saying which part failed. `identity` null = no
+ * attestation. The caller handles "attestation unreachable" itself (absent), never through here.
+ */
+export function latestChangeVerdict({ pkg, prev, next, identity, expect, localTag }) {
+  const mk = (level, text) => finding({ measure: "C1", subject: `npm:${pkg}:latest`, version: next, level, sources: ["npm attestation"], text });
+  const head = `${pkg} latest ${prev} → ${next}`;
+  const c = cmpVersion(next, prev);
+  if (c === null || c <= 0) return mk("alert", `${head}: not a move forward.`);
+  const tag = `v${next}`;
+  if (!localTag) return mk("alert", `${head}: the local repo has no tag ${tag}.`);
+  if (!identity) return mk("alert", `${head}: npm has no SLSA provenance attestation for ${pkg}@${next}.`);
+  if (identity.repo.toLowerCase() !== String(expect?.repo ?? "").toLowerCase()) return mk("alert", `${head}: published by ${identity.repo}, expected ${expect?.repo}.`);
+  if (identity.workflow !== expect?.workflow) return mk("alert", `${head}: published by workflow ${identity.workflow}, expected ${expect?.workflow}.`);
+  if (identity.ref !== `refs/tags/${tag}`) return mk("alert", `${head}: published at ${identity.ref}, expected refs/tags/${tag}.`);
+  return mk("digest", `${head}, published by ${identity.repo} ${identity.workflow} at ${tag} (local tag present)`);
+}
+
 /**
  * C1 from `npm view <pkg> --json`: a deprecated latest ⇒ alert. `readings` = `{maintainers, distTags}`
  * for core to diff run over run (keys "C1.maintainers"/"C1.distTags"). With `expectMaintainers` /

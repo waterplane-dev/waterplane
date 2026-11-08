@@ -136,3 +136,25 @@ test("the composer's proposal is never the agent's question, whatever the footer
   assert.equal(looksLikeQuestion(asked), true);
   assert.equal(askLine(asked).endsWith("Run D1a now?"), true);
 });
+
+test("the CLI's recap is not the agent speaking, and a question above it still counts", () => {
+  const rule = "─".repeat(54);
+  const grid = (closing) => [
+    closing,
+    "",
+    "✻ Baked for 10m 49s · done 4:26 PM",
+    "",
+    "※ recap: Replaced the push library, committed on main.",
+    "  Should the next step be a real notification?",
+    "  (disable recaps in /config)",
+    "                new task? /clear to save 136k tokens",
+    rule,
+    "❯ ",
+    rule,
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← 3 agents",
+  ].join("\n");
+  assert.equal(looksLikeQuestion(grid("⏺ Nothing leaks unless someone later logs it.")), false);
+  const asked = grid("⏺ Want the padding too?");
+  assert.equal(looksLikeQuestion(asked), true);
+  assert.equal(askLine(asked), "⏺ Want the padding too?");
+});

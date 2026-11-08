@@ -51,9 +51,10 @@ The installed Android app appears in the share sheet as a share target for water
 - asked: 2026-10-06
 - shipped: c1d7d699
 
-### R-apk-011 · requested
-The Android app keeps building, syncing and working unchanged while the iOS shell is added.
+### R-apk-011 · shipped
+The Android app keeps building, syncing and working as before with an iOS shell beside it.
 - asked: 2026-10-06
+- shipped: be49c5ea
 
 ### R-apk-012 · shipped
 If a downloaded web release shows a white screen, the app detects the bad state and automatically switches back to the release bundled in the APK, and does not take that build again.
@@ -142,7 +143,7 @@ On a newer app, while the sign-ins are locked the background link keeps each tok
 - asked: 2026-11-03
 - shipped: 9780cdce, 771f39f8
 
-### R-apk-029 · built, unverified on a phone
+### R-apk-029 · shipped
 The app takes an update over the air only when it can check it: once a phone holds a desktop's update key, an update with no signature, a bad one, or an older one than it already took is refused, nothing is downloaded, and Settings › Connection › app version says why in words that stay true whether the desktop is out of date or cannot read its key file. The key is learned on the next connection over the tailnet or an encrypted link, never over a plain Wi-Fi route: with no question on an older app, and through the app's own dialog on a newer one. A changed key and a restored desktop each wait for the person's answer, and an older app on an older desktop updates as it always did.
 - asked: 2026-11-03 (LAN security plan, section 5)
 - shipped: c7661bd2, e44959a9, 2815d9b1

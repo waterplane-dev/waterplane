@@ -113,6 +113,7 @@ test("call(): routes to a handled method; every failure is a sentence", async ()
   const boom = await reg.call("caller", "boom", {});
   assert.equal(boom.ok, false);
   assert.match(boom.error, /CALLER "boom" failed: nope/);
+  assert.equal(reg.byId("caller").status, null, "a refusal went to its caller: it is not left on the plugin's status line for every phone");
   assert.match((await reg.call("caller", "big", {})).error, /over the 512 KB a call may carry/);
   await reg.setEnabled("caller", false);
   assert.deepEqual(await reg.call("caller", "echo", {}), { ok: false, error: "CALLER is turned off" });

@@ -263,8 +263,8 @@ export interface HostPluginApi {
    * `call(pluginId, method, args)`. One handler per method; a second replaces
    * the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when
    * it presented a paired device's token, that device's id and name. A handler that ignores it is
-   * unchanged. A throw is the caller's `{ ok:false, error }` and the plugin's
-   * status line. Returns an unregister.
+   * unchanged. A throw is the caller's `{ ok:false, error }`, and only that: it is
+   * how a method refuses, so it never becomes the plugin's status line. Returns an unregister.
    */
   handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown | Promise<unknown>): () => void;
   /**

@@ -9,8 +9,10 @@ Inbox and outbox items are clickable and show thumbnails; all image displays sho
 - asked: 2026-09-11
 - shipped: 542d758
 
-### R-messaging-003 · requested
+### R-messaging-003 · shipped
 Synced/sent items show a clear confirmation (e.g. a checkmark) that they reached the server, consistently across queues and lists.
+- shipped: c74402fe
+- note: Green-check SyncMark on pad, snippets, schedule, fan-out, settings; queue sheet has its own delivered marks. Not every list audited.
 
 ### R-messaging-004 · shipped
 User can send or suppress the next prompt while a progress indicator is still showing for the previous one.
@@ -36,9 +38,10 @@ Quoting dialog auto-scrolls to show the bottom by default, and each line has a c
 - asked: 2026-09-24, 2026-09-24
 - shipped: 9fd1c04
 
-### R-messaging-009 · requested
-User can quote marked content from a second screen while remaining on the first screen.
+### R-messaging-009 · shipped
+The Send sheet and the pad offer the saved-snippet (quote) button like the compose bar does.
 - asked: 2026-09-24
+- shipped: 7f118baa
 
 ### R-messaging-010 · requested
 Typed compose words are kept until the user deletes them, and deleting them asks for confirmation once with an in-app confirm button, never a browser confirm dialog.
@@ -48,12 +51,18 @@ Typed compose words are kept until the user deletes them, and deleting them asks
 A promo that was sent successfully is reported as sent.
 - asked: 2026-10-06
 
-### R-messaging-012 · requested
-A sent message counts as delivered only once the CLI's full framed composer shows the echoed text, never from a one-row bare read.
+### R-messaging-012 · shipped
+A sent message waits a moment for the CLI's full composer frame to show the echoed text before it counts as delivered, instead of trusting a lone bare row; if no frame ever draws it is still accepted.
 - asked: 2026-10-20
+- shipped: 616671df
 
 ### R-messaging-013 · shipped
 Sending a message from the phone finishes and does not hang on "Sending… desktop hasn't answered yet; retrying".
 - asked: 2026-10-25
 - shipped: 9b5b9862
+
+### R-messaging-014 · shipped
+A prompt sends from the app as it does in CLI mode when the CLI labels the composer's top border (ultracode on), instead of falling to degraded sending.
+- asked: 2026-11-06
+- shipped: d10eceb4
 

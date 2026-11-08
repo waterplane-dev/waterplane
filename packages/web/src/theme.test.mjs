@@ -305,7 +305,7 @@ test("text on a tinted tab row is the ink proven readable on the tint", () => {
   // The test above proves `--fg` on every hue's fill and nothing else; a row's
   // second line in `--muted` read ~2:1 on the open row (owner's screenshot,
   // 2026-10-26). Every text colour inside a `.stab-row` must therefore be `--fg`.
-  for (const sel of [".stab-row", ".stab-row-label", ".stab-row-sub"]) {
+  for (const sel of [".stab-row", ".stab-row-label", ".stab-row-sub", ".stab-row-nums"]) {
     const at = CSS.indexOf(sel + " {");
     assert.ok(at >= 0, `no block for ${sel}`);
     const body = CSS.slice(at, CSS.indexOf("}", at)).replace(/\/\*[\s\S]*?\*\//g, "");

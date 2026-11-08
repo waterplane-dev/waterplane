@@ -1,5 +1,5 @@
 import { highlightAt, reanchor, stepHighlight } from "./tabHighlight";
-import { FileText, Layers, Loader, X } from "lucide-react";
+import { FileText, Flag, Layers, List, Loader, Star, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useBackStep } from "./backStep";
 import { askConfirm } from "./Confirm";
@@ -346,9 +346,20 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
                   ? <Loader size={16} className="spin stab-spin" aria-hidden="true" />
                   : <span className="stab-led" aria-hidden="true" />}
                 <span className="stab-row-text">
-                  <span className="stab-row-label">{t.label}<TabMarks sessionId={t.id} size={13} /></span>
+                  <span className="stab-row-label">
+                    {t.label}
+                    {t.starred && <span className="stab-tag starred" role="img" aria-label="starred"><Star size={13} fill="currentColor" /></span>}
+                    {t.flagBy && <span className={`stab-tag fu-${t.flagBy}`} role="img" aria-label="flagged for follow up"><Flag size={13} fill="currentColor" /></span>}
+                    <TabMarks sessionId={t.id} size={13} />
+                  </span>
                   <span className="stab-row-sub">{shownRepo(t.repo)} · {STATUS_LABEL[t.status]}</span>
                 </span>
+                {(t.spent || t.turns != null) && (
+                  <span className="stab-row-nums">
+                    {t.spent && <span aria-label={`cost so far ${t.spent}`}>{t.spent}</span>}
+                    {t.turns != null && <span className="stab-row-turns" aria-label={`${t.turns} turn${t.turns === 1 ? "" : "s"} logged so far`}><List size={12} aria-hidden="true" />{t.turns}</span>}
+                  </span>
+                )}
                 <button className="stab-x" aria-label={`close ${t.label}`} title="close this session"
                   onClick={(e) => { e.stopPropagation(); void close(t); }}>
                   <X size={18} />

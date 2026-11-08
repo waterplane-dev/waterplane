@@ -66,9 +66,11 @@ Git availability is detected by whether a usable git runs, not by a fixed path c
 - asked: 2026-10-21, 2026-10-21
 - shipped: 74c7719e, a362d9ce, e335f4a6
 
-### R-git-014 · requested
-Work trees are not offered anywhere in the product; the work-tree feature is removed.
+### R-git-014 · shipped
+The repo-readings sheet lists only main repos, with no worktree toggle.
 - asked: 2026-10-22
+- shipped: 327e196b
+- note: Worktrees remain elsewhere (new-worktree tab, send and secret pickers, leftover cleanup).
 
 
 ### R-git-015 · shipped
@@ -90,9 +92,10 @@ Protected main branches are supported by the WP UI workflows: a push a branch ru
 - asked: 2026-10-26
 - shipped: 04d4ac10, b384fdbf
 
-### R-git-019 · requested
+### R-git-019 · shipped
 The default workflow needs no manual branch or PR handling, while users who need branches or PRs remain supported.
 - asked: 2026-10-26
+- shipped: 37f60442, a3ac5325
 
 ### R-git-020 · shipped
 PR mode switches on only from the remote's own rules (a pull-request, required-checks or required-review rule on the default branch, read via `gh`); a repo with no rules, or only force-push/deletion blocked, or one whose rules cannot be read, stays in direct mode with the push button and screens unchanged.
@@ -152,18 +155,27 @@ Resuming after an update keeps the git view's repo and settings.
 - asked: 2026-10-30
 - shipped: 6b29a030
 
-### R-git-032 · built
+### R-git-032 · shipped
 The git sheet and the launcher's git badge never present a stale "behind" count as current: the desktop sends when the worktree last fetched, the sheet fetches once when it opens and says under its counts how old ↓ is ("as of the last check of origin/main, 5m ago"), a count older than a day or never taken reads ↓? with the reason in words (a nonzero one stays as a floor), and the badge's title says when the remote was last checked.
 - asked: 2026-11-03 — the owner's checkout sat 30 commits behind for four weeks while the phone showed it in sync
+- shipped: c86ae632
 
-### R-git-033 · built
+### R-git-033 · shipped
 Pre-push checks run without a push: the git view's and the Sync sheet's *Run checks* run the repo's own hook exactly as a push would feed it, pushing nothing, with the push's clock and steps, and notify when they end. The real push still runs the hook; a verdict never skips or refuses anything.
 - asked: 2026-11-04 — "a button to run the pre-push hooks without actually pushing so that I can either run all repositories or within one selected repository"
+- shipped: 7439b6dc
 
-### R-git-034 · built
+### R-git-034 · shipped
 The history's not-pushed list marks each commit the checks judged, passed or failed, and how long ago. Where the repo says its hook tests the pushed commit (git config `waterplane.prePushTestsCommit`), any outgoing commit can be checked by itself and a passed one offers *Push up to here (N)*, sending it and the older commits and leaving newer ones local. Where the hook tests the working tree, only the newest commit can be checked, a run over uncommitted changes marks nothing, and the list says why there is no partial push. In PR mode a partial push is refused in words.
 - asked: 2026-11-04 — "select one of these commits and say everything until this commit. Now push and just leave out the other two or three more newer commits"
+- shipped: 7439b6dc
 
-### R-git-035 · built
+### R-git-035 · shipped
 A changed Markdown file's diff also offers it rendered, and any changed text file still on disk can be opened for editing from its diff. Back, after a save or not, lands on that diff in the mode it was left, read again.
 - asked: before 2026-11-05 — a task given to GitHub Copilot; its wording was not kept
+- shipped: 5f6fc266
+### R-git-036 · shipped
+The public waterplane repository carries only its main branch.
+- asked: 2026-11-03
+- note: no commit, this is GitHub state; `git ls-remote --heads` showed only main on 2026-11-06.
+

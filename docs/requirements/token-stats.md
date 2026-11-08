@@ -19,13 +19,16 @@ The context window mini graph uses the auto-compact value as its maximum y value
 - asked: 2026-10-12
 - shipped: e6e47af
 
-### R-token-stats-005 · requested
+### R-token-stats-005 · shipped
 The Copilot stats page has the same quality and layout as the Claude stats page, built from shared code; other providers' pages match where it makes sense.
 - asked: 2026-10-15
+- shipped: 1e04d23d
 
-### R-token-stats-006 · requested
-The token stats view shows a turns section beside the token charts, with a button to set a limit on the number of turns.
+### R-token-stats-006 · shipped
+The context sheet lists the most expensive agents with requests, peak window, tokens, cost and model; it has no turns graph or turns-limit button.
 - asked: 2026-10-21
+- shipped: 4c6ff87f, f6cf4904
+- note: Owner agreed to the assistant's recommendation against a turns graph and turn-limit button.
 
 ### R-token-stats-007 · shipped
 Token stats pages look and behave identically in the web app, APK and VS Code, built from one shared source.

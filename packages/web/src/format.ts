@@ -202,6 +202,30 @@ export function agoText(ms: number): string {
   return `${Math.round(h / 24)} d ago`;
 }
 
+/** Why a cached copy is on screen after the read ended: `link` the socket is
+ *  down, `no-answer` the socket is up and the desktop did not answer. */
+export type StaleGap = "link" | "no-answer";
+
+/**
+ * The sentence above cached rows, written once: the wording is a promise about
+ * freshness. It says only what the caller knows. The hook's read knows all of
+ * it; a sheet tracking its own list passes `state` and `age`, and gets the
+ * sentence that blames nothing, because "the link is down" under a live strip
+ * is how this came to be split (a cached copy is on screen during EVERY read).
+ */
+export function stalenessNote(
+  res: { state: string; age?: number | null; error?: string | null; inflight?: boolean; gap?: StaleGap | null },
+  noun = "listing",
+): string | null {
+  if (res.state !== "cached" || res.age == null) return null;
+  const head = `Cached ${noun} from ${agoText(res.age)}`;
+  if (res.inflight) return `${head} — checking the desktop for anything newer.`;
+  if (res.gap === "link") return `${head} — the link is down, so anything added since won't be here.`;
+  if (res.error) return `${head} — the desktop refused a fresh read (${res.error}), so anything added since won't be here.`;
+  if (res.gap === "no-answer") return `${head} — the desktop did not answer, so anything added since won't be here.`;
+  return `${head} — anything added since won't be here.`;
+}
+
 /**
  * An elapsed SPAN between two instants (`to` defaults to now), floored to the
  * second and never past minutes: "45s" / "2m 5s". Distinct from `dur` on

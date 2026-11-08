@@ -469,6 +469,11 @@ this" and "the host was not reachable" lead to different next actions, and colla
 permissions problem gets read as a bad tunnel for a week. On a failure the cached data STAYS: it is
 still true about the moment it was taken, and it is the only thing on screen. Only the label moves.
 
+`cached` is not a claim about the link: the copy is on screen during every read too. So the sentence
+(`stalenessNote`, `format.ts`) reads `inflight`, `gap` and `error`, and says "the link is down" only
+when it is. The hook also subscribes to the link, because reading it once per render left a sheet
+opened during a reconnect on its cache, saying the link was down under a live strip (2026-11-07).
+
 `offline` is also an INPUT, because the link signal this app trusts is the SOCKET: `navigator.onLine`
 stays true while the Tailscale path is dead, which is the exact failure every offline path here
 exists for. A caller that already knows the socket is down passes it, and the cache is served without
@@ -3899,6 +3904,8 @@ every other media kind in this viewer.
   when the shortlist empties, which is exactly when the archive is the only way back.
 
 ### `FilesSheet.tsx`
+
+- `filesDir.ts` — the folder the browser was last in, per repo, so Files reopens there rather than at the root (asked 2026-11-07). A host key, because repo ids are that desktop's; never synced, because two phones are in two places. A file named from another screen neither reads nor moves it: that is the other screen's errand. A remembered folder deleted since is not special-cased: the sheet's error note says it could not be read and the crumbs lead out, so Back still walks up one folder at a time.
 
 - `FilesSheet.tsx` — the repo browser, and the rare edit. Deliberately NOT a Gallery tab: a gallery
   listing is keyed by COVERAGE so one can be re-filtered into another (`shared/gallery.ts`), and a

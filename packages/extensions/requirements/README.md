@@ -20,8 +20,7 @@ What this repo is expected to do, as a person asked for it: `docs/requirements/<
   filter; `cut.test.mjs`), `data.ts` the stores and the only writer, `RequirementsSheet.tsx` + `ItemRow.tsx` the
   sheet, `setupRow.ts` the words of the setup row (pinned by `web/setupRow.test.mjs`). Two doors to the update:
   the sheet's button and the setup row's hand-to-agent button (`SetupRowDef.agent`); both leave a backlog row
-  waiting for a tap. A shipped commit opens the repo's git screen (working tree only — a per-commit screen is a
-  follow-up); a session is text only (no `CoreApi` verb resolves an 8-character conversation prefix).
+  waiting for a tap. A shipped commit opens the repo's git screen (working tree only; there is no per-commit screen); a session is text only (no `CoreApi` verb resolves an 8-character conversation prefix).
   Sheet ids are `feature:requirements/<name>` (`featureSheetId`), never persisted.
 - `shared/methods.mts` — the method table (`ReqMethods`) and the two pure strings both ends word alike (`updateBrief`, `updateKey`). Files the host half imports must be `.mts`; `packages/host/tsconfig.extensions.json` includes `shared/`. The item parser is `@waterplane/shared`'s `parseRequirementsArea`, the same grammar as `scripts/requirements/update.mjs`.
 

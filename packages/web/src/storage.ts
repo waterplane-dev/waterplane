@@ -156,7 +156,7 @@ export const KEY_SCOPE = {
   // what that host last said, cached for an offline cold start
   snapSessions: "host", snapRepos: "host", snapReposAt: "host", snapRecent: "host", snapClosed: "host",
   snapBacklog: "host", snapHistory: "host", snapBuilds: "host", snapCapture: "host", snapSchedules: "host",
-  snapCliHealth: "host", snapAt: "host", themeOverlay: "host", themeOverlayCss: "host", slashCache: "host", fileMtimes: "host", artMarks: "host", fileRemarks: "host",
+  snapCliHealth: "host", snapAt: "host", themeOverlay: "host", themeOverlayCss: "host", slashCache: "host", fileMtimes: "host", artMarks: "host", fileRemarks: "host", filesDir: "host",
   newImages: "host", cmdHistory: "host", usage: "host", notifSeen: "host",
   costNoticed: "host", agentNoticed: "host", spendNoticed: "host",
   sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", wheelHidden: "host",

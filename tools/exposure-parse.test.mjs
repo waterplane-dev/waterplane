@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  ALLOW_LICENCES, apkCertFinding, codeScanningFindings, codeScanningUnavailable, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings,
+  ALLOW_LICENCES, attestationIdentity, latestChangeVerdict, apkCertFinding, codeScanningFindings, codeScanningUnavailable, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings,
   npmAuditFindings, npmPublishedFindings, osvFindings, osvQueries, parseGradleDeps, parseLockfile, parsePyproject,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
@@ -424,6 +424,40 @@ test("npmPublishedFindings: deprecated latest alerts; readings carry maintainers
   assert.equal(strict.findings.length, 2);
   assert.ok(strict.findings.every((f) => f.measure === "C1"));
   assert.deepEqual(npmPublishedFindings({ ...view, maintainers: [{ name: "bob" }, { name: "alice" }] }).readings.maintainers, ["alice", "bob"]);
+});
+
+const stmt = (predicate) => ({ attestations: [
+  { predicateType: "https://github.com/npm/attestation/tree/main/specs/publish/v0.1", bundle: { dsseEnvelope: { payload: "e30=" } } },
+  { predicateType: "https://slsa.dev/provenance/v1", bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify({ predicate })).toString("base64") } } },
+] });
+const V1 = (over = {}) => stmt({ buildDefinition: { externalParameters: { workflow: { repository: "https://github.com/waterplane-dev/waterplane", path: ".github/workflows/npm-publish.yml", ref: "refs/tags/v0.1.19", ...over } } } });
+
+test("attestationIdentity: SLSA v1 and v0.2 give repo/workflow/ref; anything else is null", () => {
+  const want = { repo: "waterplane-dev/waterplane", workflow: ".github/workflows/npm-publish.yml", ref: "refs/tags/v0.1.19" };
+  assert.deepEqual(attestationIdentity(V1()), want);
+  assert.deepEqual(attestationIdentity(stmt({ invocation: { configSource: { uri: "git+https://github.com/waterplane-dev/waterplane@refs/tags/v0.1.19", entryPoint: ".github/workflows/npm-publish.yml" } } })), want);
+  assert.equal(attestationIdentity(null), null);
+  assert.equal(attestationIdentity({ attestations: [{ predicateType: "https://slsa.dev/provenance/v1", bundle: { dsseEnvelope: { payload: "!!notjson" } } }] }), null);
+  assert.equal(attestationIdentity({ attestations: [{ predicateType: "other", bundle: {} }] }), null);
+});
+
+test("latestChangeVerdict: forward + local tag + right repo/workflow/ref is a digest; every other case alerts", () => {
+  const base = { pkg: "waterplane", prev: "0.1.18", next: "0.1.19", identity: attestationIdentity(V1()), expect: { repo: "waterplane-dev/waterplane", workflow: ".github/workflows/npm-publish.yml" }, localTag: true };
+  const ok = latestChangeVerdict(base);
+  assert.equal(ok.level, "digest");
+  assert.equal(ok.key, "C1:npm:waterplane:latest@0.1.19");
+  assert.equal(ok.text, "waterplane latest 0.1.18 → 0.1.19, published by waterplane-dev/waterplane .github/workflows/npm-publish.yml at v0.1.19 (local tag present)");
+  const alerts = {
+    backwards: { prev: "0.1.19", next: "0.1.18" },
+    sideways: { prev: "0.1.19", next: "0.1.19" },
+    foreignRepo: { identity: attestationIdentity(V1({ repository: "https://github.com/evil/waterplane" })) },
+    foreignWorkflow: { identity: attestationIdentity(V1({ path: ".github/workflows/x.yml" })) },
+    wrongRef: { identity: attestationIdentity(V1({ ref: "refs/heads/main" })) },
+    noLocalTag: { localTag: false },
+    noAttestation: { identity: null },
+  };
+  for (const [name, over] of Object.entries(alerts)) assert.equal(latestChangeVerdict({ ...base, ...over }).level, "alert", name);
+  assert.match(latestChangeVerdict({ ...base, localTag: false }).text, /no tag v0\.1\.19/);
 });
 
 const MARKET = (over = {}) => ({ results: [{ extensions: [{ extensionName: "demo-ext", flags: "validated, public", versions: [{ version: "0.6.1" }], ...over }] }] });

@@ -97,6 +97,24 @@ the package page, `npm view waterplane dist.attestations` and `npm audit signatu
 published bytes to the commit and the workflow run that built them. How a release is made, signed
 and published: [docs/notes/distribution.md](notes/distribution.md).
 
+### Verify a download by hand
+
+The installer and `waterplane update` check signatures for you. To check a GitHub release yourself,
+you need OpenSSL 3 or later (macOS's own `openssl` is LibreSSL, which cannot do this) and the public
+key, [`deploy/release-pubkey.pem`](../deploy/release-pubkey.pem) in this repo. The private key never
+sits on a site that serves downloads.
+
+```sh
+v=0.1.19   # the version you downloaded
+base64 -d < waterplane-$v.tar.gz.sha256.sig > sha256.sig.bin
+openssl pkeyutl -verify -pubin -inkey release-pubkey.pem -rawin \
+  -in waterplane-$v.tar.gz.sha256 -sigfile sha256.sig.bin
+shasum -a 256 -c waterplane-$v.tar.gz.sha256
+```
+
+Expect `Signature Verified Successfully`, then `OK`. `release.json` and `release.json.sig` verify
+the same way.
+
 `npm i -g` fails with `EACCES` when Node came from the nodejs.org installer or another account's
 Homebrew (its global folder is not yours). Either use a Node in your home folder (nvm, fnm, volta),
 or point npm's global folder there once: `npm config set prefix ~/.npm-global`, then add

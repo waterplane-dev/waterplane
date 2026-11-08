@@ -1,13 +1,16 @@
 # layout
 
-### R-layout-001 · requested
-Text input box is sized appropriately for comfortable typing.
+### R-layout-001 · shipped
+The message box grows with what is typed, up to a ceiling, so a long prompt can be read while typing.
+- shipped: 664187d4
 
-### R-layout-002 · requested
-Controls are positioned horizontally in one row rather than stacked vertically.
+### R-layout-002 · shipped
+The launcher's section-head buttons (waiting, starred, fold, fan-out, schedule, refresh, close) sit in one row, not stacked.
+- shipped: 664187d4
 
 ### R-layout-003 · requested
-Buttons remain active, responsive and functional (never grayed out) during operations, including offline and on build screens, clearly indicate operation outcomes, and their styling clearly shows whether each is clickable or disabled.
+A button a person taps always visibly does something: offline, queued or on a build screen it says what happened.
+- note: Overlaps R-ui-076 (never grey out a button).
 
 ### R-layout-004 · shipped
 Layout displays content in fewer lines (two instead of three).
@@ -20,11 +23,12 @@ All buttons are positioned at the top of the interface, not the bottom.
 UI boxes are sized consistently across all sections.
 - shipped: 8f710c1
 
-### R-layout-007 · requested
-App branding text is removed to save space.
+### R-layout-007 · shipped
+The launcher topbar shows only the app mark, with no app-name text, to save space.
+- shipped: 6cb1c809
 
 ### R-layout-008 · requested
-Diagrams are positioned lower right with text wrapping around them.
+On a session row the two small charts (context and token total) sit at the lower right with the prompt text wrapping around them.
 - asked: 2026-09-18
 
 ### R-layout-009 · shipped
@@ -63,9 +67,10 @@ On desktop the sync dialog is tidy and its marked part is accessible; on mobile 
 Marked text wraps so the x and ... controls stay pinned top-right on desktop and mobile.
 - asked: 2026-10-13
 
-### R-layout-017 · requested
-The VS Code extension's left panel is well structured with the main data in the centre, no confusing double panels, and both side columns are resizable.
+### R-layout-017 · shipped
+The VS Code extension has a native navigation tree on the left and one main view in the centre, with no second session list; in the wide web layout both side columns (sidebar and side panel) can be resized by dragging.
 - asked: 2026-10-14, 2026-10-14
+- shipped: a2ea18d8, 86981333
 
 ### R-layout-018 · requested
 Elements on screen do not overlap each other.
@@ -116,3 +121,8 @@ Once the launcher's closed top section needs a second line, a drag grip under it
 ### R-layout-028 · shipped
 On a phone, the context window & cost screen's head, conversation name and door buttons scroll away with the charts, so the charts get the whole screen; a desktop side panel keeps its head (R-ui-075).
 - asked: 2026-11-06
+### R-layout-029 · shipped
+On the context window & cost screen, the conversation name, the door buttons and the cached-graph line sit on one gutter, with even space above and below the buttons.
+- asked: 2026-11-06
+- shipped: 34ecfc00
+

@@ -33,21 +33,27 @@ Handled items stop showing as waiting and no longer display red 'ask you' marker
 - asked: 2026-09-24
 - shipped: 539dc0d
 
-### R-status-008 · requested
-Connection status icon accurately represents the current connection state and is never misleading.
+### R-status-008 · shipped
+The queue bar's icon names the cause: a no-connection cloud only when offline, a pause when the person holds the queue, an hourglass when it waits for the turn to end.
 - asked: 2026-10-03
+- shipped: c67f77e
 
-### R-status-009 · requested
-The status output shows more detail, so users see more information there.
+### R-status-009 · shipped
+The public-mirror verification shows each step's start, duration and result on screen while it runs, with a periodic latest-line heartbeat for slow steps.
 - asked: 2026-10-07
+- shipped: 1dd8f8e5
+- note: Misread: the ask was about build output, not a status view.
 
-### R-status-010 · requested
-The done status shown for an item matches its actual completion state.
+### R-status-010 · shipped
+A backlog item that already ran shows no 'next due now' clock chip; the next time shows only while the item is still waiting.
 - asked: 2026-10-08
+- shipped: 464ea31d
+- note: The done status itself was correct; the chip beside it was wrong.
 
-### R-status-011 · requested
+### R-status-011 · shipped
 The red 'Ask you' status has a clearly pressable button right next to it that deactivates the status; it looks like a button, not a status.
 - asked: 2026-10-15
+- shipped: 844f71f8
 
 ### R-status-012 · requested
 GitHub Copilot status is never detected covertly; it is determined openly.

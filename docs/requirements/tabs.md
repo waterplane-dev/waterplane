@@ -28,9 +28,10 @@ Tabs can be ordered by open sequence, by frequency (most-opened first), or by re
 - asked: 2026-09-20, 2026-10-05
 - shipped: d44506e
 
-### R-tabs-007 · requested
-Light-mode tab colors are higher intensity than the main screen's repo colors.
+### R-tabs-007 · shipped
+In light mode the repo-coloured fill of the session tab you are in is stronger than in dark mode, so the colour does not wash out.
 - asked: 2026-09-20
+- shipped: e641eb7e
 
 ### R-tabs-008 · shipped
 Number of visible tabs is user-configurable, defaulting to 10.
@@ -76,3 +77,6 @@ A lock mark appears on a session's tab while that session is waiting for vault a
 - asked: 2026-10-30
 - shipped: 9b9e87e1
 
+### R-tabs-017 · shipped
+Each session row in the open-tabs list shows its star and follow-up flag beside the name, and the prompt count and cost so far that the launcher row shows, so a person can find a session by more than its name. A figure nobody measured is absent, never zero.
+- asked: 2026-11-06

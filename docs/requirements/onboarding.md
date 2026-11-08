@@ -99,9 +99,10 @@ A first-time user on a host that has never run a session sees the repo row's + l
 - asked: 2026-10-08
 - shipped: d3975281, df830262
 
-### R-onboarding-016 · requested
-The flow from the first install step through to the first prompt working runs end to end without failures.
+### R-onboarding-016 · shipped
+The README shows a film of the whole setup, from the first install step to the first prompt sent and worked on.
 - asked: 2026-10-08
+- shipped: 74e6cefd
 
 
 ### R-onboarding-017 · shipped
@@ -138,9 +139,10 @@ The setup checklist mentions low disk space with a recommendation.
 The Opt-ins list remembers what the person already started in that repo: an offer whose words were sent there (or that is half done, such as readings written but not committed) moves to its own "Started here" list above the fresh offers, saying when it was sent and what became of it (waiting, running, still open, finished, failed, session closed). Sending it again asks once more first, the walk-through only counts offers never started, and any open offer can be marked done by the person.
 - asked: 2026-10-26
 - shipped: 57889170
-### R-onboarding-024 · requested
-A button in the app runs the full setup with AI.
+### R-onboarding-024 · shipped
+The capture sheet has a "set up with AI" button that opens a seeded prompt for a new session to find how the repo runs and write and verify the capture targets.
 - asked: 2026-10-27
+- shipped: 8e70c751
 
 ### R-onboarding-025 · shipped
 Any repo waterplane drives can be made ready for Copilot and local models by a setup check and documented instructions: which context files to create and which model suits which task.

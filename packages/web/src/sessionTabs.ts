@@ -33,7 +33,7 @@
  * is `SessionTabsBar.tsx`.
  */
 import { useEffect, useRef, useState } from "react";
-import { glueCompanions, repoLabel, repoShown, trimDefaultBranch } from "@waterplane/shared";
+import { costChip, glueCompanions, repoLabel, repoShown, trimDefaultBranch, usageChip, type FollowUp, type SessionInfo } from "@waterplane/shared";
 // Type-only, so `node --test` running straight over this file never has to load
 // a `.tsx`: what a tab's state IS belongs to `sessionFacts.tsx` and may not be
 // a second opinion held here.
@@ -67,6 +67,29 @@ export interface SessionTab {
   status: SessionStatus;
   /** When the session was created — the "open sequence" order, and the tie-break. */
   createdAt: number;
+  /** The person's star. Read by the tabs list only, like the three below. */
+  starred?: boolean;
+  /** Who flagged it for follow up; the flag's colour says who, as on the launcher row. */
+  flagBy?: FollowUp["by"];
+  /** The launcher row's tally (`turnTally`). Absent until a turn is logged. */
+  turns?: number;
+  /** What it has cost so far, the launcher's figure. Absent when nothing was measured, never `$0`. */
+  spent?: string;
+}
+
+/**
+ * The launcher row's orientation facts for one tab, so the tabs list and the
+ * row never print a session two ways. `spent` climbs the row's own ladder,
+ * money where it could be priced and tokens otherwise (`SpendSparkline`).
+ */
+export function tabFacts(s: Pick<SessionInfo, "starred" | "followUp" | "contextSpark">, turns: number | null): Pick<SessionTab, "starred" | "flagBy" | "turns" | "spent"> {
+  const spent = costChip(s.contextSpark?.costUsd) ?? usageChip(s.contextSpark?.usageTok);
+  return {
+    ...(s.starred ? { starred: true } : {}),
+    ...(s.followUp ? { flagBy: s.followUp.by } : {}),
+    ...(turns != null ? { turns } : {}),
+    ...(spent ? { spent } : {}),
+  };
 }
 
 /**

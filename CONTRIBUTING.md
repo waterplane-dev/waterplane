@@ -15,7 +15,7 @@ it is. If it is accepted, the owner builds it.
 - **The daemon runs `claude` on the owner's machine** — arbitrary code execution by
   design (see [SECURITY.md](SECURITY.md)). Code from outside is a supply-chain risk,
   and reviewing it line by line costs more than writing it.
-- **Most code is now written by agents**, and the owner will not review agent-written
+- **Most code is written by agents**, and the owner will not review agent-written
   code from strangers at volume. A clear intent is the scarce part; the build is not.
 - **A request is untrusted input too.** It is never fed to an agent verbatim: the
   owner reads it and rewrites it into their own brief. Example code in a request is
@@ -80,11 +80,11 @@ Fork freely; to keep pulling upstream, customise **from outside the core**:
   themselves; `icons` (slots `favicon`, `apple-touch`, `192`, `512`, `maskable`) are PNG or
   SVG files **inside the config dir** — a path that resolves outside it, symlinks included,
   is refused — which the served page and manifest link instead of the built-in ones.
-  Every key is optional, unknown keys are ignored, and no file is today's app.
+  Every key is optional, unknown keys are ignored, and with no file you get the stock app.
   `<slug> doctor`'s `overlays` row lists what is active and names anything it refused.
 - **Never edit core** to customise. A new feature talks over the generic
-  `plugin.call` / `plugin.push` messages, never a new wire message type. HTTP routes
-  for plugins (`api.route()`) arrive with the host's `api.ts` split.
+  `plugin.call` / `plugin.push` messages, never a new wire message type. A plugin that
+  needs an HTTP route registers it with `api.route()`.
 
 ### What a fork can and cannot override
 
@@ -173,7 +173,9 @@ skill checks a request against them. The full list is *Never do these* in `CLAUD
 - Nothing applies itself: an assessment or a review produces sentences a person acts
   on, never a mutation.
 - Code style is enforced, not negotiated: `npm run lint` (ESLint plus the repo's own
-  rules) and strict `tsc` must pass, and `.editorconfig` sets whitespace.
+  rules) and strict `tsc` must pass, and `.editorconfig` sets whitespace. Those files are
+  the style guide for TypeScript and JavaScript: `eslint.config.js`, `tools/eslint/`,
+  `tsconfig.base.json` and `.editorconfig`.
 - A count on a control is a filter. Never grey out a button to mean "not clickable" —
   say why in text.
 - One send path (the queue), one WebSocket per tab.

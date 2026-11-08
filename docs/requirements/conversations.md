@@ -24,9 +24,10 @@ option or per-shell keep.
 - asked: 2026-09-28
 - shipped: this change (`core/launcher/CloseSheet.tsx` + `closeModel.ts`)
 
-### R-conversations-005 · requested
-Compacting a conversation keeps the text the user had entered before the compact.
+### R-conversations-005 · shipped
+After a compact, a session's card still shows what it started with: a typed slash command never becomes its Started line.
 - asked: 2026-10-06
+- shipped: d797cde1
 
 ### R-conversations-006 · requested
 The dialogue remembers what the user said last time and offers a reset button that clears that memory.
@@ -42,7 +43,8 @@ A conversation can be bookmarked (live or from the archive) with an optional one
 The archive lists a non-claude backend's conversations (when that backend's facts include `conversations`), resumes one under that backend and deletes one after a confirm; reading/forking/bookmarks stay claude's until a backend provides them.
 - asked: 2026-10-22 (backend contract v2 follow-up, workflow backend-v2-followups, package b-archive-non-claude)
 - shipped: this change (`ArchiveSheet.tsx` backend switch over `GET/DELETE /api/conversations`, `features/tools/logic.ts` `archiveBackends` + `liveConversationIds` matching `backendSessionId`, `webapi/webapiTree.ts` `conversations`/`conversationsDelete`)
-### R-conversations-009 · requested
-A chat always renders its turns; it never shows blank or half-drawn where its content should be.
+### R-conversations-009 · shipped
+In the health index chart, a week with no moves lists its readings plainly instead of drawing empty bar tracks that look like a chart that failed to draw.
 - asked: 2026-10-23
+- shipped: a373265e
 

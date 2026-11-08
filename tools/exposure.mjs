@@ -39,10 +39,11 @@ import {
 } from "./exposure/core.mjs";
 import {
   apkCertFinding, codeScanningFindings, codeScanningUnavailable, dependabotFindings, eolFindings, eraFindings, manualConfirmFinding, privacyUrlFinding, rdapExpiryFinding, targetApiFinding, targetSdkFiles, targetSdkReadings, ghRepoSettings, licenceFindings, marketplaceFindings, npmAuditFindings,
-  npmPublishedFindings, npmVerifyFinding, osvFindings, osvQueries, parseGradleDeps, parsePyproject, parseLockfile,
+  attestationIdentity, latestChangeVerdict, npmPublishedFindings, npmVerifyFinding, osvFindings, osvQueries, parseGradleDeps, parsePyproject, parseLockfile,
   parseVersionCatalog, registryFindings, secretScanningFindings, sha256Mismatches,
 } from "./exposure/parse.mjs";
 import * as src from "./exposure/sources.mjs";
+import { NPM_WORKFLOW } from "../scripts/release/publish-lib.mjs";
 import { collectPlayVitals } from "./exposure/play.mjs";
 import { parseTargets, targetRunArgv, unsetTargetVars, unsetVarsSentence } from "./exposure/targets.mjs";
 
@@ -252,16 +253,32 @@ async function collectGh(repoSlug, hasManifests, now) {
   return out;
 }
 
-/** C1: what is on npm. */
-function collectNpmPublished(pkg) {
+/**
+ * C1: what is on npm. A move of the `latest` tag since the last run is judged, not alerted:
+ * forward + local tag v<new> + SLSA attestation naming `gh` and NPM_WORKFLOW at refs/tags/v<new> is a digest.
+ */
+async function collectNpmPublished(pkg, { prevTags, gh, dir } = {}) {
   const out = { findings: [], absent: [], readings: {} };
   const v = src.npmView(pkg);
   if (!v.ok) { out.absent.push(absent("C1", v.why, v.unreachable)); return out; }
-  const p = npmPublishedFindings(v.data);
+  const p = npmPublishedFindings(v.data, { expectDistTags: [] });
   out.findings.push(...p.findings);
   out.readings = { "C1.maintainers": JSON.stringify(p.readings.maintainers), "C1.distTags": JSON.stringify(Object.fromEntries(Object.entries(p.readings.distTags).sort())) };
   const latest = p.readings.distTags.latest ?? v.data.version;
   if (!latest) { out.absent.push(absent("C1", `${pkg} has no latest version`)); return out; }
+  let prevLatest = null;
+  try { prevLatest = prevTags ? JSON.parse(prevTags).latest ?? null : null; } catch { /* unreadable baseline: no judgement */ }
+  if (prevLatest && prevLatest !== latest) {
+    if (!gh) out.absent.push(absent("C1", `latest moved ${prevLatest} → ${latest} but no --gh was given, so who published it cannot be judged`));
+    else {
+      const att = await src.npmAttestation(pkg, latest);
+      const tag = src.gitHasTag(dir, `v${latest}`);
+      if (!att.ok) out.absent.push(absent("C1", `attestation for ${pkg}@${latest}: ${att.why}`, true));
+      else if (att.data !== null && !Array.isArray(att.data?.attestations)) out.absent.push(absent("C1", `attestation for ${pkg}@${latest} is not readable`, true));
+      else if (!tag.ok) out.absent.push(absent("C1", `local tag check: ${tag.why}`, true));
+      else out.findings.push(latestChangeVerdict({ pkg, prev: prevLatest, next: latest, identity: attestationIdentity(att.data), expect: { repo: gh, workflow: `.github/workflows/${NPM_WORKFLOW}` }, localTag: tag.data }));
+    }
+  }
   const ver = src.npmVerify(pkg, latest);
   if (!ver.ok) out.absent.push(absent("C1", ver.why, true));
   else if (ver.data.status === 1) out.findings.push(npmVerifyFinding(pkg, latest, ver.data.stdout));
@@ -466,7 +483,10 @@ async function cmdRun(argv) {
   let settings = wantB ? {} : { ...(prev?.readings?.settings ?? {}) }; // a run without B carries the last B/C1 baseline
   if (o.gh && wantB) { const g = await collectGh(o.gh, hasManifests, nowD); parts.push(g); settings = { ...g.settings }; }
   else if (wantB) parts.push({ findings: [], absent: ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"].map((m) => absent(m, "no --gh given")) });
-  if (o.npm && want("C1")) { const c = collectNpmPublished(o.npm); parts.push(c); Object.assign(settings, c.readings); }
+  if (o.npm && want("C1")) { const c = await collectNpmPublished(o.npm, { prevTags: prev?.readings?.settings?.["C1.distTags"], gh: o.gh, dir }); parts.push(c);
+    // npm unreadable this run: keep the last C1 baseline, so the next readable run still judges a move made in the gap
+    for (const k of ["C1.maintainers", "C1.distTags"]) if (!(k in c.readings) && prev?.readings?.settings?.[k] !== undefined) settings[k] = prev.readings.settings[k];
+    Object.assign(settings, c.readings); }
   if (o.vscode && want("C3")) parts.push(await collectMarketplace(dir, o.vscode, o["vscode-manifest"], nowD));
   if (o["release-repo"] && want("C2")) parts.push(collectRelease(o["release-repo"], o["apk-cert"]));
   const stores = {};

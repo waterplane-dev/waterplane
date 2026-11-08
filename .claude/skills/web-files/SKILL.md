@@ -180,6 +180,6 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   gone — never re-pointed at whatever sits on its old numbers. Pure half `fileRemarks.test.mjs`.
 - `pasteImages.ts` —
   **TEXT WINS** (with `desktopShot.ts` and `artifactMarks.ts`): a paste with non-blank `text/plain` never opens the annotator; a pasted picture takes the picker's route (`routeFiles`). `desktopShot.ts` is the one screenshot path (`POST /api/host/screenshot`) — never a second capture route. `artifactMarks.ts` new/opened/downloaded marks are kept on this phone (storage class `host`), never synced, validated against mtime.
-- `FilesSheet.tsx` — the repo browser and the rare edit. **Saving is never queued** — a write composed
+- `FilesSheet.tsx` — the repo browser and the rare edit. It reopens in the repo's last folder (per host, never synced); a file named from elsewhere neither reads nor moves it. **Saving is never queued** — a write composed
   now and replayed in an hour carries a base the file left behind. A `stale` refusal keeps the typed
   text and **never re-sends with a fresh base**.

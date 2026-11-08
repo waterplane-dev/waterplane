@@ -781,7 +781,9 @@ export class PluginRegistry {
       if (size > CALL_RESULT_MAX) return { ok: false, error: `${e.manifest.name} "${method}" answered ${Math.round(size / 1024)} KB — over the ${CALL_RESULT_MAX / 1024} KB a call may carry` };
       return { ok: true, result: result ?? null };
     } catch (err) {
-      this.handlerFailed(e, `"${method}"`, err);
+      // The caller gets this sentence, so it is not also the plugin's status: a throw here is how a method refuses (the vault's locked
+      // list), and a status line would stay on Settings for every phone until the next restart, long after the refusal stopped being true.
+      console.warn(`[${BRAND.slug}] plugin ${e.manifest.id}: "${method}" refused: ${msgOf(err)}`);
       return { ok: false, error: `${e.manifest.name} "${method}" failed: ${msgOf(err)}` };
     }
   }

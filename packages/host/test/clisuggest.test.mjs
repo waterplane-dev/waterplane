@@ -56,6 +56,30 @@ test("a screen with no composer at all is null, not a guess", () => {
   assert.equal(cliSuggestionOf(prose, prose), null);
 });
 
+test("a torn closing rule never lets the footer through as a proposal", () => {
+  // Live on a phone 2026-11-07: letters left on the closing rule, so it stopped
+  // being a rule and the box ran on into the footer. The dim read was clean.
+  const footer = "  ⏵⏵ auto mode on · 1 shell · ← 3 agents · ↓ to man…";
+  const torn = ["✻ Sautéed for 30s", "", RULE, "❯", `${RULE}ing`, footer];
+  const clean = ["✻ Sautéed for 30s", "", RULE, "❯", RULE, footer];
+  assert.equal(cliSuggestionOf(torn, clean), null);
+});
+
+test("a box no rule closes is refused, rule glyphs or not", () => {
+  const open = [RULE, "❯", "  ⏵⏵ auto mode on · 1 shell"];
+  assert.equal(cliSuggestionOf(open, [RULE, "❯", RULE]), null);
+});
+
+test("words under a torn rule that a later rule closes are still refused", () => {
+  const stale = [RULE, "❯", `${RULE}ing`, "  ⏵⏵ auto mode on", RULE];
+  assert.equal(cliSuggestionOf(stale, [RULE, "❯", RULE]), null);
+});
+
+test("a proposal wrapped over two rows is still one proposal", () => {
+  const plain = [RULE, "❯ watch CI and report", "  when it finishes", RULE];
+  assert.equal(cliSuggestionOf(plain, [RULE, "❯", RULE]), "watch CI and report when it finishes");
+});
+
 test("an over-long read is refused, never published as one tap", () => {
   const long = "x".repeat(CLI_SUGGESTION_MAX + 1);
   assert.equal(cliSuggestionOf(grid(`❯ ${long}`), grid("❯")), null);

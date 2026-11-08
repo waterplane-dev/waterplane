@@ -18,9 +18,10 @@ When a downloaded app is ready for one-tap installation, the user gets a notific
 - asked: 2026-09-25
 - shipped: 7bc8c78
 
-### R-notifications-005 · requested
+### R-notifications-005 · shipped
 Users can view a list of snoozed or dismissed installation notifications.
 - asked: 2026-09-25
+- shipped: 7bc8c78f
 
 ### R-notifications-006 · shipped
 Toast notifications dismiss on tap, and dismissed toasts still appear in full in the notifications list.

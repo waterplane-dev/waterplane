@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.4 - 2026-11-08
+
+### New
+
+- **The file browser reopens in the folder you left.** Each repo remembers its own folder.
+- **Every Questions card names the session's conversation beside its title.** Two sessions of one repo can now be told apart.
+- **Each row in the tabs list shows its star, flag, prompt count and cost.** The launcher row already did.
+- **The shift+tab chip sits at the very end of the key row**, past CLI.
+
+### Fixed
+
+- **A narrowed terminal no longer raises a false "asked you".** A narrowed screen kept the tail of an older, wider frame, and that text could end in a "?". A session that asked nothing showed a question, with the mixed text on its card. The agent's recap is also cut from the question check, so a "?" in it can no longer count as the ask.
+- **The footer is no longer published as Claude's proposal.** Letters left on the composer's closing rule made the box run on into the footer. A proposal now needs a box that a rule closes.
+- **A cached list no longer says the connection is down when it is up.** The age line read "down" under a strip showing 185 ms. It now says what is true: checking, connection down, no answer, or the host's refusal.
+- **A sheet opened during a reconnect now reads the host when the connection returns.** It used to stay on its cached copy.
+- **Smaller fixes.** The name fields on the New sheet open a lowercase keyboard, since project, folder and branch names are not sentences.
+
 ## 0.9.3 - 2026-11-06
 
 ### New

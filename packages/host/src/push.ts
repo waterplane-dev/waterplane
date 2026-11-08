@@ -9,7 +9,7 @@
 import { chmodSync, mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonGuarded, readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
-import webpush, { type PushSubscription } from "web-push";
+import { generateVapidKeys, pushTransport, vapidFrom, type PushSubscription, type Vapid } from "./pushsend.js";
 import { env } from "./env.js";
 import { BRAND, type NotifyLevel, type NotifyOpen } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
@@ -162,7 +162,7 @@ export const PUSH_CLOCK_SKEW_MS = 10 * 60_000;
 
 /**
  * How far the push service's clock is from this host's, in ms (service − host), read off the
- * refusal's own `Date` response header (web-push's `WebPushError.headers`); null when the error
+ * refusal's own `Date` response header (`PushRefused.headers`); null when the error
  * carries no parseable Date — then nobody said, and the refusal is judged as before.
  */
 export function pushClockSkewMs(err: unknown, now: number): number | null {
@@ -182,6 +182,7 @@ function endpointHost(endpoint: string): string {
 export class PushManager {
   private subs: StoredSub[] = [];
   private keys: { publicKey: string; privateKey: string };
+  private vapid: Vapid;
   private subsPath: string;
   private keysPath: string;
   private now: () => number;
@@ -207,7 +208,7 @@ export class PushManager {
       // otherwise; tighten it in place (best effort, never fatal).
       try { if ((statSync(this.keysPath).mode & 0o077) !== 0) chmodSync(this.keysPath, 0o600); } catch { /* best effort */ }
     } else {
-      this.keys = webpush.generateVAPIDKeys();
+      this.keys = generateVapidKeys();
       regenerated = !!read.corrupt;
       try { writeJsonAtomic(this.keysPath, this.keys, { mode: 0o600, space: 2 }); } catch (e) {
         console.error(`[push] could not save VAPID keys (${(e as Error).message}); push works until restart`);
@@ -217,7 +218,7 @@ export class PushManager {
     // non-resolvable VAPID contact like `mailto:waterplane@localhost`. Default to a
     // valid-looking placeholder; override with a real address via env.
     const vapidContact = env("VAPID_CONTACT") || `mailto:${BRAND.slug}@example.com`;
-    webpush.setVapidDetails(vapidContact, this.keys.publicKey, this.keys.privateKey);
+    this.vapid = vapidFrom(vapidContact, this.keys);
 
     this.subs = readJsonGuarded<StoredSub[]>(this.subsPath, [], Array.isArray);
     if (regenerated && this.subs.length) {
@@ -301,7 +302,7 @@ export class PushManager {
       this.subs.map(async (sub) => {
         const where = endpointHost(sub.endpoint);
         try {
-          await webpush.sendNotification(sub, whole);
+          await pushTransport.sendNotification(sub, whole, this.vapid);
           sent(sub);
         } catch (err: any) {
           if (pushRefusal(err?.statusCode) !== "too-large") { refused(sub, where, err, false); return; }
@@ -310,7 +311,7 @@ export class PushManager {
           if (floor === null) return;
           const small = floor;
           console.warn(`[push] ${where} answered 413 to "${payload.title}"; resending cut to ${Buffer.byteLength(small, "utf8")} bytes`);
-          try { await webpush.sendNotification(sub, small); sent(sub); } catch (e: any) { refused(sub, where, e, true); }
+          try { await pushTransport.sendNotification(sub, small, this.vapid); sent(sub); } catch (e: any) { refused(sub, where, e, true); }
         }
       }),
     );

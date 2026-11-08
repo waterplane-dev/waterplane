@@ -83,9 +83,10 @@ The VS Code extension shows the same overall cost view as the phone, with one st
 - shipped: 4707cf3f
 - reworked 2026-10-21 (owner): the view's headline is also shown before any scan, from the last scan's kept summary (R-cost-018).
 
-### R-cost-017 · requested
-The set budget is visible in the UI.
+### R-cost-017 · shipped
+A budget set on a queued or scheduled item is shown on its backlog row, where it can be changed or cleared.
 - asked: 2026-10-18
+- shipped: 5ff4bf7c
 
 ### R-cost-018 · shipped
 The VS Code extension shows the last seven days' cost the moment VS Code opens, without reading the logs: the tree's All sessions row says `7 d: here $14 · all $80 · 2 h ago` from the last finished scan, with its age (none right after a read), the same seven days before and after this window's scan, and the `here` part only when that folder has a priced figure (a sub-folder counts only sessions started in it; never a prefix match, never `$0` — unpriced weeks in tokens). The status bar shows the session only while one is live (running, or written in the last 30 minutes); otherwise the seven days, `7 d here $14` when this repo's is known, else `7 d all $80`, with the age in the text once the reading is over a day old; with neither it hides. A reading more than seven days old is not shown anywhere: it would not be the last seven days. A changed Claude config dir drops the kept figure.

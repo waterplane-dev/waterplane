@@ -10,9 +10,11 @@ The /api/health endpoint reports ptys.masters equal to the number of active sess
 - asked: 2026-09-25
 - shipped: 071595d
 
-### R-diagnostics-003 · requested
-Setup checklist communicates waterplane capabilities (build tools, auto-download, frame conditions) to the repo and detects outdated skill files with a fix button.
+### R-diagnostics-003 · shipped
+Every Claude session waterplane starts is handed a current skill telling it what waterplane offers a repo (outbox, builds, its conditions), so no per-repo skill file goes out of date.
 - asked: 2026-09-27
+- shipped: 2efac477
+- note: Owner moved from a per-repo skill file with an outdated-detector and fix button to a skill handed at spawn.
 
 ### R-diagnostics-004 · shipped
 Setup checklist inspects and verifies that APK files are present in the repo.
@@ -29,9 +31,10 @@ The doctor reports the WSL idle state correctly by asking Windows for the keep-a
 - asked: 2026-10-09
 - shipped: aeae7b6e
 
-### R-diagnostics-007 · requested
+### R-diagnostics-007 · shipped
 The log view has a Copy Log button and a button sending the log to a CLI session for fixing; the log opens directly below the clicked row.
 - asked: 2026-10-14
+- shipped: ffb1d83b
 
 ### R-diagnostics-008 · shipped
 A checkbox dialog with the cursor on Submit is still recorded as an open dialog in the health record, even when the footer wraps over two rows at 46 columns and includes 'ctrl+g to edit in Vim' or another short hint.
@@ -39,8 +42,9 @@ A checkbox dialog with the cursor on Submit is still recorded as an open dialog 
 - shipped: 5cb8f255
 
 ### R-diagnostics-009 · requested
-The doctor command checks for the nom package and reports on it.
+The doctor reports whether the npm install route (npm i -g waterplane) can work on this desktop, beyond the existing npm-version row.
 - asked: 2026-10-19
+- note: The ask said 'nom package' = the npm package for installing waterplane.
 
 ### R-diagnostics-010 · shipped
 Each CLI health signal has a fixture current for the installed CLI version, harvested from the live host once per version as one redacted sample (chrome verbatim, prose and secrets masked), and written into the repo only on explicit request.

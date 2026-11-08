@@ -5,22 +5,25 @@ App requests microphone permission on Android, with the permission setting acces
 - asked: 2026-09-19
 - shipped: b0b701e
 
-### R-voice-002 · requested
+### R-voice-002 · shipped
 Voice input dictation offers low latency and high quality.
 - asked: 2026-09-19
+- shipped: b87535a7, 9b59edb9
 
-### R-voice-003 · requested
+### R-voice-003 · shipped
 Local voice service runs without port conflicts with other services.
 - asked: 2026-09-19
+- shipped: b87535a7
 
 ### R-voice-004 · shipped
 Voice input handles poor connectivity the same way written prompts do, without erroring after extended recording.
 - asked: 2026-09-20
 - shipped: bab3986
 
-### R-voice-005 · requested
+### R-voice-005 · shipped
 Voice recording works reliably, and recording status clearly shows whether it is recording or sending.
 - asked: 2026-09-22, 2026-09-22
+- shipped: 7af661e3
 
 ### R-voice-006 · requested
 Speaker combo box displays the actual selected voice value.

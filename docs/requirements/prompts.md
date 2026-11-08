@@ -27,9 +27,11 @@ Accept buttons show clear outcome explanations before the user acts.
 - asked: 2026-09-18
 - shipped: 2cb29c8
 
-### R-prompts-007 · requested
-Assessment derives keywords, headlines, and classification (bug/feature/enhancement) for each item; headlines are optional for human-written backlog items.
+### R-prompts-007 · shipped
+Assessment gives each item a short headline and a bug, feature, enhancement or chore label; a person may optionally set a headline on their own backlog items.
 - asked: 2026-09-18
+- shipped: 4ea4a5ba
+- note: Keywords were not built; the owner said keywords or a headline.
 
 ### R-prompts-008 · shipped
 System prompts the user to confirm whether a ranking persists or is overwritten.

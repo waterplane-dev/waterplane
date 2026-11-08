@@ -68,3 +68,17 @@ test("normal screen: still the replay — rows the 5-row grid no longer shows ar
   const text = await screenText(core, "x", 40);
   assert.match(text, /^line 1$/m, "the 50-row replay still holds rows the 5-row grid lost");
 });
+
+test("alternate screen: a narrowed grid reads no cell past the pane's edge", async () => {
+  const { s, feed, resize } = sessionAt(80, 6);
+  feed(`${ESC}[?1049h${ESC}[H${"a".repeat(54)}stale tail${ESC}[2;1H${"b".repeat(54)}echo exit $?`);
+  await settle();
+  resize(54, 6);
+  feed(`${ESC}[Hrecap one${ESC}[K${ESC}[2;1Hrecap two${ESC}[K`);
+  await settle();
+  assert.deepEqual(s.screenLog.gridText().split("\n").slice(0, 2), ["recap one", "recap two"]);
+  assert.deepEqual(s.screenLog.gridCells(6).slice(0, 2).map((r) => r.text.trimEnd()), ["recap one", "recap two"]);
+  // The 80-column frame really was on screen, so the log may keep it; what it
+  // must never hold is a row that was never drawn, the new words on the old tail.
+  assert.equal(s.screenLog.lines().some((l) => /recap .*(stale tail|exit)/.test(l)), false);
+});

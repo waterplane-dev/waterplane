@@ -5,6 +5,23 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.20
+
+### New
+
+- **The Files browser reopens in the folder you left, per repo.** Each repo remembers its own place.
+- **Every Questions card names the session's conversation beside its title.** Two sessions of one repo can now be told apart.
+- **Each row in the tabs list shows its star, flag, prompt count and cost.** They match the launcher row.
+- **The shift+tab chip sits at the very end of the key row, past CLI.**
+- **The name fields on the New sheet open a lowercase keyboard.** Project, folder and branch names are not sentences.
+
+### Fixed
+
+- **A cached list says the link is down only when it is.** The age line used to say so under a strip reading 185 ms. It now says checking, link down, no answer, or the host's refusal. A sheet opened during a reconnect reads the host when the link comes back instead of staying on its cache.
+- **A session no longer reports "asked you" on a turn that asked nothing.** After a pane was narrowed, the leftover tail of an old wider frame ended up on the card. A "?" in the CLI's recap can no longer count as the question.
+- **A torn closing rule no longer publishes the footer as Claude's proposal.** A proposal now needs a complete box and both reads from the same frame.
+- **The Wi-Fi name is shown with Tailscale on.** The name was empty even with the permission granted, because the VPN was read instead of the Wi-Fi network. It is read again when the app resumes.
+
 ## 0.1.19
 
 ### New

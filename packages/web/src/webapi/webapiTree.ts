@@ -89,11 +89,11 @@ export const treeApi = {
     return d.tools ?? {};
   },
   /** One directory of the worktree, or (with `q`) a recursive name search. */
-  tree: (repoId: string, path = "", q?: string) => {
+  tree: (repoId: string, path = "", q?: string, signal?: AbortSignal) => {
     const s = new URLSearchParams();
     if (path) s.set("path", path);
     if (q) s.set("q", q);
-    return jget<TreeListing>(`/api/repos/${repoId}/tree?${s}`);
+    return jget<TreeListing>(`/api/repos/${repoId}/tree?${s}`, undefined, signal);
   },
   /** Read one file for the viewer/editor. Carries the `sha` a save must echo. */
   treeFile: (repoId: string, path: string) =>

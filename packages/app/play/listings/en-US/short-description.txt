@@ -1,1 +1,1 @@
-Drive Claude Code on your own computer from your phone, over Tailscale.
+Your phone as the workbench for Claude Code running on your own desktop.

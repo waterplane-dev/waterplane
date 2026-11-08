@@ -69,8 +69,9 @@ The per-prompt cost section is one component shared by CLI and GUI modes, collap
 - shipped: f61cced, 83a6fda
 
 ### R-metrics-015 · requested
-Graphs are placed on the relevant screen and are improved in readability and information shown.
+The This desktop sheet draws CPU, memory, GPU, held memory, temperature and fan readings as full-width graphs with axes and a current value, and also draws disk space as a history graph.
 - asked: 2026-10-07
+- note: Full-width graphs with axes, temperature and fans shipped in 74e3f90b; no disk history graph yet.
 
 ### R-metrics-016 · shipped
 The VS Code extension shows repo health metrics over time.
@@ -128,18 +129,21 @@ The current repo health score is calculated from current data alone, without nee
 - asked: 2026-10-17
 - shipped: 87750d7a
 
-### R-metrics-027 · requested
+### R-metrics-027 · shipped
 When repo health has no score, the view shows a plain sentence explaining why, never a prompt to restart the desktop app.
 - asked: 2026-10-17
+- shipped: 7c26e7fe
 
 ### R-metrics-028 · shipped
 The repo-health engine counts .mts and .cts files as TypeScript source.
 - asked: 2026-10-18
 - shipped: 7f7a22ba
 
-### R-metrics-029 · requested
-The metrics view has a button that resets the stats so the user can start over.
+### R-metrics-029 · shipped
+When a repo's own copy of the health engine fails, Repo readings offers a button that sends the agent a prompt to adopt the desktop's current engine.
 - asked: 2026-10-19
+- shipped: 6e2394a1
+- note: Owner first asked for start over, then refined to the adopt-engine prompt button.
 
 ### R-metrics-030 · shipped
 When a repo's own health engine copy fails, the view offers a button that seeds a prompt asking the agent to adopt the desktop's engine for the repo's item metrics.
@@ -200,9 +204,10 @@ The owner sees how many people, and how many unique visitors, visit waterplane.d
 - asked: 2026-10-30
 - shipped: 80eff9f9, 62de4d8b, 69b5ef27
 
-### R-metrics-042 · requested
-Repo health series keep recording after a definition change instead of refusing to append to the existing series.
+### R-metrics-042 · shipped
+When the health engine's definition changes, a series measured under the older one is not mixed with new readings; one tap on the phone re-cuts it under the current definition and keeps the old series aside.
 - asked: 2026-10-30
+- shipped: 6f82322f
 
 ### R-metrics-043 · shipped
 The reach page on the tailnet shows the waterplane.dev visit counts and the unique visitor count beside the page views.
@@ -214,7 +219,7 @@ On the reach page, unique visitors are drawn as a second line in the same graph 
 - asked: 2026-10-30
 
 ### R-metrics-045 · requested
-The repo-health charts for the usmc repo draw again, with the repo running the desktop's current repohealth engine, and the measured series in .waterplane/repohealth.jsonl is kept intact.
+A repo that carries its own copy of the health engine never loses its charts because an update ran past its time limit; the measured series is kept intact.
 - asked: 2026-10-30
 
 ### R-metrics-046 · shipped
@@ -230,4 +235,13 @@ The phone runs a repo-health re-cut itself with a button, rather than requiring 
 ### R-metrics-048 · requested
 The BA3 web app counts usage in the same lightweight way as waterplane.dev, in addition to keeping Google Analytics.
 - asked: 2026-11-02
+
+### R-metrics-049 · shipped
+The CPU figure shown for a peer host (such as the zenbook under WSL2) matches the system monitor instead of reading too low.
+- asked: 2026-11-03
+- shipped: e2b54b97
+
+### R-metrics-050 · requested
+The reach dashboard is also available as a private cloud dashboard only the owner can open, near-zero cost, and available during Mac network outages.
+- asked: 2026-11-06
 

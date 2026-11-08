@@ -63,6 +63,11 @@ test("settingChanges: a changed value is an alert 'm: old → new'; first run an
   assert.equal(c.text, "B4: protection → none");
 });
 
+test("settingChanges: C1.distTags is judged elsewhere and not diffed; C1.maintainers still is", () => {
+  const out = settingChanges({ "C1.distTags": '{"latest":"0.1.18"}', "C1.maintainers": '["a"]' }, { "C1.distTags": '{"latest":"0.1.19"}', "C1.maintainers": '["a","b"]' });
+  assert.deepEqual(out.map((x) => x.subject), ["C1.maintainers"]);
+});
+
 test("applyAccepts: no until, version, date and change; expired is open; a newer version reopens", () => {
   const acc = { reason: "ok", at: "2026-10-01" };
   const a = f({ subject: "a", version: "1.0.0", text: "same" });
@@ -91,7 +96,6 @@ test("PRE_ACCEPTED applies by default and the accepts file overrides it", () => 
   assert.ok(applyAccepts([pty], {}, NOW)[0].accepted);
   const over = applyAccepts([pty], { "A2:node-pty": { reason: "x", at: "a", until: { date: "2020-01-01" } } }, NOW);
   assert.equal(over[0].accepted, undefined, "an expired file entry replaces the built-in one");
-  assert.ok(applyAccepts([f({ measure: "A5", subject: "web-push" })], null, NOW)[0].accepted);
 });
 
 test("exitCode: 10 beats 2 beats 0; accepted alerts and digests do not count; a known open alert is quiet", () => {

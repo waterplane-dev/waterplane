@@ -24,13 +24,15 @@ Pinch, pan and double-tap zoom work on pictures in the repo browser, like the ga
 - asked: 2026-10-03
 - shipped: 32a7cf9
 
-### R-input-006 · requested
+### R-input-006 · shipped
 The hint text does not shrink the selector, which stays large enough to use on a phone.
 - asked: 2026-10-05
+- shipped: e318f984
 
-### R-input-007 · requested
-Text inputs do not auto-capitalize the first letter by default on the keyboard.
+### R-input-007 · shipped
+Shell session boxes and the desktop typing box do not auto-capitalize the first letter or autocorrect; the main prompt box is unchanged.
 - asked: 2026-10-06
+- shipped: b4cfab27, f006c44b
 
 
 ### R-input-008 · shipped
@@ -47,27 +49,30 @@ With a physical keyboard, Ctrl+Return (⌘+Return on a Mac) confirms the primary
 - asked: 2026-10-12, 2026-10-13, 2026-10-14
 - shipped: 5994be77
 
-### R-input-011 · requested
-After the relevant action the cursor is placed in the prompt input field automatically.
+### R-input-011 · shipped
+After closing the annotator with Ctrl/Cmd+Return on a desktop, the cursor is in the prompt box at the end of the text.
 - asked: 2026-10-14
+- shipped: 81cd5434
 
 ### R-input-012 · shipped
 While a prompt has not been sent, the user can edit it with an edit button.
 - asked: 2026-10-19
 - shipped: 61c601fb
 
-### R-input-013 · requested
-Confirmation prompts accept a response without 'y' and continue.
+### R-input-013 · shipped
+The installer never stops to ask for a 'y' to continue without Claude; it explains how to get it and carries on.
 - asked: 2026-10-20
+- shipped: 3023b2aa
 
 ### R-input-014 · shipped
 With a picture open in the annotator, Ctrl/Cmd+Return sends the picture first; the next press sends the prompt.
 - asked: 2026-10-20
 - shipped: abcd5220
 
-### R-input-015 · requested
+### R-input-015 · shipped
 Remote desktop keyboard input accepts upper-case letters.
 - asked: 2026-10-21
+- shipped: f006c44b
 
 ### R-input-016 · shipped
 Typed answers sent to a backend are limited to 1000 characters and sent with Return only.

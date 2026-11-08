@@ -3,14 +3,16 @@
 ### R-ui-001 · requested
 Repo section font is sized appropriately for professional appearance.
 
-### R-ui-002 · requested
-Icons are easily tappable and mobile/tactile-friendly for touch interaction; the burger/menu button in particular is displayed larger for easier tapping.
+### R-ui-002 · shipped
+Header icons are at least a fingertip wide (40px) on a phone, and the menu button that stays on screen while typing is full fingertip size, not a thin chip.
+- shipped: 6cb1c809
 
 ### R-ui-003 · requested
 Garmin simulator provides a visual user interface for testing.
 
-### R-ui-004 · requested
+### R-ui-004 · shipped
 Files icon is always visible, even without new files.
+- shipped: 664187d4
 
 ### R-ui-005 · shipped
 Hammer/build tool is available in the session toolbar, integrated with the command icon buttons, and visible in its expected/marked location.
@@ -21,33 +23,38 @@ Chips layout displays with proper wrapping instead of splitting across lines.
 - shipped: 664187d
 
 ### R-ui-007 · requested
-Recently added UI elements display correctly and look good on mobile.
+Every screen and sheet fits and is usable on a phone-width display, with no clipped or overflowing controls.
 
-### R-ui-008 · requested
-Buttons clearly show what they do through better design or optional help dialogs.
+### R-ui-008 · shipped
+A button's purpose can be learned on a phone: tapping a ? chip or explain mode shows a hint card per control, and the person can permanently dismiss the chip.
+- shipped: f479df98
 
 ### R-ui-009 · requested
-Three related commands are combined or visually grouped, and redundant send-toggle options are merged into one.
+On a queued message the retry, discard and more buttons read as one group; and the compose bar's separate queue-another icon is merged into the Send button's options menu instead of sitting beside it.
 
-### R-ui-010 · requested
-Feature is available at this location.
+### R-ui-010 · shipped
+A fan-out sweep can be put on a clock from inside the Fan-out sheet, with a later button beside Run in N repos.
+- shipped: f479df98
 
 ### R-ui-011 · shipped
 Tool call details are hidden by default and shown on-demand when the user clicks a placeholder.
 - shipped: 7aaee35
 
-### R-ui-012 · requested
-Screens support scrolling functionality, including scrolling up by swiping with fingers.
+### R-ui-012 · shipped
+The terminal scrolls back with a finger swipe on a phone, and editor and sheet bodies scroll when taller than the screen.
+- shipped: 6cb1c809
 
-### R-ui-013 · requested
-User can send clipboard content or type text to send as an alternative.
+### R-ui-013 · shipped
+The to-host-clip sheet takes text from the compose draft, the phone's clipboard or typed on the spot, all in one editable box.
+- shipped: 241769c6
 
 ### R-ui-014 · shipped
 Item count/unread badge shows only new items from the outbox, not the inbox, and updates correctly when items are marked as read.
 - shipped: 8fbe9f1
 
-### R-ui-015 · requested
-Items are automatically checked and retired.
+### R-ui-015 · shipped
+A prompt whose delivery could not be confirmed when sent is checked again later, and its row is retired automatically once the conversation shows it ran.
+- shipped: 6b101ad1
 
 ### R-ui-016 · requested
 Send button responds quickly in offline mode, and a busy indicator does not block the user from queuing additional prompts while offline.
@@ -58,7 +65,8 @@ Marked/tagged UI controls (indicator, access button, build button) are consolida
 - shipped: 8fbe9f1
 
 ### R-ui-018 · requested
-Buttons across the app respond reliably to taps and perform their intended action (e.g. delete, retry) without failing silently or showing visual glitches like flashing.
+A button that cannot act is not drawn as a dimmed look-alike but says why in words, and a retry or delete tap visibly does its action without flashing or failing silently.
+- note: Greyed-button part: d30355b6.
 
 ### R-ui-019 · requested
 All repo functionality is integrated into the live view with per-repo entries, rather than separate screens.
@@ -72,8 +80,9 @@ Read mode shows detailed insight into what is happening, including activity and 
 - asked: 2026-09-11
 - shipped: c74402f
 
-### R-ui-022 · requested
-Repo filter list includes a filter for started repos.
+### R-ui-022 · shipped
+The live list's status chips include a starred filter that shows only starred sessions.
+- shipped: 718cc630
 
 ### R-ui-023 · shipped
 Clicking an item filters the results, with a clear-filter button to undo it.
@@ -125,30 +134,35 @@ Font and icon sizes are customizable via a setting, in addition to being sized a
 Gray boxes are removed from icon UI for visual consistency and space savings.
 - asked: 2026-09-11
 
-### R-ui-036 · requested
-Dialogs have close and minimize buttons, are shown at a significantly smaller/reduced size (e.g. decision dialogues at most half their current size), and do not block screen interaction while in CLI mode.
+### R-ui-036 · shipped
+In the terminal view a choice question is answered on the CLI itself and no card covers the screen; the send-mode strip is compact and carries its own close button.
 - asked: 2026-09-13, 2026-09-20, 2026-09-20
+- shipped: bab3986c, f55b57cd
+- note: The old answer bar with minimize and hide handles was removed rather than shrunk.
 
 ### R-ui-037 · requested
 Unnecessary spacing gaps are removed from the UI.
 - asked: 2026-09-13
 
-### R-ui-038 · requested
-CLI read-mode toggle button appears once in the menu and is not duplicated elsewhere.
+### R-ui-038 · shipped
+The CLI/reader switch is one button in the terminal's corner group on both surfaces, and is not repeated in the header or the menu.
 - asked: 2026-09-13
+- shipped: 8fbe9f1f
 
-### R-ui-039 · requested
+### R-ui-039 · shipped
 Button states update reliably without requiring a view switch to refresh.
 - asked: 2026-09-18
+- shipped: 7adeb6c9, 3ca7a224
 
 ### R-ui-040 · shipped
 UI clearly indicates why an element is grayed out.
 - asked: 2026-09-18
 - shipped: 6d20ed8
 
-### R-ui-041 · requested
-Session view reuses the same component the main view uses.
+### R-ui-041 · shipped
+The session screen's header draws the same spend miniature curve as the main view's session row.
 - asked: 2026-09-18
+- shipped: 4ea4a5ba, 89051a36
 
 ### R-ui-042 · shipped
 Tapping a marked element opens a detailed view with full information, including a large visualization with tooltips, subagent counts, modifications, and token usage over time.
@@ -175,9 +189,10 @@ Console redraw does not interfere with dialogue display or option visibility; qu
 - asked: 2026-09-20
 - shipped: 4b18afc
 
-### R-ui-047 · requested
+### R-ui-047 · shipped
 Dialogue options remain visible and do not scroll away when the console scrolls.
 - asked: 2026-09-20
+- shipped: 4b18afc7
 
 ### R-ui-048 · requested
 Dialogue list includes a visible clear button that actually clears the list when pressed.
@@ -193,9 +208,10 @@ Status bars for menu and user settings always remain visible in the main view.
 - asked: 2026-09-20
 - shipped: 7adeb6c
 
-### R-ui-051 · requested
-Main view displays summary keywords for each repo.
+### R-ui-051 · shipped
+Each session row in the main view shows the conversation's short keyword name.
 - asked: 2026-09-21
+- shipped: 9d32436d
 
 ### R-ui-052 · shipped
 Default branch name (e.g. main) is hidden throughout to save space, shown only for non-default branches.
@@ -207,13 +223,15 @@ Dialogs do not show an error when reopened with a previously selected option tha
 - asked: 2026-09-22
 - shipped: 9c18e5b
 
-### R-ui-054 · requested
-Version numbers are visible and consistent across all screens for cross-checking.
+### R-ui-054 · shipped
+An app build's version prints the same way on the Downloads list, the Apps list and the install log; the install log shows the file name and every app row names its repo.
 - asked: 2026-09-24
+- shipped: e38c44a6
 
-### R-ui-055 · requested
+### R-ui-055 · superseded
 Repository name is visible on all screens.
 - asked: 2026-09-24
+- superseded-by: R-ui-054
 
 ### R-ui-056 · requested
 Clicking read mode exits full screen without re-entering CLI mode.
@@ -259,8 +277,9 @@ On a session card, title and prompts sit on top and the chip and button strip is
 A button lets the user change the settings a readout reports, opening Settings at that row.
 - shipped: 555175d
 
-### R-ui-066 · requested
-Layout has no empty space, with chips repositioned to the top right.
+### R-ui-066 · shipped
+On a session card the status chip sits on the title line at the top right beside the age, with the new marker folded into it, leaving no empty space.
+- shipped: b50d69ef
 
 ### R-ui-067 · shipped
 The 5-hour session reset time appears next to the session value, not the weekly value.
@@ -272,21 +291,25 @@ Open and Done labels sit adjacent to each other in the session strip.
 - asked: 2026-10-03
 - shipped: 469214e
 
-### R-ui-069 · requested
-A compact icon in the upper right corner replaces a large space-consuming element.
+### R-ui-069 · shipped
+The per-prompt cost card's why-dollars explanation is a small ? icon in its top-right corner instead of a row that takes space.
 - asked: 2026-10-03
+- shipped: f28eea72
 
-### R-ui-070 · requested
-All text in the interface uses one uniform, smaller font size.
+### R-ui-070 · shipped
+Every item in the session status strip uses one smaller text size.
 - asked: 2026-10-03
+- shipped: d13c256b
 
-### R-ui-071 · requested
-Subagents view is visible in the default view.
+### R-ui-071 · shipped
+The context sheet's default chart stacks by token kind and still shows the subagent lanes.
 - asked: 2026-10-03
+- shipped: e821180b
 
-### R-ui-072 · requested
-All text is visible in the main view, none missing.
+### R-ui-072 · shipped
+A reopened conversation's session card keeps its first and latest prompt text instead of showing blank.
 - asked: 2026-10-04
+- shipped: fe835fd2
 
 
 ### R-ui-073 · shipped
@@ -294,9 +317,11 @@ On a window at least 1024px wide the app is a two-pane workspace — repos and s
 - asked: 2026-10-07 — plan: docs/analysis/desktop-workspace-plan.md, 2026-10-07
 - shipped: fd8cc502, 41a0931a, 57a3510b, 75352f87, f7f79edd
 
-### R-ui-074 · requested
+### R-ui-074 · shipped
 On a desktop window the keyboard drives the CLI: a key typed while no field has focus reaches the terminal (which then keeps the keyboard), and the terminal says when it has it — not only the on-screen key buttons.
 - asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §5
+- shipped: dda5ea28
+- note: The cited plan section does not describe this; the behaviour is in strayKeys.
 
 ### R-ui-075 · shipped
 A side panel on a desktop window can always be closed with a visible control: its head sits below the top strips and never scrolls away.
@@ -316,8 +341,9 @@ On iOS, web controls for features the native shell lacks are hidden or explained
 - asked: 2026-10-06
 
 ### R-ui-079 · requested
-Alternative views exist that the user can switch between with a toggle.
+The model wheel offers alternative views (such as cells coloured by cost) that the user can switch between, with the plain wheel as the default.
 - asked: 2026-10-07
+- note: Owner may discard it later.
 
 ### R-ui-080 · shipped
 The app has an icon that works well in light mode, and the icon is the same size as the button it sits in, never larger.
@@ -445,9 +471,10 @@ Choices among text options are radio rows with a round dot and a full wrapping l
 - asked: 2026-10-15
 - shipped: a2a657b4, 8489dc15, c38b1ba3
 
-### R-ui-108 · requested
+### R-ui-108 · shipped
 Multi-selection controls are rendered as checkboxes, not circles.
 - asked: 2026-10-17
+- shipped: 40d54917
 
 ### R-ui-109 · requested
 The VS Code extension UI looks the same as the web UI, with matching styling.
@@ -458,9 +485,10 @@ App styling is built on reusable shared variables (a token scale) and split into
 - asked: 2026-10-18
 - shipped: cd8ae25f, 669f639c
 
-### R-ui-111 · requested
+### R-ui-111 · shipped
 The cute elements have a cancel button.
 - asked: 2026-10-19
+- shipped: e2b6da2f
 
 ### R-ui-112 · shipped
 Folding the CLI output stays folded: it does not reopen itself in a loop.
@@ -472,9 +500,10 @@ Radio-button option groups show visible headings and full labels, with no text m
 - asked: 2026-10-19
 - shipped: 54ed1399
 
-### R-ui-114 · requested
-An on-screen banner can be dismissed by the user and stays gone.
+### R-ui-114 · shipped
+A banner that reports a stopped download can be removed from the strip itself and stays gone.
 - asked: 2026-10-20
+- shipped: ce716886
 
 ### R-ui-115 · requested
 Dialogs offer a "don't show again" tickbox.
@@ -509,9 +538,10 @@ The two buttons are never shown on screen at the same time, so the screen is not
 - asked: 2026-10-22
 - shipped: 13640e8d
 
-### R-ui-122 · requested
-The UI renders correctly when GitHub Copilot is the backend, with no broken panels.
+### R-ui-122 · shipped
+A plugin panel pinned to the header, such as GitHub Copilot, shows as one icon that opens its menu, not as a whole panel inside the icon strip.
 - asked: 2026-10-23, 2026-10-23
+- shipped: 080e4276
 
 ### R-ui-123 · requested
 Every user-visible reference to the old name "USMC" is replaced with "waterplane".
@@ -532,18 +562,20 @@ When the user selects an item in a dialogue, the dialogue states clearly what th
 - asked: 2026-10-26
 - shipped: 9dbda67f
 
-### R-ui-127 · requested
-Text in the UI has readable contrast.
+### R-ui-127 · shipped
+Text on every row, including repo-tinted tab rows, is readable against its background in light and dark.
 - asked: 2026-10-26
+- shipped: 41fe5bfc
 
 ### R-ui-128 · shipped
 Repo lists show whether they have been read yet: 'not read yet' and 'no repos found' are different states, and a host with zero repos does not leave the launcher waiting forever.
 - asked: 2026-10-30
 - shipped: ced613d9, 2b1aba68
 
-### R-ui-129 · requested
+### R-ui-129 · superseded
 When a feature does not apply, it is collapsed away with an explanation rather than hidden.
 - asked: 2026-10-31
+- superseded-by: R-usage-029
 
 ### R-ui-130 · shipped
 The "All backends" and "Open code" buttons in the VS Code extension open their pages instead of crashing into an empty page.
@@ -554,4 +586,9 @@ The "All backends" and "Open code" buttons in the VS Code extension open their p
 The context weight screen looks the same wherever it appears, with the three variants consolidated into one.
 - asked: 2026-11-02
 - shipped: f8521a12, 7b1dd405
+
+### R-ui-132 · shipped
+The vault's token-file check is generic: it finds any `credentials.json` holding a refresh token in a hidden folder and names no provider, and the vault has no Garmin-specific secret kind.
+- asked: 2026-11-06
+- shipped: fb508e2c
 

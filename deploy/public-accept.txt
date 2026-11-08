@@ -196,3 +196,5 @@ packages/web/src/updateTrust.test.mjs:209:305c953a46  # fixture
 packages/web/src/updateTrust.test.mjs:210:f8990b593b  # fixture
 packages/web/src/updateTrust.test.mjs:270:ae4aa3284e  # fixture
 tools/demo-scenario.test.mjs:13:665f6bbd32  # fixture
+deploy/public-accept.txt:85:4b4fc630c6  # this file's own comment on origin.ts's made-up evil.ts.net
+packages/host/test/passive.test.mjs:80:5813271df0  # 100.80.1.2 test peer, made up

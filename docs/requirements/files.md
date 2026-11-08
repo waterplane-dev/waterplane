@@ -46,3 +46,6 @@ A folder added to the repo root folder appears in the main list of all repos; re
 - asked: 2026-11-02, 2026-11-02
 - shipped: 938bdf6f
 
+### R-files-011 · shipped
+The file browser reopens in the folder last browsed in that repo, on this phone, including after the app restarts. A file opened by name from another screen does not change that folder.
+- asked: 2026-11-07

@@ -74,7 +74,6 @@ export interface ExposureRunResult { ok: boolean; exit: number | null; sentence:
 /** Built-in accepts, merged UNDER the accepts file's (the file wins). Keys are what parse.mjs emits. */
 export const PRE_ACCEPTED: Record<string, ExposureAccept> = {
   "A2:node-pty": { reason: "node-pty is pinned to a pre-release on purpose (SECURITY.md)", at: "2026-10-26" },
-  "A5:web-push": { reason: "MPL-2.0, accepted on purpose", at: "2026-10-26" },
 };
 
 /** Semver-ish compare (-1/0/1); a pre-release sorts below its release, `v` and `+build` ignored. */

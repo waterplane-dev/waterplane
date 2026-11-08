@@ -70,34 +70,36 @@ export function KeyRow({ active, backends, compose, keysOpen, setKeysOpen }: {
   const hintKey = JSON.stringify(active.keyHints ?? []);
   const [spentHints, setSpentHints] = useState<{ of: string; keys: string[] }>({ of: "", keys: [] });
   const spent = spentHints.of === hintKey ? spentHints.keys : [];
+  const hints = active.keyHints ?? [];
+  const hintChip = (h: (typeof hints)[number]): ReactNode => {
+    const bytes = keyHintBytes(h.key);
+    if (!bytes || spent.includes(h.key)) return null;
+    const title = `${h.key} — ${h.verb} (the CLI names this key on screen now)`;
+    return (
+      <Button key={`hint:${h.key}`} className="key-hint" title={title} aria-label={title}
+        onPointerDown={keepFocus} onClick={() => {
+          // A chip is a whole key already: held modifiers let go rather
+          // than waiting to land on whatever is pressed next.
+          compose.chord.clear();
+          sendInput(bytes);
+          if (h.key !== "shift+tab") setSpentHints({ of: hintKey, keys: [...spent, h.key] });
+        }}>
+        {keyHintLabel(h.key)} <span className="key-hint-verb">{h.verb}</span>
+      </Button>
+    );
+  };
   return (
     <div className="keys">
       {/* The arrows normally BLUR the box (a focused-but-dismissed textarea
           re-summons the keyboard on any focus-preserving tap). In CLI mode the
           box IS the keyboard — dismissing it to press an arrow would mean
           re-opening it for the next letter. */}
-      {/* The keys the CLI names on screen right now that this row lacks —
-          `(shift+tab to cycle)`, a picker's `s for this session only`
-          (`SessionInfo.keyHints`, read by the host). First, because they are
-          what the screen is asking for; gone when the hint is. Raw, like
-          the rest of the row. */}
-      {(active.keyHints ?? []).map((h) => {
-        const bytes = keyHintBytes(h.key);
-        if (!bytes || spent.includes(h.key)) return null;
-        const title = `${h.key} — ${h.verb} (the CLI names this key on screen now)`;
-        return (
-          <Button key={`hint:${h.key}`} className="key-hint" title={title} aria-label={title}
-            onPointerDown={keepFocus} onClick={() => {
-              // A chip is a whole key already: held modifiers let go rather
-              // than waiting to land on whatever is pressed next.
-              compose.chord.clear();
-              sendInput(bytes);
-              if (h.key !== "shift+tab") setSpentHints({ of: hintKey, keys: [...spent, h.key] });
-            }}>
-            {keyHintLabel(h.key)} <span className="key-hint-verb">{h.verb}</span>
-          </Button>
-        );
-      })}
+      {/* The keys the CLI names on screen right now that this row lacks — a
+          picker's `s for this session only` (`SessionInfo.keyHints`, read by
+          the host). First, because they are what the screen is asking for;
+          gone when the hint is. Raw, like the rest of the row. shift+tab is
+          the exception, drawn last: see the end of this row. */}
+      {hints.filter((h) => h.key !== "shift+tab").map(hintChip)}
       {specialKeys(interruptWho(backends, active.backend)).map((k, i) => (
         <Button key={i} title={k.title} aria-label={k.title}
           onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus}
@@ -125,8 +127,8 @@ export function KeyRow({ active, backends, compose, keysOpen, setKeysOpen }: {
         aria-expanded={keysOpen} title="claude's own shortcuts (ctrl+o transcript, ctrl+t todos, alt+p model…) — one tap each"
         aria-label="claude's shortcuts"><Keyboard size={ICON} /> Keys</Button>
       )}
-      {/* Lives at the END of this row on purpose: the row IS raw input, and
-          CLI mode is the same thing with the alphabet added. */}
+      {/* Ends the fixed keys on purpose: the row IS raw input, and CLI mode is
+          the same thing with the alphabet added. */}
       <Button
         className={`cli-key ${cliMode ? "active" : ""}`}
         data-hint="compose.cli"
@@ -136,6 +138,9 @@ export function KeyRow({ active, backends, compose, keysOpen, setKeysOpen }: {
           ? "CLI mode is on — every key you type goes straight to the session. Tap to go back to composing (queued, confirmed sends)."
           : "CLI mode — type directly at the CLI instead of composing a message: keystrokes go through as you type, nothing is queued or echo-checked."}
       ><TerminalIcon size={ICON} /> CLI</Button>
+      {/* `(shift+tab to cycle)`: the very end of the row, past CLI, as the owner
+          asked (R-cli-010). */}
+      {hints.filter((h) => h.key === "shift+tab").map(hintChip)}
     </div>
   );
 }

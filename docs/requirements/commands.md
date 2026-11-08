@@ -11,8 +11,9 @@ App includes a default list of typical routine commands and prompts that the use
 User can specify prompts to fire after the CLI opens when queuing a CLI-open command or starting a new session.
 - shipped: f7caebb
 
-### R-commands-004 · requested
+### R-commands-004 · shipped
 Shortcuts and commands from the non-compact toolbar are available in compact view and fully customizable.
+- shipped: 664187d4
 
 ### R-commands-005 · shipped
 Repo/session context and prompts are automatically and reliably preserved and delivered when sending prompts to a new or existing session, and never silently disappear before the backend processes them. Prompts are delivered reliably in read mode as well.
@@ -24,8 +25,9 @@ Commands can be queued as one-off items without requiring a recurring schedule.
 - shipped: 58066b0
 
 ### R-commands-007 · requested
-Prompt text remains editable and accessible after sending, including with images and scheduling.
+Choosing an image in the Send sheet and coming back returns to the prompt text with the typed words and schedule intact; a prompt is never lost on that round trip.
 - asked: 2026-09-14
+- note: Item misread the ask: it was about losing the prompt, not editing after sending. Code has an annotator round trip back to send, fix commit not pinned.
 
 ### R-commands-008 · shipped
 One-time non-recurring prompts display in the active section only and show their execution time instead of a 'not armed' status.
@@ -37,9 +39,10 @@ One-time non-recurring prompts display in the active section only and show their
 - asked: 2026-09-19
 - shipped: de77902
 
-### R-commands-010 · requested
+### R-commands-010 · shipped
 User can save an idea or bug for later without it auto-firing into the backlog.
 - asked: 2026-09-20
+- shipped: 869f2328
 
 ### R-commands-011 · shipped
 Successful /compact submissions are detected as completed rather than reported as failed to send.
@@ -56,9 +59,11 @@ Prompts and commands accept both "waterplane" and "WP" as names for the product.
 - asked: 2026-10-01
 - shipped: eb7757f
 
-### R-commands-014 · requested
-Commands shown in the app are copy-paste ready.
+### R-commands-014 · shipped
+The local-runtime sheet shows its temperature-reading install steps as copy-ready commands, each with a copy button.
 - asked: 2026-10-06
+- shipped: a5b785ef
+- note: Item generalised one screen to all commands.
 
 ### R-commands-015 · shipped
 After a slash command the reader cannot show, the app asks whether to switch to the CLI, with a don't-ask-again option kept per device and set in Settings.

@@ -188,7 +188,8 @@ export function cellRows(term: InstanceType<typeof Terminal>, start: number, end
       // The second cell of a wide character has width 0 and no text of its own.
       if (cell.getWidth() > 0) lit += cell.isDim() ? " " : cell.getChars() || " ";
     }
-    rows.push({ text: line.translateToString(true), spans, undimmed: lit.trimEnd() });
+    // `width` too: a narrowed alternate buffer's rows run past it (`gridText`).
+    rows.push({ text: line.translateToString(true, 0, width), spans, undimmed: lit.trimEnd() });
   }
   return rows;
 }

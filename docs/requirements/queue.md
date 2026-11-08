@@ -59,9 +59,10 @@ Backlog and scheduled items deliver their prompt into the session they open exac
 Delivered backlog items show their delivered status and never carry a false failed label.
 - asked: 2026-10-15
 
-### R-queue-014 · requested
+### R-queue-014 · shipped
 The send/queue choice shown before sending matches what actually happens; if Claude queues a message itself, the UI says so instead of offering an unreal option.
 - asked: 2026-10-24
+- shipped: 8cefeaad
 
 ### R-queue-015 · requested
 The repo backlog is never lost; backlog items persist.
@@ -78,6 +79,17 @@ A draft withdrawn by its agent or a row called off shows as settled, not failed,
 - shipped: 77e292f3, 2f5bc2aa
 
 ### R-queue-018 · requested
-Bug-hunt backlog items are filed in each public OSS repo's lead repository, never in its public mirror.
+Backlog items for a public OSS repo are filed in its lead repository, never in its public mirror.
 - asked: 2026-10-29
+- note: The original ask was a one-off posting task; the lasting rule is placement.
+
+### R-queue-019 · shipped
+The queued-messages notice (e.g. "2 queued, will send when the connection is back") folds away behind the corner button like the other strips above the prompt bar.
+- asked: 2026-11-03
+- shipped: e1193320
+
+### R-queue-020 · shipped
+Typed words in the retired pad rescue store and give-ups ledger survive the upgrade: they come back once, onto the pad or queue, with their original id and time at any age; the old store is kept and nothing appears twice.
+- asked: 2026-11-04
+- shipped: 4ea4a5ba
 

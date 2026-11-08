@@ -8,9 +8,10 @@ Outline icons in session and overview show a count of items.
 - asked: 2026-09-12
 - shipped: b2d01bc
 
-### R-outline-003 · requested
-Outline list includes all recently accepted items.
+### R-outline-003 · shipped
+The outline list includes the newest prompt right after it is sent, even while the CLI has not started it yet, marked as waiting.
 - asked: 2026-09-17
+- shipped: f7caebbe, b87535a7
 
 ### R-outline-004 · shipped
 A button opens a session's outline and read mode without entering the session.

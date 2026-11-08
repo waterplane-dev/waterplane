@@ -30,13 +30,16 @@ Settings search finds every setting, including the vault and other extension row
 - asked: 2026-10-11
 - shipped: 4637a41d, eab23a65
 
-### R-settings-007 · requested
+### R-settings-007 · shipped
 A per-device setting sets how often background updates refresh: live, 1, 5, 15 minutes or off, default 5 minutes, trading battery for freshness of the offline status.
 - asked: 2026-10-12, 2026-10-13
+- shipped: 1bfe6427
 
-### R-settings-008 · requested
-The main view can sort repos by number of open sessions, with alphabetical order as the second criterion, selectable in the existing sort setting beside the alphabetical default.
+### R-settings-008 · shipped
+The main view can order repos by most open sessions first, ties alphabetical, or alphabetical only, chosen in a per-device repo order setting.
 - asked: 2026-10-15
+- shipped: b35c327a
+- note: Default later became most open sessions first (15794716).
 
 ### R-settings-009 · shipped
 A private permissions extension shows which Claude Code permission rules apply in a repo, read-only.
@@ -49,8 +52,9 @@ Changing the default level and thinking effort in the dialog applies only to the
 - shipped: be94de41
 
 ### R-settings-011 · requested
-A feature's opt-in has a setup button in the opt-ins section, and that section is shown only when its opt-in is active.
+The exposure watch is switched on from a setup button in the repo opt-ins, and the watch region shows only for a repo that has it on.
 - asked: 2026-10-26
+- note: Opt-in button exists; watch chip is always shown.
 
 ### R-settings-012 · shipped
 Functionality that only a few people need is optional rather than shown to everyone.

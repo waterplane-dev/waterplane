@@ -15,9 +15,9 @@ customized: a plugin adds the button, switch or status line your way of working 
 [How it compares](#how-it-compares) · [Security](SECURITY.md) · [Open source (MIT)](LICENSE) ·
 macOS, Linux, Windows via WSL2 · Android app or web app, no iOS app yet
 
-<a href="https://waterplane-dev.github.io/media/first-look-9e3dc02a21.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-9e3dc02a21.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4), with pause and seek.*
 <!-- /site:intro -->
 
 - **The real CLI, not a re-implementation.** Every slash command, plan and trust prompt and the
@@ -68,7 +68,7 @@ Two more things I was not at ease with:
 - **Remote desktop to a Mac from a phone is miserable.** Every solution I tried was. It was
   surprisingly easy to let Claude build an alternative into waterplane that is actually usable from
   a phone: the [live desktop view](packages/extensions/desktop/README.md), experimental, macOS and Windows,
-  shipped off by default.
+  off by default.
 <!-- /site:why -->
 
 <!-- site:desk -->
@@ -80,9 +80,9 @@ elsewhere: the Mac Studio builds and runs the simulators while the notebook only
 The window gets a sidebar of repos, the session in the middle and a panel beside it, and it is
 the same sessions, queue and costs, so what you left on the laptop is waiting on the phone.
 
-<a href="https://waterplane-dev.github.io/media/desktop-7af0b11f01.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
+<a href="https://waterplane-dev.github.io/media/desktop-abba5cda6f.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
 
-*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-7af0b11f01.mp4).*
+*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-abba5cda6f.mp4).*
 
 Desktops can also work for each other. Pair two of them and an agent on one can hand a job to the
 other (run the Windows build, the tests on the bigger machine): the branch travels through your
@@ -194,9 +194,9 @@ npm run build
 npm start
 ```
 
-<a href="https://waterplane-dev.github.io/media/setup-30becef6cf.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
+<a href="https://waterplane-dev.github.io/media/setup-3bc9b6dc2e.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
 
-*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-30becef6cf.mp4), with pause and seek.*
+*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-3bc9b6dc2e.mp4), with pause and seek.*
 
 `npm run doctor` (or `waterplane doctor`) is the first thing to re-run when something misbehaves:
 it names what is wrong and what to type. The host lists the git repos under `~/dev` (or
@@ -221,9 +221,9 @@ updating and every environment variable: [docs/install.md](docs/install.md).
 <!-- site:outbox -->
 ### What Claude made, on your phone
 
-<a href="https://waterplane-dev.github.io/media/gallery-and-files-6250099dbb.mp4"><img src="docs/media/gallery-and-files.png" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4"><img src="docs/media/gallery-and-files.png" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
 
-*[The walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-6250099dbb.mp4).*
+*[The walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4).*
 
 What Claude leaves in `.claude/outbox/` appears on the phone as a picture or a file, with a badge on
 the repo and a notification. Open it full size, draw a circle or a box on it, type what to change,
@@ -234,9 +234,9 @@ of text to point Claude at it.
 <!-- site:limit -->
 ### When the usage limit hits, it carries on
 
-<a href="https://waterplane-dev.github.io/media/limit-and-budget-49f91fd711.mp4"><img src="docs/media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
+<a href="https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4"><img src="docs/media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-49f91fd711.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4), with pause and seek.*
 
 When a session hits a Claude usage limit, the host notices, waits for the reset and continues it,
 reopening the conversation with `--continue` if the CLI exited. Bounded retries, and an off switch
@@ -248,9 +248,9 @@ your words kept and the reason said.
 <!-- site:queue -->
 ### Queue it now, or schedule it against the usage windows
 
-<a href="https://waterplane-dev.github.io/media/queue-and-schedule-1cb4c31dac.mp4"><img src="docs/media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
+<a href="https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4"><img src="docs/media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-1cb4c31dac.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4), with pause and seek.*
 
 A prompt sent while you are offline or while the session is busy waits in a queue and is typed in
 exactly once. Or post a prompt for later: at a time, when the session goes quiet, after another one
@@ -261,9 +261,9 @@ before the reset, spend what is left"). The Backlog holds a repo's work that nob
 <!-- site:cost -->
 ### Know what it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-6b4a0ebc6b.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-6b4a0ebc6b.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4), with pause and seek.*
 
 Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus
 what the *next* turn will cost compared with a fresh session. The token ledger splits every total by
@@ -278,9 +278,9 @@ than a guess.
 <!-- site:health -->
 ### Repo health, so the vibe coding stays maintainable
 
-<a href="https://waterplane-dev.github.io/media/repo-health-a6076318e5.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-a6076318e5.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4), with pause and seek.*
 
 Vibe coding drifts into a mess quietly, and a steady number does not mean a healthy repo. Each repo
 gets one health score out of 100, measured against fixed good values: file length, files reworked
@@ -358,7 +358,7 @@ foremost (opencode support is experimental). The packages and the plugin mechani
 <!-- site:compare -->
 ## How it compares
 
-Anthropic's own Remote Control now drives a local Claude Code session from the Claude app, and Happy,
+Anthropic's own Remote Control drives a local Claude Code session from the Claude app, and Happy,
 Paseo and Orca put coding agents on a phone too. Reaching your agent from a phone is not what is
 different here. What is: the real terminal plus a reader, no vendor or relay in the path, the build
 and artifact loop back to the phone (marked-up screenshots into the prompt, verified simulator and
@@ -446,6 +446,7 @@ All public repos: [waterplane](https://github.com/waterplane-dev/waterplane) ·
   service, updating, configuration.
 - [Architecture](docs/notes/architecture.md): what runs where, the packages, and the plugins.
 - [SECURITY.md](SECURITY.md): the threat model, and how to report a security problem.
+- [GOVERNANCE.md](GOVERNANCE.md) and [ROADMAP.md](ROADMAP.md): who decides, and what the next year holds.
 - [DISCLAIMER.md](DISCLAIMER.md): what else you agree to by running it.
 - [The Android app](packages/app/README.md): building it, and every permission with its reason.
 - [CLAUDE.md](CLAUDE.md) and [docs/notes/](docs/notes/README.md): the rules an agent must know before

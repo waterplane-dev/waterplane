@@ -165,7 +165,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
 - `plugins/pluginregistry.ts` + `plugins/pluginloader.ts` + `plugins/pluginapi.ts` + `plugins/pluginfiles.ts` + `plugins/pluginroutes.ts` + `plugins/pluginrpc.ts` + `plugins/pluginstreams.ts` + `plugins/builtin.ts` + `plugins/setupcontrib.ts` + `plugins/pluginassets.ts` — the plugin host. `pluginassets.ts`: realpath-contained static assets, NOT an `OPAQUE_READ_ROUTE`, not in `passive.ts`.
   Loader: `<config dir>/plugins/*/` + `plugin-paths.json`, `manifestProblems`, host module CONTAINED in its dir. Registry: **a broken plugin is LISTED
   (`state: "error"`, reason verbatim), never skipped, never fatal** — bad manifest, duplicate id,
-  import failure, `activate()` throwing or over 10 s; a throwing handler becomes its status line.
+  import failure, `activate()` throwing or over 10 s; a throwing handler (not `handle`) becomes its status line.
   A `plugin.set` is refused WHOLE in words (enabled flags: `<state dir>/plugins.json`, absent ⇒ on). Loaded once at boot,
   never in `--doctor`. `firePrompt` records the fingerprint the gate checks. The API: every
   side-effecting call is dead once that activation is switched off (`gen`); `env()` only declared

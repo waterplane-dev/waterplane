@@ -44,7 +44,8 @@
  * the four states says them, are untouched by any of that.
  */
 import type { ReactNode } from "react";
-import { agoText, type ResourceState } from "./useRemoteResource";
+import { stalenessNote, type ResourceState } from "./useRemoteResource";
+import type { StaleGap } from "./format";
 
 export interface EmptyProps {
   /**
@@ -55,7 +56,7 @@ export interface EmptyProps {
    * own arrival stamp), and forcing them through the hook to get the wording
    * would be the tail wagging the dog.
    */
-  res?: { state: ResourceState; age?: number | null; error?: string | null };
+  res?: { state: ResourceState; age?: number | null; error?: string | null; inflight?: boolean; gap?: StaleGap | null };
   /**
    * Whether there is anything to show. Defaults true, because most call sites
    * already render this inside their own `rows.length === 0` test.
@@ -88,9 +89,8 @@ export interface EmptyProps {
 export function Empty({ res, empty = true, thing, offlineNote, note, noun = "listing", children }: EmptyProps) {
   // The age line stands whether or not there are rows, which is the whole
   // reason `empty` is a prop and not an assumption.
-  const stale = res?.state === "cached" && res.age != null
-    ? <div className="empty empty-stale">Cached {noun} from {agoText(res.age)} — the link is down, so anything added since won’t be here.</div>
-    : null;
+  const ageLine = res ? stalenessNote(res, noun) : null;
+  const stale = ageLine ? <div className="empty empty-stale">{ageLine}</div> : null;
   if (!empty) return stale;
 
   const what = thing ?? "this";

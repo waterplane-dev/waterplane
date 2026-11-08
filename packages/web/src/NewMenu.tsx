@@ -128,7 +128,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
           <>
             <input className="search" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
               placeholder="https://github.com/owner/repo or git@host:owner/repo" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
-            <input className="search" placeholder="folder name (optional — taken from the URL)" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="search" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="folder name (optional — taken from the URL)" value={name} onChange={(e) => setName(e.target.value)} />
             <Hint>
               Cloned on the desktop with its own git sign-in, so private repos work where the desktop can reach them.
               The phone's inbox and outbox are excluded in this clone only — the project itself is not changed.
@@ -137,7 +137,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
           </>
         )}
         {tab !== "worktree" && tab !== "clone" && (
-          <input className="search" placeholder={tab === "repo" ? "new project name" : "new folder name"} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <input className="search" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder={tab === "repo" ? "new project name" : "new folder name"} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         )}
         {tab === "repo" && onBuildApp && (
           <Button className="new-buildapp" onClick={onBuildApp}>
@@ -162,7 +162,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
             <select className="search" value={repoId} onChange={(e) => setRepoId(e.target.value)}>
               {primaryRepos.map((r) => <option key={r.id} value={r.id}>{r.displayName || r.repoName}</option>)}
             </select>
-            <input className="search" placeholder="new branch name" value={branch} onChange={(e) => setBranch(e.target.value)} />
+            <input className="search" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="new branch name" value={branch} onChange={(e) => setBranch(e.target.value)} />
           </>
         )}
         {/* The one decision this sheet makes that is not about the folder:

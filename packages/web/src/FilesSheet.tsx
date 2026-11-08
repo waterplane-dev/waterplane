@@ -5,6 +5,7 @@ import {
 import { api, copyText, type TreeEntry, type TreeFile, type TreeListing } from "./api";
 import { instructionFileWeight, instructionFileWeightWords } from "@waterplane/shared";
 import { ago, fmtSize } from "./format";
+import { readFilesDir, writeFilesDir } from "./filesDir";
 import { getArtifactText, getTreeListing, putArtifactText, putTreeListing } from "./offlineCache";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
@@ -72,8 +73,12 @@ function statusLabel(code: string): string {
 }
 
 export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemarks, initialFile, initialEdit, onClose }: Props) {
-  const [dir, setDir] = useState(() =>
-    initialFile && initialFile.includes("/") ? initialFile.slice(0, initialFile.lastIndexOf("/")) : "");
+  const [dir, setDir] = useState(() => {
+    if (!initialFile) return readFilesDir(repoId);
+    return initialFile.includes("/") ? initialFile.slice(0, initialFile.lastIndexOf("/")) : "";
+  });
+  // A file named from elsewhere is that screen's errand, not where the person was browsing.
+  useEffect(() => { if (!initialFile) writeFilesDir(repoId, dir); }, [repoId, dir, initialFile]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
@@ -90,7 +95,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
   // exact failure this whole sheet has to survive.
   const tree = useRemoteResource<TreeListing>(
     `${repoId}:${dir}`,
-    () => api.tree(repoId, dir),
+    (signal) => api.tree(repoId, dir, undefined, signal),
     {
       fromCache: async () => {
         const hit = await getTreeListing<TreeListing>(repoId, dir);
@@ -236,7 +241,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
           wording is a PROMISE about freshness, and one written per sheet is one
           that can quietly overstate it. */}
       {tree.state === "cached" && (
-        <Hint>{stalenessNote(tree.state, tree.age)}</Hint>
+        <Hint>{stalenessNote(tree)}</Hint>
       )}
       {tree.state === "offline" && (
         <Hint>No link, and this folder isn't cached on the phone.</Hint>

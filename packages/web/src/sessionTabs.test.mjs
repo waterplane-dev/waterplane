@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import {
   TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
-  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, filterStrip, isTabsListPress, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
+  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, filterStrip, isTabsListPress, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabFacts, tabLabel,
 } from "./sessionTabs.ts";
 
 const tab = (id, createdAt, over = {}) => ({
@@ -328,4 +328,12 @@ test("a tab that IS its repo says the name it is shown under; the prefix test st
   assert.equal(tabLabel({ tabTitle: "tab strip", title: "myapp · main" }, "myapp", "waterplane"), "tab strip");
   // Nobody gave it a name: byte-identical to before.
   assert.equal(tabLabel({ title: "myapp · main" }, "myapp"), "myapp");
+});
+
+test("the tabs list carries the launcher row's marks and figures, and nothing it did not measure", () => {
+  assert.deepEqual(tabFacts({}, null), {}, "no reading is absent, never a zero");
+  assert.deepEqual(
+    tabFacts({ starred: true, followUp: { by: "agent", at: 1 }, contextSpark: { costUsd: 4.21, usageTok: 38e6 } }, 12),
+    { starred: true, flagBy: "agent", turns: 12, spent: "$4.21" });
+  assert.match(tabFacts({ contextSpark: { usageTok: 38e6 } }, null).spent, /38/, "an unpriced session falls back to tokens");
 });

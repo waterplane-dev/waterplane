@@ -7,6 +7,7 @@ import { ago } from "./format";
 import { PromptAnswer } from "./PromptAnswer";
 import { CliSuggestion } from "./CliSuggestion";
 import { SheetHead } from "./Sheet";
+import { SessionName } from "./SessionName";
 import { Empty } from "./Empty";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
@@ -49,6 +50,20 @@ interface Props {
    *  session's next prompt — the durable compose path, queued offline. */
   onSendSuggestion: (session: SessionInfo, text: string) => void;
   onClose: () => void;
+}
+
+/** Which session a card belongs to: the title, which opens it, and the desktop's
+ *  name for the conversation. Three sessions of one repo asking at once are the
+ *  repo's name three times without that name (`SessionName.tsx`). */
+function QuestionHead({ s, onOpen }: { s: SessionInfo; onOpen: (sessionId: string) => void }) {
+  return (
+    <div className="q-head">
+      <button className="linkish" onClick={() => { track("action:questions.open"); onOpen(s.id); }}>
+        <TerminalIcon size={13} style={{ verticalAlign: "-2px" }} /> {s.title || s.cwd}
+      </button>
+      <SessionName s={s} />
+    </div>
+  );
 }
 
 /**
@@ -140,11 +155,7 @@ export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer
           const queued = queuedFor(s);
           return (
             <div key={s.id} className="q-card">
-              <div className="q-head">
-                <button className="linkish" onClick={() => { track("action:questions.open"); onOpen(s.id); }}>
-                  <TerminalIcon size={13} style={{ verticalAlign: "-2px" }} /> {s.title || s.cwd}
-                </button>
-              </div>
+              <QuestionHead s={s} onOpen={onOpen} />
               {/* Every word and every button from `PromptAnswer.tsx` — the one
                   card, shared with the reader's `tr-ask`. It used to be a second
                   copy of the approve bar's markup, and the two had already
@@ -164,11 +175,7 @@ export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer
 
         {unreadable.map((s) => (
           <div key={s.id} className="q-card">
-            <div className="q-head">
-              <button className="linkish" onClick={() => { track("action:questions.open"); onOpen(s.id); }}>
-                <TerminalIcon size={13} style={{ verticalAlign: "-2px" }} /> {s.title || s.cwd}
-              </button>
-            </div>
+            <QuestionHead s={s} onOpen={onOpen} />
             {/* A dialog is up but `prompt.ts` could not parse it into options.
                 There is nothing safe to offer as a one-tap answer — a guessed
                 keystroke into an unknown box is exactly what the fingerprint
@@ -184,11 +191,7 @@ export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer
         ))}
         {inProse.map((s) => (
           <div key={s.id} className="q-card">
-            <div className="q-head">
-              <button className="linkish" onClick={() => { track("action:questions.open"); onOpen(s.id); }}>
-                <TerminalIcon size={13} style={{ verticalAlign: "-2px" }} /> {s.title || s.cwd}
-              </button>
-            </div>
+            <QuestionHead s={s} onOpen={onOpen} />
             {/* The agent's own words, not a paraphrase: this is the one line of
                 the turn that decides what happens next, and it is the line a
                 "Turn finished" ping threw away. No one-tap answer because there

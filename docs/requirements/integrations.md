@@ -1,12 +1,14 @@
 # integrations
 
-### R-integrations-001 · requested
-System does not read data from ollama-local.
+### R-integrations-001 · shipped
+The desktop reads the local Ollama runner passively (throughput, time, memory per model) and shows it in the local runner usage view.
 - asked: 2026-09-18
+- shipped: 3a6b9322
 
-### R-integrations-002 · requested
-Open code view uses one unified concept to integrate GitHub Copilot, Ollama and other code providers.
+### R-integrations-002 · shipped
+The opencode usage view groups usage by provider, each in its own unit (Copilot per prompt, local runners by answer time, APIs by token), never as one mixed token total.
 - asked: 2026-09-26
+- shipped: d6f0e8f9
 
 ### R-integrations-003 · shipped
 Fixes to the local Copilot reader apply to both waterplane and the VS Code extension from one shared implementation.

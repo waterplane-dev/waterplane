@@ -179,6 +179,8 @@ export const LS_WORK = {
    *  per repo + path, plus the comment being written. Typed words: kept by the
    *  hard reset like the compose drafts are. */
   fileRemarks: lsKey("fileRemarks"),
+  /** repoId → the folder the file browser was last in (`filesDir.ts`). Root is no entry. */
+  filesDir: lsKey("filesDir"),
   /** Images already seen in a repo, so "new" means new. */
   newImages: lsKey("newimg"),
   /** Local write times for the synced keys. Last write wins on these. */

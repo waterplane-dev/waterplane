@@ -5,9 +5,10 @@ Console has zoom buttons to increase text size and show more content, and a full
 - asked: 2026-09-13, 2026-09-18, 2026-09-20
 - shipped: 8fbe9f1
 
-### R-console-002 · requested
+### R-console-002 · shipped
 Console no longer displays the size value.
 - asked: 2026-09-13
+- shipped: 8fbe9f1f
 
 ### R-console-003 · shipped
 Scroll-back recording happens server-side so it can be captured reliably.
@@ -19,9 +20,10 @@ Scroll-back display never duplicates or omits lines from the recording.
 - asked: 2026-09-20
 - shipped: 4b18afc
 
-### R-console-005 · requested
-Console and UI text output does not repeat itself.
+### R-console-005 · shipped
+The scrollback never archives the same screen lines twice, so the CLI logo and header are not repeated after a resize or repaint.
 - asked: 2026-09-26
+- shipped: 63de6aa
 
 ### R-console-006 · shipped
 CLI view draws a tick per row for line-by-line selection; picked rows are visually distinct and can be quoted, copied or answered.
@@ -36,11 +38,13 @@ The last-opened session card in the session list has a prominent background wash
 An abort button on the reader's working card stops the current run, after two taps.
 - shipped: 54a1442
 
-### R-console-009 · requested
-Sessions are sortable, with stronger visual separators between rows.
+### R-console-009 · shipped
+On the session card the status chip comes first in a fixed order, and a page-colour gutter separates the session cards more strongly.
+- shipped: ab24f9d4
 
-### R-console-010 · requested
+### R-console-010 · shipped
 A section on the session card shows recent prompts, token costs and context information.
+- shipped: 4e366ae6
 
 ### R-console-011 · shipped
 Agent worktrees show under the session that made them.

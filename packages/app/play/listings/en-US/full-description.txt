@@ -1,15 +1,24 @@
-waterplane is a remote control for the coding agent running on YOUR computer. It drives the real Claude Code command-line tool there, in a real terminal, and puts it on your phone: every slash command, plan prompt and context meter works as it does at your desk.
+waterplane is a phone client for Claude Code running on your own desktop. The agent writes the code; the app gives you the steering: live sessions across your repos, diffs and commits, the screenshots and builds it makes, a queue and a schedule, and what every turn costs.
 
-You need your own desktop (macOS, Linux, or Windows via WSL) running the free, open-source waterplane daemon, and Tailscale on both devices. Without that, the app has nothing to connect to. Install instructions: https://github.com/waterplane-dev/waterplane
+It drives the real Claude Code command-line tool in a terminal on your desktop, not a copy of it, so slash commands, plan prompts and the context meter work as they do at your desk.
 
-What you get:
-• The live terminal, plus a reader view of the conversation
-• Answer the agent's questions with a tap, even from a notification
-• An offline send queue: type while the tunnel is down, it is delivered when it is back
-• Files both ways: send photos and files to the agent, download what it builds
-• Install the Android apps you build on your desktop (every install asks you first)
-• Usage, context and cost readouts
+What you need:
+• A desktop (macOS, Linux, or Windows with WSL2) with Claude Code and the free, open-source waterplane daemon installed
+• A way for the phone to reach it: Tailscale from anywhere, or a desktop password on the same Wi-Fi
 
-There is no cloud service: the app talks only to your own computer over your private network. Try Demo mode on the first screen to see every screen with sample data.
+Without a desktop, only the demo works. Setup: https://github.com/waterplane-dev/waterplane
+
+What you can do:
+• Run sessions in many repos at once, as the live terminal or in a clean reader
+• Get a notification when a session needs you or finishes; its questions and plan prompts come up as buttons
+• Write prompts offline; they are delivered when the link is back
+• Queue prompts behind a busy session, or schedule them for later or for after a usage limit
+• Review diffs, commit and push
+• See screenshots and builds in a gallery, mark one up and send it back with your prompt
+• Send photos and files to the agent, and download what it builds
+• Install the Android apps you build on your desktop (Android asks you before every install)
+• See usage, context and cost per turn, and the health of each repo
+
+There is no waterplane server and no account: the app connects only to your own desktop. Tap Try the demo on the first screen to explore with sample data; nothing connects and nothing runs.
 
 waterplane is an independent project and is not affiliated with or endorsed by Anthropic.

@@ -21,9 +21,10 @@ A full test sweep runs again after each version increase, before release.
 Push guards finish quickly while still verifying the change thoroughly before it is pushed.
 - asked: 2026-10-08, 2026-10-09
 
-### R-ci-cd-006 · requested
+### R-ci-cd-006 · shipped
 The npm package is published with a provenance attestation via npm trusted publishing, with no long-lived npm token, from the npm-publish.yml workflow in the public repo; the workflow is live in .github/workflows and guarded to run only there.
 - asked: 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-19
+- shipped: a6bdfe33
 
 ### R-ci-cd-007 · shipped
 The pre-push check passes in full, including the web typecheck, the e2e suite and the android-hello template Gradle build without timing out beside other scripts, so pushing main to origin/main succeeds, also from the phone's git screen.

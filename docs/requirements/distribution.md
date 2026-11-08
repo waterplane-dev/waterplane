@@ -49,9 +49,10 @@ Each internal link in the published docs that points to an unpublished file is h
 - asked: 2026-10-07
 - shipped: 2ea51816
 
-### R-distribution-011 · requested
+### R-distribution-011 · shipped
 The release publish script automatically builds and publishes the demo videos that the public docs need.
 - asked: 2026-10-07
+- shipped: 03d096ef, 78ae16f4
 
 ### R-distribution-012 · shipped
 Demo videos are hosted from a separate GitHub Pages media repo and linked from the public docs; session ids never appear in the published public snapshot.
@@ -73,27 +74,30 @@ Lighter alternative variants are available on demand as options in the WP build 
 - asked: 2026-10-08
 - shipped: 1c7d859
 
-### R-distribution-016 · requested
-The APK is trustworthy enough for users to install: it is planned for Play Store distribution, and users can compile it themselves from source.
+### R-distribution-016 · shipped
+The APK is trustworthy enough for users to install: it is on Google Play, and users can compile it themselves from source.
 - asked: 2026-10-08
+- shipped: 5023c1e5
 
 ### R-distribution-017 · shipped
 Windows users install and start the host through one Windows launcher, from a checkout or an npm install.
 - asked: 2026-10-09
 - shipped: 202b4659
 
-### R-distribution-018 · requested
-The user-facing product name is read from the single brand definition everywhere, including Play store listing text; no file hardcodes it unless allowed with a reason.
+### R-distribution-018 · shipped
+The product name is the same everywhere it appears; a file that must spell it out (such as the Play listing text, uploaded verbatim) is a listed exception with a reason.
 - asked: 2026-10-09, 2026-10-11
+- shipped: e665294a
 
 ### R-distribution-019 · shipped
 A central private plan file records the details of the public open-source release, including the VS Code extension.
 - asked: 2026-10-10, 2026-10-11
 - shipped: e4660f43, e36d63d3
 
-### R-distribution-020 · requested
+### R-distribution-020 · shipped
 The VS Code extension is built to publishable quality so it can be shipped as is.
 - asked: 2026-10-11
+- shipped: a700d413
 
 ### R-distribution-021 · shipped
 The cost and repo health views are one shared implementation used by both waterplane and the VS Code extension.
@@ -137,9 +141,10 @@ The game is published to the Play Store as 'Waterplane game', distinguishable fr
 The waterplane, waterplane-game and child-paint repos are public on GitHub with clean rewritten history, no personal paths, noreply commit emails, a description and topics; child-paint is served as a GitHub Pages site and the waterplane npm package is published and installable.
 - asked: 2026-10-17, 2026-10-17, 2026-10-17
 
-### R-distribution-030 · requested
+### R-distribution-030 · shipped
 waterplane.dev and www.waterplane.dev serve the GitHub Pages site over HTTPS with a valid certificate, and waterplane-dev.github.io redirects to it.
 - asked: 2026-10-16, 2026-10-17
+- shipped: 16ecc0eb
 
 ### R-distribution-031 · shipped
 The build entry for the VS Code extension has a restart option for updating open windows' extensions, on by default.
@@ -155,9 +160,10 @@ The VS Code extension is published to the VS Code Marketplace on each release by
 - asked: 2026-10-20, 2026-10-20
 - shipped: 6cbd0fd8, 72cf8462, a700d413
 
-### R-distribution-034 · requested
-The public mirror always carries the latest released version of the product.
+### R-distribution-034 · shipped
+Each release publishes the public mirror at that release's version, so the mirror carries the latest released version.
 - asked: 2026-10-20
+- shipped: 03d096ef
 
 ### R-distribution-035 · shipped
 Play Store listing screenshots and images are generated from the demo; no personal photos are included.
@@ -177,9 +183,10 @@ The apps collect no user data (and the Play data-safety form says so), request o
 Waterplane Game, TalkingPictures and Little Painter are published on Google Play through the Play Console with the same flow; listings declare their assets as AI-made, each labelled, are completed and submitted, and show as in review rather than as a draft.
 - asked: 2026-10-21, 2026-10-22, 2026-10-23
 
-### R-distribution-039 · requested
+### R-distribution-039 · superseded
 The Waterplane AAB is on the internal testing track assigned to the owner's account, not published to production; the Android app is distributed through Google Play private/internal testing, not a public listing.
 - asked: 2026-10-21, 2026-10-26
+- superseded-by: R-distribution-049
 
 ### R-distribution-040 · requested
 The Waterplane Game does not ship a PC form factor.
@@ -219,7 +226,19 @@ One wp build button runs the whole release train in order: next version and note
 - asked: 2026-11-02
 - shipped: 03d096ef, 353f8a66
 
-### R-distribution-048 · requested
-The release train also covers Google Play and the nom release.
+### R-distribution-048 · shipped
+The release train also covers Google Play (a permanent step run after the other releases) and the npm release.
+- asked: 2026-11-02, 2026-11-04
+- shipped: f5806f8b
+
+### R-distribution-049 · shipped
+The waterplane Android app is listed on Google Play as a full production release, rolled out to all countries with managed publishing off, like the other apps.
 - asked: 2026-11-02
+- shipped: f5806f8b
+- note: sent for review 2026-11-03 with full rollout, managed publishing off, 177 countries plus rest of world; the public Play page answered 200 on 2026-11-06. Each release train now uploads to production.
+
+### R-distribution-050 · shipped
+The Play listing has complete policy declarations, including a working video link for each foreground service type the app declares.
+- asked: 2026-11-02
+- shipped: 62cca32f
 

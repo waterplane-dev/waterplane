@@ -34,6 +34,13 @@ import { composerFrame } from "./permmode.js";
  */
 const TUI_CHROME = /^(>|❯|│|┃|╭|╰|─|━|⏵|✳|✻|·|\[|🤖)|message or|\/command|auto[- ]?mode|shift\+tab|for agents|bypassing permissions|\? for shortcuts|baked for|\besc\b.*\btab\b|^[\s↑↓←→↵⏎^c]+$/i;
 
+/**
+ * The head of the CLI's own summary of a finished turn. It is printed after the
+ * agent's last word and runs down to the composer ("(disable recaps in /config)",
+ * "new task? /clear to save…"), so nothing from here down was said to anyone.
+ */
+const RECAP_HEAD = /^※\s*recap:/i;
+
 /** A row that starts its own item rather than continuing the one above. */
 const ITEM_START = /^([-*•●⏺⎿]|\d+[.)])\s/;
 /** A row that ends a sentence, so the next row is not its wrapped tail. */
@@ -56,6 +63,8 @@ function contentLines(tail: string): string[] {
   // agent's question.
   const frame = composerFrame(rows);
   if (frame) rows = rows.slice(0, frame.top);
+  const recap = rows.findLastIndex((r) => RECAP_HEAD.test(r));
+  if (recap >= 0) rows = rows.slice(0, recap);
   let end = rows.length;
   while (end > 0 && (!rows[end - 1] || TUI_CHROME.test(rows[end - 1]))) end--;
   const out: string[] = [];

@@ -41,9 +41,10 @@ An installation log lists every automatic app install with version, package name
 - asked: 2026-09-21
 - shipped: c3471ea, e38c44a
 
-### R-downloads-010 · requested
-Artifact size limit rules are visible and configurable.
+### R-downloads-010 · shipped
+A repo's download rules, including the maximum file size to auto-download, are visible and settable, and open from the repo's menu in the main view.
 - asked: 2026-09-21
+- shipped: 50a82409
 
 ### R-downloads-011 · shipped
 Auto-download starts and completes reliably even with good connectivity, without being blocked by a false offline state.

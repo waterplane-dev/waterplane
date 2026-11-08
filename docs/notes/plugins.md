@@ -92,8 +92,8 @@ A fork customises waterplane **from outside the core**, so it can keep pulling u
 - **A new feature talks over the generic `plugin.call` / `plugin.push` messages**
   (`api.handle`, `api.push`), never a new member of the wire unions — the wire stays closed, and
   `PROTOCOL_VERSION` is not a fork's to bump.
-- **HTTP**: `api.route()` is coming with the host `api.ts` split; until then a plugin has
-  `hookSink()`/`onHook` (loopback only) and no routes of its own.
+- **HTTP**: a plugin serves its own routes with `api.route()`; `hookSink()`/`onHook` is the
+  loopback-only sink.
 - Build against [docs/plugins-api.md](../plugins-api.md) and declare the `apiVersion` you used.
 
 ## Trust
@@ -147,7 +147,7 @@ external plugin needs UI. The contract as requirements: `docs/requirements/plugi
 | `env()` | `process.env`, **only names the manifest declared**, read live |
 | `repo(repoId)` | `repos.ts`'s `findTarget`, then every path through `contained` + `inRoot` (a symlink out reads as absent) and never an `isSecretFile` name — `readFile`, `listDir` (secrets left out), `git()` (branch, HEAD, changed count; null outside a repo) |
 | `setupCheck()`/`setupFix()` | the setup checklist: `compliance.ts` asks `plugins/setupcontrib.ts`, which asks the registry, for the contributed rows (at the place the requirements row always sat, before the APK row) and fixes. A fix id the core owns (`CORE_FIX_IDS`) or another plugin took is refused by THROWING in `activate()`, so the plugin is listed broken with the reason |
-| `handle()` | the registry's `call(pluginId, method, args)` — the one entry the generic `plugin.call` wire message routes to, through `callOnce` and its ledger (`plugins/pluginrpc.ts`). Answers `{ok, result}` or `{ok:false, error}` in words; a result past 512 KB or not JSON is refused |
+| `handle()` | the registry's `call(pluginId, method, args)` — the one entry the generic `plugin.call` wire message routes to, through `callOnce` and its ledger (`plugins/pluginrpc.ts`). Answers `{ok, result}` or `{ok:false, error}` in words; a result past 512 KB or not JSON is refused. A throw goes to the caller and the log, never the status line: it is how a method refuses, and a status would outlive the refusal |
 | `push(event, data)` | broadcast as `plugin.push {plugin, event, data}` to every phone (the web half's `pushes`). Returns null when sent, else the refusal in words: bad event name (`PLUGIN_EVENT_RE`), not JSON, over 64 KB, plugin not running |
 | `handToAgent()` | `agentintents.ts`'s `handToAgentVia` → `addClientBacklogItem`, the SAME add the phone's `backlog.add` and an agent's `POST /api/agent/backlog` take: contained, persisted, `origin: "plugin:<id>"`, waiting for a tap (`manual`) unless `fire`, then fired by the intent ladder. A `key` makes it at-most-once in the store (`plugin-<id>-<key>`, 64 chars in all). The first argument is a repo id, or an absolute worktree path (starts with `/`, matched by realpath — ids stay `sha1(worktreePath)[:10]`, which a plugin must not re-derive). Never `deliver.ts`, never a session's PTY |
 | `bindConversation(look)` / `tail(path, onLine)` / `screen(sessionId)` / `sessionFiles(hostSessionId)` (2.0) | the backend toolkit (`plugins/plugintoolkit/`), so a backend plugin stops copying helpers: `bindConversation` is `shared/bindconv.ts`'s pure ladder over the candidates the plugin's own queries found (exactly one survivor or nothing); `tail` is `tailJsonl` (complete lines once, rotation-safe, ≤ 1 MiB per `advance()`); `screen` is the live VT grid as rows plus the `echo.ts`-squashed form (null for an unknown session); `sessionFiles` is the launch dir the host wrote for a session THIS plugin's backend spawned (null otherwise) |

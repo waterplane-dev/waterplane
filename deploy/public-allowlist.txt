@@ -19,7 +19,7 @@ tools/**
 
 # ---- docs: notes, requirements and assets -----------------------------------
 # docs/notes is public (redacted by the owner's decision; the publisher's scan
-# keeps it clean). docs/analysis, docs/prompts and docs/code-quality-review.md
+# keeps it clean). docs/analysis and docs/prompts
 # stay private, pending the owner's review: links into them are reported as
 # dangling.
 docs/notes/**
@@ -53,6 +53,8 @@ site/**
 /SECURITY.md
 /CONTRIBUTING.md
 /CODE_OF_CONDUCT.md
+/GOVERNANCE.md
+/ROADMAP.md
 /CHANGELOG.md
 /NOTICES.md
 /DISCLAIMER.md
@@ -165,7 +167,6 @@ deploy/release-pubkey.pem
 # cannot publish them by accident).
 !docs/analysis/**
 !docs/prompts/**
-!docs/code-quality-review.md
 !.claude/outbox/**
 !.claude/inbox/**
 !.claude/worktrees/**

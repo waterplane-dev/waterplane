@@ -1,10 +1,11 @@
 # sessions
 
 ### R-sessions-001 · requested
-Session timeout is customizable; default is 24 hours.
+The close-sessions dialog lets the person type their own idle time for closing inactive sessions, with 24 hours as the default.
 
-### R-sessions-002 · requested
-Default session-timeout setting is 4 hours.
+### R-sessions-002 · shipped
+The gallery's outbox view defaults to files from the last 4 hours.
+- shipped: 664187d4
 
 ### R-sessions-003 · shipped
 User can control automatic session continuation when multiple sessions have the same state.
@@ -59,7 +60,7 @@ Table/graph view toggle button is positioned consistently with other controls ac
 - shipped: 858a2fb
 
 ### R-sessions-015 · requested
-Main view displays a visible session where the user can check agent answers.
+After asking for a fix from the repo readings sheet, the new session appears in the main view so the person can check the agent's answers.
 - asked: 2026-09-21
 
 ### R-sessions-016 · shipped
@@ -67,18 +68,20 @@ Sending a prompt offers a choice of target: same session, a new session, or anot
 - asked: 2026-09-24, 2026-09-24
 - shipped: cb34e8e
 
-### R-sessions-017 · requested
-When targeting another open session, relevant keywords for that session's topic display alongside the session options.
+### R-sessions-017 · shipped
+Every place that lets the person pick another session as a target shows the short name the desktop gave that session, beside its title.
 - asked: 2026-09-24
+- shipped: cb34e8e7
 
 ### R-sessions-018 · shipped
 A button in the session cost view opens a new session that analyzes the cost drivers and suggests improvements without implementing them.
 - asked: 2026-09-26
 - shipped: 3c4f0a2
 
-### R-sessions-019 · requested
-The session limit is consistent across the codebase.
+### R-sessions-019 · shipped
+A prompt timed shortly before the weekly reset is let past the 5-hour session ceiling as well as the weekly ceiling, until that reset.
 - asked: 2026-09-30
+- shipped: 01cfc6f0
 
 ### R-sessions-020 · shipped
 Fork and reset cut at the inspected point, before the tapped turn.
@@ -129,26 +132,30 @@ A session can be named by hand through a dedicated header button; the typed name
 A claude session's permission mode (manual, accept edits, plan, auto — and bypass / don't ask where the session has them) can be read and switched from the phone the way the desktop's mode menu does, following a change typed at the desk; ultracode shows as the CLI last confirmed it. A mode the session's shift+tab cycle does not hold, an open question box or an unreadable footer is said in words, never guessed.
 - asked: 2026-10-07
 - shipped: 0567a97
-### R-sessions-030 · requested
-When a new project folder is opened for the first time, waterplane asks whether to trust it; until trusted, the folder runs in restricted mode and its hooks do not execute.
+### R-sessions-030 · shipped
+A background model call the desktop makes on its own is refused in a folder the claude CLI does not trust, so that folder's hooks never run from it; the refusal is said once.
 - asked: 2026-10-04
+- shipped: 4698c58a
 
-### R-sessions-031 · requested
-Tapping the worktree chip does not apply the note filter.
+### R-sessions-031 · shipped
+Tapping a repo's worktree chip filters the list to that repo's worktree rows, like the other header chips.
 - asked: 2026-10-05
+- shipped: 2f56055d
 
-### R-sessions-032 · requested
-The latest item shows at the top of the list.
+### R-sessions-032 · shipped
+In Downloads, the newest finished download is at the top of the On this phone list.
 - asked: 2026-10-06
+- shipped: eeb82bfb
 
 ### R-sessions-033 · shipped
 A shared item can go to the currently open session, a new session, or an existing session the user selects.
 - asked: 2026-10-06
 - shipped: c1d7d699
 
-### R-sessions-034 · requested
-Sessions started from the backlog or by the scheduler appear in the main session view.
+### R-sessions-034 · shipped
+A /fork typed on the phone opens a normal tab in the app and switches to it. Backlog rows in one repo wait only on queued or automatic sessions, say when they wait for an answer with a button to open that session, and Fire starts a row on one tap.
 - asked: 2026-10-06
+- shipped: b93af861, 5ed143c9
 
 ### R-sessions-035 · superseded
 A worktree is shown next to the session it belongs to, not visually closer to the session below it.
@@ -156,9 +163,10 @@ A worktree is shown next to the session it belongs to, not visually closer to th
 - shipped: dc5373ce
 - superseded-by: R-git-014
 
-### R-sessions-036 · requested
-The user can see the kick-off progress of a session.
+### R-sessions-036 · shipped
+When a fan-out is run over several repos, a strip above Run shows its kick-off progress (sent, then how many of the repos have started) with a link to the run's list.
 - asked: 2026-10-08
+- shipped: 4b31cb7f
 
 ### R-sessions-037 · shipped
 Open sessions are numbered per repo from 0, in list order; only open sessions get numbers and a filter never renumbers the rest.
@@ -223,25 +231,31 @@ A shell session keeps the repo it was opened in even after the person cds elsewh
 - asked: 2026-10-15
 - shipped: 579c8b42
 
-### R-sessions-050 · requested
+### R-sessions-050 · shipped
 A prompt sent into a session is detected as delivered without the user pressing the on-screen return key.
 - asked: 2026-10-16
+- shipped: 5eff24ea
 
-### R-sessions-051 · requested
+### R-sessions-051 · superseded
 Prompts from marked screenshots go to a new session with the prompt pre-filled for the user to review and send, not to the backlog.
 - asked: 2026-10-16
+- superseded-by: R-vault-021
 
-### R-sessions-052 · requested
-Each session appears once in the session list.
+### R-sessions-052 · shipped
+Restarting a session, even with a second tap, gives one session in the list, not two copies of the same conversation.
 - asked: 2026-10-19
+- shipped: 8d69613a
 
-### R-sessions-053 · requested
-Long sessions auto-compact at the configured 400k context, and the phone offers intervention buttons when a session nears its context limit.
+### R-sessions-053 · shipped
+When an agent inside a session grows past a window size the person chose, the phone alerts them, and the context sheet lists the most expensive agents with an interrupt-and-re-plan button.
 - asked: 2026-10-20
+- shipped: 4c6ff87f, f6cf4904
+- note: Auto-compact at 400k was already set and works on the main conversation only; the ask was about subagents running away.
 
-### R-sessions-054 · requested
-Each session shows which project or repo it belongs to.
+### R-sessions-054 · shipped
+The vault's re-arm card starts each grant row with the project name, so which project it is reads first.
 - asked: 2026-10-22
+- shipped: 7c57d37a
 
 ### R-sessions-055 · shipped
 Closed and archived sessions are listed in the same card style as open sessions.
@@ -253,9 +267,10 @@ A session still on an older Claude binary than the installed one can be restarte
 - asked: 2026-10-23, 2026-10-24
 - shipped: ba813d9a, 158badcb
 
-### R-sessions-057 · requested
+### R-sessions-057 · superseded
 Sessions can be found again later, so a session with a pending next step can be located.
 - asked: 2026-10-26
+- superseded-by: R-sessions-041
 
 ### R-sessions-058 · shipped
 A plugin-backend session that stops at a dated usage wall resumes at the reset time as Claude sessions do; a wall with no reset time schedules nothing.

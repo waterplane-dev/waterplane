@@ -28,8 +28,9 @@ After a successful CLI update the update button disappears.
 - shipped: edf27820
 
 ### R-updates-007 · requested
-For the project's developers only, the newest update installs automatically and an integration test then runs after each update, fixes what broke and reports what it did; this is not activated for other users of the repository.
+For the project's developers only, a newer Claude CLI release is installed automatically and a real-CLI check then runs, fixes what broke and reports what it did; it is never active for other users of the repository.
 - asked: 2026-10-07
+- note: The real-CLI smoke script exists (824429cc); the automatic install job and auto-fix were not switched on, pending the owner's go-ahead.
 
 ### R-updates-008 · shipped
 Pressing the update button in the VS Code title bar fully updates the open extension to the current build, so it shows the current style.

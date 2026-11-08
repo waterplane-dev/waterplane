@@ -7,6 +7,7 @@ import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.TransportInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -62,9 +63,17 @@ import java.util.List;
  * {@link WifiInfo} carried by {@link NetworkCapabilities#getTransportInfo()} of
  * a callback registered with {@code FLAG_INCLUDE_LOCATION_INFO} —
  * {@code getNetworkCapabilities(network)} hands back a redacted copy. So this
- * plugin keeps its own default-network callback and caches the last
+ * plugin keeps a callback on the Wi-Fi network itself and caches the last
  * capabilities it delivered. Below 31 the deprecated
  * {@link WifiManager#getConnectionInfo()} is still the way.
+ *
+ * <b>Not the default network's callback.</b> With Tailscale up the default
+ * network is the VPN: it reports {@code TRANSPORT_WIFI} from what runs under it,
+ * but its transport info is a {@code VpnTransportInfo}, which has no name. A
+ * {@link NetworkRequest} leaves VPNs out unless asked, so the Wi-Fi callback
+ * sees the Wi-Fi underneath. The name also goes missing from whatever is
+ * delivered while the app is in the background, since a "while in use" grant
+ * does not cover that moment, so the callback is registered again on every resume.
  *
  * <b>Its own callback, on purpose.</b> {@link ShellLinkService} has one too, but
  * only while the background link is switched on; this one lives exactly as
@@ -94,6 +103,10 @@ public class ShellNetPlugin extends Plugin {
     @Nullable private ConnectivityManager.NetworkCallback callback;
     /** Last capabilities the callback delivered; null when there is no default network. */
     @Nullable private volatile NetworkCapabilities caps;
+    /** API 31+: the callback that carries the Wi-Fi name, and the last network and capabilities it delivered. */
+    @Nullable private ConnectivityManager.NetworkCallback wifiCallback;
+    @Nullable private volatile Network wifiNetwork;
+    @Nullable private volatile NetworkCapabilities wifiCaps;
     /** JSON of the last state pushed to the page, to push only on change. */
     @Nullable private String lastPushed;
     private final Runnable push = this::pushIfChanged;
@@ -102,12 +115,21 @@ public class ShellNetPlugin extends Plugin {
     public void load() {
         super.load();
         register();
+        registerWifi();
+    }
+
+    /** What was delivered in the background may have lost the name, and nothing delivers it again unasked. */
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        rereadWifi();
     }
 
     @Override
     protected void handleOnDestroy() {
         handler.removeCallbacks(push);
         unregister();
+        unregisterWifi();
         super.handleOnDestroy();
     }
 
@@ -135,10 +157,7 @@ public class ShellNetPlugin extends Plugin {
         // Capabilities delivered before the grant were redacted, and nothing
         // re-delivers them just because a permission changed — re-register so
         // the callback's first delivery carries the name.
-        if (getPermissionState(LOCATION) == PermissionState.GRANTED) {
-            unregister();
-            register();
-        }
+        if (getPermissionState(LOCATION) == PermissionState.GRANTED) rereadWifi();
         call.resolve(state());
         schedulePush();
     }
@@ -159,8 +178,8 @@ public class ShellNetPlugin extends Plugin {
         } catch (RuntimeException e) {
             Log.d(TAG, "network unreadable: " + e);
         }
-        // The callback's copy when there is one: only it carries the Wi-Fi name. Before its first
-        // delivery the platform's own answer stands, or this would report a live network as none.
+        // The callback's copy when there is one. Before its first delivery the platform's own
+        // answer stands, or this would report a live network as none.
         NetworkCapabilities nc = caps != null ? caps : live;
         String transport;
         if (nc == null) transport = "none";
@@ -168,7 +187,7 @@ public class ShellNetPlugin extends Plugin {
         else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) transport = "cellular";
         else transport = "other";
         ret.put("transport", transport);
-        String ssid = "wifi".equals(transport) ? ssid(nc) : null;
+        String ssid = "wifi".equals(transport) ? ssid() : null;
         ret.put("ssid", ssid != null ? ssid : JSObject.NULL);
         ret.put("permission", permission());
         // Absent, not false, with no network to ask: the page reads `vpn === false` as "the
@@ -213,12 +232,13 @@ public class ShellNetPlugin extends Plugin {
     }
 
     @Nullable
-    private String ssid(NetworkCapabilities nc) {
+    private String ssid() {
         if (getPermissionState(LOCATION) != PermissionState.GRANTED) return null;
         String raw = null;
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                TransportInfo ti = nc.getTransportInfo();
+                NetworkCapabilities wifi = wifiCaps;
+                TransportInfo ti = wifi == null ? null : wifi.getTransportInfo();
                 if (ti instanceof WifiInfo) raw = ((WifiInfo) ti).getSSID();
             } else {
                 WifiManager wm = (WifiManager) getContext().getApplicationContext()
@@ -254,12 +274,7 @@ public class ShellNetPlugin extends Plugin {
         if (callback != null) return;
         ConnectivityManager cm = getContext().getSystemService(ConnectivityManager.class);
         if (cm == null) return;
-        ConnectivityManager.NetworkCallback cb;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            cb = new Callback(ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO);
-        } else {
-            cb = new Callback();
-        }
+        ConnectivityManager.NetworkCallback cb = new Callback();
         try {
             cm.registerDefaultNetworkCallback(cb);
             callback = cb;
@@ -281,10 +296,60 @@ public class ShellNetPlugin extends Plugin {
         }
     }
 
-    private final class Callback extends ConnectivityManager.NetworkCallback {
-        Callback() { super(); }
-        Callback(int flags) { super(flags); }
+    private void registerWifi() {
+        if (wifiCallback != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+        ConnectivityManager cm = getContext().getSystemService(ConnectivityManager.class);
+        if (cm == null) return;
+        ConnectivityManager.NetworkCallback cb = new WifiCallback();
+        try {
+            cm.registerNetworkCallback(
+                    new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), cb);
+            wifiCallback = cb;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "no Wi-Fi callback: " + e);
+        }
+    }
 
+    private void unregisterWifi() {
+        ConnectivityManager.NetworkCallback cb = wifiCallback;
+        wifiCallback = null;
+        if (cb == null) return;
+        ConnectivityManager cm = getContext().getSystemService(ConnectivityManager.class);
+        if (cm == null) return;
+        try {
+            cm.unregisterNetworkCallback(cb);
+        } catch (RuntimeException e) {
+            Log.d(TAG, "unregister Wi-Fi: " + e);
+        }
+    }
+
+    /** A fresh registration's first delivery is the current network, read with today's rights. */
+    private void rereadWifi() {
+        unregisterWifi();
+        registerWifi();
+    }
+
+    private final class WifiCallback extends ConnectivityManager.NetworkCallback {
+        WifiCallback() { super(ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO); }
+
+        @Override
+        public void onCapabilitiesChanged(Network network, NetworkCapabilities nc) {
+            wifiNetwork = network;
+            wifiCaps = nc;
+            schedulePush();
+        }
+
+        /** A hand-over can lose the old network after the new one arrived; only the one held counts. */
+        @Override
+        public void onLost(Network network) {
+            if (!network.equals(wifiNetwork)) return;
+            wifiNetwork = null;
+            wifiCaps = null;
+            schedulePush();
+        }
+    }
+
+    private final class Callback extends ConnectivityManager.NetworkCallback {
         @Override
         public void onCapabilitiesChanged(Network network, NetworkCapabilities nc) {
             caps = nc;

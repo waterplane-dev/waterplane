@@ -27,10 +27,10 @@
  * "the host was not reachable" lead to different next actions, and collapsing
  * them is how a permissions problem gets read as a bad tunnel for a week.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isOffline } from "./api";
-import { agoText } from "./format";
-import { linkOnline } from "./link";
+import { agoText, stalenessNote, type StaleGap } from "./format";
+import { linkOnline, subscribeLink } from "./link";
 
 /** How long a cache read may hold up the live one. IndexedDB answers in a few
  *  ms when it works; past this it is not going to, and the host is the answer. */
@@ -60,6 +60,10 @@ export interface RemoteResource<T> {
    * spends that on a spinner or on a `disabled` attribute.
    */
   inflight: boolean;
+  /** Why a `cached` copy is still on screen once no read is out: the link is
+   *  down, or the link is up and the desktop did not answer. Null otherwise. A
+   *  refusal is not here, it is `error`. */
+  gap: StaleGap | null;
   /** Re-read from the host. `quiet` keeps whatever is on screen while it runs,
    *  for a background refresh that must not blank the list. */
   reload: (opts?: { quiet?: boolean }) => void;
@@ -112,11 +116,18 @@ export function useRemoteResource<T>(
   // Tailscale path is dead, and a `readyState` stays OPEN under a tunnel that
   // has already died. This was the fourth independent derivation of "am I
   // online" in this app, which is three too many — a caller may still override.
-  const { enabled = true, offline: forcedOffline = !linkOnline(), fromCache, toCache } = opts;
+  //
+  // SUBSCRIBED, not read once per render: a sheet opened while the socket was
+  // still connecting served its cache, and nothing re-rendered it when the link
+  // came up, so it said "the link is down" under a strip reading 185 ms until
+  // somebody tapped refresh.
+  const online = useSyncExternalStore(subscribeLink, linkOnline);
+  const { enabled = true, offline: forcedOffline = !online, fromCache, toCache } = opts;
   const [data, setData] = useState<T | null>(null);
   const [state, setState] = useState<ResourceState>("loading");
   const [age, setAge] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unanswered, setUnanswered] = useState(false);
   // Counted, not a boolean: a key change starts the next read before the
   // cancelled one has unwound, and a flag would be cleared by the loser.
   const [busy, setBusy] = useState(0);
@@ -146,6 +157,7 @@ export function useRemoteResource<T>(
     const mine = key;
     const stillMine = () => !cancelled && liveKey.current === mine;
 
+    setUnanswered(false);
     setBusy((n) => n + 1);
     void (async () => {
       try {
@@ -184,6 +196,7 @@ export function useRemoteResource<T>(
           // it is still true about the moment it was taken. Only the LABEL moves.
           setState(cached ? "cached" : offline ? "offline" : "error");
           setError(offline ? null : String((e as Error)?.message || e));
+          setUnanswered(offline);
         }
       } finally {
         // Decremented even for a read whose answer is no longer wanted: the
@@ -196,20 +209,9 @@ export function useRemoteResource<T>(
     return () => { cancelled = true; ac.abort(); };
   }, [key, enabled, forcedOffline, nonce]);
 
-  return { data, state, age, error, inflight: busy > 0, reload, set: setData };
-}
-
-/**
- * The sentence a sheet puts above cached rows.
- *
- * Written here rather than per sheet for the same reason as the hook: the
- * wording is a promise about freshness, and twenty-six wordings are twenty-six
- * chances for one of them to overstate it.
- */
-export function stalenessNote(state: ResourceState, age: number | null, noun = "listing"): string | null {
-  if (state !== "cached" || age == null) return null;
-  return `Cached ${noun} from ${agoText(age)} — the link is down, so anything added since won't be here.`;
+  const gap: StaleGap | null = forcedOffline ? "link" : unanswered ? "no-answer" : null;
+  return { data, state, age, error, inflight: busy > 0, gap, reload, set: setData };
 }
 
 /** Moved to `format.ts`; re-exported so existing importers keep working. */
-export { agoText };
+export { agoText, stalenessNote };

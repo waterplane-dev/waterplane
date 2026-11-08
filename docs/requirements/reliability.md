@@ -4,8 +4,9 @@
 Typed text, annotated images, and prompts are not lost during errors, timeouts, or send/connectivity failures.
 - shipped: 664187d, f479df9
 
-### R-reliability-002 · requested
+### R-reliability-002 · shipped
 Timeout errors do not navigate to white or blank pages; app remains usable.
+- shipped: 664187d4
 
 ### R-reliability-003 · shipped
 UI (question box, answer box) remains stable without flickering during send attempts and reconnection; stale dialogs/question cards no longer redraw or block console visibility.

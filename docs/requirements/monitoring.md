@@ -5,9 +5,11 @@ System stats display CPU, memory, temperature, fan speed, and process breakdown 
 - asked: 2026-09-18
 - shipped: 58066b0
 
-### R-monitoring-002 · requested
+### R-monitoring-002 · shipped
 The exposure watch runs automatically once a day for each public repo, and exits with distinct codes: 0 nothing new, 10 action needed, 2 unreachable sources, 64 usage error.
 - asked: 2026-10-26, 2026-10-26
+- shipped: 025ace37, d7f26c4d
+- note: The daily schedule is owner-private (untracked LaunchAgent and script), not in the public tree.
 
 ### R-monitoring-003 · shipped
 The owner-private exposure watch reports the Play target-API deadline (read from the app's build files), Play vitals, privacy-policy URL status, domain (RDAP) expiry and a manual npm 2FA row the owner confirms; Socket runs only when its token exists in the vault. It never appears in the public tree.
@@ -32,3 +34,8 @@ The phone's exposure watch shows CodeQL code-scanning findings alongside Dependa
 ### R-monitoring-007 · shipped
 A crash finding on the phone's watch list can be sent to a session for an agent to find the cause and fix it, and every watch finding says in plain words where it came from.
 - asked: 2026-11-05
+### R-monitoring-008 · shipped
+An outage report charts network outages per day and shows which hours of the day they cluster in; the network probe checks the new addresses.
+- asked: 2026-11-05, 2026-11-06
+- note: no commit, neither is in this repo. The report is `.claude/outbox/net-outage-report-2026-11-05.html`, the probe `~/.local/share/dns-probe.sh`.
+

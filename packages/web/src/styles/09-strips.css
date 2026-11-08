@@ -258,6 +258,12 @@
    ~2:1 on the open row. `--fg` is what theme.test.mjs proves readable on every
    hue's fill; size and weight carry the hierarchy instead of a greyer ink. */
 .stab-row-sub { font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); overflow-wrap: anywhere; }
+/* The launcher row's figures, a column beside the words rather than a third
+   line: a long list is scanned, and the name still wraps whole. */
+.stab-row-nums { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); font-variant-numeric: tabular-nums; }
+.stab-row-turns { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.stab-tag { display: inline-flex; margin-left: var(--sp-4); vertical-align: -2px; }
+.stab-tag.starred { color: var(--star); }
 .stab-row .stab-x { width: 40px; height: 40px; }
 /* One tab. The repo hue is the FILL (`--repo-accent` is set inline per tab from
    the repo name, `--repo-fill` turns it into the wash the launcher uses) and
