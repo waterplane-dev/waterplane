@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import {
   SETTING_GROUPS, SETTING_ROWS, addSettingRows, filterSummary, groupMatches, groupShown, rowMatches, rowShown, settingRow,
-  nestedMatches, setRowWords, wordsMatch,
+  nestedMatches, setRowWords, wordsMatch, PLUGIN_SCOPE, pluginScopeOf, scopeRowIds, setPluginName,
 } from "./settingsIndex.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -351,4 +351,29 @@ test("SetLine and SetNote never become a counted row", () => {
       assert.ok(!body.includes(banned), `${name} uses ${banned}: a note or a layout line must never become a counted row; a decision is SetSwitch/SetChoice/…`);
     }
   }
+});
+
+test("a plugin scope pins the plugins row plus the rows its extension contributed, and says so", () => {
+  addSettingRows([{ id: "scope-ext-a", group: "tools", label: "a thing" }, { id: "scope-ext-a2", group: "appearance", label: "a look" }], "scopeext");
+  addSettingRows([{ id: "scope-ext-b", group: "tools", label: "b thing" }], "other");
+  const pin = `${PLUGIN_SCOPE}scopeext`;
+  assert.equal(pluginScopeOf(pin), "scopeext");
+  assert.equal(pluginScopeOf("theme"), null);
+  assert.equal(pluginScopeOf(null), null);
+  assert.deepEqual(scopeRowIds("scopeext"), ["plugins", "scope-ext-a", "scope-ext-a2"]);
+  assert.deepEqual(scopeRowIds("nobody"), ["plugins"]);
+  // token-stats is a fixed builtin: its manifest names "Settings: token statistics", so the scope must hold that core row
+  // ...and NOT the generic plugins row: a fixed builtin has no section there, so it would draw an empty card
+  assert.deepEqual(scopeRowIds("token-stats"), ["token-stats"]);
+  assert.equal(rowShown("plugins", "", `${PLUGIN_SCOPE}token-stats`), false);
+  assert.equal(rowShown("token-stats", "", `${PLUGIN_SCOPE}token-stats`), true);
+  for (const id of ["plugins", "scope-ext-a", "scope-ext-a2"]) assert.equal(rowShown(id, "", pin), true, id);
+  for (const id of ["theme", "scope-ext-b"]) assert.equal(rowShown(id, "", pin), false, id);
+  assert.equal(groupShown("tools", "", pin), true);
+  assert.equal(groupShown("appearance", "", pin), true);
+  assert.equal(groupShown("sessions", "", pin), false);
+  setPluginName("scopeext", "Scope Ext");
+  assert.equal(filterSummary(3, 60, "", pin), "showing Scope Ext only — 3 of 60 settings");
+  assert.match(filterSummary(0, 60, "", pin), /Scope Ext has no settings on this screen/);
+  assert.equal(filterSummary(1, 60, "", "plugins"), "showing “plugins” only — 1 of 60 settings", "a row pin reads as before");
 });

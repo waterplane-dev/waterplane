@@ -42,7 +42,7 @@ what this project vouches for; the topic is everything that exists.
 
 ## The API is versioned: semver, one rule
 
-`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`2.7.0` now). A manifest's `apiVersion` (`"2.2"`, or a
+`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`2.8.0` now). A manifest's `apiVersion` (`"2.2"`, or a
 bare `2`, meaning `2.0`) loads when its **major
 equals the host's and its minor is no newer**; the patch is never compared. Anything else is
 refused before any of its code runs, as a sentence naming both versions and which side is behind

@@ -70,9 +70,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-ef86db40c1.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-e89cdc338c.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notification on the phone with the app (a second one here, or the same one) says the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-ef86db40c1.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-e89cdc338c.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that

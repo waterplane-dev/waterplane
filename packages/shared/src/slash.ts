@@ -43,6 +43,19 @@ const LOCAL_ONLY = new Set([
   // and filed it as "typed, but Return was swallowed".
   "/effort", "/fast", "/theme", "/color", "/keybindings", "/skills", "/plugin",
   "/version", "/diff", "/copy",
+  // Views of background work (`local-jsx`, checked 2026-11-08). `/workflows` was
+  // missing: it opened its view and was filed as "Return was swallowed".
+  "/workflows", "/tasks", "/loops", "/artifacts",
+  // The rest of 2.1.319's `local-jsx` table that only opens a view or sets
+  // something in place. Left OFF on purpose, because their Return can start or
+  // hand off work: /plan /goal /ultraplan /ultrareview /autofix-pr /branch
+  // /fork /subtask /background /stop /teleport /exit /cd /install. Anything
+  // unlisted that turns out local is caught by the composer rule instead
+  // (`deliverscreen.ts`'s `composerHolds`).
+  "/autocompact", "/scroll-speed", "/skill-doctor", "/wellbeing", "/rename",
+  "/remote-env", "/mobile", "/session", "/usage-credits", "/extra-usage",
+  "/rate-limit-options", "/setup-bedrock", "/setup-vertex", "/web-setup",
+  "/powerup", "/brief", "/daemon", "/design-login", "/import", "/install-github-app",
 ]);
 
 /** True when `text` is one of the TUI-local commands above (args ignored).

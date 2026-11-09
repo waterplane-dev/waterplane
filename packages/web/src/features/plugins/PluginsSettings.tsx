@@ -13,6 +13,8 @@ import { AlertTriangle, CheckCircle2, CircleDashed, Download, FolderOpen, KeyRou
 import { BRAND, PLUGIN_MANIFEST } from "@waterplane/shared";
 import type { PluginField, PluginView } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
+import { useSettingsOnly } from "../../settingsFocus";
+import { pluginScopeOf } from "../../settingsIndex";
 import { ConfirmButton } from "../../Confirm";
 import { SetAction, SetChoice, SetCustom, SetNote, SetPick, SetSwitch, SetWarn, useNestedShown } from "../../SettingsKit";
 import { enablePlugin, openDecisions, refuseValue, runPluginAction, setPluginValue } from "./actions";
@@ -39,6 +41,8 @@ export function PluginsSettings() {
   const list = useStore(pluginStore);
   const status = useStore(updatesStatus);
   const rows = installedRows(list ?? [], status);
+  // A plugin scope (`openPluginSettings`) shows that plugin's section only — not the list-wide updates and add-by-URL.
+  const scoped = pluginScopeOf(useSettingsOnly()) !== null;
   // The host sends the list on connect and after every change; asking once
   // when the screen comes up covers a phone that connected before an older
   // host knew the message. Nobody tapped anything, so no receipt.
@@ -57,9 +61,9 @@ export function PluginsSettings() {
         </SetNote>
       )}
       {list?.map((p) => <PluginSection key={p.source} p={p} row={rows.find((r) => r.id === p.manifest.id)} />)}
-      <CheckedLine status={status} />
-      <AvailableList status={status} />
-      <AddByUrl />
+      {!scoped && <CheckedLine status={status} />}
+      {!scoped && <AvailableList status={status} />}
+      {!scoped && <AddByUrl />}
     </SetCustom>
   );
 }
@@ -74,7 +78,7 @@ function PluginSection({ p, row }: { p: PluginView; row: InstalledRow | undefine
   const StateIcon = TONE_ICON[state.tone];
   const env = envRows(p);
   // Under a query only its own words answer, the sections beside it step aside.
-  if (!useNestedShown("plugins", pluginWords(p))) return null;
+  if (!useNestedShown("plugins", pluginWords(p), m.id)) return null;
   return (
     <div className="plugin-sec">
       <div className="plugin-head">

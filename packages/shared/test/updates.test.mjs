@@ -19,6 +19,8 @@ test("pluginMaturity: absent or unknown is unrated, never stable; words live her
   assert.equal(pluginMaturity({ maturity: "experimental" }).meaning, "May not work");
   assert.equal(pluginMaturity({}).meaning, "The plugin does not say");
   assert.equal(pluginMaturity({ maturity: "stable" }).label, "Stable");
+  assert.equal(pluginMaturity({ maturity: "preview" }).label, "Beta");
+  assert.equal(pluginMaturity({ maturity: "experimental" }).label, "Experimental");
   assert.equal(PLUGIN_TOPIC, "waterplane-plugin");
 });
 
@@ -68,4 +70,15 @@ test("updatesDue: an entry with problems or not installed never counts", () => {
   const s = self({ latest: undefined });
   assert.equal(updatesDue({ self: s, catalog: [entry({ problems: ["has dependencies"] })] }).length, 0);
   assert.equal(updatesDue({ self: s, catalog: [entry({ installed: null })] }).length, 0);
+});
+
+test("manifest: summary is one non-empty line of at most 120 chars; places are non-empty lines of at most 80", () => {
+  assert.deepEqual(manifestProblems({ ...base, summary: "x".repeat(120), places: ["Usage meter: a line", "y".repeat(80)] }), []);
+  assert.equal(manifestProblems({ ...base, summary: "x".repeat(121) }).length, 1);
+  assert.equal(manifestProblems({ ...base, summary: "  " }).length, 1);
+  assert.equal(manifestProblems({ ...base, summary: 3 }).length, 1);
+  assert.equal(manifestProblems({ ...base, places: "Usage meter" }).length, 1);
+  assert.equal(manifestProblems({ ...base, places: [""] }).length, 1);
+  assert.equal(manifestProblems({ ...base, places: ["y".repeat(81)] }).length, 1);
+  assert.equal(manifestProblems({ ...base, places: [4] }).length, 1);
 });

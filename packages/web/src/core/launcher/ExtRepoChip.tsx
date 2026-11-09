@@ -18,7 +18,7 @@ export function ExtRepoChip({ def, repo }: { def: RepoChipDef; repo: RepoTarget 
   return (
     <button className="repo-group-stat" title={r.title}
       onClick={() => { track(`action:repo.chip.${def.id}`); def.open(repo, r.filter, core()); }}>
-      <Icon size={12} />{r.label ? `${r.label} ` : ""}{r.n}
+      <Icon size={12} />{r.text ?? `${r.label ? `${r.label} ` : ""}${r.n}`}
     </button>
   );
 }

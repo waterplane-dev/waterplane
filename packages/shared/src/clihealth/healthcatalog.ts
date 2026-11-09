@@ -168,6 +168,7 @@ export const CLI_SIGNALS: readonly CliSignalSpec[] = [
     means:
       "Commands that open a view instead of running a turn. Get the list wrong in either direction and the app either hammers Return into the view it just opened, or waits for a turn that never starts.",
     capture: "line",
+    fallback: "the composer letting go of a command no list names",
   },
 ] as const;
 

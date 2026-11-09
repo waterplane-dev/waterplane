@@ -25,13 +25,13 @@
  */
 import {
   Bell, Bot, CloudUpload, CornerDownLeft, Cpu, ExternalLink, Gauge, HardDrive, HelpCircle, KeyRound,
-  ListChecks, Lock, Monitor, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon, Waypoints,
-  Activity, BarChart3, CalendarClock, DoorClosed, DoorOpen,
+  ListChecks, Lock, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon, Waypoints,
+  Activity, BarChart3, CalendarClock, DoorClosed, DoorOpen, Puzzle,
 } from "lucide-react";
 import { BRAND, SYNCED_SETTING_KEYS, envName, type Effort, type PermissionMode } from "@waterplane/shared";
 import { useEffect } from "react";
 import { createStore, useStore } from "../../sdk/store.ts";
-import { settingsOnly, useSettingsOnly } from "../../settingsFocus.ts";
+import { pluginScope, settingsOnly, useSettingsOnly } from "../../settingsFocus.ts";
 import { core } from "../api.ts";
 import { SHEET } from "../../sheetNames.ts";
 import { openSchedules } from "../../features/schedule";
@@ -53,7 +53,7 @@ import { pushAllSettings } from "../../settings.ts";
 import { api } from "../../api.ts";
 import { showToast } from "../../toast.ts";
 import { track } from "../../usage.ts";
-import { showHostStat, takeShot } from "../../features/hostTools";
+import { showHostStat } from "../../features/hostTools";
 import {
   AppearanceRows, OfflineRows, WritingRows, type InstallFacts, type ReconnectFacts, type VoiceFacts,
 } from "./SettingsGroups.tsx";
@@ -81,19 +81,23 @@ export interface SettingsSheetProps {
   /** Drop the socket and dial again (after logging this device out). */
   redial(): void;
   /** More than one repo could store a desktop screenshot: ask which. */
-  pickShotRepo(): void;
 }
 
-export function SettingsSheet(props: SettingsSheetProps) {
+export function SettingsSheet(props: SettingsSheetProps & { pluginView?: boolean }) {
   const settingsQ = useStore(query);
-  const only = useSettingsOnly();
+  const pinned = useSettingsOnly();
+  const scope = useStore(pluginScope);
+  // The `pluginSettings` overlay narrows to its plugin; typing in the search box widens it in place.
+  const scoped = props.pluginView ? scope : null;
+  const only = scoped ?? pinned;
+  const route = props.pluginView ? "pluginSettings" : "settings";
   // A door's pin is for that visit only: closing Settings drops it, so the
   // menu's own "Settings" never opens on one row left over from a door.
   // Counted and checked a microtask later, because StrictMode's dev-only
   // unmount/remount would otherwise drop the pin on the way IN.
   useEffect(() => {
     mounted++;
-    return () => { mounted--; queueMicrotask(() => { if (mounted === 0) settingsOnly.set(null); }); };
+    return () => { mounted--; queueMicrotask(() => { if (mounted === 0) { settingsOnly.set(null); pluginScope.set(null); } }); };
   }, []);
   const c = core();
   const { status } = c.conn;
@@ -104,7 +108,7 @@ export function SettingsSheet(props: SettingsSheetProps) {
   const tally = newSettingsTally(settingsQ, only);
   return (
     <div className="sheet">
-      <SheetHead title={<><Settings size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} /> Settings</>} onClose={() => c.nav.close("settings")}>
+      <SheetHead title={<><Settings size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} /> Settings</>} onClose={() => c.nav.close(route)}>
         <div className={`conn conn-${status}`}>{status}{tailscaleIp ? ` · ${tailscaleIp}` : ""}</div>
       </SheetHead>
       {/* Every switch below this line follows the user to their other
@@ -114,7 +118,12 @@ export function SettingsSheet(props: SettingsSheetProps) {
       <SyncMark keys={SYNCED_SETTING_KEYS} thing="your settings" />
       {/* Above the scroll, not in it: the box you type into must not walk
           off the top of the screen while you read what it found. */}
-      <SetSearch value={settingsQ} onChange={(q) => { settingsOnly.set(null); query.set(q); }} />
+      <div className="set-doors set-doors-top">
+        <button className="set-door" title="Every plugin: on or off, what it does, where it shows up" onClick={() => c.nav.open("pluginManager")}>
+          <Puzzle size={14} /> Plugins
+        </button>
+      </div>
+      <SetSearch value={settingsQ} onChange={(q) => { settingsOnly.set(null); pluginScope.set(null); query.set(q); }} />
       <SettingsScope value={tally}>
       <div className="settings">
 
@@ -177,14 +186,14 @@ export function SettingsSheet(props: SettingsSheetProps) {
           {featureSettingsRows("tools", { to: -10 })}
           <div className="set-doors">
             {featureSettingsRows("tools", { from: -10, to: 0 })}
-            <ToolDoors pickShotRepo={props.pickShotRepo} />
+            <ToolDoors />
           </div>
           {featureSettingsRows("tools", { from: 0 })}
         </SetGroup>
 
         {/* Drawn last, floated to the top by `order: -1` — it reads the
             tally the rows above filled in during this same render. */}
-        <SetFilterBar tally={tally} onClear={() => { settingsOnly.set(null); query.set(""); }} />
+        <SetFilterBar tally={tally} onClear={() => { if (scoped) { c.nav.close(route); return; } settingsOnly.set(null); query.set(""); }} />
       </div>
       </SettingsScope>
     </div>
@@ -507,7 +516,7 @@ function ConnectionRows({ redial }: { redial(): void }) {
 
 // ── Tools: the door rack (after the features' doors at its head) ────────────
 
-function ToolDoors({ pickShotRepo }: { pickShotRepo(): void }) {
+function ToolDoors() {
   const c = core();
   const open = c.nav.open;
   return (
@@ -533,14 +542,6 @@ function ToolDoors({ pickShotRepo }: { pickShotRepo(): void }) {
       <SetAction id="tool-features" compact label="feature usage" icon={BarChart3}
         title="which features you actually use (and which you never do)"
         onClick={() => open("features")} />
-      <SetAction id="tool-screenshot" compact label="screenshot" icon={Monitor}
-        title="screenshot the desktop"
-        onClick={() => {
-          const visibleRepos = c.world.visibleRepos;
-          if (!visibleRepos.length) showToast("no repo to store the shot");
-          else if (visibleRepos.length === 1) void takeShot(visibleRepos[0].id);
-          else pickShotRepo();
-        }} />
     </>
   );
 }

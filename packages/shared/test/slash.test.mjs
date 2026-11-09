@@ -30,6 +30,15 @@ test("settings applied in place are local — /effort high started no turn", () 
   }
 });
 
+test("views of background work are local — /workflows started no turn", () => {
+  // Reported from a phone 2026-11-08: `/workflows` opened its view, and the
+  // delivery came back "typed, but Return was swallowed".
+  for (const c of ["/workflows", "/tasks", "/loops", "/artifacts"]) {
+    assert.equal(isLocalCommand(c), true, c);
+    assert.equal(startsNoTurn(c), true, c);
+  }
+});
+
 test("arguments do not change what a command IS", () => {
   assert.equal(isLocalCommand("/resume some-session-id"), true);
   assert.equal(isLocalCommand("  /context  "), true);

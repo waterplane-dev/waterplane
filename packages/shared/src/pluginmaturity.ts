@@ -18,7 +18,7 @@ export type PluginMaturityLevel = PluginMaturityDeclared | "unrated";
 
 export interface PluginMaturityInfo {
   level: PluginMaturityLevel;
-  /** The tag as printed: "Stable", "Preview", "Experimental", "Unrated". */
+  /** The tag as printed: "Stable", "Beta", "Experimental", "Unrated". */
   label: string;
   /** One line of what it means for the person installing. */
   meaning: string;
@@ -26,7 +26,7 @@ export interface PluginMaturityInfo {
 
 const WORDS: Record<PluginMaturityLevel, { label: string; meaning: string }> = {
   stable: { label: "Stable", meaning: "The author considers it ready for daily use" },
-  preview: { label: "Preview", meaning: "May break between versions" },
+  preview: { label: "Beta", meaning: "May break between versions" },
   experimental: { label: "Experimental", meaning: "May not work" },
   unrated: { label: "Unrated", meaning: "The plugin does not say" },
 };

@@ -17,6 +17,12 @@ oracle that used to live in `features/oracle` is now such a plugin.
   the rack door `tool-decisions`. Empty: "No plugins installed" and where they go.
 - `PluginsToolbar.tsx`: the session menu's `plugins` item (toggles, the core-owned "let <name>
   answer" switch, session actions) and `PluginBadges` for a session row.
+- **Plugin manager** (`PluginManagerSheet.tsx`, overlay `pluginManager`; pure half `managerLogic.ts`, sdk `featureManifests()`
+  for the web halves): a card per listed plugin (`plugin.list`, fixed builtins too) with state, summary, tags, the on/off switch
+  (`enablePlugin`, the Settings path; a fixed one says why in words), status, missing env, the load error verbatim, "Where to find
+  it" (derived from contributions, a manifest's `places` winning for the same place, an openable one a button) and a Settings button
+  (`openPluginSettings`: its own overlay `pluginSettings` over the manager, the same `SettingsSheet` narrowed by `pluginScope`; Back lands on the manager, the filter bar's clear closes back to it, typing in the search box widens it in place; Settings underneath stays unfiltered). Filters All/On/Off/Beta (previews and experimental)/Private sit above the list, counted and cut by one function. The
+  door is a plain "Plugins" button at the top of Settings (no count); the head's button goes to Updates, where Add by URL lives.
 - **Updates** (`UpdatesParts.tsx`, `UpdatesSheet.tsx`, `UpdatesSettings.tsx`, `updatesActions.ts`; the pure half is in
   `logic.ts`, stores `updatesStatus`/`applies` in `store.ts`): the host's `updates.status` drawn as installed
   plugins with a maturity tag + source + an update button only where shared `updatesDue` lists it, the

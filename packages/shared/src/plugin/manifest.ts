@@ -61,6 +61,10 @@ export const PLUGIN_PATHS_FILE = "plugin-paths.json";
 /** That file's name before API 1.0.0; the loader renames an old one once, never deletes it. */
 export const LEGACY_PLUGIN_PATHS_FILE = "plugins.json";
 
+/** Caps on the manifest's `summary` and each `places` entry. */
+export const PLUGIN_SUMMARY_MAX = 120;
+export const PLUGIN_PLACE_MAX = 80;
+
 /** The manifest, a JSON file named `PLUGIN_MANIFEST`. */
 export interface PluginManifest {
   id: string;
@@ -70,7 +74,13 @@ export interface PluginManifest {
    *  (`1`, read as `1.0`). Checked by `pluginApiProblem` before any of its code runs. */
   apiVersion: string | number;
   description?: string;
-  maturity?: "stable" | "preview" | "experimental"; // absent = "unrated" (`pluginMaturity`)
+  maturity?: "stable" | "preview" | "experimental"; // absent = "unrated" (`pluginMaturity`); "preview" is printed "Beta"
+  /** One plain sentence (≤ `PLUGIN_SUMMARY_MAX` chars) saying what it does for the person. Absent = the
+   *  phone falls back to the description. */
+  summary?: string;
+  /** Hand-written "where to find it" lines for places the web cannot derive from contributions
+   *  (e.g. a host-only plugin's line on the usage meter). Each non-empty, ≤ `PLUGIN_PLACE_MAX` chars. */
+  places?: string[];
   /** Host module, relative to the plugin dir. Absent ⇒ `host.mjs`. */
   host?: string;
   settings?: PluginField[];
@@ -146,6 +156,15 @@ export interface PluginView {
    *  made no choice (absent = their switch decides, or no probe applies). `why` is the sentence shown
    *  under the switch. */
   auto?: { state: "on" | "off"; why: string };
+  /** Set by the host ONLY for an in-repo builtin whose own `ship.json` says `"ship": false` — an
+   *  extension the public snapshot leaves out (like the vault). Absent = not private. */
+  privacy?: "private";
+  /** An in-repo extension that ships with the product (loaded from the bundle, not installed by the
+   *  person). Absent = an outside plugin. */
+  builtin?: true;
+  /** A builtin that cannot be switched off (not `optional`, and started). Listed so the plugin manager
+   *  shows every plugin; every older reader of the list skips these rows. Absent = switchable. */
+  fixed?: true;
 }
 
 export interface PluginStatus {
@@ -182,6 +201,10 @@ export function manifestProblems(m: unknown): string[] {
   if (o.assets !== undefined && (typeof o.assets !== "string" || !o.assets || /^([\\/]|[A-Za-z]:)/.test(o.assets) || o.assets.split(/[\\/]/).includes(".."))) out.push("assets must be a folder path inside the extension (relative, no ..)");
   if (o.autoOn !== undefined && typeof o.autoOn !== "string") out.push("autoOn must be the name of a probe");
   for (const k of ["optional", "experimental"]) if (o[k] !== undefined && typeof o[k] !== "boolean") out.push(`${k} must be true or false`);
+  if (o.summary !== undefined && (typeof o.summary !== "string" || !o.summary.trim() || o.summary.length > PLUGIN_SUMMARY_MAX)) out.push(`summary must be a non-empty line of at most ${PLUGIN_SUMMARY_MAX} characters`);
+  if (o.places !== undefined) {
+    if (!Array.isArray(o.places) || o.places.some((p) => typeof p !== "string" || !p.trim() || p.length > PLUGIN_PLACE_MAX)) out.push(`places must be a list of non-empty lines of at most ${PLUGIN_PLACE_MAX} characters`);
+  }
   if (o.backends !== undefined) {
     if (!Array.isArray(o.backends)) out.push("backends must be a list of backend ids");
     else for (const b of o.backends) {

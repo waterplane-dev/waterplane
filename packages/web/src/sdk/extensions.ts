@@ -94,6 +94,11 @@ export function bindImageTextFeatures(source: () => readonly FeatureManifest[]):
   features = source;
 }
 
+/** Every feature's manifest (registry order), for the plugin manager's "where does it show up". Read-only. */
+export function featureManifests(): readonly FeatureManifest[] {
+  return features();
+}
+
 /** The phone-side reader for the words inside an annotator mark, or null — with none, the annotator
  *  behaves exactly as before (typed words only). Core's, not in the SDK index. */
 export function imageTextReader(): ImageTextReader | null {

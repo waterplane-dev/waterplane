@@ -73,6 +73,7 @@ export const GUARDS = [
   { test: "guards", tier: "edit", paths: ["scripts/guards/**", "tools/*.test.mjs"] },
 
   // ── commit: typescript / eslint / child processes, still no build ─────────
+  { test: "vaultglossary", tier: "commit", paths: ["packages/extensions/vault/web/**", "packages/extensions/vault/README.md", "tools/vaultglossary.baseline.json"] }, // needs typescript
   { test: "apppins", tier: "commit", paths: WEB },
   { test: "assesspins", tier: "commit", paths: WEB },
   { test: "pulllinkpins", tier: "commit", paths: WEB },
@@ -105,6 +106,7 @@ export const GUARDS = [
   { test: "repohealth-narrate", tier: "push", paths: [], why: "imports @waterplane/shared's dist" },
   { test: "brand", tier: "push", paths: [], why: "git grep over the tracked tree, and shared's dist" },
   { test: "publictree", tier: "push", paths: [], why: "git ls-files" },
+  { test: "shipprivacy", tier: "push", paths: [], why: "reads every extension's ship.json against deploy/public-allowlist.txt" },
   { test: "repohealth", tier: "push", paths: [], why: "git history, and shared's dist" },
   { test: "repohealth-own", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },
   { test: "repohealth-central", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },

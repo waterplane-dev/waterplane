@@ -16,7 +16,6 @@ import { annotate, attachForInbox, openBrowseFor, openGalleryForSend, RepoFileSh
 import { SettingsSheet } from "../settings/SettingsSheet";
 import { SendSheetEntry } from "../send/SendSheetEntry";
 import { featureSheets } from "../sheets";
-import { openShotPick } from "../launcher/LauncherScreen";
 import type { Route } from "./useRoute";
 import type { Connection } from "../conn/useConnection";
 import type { QueueApi } from "../queue/useQueue";
@@ -102,6 +101,16 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
    * overlay whose backing state is gone (a reload restored "image" with no
    * picked file) paints the screen below rather than an empty sheet.
    */
+  // Settings, and the same sheet narrowed to one plugin (`pluginSettings`, opened from the plugin manager's card).
+  const settingsSheet = (pluginView: boolean) => (
+    <SettingsSheet
+      pluginView={pluginView}
+      pickBackend={pickBackend} voice={voice}
+      install={{ installed, canInstall, evt: installEvt, taken: () => setCanInstall(false) }}
+      reconnect={{ holdRef: holdQueueRef, setReconnectAsk, flush: flushOutbox }}
+      redial={() => connRef.current.reconnect()}
+    />
+  );
   const overlayViews: Partial<Record<NonNullable<Overlay>, () => ReactNode>> = {
     ...featureSheets(),
     ...launchCore.sheets,
@@ -136,15 +145,8 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     /* The app's own configuration, and every feature's rows through
        `featureSettingsRows` (core/settings). What it takes as props is what
        only App holds today. */
-    settings: () => (
-      <SettingsSheet
-        pickBackend={pickBackend} voice={voice}
-        install={{ installed, canInstall, evt: installEvt, taken: () => setCanInstall(false) }}
-        reconnect={{ holdRef: holdQueueRef, setReconnectAsk, flush: flushOutbox }}
-        redial={() => connRef.current.reconnect()}
-        pickShotRepo={openShotPick}
-      />
-    ),
+    settings: () => settingsSheet(false),
+    pluginSettings: () => settingsSheet(true),
 
     git: () => {
       // `?repo=` as the URL holds it: the one a reload or an update resume came back on.

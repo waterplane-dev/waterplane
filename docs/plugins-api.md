@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.7.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.8.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -65,6 +65,8 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`LEGACY_PLUGIN_MANIFESTS`](#legacy_plugin_manifests) — const
 - [`PLUGIN_PATHS_FILE`](#plugin_paths_file) — const
 - [`LEGACY_PLUGIN_PATHS_FILE`](#legacy_plugin_paths_file) — const
+- [`PLUGIN_SUMMARY_MAX`](#plugin_summary_max) — const
+- [`PLUGIN_PLACE_MAX`](#plugin_place_max) — const
 - [`PluginManifest`](#pluginmanifest) — interface
 - [`AUTO_ON_PROBES`](#auto_on_probes) — const
 - [`AutoOnProbe`](#autoonprobe) — type
@@ -177,9 +179,11 @@ narrowed per desktop by a host probe; a non-string is refused, an unknown name i
 waiting; scoped to the calling plugin's own tags. 2.5 plugins load as-is.
 **2.7** (additive): `HostPluginApi.notifyDoneExcept(keep)` — a plugin's start settles the notices a
 previous run left behind, keeping the tags still live; scoped to its own items. 2.6 plugins load as-is.
+**2.8** (additive): `HostPluginApi.revokeDevice(id)` — an IN-REPO extension revokes one paired device's token
+(the vault's `wp-secret devices rm`); an external plugin's call throws. 2.7 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.7.0";
+export const PLUGIN_API_VERSION = "2.8.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -448,6 +452,24 @@ That file's name before API 1.0.0; the loader renames an old one once, never del
 export const LEGACY_PLUGIN_PATHS_FILE = "plugins.json";
 ```
 
+## PLUGIN_SUMMARY_MAX
+
+*const*
+
+Caps on the manifest's `summary` and each `places` entry.
+
+```ts
+export const PLUGIN_SUMMARY_MAX = 120;
+```
+
+## PLUGIN_PLACE_MAX
+
+*const*
+
+```ts
+export const PLUGIN_PLACE_MAX = 80;
+```
+
 ## PluginManifest
 
 *interface*
@@ -466,6 +488,8 @@ export interface PluginManifest { … }
 | `apiVersion` | `apiVersion: string \| number` | The plugin API this plugin was written against: semver (`"1.0"`), or a bare major (`1`, read as `1.0`). Checked by `pluginApiProblem` before any of its code runs. |
 | `description` | `description?: string` |  |
 | `maturity` | `maturity?: "stable" \| "preview" \| "experimental"` |  |
+| `summary` | `summary?: string` | One plain sentence (≤ `PLUGIN_SUMMARY_MAX` chars) saying what it does for the person. Absent = the phone falls back to the description. |
+| `places` | `places?: string[]` | Hand-written "where to find it" lines for places the web cannot derive from contributions (e.g. a host-only plugin's line on the usage meter). Each non-empty, ≤ `PLUGIN_PLACE_MAX` chars. |
 | `host` | `host?: string` | Host module, relative to the plugin dir. Absent ⇒ `host.mjs`. |
 | `settings` | `settings?: PluginField[]` |  |
 | `actions` | `actions?: PluginActionDef[]` |  |
@@ -530,6 +554,9 @@ export interface PluginView { … }
 | `status` | `status?: PluginStatus \| null` | One line the plugin sets about itself ("no GEMINI_API_KEY — set it via the secret sheet"). |
 | `env` | `env?: Record<string, boolean>` | Declared env names → set or not. |
 | `auto` | `auto?: { state: "on" \| "off"; why: string; }` | An `autoOn` extension's default as this desktop decided it — present ONLY while the person has made no choice (absent = their switch decides, or no probe applies). `why` is the sentence shown under the switch. |
+| `privacy` | `privacy?: "private"` | Set by the host ONLY for an in-repo builtin whose own `ship.json` says `"ship": false` — an extension the public snapshot leaves out (like the vault). Absent = not private. |
+| `builtin` | `builtin?: true` | An in-repo extension that ships with the product (loaded from the bundle, not installed by the person). Absent = an outside plugin. |
+| `fixed` | `fixed?: true` | A builtin that cannot be switched off (not `optional`, and started). Listed so the plugin manager shows every plugin; every older reader of the list skips these rows. Absent = switchable. |
 
 ## PluginStatus
 
@@ -817,6 +844,7 @@ export interface HostPluginApi { … }
 | `stream` | `stream(name: string, handlers: PluginStreamHandlers): () => void` | Since 1.4. Serve live stream `name` to the sockets that open it: binary frames on the one socket, never durable or retried (`shared/stream.ts` has the whole contract). THROWS on a bad name or one already served. The returned function ends every open subscription. |
 | `offerFile` | `offerFile(file: string, opts: import("../pluginfile.js").PluginFileOfferOpts): import("../pluginfile.js").PluginFileOffer` | Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). |
 | `repoApps` | `repoApps(): Promise<AppRepoFacts[]>` | Since 2.5: facts about each Android app module in every PRIMARY checkout on this desktop (read-only, bounded async walks, one repo at a time): package, targetSdk, key kind, the outbox APK, the build rows, the auto-download rule and whether it would take the newest APK. [] when the desktop has none. Core's readiness facts (`appready.ts`); rejects in words on a host that cannot read them, or once this plugin is switched off. Concurrent calls share one walk. Any plugin may call it: the facts are paths and names, not secrets (`docs/notes/plugins.md`, "Which apps a repo builds"). |
+| `revokeDevice` | `revokeDevice(deviceId: string): { revoked: boolean; closedSockets: number; }` | Since 2.8, IN-REPO EXTENSIONS ONLY (`packages/extensions/<id>/`; an external plugin's call THROWS): revoke ONE paired device's waterplane token by its ledger id (`PluginCaller.deviceId`) — the row is deleted and that device's open sockets closed, exactly what Settings → Devices' revoke does. Nothing else: no list, no mint, no other device. `revoked: false` = no such device (already revoked, or the password changed since). THROWS a sentence for a malformed id, on a host that cannot revoke, and once the extension is switched off. |
 
 ## PluginHttpMethod
 

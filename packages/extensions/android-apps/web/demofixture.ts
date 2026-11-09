@@ -43,6 +43,6 @@ export const demoListed: PluginView = {
     id: "android-apps", name: "Android apps", version: "0.1.0", apiVersion: "2.5", optional: true, autoOn: "androidRepo",
     description: "Your repos' Android apps on this phone: build, download and install each one, and the history of what installed itself where. On by itself when a repo here builds an Android app.",
   },
-  source: "builtin", enabled: true, state: "active", values: {},
+  source: "builtin", builtin: true, enabled: true, state: "active", values: {},
   auto: { state: "on", why: "a repo here builds an Android app" },
 };

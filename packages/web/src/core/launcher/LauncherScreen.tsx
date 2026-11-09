@@ -9,9 +9,8 @@
  * its index; the launcher's own state is `useLauncherModel`'s.
  */
 import { useLayoutEffect, useRef } from "react";
-import { useBackStep } from "../../backStep";
 import { Archive, ArrowDownUp, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
-import { BRAND, branchLabel, repoShown } from "@waterplane/shared";
+import { BRAND } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
@@ -35,7 +34,7 @@ import { openSearch } from "../../features/search";
 import { openSchedules } from "../../features/schedule";
 import { openActivity } from "../../features/activity";
 import { pickImageFor } from "../../features/images";
-import { takeShot, useHostPush } from "../../features/hostTools";
+import { useHostPush } from "../../features/hostTools";
 import { ElsewhereChip, HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { FirstRunCard } from "../../features/onboard";
 import { WhatsNewLauncherRow } from "../../features/whatsnew";
@@ -57,7 +56,6 @@ import { Hint } from "../../kit/Hint";
 import { SHEET } from "../../sheetNames";
 
 export type { LauncherProps } from "./types";
-export { openShotPick } from "./useLauncherModel";
 
 const ICON = 16;
 
@@ -86,7 +84,6 @@ export function LauncherScreen(p: LauncherProps) {
   const { status, connVisible } = p.conn;
   const { tailscaleIp } = p.conn.info;
   const { focusRepo, setOverlay, lastVisitedId } = p.route;
-  const { visibleRepos } = p.view;
   const { openCwd, refreshRepos } = p.launchCore;
   const { clearExited } = p.verbs;
   const {
@@ -95,10 +92,8 @@ export function LauncherScreen(p: LauncherProps) {
     statusFilter, setStatusFilter, statusFilterActive, toggleStatusFilter, shownSessions, sortedSessions,
     textQuery, setTextQuery, textOn, noRepoCollapsed,
     allReposCollapsed, persistCollapsedRepos, scheduleWords, scheduleLead, scheduleTitle, setCloseAllPick,
-    shotPick, setShotPick, repoForCwd,
+    repoForCwd,
   } = m;
-  // The screenshot repo picker: Back shuts it, never exits the app from under it.
-  useBackStep(shotPick, () => setShotPick(false));
   const face = useUsageFace(); // windows (subscription) / dollars (api, cloud) / a bare door
   const push = useHostPush();
 
@@ -547,25 +542,6 @@ export function LauncherScreen(p: LauncherProps) {
       </div>
       )}
       <CloseSheet p={p} m={m} />
-      {shotPick && (
-        <div className="bl-modal-backdrop" onClick={() => setShotPick(false)}>
-          <div className="bl-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="bl-modal-title">Screenshot → which repo?</div>
-            <div className="bl-modal-repo">The capture is saved into the chosen repo, then opens in the annotator.</div>
-            <div className="list">
-              {visibleRepos.map((t) => (
-                <Row key={t.id} as="button" onClick={() => { setShotPick(false); void takeShot(t.id); }}>
-                  <RowTitle>{repoShown(t)}</RowTitle>
-                  {branchLabel(t) && <RowSub>{branchLabel(t)}</RowSub>}
-                </Row>
-              ))}
-            </div>
-            <div className="bl-modal-actions">
-              <Button onClick={() => setShotPick(false)}>Cancel</Button>
-            </div>
-          </div>
-        </div>
-      )}
       <NetActivity />
       {/* The demo's first cue (features/demoTour): nothing outside the demo's first minute. */}
       <DemoStartCue />

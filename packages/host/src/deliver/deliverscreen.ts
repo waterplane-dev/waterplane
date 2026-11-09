@@ -104,6 +104,26 @@ export async function composerHoldsOnlyHint(sessions: SessionManager, sessionId:
 }
 
 /**
+ * Does the live composer hold this text? `true` it does, `false` the box is
+ * placed and holds something else or nothing, `null` no box this backend's
+ * anchors can place (a view drawn over it — or no reader at all).
+ *
+ * Asked by the hooked submit ladder about a `/command` no list knows
+ * (`deliverreturn.ts`, `composer-let-go`): a view-only command fires no
+ * `UserPromptSubmit`, so the ladder waited for a turn that never came and
+ * pressed Return again into the view the first press had opened (`/workflows`,
+ * 2026-11-08: filed "Return was swallowed"). A swallowed Return leaves the text
+ * in the box; a taken one does not.
+ */
+export async function composerHolds(sessions: SessionManager, sessionId: string, text: string): Promise<boolean | null> {
+  const anchors = composerAnchorsOf(sessions, sessionId);
+  if (!anchors) return null;
+  const rows = (await sessions.screenText(sessionId, ROW_WINDOW)).split("\n");
+  const r = liveComposerEcho(rows, text, anchors);
+  return r === null ? null : r !== "none";
+}
+
+/**
  * The closures `runDelivery` declared over its screen, in the order it
  * declared them. Every one captures only consts (the session, the text, the
  * delivery's `key` and `shape`), so the run destructures what it uses and

@@ -13,6 +13,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { CircleHelp } from "lucide-react";
+import { explainName } from "./explainName";
 
 export function Explain({ of, label, children }: {
   /** What it explains, for the screen reader. */
@@ -25,7 +26,7 @@ export function Explain({ of, label, children }: {
   return (
     <>
       <button type="button" className={`hint-chip explain-chip${open ? " open" : ""}`}
-        aria-expanded={open} aria-label={`what ${of} means`}
+        aria-expanded={open} aria-label={explainName(of)}
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
         <CircleHelp size={13} aria-hidden />{label ? <span className="explain-label">{label}</span> : null}
       </button>

@@ -82,6 +82,11 @@
 .segmented.gallery-scope { gap: var(--sp-4); padding: var(--sp-6) var(--sp-10) var(--sp-8); border-bottom: 0; }
 .gallery-scope .seg { min-width: 0; min-height: 40px; padding: var(--sp-6) var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); white-space: nowrap; }
 .fchips.gallery-filters { padding: 0 var(--sp-6) var(--sp-2); background: var(--panel); border-bottom: 1px solid var(--line); }
+/* The sheet is a flex column and the grid scrolls inside it. These rows scroll sideways, and a
+   flex item with overflow set may shrink to nothing: with a long grid the chip row lost its top
+   and "combine pictures" became a clipped strip with its own scrollbar (owner, 2026-11-09).
+   Only the grid gives up height. */
+.gallery-scope, .fchips.gallery-filters, .gallery-pick { flex-shrink: 0; }
 
 /* The kit's FilterChip (kit/FilterChip.tsx): a 30px pill in a 44px touch box, so a filter row
    reads as filters rather than as a second row of buttons, and only a lit one is coloured —

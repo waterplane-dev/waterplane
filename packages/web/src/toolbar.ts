@@ -14,7 +14,7 @@
  * reason in reverse — a stale pin from an older build must not render an empty
  * slot in the header.
  */
-import { AtSign, BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
+import { AtSign, BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
@@ -103,7 +103,6 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: "ctx", name: "ctx", Icon: Gauge },
   { id: "usage", name: "usage", Icon: CircleDollarSign },
   { id: "cpu", name: "cpu", Icon: Cpu },
-  { id: "shot", name: "shot", Icon: Monitor },
   { id: "clip", name: "to host clip", Icon: ClipboardPaste },
   { id: "select", name: "select", Icon: Copy },
   // This session's reference (peer name, folder, conversation id) to the

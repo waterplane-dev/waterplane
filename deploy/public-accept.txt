@@ -198,3 +198,9 @@ packages/web/src/updateTrust.test.mjs:270:ae4aa3284e  # fixture
 tools/demo-scenario.test.mjs:13:665f6bbd32  # fixture
 deploy/public-accept.txt:85:4b4fc630c6  # this file's own comment on origin.ts's made-up evil.ts.net
 packages/host/test/passive.test.mjs:80:5813271df0  # 100.80.1.2 test peer, made up
+packages/host/test/pushsend.test.mjs:14:2f93cb997f  # RFC 8291 appendix A auth secret, a published test vector
+deploy/public-accept.txt:199:c0dad9325a  # this file's own comment on a made-up MagicDNS name
+deploy/public-accept.txt:200:8fec9ae2e7  # this file's own comment on a made-up test peer address
+docs/requirements/connection.md:135:e25b65e0a3  # a short session prefix in a requirement's source line, as images.md
+docs/requirements/connection.md:136:c6c23715a0  # a short session prefix in a requirement's source line
+docs/requirements/connection.md:137:42f99aab32  # a short session prefix in a requirement's source line

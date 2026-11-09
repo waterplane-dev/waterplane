@@ -113,8 +113,14 @@ export interface DeliveryShape {
    * `source` is `prompt-hook`'s twin from a backend's side channel
    * (`sources.delivery.landed`): its own record of a user message whose text
    * equals ours, landing after our Return. Same strength, different witness.
+   *
+   * `composer-let-go` is a `/command` on NO list that started no turn: after
+   * the Return the live composer no longer held it (emptied, or a view drew
+   * over it), read twice. Proof the Return was TAKEN, not that a turn ran —
+   * the generic rule for the CLI's commands the static lists have not caught
+   * up with (`deliverscreen.ts`'s `composerHolds`).
    */
-  submit?: "prompt-hook" | "source" | "turn" | "screen-turn" | "screen-moved" | "log" | "none";
+  submit?: "prompt-hook" | "source" | "turn" | "screen-turn" | "screen-moved" | "composer-let-go" | "log" | "none";
 }
 
 /** Feature that sent a command. `compose` is the person typing in the app. */

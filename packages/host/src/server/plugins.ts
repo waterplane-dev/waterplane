@@ -57,6 +57,8 @@ export function createPlugins(ctx: ServerCtx, ptyHeld: (ws: WebSocket) => boolea
     host: ctx, // `host`: handToAgent's backlog add
     probes: hostAutoProbes(ctx.ROOT), // `autoOn`: what each named probe walks is the host's
     repoApps: async () => (await hostAppReadiness(ctx)).apps, // `api.repoApps()`
+    // `api.revokeDevice` (in-repo extensions only): the same two steps as `POST /api/devices/revoke` (`authroutes.ts`).
+    revokeDevice: (id) => { const revoked = ctx.auth.devices.revoke(id); return { revoked, closedSockets: revoked ? ctx.closeDevice(id) : 0 }; },
     decision: (row) => ctx.decisionLog.add(row),
     meter: (e) => ctx.meter.record(e),
     notify: (kind, p) => ctx.notify(kind, p),

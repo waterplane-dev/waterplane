@@ -66,9 +66,6 @@ const repoMenuStore = createStore<string | null>(null);
 // would be invisible while it is closed.
 const navMenuStore = createStore(false);
 const showHiddenStore = createStore(false);
-/** Launcher screenshot: choose which repo stores the capture. Opened from
- *  Settings (`openShotPick`), drawn on the launcher underneath it. */
-const shotPickStore = createStore(false);
 // Open the close sheet; value = "*" (all listed sessions) or a repo name, null = closed.
 const closeAllPickStore = createStore<string | null>(null);
 // The old dialog's custom-cutoff number and its quiet/open clock toggle are
@@ -89,8 +86,6 @@ const closeKeepStarStore = createStore<boolean>(lsBool(LS.closeKeepStar, true));
 /** The list's last scrollTop — survives the unmount while a session or a sheet is open. */
 export const launcherScroll = { top: 0 };
 
-/** Settings → "screenshot": ask which repo the capture goes into, on the launcher. */
-export function openShotPick(): void { shotPickStore.set(true); }
 
 /** `[value, set]` over a store — `useState`'s shape, so call sites read the same. */
 function useSlot<T>(s: Store<T>) {
@@ -112,7 +107,6 @@ export function useLauncherModel(p: LauncherProps) {
   const [repoMenu, setRepoMenu] = useSlot(repoMenuStore);
   const [navMenu, setNavMenu] = useSlot(navMenuStore);
   const [showHidden, setShowHidden] = useSlot(showHiddenStore);
-  const [shotPick, setShotPick] = useSlot(shotPickStore);
   const [closeAllPick, setCloseAllPick] = useSlot(closeAllPickStore);
   const [closeKeepStar, setCloseKeepStar] = useSlot(closeKeepStarStore);
   const [dragSid, setDragSid] = useState<string | null>(null);
@@ -554,7 +548,7 @@ export function useLauncherModel(p: LauncherProps) {
     statusFilter, setStatusFilter, toggleStatusFilter, statusFilterActive, textQuery, setTextQuery, textOn,
     collapsedRepos, persistCollapsedRepos, toggleRepoCollapsed,
     sessionOrder, saveSessionOrder, resetSessionOrder, dragSid, dragRef, armRowDrag,
-    tab, setTab, repoMenu, setRepoMenu, navMenu, setNavMenu, showHidden, setShowHidden, shotPick, setShotPick,
+    tab, setTab, repoMenu, setRepoMenu, navMenu, setNavMenu, showHidden, setShowHidden,
     closeAllPick, setCloseAllPick, closeKeepStar, setCloseKeepStar,
     // names
     repoForCwd, sessionRepo, sessionRepoName, sessionRepoLabel, sessionRowBranch, sessionRowTitle,

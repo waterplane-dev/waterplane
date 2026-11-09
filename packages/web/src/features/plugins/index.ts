@@ -5,20 +5,22 @@
  */
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
-import { setRowWords } from "../../settingsIndex";
+import { setPluginName, setRowWords } from "../../settingsIndex";
 import { onActionResult, onPluginError } from "./actions";
 import { pluginSearchWords } from "./logic";
 import { DecisionLogSheet } from "./DecisionLogSheet";
 import { DecisionLogDoor, PluginsSettings } from "./PluginsSettings";
 import { UpdatesAutoRow, UpdatesDoor } from "./UpdatesSettings";
+import { PluginManagerSheet } from "./PluginManagerSheet";
 import { UpdatesSheet } from "./UpdatesSheet";
 import { onResult, onStatus } from "./updatesActions";
 import { PluginsToolbar } from "./PluginsToolbar";
-import { applyLiveList, decisions, plugins } from "./store";
+import { allPlugins, applyLiveList, decisions, plugins } from "./store";
 
 export { openDecisions } from "./actions";
 export { PluginBadges } from "./PluginsToolbar";
-export { usePlugins } from "./store";
+export { usePlugins, useAllPlugins } from "./store";
+export { openPluginSettings } from "../../settingsFocus";
 /** The host's plugin list as "is it on" reads it (cached per host), read-only outside this feature:
  *  bound into the SDK's `isExtensionEnabled` by core. */
 export { pluginsLive, pluginsOn } from "./store";
@@ -30,13 +32,17 @@ export const manifest: FeatureManifest = {
   id: "plugins",
   sheets: [
     { id: "decisions", persisted: false, render: () => createElement(DecisionLogSheet) },
+    { id: "pluginManager", persisted: false, render: () => createElement(PluginManagerSheet) },
     { id: "updates", persisted: false, render: () => createElement(UpdatesSheet) },
   ],
   messages: {
     "plugin.list": (msg) => {
-      plugins.set(msg.plugins);
-      applyLiveList(msg.plugins);
-      setRowWords("plugins", pluginSearchWords(msg.plugins));
+      const switchable = msg.plugins.filter((p) => !p.fixed);
+      allPlugins.set(msg.plugins);
+      for (const p of msg.plugins) setPluginName(p.manifest.id, p.manifest.name);
+      plugins.set(switchable);
+      applyLiveList(switchable);
+      setRowWords("plugins", pluginSearchWords(switchable));
     },
     "plugin.actionResult": (msg) => onActionResult(msg),
     "plugin.error": (msg) => onPluginError(msg),

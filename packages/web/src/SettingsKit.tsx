@@ -53,7 +53,7 @@ import { ChevronRight, Loader, Minus, Plus, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { RadioRows } from "./kit/RadioRows";
-import { filterSummary, groupShown, nestedMatches, rowShown } from "./settingsIndex";
+import { filterSummary, groupShown, nestedMatches, pluginScopeOf, rowShown } from "./settingsIndex";
 import { Button } from "./kit/Button";
 import { noteClass } from "./kit/hintClass";
 
@@ -117,9 +117,11 @@ function useRowVisible(id: string | undefined): boolean {
  * words answer it, else only the ones whose `words` do (`nestedMatches`).
  * Neither counted nor pinned on its own — its parent already was.
  */
-export function useNestedShown(parentId: string, words: string): boolean {
+export function useNestedShown(parentId: string, words: string, itemId?: string): boolean {
   const ctx = useContext(Ctx);
-  if (!ctx || ctx.only) return true;
+  if (!ctx) return true;
+  // A plugin scope shows that plugin's section alone; a row pin shows every section.
+  if (ctx.only) { const sc = pluginScopeOf(ctx.only); return sc === null || sc === itemId; }
   return nestedMatches(parentId, words, ctx.query);
 }
 

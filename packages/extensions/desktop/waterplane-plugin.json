@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "apiVersion": "2.0",
   "description": "Watch this desktop's screen live from the phone as video, on the same connection as everything else, with bandwidth presets; optionally click and type into it. macOS, and Windows with the host running in WSL. A small helper (wp-desktop: Swift on the Mac, C# on Windows, compiled by the compiler Windows already carries) captures, encodes and posts input; it is built on first use. Experimental.",
+  "summary": "Lets you watch this computer's screen live on your phone, and optionally click and type into it.",
+  "maturity": "preview",
   "host": "host/index.mts",
   "web": "web/index.ts",
   "optional": true,

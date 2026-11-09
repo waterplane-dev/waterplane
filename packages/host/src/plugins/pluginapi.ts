@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
-import { BRAND, bindConversation, pluginValues, PLUGIN_API_V2_DOC, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
+import { BRAND, bindConversation, isDeviceId, pluginValues, PLUGIN_API_V2_DOC, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
 import type { BackendFacts, HandToAgentResult, HostPluginApi, PluginBackendDef, PluginLaunchRequest, PluginRepoScope, PluginSession, PluginSessionMatch, Provider, RepoTarget } from "@waterplane/shared";
 import { forgetRules, gateAnswer, gateRule, rulesFor } from "../answergate.js";
 import { registerBackend, registerScreenReader, registerStoreReader, unregisterBackend, type BackendDescriptor, type BackendModels, type LaunchRequest } from "../backends/index.js";
@@ -489,6 +489,14 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     repoApps: async () => {
       if (!live()) throw new Error(`${e.manifest.name} is not running`);
       return reg.repoApps(); // one walk shared by concurrent callers; rejects in words without the seam
+    },
+    // 2.8: in-repo extensions only — the registry knows which entry is one (`builtin`); one id, nothing else.
+    revokeDevice: (deviceId) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      if (!e.builtin) throw new Error(`${e.manifest.name} is not part of ${BRAND.displayName} — only an in-repo extension may revoke a paired device`);
+      if (!isDeviceId(deviceId)) throw new Error("that is not a paired device's id");
+      if (!reg.deps.revokeDevice) throw new Error("this host cannot revoke a paired device");
+      return reg.deps.revokeDevice(deviceId);
     },
     handToAgent: async (repoId, prompt, opts = {}): Promise<HandToAgentResult> => {
       if (!live()) return { ok: false, reason: `${e.manifest.name} is not running` };

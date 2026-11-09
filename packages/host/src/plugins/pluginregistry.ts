@@ -20,8 +20,8 @@
  *
  * Two kinds of entry, one API object (`makeApi`): EXTERNAL plugins found in the
  * config dir, and the IN-REPO extensions under `packages/extensions/<id>/`
- * (`builtin.ts`), loaded first, always on, never switched off, and left out of
- * the phone's plugin list unless broken — they are part of the product. The
+ * (`builtin.ts`), loaded first, always on, never switched off. `views()` lists them with `fixed: true`
+ * (the plugin manager shows every plugin; the settings rows skip `fixed`). The
  * exception is a builtin whose manifest says `optional` (opencode): listed, and
  * switchable like any plugin, its default from the release (`builtin.ts`).
  *
@@ -48,7 +48,7 @@ import { discoverTargets, findTarget } from "../repos.js";
 import type { HostCtx } from "../routes/types.js";
 import type { SessionManager } from "../sessions.js";
 import { cleanReply, findPluginRoute, type PluginRoute } from "./pluginroutes.js";
-import { builtinDir, builtinHostModule, releaseBuiltins, shippedBuiltins, type ReleaseBuiltins } from "./builtin.js";
+import { builtinDir, builtinHostModule, isPrivateExtension, releaseBuiltins, shippedBuiltins, type ReleaseBuiltins } from "./builtin.js";
 import { discoverPluginDirs, importHost, readPluginDir } from "./pluginloader.js";
 import { makeApi } from "./pluginapi.js";
 import { PluginStreams, type StreamSink } from "./pluginstreams.js";
@@ -91,6 +91,8 @@ export interface PluginEntry {
   stored: Record<string, PluginValue>;
   /** An in-repo extension (`packages/extensions/<id>/`): always on, never listed unless broken. */
   builtin?: boolean;
+  /** A builtin whose own `ship.json` says `"ship": false` (read once at load). */
+  private?: boolean;
   /** Contributed setup rows, asked on every check of every repo. */
   setupChecks: Set<(s: SetupSubject) => ComplianceCheck | null>;
   /** Contributed fixes by fix id — the ids its rows name in `fix`. */
@@ -165,6 +167,9 @@ export interface RegistryDeps {
   probes?: AutoProbes;
   /** `api.repoApps()` — core's readiness facts (`appready.ts`). Absent ⇒ the call rejects in words. */
   repoApps?(): Promise<AppRepoFacts[]>;
+  /** `api.revokeDevice(id)` (in-repo extensions only, `pluginapi.ts`): the ledger revoke + socket close of
+   *  `POST /api/devices/revoke`. Absent ⇒ the call throws in words. */
+  revokeDevice?(id: string): { revoked: boolean; closedSockets: number };
   /** Test seam: where builtin `id` lives. Absent ⇒ `builtin.ts`'s `packages/extensions/<id>/`. */
   locateBuiltin?(id: string): { dir: string; hostFile: string };
 }
@@ -225,7 +230,7 @@ export class PluginRegistry {
     });
   }
 
-  private newEntry(p: Pick<PluginEntry, "dir" | "source" | "manifest" | "hostFile" | "loadError" | "enabled" | "stored" | "manifestLegacy"> & { builtin?: boolean }): PluginEntry {
+  private newEntry(p: Pick<PluginEntry, "dir" | "source" | "manifest" | "hostFile" | "loadError" | "enabled" | "stored" | "manifestLegacy"> & { builtin?: boolean; private?: boolean }): PluginEntry {
     return {
       ...p, state: "off", status: null, mod: null, gen: 0,
       handlers: { prompt: new Set(), question: new Set(), action: new Set() }, onSettings: new Set(),
@@ -267,6 +272,7 @@ export class PluginRegistry {
       const e = this.newEntry({
         dir, source: d.source, manifest: d.manifest, hostFile: loadError ? null : hostFile, loadError,
         enabled, stored: loadError ? {} : this.readStored(d.manifest.id, d.manifest), builtin: true,
+        ...(isPrivateExtension(dir) ? { private: true } : {}),
         ...(d.manifestLegacy ? { manifestLegacy: true } : {}),
       });
       if (loadError) { e.state = "error"; e.error = loadError; console.warn(`[${BRAND.slug}] extension ${id}: ${loadError}`); }
@@ -334,12 +340,16 @@ export class PluginRegistry {
   }
 
   views(): PluginView[] {
-    return this.entries.filter((e) => !e.builtin || e.state === "error" || e.manifest.optional === true).map((e) => ({
+    // EVERY plugin: a builtin that cannot be switched off rides along as `fixed` (the manager lists it; the phone's older readers skip it).
+    return this.entries.map((e) => ({
       manifest: e.manifest, source: e.source, enabled: e.enabled, state: e.state,
       ...(e.error ? { error: e.error } : {}),
       ...(e.manifestLegacy ? { manifestLegacy: true } : {}),
       values: e.loadError ? {} : pluginValues(e.manifest, e.stored),
       status: e.status,
+      ...(e.builtin ? { builtin: true as const } : {}),
+      ...(e.builtin && e.private ? { privacy: "private" as const } : {}),
+      ...(e.builtin && e.state !== "error" && e.manifest.optional !== true ? { fixed: true as const } : {}),
       env: Object.fromEntries((e.manifest.env ?? []).map((n) => [n, !!process.env[n]])),
       // Never on an entry whose start failed: "on automatically" beside `state: "error"` would be untrue.
       ...(e.auto && !e.chosen && !e.loadError && e.state !== "error"

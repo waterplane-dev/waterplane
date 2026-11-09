@@ -10,8 +10,12 @@ import type { DecisionLogEntry, PluginView, UpdatesRestart, UpdatesStatus, Updat
 import { createStore, useStore } from "../../sdk";
 import { cacheLiveList, readCachedList, type CachedPlugin } from "./logic";
 
-/** Every installed plugin as the host last listed it; null until it has said. */
+/** Every SWITCHABLE plugin as the host last listed it (`fixed` rows left out, so every reader below is
+ *  exactly what it was before the manager existed); null until it has said. */
 export const plugins = createStore<PluginView[] | null>(null);
+
+/** EVERY plugin the host lists, `fixed` builtins included — the plugin manager's rows. Same ONE writer. */
+export const allPlugins = createStore<PluginView[] | null>(null);
 
 /** What "is it on" reads (bound into the SDK's `isExtensionEnabled` by core): STARTS from this host's
  *  cached last list, so a cold start with no connection reads the desktop's last word; the live list
@@ -43,6 +47,10 @@ export const decisions = createStore<DecisionLogEntry[]>([]);
 export const decisionScope = createStore<string | null>(null);
 
 /** The installed plugins (null = the host has not said yet). */
+export function useAllPlugins(): PluginView[] | null {
+  return useStore(allPlugins);
+}
+
 export function usePlugins(): PluginView[] | null {
   return useStore(plugins);
 }

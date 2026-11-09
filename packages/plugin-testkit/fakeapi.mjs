@@ -88,7 +88,7 @@ export function fakeApi(opts = {}) {
   const root = mkdtempSync(join(tmpdir(), `${id}-plugin-test-`));
   const calls = {
     backend: [], onHook: [], setStatus: [], onSettings: [], on: [], setBadge: [], decision: [], ruleAllows: [], bind: [], log: [],
-    seedSettings: [], suggest: [], answer: [], meter: [], notify: [], notifyDone: [], notifyDoneExcept: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
+    seedSettings: [], suggest: [], answer: [], meter: [], notify: [], notifyDone: [], notifyDoneExcept: [], revokeDevice: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
     offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFix: [], sessionOf: [],
   };
   const screens = new Map();
@@ -173,6 +173,7 @@ export function fakeApi(opts = {}) {
     route: (method, pattern, fn) => reg(calls.route, { method, pattern, fn }),
     stream: (name, handlers) => reg(calls.stream, { name, handlers }),
     repoApps: async () => (opts.repoApps ?? []).map((a) => ({ ...a })),
+    revokeDevice: (deviceId) => { calls.revokeDevice.push(deviceId); return { revoked: false, closedSockets: 0 }; },
     offerFile: (file, o) => { calls.offerFile.push({ file, opts: o }); return { path: `/api/plugin-file/${id}/fake`, size: 0, expiresAt: Date.now() + 60_000, withdraw() {} }; },
     // ── test helpers, not part of the contract ──
     _calls: calls,

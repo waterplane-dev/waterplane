@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.5 - 2026-11-09
+
+### Changed
+
+- **Rebuilt with the shared waterplane modules of waterplane 0.1.22.** Nothing changes in what the extension shows or reads.
+
 ## 0.9.4 - 2026-11-08
 
 ### New

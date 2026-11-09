@@ -5,6 +5,22 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.22
+
+Folds 0.1.21, which was tagged but never released.
+
+### New
+
+- **Gallery filter chips and the combine bar keep their height.** Only the grid shrinks, so the chip row is no longer cut off and the combine strip no longer scrolls when there are many files.
+- **Back from a plugin's Settings returns to Plugins.** Settings underneath stays unfiltered.
+- **The plugin manager shows every plugin as a card.** Each card has a switch, a Beta label, and a short summary of what it does and where it appears.
+- **The screenshot item is gone from the menu and from Settings.** The camera button in the live desktop view is the one way to take a screenshot.
+
+### Fixed
+
+- **An unlisted slash command is no longer pressed again into its own view.** Return is not sent up to five times into the view the first press opened. The composer letting go now counts as delivered, and 20 more view and setting commands are recognised.
+- **/workflows, /tasks, /loops and /artifacts are no longer reported as "Return was swallowed".** They are views inside the CLI.
+
 ## 0.1.20
 
 ### New

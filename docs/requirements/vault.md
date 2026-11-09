@@ -37,7 +37,7 @@ The vault exports to a password-protected file or copy-pasteable text in kdbx, B
 - note: the Bitwarden file is proved against Bitwarden's own importer code on a fixture (27d23e69, test/export-bitwarden-importer.test.mjs, skips unless the bundle is built). A live import into an account has not been done; the server's field limits were read, not run, and only notes are checked against them.
 
 ### R-vault-008 · shipped
-The vault screen has a lock-now button that ends everything open.
+The Open now screen has an End all button that ends everything open.
 - asked: 2026-10-11
 - shipped: 9e42608a
 
@@ -91,7 +91,7 @@ A secret shared by several projects can be split from the phone: one project get
 - shipped: 5f1ff3cb
 
 ### R-vault-019 · shipped
-A "projects & credentials" screen shows which projects reference which vault credentials (from the desktop's own scan of `.env` references), which ones each credential is allowed for and when it was last used from there; every listed secret always carries its uses (an empty list means never used). Mismatches are flagged: a file names a secret this repo cannot get, a reference names no secret, or a credential is allowed here but never referenced or used.
+The Repos screen shows which projects reference which vault credentials (from the desktop's own scan of `.env` references), which ones each credential is allowed for and when it was last used from there; every listed secret always carries its uses (an empty list means never used). Mismatches are flagged: a file names a secret this repo cannot get, a reference names no secret, or a credential is allowed here but never referenced or used.
 - asked: 2026-10-12 (owner: "Allow me to see which projects use which credentials")
 - shipped: 5f1ff3cb
 
@@ -121,7 +121,7 @@ A stored secret's repos ("where it may be released") can be changed from the pho
 - shipped: 5b78defa
 
 ### R-vault-025 · shipped
-A secret whose original still sits in a project's file counts as used by that project (the file's git root), in "projects & credentials" and on the secret card ("used by …", "still holds the original" vs "references it"), with or without a scan. The secret card opens "projects & credentials" cut to it and offers "give <repo> its own key" per project when two or more use it, or says why not.
+A secret whose original still sits in a project's file counts as used by that project (the file's git root), on Repos and on the secret card ("used by …", "still holds the original" vs "references it"), with or without a scan. The secret card opens "projects & credentials" cut to it and offers "give <repo> its own key" per project when two or more use it, or says why not.
 - asked: 2026-10-12 (owner: "see which projects use which credentials")
 - shipped: 5b78defa
 
@@ -151,7 +151,7 @@ A fetch nobody answers tells the program after 90 s that its card stays (R-vault
 - shipped: c2171799 f430779c 2723cb65 887e6d05 2b6b079d
 
 ### R-vault-031 · shipped
-A reference that names no secret in the vault can be pointed, from its flag on "projects & credentials", at a secret that is (ranked suggestion with the reason, e.g. a label naming the same env key), or the person is taken to store a key under that id; the line changes only after one fingerprint card naming the exact file, line and both ids, and only if the line still reads what the card showed.
+A reference that names no secret in the vault can be pointed, from its flag on Repos, at a secret that is (ranked suggestion with the reason, e.g. a label naming the same env key), or the person is taken to store a key under that id; the line changes only after one fingerprint card naming the exact file, line and both ids, and only if the line still reads what the card showed.
 - asked: 2026-10-12 (owner: "assign keys to projects that don't have one yet, e.g. the first service's Gemini key also to the tutor app")
 - shipped: 8eff44eb 8150e74f e7aa1fb1 23c0f64f e83c3881
 
@@ -171,7 +171,7 @@ An added or repointed reference has a one-tap undo while the line still reads wh
 - shipped: 8eff44eb e7aa1fb1 23c0f64f e83c3881
 
 ### R-vault-035 · shipped
-A person who tried the vault out can put the desktop back as it was from the phone's keys & backup screen ("start over"): first a value-free list of what goes back where (every secret to the places it came from, every line the vault added put back), then ONE fingerprint card naming all of it; after it every secret is moved back (all or nothing across secrets — one place failing leaves every file and the vault as they were). **No stored secret is lost on the way:** after every write, every place of every secret is read again and compared with the vault's own value (one miss undoes every write and the vault stays whole); vault.json is then moved aside still encrypted, never deleted, and the phone keeps its key so that copy still opens; the phone asks for a current backup first (or an explicit "go on without a backup" tick); a secret with no known origin is deleted only when ticked AND the last backup holds it as it is now, and is named on the card. A standing rewire or a line edited since is a block in words and nothing is asked. An empty vault keeps the plain reset.
+A person who tried the vault out can put the desktop back as it was from the phone's Backup & recovery screen ("start over"): first a value-free list of what goes back where (every secret to the places it came from, every line the vault added put back), then ONE fingerprint card naming all of it; after it every secret is moved back (all or nothing across secrets — one place failing leaves every file and the vault as they were). **No stored secret is lost on the way:** after every write, every place of every secret is read again and compared with the vault's own value (one miss undoes every write and the vault stays whole); vault.json is then moved aside still encrypted, never deleted, and the phone keeps its key so that copy still opens; the phone asks for a current backup first (or an explicit "go on without a backup" tick); a secret with no known origin is deleted only when ticked AND the last backup holds it as it is now, and is named on the card. A standing rewire or a line edited since is a block in words and nothing is asked. An empty vault keeps the plain reset.
 - asked: 2026-10-13 (owner: "a reset to before button … reset the whole vault finding and migration to how it was before"; then "this must guarantee that none of the stored secrets is accidentally lost on the way")
 - shipped: db60343e
 
@@ -197,7 +197,7 @@ The owner exports every login as a real login item to KeePass (KDBX, with the ot
 - note: show + copy is untested on a device (the APK's clipboard read-back and clear above all).
 
 ### R-vault-040 · shipped
-A "step by step" screen lists every secret a migration concerns — each stored secret with an origin, and each row of the last scan not yet in the vault — under to do, waiting for a session, done and set aside, each with the step it is at in one line. Opening one shows its five steps (move it in, find who reads it, decide each program, try the vault copy, remove the plain-text original) with the button for the current one; the step is derived from what the desktop reports, so leaving at any step and coming back resumes there. Programs are decided before the original is removed, and an original already removed while a program still reads it is listed first and says so. "Set aside" moves a secret to its own list (kept on the desktop, ids only, a history row each time), from which "bring back" returns it; a set-aside secret is not the home's next step.
+The Move in screen lists every secret a migration concerns — each stored secret with an origin, and each row of the last scan not yet in the vault — under to do, waiting for a session, done and set aside, each with the step it is at in one line. Opening one shows its five steps (move it in, find who reads it, decide each program, try the vault copy, remove the plain-text original) with the button for the current one; the step is derived from what the desktop reports, so leaving at any step and coming back resumes there. Programs are decided before the original is removed, and an original already removed while a program still reads it is listed first and says so. "Set aside" moves a secret to its own list (kept on the desktop, ids only, a history row each time), from which "bring back" returns it; a set-aside secret is not the home's next step.
 - asked: 2026-10-16 (owner: "a per secret stepped setup wizard … resume per secret and see it easily at a glance where every secret stands and if it is in scope for such a migration or by user set to the other list from which it can also be removed again")
 - shipped: 343f8254
 - note: R-vault-101 makes it six steps (the sixth, "finish the removal", comes after removing the original).
@@ -248,7 +248,7 @@ A login has an email beside its username, end to end: the record (unsealed by de
 - shipped: de1c70bb e97d3aa4 a1e321ba
 
 ### R-vault-049 · shipped
-The accounts row is on the vault home in every state (not enrolled: it says "pair the phone first" and opens keys & backup); "+ login" is reachable from the accounts screen whenever a put is possible; the home and `wp-secret status` say whether agents have the vault rule (`~/.claude/skills/wp-secret`) and install it from the phone with one tap and no fingerprint, never over a file wp-secret did not write; a project's setup checklist carries the same row.
+The Logins row is on the vault home in every state (not enrolled: it says "pair the phone first" and opens Backup & recovery); "+ login" is reachable from the Logins screen whenever a put is possible; the home and `wp-secret status` say whether agents have the vault rule (`~/.claude/skills/wp-secret`) and install it from the phone with one tap and no fingerprint, never over a file wp-secret did not write; a project's setup checklist carries the same row.
 - asked: 2026-10-17 (owner: "I don't see such a button yet and have no idea how to use it")
 - plan: REPO-VIEW-PLAN.md §5
 - shipped: 817d3ed8 e97d3aa4 a1e321ba
@@ -363,7 +363,7 @@ The secrets scanner ignores .example template files.
 - shipped: 8548f74
 
 ### R-vault-070 · shipped
-On the vault's find-and-move-in screen each secret row shows its id and one line per source, with the facts and what changes folded, so it reads at a glance.
+On the vault's Move in screen each secret row shows its id and one line per source, with the facts and what changes folded, so it reads at a glance.
 - asked: 2026-10-17
 - shipped: b5d577d3
 
@@ -463,7 +463,7 @@ A repeated ask for the same secrets and command from the same matched coding ses
 - shipped: 07b52bcc
 
 ### R-vault-089 · shipped
-The vault has one "who uses my secrets" screen listing every coding session holding values, every registered program, every standing and timed grant, and every unregistered program that asked in the last 14 days, grouped by kind; each row says who, the reason given, which secrets, the last recorded use and how many times it asked this week, and carries its own revoke or remove (confirmed once); an unregistered program says in words why it has nothing to revoke.
+The vault has one Use › Users screen listing every coding session holding values, every registered program, every standing and timed grant, and every unregistered program that asked in the last 14 days, grouped by kind; each row says who, the reason given, which secrets, the last recorded use and how many times it asked this week, and carries its own revoke or remove (confirmed once); an unregistered program says in words why it has nothing to revoke.
 - asked: 2026-10-29 ("better and more ui … a review of all current users", vault-card-transparency P9)
 - plan: docs/analysis/vault/CONSUMERS-PLAN.md
 - shipped: 7a89c2a0
@@ -475,7 +475,7 @@ That screen marks, as offers it never acts on, a user unused for 14 days (said o
 - shipped: 7a89c2a0
 
 ### R-vault-091 · shipped
-The screen is reached from the vault home ("who uses my secrets" with its count) and from every release card's fold ("see everyone using this secret"), which opens it cut to that secret.
+The screen is reached from the vault home (the Use row, with its count) and from every release card's fold ("see everyone using this secret"), which opens it cut to that secret.
 - asked: 2026-10-29 (vault-card-transparency P9)
 - shipped: 7a89c2a0
 ### R-vault-092 · shipped
@@ -509,7 +509,7 @@ A vault approval does not need Tailscale: it works on the desktop itself (localh
 The vault's list is hidden on a phone until it is unlocked with a fingerprint, and the desktop enforces it, not the app: while a phone's window is closed, `vault.list` answers only the cards waiting, the enrol, the recovery key and the export file offer; the history, users, consumers, day ledgers, a project's repo view, a scan's rows and a migration's report are refused with one sentence; and the lease push carries no rows (a content-free tick, sent only while some window is open). The unlock is a fresh single-use nonce from the desktop, one fingerprint on the phone, and an HMAC under the host-binding key as the only thing sent back (the vault key is zeroed on the phone and never leaves it). The window is per paired device, stays open while the app is in front (a beat every 15 s), and closes a minute after the app goes to the background or after "lock"; a restart closes every window. Waiting cards, the enrol and the recovery key are never behind it, so a closed window never blocks an approval. The lock says what is hidden and what is not, never "safe"; a phone that cannot do a fingerprint says why in a sentence. It does not stop a program of the same user on the desktop (it holds the binding key, and `wp-secret ls` is its own rule, R-vault-096) and it is not a second lock on approving: that stays one fingerprint per card.
 - asked: 2026-11-04 (exposure challenge F2); owner built it in full 2026-11-05 despite the replan's suggestion to cut it
 - shipped: aff45d98
-- note: `shared/wire/view.mts` is the contract and holds the one list of which method is gated, cut or open (`test/vaultviewgate.test.mjs` fails for a new method until it is placed). Phone seam: `web/viewprove.ts` takes any "unwrap under a fingerprint" function; Android passes the shell's existing `unwrap`, so no new APK, and iOS passes its own. Open question for the owner: should `wp-secret` on the desktop get more data (labels, history) after a phone fingerprint of its own? Not built; the window is keyed by device, so a command-line slot would be one more key, with the same proof. Gated too: the id-keyed edits and reads whose answer comes from the catalog (`vault.accountUpdate`, `setPurpose`, `rewireDraft`, `rewirePrompt`, `rewireMark`, `rewireSent`, `keepPlace`, `setAside`, `setPhase`, `repoLink`, `repoUnlink`, `consumerConfirm`). A caller with no device id is keyed by `kind`, so a loopback tab is not the tailnet phone's window; two same-kind callers with no id still share one. The phone locks itself `VIEW_WINDOW_MS` after the last answer that said open (`web/viewlogic.ts`), keeps a scan's and a migration's ids through a lock and re-reads them on unlock, and the head's list lock (`hide` glyph, "lock list") is a different verb and glyph from the kept rows' "lock now".
+- note: `shared/wire/view.mts` is the contract and holds the one list of which method is gated, cut or open (`test/vaultviewgate.test.mjs` fails for a new method until it is placed). Phone seam: `web/viewprove.ts` takes any "unwrap under a fingerprint" function; Android passes the shell's existing `unwrap`, so no new APK, and iOS passes its own. View-for card (2026-11-09, host half built, phone/web half not yet): a locked SCREEN (a paired browser, or the desktop's own browser as `-:loopback`) calls `vault.viewAsk`; every phone's `vault.list` then carries a `viewFor` card naming it (name, kind, how it arrived, host) and saying nothing is released; the phone answers `vault.viewGrant` with the same HMAC-only proof (the vault key never leaves it), which opens only the slot that card names, for as long as that screen keeps beating (`viewKeep`); a phone locks one screen with `vault.viewCloseFor`. A screen with no sign-in of its own (`-:tailscale`, `-:lan`, `-:unknown`) is refused in words (set the desktop password), since opening it would open every such screen. `wp-secret` on the desktop still gets no more than `ls --full` after its own card. `ViewGate.open` now checks every enrolled device's HB, not only the first. Tests: `test/vaultviewfor.test.mjs`. Gated too: the id-keyed edits and reads whose answer comes from the catalog (`vault.accountUpdate`, `setPurpose`, `rewireDraft`, `rewirePrompt`, `rewireMark`, `rewireSent`, `keepPlace`, `setAside`, `setPhase`, `repoLink`, `repoUnlink`, `consumerConfirm`). A caller with no device id is keyed by `kind`, so a loopback tab is not the tailnet phone's window; two same-kind callers with no id still share one. The phone locks itself `VIEW_WINDOW_MS` after the last answer that said open (`web/viewlogic.ts`), keeps a scan's and a migration's ids through a lock and re-reads them on unlock, and the head's list lock (`hide` glyph, "lock list") is a different verb and glyph from the kept rows' "lock now".
 - note: not yet tried on a real phone.
 
 ### R-vault-098 · shipped
@@ -534,7 +534,7 @@ The vault's catalog file (`vault.json`, format 4) is sealed: the secrets' labels
 - note: not yet tried on a real phone.
 
 ### R-vault-101 · shipped
-Removing a kept original is a hold, not an instant deletion. The originals leave their places exactly as before, but each removed place is held for 1, 3 or 7 days (picked at removal, default 1; the CLI takes 1..30), with a sealed copy in the vault wherever the recorded recipe cannot restore the file exactly. During the hold, "put back" (one card) writes every held place of the picked secrets out again and the vault copy stays, with its leases, grants and uses; "move back" is the different verb that deletes it. When the hold ends the desktop looks at each held place without reading any value (as the vault left it, a file back, uses since) and sends one reminder with those value-free facts. "Finish" (one card) runs, after the fingerprint, a value scan of the places, shell history, git and snapshots; a place that still holds the value stays held and says so, the others lose their sealed copies and count as removed. Nothing finishes by itself. The phone says "hold n originals away — one card", shows an "n held" chip that filters the list, and the step by step screen has a sixth step. A hold is not secure erasure (APFS and Time Machine snapshots may keep the bytes), a scan cannot see a program that failed quietly, and a one-day hold will not catch a weekly job. `wp-secret migrate` without keep-original and `wp-secret migrate-env` hold too: two fingerprints, one to store, one to hold away, through the desktop (a denied second card removes nothing and everything stays stored with its original kept). The phone migration's remove-now holds too, with its sealed copies saved before any file changes, on its one fingerprint.
+Removing a kept original is a hold, not an instant deletion. The originals leave their places exactly as before, but each removed place is held for 1, 3 or 7 days (picked at removal, default 1; the CLI takes 1..30), with a sealed copy in the vault wherever the recorded recipe cannot restore the file exactly. During the hold, "put back" (one card) writes every held place of the picked secrets out again and the vault copy stays, with its leases, grants and uses; "move back" is the different verb that deletes it. When the hold ends the desktop looks at each held place without reading any value (as the vault left it, a file back, uses since) and sends one reminder with those value-free facts. "Finish" (one card) runs, after the fingerprint, a value scan of the places, shell history, git and snapshots; a place that still holds the value stays held and says so, the others lose their sealed copies and count as removed. Nothing finishes by itself. The phone says "hold n originals away — one card", shows an "n held" chip that filters the list, and the Move in screen has a sixth step. A hold is not secure erasure (APFS and Time Machine snapshots may keep the bytes), a scan cannot see a program that failed quietly, and a one-day hold will not catch a weekly job. `wp-secret migrate` without keep-original and `wp-secret migrate-env` hold too: two fingerprints, one to store, one to hold away, through the desktop (a denied second card removes nothing and everything stays stored with its original kept). The phone migration's remove-now holds too, with its sealed copies saved before any file changes, on its one fingerprint.
 - asked: 2026-11-06 (owner: "move all secrets to a temporary location before wiping them … another scan and maybe a day or so until a reminder fires to finally remove them")
 - shipped: 5e032830, 596289ae, a9b7b41a, 505fe62f
 - note: plan `docs/analysis/vault/HOLD-PLAN.md`; `host/slices/holding.mts`, `host/holdwatch.mts`, `shared/format/hold.mts`; phone `web/holdlogic.ts`.
@@ -546,7 +546,7 @@ Every login carries "copy password" and "show password" on its own row, on the a
 - note: not yet tried on a real phone.
 
 ### R-vault-103 · shipped
-Each group on "who uses my secrets" carries a closed explanation of what that group may do without a card and what ends it. A registered program's says the registration is a name, not a permission or proof; an unregistered program's says its row is a record of asks, that its cards never offer "until I revoke", and how to register it. A row never claims nothing is kept for a program, because a lease or timed grant can be.
+Each group on Use › Users carries a closed explanation of what that group may do without a card and what ends it. A registered program's says the registration is a name, not a permission or proof; an unregistered program's says its row is a record of asks, that its cards never offer "until I revoke", and how to register it. A row never claims nothing is kept for a program, because a lease or timed grant can be.
 - asked: 2026-11-06 (owner: "ui need to explain the categories better"; "what's the effective difference for me as user and for the security?")
 - note: not yet tried on a real phone.
 ### R-vault-104 · shipped
@@ -574,6 +574,7 @@ The approval card shows how far a secret reaches, so a broad admin login is clea
 A private downscoping helper mints narrower credentials from a broad login, for one secret or a list, and stays private to the owner.
 - asked: 2026-11-04, 2026-11-05
 - shipped: 8b47cee3
+- changed: 2026-11-08 (owner, journey spec Q4): "it can be shown to the user with a big disclaimer that this carries various risks and needs careful consider[ation] to hand such a thing to an agent". The helper is no longer owner-only: a wide secret's card offers `Make a narrower one`, behind a prominent warning that handing a broad login to an agent is risky and needs care; see docs/analysis/vault/JOURNEY-SPEC.md Q4.
 
 ### R-vault-109 · requested
 The vault's secret handling works on Windows, Linux and Android, and later on iPhone, not only the macOS Keychain.
@@ -656,3 +657,122 @@ Every secret's own card has "show value", "copy value" and "change value". Show 
 While a card is waiting, the locked vault's lock is one line ("list locked", an unlock button and a `?` that opens the sentences), so the card is at the top of the screen. With nothing waiting it is the full box. A warning or a reason the phone cannot unlock is still said in text under the line.
 - asked: 2026-11-07
 - shipped: f4728145
+
+### R-vault-125 · shipped
+`wp-secret run c-ID` starts a registered program through the vault: the desktop runs the registered command in the repo's root with a scrubbed environment (only the basics, its secrets, and any `--env NAME` the person passes), the value is in the program and in no reply, its output is masked, it has no input or terminal, and the exit code is the program's own (77 denied; 125 not started, or unknown after a desktop restart). A proxied key is refused.
+- asked: 2026-11-08 (owner request)
+- shipped: 98072fd2
+
+### R-vault-126 · shipped
+A registration pins its program and entry script by SHA-256 (not package runners, not scripts outside the repo). `wp-secret consumer list` shows pinned, changed, missing or not pinned, and `wp-secret consumer pin c-ID` shows the diff and re-pins at the desktop on one fingerprint; the phone cannot re-pin.
+- asked: 2026-11-08 (owner request)
+- shipped: 6610cf7c
+
+### R-vault-127 · shipped
+A run whose pinned files are as registered says "The vault runs <name> from the code you registered on <date>", never "verified". A run whose pinned file changed or is missing always asks, names the file, when it was written and where it stands in git, and offers only "Run it this once" and "Not now", with the re-pin pointed at the desktop.
+- asked: 2026-11-08 (owner request)
+- shipped: 1ad18588
+
+### R-vault-128 · shipped
+The "also allow" tick on a run card makes a grant that serves `wp-secret run` of that program only. A bare request that matches a registered program still asks, and its card says it came another way than `wp-secret run` and only reports to be that program.
+- asked: 2026-11-08 (owner request)
+- shipped: 1ad18588
+
+### R-vault-129 · shipped
+The vault's guide and README say that a registered program runs from the code you registered, with the value kept out of the request's reply, and that the vault does not check what that code loads and anything running as you can change the vault itself.
+- asked: 2026-11-08 (owner request)
+
+### R-vault-130 · shipped
+Every card in the secrets list shows how far a leak of that secret reaches: a four-step bar with the extent in words and who says so. An estimate is drawn dashed and says it may be wider, a secret nobody rated shows an empty dashed bar read as reaching everything, and a person's yes on "can spend money" or "user data behind it" is named beside it. Nothing reads as safe and nothing is green. A tap lists every secret that reaches as far.
+- asked: 2026-11-08 (owner request: "visual clues on how far they reach / blast radius")
+- shipped: 992e99c1
+
+### R-vault-131 · shipped
+Use › Reach › Over time opens on a "by reach" view: per recorded day, how many secrets reach everything, are not rated, reach the whole account, one project or one function, stacked widest first, with the count that reaches the whole account or more drawn as a line over every recorded day, and the change from the first day to the latest said in numbers. The desktop keeps the split per day from this change on; earlier days show only the line and say the split was not kept yet.
+- asked: 2026-11-08 (owner request: "an aggregated view over time so I see my down scoping progress")
+- shipped: 992e99c1
+
+### R-vault-145 · built
+The exposure screen's third reading says in plain words what it counts and why: one sentence first names how many secrets reach the whole account or more (or are not rated), how many of them something on this desktop references (a repo's env file, a grant, a program, a reboot copy) — the ones to downscope or rewire — and how many have no reference seen. The chart draws the referenced count as a solid line inside a dashed line of every wide secret, each with its latest number, and the lists are named "referenced" and "no reference seen". It never says a secret is used: a reference is not use.
+- asked: 2026-11-08 (owner: "the wired in tab is also confusing")
+
+## Journey and wording (owner complaints)
+
+Collected 2026-11-08 from the owner's own messages about the vault's phone screens. Quotes are verbatim (dictated; garble noted in brackets). A complaint already held by an earlier item is not repeated here: see `.claude/outbox/journey-vault/E-complaints.md` for the full map.
+
+### R-vault-132 · requested
+The export dialog says in plain words which copy it removes: the temporary plain-text copy made for the export on the phone is wiped, and the vault's own encrypted values stay and remain usable. The dialog never offers "drop" without saying what is dropped.
+- asked: 2026-10-11: "Export ....has bad wording I think. I do read in a dialogue with the plain text values "drop from the phone" . I trink [think] itnmeans [it means] wiping the temporary copy in the phone that exist llfor Tre [exist for the] export and the original values int the vault remain encrypted and usable."
+- note: the lock button asked beside it is R-vault-008; the export itself R-vault-007.
+
+### R-vault-133 · requested
+Before a program or session can cause a fingerprint prompt, the person can read, on that secret's card and in the project's page, when the next fingerprint will be asked: at start, on each use, after a restart of the service, or never while a grant stands. The answer names the event, not the setting.
+- asked: 2026-10-12: "if i woudl use the tiptoi app now to generate a new audio with gemini - would i then get a fingerprint prompt for the secret in our vault, or if the service restarts?"
+- asked: 2026-10-13: "I moved in the Gemini key of Tiptoi. When will I now be asked to probed [prove] my appeal [approval?] with my finger print?"
+- asked: 2026-10-26: "For which things do you need credentials from the vault and for which not and how do we handle the need for my fingerprint here?"
+- note: R-vault-029 (treatments say what they mean) and R-vault-081 (restart) hold parts; none answers the question for one concrete secret. Recurs on three dates.
+
+### R-vault-134 · requested
+Back inside the vault returns to the vault screen the person came from, never to the app's main view, and a vault sheet reached from a notification or a card still has a Back that ends on the vault home.
+- asked: 2026-10-13: "The back button here in the vault plugin does lead back to the main view instead of tonthe [to the] vault screen I want to reach. Effectively I'm now stuck in this one screen of the vault plugin..we have similar issues in other places as well that the back button does not lead to the last visible "page""
+- note: the app-wide rule is R-navigation-006; this item pins it for the vault's screens.
+
+### R-vault-135 · requested
+A login that has a one-time-password seed shows the current code on the phone after one fingerprint, beside its password, and says when the code changes. A person who can approve an npm 2FA prompt by fingerprint can find where the code is.
+- asked: 2026-10-18: "Where do I find the otp? I can npm 2fa with fingerprint but don't find a otp entry generator"
+- asked: 2026-10-18: "Is there no mom [MFA/OTP] login available in the wp vault?"
+- note: R-vault-039 only carries the otp field into a KeePass/Bitwarden export; the phone side is not asked for anywhere else.
+
+### R-vault-136 · requested
+In every vault list (secrets, logins, Move in, Use › Users, rate-many) each item is visibly its own block: a person can tell where one item starts and where it ends in a list of many, and which control belongs to which item.
+- asked: 2026-10-13: "Please structure this better - it hard to grasp what I see here"
+- asked: 2026-11-06: "this list view is also really bad and it's hard to see if many items are listed, where which item starts or ends. We have this issue in many places in the vault ui."
+- asked: 2026-11-06: "the list view can use some improvements to look better"
+- note: R-vault-051 (shared row grammar) and R-vault-102 hold the grammar and the copy button; the item-boundary complaint recurs after both, so look at it as still open. Owner also said "also these dialogues look really bad" (2026-11-06, session a68700c9); R-vault-113 holds only the width.
+
+### R-vault-137 · requested
+A `?` help icon sits on the thing it explains and nowhere else; it is never placed between two cards or beside a card's title so that it could belong to either.
+- asked: 2026-11-06: "Vault: badly placed questionmark icon" [screenshot circled the `?` next to "one card" above a card row]
+- note: R-vault-123 is about the `?` in the lock line only.
+
+### R-vault-138 · requested
+Each row of the ask list names its session the way the person knows it (the session's tab name or the first words of its last prompt), not only "Vault card fill from".
+- asked: 2026-11-07: "The ask list view does missnthe [miss the] descriptive session key words"
+- note: R-vault-083 puts the session on the approval card; the list row is what is missing.
+
+### R-vault-139 · shipped
+On the not-rated list the two batch steps say what they do and when each can be pressed: step 1 (estimate, no fingerprint, rates nothing) and step 2 (rate, one fingerprint, the only way off the list). A step that cannot be pressed yet says why in text; no step is greyed out without a sentence.
+- asked: 2026-11-07: "Vault: wh [why] not rated?"
+- asked: 2026-11-08: "Vault: what's the difference?"
+- asked: 2026-11-08: "When can I press the step w [2] button"
+- shipped: d24cadac
+- note: shipped per the commit's wording; not seen on a phone. The behaviour is R-vault-120.
+
+### R-vault-140 · requested
+Every vault verb that is built is reachable by a visible button on the screen where the need arises, and a verb that is only for the owner says so there instead of being missing. The person never has to ask "is it built?".
+- asked: 2026-10-13: "I want to be able to wire the same Gemini API key also for this "learning-helper" project and I don't see a button for This"
+- asked: 2026-10-17: "button that helps to find and store and on demand switch fingerprint show user login credentials ... I don't see such a button yet and have nonidea how to use it. Is it build?"
+- asked: 2026-10-17: "we have a vault plugin for wp created that has an ui - cant you give me the steps to do in that ui to put it in the vault? do we have a implementation gap here? that MUST be super easy for the user!!!"
+- asked: 2026-11-08: "Vault: did we not build a down scoping assistance prompt and button?"
+- asked: 2026-11-08: "Vault: inspect and adapter [adapt] the rewire button so this works bette [better]"
+- note: R-vault-108 says the downscoping helper "stays private to the owner", which is read as "no phone button"; the owner's question suggests they expect one. Decided 2026-11-08: shown to every user with a prominent risk warning (R-vault-108 changed). Recurs on four dates.
+
+### R-vault-141 · requested
+When an action finishes using a credential without a fingerprint card, the person can see which route let it through (a standing grant, a boot unlock, a registered program, or a copy that never moved into the vault), and a copy that never moved is flagged as a gap.
+- asked: 2026-10-16: "Looks like we did not wire something correctly ... I did not get a prompt to release a key or so"
+- asked: 2026-11-06: "I did not get a fingerprint request for his [this] action that apparently succeeded - did we miss to move some credentials to the vault?"
+- note: R-vault-064 covers a removed original; R-vault-086/087/089 show asks that did come. Recurs on two dates.
+
+### R-vault-142 · requested
+The Use › Users group of unregistered programs says why a program is unregistered (nobody has registered it; an agent does not register on its own), what changes for the person and for security once it is registered, and offers the register button on that row.
+- asked: 2026-11-06: "ui need to explain the categories better and I now wander myself why there are any unregistered programs and why AI did not register them and what's the effective difference for me as user and for the security?"
+- note: R-vault-103 explains what each group may do; the "why unregistered" and "difference for me" parts are not stated there.
+
+### R-vault-143 · requested
+The vault's documents are written for a first-time reader: they say what is true now, never how it changed or what the previous conversation decided. The vault has one README that starts a new reader, fewer and more compact files, and the other reader-facing docs follow the same rule.
+- asked: 2026-11-07: "Thai and other MD files from the vault are written from wrong perspective. They should address first time readers and not people that read it all already one time. ... Especially for the vault also condensed the information so it is all in all more compact and less files and it also a has one readme.md to get started with"
+- note: R-vault-014 and R-vault-129 name the docs but not this audience rule.
+
+### R-vault-144 · requested
+Vault screens and the vault README use one word per concept: **secret** (a stored value), **login** (username + password; CLI `account`), **ask** (a program waiting for a secret; "N waiting"), **Release** / **Deny**, **allowed for 5 min** (ends by itself) and **allowed until you end it** (CLI `grant --standing`), **End** / **End all** (CLI `revoke`), **Lock list** as the only "lock", **move in** (CLI `migrate`), **original** (the leftover plain file; put back / delete original), **History** / **Users** / **Reach** for the three use views, **reach** for leak size (this app / the whole account / everything / not set), **repo** (never project, except a cloud provider's project id), **says … not verified** for a program's own claim, **Backup & recovery** for keys & backup. Words with no screen meaning (pid, pane, worktree, broker, proxied, sealed, treatment, consumer, rewire, …) are not shown. A command is always shown verbatim in a mono block; the README gives each screen-word ↔ CLI-verb pair once. Full list and banned words: `.claude/outbox/journey-vault/glossary-proposal.md` until it moves into the vault docs.
+- asked: 2026-11-08 (owner picked login, ask, allowed until you end it, reach; journey review `.claude/outbox/journey-vault/decide.md`)

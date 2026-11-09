@@ -594,6 +594,8 @@ export interface RepoChipCount<F> {
   n: number; filter: F; title: string;
   /** A short word drawn before the number ("requirements 111") — a `title` is invisible on a phone. Keep it one word. */
   label?: string;
+  /** The chip's whole words, number included ("2 waiting"), when the number does not simply follow `label`. Wins over `label`. */
+  text?: string;
 }
 
 /** A count chip on a repo's group row. A count is a filter: the tap opens exactly those rows. */

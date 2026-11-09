@@ -34,7 +34,7 @@ export function UpdatesSheet() {
       <Hint>{BRAND.displayName} on the desktop, and plugins from {ORG}. A check only looks; nothing installs until you confirm.</Hint>
       <CheckedLine status={status} />
       {filtered && <FilterBar onClear={() => setAll(true)} clearLabel="show all">{cutWords(shown.length, total)}</FilterBar>}
-      <div className="list hist">
+      <div className="list hist plugin-mgr">
         <Empty empty={!status}>The desktop has not reported its updates yet.</Empty>
         {status && shown.map((r) => <RowView key={r.key} r={r} />)}
         {status && !filtered && <AddByUrl />}

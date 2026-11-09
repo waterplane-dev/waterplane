@@ -164,3 +164,38 @@ Android apps are an optional feature, on only when the desktop has an Android re
 - asked: 2026-11-01
 - shipped: 817a950c, 61e88d21
 
+
+### R-plugins-035 · shipped
+The very top of Settings has a Plugin manager button that opens a screen listing every plugin available, as a plugin manager would.
+- shipped: 9c44c5a6, 7ae6dadb
+- asked: 2026-11-08
+
+### R-plugins-036 · shipped
+Each plugin card in the manager shows whether it is on, off or failed to load, a one-line summary of what it does, and its status: Beta, Experimental or Stable; a plugin the public release leaves out is tagged Private.
+- shipped: 9c44c5a6, 7ae6dadb
+- asked: 2026-11-08
+
+### R-plugins-037 · shipped
+Tapping a plugin's settings in the manager closes the manager and opens Settings narrowed to that plugin; the plugin's settings stay searchable in Settings as before, and the narrowed view says what it hides and clears.
+- shipped: 9c44c5a6, 7ae6dadb
+- asked: 2026-11-08
+
+### R-plugins-038 · shipped
+The manager's filters (All, On, Off, Beta or Experimental, Private) sit above the list, each with its count; choosing one shows exactly those plugins and says "n of N" with a clear button.
+- shipped: 9c44c5a6, 7ae6dadb
+- asked: 2026-11-08
+
+### R-plugins-039 · shipped
+Each plugin card says where the plugin shows up in the app (home menu, session menu, session header, token statistics, settings, repo menu, apps and so on), worked out from what the plugin contributes plus any lines the plugin writes itself; a place that can be opened without a session is a button.
+- shipped: 9c44c5a6, 7ae6dadb
+- asked: 2026-11-08
+
+### R-plugins-040 · shipped
+A plugin's maturity "preview" is printed Beta everywhere; Experimental and Stable keep their words.
+- shipped: 1781723a
+- asked: 2026-11-08
+
+### R-plugins-041 · shipped
+A plugin counts as Private exactly when its own ship.json says it is not shipped, and that agrees with the public release's allow-list; a test holds the two together.
+- shipped: 1781723a
+- asked: 2026-11-08

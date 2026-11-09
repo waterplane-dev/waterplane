@@ -1,8 +1,7 @@
 # hostTools
 
 Things about the desktop and the link rather than about a session: the host's CPU/memory load
-(toolbar `cpu`), a desktop screenshot straight into the annotator (toolbar `shot`), the sign-in
-code paste (the login bar — deliberately the RAW, undurable path), the two alert switches (Web Push
+(toolbar `cpu`), the sign-in code paste (the login bar — deliberately the RAW, undurable path), the two alert switches (Web Push
 on this document, the APK's background link) and the ways to reach this host (`serveCmd`,
 `endpoints`).
 
@@ -25,10 +24,9 @@ on the desktop's screen and a re-drawn, unchanged row read as a dead button.
 
 **Settings rows** (`HostSettings.tsx`): `HostNotifySettings` (Notifications, order 20 —
 `notif-push`, `notif-shell-link`, `notif-shell-battery`) and `HostConnectionSettings` (Connection,
-order -10 — `app-version`, `endpoints`; the host list itself is `features/hosts`' `hosts` row at -20). The two doors
-`tool-host-stat` and `tool-screenshot` sit mid-rack in the core sheet, which calls `showHostStat`
-and `takeShot` from this index.
+order -10 — `app-version`, `endpoints`; the host list itself is `features/hosts`' `hosts` row at -20). The door
+`tool-host-stat` sits mid-rack in the core sheet, which calls `showHostStat` from this index. A
+desktop screenshot is not here: it is the live desktop view's camera button (`extensions/desktop`).
 
 **Reads from core**: `conn.liveSend`/`send`, `conn.info` (the tailnet name `serveCmd` and
-`endpoints` are built from), `nav.open`, `world.activeRepo`, `files.annotateUrl` (the screenshot
-lands in the annotator), `say`.
+`endpoints` are built from), `nav.open`, `say`.

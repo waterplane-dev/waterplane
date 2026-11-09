@@ -43,6 +43,7 @@ const SRC = /\.(?:[cm]?[jt]sx?|mts)$/;
 const NAMED_OK = {
   "package-lock.json": "generated; base64 integrity hashes contain any two-letter prefix by chance",
   "eslint-suppressions.json": "the lint baseline names files by path, private ones too; publish-public.mjs (publicSuppressions) drops every non-public entry from the snapshot",
+  "tools/vaultglossary.test.mjs": "the vault glossary guard (R-vault-144) skips strings that start with the vault CLI's name; with the vault absent it scans nothing and passes",
   "tools/repohealth/fixture.json": "a recorded snapshot of this repository's own history (paths as they were), replayed by the repo-health tests",
 };
 

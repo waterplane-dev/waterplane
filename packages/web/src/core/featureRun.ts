@@ -140,7 +140,7 @@ export interface KeyedNode { key: string; node: ReactNode }
  */
 export function createSettingsRowTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const defs = features.flatMap((f) => (f.settings ?? []).map((d, i) => ({ feature: f.id, key: `${f.id}:${i}`, d })));
-  addSettingRows(defs.flatMap((x) => (x.d.rows ?? []).map((r) => ({ ...r, group: x.d.group }))));
+  for (const x of defs) addSettingRows((x.d.rows ?? []).map((r) => ({ ...r, group: x.d.group })), x.feature);
   const fail = createFailReporter(true);
   return {
     /** `band` cuts the group's rows to `from <= order < to` — so the core sheet

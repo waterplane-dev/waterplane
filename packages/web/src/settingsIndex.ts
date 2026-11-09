@@ -203,7 +203,6 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "tool-cli-health", group: "tools", label: "CLI health", keywords: "heuristics detector hook echo probe conversation log broken degraded" },
   { id: "tool-features", group: "tools", label: "feature usage", keywords: "which features used never analytics track" },
   { id: "tool-host-stat", group: "tools", label: "host stat", keywords: "cpu memory load desktop mac pressure temperature" },
-  { id: "tool-screenshot", group: "tools", label: "screenshot the desktop", keywords: "capture screen mac image" },
   { id: "whats-new", group: "tools", label: "what's new", keywords: "release version changelog new features overview 0.1.8 automation burn downloads notifications" },
   { id: "tool-updates", group: "tools", label: "updates", keywords: "update self plugin install available new version restart roll back" },
   { id: "tool-decisions", group: "tools", label: "decision log", keywords: "activity auto-continue usage limit what a plugin answered suggested history archive" },
@@ -237,9 +236,44 @@ const HAY = new Map(SETTING_ROWS.map((r) => [r.id, haystack(r)]));
  */
 const EXTRA: SettingRowMeta[] = [];
 
-export function addSettingRows(rows: readonly SettingRowMeta[]): void {
+/** Row id → the extension that contributed it (`addSettingRows`' `owner`). In-repo core rows have none. */
+const OWNED = new Map<string, string>();
+
+// ── a plugin scope on the pin ───────────────────────────────────────────────
+/** The pin (`settingsFocus.ts` `settingsOnly`) is a row id, or `plugin:<id>` = ONE plugin: the `plugins`
+ *  row (its section only) plus every row that extension contributes. */
+export const PLUGIN_SCOPE = "plugin:";
+
+/** The plugin id a pin scopes to, or null for a row pin / no pin. */
+export function pluginScopeOf(only: string | null | undefined): string | null {
+  return only && only.startsWith(PLUGIN_SCOPE) ? only.slice(PLUGIN_SCOPE.length) : null;
+}
+
+/** Core rows that ARE one builtin plugin's settings (a fixed builtin has no section in the `plugins` row, so
+ *  without this its Settings button would open on a row about something else). Plugin id → core row ids. */
+const CORE_OWNED: Readonly<Record<string, readonly string[]>> = { "token-stats": ["token-stats"] };
+
+/** The row ids a plugin scope shows: the `plugins` row (only for a plugin that has a section in it: a fixed builtin
+ *  in CORE_OWNED has none, and the row would draw an empty card under a code warning), the core rows that are this
+ *  plugin's, then the rows the extension contributed. */
+export function scopeRowIds(pluginId: string): string[] {
+  const core = Object.hasOwn(CORE_OWNED, pluginId);
+  return [...(core ? [] : ["plugins"]), ...(core ? CORE_OWNED[pluginId]! : []), ...[...OWNED].filter(([, o]) => o === pluginId).map(([id]) => id)];
+}
+
+const SCOPE_NAMES = new Map<string, string>();
+/** The name the filter bar prints for a plugin scope (the `plugin.list` handler is the one writer). */
+export function setPluginName(id: string, name: string): void { SCOPE_NAMES.set(id, name); }
+
+function pinIncludes(only: string, rowId: string): boolean {
+  const p = pluginScopeOf(only);
+  return p === null ? rowId === only : scopeRowIds(p).includes(rowId);
+}
+
+export function addSettingRows(rows: readonly SettingRowMeta[], owner?: string): void {
   for (const r of rows) {
     if (BY_ID.has(r.id)) continue;
+    if (owner) OWNED.set(r.id, owner);
     EXTRA.push(r);
     BY_ID.set(r.id, r);
     HAY.set(r.id, haystack(r));
@@ -317,13 +351,16 @@ export function groupMatches(groupId: string, query: string): boolean {
  * query while it is set; typing in the box ends it (the sheet clears it).
  */
 export function rowShown(id: string, query: string, only?: string | null): boolean {
-  if (only) return id === only;
+  if (only) return pinIncludes(only, id);
   return rowMatches(id, query);
 }
 
 /** The heading's half of `rowShown` — see `groupMatches`. */
 export function groupShown(groupId: string, query: string, only?: string | null): boolean {
-  if (only) return BY_ID.get(only)?.group === groupId;
+  if (only) {
+    const p = pluginScopeOf(only);
+    return p === null ? BY_ID.get(only)?.group === groupId : scopeRowIds(p).some((r) => BY_ID.get(r)?.group === groupId);
+  }
   return groupMatches(groupId, query);
 }
 
@@ -350,6 +387,12 @@ export function settingRow(id: string): SettingRowMeta | undefined {
  */
 export function filterSummary(shown: number, total: number, query: string, only?: string | null): string {
   if (only) {
+    const p = pluginScopeOf(only);
+    if (p !== null) {
+      const name = SCOPE_NAMES.get(p) ?? p;
+      if (shown === 0) return `${name} has no settings on this screen right now — ${total} settings here`;
+      return `showing ${name} only — ${shown} of ${total} settings`;
+    }
     const label = BY_ID.get(only)?.label ?? only;
     if (shown === 0) return `“${label}” is not on this screen right now — ${total} settings here`;
     return `showing “${label}” only — ${shown} of ${total} settings`;

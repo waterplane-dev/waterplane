@@ -82,6 +82,15 @@ export function shippedBuiltins(rel: ReleaseBuiltins | null = releaseBuiltins())
 }
 
 
+/**
+ * True when the extension at `dir` is one the public snapshot leaves out: its own `ship.json` says
+ * `"ship": false`. Missing, unreadable or unparseable ⇒ false (not private, never a guess).
+ */
+export function isPrivateExtension(dir: string): boolean {
+  try { return (JSON.parse(readFileSync(join(dir, "ship.json"), "utf8")) as { ship?: unknown } | null)?.ship === false; }
+  catch { return false; }
+}
+
 export function builtinDir(id: string): string {
   return join(EXT_ROOT, id);
 }

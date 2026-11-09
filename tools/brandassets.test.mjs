@@ -23,6 +23,19 @@ test("hero.svg is outlined: no live text, so it does not depend on fonts", () =>
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "brand", "hero.svg"), "utf8"), /<text\b/);
 });
 
+// 2026-11-09: four NaN coordinates in the outlined title made every renderer stop at "water", and
+// the social preview (site/assets/og.png, a copy of hero.png) shipped that way for weeks.
+test("no brand SVG has a NaN or Infinity coordinate: renderers stop drawing at the first one", () => {
+  for (const f of fs.readdirSync(path.join(ROOT, "brand")).filter((n) => n.endsWith(".svg"))) {
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "brand", f), "utf8"), /NaN|Infinity/, `brand/${f}`);
+  }
+});
+
+test("the site's social preview is the current hero.png", () => {
+  const og = fs.readFileSync(path.join(ROOT, "site", "assets", "og.png"));
+  assert.ok(og.equals(fs.readFileSync(path.join(ROOT, "packages", "web", "public", "assets", "hero.png"))), "cp packages/web/public/assets/hero.png site/assets/og.png");
+});
+
 test("the notification glyph, themed icon layer and maskable icon are wired", () => {
   const res = "packages/app/android/app/src/main/res";
   assert.match(fs.readFileSync(path.join(ROOT, res, "mipmap-anydpi-v26/ic_launcher.xml"), "utf8"), /<monochrome /);

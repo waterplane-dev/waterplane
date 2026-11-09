@@ -9,6 +9,7 @@ import type { DeliveryResult, DeliveryRun } from "./delivertypes.js";
 import { resolveBackend } from "../backends/index.js";
 import { trustRule, type TrustRule } from "../backends/derive.js";
 import { readNavBox, trustKeys } from "../prompt.js";
+import { composerHolds } from "./deliverscreen.js";
 
 /** Does this session's backend have TURNS? A shell does not (`caps.turns`).
  *  Unknown backend / no lookup on a test double ⇒ true, today's behaviour. */
@@ -357,8 +358,33 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
    */
   const submitPolls = unannounced ? UNANNOUNCED_POLLS : 6;
   const submitTries = unannounced ? UNANNOUNCED_TRIES : 5;
+  /**
+   * **A `/command` no list knows: press again only while the box still holds it.**
+   *
+   * The lists in `shared/slash.ts` trail the CLI (2.1.319 shipped ~40 `local-jsx`
+   * commands; `/workflows` was missing and was filed "Return was swallowed"
+   * after four more Returns went into the view the first one opened). So
+   * before every re-press of a single-line slash command, ask the composer: a
+   * Return that was swallowed left our text there, one that was taken did not
+   * (`composerHolds`). Taken + no turn ⇒ `ok` as `composer-let-go`, and a
+   * `slash.local` fallback naming the command, so the drift is visible and the
+   * list can be fixed. Prompts are untouched: their hook is the proof.
+   */
+  const slashWord = !text.includes("\n") && /^\/[A-Za-z][\w:-]*(?:\s|$)/.test(text.trim()) && !unannounced;
+  // Only a box SEEN holding the command before the Return makes its absence
+  // after it evidence: a screen whose composer was never placeable says nothing.
+  const boxBefore = slashWord && (await composerHolds(sessions, sessionId, text)) === true;
+  /** Read twice, 300 ms apart, so one torn frame never decides. */
+  const composerLetGo = async () => {
+    for (let i = 0; i < 2; i++) {
+      if (i) await sleep(300);
+      if ((await composerHolds(sessions, sessionId, text)) === true) return false;
+    }
+    return true;
+  };
   let submitted = false;
-  for (let attempt = 0; attempt < submitTries && !submitted; attempt++) {
+  let letGo = false;
+  for (let attempt = 0; attempt < submitTries && !submitted && !letGo; attempt++) {
     armSourceProof();
     sessions.write(sessionId, "\r");
     // Poll instead of sleeping a fixed slice: the hook reports the turn start
@@ -367,6 +393,15 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
       await sleep(150);
       submitted = turnStarted();
     }
+    if (!submitted && boxBefore) {
+      letGo = await composerLetGo();
+      submitted = turnStarted(); // a slow hook may have landed during the reads
+    }
+  }
+  if (letGo && !submitted) {
+    shape.submit = "composer-let-go";
+    note("slash.local", "fallback", { via: "composer let go", raw: text.trim().split(/\s+/)[0] ?? "" });
+    return { result: "ok" };
   }
   if (submitted) {
     // Which proof answered is kept apart on the audit row: `prompt-hook` is the

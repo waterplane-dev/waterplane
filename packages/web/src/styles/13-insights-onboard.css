@@ -119,6 +119,10 @@
 /* Plugins (features/plugins): a section per plugin inside Settings' one
    `plugins` row, its session-menu group, and a row's plugin badges. */
 .plugin-sec { border-top: 1px solid var(--line); padding: var(--sp-10) 0 var(--sp-4); margin-top: var(--sp-8); }
+/* .list.hist sets padding by shorthand at two classes; match it or the sides go to 0. */
+.list.plugin-mgr { padding-left: var(--sp-16); padding-right: var(--sp-16); }
+.plugin-mgr-pad { padding: var(--sp-6) var(--sp-16) 0; }
+.plugin-mgr-h { font-size: var(--fs-11); color: var(--muted); margin-bottom: var(--sp-4); }
 .plugin-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
 .plugin-src code, .plugin-env code { word-break: break-all; }
 .plugin-field { display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; margin-top: var(--sp-6); }

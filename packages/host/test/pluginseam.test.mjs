@@ -217,7 +217,7 @@ test("handToAgent(): an absolute worktree path resolves the same repo as its id 
   assert.equal(handed.at(-1).repoDir, wt2);
 });
 
-test("builtins: loaded first, always on unless optional, not listed unless optional, and their id cannot be taken", async () => {
+test("builtins: loaded first, always on unless optional, listed as fixed unless optional, and their id cannot be taken", async () => {
   const { reg, pd } = boot();
   plugin(pd, "requirements", `export function activate() {}`);
   await reg.loadBuiltins();
@@ -228,8 +228,9 @@ test("builtins: loaded first, always on unless optional, not listed unless optio
   assert.equal(impostor.state, "error");
   assert.match(impostor.error, /duplicate id "requirements"/);
   assert.match(await reg.setEnabled("requirements", false), /part of waterplane and is always on/);
-  assert.ok(!reg.views().some((v) => v.source.startsWith("built in") && v.manifest.id === "requirements"),
-    "an always-on builtin is not in the phone's plugin list (an OPTIONAL one is — that extension's own test pins that half)");
+  const listed = reg.views().find((v) => v.builtin && v.manifest.id === "requirements");
+  assert.equal(listed?.fixed, true,
+    "an always-on builtin is in the list as `fixed` (the plugin manager shows every plugin; the settings rows skip `fixed`)");
 });
 
 test("builtins: a release decides which ship — one it does not name is not loaded and not listed broken", async () => {

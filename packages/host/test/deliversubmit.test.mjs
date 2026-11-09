@@ -473,3 +473,58 @@ test("a SHELL with a program in front is not typed into — unless that program 
   const r = await deliverPrompt(claude, "s1", "line one\nline two", "prompt", { watch: false });
   assert.notEqual(r, "retry");
 });
+
+// ── A `/command` no list knows: the composer letting go is the proof ────────
+//
+// Reported from a phone 2026-11-08: `/workflows` opened its view and came back
+// "typed, but Return was swallowed". It was on no list, fires no
+// `UserPromptSubmit`, so the hooked ladder pressed Return four more times —
+// into the view the first press had opened. The generic rule: press again only
+// while the box still holds the command.
+
+const BOX_RULE = "─".repeat(60);
+/** The double, with the typed text drawn inside a real composer box. */
+function boxedSessions(opts) {
+  const sessions = fakeSessions(opts);
+  const write = sessions.write;
+  sessions.write = (id, data) => {
+    if (data === "\r") return write(id, data);
+    sessions.state.screen = ["", BOX_RULE, `❯ ${data}`, BOX_RULE, "  ? for shortcuts"].join("\n");
+  };
+  return sessions;
+}
+const VIEW = ["Workflows", "", "  ❯ reword:readme   completed", "", "  ↑↓ agent · esc back"].join("\n");
+
+test("an unlisted /command whose Return opens a view is ok after ONE press", async () => {
+  const h = store();
+  const sessions = boxedSessions({ hooked: true, onReturn: (s) => { s.screen = VIEW; } });
+  const result = await deliverPrompt(sessions, "s1", "/frobnicate", "prompt", { watch: false });
+  assert.equal(result, "ok");
+  assert.equal(sessions.state.returns, 1, "no second Return into the view the first one opened");
+  const sig = h.store.get().signals["slash.local"];
+  assert.equal(sig.window.at(-1).fallback, true, "and the list drift is on the record");
+});
+
+test("an unlisted /command whose Return empties the box is ok after ONE press", async () => {
+  store();
+  const sessions = boxedSessions({
+    hooked: true,
+    onReturn: (s) => { s.screen = ["  ⎿  done", "", BOX_RULE, "❯ ", BOX_RULE].join("\n"); },
+  });
+  assert.equal(await deliverPrompt(sessions, "s1", "/frobnicate now", "prompt", { watch: false }), "ok");
+  assert.equal(sessions.state.returns, 1);
+});
+
+test("an unlisted /command still IN the box is a swallowed Return, pressed again", async () => {
+  store();
+  const sessions = boxedSessions({ hooked: true });
+  assert.equal(await deliverPrompt(sessions, "s1", "/frobnicate", "prompt", { watch: false }), "unsubmitted");
+  assert.equal(sessions.state.returns, 5, "the old ladder, untouched while the text is visibly there");
+});
+
+test("a prose prompt is untouched by the composer rule", async () => {
+  store();
+  const sessions = boxedSessions({ hooked: true, onReturn: (s) => { s.screen = VIEW; } });
+  assert.equal(await deliverPrompt(sessions, "s1", TEXT, "prompt", { watch: false }), "unsubmitted");
+  assert.equal(sessions.state.returns, 5, "its proof is the hook, never the box");
+});

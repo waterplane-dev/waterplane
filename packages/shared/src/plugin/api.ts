@@ -366,4 +366,10 @@ export interface HostPluginApi {
    *  Concurrent calls share one walk. Any plugin may call it: the facts are paths and names, not secrets
    *  (`docs/notes/plugins.md`, "Which apps a repo builds"). */
   repoApps(): Promise<AppRepoFacts[]>;
+  /** Since 2.8, IN-REPO EXTENSIONS ONLY (`packages/extensions/<id>/`; an external plugin's call THROWS): revoke ONE paired
+   *  device's waterplane token by its ledger id (`PluginCaller.deviceId`) — the row is deleted and that device's open sockets
+   *  closed, exactly what Settings → Devices' revoke does. Nothing else: no list, no mint, no other device. `revoked: false` =
+   *  no such device (already revoked, or the password changed since). THROWS a sentence for a malformed id, on a host that
+   *  cannot revoke, and once the extension is switched off. */
+  revokeDevice(deviceId: string): { revoked: boolean; closedSockets: number };
 }

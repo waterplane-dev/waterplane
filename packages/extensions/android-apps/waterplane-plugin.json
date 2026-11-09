@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "apiVersion": "2.5",
   "description": "Your repos' Android apps on this phone: build, download and install each one, and the history of what installed itself where. On by itself when a repo here builds an Android app.",
+  "summary": "Builds your repos' Android apps and installs them on this phone, keeping a history of what went where.",
+  "maturity": "stable",
   "host": "host/index.mts",
   "web": "web/index.ts",
   "optional": true,

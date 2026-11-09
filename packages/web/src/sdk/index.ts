@@ -32,6 +32,7 @@ export { isDemo, registerDemoPlugin, demoPluginPushes, type DemoPlugin } from ".
 export { extDeviceStorage, extStorage, type ExtStorage } from "./extStorage.ts";
 /** Is an extension switched on (`useExtensionEnabled`/`isExtensionEnabled`, by its manifest id),
  *  and where its downloaded assets are cached and served (`extAssetCacheName`, `extAssetUrl`). */
+export { featureManifests } from "./extensions.ts";
 export { EXT_CACHE_PREFIX, extAssetCacheName, extAssetUrl, isExtensionEnabled, useExtensionEnabled, watchExtensionEnabled } from "./extensions.ts";
 /** How core opens the screen an extension owns for this phone's own apps (`FeatureManifest.appsDoor`) without importing it:
  *  `useAppsDoor()` answers null while no such extension is on — the caller's off state. */

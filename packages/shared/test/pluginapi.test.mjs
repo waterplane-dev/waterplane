@@ -41,9 +41,9 @@ test("pluginApiProblem: a newer minor, another major or no version is refused in
 });
 
 test("2.0: a 1.x plugin is refused, and the sentence names where the 2.0 contract is written", () => {
-  assert.equal(PLUGIN_API_VERSION, "2.7.0");
+  assert.equal(PLUGIN_API_VERSION, "2.8.0");
   const why = pluginApiProblem("1.8");
-  assert.match(why, /^apiVersion is "1\.8"; this daemon speaks 2\.7\.0, and loads plugins written for 2\.0 up to 2\.7; this plugin was written for an older API and must be updated/);
+  assert.match(why, /^apiVersion is "1\.8"; this daemon speaks 2\.8\.0, and loads plugins written for 2\.0 up to 2\.8; this plugin was written for an older API and must be updated/);
   assert.ok(why.endsWith(" — the 2.0 contract is docs/plans/backend-contract-v2.md"), why);
   assert.match(pluginApiProblem(1), /docs\/plans\/backend-contract-v2\.md$/);
   assert.equal(pluginApiProblem("2.0"), null);
@@ -54,7 +54,8 @@ test("2.0: a 1.x plugin is refused, and the sentence names where the 2.0 contrac
   assert.equal(pluginApiProblem("2.5"), null); // 2.5: api.repoApps, manifest autoOn, PluginView.auto
   assert.equal(pluginApiProblem("2.6"), null); // 2.6: api.notifyDone
   assert.equal(pluginApiProblem("2.7"), null); // 2.7: api.notifyDoneExcept
-  assert.match(pluginApiProblem("2.8"), /this daemon speaks 2\.7\.0, and loads plugins written for 2\.0 up to 2\.7; this plugin needs a newer daemon$/);
+  assert.equal(pluginApiProblem("2.8"), null); // 2.8: api.revokeDevice (in-repo extensions only)
+  assert.match(pluginApiProblem("2.9"), /this daemon speaks 2\.8\.0, and loads plugins written for 2\.0 up to 2\.8; this plugin needs a newer daemon$/);
   assert.doesNotMatch(pluginApiProblem("3.0"), /backend-contract-v2/); // a newer plugin needs a newer daemon, not this doc
 });
 

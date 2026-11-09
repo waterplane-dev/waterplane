@@ -293,3 +293,8 @@ test("isWideFull: the canvas and chart sheets yes, everything else a panel", () 
     assert.equal(isWideFull(o), false, String(o));
   }
 });
+
+test("pluginSettings (a plugin's Settings over the manager) is never reload-persisted", () => {
+  assert.ok(!PERSISTED_OVERLAYS.has("pluginSettings"));
+  assert.equal(routeToHash(null, "pluginSettings"), "");
+});

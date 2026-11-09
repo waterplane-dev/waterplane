@@ -176,7 +176,6 @@ export const HINTS: Record<string, HintDef> = {
     when: "A terminal grid fights text selection on a phone; this is the way out.",
   },
   "toolbar:clip": { title: "Send to the desktop clipboard", what: "Puts this phone's clipboard contents onto the DESKTOP host's clipboard." },
-  "toolbar:shot": { title: "Screenshot the desktop", what: "Captures the host's whole screen and shows it here." },
   "toolbar:ctx": { title: "Context window", what: "Runs /context in this session — how much of the model's window this conversation is using." },
   "toolbar:usage": { title: "Cost", what: "Runs /cost in this session." },
   "toolbar:cpu": { title: "Desktop load", what: "CPU and memory of the machine running the agent, as a toast." },

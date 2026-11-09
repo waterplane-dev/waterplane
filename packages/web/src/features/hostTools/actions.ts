@@ -21,19 +21,6 @@ export async function showHostStat(): Promise<void> {
   }
 }
 
-/** Grab a screenshot of the desktop and open it in the annotator. */
-export async function takeShot(repoId: string): Promise<void> {
-  const say = core().say;
-  say.toast("capturing screen…");
-  try {
-    const r = await api.screenshot(repoId);
-    if (!r.file) { say.toast(`screenshot failed: ${r.error ?? "?"}`); return; }
-    core().files.annotateUrl(api.artifactUrl(repoId, r.file.relPath), r.file.name, repoId);
-  } catch {
-    say.toast("screenshot failed");
-  }
-}
-
 /**
  * Put the code the sign-in page handed back into the CLI's own input.
  *

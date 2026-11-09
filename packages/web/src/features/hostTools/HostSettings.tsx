@@ -5,8 +5,8 @@
  *  - Connection (order -10, before the password rows): the app version, and
  *    the ways to reach this host from a browser. Which hosts the APK knows is
  *    `features/hosts` (order -20).
- * The two door rack entries (`tool-host-stat`, `tool-screenshot`) stay in the
- * core sheet's rack — they sit mid-rack, and a feature's band can only open it.
+ * The door rack entry `tool-host-stat` stays in the
+ * core sheet's rack — it sits mid-rack, and a feature's band can only open it.
  */
 import { useState } from "react";
 import { BatteryCharging, Bell, BellOff, Copy, ExternalLink, Smartphone, Wifi, WifiOff } from "lucide-react";

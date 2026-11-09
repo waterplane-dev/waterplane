@@ -395,6 +395,8 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    full-width rows with a paragraph each is the shape this change is against,
    and the label is the only thing that tells them apart anyway. */
 .set-doors { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+/* Above the scroll in Settings: same side inset as the search box under it. */
+.set-doors-top { margin: var(--sp-6) var(--sp-16) 0; }
 .set-door {
   display: inline-flex; align-items: center; gap: var(--sp-6);
   min-height: 40px; padding: 0 var(--sp-12);

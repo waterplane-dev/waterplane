@@ -46,7 +46,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [outline](outline.md) | 1 | 5 | 0 |
 | [peers](peers.md) | 0 | 16 | 0 |
 | [performance](performance.md) | 0 | 1 | 0 |
-| [plugins](plugins.md) | 5 | 29 | 0 |
+| [plugins](plugins.md) | 12 | 29 | 0 |
 | [prompts](prompts.md) | 1 | 9 | 0 |
 | [queue](queue.md) | 4 | 16 | 0 |
 | [read-mode](read-mode.md) | 4 | 9 | 0 |

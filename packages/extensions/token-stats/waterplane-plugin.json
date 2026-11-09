@@ -4,5 +4,11 @@
   "version": "0.1.0",
   "apiVersion": "2.0",
   "description": "Every token this desktop has used, per day, by model and by repo, for Claude's ledger and every ledger another extension draws here (one tab each, never summed), plus the two live rate-limit windows and the windows before them.",
+  "summary": "Shows how many tokens you have used, by day, model and repo, and where your limits stand.",
+  "places": [
+    "Home screen: the usage meter in the top bar",
+    "Settings: token statistics"
+  ],
+  "maturity": "stable",
   "web": "web/index.ts"
 }

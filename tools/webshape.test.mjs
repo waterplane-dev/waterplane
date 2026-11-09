@@ -367,6 +367,7 @@ const FEATURE_FILE_NAMES = [
   /^actions\.ts$/,        // functions that write stores / send frames
   /^[a-z][A-Za-z0-9]*Actions\.ts$/, // a slice of actions.ts, re-exported by it (actions.ts stays the import point)
   /^logic\.ts$/,          // pure
+  /^[a-z][A-Za-z0-9]*Logic\.ts$/, // a pure slice beside logic.ts (managerLogic.ts), own <name>Logic.test.mjs
   /^README\.md$/,
   /^[A-Z][A-Za-z0-9]*Sheet\.tsx$/, // the sheet component
   /^[A-Z][A-Za-z0-9]*\.tsx$/,      // any other component

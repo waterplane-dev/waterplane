@@ -4,6 +4,12 @@
   "version": "0.1.0",
   "apiVersion": "2.0",
   "description": "A repo's requirements list, rebuilt from the person's prompts and the commits: the setup row that says how far behind it is, the one-time set up, and a sheet that lists the items (cut by status and area) with an update that goes through the backlog.",
+  "summary": "Keeps a list of what each repo is expected to do, rebuilt from your prompts and its commits.",
+  "places": [
+    "Repo menu: requirements",
+    "Repo readings: the requirements row"
+  ],
+  "maturity": "stable",
   "host": "host/index.mts",
   "web": "web/index.ts"
 }

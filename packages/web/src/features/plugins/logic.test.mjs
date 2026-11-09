@@ -267,5 +267,5 @@ test("the real wiring: the real store starts from this host's cache and applyLiv
   assert.equal(store.pluginsLive.get(), true);
   assert.deepEqual(JSON.parse(m.get(LS.pluginList)).map((r) => r.enabled), [false], "and the cache");
   const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-  assert.match(src, /"plugin\.list": \(msg\) => \{[^}]*applyLiveList\(msg\.plugins\)/, "the manifest's handler calls it");
+  assert.match(src, /"plugin\.list": \(msg\) => \{[^}]*applyLiveList\(switchable\)/, "the manifest's handler calls it, with the switchable rows only (fixed builtins stay out of every older reader)");
 });
