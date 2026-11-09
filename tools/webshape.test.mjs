@@ -966,6 +966,7 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/annPointer.ts": 280,
   "annotator/annRead.ts": 115,
   "annotator/annSend.ts": 155,
+  "annotator/annSendGrid.ts": 20,
   "annotator/annTypes.ts": 170,
   "annotator/useAnnotator.ts": 305, // +"text only" (annOcr.ts) state, +the phone's mark reader (annAutoRead.ts)
   "annotator/useAutoPlace.ts": 35,
@@ -1015,7 +1016,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
-  "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
+  "webapi/webapiHost.ts": 156, // +on-device whole-picture OCR, +plugin README (About fold)
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 110, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under

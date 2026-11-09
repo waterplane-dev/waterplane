@@ -1,4 +1,12 @@
-# requirements — an in-repo extension
+# Requirements
+
+Keeps a list of what a repo is expected to do, written the way you asked for it. It is built from your prompts to the agent and from the repo's commits, and saved as Markdown files in the repo's `docs/requirements/` folder. Each item is marked requested, shipped, superseded or dropped. Use it to see what you asked for and what is still open. It needs the repo's agent to build the list, so an update costs a normal agent run, and it only starts when you tap it.
+
+## Where to find it
+- **Repo menu** — the repo's ⋯ menu has a "requirements" line with the count of requested items, or "not set up" for a repo that has no list yet. It opens the list, which you can cut by status and by area. The update button there adds a waiting row to the repo's backlog; nothing runs until you tap it.
+- **Repo readings** — the "Requirements list" row says whether the list is set up, never built, current, or behind by many prompts. Its button hands the update to the agent, again as a waiting backlog row.
+
+## For developers
 
 What this repo is expected to do, as a person asked for it: `docs/requirements/<area>.md`, built by
 `scripts/requirements/update.mjs` from the prompts and the commits, left as an uncommitted diff.

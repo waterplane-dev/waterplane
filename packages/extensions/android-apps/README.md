@@ -1,4 +1,15 @@
-# android-apps — the Apps screen
+# Android apps
+
+Builds the Android apps in your repos and installs them on this phone. Each app gets a card with three steps: build it, download it, install it. A history lists what installed itself on which phone. It turns on by itself when a repo on this desktop holds an Android app.
+
+It works only in the waterplane Android app. A web browser has no installer to offer, so the entry is hidden there.
+
+## Where to find it
+- **Home menu, "android apps"** — one card per app with build, download and install. A number on the line counts builds waiting to install; tap it to see only those.
+- **Downloads, Build and Pull screens** — each has a link that opens the same Apps screen.
+- **Apps screen, history** — the log of what installed itself on which phone.
+
+## For developers
 
 Which of this desktop's Android apps will install themselves on the phone, and the log of what
 installed on which phone. It is an optional extension, so a desktop with no Android repo carries no

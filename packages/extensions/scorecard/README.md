@@ -1,11 +1,20 @@
-# scorecard — a repo's OpenSSF Scorecard on the phone (optional extension)
+# Scorecard
 
-What the public OpenSSF Scorecard says about a repo's GitHub remote, one tap from the repo. No
-credential, no model call: the host reads `api.securityscorecards.dev` and the phone only draws it.
-Optional: switch it on or off in Settings › Tools & diagnostics › plugins. A dev checkout starts it
-**on**; for a release, `deploy/ship.json` decides whether it is carried and its default switch.
+Shows the public OpenSSF Scorecard of a repo's GitHub remote: a score out of 10 for how well the project follows security habits, and which checks lose points. For each failing check you can ask Claude to fix it, or accept it with a reason. It reads only public services, needs no sign-in and makes no model call. It works for public GitHub repos, and the score is only as fresh as the project's own Scorecard workflow.
 
-## What you see
+## Where to find it
+- **Repo row** — a "failing" chip with the number of failing checks on a repo's title line. Tap it to open the sheet cut to those checks. No chip when the repo is unscored or nothing is failing.
+- **Sheet** — the score, when it was read, the failing checks (with ask Claude and accept), the accepted ones and the passing ones.
+- **Repo readings** — the "OpenSSF Scorecard" row, whose button opens the failing checks.
+
+## Settings
+Switch the whole plugin on or off in Settings › Tools & diagnostics › plugins. In the sheet, "scored as" lets a private repo use its public mirror's score.
+
+## For developers
+
+Optional extension: a dev checkout starts it on; for a release, `deploy/ship.json` decides whether it is carried and its default switch.
+
+## What you see in detail
 
 - **A `failing 3` chip on the repo row** (the score, e.g. 6/10, is in its title), drawn only when the
   repo is scored and has failing checks that nobody accepted. The number is exactly those checks, and

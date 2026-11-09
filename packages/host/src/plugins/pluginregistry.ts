@@ -54,7 +54,7 @@ import { makeApi } from "./pluginapi.js";
 import { PluginStreams, type StreamSink } from "./pluginstreams.js";
 import { setSetupSource } from "./setupcontrib.js";
 import { PluginFiles, type ServedFile } from "./pluginfiles.js";
-import { resolveAsset, type AssetResult } from "./pluginassets.js";
+import { readReadme, resolveAsset, type AssetResult, type ReadmeResult } from "./pluginassets.js";
 import { hostStateDir } from "../branddirs.js";
 import { AUTO_PROBE_EVERY_MS, autoWhy, cachedProbe, writeProbeCache, type AutoProbes } from "./pluginauto.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
@@ -563,6 +563,13 @@ export class PluginRegistry {
     if (!e) return { ok: false, status: 404, error: "no such plugin" };
     if (e.state !== "active") return { ok: false, status: 403, error: `${e.manifest.name} is ${e.state === "off" ? "turned off" : "not running"}` };
     return resolveAsset(e.manifest.name, e.dir, e.manifest.assets, file);
+  }
+
+  /** Its README.md, running or not (`readReadme`). */
+  readme(pluginId: string): ReadmeResult {
+    const e = this.byId(pluginId);
+    if (!e) return { ok: false, status: 404, error: "no such plugin" };
+    return readReadme(e.manifest.name, e.dir);
   }
 
   route(pluginId: string, method: string, parts: readonly string[]): ((req: { query: Record<string, string>; body: unknown }) => Promise<PluginHookReply>) | null {

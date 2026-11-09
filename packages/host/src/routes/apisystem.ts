@@ -201,6 +201,16 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     if (last === f.size - 1) res.on("finish", () => f.delivered());
     return true;
   }),
+  // ── a plugin's README (the Plugins screen's "Read more") ─────────────
+  // Its own prefix, so no plugin route pattern shadows it. Text as JSON, read-only, same gates as
+  // every /api route; not in `passive.ts` (a kids' phone has no Plugins screen).
+  route("GET", "/api/plugin-readme/:id", ({ res, params }, ctx) => {
+    if (!PLUGIN_HOOK_ID.test(params.id!) || !ctx.pluginReadme) return false;
+    const r = ctx.pluginReadme(params.id!);
+    if (!r.ok) { json(res, { error: r.error }, r.status); return true; }
+    json(res, { text: r.text });
+    return true;
+  }),
   // ── a plugin's static ASSETS (`manifest.assets`) ─────────────────────
   // GET|HEAD only (any other verb falls through to the plugin's own routes), ahead of
   // `* /api/plugin/:id/*` so no plugin route shadows it. Same gates as every /api route; NOT an

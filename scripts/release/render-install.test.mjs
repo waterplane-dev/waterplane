@@ -314,6 +314,38 @@ test("front door: one coherent ending — the lead goes on the https line, no ta
   assert.doesNotMatch(text, /~\/\.config\/\$SLUG|\.config\/waterplane-?host/, "the config dir is CONFIG_NAME's, never the slug's");
 });
 
+// ── the desktop ending: finish_desktop, driven with a fake opener and curl on PATH ─────────────
+async function desktopEnd({ open = 1, os = "linux", env = {} } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "inst-desk-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  for (const name of ["xdg-open", "open"]) writeFileSync(join(bin, name), `#!/bin/sh\necho "$*" >> "${join(dir, "ran")}"\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "curl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const script = (await render([])).replace(/\nmain "\$@"\s*$/, "\n");
+  writeFileSync(join(dir, "drive.sh"), `${script}\nOS='${os}'; IS_WSL=0\nfinish_desktop ${open}\n`);
+  const r = spawnSync("/bin/sh", [join(dir, "drive.sh")], { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, ...env } });
+  const out = (r.stdout || "") + (r.stderr || "");
+  const ran = existsSync(join(dir, "ran")) ? readFileSync(join(dir, "ran"), "utf8").trim() : "";
+  rmSync(dir, { recursive: true, force: true });
+  return { out, code: r.status, ran };
+}
+
+test("desktop ending: prints the loopback URL and port, and opens it when there is a screen", async () => {
+  let r = await desktopEnd({ env: { DISPLAY: ":0", [`${ENV_PREFIX}PORT`]: "9123" } });
+  assert.match(r.out, /on this desktop: http:\/\/127\.0\.0\.1:9123 \(port 9123\)/);
+  assert.equal(r.ran, "http://127.0.0.1:9123");
+  r = await desktopEnd({ os: "darwin" });
+  assert.equal(r.ran, "http://127.0.0.1:8770", "macOS uses open, default port");
+  r = await desktopEnd({ open: 0, env: { DISPLAY: ":0" } });
+  assert.match(r.out, /127\.0\.0\.1:8770 \(port 8770\)/);
+  assert.equal(r.ran, "", "OPEN=0 (--no-open, --no-service, failed doctor) prints only");
+  for (const env of [{}, { DISPLAY: ":0", SSH_CONNECTION: "1 2 3 4" }]) {
+    r = await desktopEnd({ env });
+    assert.equal(r.ran, "", "no screen, or an SSH login: nothing opened");
+    assert.match(r.out, /no browser to open here/);
+  }
+});
+
 // ── tmux is required: ensure_tmux, driven with a PATH that holds only fake binaries ───────────
 // The PATH is ONLY the fake dir, so the machine's real tmux (and brew, apt-get) cannot be found;
 // the function uses nothing but shell builtins and the fakes. No terminal ⇒ never a prompt.

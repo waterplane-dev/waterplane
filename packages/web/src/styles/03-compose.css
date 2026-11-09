@@ -519,17 +519,18 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 .sheet-actions { position: relative; }
 .sheet-actions .snippet-pop { bottom: 100%; }
 .sheet-actions .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
-/* The mark sheet's send row stays ONE line: wrapped, `Send to repo` — the
-   action the sheet exists for — dropped alone onto a second row under a tall
-   gap. Every button shrinks from its content width and its LABEL wraps inside
-   the button instead, so all verbs stay on screen at 320px with every word. */
-.annot-send-bar { flex-wrap: nowrap; gap: var(--sp-6); }
+/* The mark sheet's send row is a GRID of equal cells, at most three across and
+   two rows (AnnSendBar sets --ann-cols and the primary's span). One squeezed
+   line broke labels mid-word at 360px ("Se/nd/all", "te/xt/o/nl/y"); a free
+   wrap dropped `Send & next` alone onto a second row. Labels wrap at SPACES
+   only; the primary fills the last row's leftover cells. */
+.annot-send-bar { display: grid; grid-template-columns: repeat(var(--ann-cols, 3), minmax(0, 1fr)); gap: var(--sp-6); }
 .annot-send-bar .key, .annot-send-bar .send {
-  flex: 1 1 auto; min-width: 0; padding: var(--sp-6) var(--sp-8); white-space: normal;
-  line-height: var(--lh-12); text-align: center; overflow-wrap: anywhere;
+  min-width: 0; padding: var(--sp-6) var(--sp-8); white-space: normal;
+  line-height: var(--lh-12); text-align: center; overflow-wrap: break-word; hyphens: none;
 }
 .annot-send-bar .key svg { flex: 0 0 auto; }
-.annot-send-bar .send { margin-left: 0; }
+.annot-send-bar .send { margin-left: 0; grid-column: span var(--ann-send-span, 1); }
 .search {
   margin: var(--sp-10); padding: var(--sp-12); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-family: inherit;
   background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-10);

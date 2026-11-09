@@ -204,3 +204,4 @@ deploy/public-accept.txt:200:8fec9ae2e7  # this file's own comment on a made-up 
 docs/requirements/connection.md:135:e25b65e0a3  # a short session prefix in a requirement's source line, as images.md
 docs/requirements/connection.md:136:c6c23715a0  # a short session prefix in a requirement's source line
 docs/requirements/connection.md:137:42f99aab32  # a short session prefix in a requirement's source line
+docs/requirements/vault.md:731:de44b6e08b  # a short session prefix in a requirement's source line, as connection.md

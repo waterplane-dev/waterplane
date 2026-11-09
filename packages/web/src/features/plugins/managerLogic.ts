@@ -29,6 +29,10 @@ export interface ManagerPlace {
   open?: (core: CoreApi) => void;
   /** With `open`: the reason it cannot open right now (the contribution's own `available`), else null. */
   unavailable?: (core: CoreApi) => string | null;
+  /** True for a line the plugin's manifest wrote (`places`): its `label` is a DESCRIPTION, not a name in the app. */
+  own?: boolean;
+  /** A derived place's description, borrowed from the manifest line for the same where (an openable one keeps its button). */
+  what?: string;
 }
 
 export interface ManagerRow {
@@ -78,7 +82,8 @@ export function derivePlaces(f: Pick<FeatureManifest, "launcherItems" | "menuIte
   if (!f) return out;
   const avail = (a?: (core: CoreApi) => true | string) => a ? (core: CoreApi) => { const r = a(core); return r === true ? null : r; } : () => null;
   for (const l of f.launcherItems ?? []) out.push(place("Home menu", l.label, { open: (core) => l.open(core), unavailable: avail(l.available) }));
-  if (f.appsDoor) { const d = f.appsDoor; out.push(place("Apps", "", { open: (core) => d.open(core, { kind: "all" }) })); }
+  // The door opens the same sheet a launcher line already opens; a second button for it would be a duplicate.
+  if (f.appsDoor && !(f.launcherItems ?? []).length) { const d = f.appsDoor; out.push(place("Apps", "", { open: (core) => d.open(core, { kind: "all" }) })); }
   for (const m of f.menuItems ?? []) out.push(place("Session menu", m.label));
   for (const v of f.sessionViews ?? []) out.push(place("Session header", v.label));
   for (const t of f.toolbarItems ?? []) out.push(place("Session toolbar", humanId(t.id)));
@@ -96,12 +101,44 @@ export function derivePlaces(f: Pick<FeatureManifest, "launcherItems" | "menuIte
   return out;
 }
 
+/**
+ * How a person reaches each `where`, from the screen they start on. A bare "Repo row" or "Session menu"
+ * told the owner nothing (2026-11-09); the card prints this path, then what is there.
+ * Glyphs are the ones drawn on those buttons (☰ the menu, ⋯ a repo's more-actions).
+ */
+export const WHERE_PATH: Readonly<Record<string, string>> = {
+  "Home menu": "Home screen › ☰ menu",
+  "Apps": "The Downloads, Build and Pull sheets › Apps",
+  "Session menu": "In a session › ☰ menu",
+  "Session header": "In a session › ☰ menu, then its tab in the session header",
+  "Session toolbar": "In a session › toolbar",
+  "Session tab": "Session tabs bar",
+  "Repo menu": "Home screen › a repo's ⋯ menu",
+  "Repo row": "Home screen › a repo's title line",
+  "Repo readings": "Home screen › a repo's ⋯ menu › repo readings",
+  "Settings": "Settings",
+  "Token statistics": "Token statistics",
+  "Usage meter": "Home screen › usage meter in the top bar",
+  "Status line": "Status line at the top of the screen",
+  "Launcher": "Starting a new session › which program runs it",
+  "Annotator": "Image annotator",
+  "Password field": "A password box in a session",
+  "Machine readout": "The desktop's machine readout",
+};
+
+/** Pure: a place as the card prints it — the tap path, then what you find there (may be empty). */
+export function placeLine(p: Pick<ManagerPlace, "where" | "label" | "own" | "what">): { path: string; what: string } {
+  const base = WHERE_PATH[p.where] ?? p.where;
+  if (p.own) return { path: base, what: p.label };
+  return { path: p.label ? `${base} › ${p.label}` : base, what: p.what ?? "" };
+}
+
 const whereOf = (text: string) => (text.includes(":") ? text.slice(0, text.indexOf(":")) : text).trim();
 
 /**
  * Pure: derived places plus the manifest's own. The manifest's words win where it speaks to the same
  * "where" (the derived "Repo menu: perms" is a humanized id; the manifest says "Repo menu: permission rules"),
- * EXCEPT a derived place that opens (a button): that stays and the manifest's line for the same where is dropped.
+ * EXCEPT a derived place that opens (a button): that stays, carrying the manifest's line for the same where as its `what`.
  */
 export function mergePlaces(derived: readonly ManagerPlace[], manifest: readonly string[]): ManagerPlace[] {
   const own: ManagerPlace[] = [];
@@ -110,13 +147,31 @@ export function mergePlaces(derived: readonly ManagerPlace[], manifest: readonly
     const text = raw.trim();
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    own.push({ key: text, where: whereOf(text), label: text.includes(":") ? text.slice(text.indexOf(":") + 1).trim() : "", text });
+    own.push({ key: text, where: whereOf(text), label: text.includes(":") ? text.slice(text.indexOf(":") + 1).trim() : "", text, own: true });
   }
   const openWhere = new Set(derived.filter((d) => d.open).map((d) => d.where));
   const ownWhere = new Set(own.map((o) => o.where));
-  const keep = derived.filter((d) => d.open || !ownWhere.has(d.where));
+  // An openable place keeps its button and takes the manifest's first line for the same where as its description.
+  const keep = derived.filter((d) => d.open || !ownWhere.has(d.where))
+    .map((d) => { const twin = d.open ? own.find((o) => o.where === d.where) : undefined; return twin ? { ...d, what: twin.label } : d; });
   const mine = own.filter((o) => !openWhere.has(o.where));
   return [...keep, ...mine];
+}
+
+/**
+ * Pure: the look of a card tag, so the state reads before the words do (owner 2026-11-09:
+ * Beta orange, Private purple). Maturity runs green (Stable) → orange (Beta) → red (Experimental,
+ * "may not work"); a failed load is red; Installed (from outside this repo) stays neutral.
+ */
+export type TagLook = "ok" | "warn" | "bad" | "private" | "plain";
+export function tagLook(tag: string): TagLook {
+  switch (tag) {
+    case "Stable": return "ok";
+    case "Beta": return "warn";
+    case "Experimental": case "Failed to load": return "bad";
+    case "Private": return "private";
+    default: return "plain";
+  }
 }
 
 /** Pure: unset env names, only when they can be the reason (off, failed, or a status that is not ok). Declared env with a default is not a need. */
@@ -124,11 +179,6 @@ export function needsOf(p: PluginView, state: ManagerState): string[] {
   const unset = Object.entries(p.env ?? {}).filter(([, set]) => !set).map(([n]) => n);
   const trouble = state !== "on" || (p.status != null && p.status.tone !== "ok");
   return trouble ? unset : [];
-}
-
-/** Pure, display only: an absolute path shrinks to its last segment ("/opt/homebrew/bin/gemini" -> "gemini"). */
-export function shortenPaths(text: string): string {
-  return text.replace(/(?<![\w/.:~-])\/(?:[^\s/;,)"'`]+\/)+([^\s/;,)"'`]*[^\s/;,)"'`.])/g, "$1");
 }
 
 /** Pure: the place lines a card prints. A "Settings: x" line goes when the card has the Settings button itself. */

@@ -22,7 +22,7 @@ import {
   CLAUDE_EFFORTS, freeTextNote,
   backendIdOf, backendMark, capReason, effortChoices, hasCap, launchFor, launchModeDropNote,
   HOSTED_DISCLAIMER, ZERO_COST_DISCLAIMER, isZeroCost,
-  backendDrift, backendUnavailable, backendOptionLabel, sideChannelLine,
+  backendDrift, backendUnavailable, backendOptionLabel, sideChannelLine, startableInstead,
   launchAskStart, modelChoices, modelGroups, permModeChoices, launchModeChoices, sessionCants, shouldAskLaunch, showBackendPicker,
   showWhereFilter, windowNote,
   agentBackends, agentTabLabel, isShellBackend, shellBackend, shellQuietLine,
@@ -676,4 +676,18 @@ test("launchModes: a mode launchFor drops for a narrowed set is SAID, never sile
   assert.equal(launchModeDropNote({ backend: "narrow", permissionMode: "plan" }, null), null, "no list: no descriptor to judge by");
   // A mode the backend has no concept of is today's quiet strip, not this sentence.
   assert.equal(launchModeDropNote({ backend: "narrow", permissionMode: "bypassPermissions" }, list), null);
+});
+
+test("startableInstead: the agents that can start when this one cannot — never the shell, never another unavailable one", () => {
+  const caps = { permissionModes: [] };
+  const list = [
+    { id: "claude", label: "Claude Code", caps, models: { aliases: [], ids: [] }, unavailable: "Claude Code is not installed on this desktop." },
+    { id: "copilot", label: "GitHub Copilot", caps, models: { aliases: [], ids: [] } },
+    { id: "codex", label: "OpenAI Codex", caps, models: { aliases: [], ids: [] }, unavailable: "The OpenAI Codex CLI is not installed on this desktop." },
+    { id: "shell", label: "Shell", kind: "shell", caps, models: { aliases: [], ids: [] } },
+  ];
+  assert.deepEqual(startableInstead(list, undefined).map((b) => b.id), ["copilot"], "absent id is claude");
+  assert.deepEqual(startableInstead(list, "codex").map((b) => b.id), ["copilot"]);
+  assert.deepEqual(startableInstead(list, "copilot"), [], "a backend that can start is offered no alternative");
+  assert.deepEqual(startableInstead(null, "claude"), []);
 });

@@ -9,5 +9,8 @@
   "host": "host/index.mts",
   "web": "web/index.ts",
   "optional": true,
-  "autoOn": "androidRepo"
+  "autoOn": "androidRepo",
+  "places": [
+    "Home menu: one card per app to build, download and install"
+  ]
 }

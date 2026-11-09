@@ -406,6 +406,10 @@ local `dist-release/` for testing — the public repo does not exist yet),
 `--node-mirror <url>`, `--bin-dir <dir>`, `--no-service`,
 `--skip-claude-check`, `--with <id>`, `--without <id>`, `--uninstall` (plugins: next section).
 
+The last lines name this desktop's address and port (`http://127.0.0.1:<port>`) and open it in
+the browser when the host was started, doctor passed and there is a screen (not over SSH);
+`--no-open` only prints it.
+
 `--uninstall` runs `waterplane service uninstall`, then removes `runtime/`,
 `versions/`, `current` and the marked wrapper — and nothing else. Settings in
 `~/.config/waterplane`, the host state dir (`~/.local/state/waterplane`) and each repo's own `.waterplane/`, and

@@ -14,7 +14,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathHas } from "./claudebin.js";
-import { claudeBin, type BackendDescriptor } from "./backends/index.js";
+import { claudeBin } from "./backends/claude.js";
+import type { BackendDescriptor } from "./backends/types.js";
 
 export interface InstallerProc { pid: number; cmd: string }
 
@@ -78,7 +79,31 @@ export function binMissingRefusal(
   const inst = facts.installer(bin);
   if (inst) return `${installingWords(label, inst)}. Start the session again once it is done.`;
   if (ownWords) return null;
-  return `${label} is not installed on this desktop — \`${bin}\` is not on the PATH the host runs with. Install it (or fix that PATH), then start the session again.`;
+  const cli = cliName(label);
+  return `The ${cli} is not installed on this desktop — its \`${bin}\` command is not on the PATH the host runs with. Install the ${cli} (or fix that PATH), then start the session again.`;
+}
+
+/**
+ * The program a backend runs, named as a CLI: "GitHub Copilot" alone reads as the editor
+ * extension a person may well have, which is not what is missing. A label that already says
+ * CLI ("Gemini CLI") is kept as it is.
+ */
+export function cliName(label: string): string {
+  const l = label.trim();
+  return /\bCLI$/i.test(l) ? l : `${l} CLI`;
+}
+
+/**
+ * Why `backend` cannot start on this desktop because of its binary — the same sentence a
+ * session start would be refused with — or null when it is there. For the backend list, so
+ * the phone says it before a launch instead of after one. Never throws (a plugin's `bin()` may).
+ */
+export function backendBinUnavailable(backend: Pick<BackendDescriptor, "label" | "bin">, claudeMissing: () => string | null): string | null {
+  try {
+    const bin = backend.bin();
+    if (bin === claudeBin()) return binMissingRefusal(backend.label, bin, undefined, true) ?? claudeMissing();
+    return binMissingRefusal(backend.label, bin);
+  } catch { return null; }
 }
 
 /** `binMissingRefusal` for a backend about to be launched; claude speaks its own "not installed" in `prepare`. */

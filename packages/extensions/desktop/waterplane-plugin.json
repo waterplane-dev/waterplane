@@ -22,5 +22,10 @@
       "note": "Clicks and keys from the phone reach every app on this desktop, with the same trust as typing into a session. Off: the phone can only watch.",
       "default": false
     }
+  ],
+  "places": [
+    "Home menu: \"Desktop\" opens the live view of this computer's screen",
+    "Session header: a Desktop tab with the live view of this computer",
+    "Settings: let the phone click and type on this computer (off by default)"
   ]
 }

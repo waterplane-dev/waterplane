@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { binMissingRefusal, installerIn } from "../dist/binguard.js";
+import { binMissingRefusal, cliName, installerIn } from "../dist/binguard.js";
 
 const PS = [
   "  101 /bin/zsh -l",
@@ -41,6 +41,13 @@ test("a missing binary with an install running says so, for every backend", () =
 
 test("a missing binary with nothing installing: the generic sentence, or the backend's own", () => {
   const facts = { resolves: () => false, installer: () => null };
-  assert.match(binMissingRefusal("othercli", "othercli", facts), /othercli is not installed on this desktop — `othercli` is not on the PATH/);
+  assert.match(binMissingRefusal("GitHub Copilot", "copilot", facts), /^The GitHub Copilot CLI is not installed on this desktop — its `copilot` command is not on the PATH/);
+  assert.match(binMissingRefusal("GitHub Copilot", "copilot", facts), /Install the GitHub Copilot CLI/);
   assert.equal(binMissingRefusal("Claude Code", "claude", facts, true), null, "claude's prepare says its own, richer sentence");
+});
+
+test("a backend is named as the CLI it runs, never twice", () => {
+  assert.equal(cliName("GitHub Copilot"), "GitHub Copilot CLI");
+  assert.equal(cliName("OpenAI Codex"), "OpenAI Codex CLI");
+  assert.equal(cliName("Gemini CLI"), "Gemini CLI");
 });

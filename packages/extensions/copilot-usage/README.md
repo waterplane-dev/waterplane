@@ -1,4 +1,14 @@
-# copilot-usage — Copilot's quota on the usage meter
+# Copilot usage
+
+Shows how much of your monthly GitHub Copilot allowance you have used, in a segment next to your Claude usage. Use it if you run the Copilot program on this desktop and want to see its quota without leaving waterplane.
+
+It needs the Copilot program (`copilot`) installed on the desktop and the GitHub command line (`gh`) signed in. Without them the segment is simply absent. The plugin never shows a guessed number.
+
+## Where to find it
+- **Usage meter** — a "Copilot" segment with the percent of the month used, beside Claude's. It refreshes about every 15 minutes.
+- **Settings, plugin list** — this plugin's line says how many premium Copilot requests VS Code made this month, counted from its own chat logs. It needs no sign-in and shows nothing when VS Code has no Copilot chat logs.
+
+## For developers
 
 A host-only extension (no `web/`): it contributes one **usage probe** (`api.usageProbe`, plugin
 API 1.7) so the phone's usage chip draws a `Copilot 5% mo` segment beside Claude's. The core owns

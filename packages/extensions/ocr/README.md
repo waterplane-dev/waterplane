@@ -1,4 +1,18 @@
-# Text in marks (`ocr`)
+# Text in marks
+
+When you draw a highlight, box or circle on a picture, this reads the words under it, so your note to the agent quotes them, for example box around "Save". Reading happens on your phone, in English and German. Nothing is sent to the desktop or a cloud service.
+
+It is off by default. Switching it on downloads the reader once from your desktop (about 8 MB) and keeps it on the phone, so it works offline.
+
+## Where to find it
+- **Annotator** — after you finish a highlight, box or circle, the words under it are added to your note.
+- **Settings › Tools & diagnostics › text in marks** — shows whether the reader is downloading, ready or failed (with a try again button). After you switch it off, it offers to delete the download.
+
+## Settings
+The on and off switch is in Settings › Tools & diagnostics › plugins.
+
+
+## For developers
 
 Reads the words under a highlight, box or circle you draw on a picture in the annotator, **on the
 phone**, in English and German, so the note to the agent says `box around "…"`. Nothing

@@ -56,6 +56,7 @@ const BRAND_FILE = "packages/shared/src/brand.ts";
 const CURRENT_NAME_ALLOWED = [
   (p) => p === BRAND_FILE,
   (p) => p === "eslint.config.js",                 // the lint rule's words (check 1)
+  (p) => p === "scripts/guards/guards.mjs",         // a guard row names waterplane-plugin.json, a file name, not the brand
   (p) => p.endsWith(".md"),                        // prose, CHANGELOG, skills
   (p) => p === "package.json" || p.endsWith("/package.json"),
   (p) => p === "package-lock.json" || p.endsWith("/package-lock.json"),

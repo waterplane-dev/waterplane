@@ -104,6 +104,8 @@ export interface ApiCtx {
     ((req: { query: Record<string, string>; body: unknown }) => Promise<{ status: number; body: unknown }>) | null;
   /** A plugin's static asset (`manifest.assets`, `PluginRegistry.assetFile`). */
   pluginAsset?(pluginId: string, file: string): import("../plugins/pluginassets.js").AssetResult;
+  /** A plugin's README.md (`PluginRegistry.readme`), for the Plugins screen's "Read more". */
+  pluginReadme?(pluginId: string): import("../plugins/pluginassets.js").ReadmeResult;
   /** A file a plugin offered (`api.offerFile`, `PluginRegistry.offeredFile`); null when gone. */
   pluginFile?(pluginId: string, token: string): { file: string; name: string; size: number; mtime: number; token: string; delivered(): void } | null;
 }

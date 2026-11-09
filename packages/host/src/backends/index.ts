@@ -35,6 +35,11 @@ import { shellBackend } from "./shell.js";
 import type { BackendDescriptor, BackendModels } from "./types.js";
 import { BACKENDS, liveIds, registerCore } from "./registry.js";
 import { derive } from "./derive.js";
+import { homedir } from "node:os";
+import { backendBinUnavailable } from "../binguard.js";
+import { claudeBinResolution } from "../claudebin.js";
+import { claudeMissingRefusal } from "../doctorclaude.js";
+import { env } from "../env.js";
 
 export * from "./types.js";
 export * from "./registry.js";
@@ -299,9 +304,13 @@ export function backendAutoAcceptsTrust(id?: string): boolean {
   return b?.delivery?.autoAcceptsTrust === true;
 }
 
+const binWhy = (b: BackendDescriptor): string | null =>
+  backendBinUnavailable(b, () => claudeMissingRefusal(env("CLAUDE_BIN"), claudeBinResolution(), homedir()));
+
 export function backendInfos(): BackendInfo[] {
   return BACKENDS.map((b): BackendInfo => {
     const m = MODEL_CACHE.get(b.id) ?? { aliases: [], ids: [] };
+    const why = m.unavailable ?? binWhy(b);
     return {
       id: b.id,
       label: b.label,
@@ -323,7 +332,11 @@ export function backendInfos(): BackendInfo[] {
         ...(m.contextWindow && Object.keys(m.contextWindow).length ? { contextWindow: { ...m.contextWindow } } : {}),
         ...(m.overheadTok && Object.keys(m.overheadTok).length ? { overheadTok: { ...m.overheadTok } } : {}),
         ...(m.note ? { note: m.note } : {}) },
-      ...(m.unavailable ? { unavailable: m.unavailable } : {}),
+      // A catalogue's own reason first; else a binary that is not there (copilot never installed,
+      // claude mid-upgrade) — so the phone offers the backends that CAN start instead of queuing
+      // a create the host will refuse. Computed per list, never cached: a hello or "Check again"
+      // sees an install that finished a minute ago.
+      ...(why ? { unavailable: why } : {}),
       ...(b.experimental ? { experimental: true as const } : {}),
       // The versions a plugin was measured on, the running one, and the drift sentence (R6).
       // Absent for a backend that declares no `measured` — every core backend (the pin holds).

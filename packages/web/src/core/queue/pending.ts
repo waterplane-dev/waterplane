@@ -15,7 +15,7 @@
  * behind a `session.create` has always gone (`queueSessionPrompt`).
  */
 import { useMemo, useRef } from "react";
-import { ownedPendingCreates, type SessionInfo } from "@waterplane/shared";
+import { ownedPendingCreates, type LaunchOpts, type SessionInfo } from "@waterplane/shared";
 import { isCreateOp, loadDraft, newAckId, saveDraft, type OutboxEntry } from "../../outbox";
 import { noteSendFailed } from "../../link";
 import { showToast } from "../../toast";
@@ -154,11 +154,11 @@ export function pendingFns(c: QueueCtx): PendingFns {
    * carried forward into the new entries verbatim; nothing is lost, and two
    * copies of one prompt in Activity is how a retry runs twice.
    */
-  function retryPendingCreate(): void {
+  function retryPendingCreate(backend?: string): void {
     const e = pendingEntry;
     const op = e?.op;
     if (!e || e.status !== "failed" || op?.t !== "session.create") return;
-    track("action:session.pending.retry");
+    track(backend ? "action:session.pending.instead" : "action:session.pending.retry");
     const behind = outboxRef.current
       .filter((x) => x.mode === "input" && x.createAck === e.ackId && x.status === "failed")
       .sort((a, b) => a.ts - b.ts);
@@ -166,6 +166,9 @@ export function pendingFns(c: QueueCtx): PendingFns {
     writeOutbox(outboxRef.current.filter((x) => !dead.has(x.ackId)));
     const createAck = newAckId();
     const { ackId: _drop, ...payload } = op;
+    // "Start with <backend> instead": the same open under the program the person picked. Only the
+    // backend rides — a model, an effort or a mode chosen for the refused one is not this one's.
+    if (backend) (payload as { launch?: LaunchOpts }).launch = { backend };
     queueOp(payload as DurableOp, e.sessionId, e.text, { cwd: e.cwd, focus: true, ackId: createAck });
     for (const x of behind) queueSessionPrompt(x.cwd, x.text, createAck, x.kind === "command" ? "command" : "prompt");
     enterPending(createAck);

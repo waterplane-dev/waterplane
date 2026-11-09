@@ -5,6 +5,25 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.24
+
+Folds 0.1.23, which was tagged but never released.
+
+### New
+
+- **The installer ends with this desktop's URL and port and opens it in the browser.** It opens only when the host started, the doctor check passed and a screen is available, never over SSH. Pass `--no-open` to skip it.
+- **A new session on an agent whose CLI is missing opens the Start sheet.** It lists "Use <agent>" for every agent that can start on this desktop. The failed-start card offers the same choice and sends your words along to the agent you pick. The backend list marks a missing CLI as unavailable, so the phone knows before you launch.
+- **Plugin cards use coloured tags.** Stable is green, Beta orange, Experimental and failed red, Private purple, and Installed neutral.
+- **Each place on a plugin card is a tap path plus what is there.** For example "Home screen › a repo's ⋯ menu". Only a place that really opens has an Open button.
+- **An "About" fold on each plugin shows its README.** The READMEs now open with what the plugin does and where to find it, in plain words.
+- **The Apps door is no longer listed as a second place when a launcher line opens the same sheet.** Its path names the Downloads, Build and Pull sheets, and the repo readings path uses the button's own name.
+
+### Fixed
+
+- **"GitHub Copilot is not installed" no longer reads like the editor extension.** The message now says "The GitHub Copilot CLI is not installed" and names the `copilot` command that is missing from the PATH.
+- **The mark & send row no longer breaks labels mid-word.** The six actions form a grid of whole words, at most three across, and the primary button fills the gap in the last row.
+- **Plugin status lines are no longer shortened.** They print as the plugin wrote them, so a path like `/opt/.../copilot` is no longer cut to "copilot".
+
 ## 0.1.22
 
 Folds 0.1.21, which was tagged but never released.

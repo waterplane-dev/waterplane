@@ -31,7 +31,7 @@ import { askConfirm } from "../../Confirm.tsx";
 import { CantInline } from "../../Unavailable.tsx";
 import { noteSynced } from "../../link.ts";
 import { launchLabel, resumeIdOf } from "../../sessionFacts.tsx";
-import { backendIdOf, backendMark, isShellBackend, backendUnavailable, capReason, hasCap, launchFor, launchModeDropNote, shellBackend, shouldAskLaunch } from "../../backendCaps.ts";
+import { backendIdOf, backendMark, isShellBackend, backendUnavailable, capReason, hasCap, launchFor, launchModeDropNote, shellBackend, shouldAskLaunch, startableInstead } from "../../backendCaps.ts";
 import { needsHostedAck, readHostedAck } from "../../hostedAck.ts";
 import { showToast } from "../../toast.ts";
 import { track } from "../../usage.ts";
@@ -259,12 +259,16 @@ export function useLaunch(deps: LaunchDeps) {
     // goes through (the ask's own sheet shows the same sentence in place of its
     // Start button). Nothing is queued, and a caller holding words gets them back.
     const dead = backendUnavailable(backendsRef.current, opts.launch?.backend);
-    if (dead && !shouldAskLaunch(launchAskRef.current, !!opts.resume, !!opts.override)) {
+    // When another agent CAN start here (claude not installed, copilot is), the ask is
+    // opened even with the launch ask off: it names the backends that can, one tap each. Never
+    // for a resume: a claude conversation does not reopen under another program.
+    const offerInstead = !!dead && !opts.resume && startableInstead(backendsRef.current, opts.launch?.backend).length > 0;
+    if (dead && !offerInstead && !shouldAskLaunch(launchAskRef.current, !!opts.resume, !!opts.override)) {
       showToast(`Not started — ${dead}`);
       opts.onCancel?.();
       return true;
     }
-    if (shouldAskLaunch(launchAskRef.current, !!opts.resume, !!opts.override)) {
+    if (offerInstead || shouldAskLaunch(launchAskRef.current, !!opts.resume, !!opts.override)) {
       // The ANSWER is what gets gate-checked, not the defaults the sheet
       // started from — the whole point of that sheet is that they differ. The
       // wrapper matters most for `openRepo`, whose `run` goes to

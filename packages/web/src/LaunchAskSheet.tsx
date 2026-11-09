@@ -43,7 +43,7 @@ import { LaunchPicker, launchOf, pickHasWheel } from "./LaunchPicker";
 import { BudgetField } from "./BudgetField";
 import { budgetChipWords, capOnBackend, keptOnEdit, launchSpendUnit, launchWindowsOff, type KeptCap } from "./budgetInput";
 import { CantInline } from "./Unavailable";
-import { backendUnavailable, launchAskStart, showBackendPicker, type BackendList } from "./backendCaps";
+import { backendUnavailable, launchAskStart, showBackendPicker, startableInstead, type BackendList } from "./backendCaps";
 import { LS, lsJson, lsSetJson } from "./storage";
 import { Hint } from "./kit/Hint";
 import { SetWarn } from "./SettingsKit";
@@ -112,6 +112,8 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
   // reachable): it stays listed, and the sentence REPLACES the Start button —
   // a launch that would fail is not offered, and the reason is on screen.
   const blocked = backendUnavailable(backends, backend);
+  // …and the agents that CAN start here, offered by name rather than left for the person to find in the picker.
+  const instead = startableInstead(backends, backend);
   return (
     // One question, one verb: Ctrl/Cmd+Return presses Start (`primaryKey.ts`).
     <div className="sheet" data-primary-key="">
@@ -157,6 +159,12 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
       {blocked ? (
         <>
           <div className="act-cants"><CantInline>{blocked}</CantInline></div>
+          {instead.length > 0 && <Hint>Start it with another program this desktop has instead?</Hint>}
+          {instead.map((b) => (
+            <button key={b.id} className="send" onClick={() => { pickBackend(b.id); setModel(undefined); setEffort(undefined); }}>
+              <Play size={14} /> Use {b.label}
+            </button>
+          ))}
           {onRecheck && (
             <button className="send" onClick={() => { setAsked(true); onRecheck(); }}>
               <RefreshCw size={14} /> Check again

@@ -13,12 +13,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
-  List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
+  List, Maximize2, Minimize2, Play, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
-import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine } from "../../backendCaps";
+import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine, startableInstead } from "../../backendCaps";
 import { ago } from "../../format";
 import { LOGIN_CMD } from "../../loginCmd";
 import { BlockBar } from "./BlockBar";
@@ -646,6 +646,10 @@ export function TermArea(p: TermAreaProps): ReactNode {
                     // auto-send off, …). "warming up the CLI" over an open the
                     // queue had not even sent read as a session that was running.
                     const held = !onWire && status === "open" && pendingEntry ? q.blocked.get(pendingEntry.ackId) : undefined;
+                    // Refused because its program cannot start here (not installed): name the agents
+                    // that can, one tap each. A NEW session only — a resume belongs to its own program.
+                    const failedOp = failed && pendingEntry?.op?.t === "session.create" ? pendingEntry.op : null;
+                    const instead = failedOp && !failedOp.resume ? startableInstead(backends, failedOp.launch?.backend) : [];
                     return (
                     <>
                       {failed ? <AlertTriangle size={16} /> : <Loader2 size={16} className="spin" />}
@@ -664,13 +668,20 @@ export function TermArea(p: TermAreaProps): ReactNode {
                               : <>offline — the session will be created once you are back online</>}
                       </span>
                       <span className="term-overlay-hint">
-                        {failed
+                        {failed && instead.length > 0
+                          ? `Start it with another program this desktop has instead? Anything typed here goes with it.`
+                          : failed
                           ? `Anything typed here is still in the queue and can be re-aimed from ${SHEET.activity}.`
                           : "Write, chain and attach now — it all goes into this session the moment it opens."}
                       </span>
                       <span className="term-overlay-acts">
+                        {instead.map((b) => (
+                          <Button key={b.id} title={`open this session with ${b.label} instead`} onClick={() => retryPendingCreate(b.id)}>
+                            <Play size={14} /> use {b.label}
+                          </Button>
+                        ))}
                         {failed && (
-                          <Button title="try this open again" onClick={retryPendingCreate}>
+                          <Button title="try this open again" onClick={() => retryPendingCreate()}>
                             <RotateCw size={14} /> try again
                           </Button>
                         )}

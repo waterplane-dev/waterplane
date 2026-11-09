@@ -1,3 +1,13 @@
+# Token statistics
+
+Shows every token this desktop's sessions have used. See it by day, by model and by repo, and see where your usage limits stand now and how they looked before. Use it to find out what costs the most and when you are close to a limit. Other tools such as Copilot or a local model get their own tab and are never added into Claude's numbers. It needs nothing extra.
+
+## Where to find it
+- **Usage meter** — tap the usage chip in the top bar of the home screen. It opens the statistics.
+- **Settings** — Tools has a "token statistics" row that opens the same screen.
+
+## For developers
+
 # token-stats — the token statistics screen
 
 The all-sessions token ledger sheet: every token this desktop has used, per day, by model and by

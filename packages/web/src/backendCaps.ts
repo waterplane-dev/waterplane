@@ -741,6 +741,18 @@ export function backendUnavailable(list: BackendList, id?: string): string | nul
   return typeof u === "string" && u.trim() ? u.trim() : null;
 }
 
+/**
+ * The agents that CAN start on this desktop when `id` cannot: every agent backend but `id`
+ * that the host names no reason against. What the phone offers in place of a refused start
+ * ("Claude Code is not installed — start with GitHub Copilot instead?"). Empty when `id`
+ * itself can start, or when nothing else can — never a guess about a backend not listed.
+ */
+export function startableInstead(list: BackendList, id?: string): BackendInfo[] {
+  if (!backendUnavailable(list, id)) return [];
+  const self = backendInfo(list, id)?.id;
+  return (agentBackends(list) ?? []).filter((b) => b.id !== self && !backendUnavailable(list, b.id));
+}
+
 /** The host's drift sentence for this backend (BackendInfo.measured.drift), or null. Shown verbatim; never a refusal. */
 export function backendDrift(list: BackendList, id?: string): string | null {
   const d = backendInfo(list, id)?.measured?.drift;

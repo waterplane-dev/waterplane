@@ -388,6 +388,7 @@ export function createHttp(ctx: ServerCtx) {
         pluginHook: (id, payload) => ctx.plugins.hook(id, payload),
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
         pluginAsset: (id, file) => ctx.plugins.assetFile(id, file),
+        pluginReadme: (id) => ctx.plugins.readme(id),
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
       });

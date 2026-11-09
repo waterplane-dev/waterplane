@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  MANAGER_FILTERS, cutRows, derivePlaces, filterCounts, filterMatches, filterNote, firstSentence, managerRow, managerRows, cardPlaces, shortenPaths,
+  MANAGER_FILTERS, cutRows, derivePlaces, filterCounts, filterMatches, filterNote, firstSentence, managerRow, managerRows, cardPlaces, placeLine, tagLook,
 } from "./managerLogic.ts";
 import { scopeRowIds } from "../../settingsIndex.ts";
 
@@ -37,7 +37,7 @@ const asList = Object.values(FEATURES);
 
 test("places are derived with their own labels", () => {
   const text = (id) => derivePlaces(FEATURES[id]).map((p) => p.text);
-  assert.deepEqual(text("android-apps"), ["Home menu: android apps", "Apps"]);
+  assert.deepEqual(text("android-apps"), ["Home menu: android apps"], "the door is not a second place when a launcher line opens the sheet");
   assert.deepEqual(text("desktop"), ["Home menu: Desktop", "Session header: Desktop"]);
   assert.deepEqual(text("diskusage"), ["Settings: disk space"]);
   assert.deepEqual(text("links"), ["Home menu: Links", "Session menu: links", "Repo row: links count"]);
@@ -52,7 +52,7 @@ test("places are derived with their own labels", () => {
 
 test("only a place that needs no session carries an open (launcher item, Apps door)", () => {
   const withOpen = (id) => derivePlaces(FEATURES[id]).filter((p) => p.open).map((p) => p.text);
-  assert.deepEqual(withOpen("android-apps"), ["Home menu: android apps", "Apps"]);
+  assert.deepEqual(withOpen("android-apps"), ["Home menu: android apps"]);
   assert.deepEqual(withOpen("links"), ["Home menu: Links"]);
   assert.deepEqual(withOpen("permissions"), []);
   const d = derivePlaces(FEATURES.desktop).find((p) => p.open);
@@ -78,6 +78,10 @@ test("a manifest place wins over a derived one for the same where; a derived but
   const k = managerRow(view("links", { manifest: { places: ["Home menu: Links shortcut", "Repo row: link counts"] } }), FEATURES.links);
   assert.deepEqual(k.places.map((p) => p.text), ["Home menu: Links", "Session menu: links", "Repo row: link counts"], "the Home-menu button is kept, its manifest twin dropped");
   assert.ok(k.places[0].open);
+  assert.equal(k.places[0].what, "Links shortcut", "the button borrows its twin's words");
+  assert.deepEqual(placeLine(k.places[0]), { path: "Home screen › ☰ menu › Links", what: "Links shortcut" });
+  assert.deepEqual(placeLine(k.places[2]), { path: "Home screen › a repo's title line", what: "link counts" }, "a manifest line's label is a description");
+  assert.deepEqual(placeLine({ where: "Somewhere new", label: "", own: true }), { path: "Somewhere new", what: "" }, "an unknown where prints as itself");
 });
 
 test("row: summary falls back to the first sentence; tags in print order", () => {
@@ -166,13 +170,12 @@ test("a fixed builtin's reason reads after Unavailable's 'no <label> — '", () 
   assert.equal(`no switch — ${r.fixedWhy}.`, "no switch — Copilot is built in and always on.");
 });
 
-test("status paths shrink to their last segment, display only", () => {
-  assert.equal(shortenPaths("gemini at /opt/homebrew/bin/gemini; its home is /var/folders/ab/cd/T/x."), "gemini at gemini; its home is x.");
-  assert.equal(shortenPaths("no path here, a/b stays, 1/2"), "no path here, a/b stays, 1/2");
-});
-
 test("a Settings place line goes when the card has the Settings button", () => {
   const places = [{ key: "a", where: "Settings", label: "x", text: "Settings: x" }, { key: "b", where: "Apps", label: "", text: "Apps" }];
   assert.deepEqual(cardPlaces({ places, hasSettings: true }).map((p) => p.where), ["Apps"]);
   assert.equal(cardPlaces({ places, hasSettings: false }).length, 2);
+});
+
+test("tag looks: maturity green to red, Private purple, the rest neutral", () => {
+  assert.deepEqual(["Stable", "Beta", "Experimental", "Failed to load", "Private", "Installed"].map(tagLook), ["ok", "warn", "bad", "bad", "private", "plain"]);
 });

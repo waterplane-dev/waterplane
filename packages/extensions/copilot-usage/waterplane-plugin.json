@@ -6,7 +6,12 @@
   "description": "GitHub Copilot's monthly quota beside Claude's on the usage meter, read with gh's own sign-in (gh api /copilot_internal/user). Only on a desktop with copilot on PATH; nothing is read, and nothing drawn, otherwise. Its status line counts this month's premium requests from VS Code's own Copilot Chat logs on any desktop: files only, no sign-in.",
   "summary": "Shows how much of your monthly GitHub Copilot allowance you have used, next to your Claude usage.",
   "maturity": "preview",
-  "places": ["Usage meter: a Copilot line", "Status line: Copilot requests this month"],
+  "places": [
+    "Usage meter: a \"Copilot\" segment with the percent of your monthly allowance used",
+    "Settings: how many Copilot requests VS Code made this month"
+  ],
   "host": "host/index.mts",
-  "env": ["WATERPLANE_GH_BIN"]
+  "env": [
+    "WATERPLANE_GH_BIN"
+  ]
 }

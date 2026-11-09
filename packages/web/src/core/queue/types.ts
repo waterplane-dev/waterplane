@@ -155,7 +155,8 @@ export interface PendingFns {
   enterOldestPending(cwd: string): void;
   /** `+ later`: the session screen for words whose session starts when their backlog item runs. */
   enterLater(cwd: string): void;
-  retryPendingCreate(): void;
+  /** `backend`: open it under that backend instead ("start with … instead"). */
+  retryPendingCreate(backend?: string): void;
   adoptPendingSession(createAck: string, sessionId: string): void;
   queueSessionPrompt(cwd: string, text: string, createAck: string, kind?: "prompt" | "command"): void;
   holdForLaunch(lane: string, createAck?: string): void;

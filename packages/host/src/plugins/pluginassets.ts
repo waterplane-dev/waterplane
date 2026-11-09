@@ -6,7 +6,7 @@
  * in words. The name is flat (`ASSET_NAME`); the assets dir and the file are both realpath-resolved
  * and the file must stay under the dir, so a symlink out is a 404, never a read.
  */
-import { realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { extname, isAbsolute, join, sep } from "node:path";
 
 /** A flat file name: no slash, no leading dot, no `..` run can matter without a separator. */
@@ -39,5 +39,31 @@ export function resolveAsset(pluginName: string, pluginDir: string, assets: stri
     return { ok: true, file, size: st.size, mtimeMs: st.mtimeMs, mime: assetMime(name) };
   } catch {
     return missing(`${pluginName} has no file by that name`);
+  }
+}
+
+/** A README is text for a phone screen; past this it is not a README a person reads there. */
+export const README_MAX = 256 * 1024;
+
+export type ReadmeResult = { ok: true; text: string } | { ok: false; status: 404 | 413; error: string };
+
+/**
+ * The extension's own `README.md`, for the Plugins screen's "Read more". Same containment as an
+ * asset: the file is realpath-resolved and must sit directly in the (realpath) plugin folder, so a
+ * symlink out is a 404, never a read. Served whether or not the plugin is running — reading about a
+ * plugin that is off is how a person decides to turn it on.
+ */
+export function readReadme(pluginName: string, pluginDir: string): ReadmeResult {
+  const missing: ReadmeResult = { ok: false, status: 404, error: `${pluginName} has no README` };
+  try {
+    const dir = realpathSync(pluginDir);
+    const file = realpathSync(join(dir, "README.md"));
+    if (!file.startsWith(dir + sep)) return missing;
+    const st = statSync(file);
+    if (!st.isFile()) return missing;
+    if (st.size > README_MAX) return { ok: false, status: 413, error: `${pluginName}'s README is too long to show here` };
+    return { ok: true, text: readFileSync(file, "utf8") };
+  } catch {
+    return missing;
   }
 }

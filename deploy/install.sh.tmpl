@@ -88,6 +88,7 @@ usage: install.sh [options]
   --node-mirror <url>  where to download Node from (default $NODE_MIRROR_DEFAULT)
   --bin-dir <dir>      where to put the $SLUG command (default ~/.local/bin)
   --no-service         do not install the login service (start it with: $SLUG start)
+  --no-open            do not open the host in this desktop's browser at the end
   --skip-claude-check  do not explain how to get claude (Claude Code) when it is
                        missing; the install continues without it either way
   --with <id>          also install this plugin (repeatable) from the catalogue below
@@ -701,6 +702,42 @@ finish_https() {
   [ -z "$URL" ] || say "Then open on your phone: $URL"
 }
 
+# browser_opener: prints the command that opens a URL in this desktop's browser, or
+# nothing when there is no screen to open it on (an SSH login, a headless Linux).
+browser_opener() {
+  [ -z "${SSH_CONNECTION:-}${SSH_TTY:-}" ] || return 0
+  if [ "$OS" = darwin ]; then has open && echo open; return 0; fi
+  if [ "${IS_WSL:-0}" = 1 ]; then
+    if has wslview; then echo wslview; elif has cmd.exe; then echo 'cmd.exe /c start ""'; fi
+    return 0
+  fi
+  [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || return 0
+  has xdg-open && echo xdg-open
+}
+
+# finish_desktop OPEN: the address and port on THIS desktop (loopback is always bound,
+# always trusted, and a secure context in every browser), then — when OPEN is 1 and
+# there is a screen — opens it, after giving a just-started host a few seconds to answer.
+finish_desktop() {
+  PORT="$(host_port)"
+  LOCAL_URL="http://127.0.0.1:$PORT"
+  say "on this desktop: $LOCAL_URL (port $PORT)"
+  [ "${1:-0}" = 1 ] || return 0
+  OPENER="$(browser_opener)"
+  if [ -z "$OPENER" ]; then
+    say "no browser to open here (no screen, or an SSH login); open the address above on this desktop."
+    return 0
+  fi
+  if has curl; then
+    i=0
+    while [ "$i" -lt 20 ] && ! curl -fsS -o /dev/null --max-time 1 "$LOCAL_URL/" 2>/dev/null; do
+      sleep 0.5; i=$((i + 1))
+    done
+  fi
+  if eval "$OPENER \"\$LOCAL_URL\"" >/dev/null 2>&1; then say "opened it in your browser."
+  else warn "could not open a browser ($OPENER); open the address above yourself."; fi
+}
+
 # ── uninstall ────────────────────────────────────────────────────────────
 
 uninstall() {
@@ -720,7 +757,7 @@ uninstall() {
 
 main() {
   WITH_IDS=''; WITHOUT_IDS=''
-  VERSION="$DEFAULT_VERSION"; FROM=''; NO_SERVICE=0; SKIP_CLAUDE=0; UNINSTALL=0
+  VERSION="$DEFAULT_VERSION"; FROM=''; NO_SERVICE=0; NO_OPEN=0; SKIP_CLAUDE=0; UNINSTALL=0
   NODE_MIRROR="$NODE_MIRROR_DEFAULT"; BIN_DIR="$HOME/.local/bin"; VERSION_GIVEN=0
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -731,6 +768,7 @@ main() {
       --node-mirror) [ $# -ge 2 ] || die "--node-mirror needs a URL"; NODE_MIRROR="${2%/}"; shift 2 ;;
       --bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a directory"; BIN_DIR="${2%/}"; shift 2 ;;
       --no-service) NO_SERVICE=1; shift ;;
+      --no-open) NO_OPEN=1; shift ;;
       --skip-claude-check) SKIP_CLAUDE=1; shift ;;
       --with) [ $# -ge 2 ] || die "--with needs a plugin id"; WITH_IDS="$WITH_IDS $2"; shift 2 ;;
       --with=*) WITH_IDS="$WITH_IDS ${1#*=}"; shift ;;
@@ -810,6 +848,11 @@ main() {
   if ! finish_https "$LEAD" && [ "$DOCTOR_OK" = 1 ]; then
     say "done ($OUTCOME) — but Tailscale is not on this machine, so your phone cannot reach the host yet: $TAILSCALE_DL"
   fi
+  # The desktop's own address and port, and the browser opened on it — only when the
+  # host was started and doctor passed, so the page that opens is a working one.
+  OPEN_IT=0
+  [ "$NO_OPEN" = 1 ] || [ "$NO_SERVICE" = 1 ] || [ "$DOCTOR_OK" = 0 ] || OPEN_IT=1
+  finish_desktop "$OPEN_IT"
   [ "$DOCTOR_OK" = 1 ] || warn "$OUTCOME, but doctor reported problems (see above) — fix those, then run: $SLUG doctor"
 }
 

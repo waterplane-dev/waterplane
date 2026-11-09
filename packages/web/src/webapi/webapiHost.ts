@@ -145,6 +145,12 @@ export const hostApi = {
   /** One file of an extension's `assets` folder (`GET /api/plugin/<id>/asset/<file>`), behind the
    *  same origin + token gates as every call here; the RESPONSE, so the caller can stream it with
    *  progress (`sdk/extAssets.ts`). The fuse covers the headers; the body is the caller's to time. */
+  /** A plugin's README.md for the Plugins screen's About fold; a refusal is the host's own sentence. */
+  pluginReadme: async (id: string): Promise<{ text: string } | { error: string }> => {
+    const r = await nfetch(`/api/plugin-readme/${encodeURIComponent(id)}`, { cache: "no-store" }, 15_000);
+    const b = await r.json().catch(() => ({})) as { text?: unknown; error?: unknown };
+    return r.ok && typeof b.text === "string" ? { text: b.text } : { error: typeof b.error === "string" ? b.error : `the desktop did not send it (${r.status})` };
+  },
   pluginAsset: (id: string, file: string, signal?: AbortSignal) =>
     nfetch(`/api/plugin/${encodeURIComponent(id)}/asset/${encodeURIComponent(file)}`, { signal, cache: "no-store" }, 30_000),
 };

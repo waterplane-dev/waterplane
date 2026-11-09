@@ -9,5 +9,9 @@
   "host": "host/index.mts",
   "web": "web/index.ts",
   "assets": "assets",
-  "optional": true
+  "optional": true,
+  "places": [
+    "Annotator: the words under a highlight, box or circle go into your note",
+    "Settings: whether the text reader is downloading, ready or failed"
+  ]
 }

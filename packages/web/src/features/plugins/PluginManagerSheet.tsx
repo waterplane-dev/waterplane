@@ -8,17 +8,19 @@
  * open ON TOP of the manager (Back returns to it); the Updates door closes it first, as before.
  */
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, KeyRound, Puzzle, Settings as SettingsIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronRight, Download, KeyRound, Puzzle, Settings as SettingsIcon } from "lucide-react";
 import { useCore, useStore, featureManifests } from "../../sdk";
 import type { CoreApi } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { Unavailable } from "../../Unavailable";
-import { FilterBar, FilterChip, RowSub, chipText } from "../../kit";
+import { FilterBar, FilterChip, RowSub, Tag, chipText } from "../../kit";
 import { SetNote, SetSwitch, SetWarn } from "../../SettingsKit";
 import { openPluginSettings } from "../../settingsFocus";
+import { api, copyText } from "../../api";
+import { Markdown } from "../../Markdown";
 import { enablePlugin } from "./actions";
-import { FILTER_LABEL, MANAGER_FILTERS, cardPlaces, cutRows, filterCounts, filterNote, managerRows, shortenPaths } from "./managerLogic";
+import { FILTER_LABEL, MANAGER_FILTERS, cardPlaces, cutRows, filterCounts, filterNote, managerRows, placeLine, tagLook } from "./managerLogic";
 import type { ManagerFilter, ManagerPlace, ManagerRow } from "./managerLogic";
 import { allPlugins, errors } from "./store";
 import { openUpdates } from "./updatesActions";
@@ -68,7 +70,7 @@ function PluginCard({ r, over, core }: { r: ManagerRow; over: (then: () => void)
     <div className="plugin-sec plugin-card">
       <div className="plugin-head">
         <b>{r.name}</b>
-        {r.tags.length > 0 && <RowSub>{r.tags.join(" · ")}</RowSub>}
+        {r.tags.map((t) => <Tag key={t} className={`plugin-tag plugin-tag-${tagLook(t)}`}>{t}</Tag>)}
       </div>
       {r.summary && <SetNote>{r.summary}</SetNote>}
       {r.canSwitch
@@ -77,17 +79,15 @@ function PluginCard({ r, over, core }: { r: ManagerRow; over: (then: () => void)
       {err && <SetWarn icon={AlertTriangle}>{err}</SetWarn>}
       {r.error && <SetWarn icon={AlertTriangle}>{r.error}</SetWarn>}
       {r.status && r.state === "on" && (
-        <SetWarn tone={r.status.tone === "bad" ? "bad" : "plain"} icon={r.status.tone === "ok" ? CheckCircle2 : AlertTriangle}>{shortenPaths(r.status.text)}</SetWarn>
+        <SetWarn tone={r.status.tone === "bad" ? "bad" : "plain"} icon={r.status.tone === "ok" ? CheckCircle2 : AlertTriangle}>{r.status.text}</SetWarn>
       )}
       {r.needs.length > 0 && (
         <SetNote><KeyRound size={12} /> Needs {r.needs.map((n, i) => <span key={n}>{i > 0 && ", "}<code>{n}</code></span>)} set on the desktop.</SetNote>
       )}
       {places.length > 0 && (
         <div>
-          <div className="plugin-mgr-h">Where to find it</div>
-          <div className="set-doors">
-            {places.map((p) => <Place key={p.key} p={p} over={over} core={core} />)}
-          </div>
+          <div className="plugin-mgr-h">Where it is in the app</div>
+          {places.map((p) => <Place key={p.key} p={p} over={over} core={core} />)}
         </div>
       )}
       {r.hasSettings && (
@@ -97,13 +97,51 @@ function PluginCard({ r, over, core }: { r: ManagerRow; over: (then: () => void)
           </button>
         </div>
       )}
+      <ReadmeFold id={r.id} name={r.name} />
     </div>
   );
 }
 
+/**
+ * The plugin's own README.md, folded: what it does and where it is, in its own words, fetched only on
+ * the tap (`GET /api/plugin-readme/<id>`). A missing README is the host's sentence, never a blank.
+ */
+function ReadmeFold({ id, name }: { id: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const [got, setGot] = useState<{ text: string } | { error: string } | null>(null);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && (got === null || "error" in got)) {
+      setGot(null);
+      api.pluginReadme(id).then(setGot, () => setGot({ error: "the desktop did not answer" }));
+    }
+  };
+  return (
+    <div className="plugin-readme">
+      <button className="link-btn" aria-expanded={open} onClick={toggle}>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<BookOpen size={14} /> About {name}
+      </button>
+      {open && (got === null
+        ? <SetNote>Loading {name}'s README…</SetNote>
+        : "error" in got
+          ? <SetWarn icon={AlertTriangle}>{got.error}</SetWarn>
+          : <div className="plugin-readme-body"><Markdown src={got.text} q="" onCopy={(t) => void copyText(t)} /></div>)}
+    </div>
+  );
+}
+
+/** One place: the tap path from a screen the person knows, what is there, and an Open button only where it really opens. */
 function Place({ p, over, core }: { p: ManagerPlace; over: (then: () => void) => void; core: CoreApi }) {
-  if (!p.open) return <RowSub>{p.text}</RowSub>;
-  const why = p.unavailable?.(core) ?? null;
-  if (why) return <RowSub>{p.text} — {why}</RowSub>;
-  return <button className="set-door" title={`Open ${p.text}`} onClick={() => over(() => p.open!(core))}>{p.text}</button>;
+  const { path, what } = placeLine(p);
+  const why = p.open ? (p.unavailable?.(core) ?? null) : null;
+  return (
+    <div className="plugin-place">
+      <div className="plugin-place-path">{path}</div>
+      {what && <RowSub>{what}</RowSub>}
+      {p.open && (why
+        ? <RowSub>Cannot open it from here: {why}</RowSub>
+        : <div className="set-doors"><button className="set-door" title={`Open ${path}`} onClick={() => over(() => p.open!(core))}>Open</button></div>)}
+    </div>
+  );
 }

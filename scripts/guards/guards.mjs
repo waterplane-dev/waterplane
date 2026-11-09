@@ -82,6 +82,7 @@ export const GUARDS = [
   { test: "importcycles", tier: "commit", paths: ["packages/**"] },
   { test: "spenderssplit", tier: "commit", paths: HOST },
   { test: "hostsplitpins", tier: "commit", paths: HOST },
+  { test: "pluginmanifests", tier: "commit", paths: ["packages/extensions/*/waterplane-plugin.json", "packages/extensions/*/README.md", "packages/shared/src/plugin/**"] },
   { test: "plugindocs", tier: "commit", paths: ["packages/shared/src/plugin.ts", "packages/shared/src/plugin/**", "docs/plugins-api.md", "deploy/public-allowlist.txt", "scripts/gen-plugin-docs.mjs"] },
   { test: "extensionboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "featureboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },

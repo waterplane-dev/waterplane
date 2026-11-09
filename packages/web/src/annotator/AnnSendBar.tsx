@@ -7,37 +7,37 @@
  * A region: it draws the model and owns no hook (a child's effects run before its parent's).
  */
 
+import type { CSSProperties } from "react";
 import { Hourglass, ScanText } from "lucide-react";
 import { UploadScalePicker } from "../UploadScalePicker";
 import type { AnnModel } from "./useAnnotator";
 import { Button } from "../kit/Button";
+import { annSendGrid } from "./annSendGrid";
 
 export function AnnSendBar({ m }: { m: AnnModel }) {
   const { busy, send, sendAll, readAll } = m;
   const { index, total, onSkip, onSendAll, onDispatch, onText } = m.props;
+  const many = !!(onSendAll && total && total > 1);
+  const single = !!(onDispatch && (!total || total <= 1));
+  const n = (onSkip ? 1 : 0) + (many ? 3 : 0) + (single ? 2 : 0) + (onText ? 1 : 0) + 1;
+  const { cols, span } = annSendGrid(n); // `n` = exactly the buttons below
   return (
     <>
       {/* Last stop before the bytes go: shrink more (or less) than auto would. Sticky per device — see
           uploadScale.ts. data-primary-key: Ctrl/Cmd+Return sends this picture, then the prompt. */}
       <UploadScalePicker compact />
-      <div className="sheet-actions annot-send-bar" data-primary-key="">
+      <div className="sheet-actions annot-send-bar" data-primary-key=""
+        style={{ "--ann-cols": cols, "--ann-send-span": span } as CSSProperties}>
         {onSkip && <Button onClick={onSkip} disabled={busy}>skip</Button>}
-        {onSendAll && total && total > 1 && (
+        {many && (
           <>
             <Button onClick={() => sendAll("none")} disabled={busy} title="send this + every remaining image as-is">Send all</Button>
             <Button onClick={() => sendAll("run")} disabled={busy} title="send all, then submit once uploads finish">Send all + submit</Button>
-            {/* **One WHEN, one name — here too.** This was `Send all + queue`
-                with a `ListPlus`, which is the composer's RETIRED third mode by
-                name, icon and vocabulary ("auto-fire", "backlog item"), one tap
-                from the composer that dropped it. Same post, same holder, same
-                wait: the desktop pins it and types it in when the session is
-                free. So it wears the composer's words and the composer's
-                hourglass. */}
+            {/* One WHEN, one name: the composer's words + hourglass, never "queue". */}
             <Button onClick={() => sendAll("queue")} disabled={busy} title="send all, then hand the prompt to the desktop — it goes in when this session is free"><Hourglass size={14} /> Send all, then when it&apos;s free</Button>
           </>
         )}
-        {/* Single-image session flow gets attach-AND-run plus attach-AND-queue. */}
-        {onDispatch && (!total || total <= 1) && (
+        {single && (
           <>
             <Button onClick={() => send("run")} disabled={busy} title="attach the image and run the prompt (uploads in the background)">Send &amp; run</Button>
             <Button onClick={() => send("queue")} disabled={busy} title="attach the image and hand the prompt to the desktop — it goes in when this session is free"><Hourglass size={14} /> Send &amp; when it&apos;s free</Button>
