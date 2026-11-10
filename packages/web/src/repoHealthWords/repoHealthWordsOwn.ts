@@ -35,7 +35,7 @@ export function ownAimWords(better: RepoHealthOwnSeries["better"], repoName: str
 
 /** The line under the own tiles: what they are kept out of. */
 export function ownApartWords(product: string): string {
-  return `Not part of the health index, which is built from ${product}'s readings only so it compares across repos. Each runs once per refresh that measures a new commit, at that commit; there is no history from before a reading was declared.`;
+  return `Not part of the health index's average, which is built from ${product}'s own readings of every repo; the repo can mark one as a gate, and a failing gate holds the index under 50. Each runs once per refresh that measures a new commit, at that commit; there is no history from before a reading was declared.`;
 }
 
 /**

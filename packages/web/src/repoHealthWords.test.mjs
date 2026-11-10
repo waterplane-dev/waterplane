@@ -1120,8 +1120,8 @@ test("provenance words: each group is named once, the repo's aim is the repo's, 
   assert.equal(ownAimWords("higher", "acme"), "acme aims for this to rise.");
   assert.equal(ownAimWords("lower", "acme"), "acme aims for this to fall.");
   assert.equal(ownAimWords(null, "acme"), null, "no declared direction, no sentence — never a guessed one");
-  assert.match(ownApartWords("waterplane"), /Not part of the health index, which is built from waterplane's readings only/);
-  assert.match(indexExplainWords("2026-06-01", "waterplane"), /waterplane's five readings — never a repo's own/);
+  assert.match(ownApartWords("waterplane"), /Not part of the health index's average, which is built from waterplane's own readings of every repo; the repo can mark one as a gate/);
+  assert.match(indexExplainWords("2026-06-01", "waterplane"), /waterplane's 11 readings against fixed good values/);
   const everything = [centralHeadWords("p"), ownHeadWords("r", "f"), ownAimWords("higher", "r"), ownAimWords("lower", "r"),
     ownApartWords("p"), ownNoneWords("f")].join("\n");
   for (const word of ["score", "grade", "healthy", "unhealthy", "good", "bad", "should", "worse", "better", "improve", "regress"]) {

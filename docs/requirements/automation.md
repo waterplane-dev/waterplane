@@ -371,3 +371,7 @@ The daily update runs at 06:00 instead of 10:00.
 - asked: 2026-10-30
 - shipped: 679a36b8
 
+
+### R-automation-078 · shipped
+A repo's own script (a cron job, a findings collector) can propose work for the backlog with no live session, naming itself; the proposal never starts by itself, sends one push of its own kind (never again on a retry under the same key), and waits on the launcher as a strip in its own colour above the lists — "3 proposals wait for you", whose tap opens exactly those rows — until each is fired, scheduled or deleted. The row says which script proposed it.
+- asked: 2026-11-10

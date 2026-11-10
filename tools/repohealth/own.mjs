@@ -10,9 +10,10 @@
  * another's. A repo also knows things about itself no generic metric can — in
  * waterplane, how many of the CLI screen readers have no proof on the
  * installed `claude`. Those are declared by the repo, in a COMMITTED
- * file, and they ride in the series row under `own`, a key no metric, no
- * reading in `readings.mjs` and no index entry ever reads. They change no
- * definition, so `PREREG_VERSION` and the pack hash do not move.
+ * file, and they ride in the series row under `own`, a key no metric and no
+ * reading in `readings.mjs` ever reads. The index reads ONE thing from it: a
+ * reading the repo marked as a gate (below). They change no definition, so
+ * `PREREG_VERSION` and the pack hash do not move.
  *
  * ── The declaration ────────────────────────────────────────────────────────
  *
@@ -24,6 +25,19 @@
  *   { "readings": [ { "key": "screenNoProof", "name": "…", "means": "…",
  *                     "better": "lower", "unit": "signals",
  *                     "run": ["node", "tools/screenfixtures.mjs", "--reading"] } ] }
+ *
+ * A reading may be marked a GATE — a line the repo itself calls critical:
+ *
+ *   "gate": { "fails": "below", "at": 60 }
+ *
+ * `fails` is the side of `at` that fails (`below`: value < at; `above`:
+ * value > at; the line itself passes), and it must be the WORSE side of the
+ * reading's own `better` — a gate failing when the reading improves is a typo,
+ * refused like any other bad field (the reading is then not run, and the
+ * index counts the gate as UNKNOWN, never as passed). The engine only carries
+ * the declaration into the row; judging it is the index's
+ * (`shared/healthindex/coverage.ts`): a failing gate caps the headline, a gate
+ * whose reading is absent is unknown.
  *
  * The same file's `central` object re-tunes waterplane's OWN readings — one
  * disabled, or measured by the repo's command instead — and is `central.mjs`'s
@@ -105,11 +119,14 @@ export function parseDeclaration(text) {
   }
   const readings = [];
   const problems = [];
+  // Entries dropped for want of a key that had asked for a gate: the index counts each as an UNKNOWN gate (`unreadGates`).
+  let unreadGates = 0;
   const seen = new Set();
   doc.readings.forEach((raw, i) => {
     const e = raw && typeof raw === "object" ? raw : {};
     if (typeof e.key !== "string" || !KEY_RE.test(e.key)) {
       problems.push(`entry ${i + 1} has no usable "key" (a letter, then up to 39 letters, digits, - or _)`);
+      if (e.gate !== undefined) unreadGates++;
       return;
     }
     if (seen.has(e.key)) {
@@ -122,6 +139,8 @@ export function parseDeclaration(text) {
     if (!isStr(e.means) || e.means.length > 400) why.push(`"means" must be one sentence under 400 characters`);
     if (e.better !== "lower" && e.better !== "higher") why.push(`"better" must be "lower" or "higher"`);
     if (e.unit !== undefined && (typeof e.unit !== "string" || e.unit.length > 16)) why.push(`"unit" must be a short word`);
+    const gate = gateOf(e.gate, e.better);
+    if (gate && gate.invalid) why.push(gate.invalid);
     const runOk = Array.isArray(e.run) && e.run.length >= 1 && e.run.length <= 32
       && e.run.every((a) => typeof a === "string" && a.length > 0 && a.length <= 512 && !a.includes("\0"));
     if (!runOk) why.push(`"run" must be an argv list of 1–32 non-empty strings`);
@@ -132,10 +151,28 @@ export function parseDeclaration(text) {
       better: e.better === "lower" || e.better === "higher" ? e.better : null,
       unit: typeof e.unit === "string" ? e.unit.slice(0, 16) : "",
       run: runOk ? e.run.slice() : null,
+      ...(gate ? { gate } : {}),
       ...(why.length ? { invalid: `not run — ${why.join("; ")}` } : {}),
     });
   });
-  return { readings, problems };
+  return { readings, problems, unreadGates };
+}
+
+/**
+ * A reading's `gate`, checked: undefined where none is declared,
+ * `{ fails, at }` where it is usable, `{ invalid }` where it is not. An
+ * invalid gate is still CARRIED (as `{ invalid }`), so the index can say a gate
+ * was meant and could not be read rather than silently dropping it.
+ */
+export function gateOf(g, better) {
+  if (g === undefined) return undefined;
+  const bad = (why) => ({ invalid: `"gate" ${why}` });
+  if (!g || typeof g !== "object" || Array.isArray(g)) return bad(`must be { "fails": "below" | "above", "at": <number> }`);
+  if (g.fails !== "below" && g.fails !== "above") return bad(`"fails" must be "below" or "above"`);
+  if (typeof g.at !== "number" || !Number.isFinite(g.at)) return bad(`"at" must be a number`);
+  const worse = better === "higher" ? "below" : better === "lower" ? "above" : null;
+  if (worse && g.fails !== worse) return bad(`fails "${g.fails}" but "better" is "${better}": a gate fails on the worse side`);
+  return { fails: g.fails, at: g.at };
 }
 
 /**
@@ -224,11 +261,36 @@ export function measureOwn(root, sha, git, opts = {}) {
       means: d.means,
       better: d.better,
       unit: d.unit,
+      ...(d.gate ? { gate: d.gate } : {}),
       value: got.value,
       ...(got.reason ? { reason: got.reason } : {}),
     };
   });
-  return { file: OWN_FILE, readings, ...(decl.problems.length ? { problems: decl.problems } : {}) };
+  return {
+    file: OWN_FILE, readings,
+    ...(decl.problems.length ? { problems: decl.problems } : {}),
+    ...(decl.unreadGates ? { unreadGates: decl.unreadGates } : {}),
+  };
+}
+
+/**
+ * The row's `own` where the repo's commands are NOT approved (`--no-own`):
+ * nothing is run, but the committed declaration is still read, so the index
+ * learns that gates exist and counts each UNKNOWN (never a silent pass).
+ * `notRun` marks the row so approval re-measures it (`update`). Undefined where
+ * the commit declares nothing.
+ */
+export function notRunOwn(root, sha, git) {
+  const text = git.readFileAt(root, sha, OWN_FILE);
+  if (text === null) return undefined;
+  const decl = parseDeclaration(text);
+  if (decl.none) return undefined;
+  if (decl.refused) return { file: OWN_FILE, refused: decl.refused };
+  const notRun = "not run — this desktop has not approved the repo's committed commands";
+  const gates = decl.readings.filter((d) => d.gate).map((d) => ({
+    key: d.key, name: d.name, unit: d.unit, gate: d.gate, value: null, reason: notRun,
+  }));
+  return { file: OWN_FILE, notRun, gates, ...(decl.unreadGates ? { unreadGates: decl.unreadGates } : {}) };
 }
 
 /** Whether the commit at `sha` declares own readings — for `plot`, which runs nothing. */

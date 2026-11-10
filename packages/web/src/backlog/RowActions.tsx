@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { RowFacts } from "./BacklogRow";
 import { ConfirmButton } from "../Confirm";
+import { isPendingProposal } from "@waterplane/shared";
 import { SKIP_QUEUE_BUSY_NOTE, skipQueueNote } from "../sendIntent";
 import { RUN_AGAIN_LABEL, dropClockNote, holderOffer, isFailedRow, refireOffered, runAgainRowNote } from "../backlogFilter";
 import { track } from "../usage";
@@ -97,6 +98,15 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                   }}><ArrowRight size={14} /> {holder.label}</Button>}
                 {/* Absent offline rather than dimmed — the banner at the top says why once. */}
                 {it.status === "queued" && p.online && <Button className={it.manual ? "primary" : undefined} data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>fire</Button>}
+                {/* A proposal's SECOND answer, beside fire: give it a time. The send sheet, seeded
+                    from this row, as for a clocked row's *when*; saving re-writes it as the
+                    person's row with that clock, so it leaves the proposals strip. */}
+                {isPendingProposal(it) && p.online && (
+                  <Button data-hint="backlog.proposalwhen" title="give it a time — the send sheet, with this row already in it"
+                    onClick={() => { track("action:backlog.proposalwhen"); p.verbs.onEditWhen(it.id); }}>
+                    <CalendarClock size={14} /> schedule
+                  </Button>
+                )}
                 {/* On a TIMED row this is the other half of the pair above, and
                     the title has to say which: it starts now and skips the
                     ladder (`runNow`), so seven taps put seven agents in one

@@ -271,3 +271,8 @@ reason = "Android build-tool classpath only (guava 32.0.1-jre, 33.3.1-jre; deser
 id = "GHSA-p93r-85wp-75v3"
 ignoreUntil = 2027-04-30T00:00:00Z
 reason = "Android build-tool classpath only (bcprov-jdk18on 1.79 via AGP 8.13's sdk-common), not in the APK: absent from the release runtime classpath, and no BouncyCastle class in the dex (checked 2026-11-06). The timing channel is in FrodoKEM decapsulation; AGP uses BouncyCastle only to make keystores and test TLS certificates, and no jar on the build classpath references org.bouncycastle.pqc. Clears when AGP moves to >= 9.4, whose sdk-common pulls 1.80.2"
+
+[[IgnoredVulns]]
+id = "GHSA-ghc9-756g-vrcv"
+ignoreUntil = 2027-04-30T00:00:00Z
+reason = "Android build-tool classpath only (org.json:json 20250517), not in the APK: absent from every :app configuration (playReleaseRuntimeClasspath included) and from buildEnvironment, and no org/json class is defined in the dev debug APK's or the Play release bundle's dex (checked 2026-11-10). The app's org.json imports resolve to Android's own platform implementation, not JSON-java, so JSONTokener's numeric-string DoS never runs on the phone. Clears when an AGP bump pulls org.json >= 20260719"

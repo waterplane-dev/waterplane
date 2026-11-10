@@ -39,7 +39,12 @@ import {
   cleanSessionBudget,
   clientIntentFields,
   isAgentPosted,
+  isProposed,
   itemHeadline,
+  proposedWords,
+  proposerName,
+  proposerOf,
+  ORIGIN_PROPOSED_PREFIX,
   whenWords,
   windowRuleRefusal,
   type BacklogItem,
@@ -117,7 +122,7 @@ export async function postClientDraft(deps: ClientPostDeps, raw: IntentDraft, op
   // …and never the AGENT mark: it is written by the agent route and nowhere
   // else, so the person can trust it both ways.
   if (opts.origin) draft.origin = opts.origin;
-  else if (isAgentPosted(draft)) delete draft.origin;
+  else if (isAgentPosted(draft) || isProposed(draft)) delete draft.origin;
   const posted = deps.intents.post(draft);
   if (!posted.ok || !posted.intent) return { ok: false, reason: posted.reason || "could not be written down" };
   return { ok: true, intent: posted.intent, existing: posted.existing === true };
@@ -367,9 +372,33 @@ export function agentRowView(i: Intent) {
     steps: i.payload.kind === "prompt" ? i.payload.steps : [],
     ...(i.blockDetail ? { waiting: i.blockDetail } : {}),
     ...(i.result ? { result: { ok: i.result.ok, detail: i.result.detail } } : {}),
-    shownAs: AGENT_POSTED_WORDS,
+    shownAs: isProposed(i) ? proposedWords(i.origin) : AGENT_POSTED_WORDS,
   };
 }
+
+/** The attention key of a proposal's push — one per row, resolved once the
+ *  row stops being a pending proposal (`server/intentDeps.ts`). */
+export const proposalPushKey = (id: string): string => `proposal:${id}`;
+
+/** The ONE push a new proposal sends: who proposes, in which repo, and the
+ *  row's own words; a tap opens exactly that row. */
+export function proposalNotice(row: Intent): { title: string; body: string; tag: string; key: string; level: "attention"; backlog: { cwd: string; ids: string[] } } {
+  const repo = row.cwd.split("/").filter(Boolean).pop() || row.cwd;
+  const words = row.label || (row.payload.kind === "prompt" ? row.payload.steps[0] ?? "" : "") || row.title || row.id;
+  const body = words.length > 160 ? `${words.slice(0, 159)}…` : words;
+  return {
+    title: `${repo}: ${proposerOf(row.origin) ?? "a script"} proposes work`,
+    body,
+    tag: "proposal",
+    key: proposalPushKey(row.id),
+    // Stated here, not by the kind's default: the kind table is the bell plan's.
+    level: "attention",
+    backlog: { cwd: row.cwd, ids: [row.id] },
+  };
+}
+
+/** A row this route wrote: an agent's, or a script's proposal (`proposedBy`). */
+const postedHere = (i: Intent): boolean => isAgentPosted(i) || isProposed(i);
 
 /**
  * **The run order an agent may read and set** — every waiting row, whoever
@@ -388,7 +417,7 @@ export function agentQueue(rows: Intent[], cwd: string | null) {
       seat: n + 1,
       ...agentRowView(i),
       title: itemHeadline({ label: i.label, text: i.payload.kind === "prompt" ? i.payload.steps[0] ?? "" : "", headline: i.headline }) ?? i.title ?? undefined,
-      shownAs: isAgentPosted(i) ? AGENT_POSTED_WORDS : "the person's",
+      shownAs: isProposed(i) ? proposedWords(i.origin) : isAgentPosted(i) ? AGENT_POSTED_WORDS : "the person's",
     }));
 }
 
@@ -421,6 +450,8 @@ export interface AgentRouteDeps extends ClientPostDeps {
   repoDir(id: string): Promise<string | null>;
   json(res: ServerResponse, data: unknown, status?: number): void;
   readJson(req: IncomingMessage): Promise<any>;
+  /** The ONE push a NEW proposal sends (`proposedBy`) — never on a retry. Absent ⇒ none. */
+  announceProposal?(row: Intent): void;
 }
 
 const BASE = "/api/agent/intents";
@@ -483,10 +514,18 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
     // Read AFTER every await: the add below is synchronous, so a racing twin
     // either finds this row here or is found by `post()`'s own id guard.
     const existed = !!d.intents.get(made.add.id);
-    const added = await addClientBacklogItem(d, { ...made.add, origin: ORIGIN_AGENT, manual: true });
+    // **A script's proposal** (`proposedBy`): the same row, still `manual`, with
+    // origin `proposed:<name>` so the phone can show it apart from the bell's
+    // noise. Absent ⇒ exactly the agent's add, unchanged.
+    const hasProposer = body?.proposedBy != null;
+    const proposer = hasProposer ? proposerName(body.proposedBy) : null;
+    if (hasProposer && !proposer) { d.json(res, { ok: false, error: "`proposedBy` is the script's short name — letters, digits, `.`, `_` or `-`; nothing was written down" }, 400); return true; }
+    const origin = proposer ? `${ORIGIN_PROPOSED_PREFIX}${proposer}` : ORIGIN_AGENT;
+    const added = await addClientBacklogItem(d, { ...made.add, origin, manual: true });
     if (!added.ok) { d.json(res, { ok: false, error: "that folder is outside the configured root — nothing was written down" }, 400); return true; }
     if (added.item.status === "failed" && added.item.error && !existed) { d.json(res, { ok: false, error: `not added: ${added.item.error}` }, 409); return true; }
     const row = d.intents.get(added.item.id);
+    if (proposer && !existed && row && isProposed(row)) d.announceProposal?.(row);
     d.json(res, {
       ok: true,
       existing: existed,
@@ -525,14 +564,14 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
   if (method === "GET" && !id) {
     const cwd = await cwdOf(url.searchParams.get("repo"), url.searchParams.get("dir"));
     if (cwd === "unknown-repo") { d.json(res, { ok: false, error: "unknown repo" }, 404); return true; }
-    const rows = d.intents.list().filter((i) => isAgentPosted(i) && (!cwd || i.cwd === cwd));
+    const rows = d.intents.list().filter((i) => postedHere(i) && (!cwd || i.cwd === cwd));
     d.json(res, { ok: true, intents: rows.map(agentRowView) });
     return true;
   }
 
   if (id && (method === "GET" || method === "DELETE")) {
     const row = d.intents.get(id);
-    if (!row || !isAgentPosted(row)) {
+    if (!row || !postedHere(row)) {
       d.json(res, { ok: false, error: row ? "that row was not posted by an agent — it is the person's" : "no such intent" }, row ? 403 : 404);
       return true;
     }

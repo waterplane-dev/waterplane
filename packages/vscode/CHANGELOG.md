@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9.6 - 2026-11-10
+
+### New
+
+- **Repo health reads more of your code.** Eleven new readings cover duplicate code, dead exports, import cycles, files that change together, fixes that follow a change, and tests changed alongside code. A reading that cannot be taken is shown as unknown and lowers coverage, never as a perfect score.
+- **Repo health uses the tools you already have.** Vulnerable dependencies, analyzer findings, type strictness and coverage files are read from tools installed on your machine, each with a time limit. A missing tool is reported as absent with its reason, never as zero.
+- **Dart and Flutter repos are read in full.** Import graph, test reach, clones and dead exports are now measured, so a Flutter repo no longer scores as if it had none of them.
+- **Agent readings per repo and week.** The repo-readings sheet shows exploration cost, rework spend, compactions per committed session and escaped defects, read from your Claude session logs.
+- **All sessions opens on the last scan.** The finished figures are kept on disk, so a new window or a reload shows them at once, with their age, while the refresh scan runs.
+- **A reading that has not arrived says so.** Session, Always-on, Repo health, All sessions and Prompts show a spinning "Reading ..." line instead of an empty "nothing found" message, and All sessions adds a progress bar while logs are read.
+- **Re-reading the logs and measuring repo health show VS Code's own spinner** in the status bar until they finish.
+
+### Fixed
+
+- **The extension starts no program except git.** Native-tool readings no longer try to run anything inside VS Code; each one is shown as absent with that reason.
+- **A stopped first health read says so** instead of looking like an empty result.
+
+## Unreleased
+
+### New
+
+- **All sessions opens on the last scan.** The finished figures are kept on disk, so a new window or a reload shows them at once, with their age, while the refresh scan runs. They are replaced when it ends.
+- **A reading that has not arrived says so.** Session, Always-on, Repo health, All sessions and Prompts show a spinning "Reading ..." line instead of an empty "nothing found" message. All sessions adds a progress bar above its figures while logs are read.
+- **Re-reading the logs and measuring repo health show VS Code's own spinner** in the status bar until they finish.
+
 ## 0.9.5 - 2026-11-09
 
 ### Changed

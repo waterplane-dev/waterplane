@@ -3,7 +3,7 @@
  * number out of 100 against fixed good values (`shared/healthindex.ts`, the
  * one layer that takes a side), what holds it down — always in the open, never
  * behind a tap — its trend, its line over weeks or over commits (`axis`), and
- * the picked week's five entry scores with what each added. Geometry and
+ * the picked week's entry scores with what each added. Geometry and
  * sentences are `healthIndexWords.ts` / `healthSpendWords.ts` /
  * `healthRingWords.ts` / `healthIndexChartWords.ts`; this file only paints a
  * `HealthIndexResponse` it is handed — the phone fetches it
@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HeartPulse, OctagonAlert, Send, TriangleAlert } from "lucide-react";
 import {
-  BRAND, HEALTH_INDEX_VS_WEEKS, healthCapWords, healthCommitsAvailability, healthIndexVs, isoWeekOf, type HealthIndexResponse,
+  BRAND, HEALTH_INDEX_VS_WEEKS, healthCommitsAvailability, healthHeadlineWords, healthIndexVs, isoWeekOf, type HealthIndexPoint, type HealthIndexResponse,
 } from "@waterplane/shared";
 import { Explain } from "./Explain";
 import { CantInline } from "./Unavailable";
@@ -38,7 +38,7 @@ import {
 } from "./healthSpendWords";
 import { ringGeom } from "./healthRingWords";
 import {
-  BAR_DOWN_WORDS, BAR_UP_WORDS, COMMIT_GAP_NOTE, FIRST_SCORED_WEEK_WORDS, HOW_SCORED_SUMMARY, OUT_OF_100, carriedNoMovesWords,
+  BAR_DOWN_WORDS, BAR_UP_WORDS, COMMIT_GAP_NOTE, COVERAGE_METHOD_WORDS, FIRST_SCORED_WEEK_WORDS, HOW_SCORED_SUMMARY, OUT_OF_100, carriedNoMovesWords,
   commitGapWords, commitSpendClause, heldDownWords, scoreChartAria, spendStepNote,
 } from "./healthIndexChartWords";
 import { Button } from "./kit/Button";
@@ -120,10 +120,13 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
   const atPrev = weekIdx > 0 ? points[weekIdx - 1] : null;
   const delta = last && prev && last.lnLink !== null ? last.index - prev.index : null;
   const older = olderHostSeries(points);
-  const capOf = (p: { index: number; mean: number; cappedBy: Parameters<typeof healthCapWords>[0]["cappedBy"] }) =>
-    healthCapWords({ value: p.index, mean: p.mean, cappedBy: p.cappedBy });
-  const capNow = last ? capOf(last) : null;
-  const heldNow = last ? heldDownWords({ value: last.index, mean: last.mean, cappedBy: last.cappedBy }) : null;
+  // Every cap and the coverage line in shared's ONE wording (`healthHeadlineWords`), the VS Code view included.
+  const headOf = (p: HealthIndexPoint) =>
+    healthHeadlineWords({ value: p.index, mean: p.mean, cappedBy: p.cappedBy, capKind: p.capKind, coverage: p.coverage });
+  const capOf = (p: HealthIndexPoint) => headOf(p).cap;
+  const headNow = last ? headOf(last) : null;
+  const capNow = headNow?.cap ?? null;
+  const heldNow = last ? heldDownWords({ value: last.index, mean: last.mean, cappedBy: last.cappedBy, capKind: last.capKind, coverage: last.coverage }) : null;
   // The phone's own clock decides "this week": the latest MEASURED week can be
   // months old (a week with no commits has no point), and is then named.
   const currentWeek = isoWeekOf(new Date().toISOString().slice(0, 10));
@@ -189,8 +192,8 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
         <h3 className="rh-h"><HeartPulse size={16} aria-hidden /> Health index</h3>
         <Explain of="the health index">
           {/* With a series, the scoring sentence is in the card's fold. */}
-          {series ? null : <p>One score out of 100 per repo, against fixed good values for {BRAND.displayName}'s five readings; it starts at the first week all five exist.</p>}
-          <p>It is built from {BRAND.displayName}'s readings only — the same five in every repo, against the same good values. Each counts against the repo as it grows — longer files, more escape hatches — so the score falls when they grow past their good value and rises when they shrink back. It is the one place the app takes a side; the readings below only report.</p>
+          {series ? null : <p>One score out of 100 per repo, against fixed good values for {BRAND.displayName}'s {HEALTH_ENTRY_ORDER.length} readings; it starts at the first week its first five (file length, re-touches, escape hatches, CLAUDE.md + skills, untested modules) all exist.</p>}
+          <p>It is built from {BRAND.displayName}'s {HEALTH_ENTRY_ORDER.length} readings — the same in every repo, against the same good values — plus what the repo adds: a gate it declares on one of its own readings holds the score under 50 while it fails, and a reading nobody could read counts for nothing, never for 100, so it caps the score. Each counts against the repo as it grows — longer files, more escape hatches, more duplicate code — so the score falls when they grow past their good value and rises when they shrink back; tests changed with code runs the other way, and falls when fewer commits change a test. It is the one place the app takes a side; the readings below only report.</p>
         </Explain>
       </div>
 
@@ -233,6 +236,22 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
               ))}
             </ul>
           ) : null}
+          {/* The repo's own gates that fail or could not be read: in the open, like the alerts, failing first. */}
+          {headNow && headNow.gates.length ? (
+            <ul className="hix-alerts" aria-label="The repo's gates">
+              {(last.coverage?.gates ?? []).filter((gt) => gt.state !== "pass")
+                .sort((a, b) => (a.state === "fail" ? 0 : 1) - (b.state === "fail" ? 0 : 1))
+                .map((gt) => (
+                  <li key={gt.key} className={`hix-alert ${gt.state === "fail" ? "severe" : "warn"}`}>
+                    {gt.state === "fail" ? <OctagonAlert size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
+                    <span>{gt.text}</span>
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+          {/* What the score could read: never folded, an absence is said in the open. */}
+          {headNow?.coverage ? <div className="rh-cap hix-coverage">{headNow.coverage}</div> : null}
+          {headNow?.notes ? <div className="rh-cap hix-coverage">{headNow.notes}</div> : null}
           {view?.words ? <div className="rh-tile-mean">{view.words.body}</div> : null}
 
           {axis === "commits" && commitsAvail === "absent" ? <div className="rh-cap">{commitsAbsentWords(BRAND.displayName)}</div> : null}
@@ -365,7 +384,9 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
           <details className="hint-more rh-more">
             <summary>{HOW_SCORED_SUMMARY}</summary>
             <p>{indexExplainWords(series.baselineWeek, BRAND.displayName, { disabled: last.disabled, overridden: last.overridden })}</p>
-            {capNow ? <p>{capNow}</p> : null}
+            {/* A coverage or gate cap is already said in the open (the coverage line, the gate list). */}
+            {capNow && last.capKind !== "coverage" && last.capKind !== "gate" ? <p>{capNow}</p> : null}
+            {last.coverage ? <p>{COVERAGE_METHOD_WORDS}</p> : null}
             {at && at.scores && bars?.bars.length ? <p>{barsCaptionWords(at.week)}</p> : null}
             {tree ? <p>{tree}</p> : null}
             {sg ? <p>{spendLeadWords(last.values?.context).more}{mode === "commits" ? ` ${spendStepNote(SPEND_STEP_WORDS)}` : ""}</p> : null}

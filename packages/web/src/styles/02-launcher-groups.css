@@ -519,3 +519,22 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
 .outbox-which-where { flex: 0 0 auto; max-width: 40%; opacity: .75; font-size: calc(var(--fs-12) * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outbox-which-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outbox-which-row.more { opacity: .8; text-decoration: underline; }
+
+/* The proposals strip (features/backlog/ProposalsStrip.tsx): work a repo's
+   script proposed. The accent, FILLED — no other launcher chip is — so it reads
+   apart from the bell, the wait chip's yellow and the blocked chip's orange. */
+.proposals-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8);
+  width: 100%; box-sizing: border-box; margin: var(--sp-8) 0; padding: var(--sp-8) var(--sp-12);
+  background: var(--accent); color: var(--on-accent); border: 0; border-radius: var(--r-8);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.proposals-strip .proposals-head { font-weight: var(--fw-semibold); }
+.proposals-strip .proposals-sub { flex-basis: 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.proposals-strip .proposals-doors { display: flex; flex-wrap: wrap; gap: var(--sp-4); flex-basis: 100%; }
+.proposals-door {
+  background: transparent; color: var(--on-accent); border: 1px solid var(--on-accent-line);
+  border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-8); font: inherit; cursor: pointer;
+}
+/* A proposal's own mark on its backlog row: the same hue, as words. */
+.bl-proposed { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-4); color: var(--accent); font-weight: var(--fw-semibold); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }

@@ -151,12 +151,24 @@ function mentionsOf(tests, packs, requireDir) {
  * it), the pack and the rule. A file with no oid is read and not kept.
  */
 const IMPORTS_MEMO = new Map();
-function importsOf(owner, file, requireDir) {
-  if (!file.oid) return owner.pack.imports(file.text, file.path, { requireDir });
-  const key = `${owner.name}\0${file.oid}\0${file.path}\0${requireDir ? 1 : 0}`;
+// The pack's resolver context is per snapshot (tsconfig, workspace manifests):
+// an answer resolved under one is not the answer under another, so its identity
+// is part of the memo key.
+const CTX_IDS = new WeakMap();
+let CTX_SEQ = 0;
+const ctxId = (ctx) => {
+  if (!ctx) return 0;
+  let id = CTX_IDS.get(ctx);
+  if (!id) CTX_IDS.set(ctx, (id = ++CTX_SEQ));
+  return id;
+};
+function importsOf(owner, file, requireDir, ctx) {
+  const opts = ctx ? { requireDir, ctx } : { requireDir };
+  if (!file.oid) return owner.pack.imports(file.text, file.path, opts);
+  const key = `${owner.name}\0${file.oid}\0${file.path}\0${requireDir ? 1 : 0}\0${ctxId(ctx)}`;
   let keys = IMPORTS_MEMO.get(key);
   if (!keys) {
-    keys = [...owner.pack.imports(file.text, file.path, { requireDir })];
+    keys = [...owner.pack.imports(file.text, file.path, opts)];
     IMPORTS_MEMO.set(key, keys);
   }
   return keys;
@@ -180,7 +192,7 @@ function importsOf(owner, file, requireDir) {
  * @param {{f: {path: string, oid?: string, text: string}, owner: object}[]} readable
  * @returns {Set<string>} paths
  */
-function reachOf(readable, tests, prereg, requireDir) {
+function reachOf(readable, tests, prereg, requireDir, contexts) {
   const leaf = (k) => (requireDir ? k : k.slice(k.lastIndexOf("/") + 1));
   /** key -> every readable module answering to it. Two modules on one key are
    *  both reached, which is the ambiguity `mentions` already resolves the
@@ -210,11 +222,11 @@ function reachOf(readable, tests, prereg, requireDir) {
   };
   for (const t of tests) {
     const owner = packFor(t.path ?? "", prereg);
-    if (owner && typeof owner.pack.imports === "function") visit(owner.pack.imports(t.text, t.path ?? "", { requireDir }));
+    if (owner && typeof owner.pack.imports === "function") visit(importsOf(owner, { text: t.text, path: t.path ?? "" }, requireDir, contexts?.[owner.name]));
   }
   while (queue.length) {
     const r = byPath.get(queue.pop());
-    if (typeof r.owner.pack.imports === "function") visit(importsOf(r.owner, r.f, requireDir));
+    if (typeof r.owner.pack.imports === "function") visit(importsOf(r.owner, r.f, requireDir, contexts?.[r.owner.name]));
   }
   return reached;
 }
@@ -294,7 +306,7 @@ export function measureUntested(snapshot, history, index, prereg) {
   // A pack with a mention rule and no import rule contributes no edge, so its
   // modules are read on mentions alone — the definition this row had before
   // reach existed, and never a guess in the other direction.
-  const reached = reachOf(readable, tests, prereg, requireDir);
+  const reached = reachOf(readable, tests, prereg, requireDir, snapshot.graphContexts);
   const out = [];
   const unnamed = [];
   for (const { f } of readable) {

@@ -10,7 +10,7 @@
  */
 import { useLayoutEffect, useRef } from "react";
 import { Archive, ArrowDownUp, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
-import { BRAND } from "@waterplane/shared";
+import { BRAND, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
@@ -38,6 +38,7 @@ import { useHostPush } from "../../features/hostTools";
 import { ElsewhereChip, HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { FirstRunCard } from "../../features/onboard";
 import { WhatsNewLauncherRow } from "../../features/whatsnew";
+import { ProposalsStrip } from "../../features/backlog";
 import { enterDemo, isDemo } from "../../demo/mode";
 import { isNativeShell } from "../../hostUrl";
 import type { LauncherProps } from "./types";
@@ -353,6 +354,11 @@ export function LauncherScreen(p: LauncherProps) {
               ))}
             </>
           )}
+          {/* Work a repo's script proposed, until each is fired, scheduled or deleted — first, in its own hue (features/backlog). */}
+          <ProposalsStrip repoName={(dir) => {
+            const r = repos.find((x) => x.worktreePath === dir);
+            return r ? repoShown(r) : dir.split("/").filter(Boolean).pop() || dir;
+          }} />
           {/* Once per desktop version: what this release brought, and the way to each (features/whatsnew). */}
           <WhatsNewLauncherRow />
           {/* A host that has never opened a session: three ways in (features/onboard). */}

@@ -1,23 +1,40 @@
 /**
- * The Dart pack: extensions, and nothing else.
+ * The Dart pack: extensions, tests, the import graph and a token-level
+ * analyzer.
  *
- * ── What a size-only pack is for ────────────────────────────────────────────
+ * ── What a size-only pack was for, and why this is no longer one ────────────
  *
- * A pack's smallest useful job is to say "these files are source". That alone
- * moves a repo from "every metric absent" to "the metrics that need no
- * language are present": `size` and its per-directory split, `retouch`,
- * `cochange`, the tape of largest files, and `common`'s `TODO`/`FIXME` counts,
- * all of which read a path, a commit list and a file's text and need no
- * parser and no import syntax.
+ * Version 1 said only "these files are source", which moved `picture-app`
+ * (67 `.dart` files at the time, 60k lines of `lib/` since) from "every metric
+ * absent" to "size, retouch, co-change and TODO counts present" — and left a
+ * Health index of 100 over a tree in which no Dart file was checked for tests,
+ * duplication or dead code. Absent metrics did not lower the score; they were
+ * simply not in it.
  *
- * Counted at HEAD with `git ls-tree -r --name-only`, outside the excluded
- * directories: `picture-app` 67 `.dart` and `trading` 13. `picture-app` is the
- * repo this is for — before any pack claimed `.dart` or `.py` it activated
- * `common` alone, so its 67-file Flutter app and its 52-file Python backend
- * were together a tree in which `SRC.exts` was empty and every
- * source-population metric reported absent. It now has two packs, both
- * counted separately in the row, and a reader can see that the duplicate and
- * dead-export absences are about the Dart half.
+ * ── What this pack reads (version 2) ────────────────────────────────────────
+ *
+ *   - **Tests.** `test/**`, `integration_test/**` and `*_test.dart`. Dart has
+ *     no mention rule worth the name (a test that writes a path as a string is
+ *     rare; an `import` is how a test names code), so `mentions` IS `imports`,
+ *     as it is for Python. Reach is transitive over `import`, `export` and
+ *     `part`, so `untested` lists the Dart modules no test reaches.
+ *   - **How a URI names a module.** `package:NAME/x.dart` is this project's
+ *     only when NAME is a `pubspec.yaml` `name:` in the tree (`graphContext`
+ *     reads them; the import graph gets the context explicitly). Resolving it
+ *     any other way would mark `package:path/path.dart` as the local
+ *     `lib/path.dart`. `untested` calls `imports(text, path, {requireDir})`
+ *     with no context, so `imports` falls back to the context the last
+ *     `graphContext` call built; `snapshot.mjs` always builds it first, one
+ *     snapshot at a time. A generic hunk (pass `snapshot.graphContexts[owner]`
+ *     as `opts.ctx`) is in `docs/analysis/health-metrics/P5-dart.md`.
+ *   - **Generated code.** `*.g.dart`, `*.freezed.dart`, `*.mocks.dart`,
+ *     `*.gr.dart` are outside the measured population like the TS pack's
+ *     `.d.ts`. A `part 'x.g.dart'` is neither an edge nor a miss, and a
+ *     library that lists one reports no dead exports (the generated file may
+ *     be what names them).
+ *   - **Duplicates and dead exports.** `lang/dart-*.mjs`: a tokenizer and a
+ *     declaration scanner, no grammar. They claim less than a parser would;
+ *     `lang/dart-analyze.mjs` lists what is left out of exports.
  *
  * ── What this pack does NOT detect, and why each is absent and not zero ────
  *
@@ -27,96 +44,147 @@
  *     and none is here, because a pattern this tool has not measured against
  *     the near-miss that inflates it is a number nobody can defend. `!` is the
  *     hard one: unlike Kotlin's `!!`, a single `!` is also logical negation
- *     and `!=`, so telling the assertion apart from the operator needs more
- *     than a lookbehind. The Kotlin pack's header shows what the evidence for
- *     one of these patterns has to look like; when somebody gathers it for
- *     Dart, the kinds belong here.
- *   - **Tests.** `testGlobs` is empty, so no `.dart` file is moved out of the
- *     measured population and into the test corpus. The convention is
- *     `test/**` and `*_test.dart`, and adding it is a change of what is
- *     measured in both directions at once — files leave `size` and arrive in
- *     `untested`'s evidence — which is not worth making while `mentions` is
- *     absent and nothing could use the corpus anyway. Until then every Dart
- *     file, test or not, is one module in the size rows — in a repo where
- *     this is the only pack with an opinion. `census.mjs` unions the test
- *     globs of every ACTIVE pack and `source.mjs` applies them to a PATH, not
- *     to a language, so a directory glob another pack contributes catches
- *     Dart too: `packs/typescript.mjs`'s `**​/test/**​/*` takes `trading`'s
- *     `mobile/test/widget/widget_test.dart` out of the measured population,
- *     because that repo has 155 JS/TS files and activates that pack.
- *     `picture-app`, whose nine `test/*_test.dart` files are the case this
- *     bullet is about, has none and is unaffected. Declining a convention
- *     here is therefore declining to state one, not a guarantee that no Dart
- *     file is ever read as a test.
- *   - **Which module a test names.** `mentions` and `keysFor` are `null`, so
- *     `untested` skips every Dart file rather than listing all of them. Dart's
- *     `import 'package:app/foo.dart'` and its relative `import '../foo.dart'`
- *     would map onto a path much the way TypeScript's do; the missing half is
- *     the `package:` prefix, which resolves through `pubspec.yaml`'s package
- *     name to `lib/`, and resolving it wrong marks the wrong modules covered.
- *   - **Duplicates and dead exports.** `analyzer()` returns `null` with a
- *     reason. There is no Dart parser here.
- *   - **Dependencies.** `manifestPath` is `null`: `pubspec.yaml` is not read.
- *     This was considered and declined on the file itself.
- *     `picture-app/pubspec.yaml` opens its `dependencies:` block with
- *     `flutter:` followed by an indented `sdk: flutter`, so the entries under
- *     that key are a mix of one-line version constraints and nested maps
- *     (`sdk:`, and elsewhere `git:` and `path:` blocks). Counting the keys at
- *     one indentation level is therefore a YAML reader — indentation-sensitive,
- *     with block scalars and comments to get right — and counting lines
- *     instead would return a number that is neither the dependency count nor
- *     anything else. `deps` means "declared dependencies" in the TypeScript
- *     and Python rows; it must not mean "lines that looked like one" here. A
- *     conservative reader is writable later: the shape to read is
- *     `dependencies:` and `dev_dependencies:` at column 0, their immediate
- *     children, and a `null` for any file that also carries
- *     `dependency_overrides:`.
+ *     and `!=`.
+ *   - **Dependencies.** `manifestPath` is `null`: `pubspec.yaml`'s
+ *     `dependencies:` block mixes one-line constraints and nested maps
+ *     (`sdk:`, `git:`, `path:`), so counting keys at one indent is a YAML
+ *     reader. `deps` means "declared dependencies"; it must not mean "lines
+ *     that looked like one". (The package name alone IS read, for the graph.)
+ *   - **Part files by library name.** `part of foo.bar;` (a name, not a URI)
+ *     names no file and is not followed; the library's own `part 'x.dart'`
+ *     carries the edge.
+ *   - **Tests that are not Dart.** A `test/` directory of another language is
+ *     not this pack's corpus (its globs end in `.dart`); the TypeScript pack's
+ *     `**​/test/**​/*` still takes every file type under a `test/` directory
+ *     when that pack is active, which is the measured case of `trading`.
  */
+
+import { GENERATED_SUFFIXES, buildContext, targetsOf } from "../lang/dart-resolve.mjs";
+import { blocksOf, identsOf, parseOf } from "../lang/dart-analyze.mjs";
+
+/** `a/b/foo.dart` -> `foo.dart`. */
+function basename(path) {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
+/** `a/b/foo.dart` -> `["a", "b"]`. */
+function dirSegments(path) {
+  const parts = path.split("/");
+  parts.pop();
+  return parts;
+}
+
+/**
+ * The resolver context of the last `graphContext` call. `untested`'s
+ * `imports` call carries none; see the header. Null until a tree was read,
+ * and then `package:` URIs are external: the side that lists a module as
+ * untested rather than marking one reached on a guess.
+ */
+let lastCtx = null;
+
+/**
+ * The keys a file's directives name: the full tree path of each target. A
+ * module answers to every directory suffix of its path (`keysFor`), so this
+ * full path meets exactly one module in a single-package tree.
+ */
+function importKeys(text, path, opts) {
+  const ctx = opts.ctx ?? lastCtx;
+  const p = parseOf({ text, path });
+  const out = new Set();
+  for (const t of targetsOf(p.directives, path ?? "", ctx)) out.add(t.path);
+  return out;
+}
 
 export default Object.freeze({
   name: "dart",
-  version: "1",
+  // 2: `mentions`, `keysFor`, `imports`, the graph rule and an analyzer exist;
+  //    tests and generated suffixes are declared.
+  version: "2",
 
   /** Activates when the tree at HEAD carries one of these. */
   exts: Object.freeze([".dart"]),
 
-  /**
-   * Generated Dart (`*.g.dart`, `*.freezed.dart`) is not excluded, because
-   * neither appears in this fleet and a suffix rule that never fires is one
-   * nobody can check. It would belong here, next to `packs/typescript.mjs`'s
-   * `.d.ts`, on the day a repo commits one.
-   */
-  excludeSuffixes: Object.freeze([]),
+  /** Generated Dart is not this project's code. */
+  excludeSuffixes: GENERATED_SUFFIXES,
 
-  /** See "What this pack does NOT detect". */
-  testGlobs: Object.freeze([]),
+  /**
+   * `flutter test` and `dart test` discover `test/**_test.dart`;
+   * `integration_test/` is Flutter's.
+   */
+  testGlobs: Object.freeze(["**/test/**/*.dart", "**/integration_test/**/*.dart", "**/*_test.dart"]),
 
   /** None. `common`'s `TODO` and `FIXME` are the only marks counted here. */
   hatchKinds: Object.freeze({}),
 
   // Declined, spelled as explicit nulls so a reader comparing packs can see
-  // which capabilities this one refuses rather than wonder whether a key was
-  // forgotten. `metrics/route.mjs` tests exactly this: a capability is a
-  // function or it is absent.
+  // which capabilities this one refuses.
   manifestPath: null,
   manifests: null,
-  mentions: null,
-  keysFor: null,
-  imports: null,
-  graphConfigPath: null,
-  graphContext: null,
-  graphImports: null,
-  graphKeysFor: null,
 
-  /**
-   * No parser, and a sentence rather than a silence: `metrics/route.mjs` puts
-   * `analyzerReason` in the row so `dups` and `deadExports` read as "nothing
-   * opened these files" and never as zero.
-   */
-  analyzer() {
-    return null;
+  /** A test names a module by importing it: the same rule as `imports`. */
+  mentions(text, path, opts = {}) {
+    return importKeys(text, path, opts);
   },
 
-  /** The sentence `dups` and `deadExports` print when `analyzer()` is null. */
-  analyzerReason: "no Dart parser is available, so no Dart file was read as code",
+  /** The edges `untested` follows: `import`, `export` and `part` targets. */
+  imports(text, path, opts = {}) {
+    return importKeys(text, path, opts);
+  },
+
+  /**
+   * Every key the module at `path` answers to: each directory suffix joined to
+   * the file name, extension kept, and the bare name for a root-level file
+   * (an exact tree path, not a guess).
+   */
+  keysFor(path) {
+    const name = basename(path);
+    const dir = dirSegments(path);
+    if (dir.length === 0) return [name];
+    const keys = [];
+    for (let i = 0; i < dir.length; i++) keys.push(dir.slice(i).join("/") + "/" + name);
+    return keys;
+  },
+
+  /** Every `pubspec.yaml`: it names the packages whose `package:` URIs are ours. */
+  graphConfigPath: "(^|/)pubspec\\.yaml$",
+
+  graphContext(entries, textOf) {
+    lastCtx = buildContext(entries, textOf);
+    return lastCtx;
+  },
+
+  /**
+   * One entry per directive target. Every candidate is a whole tree path
+   * (`relative` is false), matched against `graphKeysFor` only: a relative
+   * import is resolved here, not by suffix, so `lib/a/x.dart` never reaches
+   * `vendor/lib/a/x.dart`. `null` when the lexer ended inside a string or
+   * comment: the imports are then unknown, not fewer.
+   */
+  graphImports(file, ctx) {
+    const p = parseOf(file);
+    if (!p.ok) return null;
+    return targetsOf(p.directives, file.path ?? "", ctx).map((t) => ({
+      spec: t.spec,
+      internal: true,
+      candidates: [t.path],
+    }));
+  },
+
+  graphKeysFor(path) {
+    return [path];
+  },
+
+  /**
+   * Tokenizer-based, always available (there is no install to miss).
+   * @returns {{blocks: Function, idents: Function}}
+   */
+  analyzer() {
+    return {
+      blocks: (file, params) => blocksOf(file, params),
+      idents: (file) => identsOf(file),
+    };
+  },
+
+  /** Kept for a caller that asks; unused while `analyzer()` is non-null. */
+  analyzerReason: "no Dart file was read as code",
 });

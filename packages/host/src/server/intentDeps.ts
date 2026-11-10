@@ -11,7 +11,7 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, blockOf, blockWallOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, blockOf, blockWallOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, pendingProposals, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -35,6 +35,7 @@ import { ranVerdict } from "../settle.js";
 import { backendAutoAcceptsTrust } from "../backends/index.js";
 import { haltRefusal } from "../halt.js";
 import type { ServerCtx } from "./ctx.js";
+import { proposalPushKey } from "../agentintents.js";
 
 /**
  * The durable Intent store — one file, one tick, one lifecycle for every piece
@@ -369,6 +370,16 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
       // expressible as one `intent.changed`).
       if (intent) ctx.broadcast({ t: "intent.changed", intent });
       else ctx.broadcast(ctx.intentSnapshot());
+      // **A proposal's push lasts exactly as long as the proposal waits.** Once
+      // the row is fired, given a clock (scheduling re-saves it as the person's)
+      // or deleted, its `proposal:<id>` item is resolved — the bell must not keep
+      // counting work already answered. Cheap: only open proposal items are read.
+      const prefix = proposalPushKey("");
+      const open = (ctx.attention?.items() ?? []).filter((it) => !it.handled && it.key?.startsWith(prefix));
+      if (open.length) {
+        const waiting = new Set(pendingProposals(ctx.intents.list()).map((i) => i.id));
+        for (const it of open) if (!waiting.has(it.key!.slice(prefix.length))) ctx.resolveAttention(it.key!, "fired, scheduled or deleted");
+      }
       if (!intent || intent.trigger.kind === "files") ctx.broadcast(ctx.launchSnapshot());
       // ── A row with a clock is sent to BOTH lists ─────────────────────────────
       //
@@ -428,3 +439,4 @@ export function intentsWriteNotice(message: string): { title: string; body: stri
     tag: "intents-write",
   };
 }
+

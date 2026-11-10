@@ -22,6 +22,8 @@ import { BRAND, envName, legacyParamEnvNames, paramEnvName } from "@waterplane/s
  *  whichever host launched last (measured 2026-10-27: a live session read an e2e
  *  host's 60736 and its curl went nowhere). */
 export const HOST_API_ENV = envName("API");
+/** The variable every spawned pane carries its own session id in (`sessions/tmux.ts` `spawnBackend`). */
+export const SESSION_ID_ENV = envName("SESSION_ID");
 
 export function repoSkillBody(): string {
   const D = BRAND.stateDirName;
@@ -316,6 +318,10 @@ curl -s -X POST ${base}/api/agent/intents -H 'content-type: application/json' \\
   ${base}/api/agent/backlog\` with the same \`key\`, \`repo\`/\`dir\`/\`session\`,
   \`prompt\`/\`steps\` and optional \`label\` — no \`when\`. It never starts by
   itself; the person fires it from the backlog. Prefer this when unsure.
+  **A script with no session** (a cron job, a findings collector) proposes
+  work the same way, adding \`"proposedBy":"<script name>"\` (letters, digits,
+  \`.\`, \`_\`, \`-\`) — it never needs a session. The phone shows it apart
+  as a proposal with one push; the person fires, schedules or deletes it.
 - \`GET ${base}/api/agent/intents\` lists what agents posted (both kinds); \`DELETE
   ${base}/api/agent/intents/<id>\` calls one off before it starts. Local only:
   it answers \`curl\` on this desktop, never a browser.
@@ -347,7 +353,7 @@ curl -s -X POST ${base}/api/agent/followup -H 'content-type: application/json' \
   -d "{\\"dir\\":\\"$PWD\\",\\"reason\\":\\"migration needs your call: drop the old column?\\"}"
 \`\`\`
 
-If two sessions share the folder the answer lists them; retry with \`"session":"<id>"\`.
+Your own session id is in \`$${SESSION_ID_ENV}\`: when two sessions share the folder, add \`"session"\` set to it.
 
 ## Crash and exposure findings
 
@@ -361,7 +367,7 @@ curl -s -G ${base}/api/agent/exposure --data-urlencode "dir=$PWD"
 When you start on one, mark it \`investigating\`; once the fix is built and the version that carries it exists (the
 manifest or package version you bumped), mark it \`fixed\` with that version. \`fixed\` needs a crash group that has an
 app version; for anything else say \`seen\` or \`investigating\`. A mark needs a live session in this folder (as the
-follow-up above); if two share it, retry with \`"session":"<id>"\`.
+follow-up above); name yours with \`"session"\` set to \`$${SESSION_ID_ENV}\` when two share it.
 
 \`\`\`sh
 curl -s -X POST ${base}/api/agent/exposure/triage -H 'content-type: application/json' \\

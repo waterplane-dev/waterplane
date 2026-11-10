@@ -76,6 +76,8 @@ export * from "./exposurepush.js";
 export * from "./wire/repo.js";
 /** Always-on context: what a conversation's first request carried, and a repo + desktop's every-turn rows. */
 export * from "./wire/alwayson.js";
+/** Agent readings: per-repo weekly figures only this desktop's conversation logs can give. */
+export * from "./wire/agentreadings.js";
 
 /** The reader view's document — the CLI's own conversation log, parsed. */
 export * from "./wire/transcript.js";

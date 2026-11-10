@@ -469,3 +469,80 @@ export function readHunks(root) {
   }
   return out;
 }
+
+/**
+ * The path a numstat row names when git detected a rename: `a/{x => y}/b` or
+ * `x => y`. The NEW path, so the row lands on the file as it now is.
+ * @param {string} p
+ */
+export function renameTarget(p) {
+  if (!p.includes(" => ")) return p;
+  const open = p.indexOf("{");
+  const close = p.indexOf("}", open + 1);
+  if (open >= 0 && close > open) {
+    const inner = p.slice(open + 1, close);
+    const to = inner.slice(inner.indexOf(" => ") + 4);
+    return (p.slice(0, open) + to + p.slice(close + 1)).replace(/\/\//g, "/");
+  }
+  return p.slice(p.indexOf(" => ") + 4);
+}
+
+/**
+ * Per-commit, per-file added/deleted lines WITH rename detection (`-M`), for
+ * `metrics/habits.mjs`.
+ *
+ * `readHistory` pins `diff.renames=false` on purpose (every path it returns
+ * must match a tree entry), and that is exactly wrong for a deletion ratio: a
+ * moved file would read as all lines deleted AND all lines added, and a repo
+ * that reorganises looks like it both grooms and bloats. Here a pure move is a
+ * row of `0 0` and a move-with-edits counts only the edit. Same other flags as
+ * `readHistory` (first-parent merges, no quoting), one more log of the same
+ * size, read once per `update` that has a row to measure.
+ *
+ * A binary row has no line counts and is left out: it is not a line of code.
+ *
+ * @param {string} root
+ * @returns {Map<string, Map<string, {add: number, del: number}>>} sha -> path -> counts
+ */
+export function readChurn(root) {
+  const out = gitText(root, [
+    "-c", "core.quotePath=false",
+    "log", "--first-parent", "--diff-merges=first-parent",
+    "-M", "--numstat", "--no-ext-diff", "--format=%H%x00",
+  ]);
+  const churn = new Map();
+  let files = null;
+  for (const line of out.split("\n")) {
+    if (!line) continue;
+    if (line.includes("\0")) {
+      files = new Map();
+      churn.set(line.slice(0, line.indexOf("\0")), files);
+      continue;
+    }
+    const m = NUMSTAT_ROW.exec(line);
+    if (!m || !files || m[1] === "-" || m[2] === "-") continue;
+    const path = renameTarget(m[3]);
+    const was = files.get(path);
+    if (was) {
+      was.add += Number(m[1]);
+      was.del += Number(m[2]);
+    } else {
+      files.set(path, { add: Number(m[1]), del: Number(m[2]) });
+    }
+  }
+  return churn;
+}
+
+/**
+ * Whether the history stops short of the repo's first commit. A shallow clone
+ * has a boundary commit that "adds" everything, and every window reaching it
+ * would read a repo-sized addition as one day's work.
+ * @param {string} root
+ */
+export function isShallow(root) {
+  try {
+    return gitText(root, ["rev-parse", "--is-shallow-repository"]).trim() === "true";
+  } catch {
+    return false;
+  }
+}

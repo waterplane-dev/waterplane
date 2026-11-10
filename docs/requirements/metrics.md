@@ -80,12 +80,12 @@ The VS Code extension shows repo health metrics over time.
 
 
 ### R-metrics-017 · shipped
-Each repo has a health score, 0 to 100, read week by week from five readings (size, rework, escape hatches, context weight, untested files), each against a fixed good value and read as lower-is-better; the score is the geometric mean of the five, but never more than 30 above the worst one, and the phone says which reading holds it down. A reading under 50 raises a warn alert and under 25 a severe one, each naming the offender (the longest file by path); the week-over-week trend sits second, and an unusual move against the score's own noise warns (drop) or praises (rise). Every repo is notified of a called move, and once more when a reading newly turns severe (never on a repo's first scored week, nor for one that was severe already); a chip shows in the main view. The good values are provisional.
-- asked: 2026-10-15 (owner); reworked to an absolute score with cap, alerts and trend 2026-10-17 (owner); push on a new severe alert 2026-10-17 (owner)
+Each repo has a health score, 0 to 100, read week by week from eleven readings (size, rework, escape hatches, context weight, untested files, and the six of R-metrics-055: duplicate code, dead exports, import cycles, files that change together, fixes after a change, tests changed with code), each against a fixed good value and read as lower-is-better, except tests changed with code, which is higher-is-better; the score is the geometric mean of the readings that could be measured, but never more than 30 above the worst one, never more than 100 × measured ÷ applicable, and held under 50 by a failing gate the repo declares (R-metrics-053), and the phone says which cap holds it down. A reading under 50 raises a warn alert and under 25 a severe one, each naming the offender (the longest file by path); the week-over-week trend sits second, and an unusual move against the score's own noise warns (drop) or praises (rise). Every repo is notified of a called move, and once more when a reading newly turns severe (never on a repo's first scored week, nor for one that was severe already); a chip shows in the main view. The good values are provisional.
+- asked: 2026-10-15 (owner); reworked to an absolute score with cap, alerts and trend 2026-10-17 (owner); push on a new severe alert 2026-10-17 (owner); coverage and gates 2026-11-09 (owner, R-metrics-053)
 - shipped: healthwatch.ts (host); chip in packages/web; healthindex.ts (shared); Health view in packages/vscode
 
 ### R-metrics-018 · shipped
-A repo can declare readings of its own in a committed `.waterplane-shared/health.json` (argv run at HEAD, one number out, absent with a reason otherwise); they are stored in the series beside waterplane's but never enter the health index, and every reading on the phone says whose it is — waterplane's (the same for every repo) or the repo's own — with one line on how to add one where a repo has none.
+A repo can declare readings of its own in a committed `.waterplane-shared/health.json` (argv run at HEAD, one number out, absent with a reason otherwise); they are stored in the series beside waterplane's but never enter the health index (except as a gate, R-metrics-053), and every reading on the phone says whose it is — waterplane's (the same for every repo) or the repo's own — with one line on how to add one where a repo has none.
 - asked: 2026-10-16 (owner)
 - shipped: tools/repohealth/own.mjs; RepoHealthOwn.tsx in packages/web
 ### R-metrics-019 · requested
@@ -98,7 +98,7 @@ A script archives GitHub traffic and release download counts to a local file out
 - shipped: f8d4b23f
 
 ### R-metrics-021 · shipped
-The repo health score has Ask-AI buttons: one on the index box asking what moved the picked week, and one, *assess and propose improvements*, that reads whether the repo is getting healthier, lists its proposed changes and asks which to keep, then posts only the ones the person picks as held backlog rows they fire, edit or delete (no file changed, nothing started), with a disclaimer that the biggest lever may not move the five generic readings.
+The repo health score has Ask-AI buttons: one on the index box asking what moved the picked week, and one, *assess and propose improvements*, that reads whether the repo is getting healthier, lists its proposed changes and asks which to keep, then posts only the ones the person picks as held backlog rows they fire, edit or delete (no file changed, nothing started), with a disclaimer that the biggest lever may not move the generic readings.
 - asked: 2026-10-16
 - shipped: 86e52da1, 81e3edb5, 6e8483f7
 - amended: 2026-10-19 (owner: advice-on-request replaced by one tap whose proposals land as backlog rows, approved one at a time; button renamed from "ask if it is getting healthier")
@@ -245,3 +245,32 @@ The CPU figure shown for a peer host (such as the zenbook under WSL2) matches th
 The reach dashboard is also available as a private cloud dashboard only the owner can open, near-zero cost, and available during Mac network outages.
 - asked: 2026-11-06
 
+
+### R-metrics-051 · requested
+The repo-health reading checks a Dart/Flutter project like any other: which Dart modules no test reaches, duplicated code, exports nothing uses, and import cycles. Generated Dart is left out, and anything the reader cannot tell is shown as absent, never as zero.
+- asked: 2026-11-09 (health-metrics plan, package P5)
+
+
+### R-metrics-052 · requested
+The repo-health readings include git-only measures that work in any language: how many commits fix a change from the last week, how much is deleted per line added (moves not counted) and how many commits delete more than they add, how many source commits also change a test, p95 commit size, the files where churn and size multiply, tracked binaries and build output, and docs naming paths that no longer exist. A reading that cannot be taken (shallow clone, no tests recognised) says why instead of showing zero.
+- asked: 2026-11-09 (health-metrics plan, package P3)
+
+### R-metrics-053 · shipped
+The health index never reads 100 over code it could not read: beside the score it says how many of the dimensions that apply to the repo were measured and names each unmeasured one with its reason (such as "untested modules: no rule for how a Dart test names a module (391 of 537 source files)"); an unmeasured dimension counts for nothing, so the score is at most 100 × measured ÷ applicable. A repo can mark one of its own health.json readings as a gate (`"gate": { "fails": "below" | "above", "at": n }`); a failing gate holds the score under 50 and is named on the phone and in VS Code, and a gate with no reading counts as unmeasured, never as passed, while a passing gate never raises the cap; a reading the repo replaced with its own whole-repo command counts as measured.
+- asked: 2026-11-09 (owner: picture-app read 100, "it can not be 100 good")
+- shipped: healthindex/coverage.ts (shared), tools/repohealth/reach.mjs + own.mjs gate, HealthIndexChart.tsx (phone and VS Code)
+
+
+### R-metrics-054 · requested
+The repo-health reading also shows what the repo's own tools already say, taken from the newest commit only: vulnerable dependencies by severity with the package and version (osv-scanner), the analyzer findings per 1,000 lines of each language present (eslint, the TypeScript compiler, ruff, mypy, the Dart or Flutter analyzer, shellcheck, detekt, ktlint), which strictness settings the configs state, and the coverage files already on disk that are newer than the last commit. A tool that is not installed shows "X is not installed", never zero; no tool is installed, no test is run and nothing is written into the repo.
+- asked: 2026-11-09 (health-metrics plan, package P6)
+
+### R-metrics-055 · shipped
+The health index scores six more readings the engine already takes, each against a good line calibrated on the owner's repos: duplicate code (near-duplicate block pairs per 1,000 lines read, good under 0.25), dead exports (exports no other file uses per 1,000 lines, under 1.5), import cycles (share of import-graph files in a cycle, under 1%), files that change together (median other files a change to a busy file touches, under 5), fixes after a change (share of recent source commits fixing what a commit in the week before changed, under 10%) and tests changed with code (share of recent source commits that also change a test, at least 50%). Each has a plain alert sentence; a reading the engine could not take is unknown with its reason and counts for nothing, never 100. When the weekly move was caused by a repo gate starting to fail (or passing again) or by the share of measured dimensions, the move sentence names that cause.
+- asked: 2026-11-09 (health-metrics plan, package P2)
+- shipped: healthindex/readings.ts + types.ts + words.ts (shared), tools/repohealth/reach.mjs, healthIndexWords.ts (phone and VS Code); calibration docs/analysis/health-metrics/P2.md
+
+### R-metrics-056 · shipped
+The repo-readings sheet has an Agent readings region with four weekly figures only this desktop's own claude conversation logs can give: exploration cost (median tokens a fresh session reads before its first file edit), rework spend (share of tokens in sessions whose first prompt or title says fix, repair, broken, again, bug, regression, revert or not working, plus review-repair workflow agents, beside feature and unknown — never filed as feature when unsure), compactions per session that committed, and escaped defects (crash groups marked in the exposure watch and backlog items marked bug). Each shows its split, each `?` quotes the rule the desktop applied, a week where a reading cannot be taken says why instead of showing zero, and none of them is part of the health score. The desktop reads a repo's logs once and afterwards only the ones that changed.
+- asked: 2026-11-09 (health-metrics plan, package P7)
+- shipped: host agentreadings.ts + agentscan.ts + agentclass.ts, GET /api/repos/:id/agentreadings, web AgentReadingsRegion.tsx

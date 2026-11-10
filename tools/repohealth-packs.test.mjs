@@ -50,6 +50,8 @@ import c from "./repohealth/packs/c.mjs";
 import typescript from "./repohealth/packs/typescript.mjs";
 import { measureUntested } from "./repohealth/metrics/untested.mjs";
 import { cyclesOf, measureGraph } from "./repohealth/metrics/graph.mjs";
+import { measureDups } from "./repohealth/metrics/dups.mjs";
+import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { buildResolveContext, parseJsonc } from "./repohealth/lang/typescript-resolve.mjs";
 import { SERIES, listMoves } from "./repohealth/readings.mjs";
 
@@ -378,8 +380,9 @@ test("python: no manifest in the tree is null, never a row of zeros", () => {
 // Absence: a declined capability must not read as a zero.
 // ───────────────────────────────────────────────────────────────────────────
 
-const SIZE_ONLY = [dart, shell, c];
-const ALL_NEW = [kotlin, python, dart, shell, c];
+const SIZE_ONLY = [shell, c];
+// Python and Dart have readers of their own now (`tools/repohealth-python.test.mjs`, the Dart section here).
+const ALL_NEW = [kotlin, shell, c];
 
 test("a pack with no parser says so, and the sentence is not empty", () => {
   for (const pack of ALL_NEW) {
@@ -410,7 +413,7 @@ test("a declined capability is null — never undefined, 0 or false", () => {
   }
   // No pack but TypeScript has an import-graph rule yet, and saying so is
   // what makes the graph absent for them rather than a tree with no coupling.
-  for (const pack of [common, kotlin, python, dart, shell, c]) {
+  for (const pack of [common, kotlin, shell, c]) {
     for (const cap of ["graphConfigPath", "graphContext", "graphImports", "graphKeysFor"]) {
       assert.equal(pack[cap], null, `${pack.name}.${cap} must be an explicit null`);
     }
@@ -992,4 +995,238 @@ test("graph: an alias reaches the module at its own path, never one sharing its 
   const got = measureGraph(snap, null, 0, GRAPH_TS).value;
   assert.deepEqual(got.cycles, [{ size: 2, files: ["src/lib/x.ts", "src/m.ts"] }]);
   assert.equal(got.edges, 3);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Dart: tokenizer, directives, reach, graph, clones, dead exports.
+// ───────────────────────────────────────────────────────────────────────────
+
+const DART_PUBSPEC = [{ path: "pubspec.yaml" }];
+const dartCtx = (name = "myapp", dir = "") =>
+  dart.graphContext([{ path: dir ? `${dir}/pubspec.yaml` : "pubspec.yaml" }], () => `name: ${name}\nversion: 1.0.0\n`);
+const DART_ONLY = Object.freeze({
+  PACKS: [{ name: "dart", pack: dart, files: 1 }],
+  UNTESTED_REQUIRE_DIR_SEGMENT: true,
+  GRAPH_MIN_RESOLVED: 0.9,
+  DUP_MIN_LINES: 6,
+  DUP_SHINGLE: 5,
+  DUP_HASHES: 64,
+  DUP_BANDS: 8,
+  DUP_SIMILARITY: 0.8,
+  DUP_MAX_BUCKET: 50,
+  DUP_NESTED_BLOCKS: false,
+});
+
+test("dart: directives are read from code only — comments and strings that look like imports are not", () => {
+  const ctx = dartCtx();
+  const text = [
+    "// import 'package:myapp/in_comment.dart';",
+    "/* import 'package:myapp/in_block.dart'; /* nested */ still comment */",
+    "import 'dart:async';",
+    "import 'package:flutter/material.dart';",
+    "import 'package:myapp/a.dart' as a show A;",
+    "export 'src/b.dart' hide Hidden;",
+    "import '../c.dart' if (dart.library.io) 'c_io.dart' if (dart.library.html == 'true') 'c_web.dart';",
+    "const s = \"import 'package:myapp/in_string.dart';\";",
+    "part 'd.dart';",
+    "part 'd.g.dart';",
+  ].join("\n");
+  const got = dart.graphImports({ path: "lib/m/x.dart", text }, ctx).map((i) => i.candidates[0]);
+  assert.deepEqual(got, ["lib/a.dart", "lib/m/src/b.dart", "lib/c.dart", "lib/m/c_io.dart", "lib/m/c_web.dart", "lib/m/d.dart"]);
+});
+
+test("dart: package: is ours only when its name is a pubspec name in the tree", () => {
+  const sub = dartCtx("inner", "tools/inner");
+  const got = dart.graphImports(
+    { path: "lib/m.dart", text: "import 'package:inner/z.dart'; import 'package:path/path.dart'; import 'package:inner/y.dart';" },
+    sub,
+  );
+  assert.deepEqual(got.map((i) => i.candidates[0]), ["tools/inner/lib/z.dart", "tools/inner/lib/y.dart"]);
+  // No context at all: nothing is ours, nothing is a miss.
+  assert.deepEqual(dart.graphImports({ path: "lib/m.dart", text: "import 'package:inner/z.dart';" }, null), []);
+});
+
+test("dart: a part is the library's own file — reached from it, no edge back, no cycle", () => {
+  const ctx = dartCtx();
+  const lib = { path: "lib/net.dart", text: "import 'dart:io';\npart 'net_part.dart';\n" };
+  const part = { path: "lib/net_part.dart", text: "part of 'net.dart';\nclass A {}\n" };
+  assert.deepEqual(dart.graphImports(part, ctx), []);
+  const snap = { files: [lib, part].map((f) => file(f.path, f.text)), graphContexts: { dart: ctx } };
+  const got = measureGraph(snap, null, 0, DART_ONLY).value;
+  assert.equal(got.cycleFiles, 0);
+  assert.equal(got.edges, 1);
+});
+
+test("dart: an import cycle is found, and an import the tree cannot resolve makes the graph absent", () => {
+  const ctx = dartCtx();
+  const files = [
+    file("lib/a.dart", "import 'b.dart';"),
+    file("lib/b.dart", "import 'package:myapp/a.dart';"),
+  ];
+  const got = measureGraph({ files, graphContexts: { dart: ctx } }, null, 0, DART_ONLY).value;
+  assert.deepEqual(got.cycles, [{ size: 2, files: ["lib/a.dart", "lib/b.dart"] }]);
+  const broken = [file("lib/a.dart", "import 'gone1.dart'; import 'gone2.dart';"), file("lib/b.dart", "import 'a.dart';")];
+  const bad = measureGraph({ files: broken, graphContexts: { dart: ctx } }, null, 0, DART_ONLY);
+  assert.equal(bad.value, null);
+  assert.match(bad.reason, /gone1\.dart/);
+});
+
+test("dart: an unterminated string leaves the imports unknown, not shorter", () => {
+  assert.equal(dart.graphImports({ path: "lib/a.dart", text: "import 'b.dart';\nconst x = 'oops;\nimport 'c.dart';" }, dartCtx()), null);
+});
+
+test("dart: tests are test/, integration_test/ and *_test.dart, and generated files are not source", () => {
+  const prereg = { SRC: { exts: dart.exts, excludeSuffixes: dart.excludeSuffixes, excludeDirs: [], testGlobs: dart.testGlobs } };
+  for (const p of ["test/a_test.dart", "pkg/test/fakes/f.dart", "integration_test/app.dart", "lib/x_test.dart"]) {
+    assert.equal(isTestPath(p, prereg), true, p);
+    assert.equal(isSource(p, prereg), false, p);
+  }
+  assert.equal(isTestPath("test/data.json", prereg), false, "a fixture of another kind is not this pack's corpus");
+  for (const p of ["lib/a.dart", "lib/contest/a.dart"]) assert.equal(isSource(p, prereg), true, p);
+  for (const p of ["lib/a.g.dart", "lib/a.freezed.dart"]) assert.equal(isSource(p, prereg), false, p);
+});
+
+test("dart untested: reach follows import, export and part from a test, and a foreign package names nothing", () => {
+  const ctx = dartCtx();
+  const snap = {
+    files: [
+      file("lib/ui/screen.dart", "import 'package:myapp/core/logic.dart'; import '../util.dart';"),
+      file("lib/core/logic.dart", "export 'src/engine.dart'; part 'logic_part.dart';"),
+      file("lib/core/src/engine.dart"),
+      file("lib/core/logic_part.dart", "part of 'logic.dart';"),
+      file("lib/util.dart"),
+      file("lib/path.dart", "// a local file that shares a name with the dependency package:path"),
+      file("lib/orphan.dart"),
+    ],
+    tests: [
+      {
+        path: "test/screen_test.dart",
+        text: "import 'package:flutter_test/flutter_test.dart'; import 'package:path/path.dart'; import 'package:myapp/ui/screen.dart';",
+      },
+    ],
+    graphContexts: { dart: ctx },
+  };
+  const got = measureUntested(snap, null, 0, DART_ONLY);
+  assert.deepEqual(got.value, ["lib/orphan.dart", "lib/path.dart"]);
+  // Everything else is reached; the test names only the screen.
+  assert.deepEqual(got.unnamed, ["lib/core/logic.dart", "lib/core/logic_part.dart", "lib/core/src/engine.dart", "lib/util.dart"]);
+});
+
+test("dart untested: a monorepo test reaches its own package's module, not a same-named one elsewhere", () => {
+  dart.graphContext([{ path: "app/pubspec.yaml" }, { path: "other/pubspec.yaml" }], (e) => `name: ${e.path.split("/")[0]}\n`);
+  const snap = {
+    files: [file("app/lib/x.dart"), file("other/lib/x.dart")],
+    tests: [{ path: "app/test/x_test.dart", text: "import 'package:app/x.dart';" }],
+  };
+  assert.deepEqual(measureUntested(snap, null, 0, DART_ONLY).value, ["other/lib/x.dart"]);
+});
+
+const CLONE = (name, lit = "3") =>
+  [
+    `List<int> ${name}(List<int> items) {`,
+    "  final out = <int>[];",
+    "  for (final item in items) {",
+    `    if (item > ${lit}) {`,
+    "      out.add(item * 2);",
+    "    } else {",
+    "      out.add(item + 1);",
+    "    }",
+    "  }",
+    "  return out;",
+    "}",
+  ].join("\n");
+
+test("dart dups: a copied function is a pair; other literals do not hide it; a different one is not", () => {
+  const other = [
+    "String describe(Map<String, Object> m) {",
+    "  final b = StringBuffer();",
+    "  m.forEach((k, v) {",
+    "    b.write('$k=$v;');",
+    "  });",
+    "  b.writeln();",
+    "  return b.toString().trim();",
+    "}",
+  ].join("\n");
+  const snap = {
+    files: [
+      file("lib/a.dart", `${CLONE("doubleBig")}\n\n${other}`),
+      file("lib/b.dart", CLONE("doubleBig", "900")),
+    ],
+  };
+  const got = measureDups(snap, null, 0, DART_ONLY).value;
+  assert.equal(got.pairs.length, 1);
+  assert.match(got.pairs[0].a, /^lib\/a\.dart#doubleBig@1$/);
+  assert.match(got.pairs[0].b, /^lib\/b\.dart#doubleBig@1$/);
+});
+
+test("dart dups: methods are named Class.member, and comments and strings do not count", () => {
+  const body = (s) => ["  void run() {", "    // " + s, "    final a = 1;", "    final b = a + 1;", "    print('x $a');", "    print(b);", "    if (a > b) return;", "  }"].join("\n");
+  const snap = {
+    files: [file("lib/a.dart", `class One {\n${body("first")}\n}`), file("lib/b.dart", `class Two {\n${body("second words")}\n}`)],
+  };
+  const got = measureDups(snap, null, 0, DART_ONLY).value;
+  assert.deepEqual(got.pairs.map((p) => [p.a, p.b]), [["lib/a.dart#One.run@2", "lib/b.dart#Two.run@2"]]);
+});
+
+test("dart dead exports: a public name nobody else names is listed; used, private, main and generated-part names are not", () => {
+  const snap = {
+    files: [
+      file(
+        "lib/a.dart",
+        [
+          "part 'a.g.dart';",
+          "class Unused {}",
+          "class _Hidden {}",
+          "class Used {}",
+          "class UsedByString {}",
+          "class ByTest {}",
+          "class OnlyHere {}",
+          "String helper() => OnlyHere().toString();",
+          "void main() { helper(); }",
+          "@pragma('vm:entry-point')\nvoid nativeHook() {}",
+          "extension Ext on int { int get twice => this * 2; }",
+          "typedef Cb = void Function();",
+        ].join("\n"),
+      ),
+      file("lib/b.dart", "import 'a.dart';\nvoid f() { Used(); print('$UsedByString'); }"),
+      file("lib/c.dart", "// Unused is only in a comment\nconst note = 'Unused';\nclass Plain {}\nint answer = 42;"),
+    ],
+    tests: [{ path: "test/a_test.dart", text: "void t() { ByTest(); }" }],
+  };
+  // The first file lists a generated part: its names are not judged at all.
+  assert.deepEqual(measureDeadExports(snap, null, 0, DART_ONLY).value, [
+    "lib/b.dart#f",
+    "lib/c.dart#Plain",
+    "lib/c.dart#answer",
+    "lib/c.dart#note",
+  ]);
+  snap.files[0] = file("lib/a.dart", snap.files[0].text.replace("part 'a.g.dart';\n", ""));
+  assert.deepEqual(measureDeadExports(snap, null, 0, DART_ONLY).value, [
+    "lib/a.dart#Unused",
+    "lib/b.dart#f",
+    "lib/c.dart#Plain",
+    "lib/c.dart#answer",
+    "lib/c.dart#note",
+  ]);
+});
+
+test("dart: the scanner survives generics, records of functions, named constructors and const maps", () => {
+  const text = [
+    "import 'package:myapp/z.dart';",
+    "typedef Handler<T> = Future<void> Function(T value);",
+    "final Map<String, List<Map<String, int>>> table = {'a': [{'b': 1}]};",
+    "void Function(int) callback = (n) {};",
+    "abstract interface class Repo<T extends Object> implements Base {",
+    "  Repo();",
+    "  const Repo.named(this.x) : assert(x > 0), super();",
+    "  factory Repo.make() => _Impl();",
+    "  Future<List<T>> all() async { return []; }",
+    "  T? get first => null;",
+    "}",
+    "enum Mode { a, b; String get label => name; }",
+    "int twice(int x) => x * 2;",
+  ].join("\n");
+  const got = dart.analyzer().idents({ path: "lib/s.dart", text });
+  // The typedef is a type and is left out; nothing is dropped or invented.
+  assert.deepEqual(got.exports, ["table", "callback", "Repo", "Mode", "twice"]);
 });

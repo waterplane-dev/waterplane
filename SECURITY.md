@@ -267,7 +267,7 @@ They answer only a loopback caller that is neither a browser (any `Origin` or `S
 is refused, same-origin included) nor proxied (same headers as above). They add no power: a posted row
 goes through the same containment gate and store as the phone's `intent.post`, cannot bring a budget
 waiver, and waits for the person's auto-fire switch and budget like any scheduled item. A backlog add
-never starts until the person fires it.
+never starts until the person fires it; a script's `proposedBy` only changes the row's origin mark and adds one push.
 
 ## The Android app
 

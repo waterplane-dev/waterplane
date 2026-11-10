@@ -1,5 +1,6 @@
 import type { PromptDef, PromptId, ToExtension } from "../src/protocol";
 import { Absent } from "./Absent";
+import { Loading } from "./Loading";
 import { PromptActions } from "./Actions";
 
 const WORDS: Record<PromptId, string> = {
@@ -28,7 +29,7 @@ export function PromptsView({ list, terminal, selectedTurn, have, post }: {
   have: { session: boolean; weight: boolean; health: boolean; rising: boolean };
   post: (m: ToExtension) => void;
 }) {
-  if (!list.length) return <Absent>The extension has not sent its prompts yet.</Absent>;
+  if (!list.length) return <Loading>Reading the prompt list…</Loading>;
   return (
     <>
       <div className="empty ts-caveat">

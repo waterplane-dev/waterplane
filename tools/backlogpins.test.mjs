@@ -41,7 +41,7 @@ function tally(re) {
 }
 
 // ── P1: the barrel exports exactly what the one file did ───────────────────
-test("P1: backlogFilter.ts exports the same 106 runtime names and 10 types", async () => {
+test("P1: backlogFilter.ts exports the same 110 runtime names and 10 types", async () => {
   const m = await import(join(SRC, "backlogFilter.ts"));
   assert.deepEqual(Object.keys(m).sort(), [
     "AGE_LABEL", "ASSESS_NONE_IN_CUT", "BACKLOG_AGES", "BACKLOG_STATUSES", "BL_OFFLINE", "CATEGORY_BUCKETS",
@@ -56,7 +56,7 @@ test("P1: backlogFilter.ts exports the same 106 runtime names and 10 types", asy
     "dropClocksLabel", "dropClocksNote", "dropClocksToast", "editTargetOptions", "effectiveSort", "fmtSpan", "focusRunWords",
     "fromScheduleWords", "goneOnClockLabel", "hasBacklogFilter", "headlineEditHint", "hiddenByArchive",
     "holdChipWords", "holderOffer", "isFailedRow", "itemClockKey", "matchesBacklogFilter", "nameLabel", "nameNote", "nameableInCut",
-    "namingToast", "onClockIds", "onClockLabel", "pastBudgetChipWords", "queuedChipHeld", "realLabel", "refireOffered",
+    "namingToast", "onClockIds", "onClockLabel", "pastBudgetChipWords", "proposalCut", "proposalsCutLabel", "proposalsHeadline", "proposersWords", "queuedChipHeld", "realLabel", "refireOffered",
     "requeuedWords", "retimeEligible", "retimeNote", "retimeOffClockNote", "retimeQueuedToast", "retimeToast", "rowStatusKey", "rowStatusWord",
     "runAgainAimedCount", "runAgainClosedNote", "runAgainEligible", "runAgainIds", "runAgainLabel",
     "runAgainNote", "runAgainRowNote", "runAgainState", "runAgainToast", "runSeats", "scheduleItemsLabel",
@@ -96,7 +96,7 @@ test("P3: each callback the sheet is handed is called from the same number of si
   assert.deepEqual(tally(/\.(on[A-Z][A-Za-z]*|renderRetime|imageSrc|scheduleFor|assessBlocked)(?:\?\.|!)?\(/g), {
     assessBlocked: 1, imageSrc: 1,
     onArchive: 2, onArchiveMany: 1, onAssess: 1, onCheck: 1, onCloseSession: 1, onContinue: 3, onDone: 1,
-    onDropClock: 1, onDropClocks: 1, onEditImage: 1, onEditWhen: 1, onFire: 2, onHoldForBudget: 1, onName: 1,
+    onDropClock: 1, onDropClocks: 1, onEditImage: 1, onEditWhen: 2, onFire: 2, onHoldForBudget: 1, onName: 1,
     onNextStep: 1, onOpenCut: 1, onOpenSchedule: 1, onOpenSend: 2, onOpenWeekBurn: 2, onOpenSession: 4, onQueueHere: 2, onRemove: 1,
     onReorder: 1, onRunAgain: 1, onRunAgainMany: 1, onSetAuto: 2, onSetBudget: 1, onSetCloseWhenDone: 1, onSetFlagWhenDone: 1, onSlotCheck: 1,
     onSwap: 4, onUpdate: 1, onValidate: 1,
@@ -111,14 +111,14 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
     "backlog.clock.up": 1, "backlog.done": 1, "backlog.dropclock": 1, "backlog.dropclock.all": 1,
     "backlog.editwhen": 1, "backlog.filter.age": 1, "backlog.filter.category": 1, "backlog.filter.clear": 1,
     "backlog.filter.clock": 1, "backlog.filter.status": 1, "backlog.fire": 1, "backlog.fromschedule": 1, "backlog.fromweekburn": 1,
-    "backlog.holdforbudget": 1, "backlog.name": 1, "backlog.openholder": 1,
+    "backlog.holdforbudget": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.proposalwhen": 1,
     "backlog.queuehere": 1, "backlog.refire": 1, "backlog.remove": 1, "backlog.retime.clock": 1, "backlog.retime.pick": 1,
     "backlog.runagain": 1, "backlog.runagain.all": 1, "backlog.send": 1, "backlog.slotClose": 1, "backlog.slotask.on": 1, "backlog.slotcheck": 1,
     "backlog.sort.newest": 1, "backlog.sort.run": 1, "backlog.unqueuehere": 1,
     "backlog.weekburn": 1, "backlog.weekburnrows": 1,
   });
   assert.deepEqual(tally(/data-hint="(backlog\.[^"]+)"/g), {
-    "backlog.done": 1, "backlog.fire": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.queuehere": 2,
+    "backlog.done": 1, "backlog.fire": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.proposalwhen": 1, "backlog.queuehere": 2,
     "backlog.refire": 1, "backlog.runagain": 1,
   });
 });

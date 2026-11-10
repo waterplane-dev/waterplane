@@ -888,3 +888,9 @@ test("…and a repo's central disable and override (`variant`, `central`) surviv
   bad.series.find((s) => s.key === "size.p95").variant.points.pop();
   assert.equal(parseRepoHealthPlot(JSON.stringify(bad)).series.find((s) => s.key === "size.p95").variant, undefined);
 });
+
+test("acceptsRecut arrives only as a literal true; anything else is not declared", () => {
+  assert.equal(parseRepoHealthMeasure(JSON.stringify({ ...MEASURE, acceptsRecut: true }))?.acceptsRecut, true);
+  assert.equal("acceptsRecut" in (parseRepoHealthMeasure(JSON.stringify(MEASURE)) ?? {}), false);
+  assert.equal("acceptsRecut" in (parseRepoHealthMeasure(JSON.stringify({ ...MEASURE, acceptsRecut: "yes" })) ?? {}), false);
+});

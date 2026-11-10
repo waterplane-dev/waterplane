@@ -38,6 +38,7 @@ export type { TurnCursor } from "./turns.js";
 export { TokenStore } from "./store.js";
 export type { Files, ScanStats } from "./store.js";
 export { foldCorpus } from "./corpus.js";
+export { CORPUS_VERSION, loadCorpus, saveCorpus } from "./corpusstore.js";
 export { copilotWeekWords, currentSummary, summaryOf, thisRepoWeek, weekFigure, weekSplit } from "./summary.js";
 export type { HeadlineSummary } from "./summary.js";
 export { weighFolder } from "./weight.js";

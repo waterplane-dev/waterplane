@@ -210,10 +210,12 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   // The re-cut line is the ENGINE's, for the root it measured. The constant
   // this replaced named `tools/repohealth.mjs` relative to a repo most repos
   // are not, and began with `rm`.
-  // The re-cut is a tap only through the BUNDLED engine: it is the one that
-  // knows `--recut`. A repo's own copy may predate the flag — it would ignore
-  // it and refuse again — so there the desktop line stays the remedy.
-  const recutOffered = !!repo && view?.engine?.kind === "bundled" && view?.engine?.needsApproval !== true;
+  // The re-cut is a tap only through an engine that knows `--recut`: the
+  // bundled one, or a repo's own copy that SAYS so (`acceptsRecut`). An older
+  // own copy would ignore the flag and refuse again, so there the desktop
+  // line stays the remedy.
+  const recutOffered = !!repo && view?.engine?.needsApproval !== true
+    && (view?.engine?.kind === "bundled" || measure?.acceptsRecut === true);
   const mixed = mixedVersionWords(
     series?.versions, measure?.engineVersion ?? series?.preregVersion, recutCommandOf(measure), recutOffered);
   const engineLine = engineLineWords({
@@ -234,6 +236,13 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   // Drawn under the prediction AND under a refusal (exit 3 is only ever the
   // two-definitions refusal), so the remedy sits where it is read.
   const recutShown = recutOffered && (!!mixed || !!last?.refused);
+  const recutButton = (
+    <div className="section">
+      <ConfirmButton className="key rh-verb" confirm={RECUT_CONFIRM} onConfirm={() => void refresh(false, true)}>
+        <RefreshCw size={12} aria-hidden /> {busy ? refreshBusyLabel(series, now - startedAt) : RECUT_LABEL}
+      </ConfirmButton>
+    </div>
+  );
   const narrative = view?.narrative ?? null;
   const sizeWords = seriesSizeWords(series);
   const warnings = warningsWords(last?.warnings);
@@ -475,13 +484,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
       {staleRows ? <div className="section section-hint">{staleRows}</div> : null}
       {running ? <div className="section section-hint">{running}</div> : null}
 
-      {recutShown ? (
-        <div className="section">
-          <ConfirmButton className="key rh-verb" confirm={RECUT_CONFIRM} onConfirm={() => void refresh(false, true)}>
-            <RefreshCw size={12} aria-hidden /> {busy ? refreshBusyLabel(series, now - startedAt) : RECUT_LABEL}
-          </ConfirmButton>
-        </div>
-      ) : null}
+      {recutShown && !last?.refused ? recutButton : null}
 
       {last ? (
         <div className="section section-hint">
@@ -497,6 +500,10 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           {warnings ? <div>{warnings}</div> : null}
         </div>
       ) : null}
+      {/* Under a refusal the button follows the tool's own words: their last
+          line is the remedy, and a person reads down to it — drawn above, the
+          tap sat behind the text that asks for it and went unseen. */}
+      {recutShown && last?.refused ? recutButton : null}
 
       {needsApproval && repo ? (
         <div className="section section-hint">

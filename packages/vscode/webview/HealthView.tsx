@@ -24,6 +24,7 @@ import {
 import { SCOPE_ALL_LABEL, scopeHeadWords } from "../../web/src/repoHealthWords/repoHealthWordsScope";
 import { NOT_GIT, XCODE_LICENSE, knownReadErrorWords, measureWords, notRunWords, ownAddNoteWords, ownMixedWords, readAgainLabel, repoMixedWords, sourceWords } from "../src/health/sourcewords";
 import { Absent } from "./Absent";
+import { Loading } from "./Loading";
 import { loadHealthAxis, saveHealthAxis } from "./host";
 import "../../web/src/repohealth.css";
 import { PromptActions } from "./Actions";
@@ -113,7 +114,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
         <div className="section-head rh-head"><span className="section section-hint rh-status rh-push">{seriesHeadWords()}</span></div>
         <HealthNav keys={[]} refresh={verb} />
         {run ? <div className="section section-hint" role="status">{runningWords(run, now)}</div> : null}
-        <Absent>{why ?? "No repo-health reading has arrived for this folder yet."}</Absent>
+        {why ? <Absent>{why}</Absent> : <Loading>Reading repo health for {repoName}…</Loading>}
       </div>
     );
   }

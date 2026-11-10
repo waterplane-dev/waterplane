@@ -393,6 +393,15 @@ export const HINTS: Record<string, HintDef> = {
     when: "For a list of long prompts that all look alike. One short call on the cheap model, so it costs little; it names only what is in the cut you are looking at, and running it again on the same rows changes nothing. A title it writes is yours to edit, and once you edit one nothing writes over it again.",
   },
   "backlog.done": { title: "Mark done", what: "Closes the item off by hand, without running it." },
+  // A proposal (`proposedBy`) is work a script suggested; nothing runs it until a person answers.
+  "backlog.proposalwhen": {
+    title: "Schedule this proposal",
+    what: "Opens the send sheet with this proposed item already in it, so you can give it a time. Saving makes it your own timed item, and it leaves the proposals list.",
+  },
+  "launcher.proposals": {
+    title: "Proposals waiting for you",
+    what: "Work a script suggested for a repo. Nothing runs until you answer: opens exactly those items, where each can be fired, scheduled or deleted.",
+  },
 
   // ── Files / downloads ─────────────────────────────────────────────
   "gallery.pull": {

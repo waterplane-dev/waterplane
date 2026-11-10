@@ -8,6 +8,7 @@ import type { AoPlot } from "../../web/src/alwaysOnPlot";
 import { FilterChip } from "../../web/src/kit/FilterChip";
 import { toggleChip } from "../../web/src/kit/chips";
 import { Absent } from "./Absent";
+import { Loading } from "./Loading";
 import { PromptActions } from "./Actions";
 import { TabLinks } from "./TabLinks";
 import type { AgentTotals } from "../src/protocol";
@@ -95,7 +96,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
 }) {
   const [cut, setCut] = useState<Scope | null>(null);
   const [pick, setPick] = useState<string | null>(null);
-  if (!doc) return <Absent>{why ?? "No CLAUDE.md or skills were found in this folder."}</Absent>;
+  if (!doc) return why ? <Absent>{why}</Absent> : <Loading>Reading this folder’s CLAUDE.md and skills…</Loading>;
   const r = doc.reading;
   const skills = [...doc.skills].sort((a, b) => b.descChars - a.descChars);
   const descTotal = skills.reduce((n, s) => n + s.descChars, 0);

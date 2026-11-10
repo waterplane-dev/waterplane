@@ -12,6 +12,7 @@ import { setSlotCheckOpener } from "../../slotAskStore";
 import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList, openSlotCheck } from "./actions";
 
 export { useBacklog } from "./store";
+export { ProposalsStrip } from "./ProposalsStrip";
 export {
   onAssessAck, openAssessFor, openBacklogCut, openBacklogFor, openBacklogIn, openSlotCheck,
 } from "./actions";

@@ -1,7 +1,8 @@
 // healthindex/score: The absolute score: per-entry scores, alerts, the capped headline, the weekly series. Barrel: ../healthindex.ts (read the header there).
-import { HEALTH_ENTRIES, type HealthEntry, HEALTH_GOOD, HEALTH_SCORE_CAP_GAP, HEALTH_ALERT_WARN, HEALTH_ALERT_SEVERE, type HealthSeriesRow, type HealthSizeParts, type HealthAlertSubject, type HealthAlert, type HealthIndexPoint, type HealthIndexSeries } from "./types.js";
-import { healthScore, healthWeeks, healthContextGood, type HealthEntryReadings, healthEntryReadings, centralOf, treeOf, DAY_MS } from "./readings.js";
+import { HEALTH_ENTRIES, HEALTH_OPTIONAL_ENTRIES, type HealthEntry, HEALTH_GOOD, HEALTH_SCORE_CAP_GAP, HEALTH_ALERT_WARN, HEALTH_ALERT_SEVERE, type HealthSeriesRow, type HealthSizeParts, type HealthAlertSubject, type HealthAlert, type HealthIndexPoint, type HealthIndexSeries } from "./types.js";
+import { healthScore, healthEntryScore, healthWeeks, healthContextGood, type HealthEntryReadings, healthEntryReadings, centralOf, treeOf, DAY_MS } from "./readings.js";
 import { wordOf } from "../wordof.js";
+import { healthCoverage, healthHeadline, type HealthCoverage, type HealthCapKind } from "./coverage.js";
 
 const daysBetween = (a: string, b: string): number =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
@@ -12,6 +13,9 @@ const daysBetween = (a: string, b: string): number =>
 const commas = (n: number): string => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const pct = (x: number): string => `${Math.round(x * 100)}%`;
 const oneDp = (x: number): string => (Math.round(x * 10) / 10).toFixed(1);
+const twoDp = (x: number): string => (Math.round(x * 100) / 100).toFixed(2);
+/** A share with one decimal under 10% (`0.6%`), whole above: a cycle share lives near 1%. */
+const finePct = (x: number): string => (x < 0.1 ? `${(Math.round(x * 1000) / 10).toFixed(1)}%` : pct(x));
 
 /** Plain names for an entry, as the cap sentence names it. */
 export const HEALTH_ENTRY_LABEL: Record<HealthEntry, string> = {
@@ -20,6 +24,12 @@ export const HEALTH_ENTRY_LABEL: Record<HealthEntry, string> = {
   hatches: "escape hatches",
   context: "CLAUDE.md + skill descriptions",
   untested: "untested modules",
+  dups: "duplicate code",
+  deadExports: "dead exports",
+  cycles: "import cycles",
+  cochange: "files that change together",
+  fixAfterChange: "fixes after a change",
+  testsWithCode: "tests changed with code",
 };
 
 function alertText(level: HealthAlert["level"], subject: HealthAlertSubject, value: number, good: number, path?: string): string {
@@ -38,13 +48,25 @@ function alertText(level: HealthAlert["level"], subject: HealthAlertSubject, val
         return `CLAUDE.md + skill descriptions are ${commas(value)} chars (good: under ${commas(good)})`;
       case "untested":
         return `${pct(value)} of source files have no test reaching them (good: under ${pct(good)})`;
+      case "dups":
+        return `${twoDp(value)} near-duplicate block pairs per 1,000 lines (good: under ${twoDp(good)})`;
+      case "deadExports":
+        return `${oneDp(value)} exports per 1,000 lines that no other file uses (good: under ${oneDp(good)})`;
+      case "cycles":
+        return `${finePct(value)} of the import graph's files sit in an import cycle (good: under ${finePct(good)})`;
+      case "cochange":
+        return `a change to one of the busiest files also changes ${oneDp(value)} other files beside it (median; good: under ${oneDp(good)})`;
+      case "fixAfterChange":
+        return `${pct(value)} of recent source commits fix what a commit in the week before changed (good: under ${pct(good)})`;
+      case "testsWithCode":
+        return `only ${pct(value)} of recent source commits also change a test (good: at least ${pct(good)})`;
     }
   })();
   return `${level}: ${body}`;
 }
 
 function alertOf(entry: HealthEntry, subject: HealthAlertSubject, value: number, good: number, path?: string | null): HealthAlert | null {
-  const score = healthScore(value, good);
+  const score = healthEntryScore(entry, value, good);
   if (!(score < HEALTH_ALERT_WARN)) return null;
   const level = score < HEALTH_ALERT_SEVERE ? "severe" : "warn";
   const p = path ?? undefined;
@@ -62,10 +84,22 @@ export function healthCapWords(s: { value: number; mean: number; cappedBy: Healt
   return `Capped at ${Math.round(s.value)} by ${wordOf(HEALTH_ENTRY_LABEL, s.cappedBy, "an entry this app version cannot name")} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
 }
 
-/** One week's score from its readings; null when any enabled entry is absent, or none is enabled. */
-function scoreWeek(r: HealthEntryReadings, disabled: readonly HealthEntry[], contextWarnChars: number | null) {
-  const enabled = HEALTH_ENTRIES.filter((e) => !disabled.includes(e));
-  if (enabled.length === 0 || enabled.some((e) => r.values[e] === undefined)) return null;
+/**
+ * One week's score from its readings; null when any enabled CORE entry is
+ * absent, none is enabled, or every enabled entry is UNKNOWN (`coverage.ts`).
+ * An optional entry (`HEALTH_OPTIONAL_ENTRIES`) the row could not read is
+ * unknown with the engine's reason; one the row has no field for does not
+ * apply on that row. Unknown entries leave the mean, the worst-entry cap and
+ * the alerts; the coverage and gate caps then apply (`healthHeadline`).
+ */
+function scoreWeek(r: HealthEntryReadings, row: HealthSeriesRow, disabled: readonly HealthEntry[], contextWarnChars: number | null) {
+  const all = HEALTH_ENTRIES.filter((e) => !disabled.includes(e) && !(r.unrecorded ?? []).includes(e));
+  const absent = r.absent ?? {};
+  if (all.length === 0 || all.some((e) => r.values[e] === undefined && !(HEALTH_OPTIONAL_ENTRIES.includes(e) && absent[e]))) return null;
+  const coverage: HealthCoverage = healthCoverage(row, all, absent);
+  const unknown = new Set(coverage.items.filter((i) => i.kind === "entry" && i.state === "unknown").map((i) => i.key));
+  const enabled = all.filter((e) => !unknown.has(e));
+  if (enabled.length === 0) return null;
   const ctxGood = healthContextGood(contextWarnChars);
   const scores: Partial<Record<HealthEntry, number>> = {};
   let sizeParts: HealthSizeParts | null = null;
@@ -88,7 +122,7 @@ function scoreWeek(r: HealthEntryReadings, disabled: readonly HealthEntry[], con
       continue;
     }
     const good = e === "context" ? ctxGood : HEALTH_GOOD[e];
-    scores[e] = healthScore(v, good);
+    scores[e] = healthEntryScore(e, v, good);
     const a = alertOf(e, e, v, good);
     if (a) alerts.push(a);
   }
@@ -97,10 +131,9 @@ function scoreWeek(r: HealthEntryReadings, disabled: readonly HealthEntry[], con
   const mean = Math.exp(enabled.reduce((s, e) => s + Math.log(scores[e] as number), 0) / n);
   let worst: HealthEntry = enabled[0];
   for (const e of enabled) if ((scores[e] as number) < (scores[worst] as number)) worst = e;
-  const capped = (scores[worst] as number) + HEALTH_SCORE_CAP_GAP;
-  const index = Math.min(mean, capped);
+  const { index, capKind } = healthHeadline(mean, scores[worst] as number, coverage);
   alerts.sort((a, b) => a.score - b.score);
-  return { index, mean, scores, sizeParts, cappedBy: capped < mean ? worst : null, alerts, enabled };
+  return { index, mean, scores, sizeParts, cappedBy: capKind === "worst" ? worst : null, capKind, coverage, alerts, enabled };
 }
 
 /**
@@ -115,13 +148,13 @@ export function healthIndex(
   for (const { week, row } of healthWeeks(rows)) {
     const c = centralOf(row);
     const readings = healthEntryReadings(row);
-    const s = scoreWeek(readings, c.disabled, contextWarnChars);
+    const s = scoreWeek(readings, row, c.disabled, contextWarnChars);
     if (!s) continue;
     const prereg = typeof row.prereg === "string" ? row.prereg : null;
     const prev = points[points.length - 1];
     const base = {
       week, index: s.index, mean: s.mean, scores: s.scores, sizeParts: s.sizeParts,
-      cappedBy: s.cappedBy, alerts: s.alerts, values: readings.values, prereg,
+      cappedBy: s.cappedBy, capKind: s.capKind, coverage: s.coverage, alerts: s.alerts, values: readings.values, prereg,
       central: c.fp, disabled: c.disabled, overridden: c.overridden, tree: treeOf(row),
     };
     if (!prev) {
@@ -129,7 +162,9 @@ export function healthIndex(
       continue;
     }
     const spanDays = daysBetween(prev.week, week);
-    const gapReason = prev.prereg !== prereg ? "prereg" : prev.central !== c.fp ? "central" : null;
+    // A change in WHAT was measured (an entry turning unknown, a gate declared) moves the basket like a central change.
+    const gapReason = prev.prereg !== prereg ? "prereg" : prev.central !== c.fp ? "central"
+      : (prev.coverage?.key ?? "") !== s.coverage.key ? "coverage" : null;
     if (gapReason) {
       points.push({ ...base, gap: true, lnLink: null, comparable: 0, contributions: {}, spanDays, gapReason });
       continue;
@@ -154,9 +189,9 @@ export function healthIndex(
 export function healthRowScore(
   row: HealthSeriesRow,
   contextWarnChars: number | null,
-): { index: number; mean: number; scores: Partial<Record<HealthEntry, number>>; cappedBy: HealthEntry | null } | null {
-  const s = scoreWeek(healthEntryReadings(row), centralOf(row).disabled, contextWarnChars);
-  return s ? { index: s.index, mean: s.mean, scores: s.scores, cappedBy: s.cappedBy } : null;
+): { index: number; mean: number; scores: Partial<Record<HealthEntry, number>>; cappedBy: HealthEntry | null; capKind: HealthCapKind | null; coverage: HealthCoverage } | null {
+  const s = scoreWeek(healthEntryReadings(row), row, centralOf(row).disabled, contextWarnChars);
+  return s ? { index: s.index, mean: s.mean, scores: s.scores, cappedBy: s.cappedBy, capKind: s.capKind, coverage: s.coverage } : null;
 }
 
 /** One scored commit (a series row) for the phone's commits axis. No lnLink, contributions or move. */

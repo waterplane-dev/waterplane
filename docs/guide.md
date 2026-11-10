@@ -139,9 +139,11 @@ Try it: `?demo=numbers`
 
 *A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4), with pause and seek.*
 
-Each repo has one health score out of 100, against fixed good values for five readings: file length
+Each repo has one health score out of 100, against fixed good values for eleven readings: file length
 (the longest file and the file the average line sits in), files reworked right after an edit,
-unexplained escape hatches, untested modules and the weight of `CLAUDE.md` plus skill descriptions.
+unexplained escape hatches, untested modules, the weight of `CLAUDE.md` plus skill descriptions, and, where the engine could
+read them, duplicate code, dead exports, import cycles, files that change together, fixes after a
+change and how often a change brings a test (the one reading where more is better).
 The repo list wears it as a chip; a tap opens **Repo readings** on **over time**. The score stays
 within 30 of its worst entry, so one reading on fire caps it, and every warning (severe or warn)
 names its offender. The trend against the first scored week comes second, then every entry's own

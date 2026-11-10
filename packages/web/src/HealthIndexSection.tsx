@@ -47,7 +47,7 @@ export function HealthIndexSection({ repoId, onAsk, onAskTrend, onQualityRun, ax
   return (
     <HealthIndexChart view={view} onAsk={onAsk} onAskTrend={onAskTrend} onQualityRun={onQualityRun} axis={axis} empty={
       <Empty res={res} empty={!view?.series} thing="the health index" noun="index">
-        {view?.reason ?? "No health index yet: it starts at the first week every one of its five readings exists."}
+        {view?.reason ?? "No health index yet: it starts at the first week its first five readings (file length, re-touches, escape hatches, CLAUDE.md + skills, untested modules) all exist."}
       </Empty>
     } />
   );

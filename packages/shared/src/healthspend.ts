@@ -6,7 +6,7 @@
  * mostly WHICH MODEL ran (opus is several times sonnet) and how long the
  * sessions ran, neither of which is a fact about the repo. The context one
  * request re-sends is closer to what the readings can move, and it costs twice:
- * in money and in the wait before the first token. Of the five readings only
+ * in money and in the wait before the first token. Of the readings only
  * CLAUDE.md + skill descriptions rides in EVERY request; the others reach it
  * only when the agent reads those files, so the line is context, never proof.
  *

@@ -146,6 +146,12 @@ const ROWS: readonly RowSpec[] = [
     cost: "The connection charts start again from now. Nobody else has a copy of what they showed.",
   },
   {
+    id: "devblobs", store: "devblobs", label: "extension copies on this phone", kind: "keep",
+    cost: "What an extension keeps only here, such as the vault's copy of chosen secrets. Gone means pulling it again from the desktop.",
+    // The extension's own screen forgets it (it knows what it holds); a bare clear here would leave its memory saying it is there.
+    cant: "forget it from the extension's own screen: Vault › Backup & recovery › Copy on this phone.",
+  },
+  {
     id: "screenlog", store: "screenlog", label: "terminal scrollback", kind: "keep",
     cost: "The lines that scrolled off the TUI are not on the wire — the desktop cannot send them again. Panning up stops working for these sessions.",
   },
@@ -274,6 +280,7 @@ export async function clearRow(row: StoreUse): Promise<{ ok: boolean; note?: str
       return { ok: true, note: r.kept ? `${r.kept} kept — it is being transcribed right now.` : undefined };
     }
     case "extassets":
+    case "devblobs":
     case "queueduploads":
       // Has a `cant`; the sheet draws no button for it. Refused here too, so a
       // second caller cannot route around the sentence.

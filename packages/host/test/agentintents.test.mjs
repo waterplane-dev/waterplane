@@ -9,7 +9,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addClientBacklogItem, agentBacklogFrom, agentCallerRefusal, agentDraftFrom, agentOrderIds, agentQueue, agentWhenOf, postClientDraft } from "../dist/agentintents.js";
+import { addClientBacklogItem, agentBacklogFrom, agentCallerRefusal, agentDraftFrom, agentOrderIds, agentQueue, agentWhenOf, handleAgentIntents, postClientDraft, proposalNotice } from "../dist/agentintents.js";
+import { isPendingProposal, pendingProposals, proposerName, proposedWords } from "@waterplane/shared";
 
 test("only a non-browser, unproxied process on loopback is an agent", () => {
   assert.equal(agentCallerRefusal("127.0.0.1", {}), null);
@@ -180,4 +181,78 @@ test("the run order: every waiting row in tick order, and a reorder names only w
   assert.match(agentOrderIds({ ids: ["b", "nope"] }, get).refused, /no such intent: nope/);
   assert.match(agentOrderIds({ ids: ["b", "ran"] }, get).refused, /ran is running/);
   assert.match(agentOrderIds({ ids: ["b", "aside"] }, get).refused, /aside is archived/);
+});
+
+test("a script's proposal: its own origin, still manual, at-most-once by key, ONE push and none on the retry", async () => {
+  const rows = new Map();
+  const pushes = [];
+  const d = {
+    containRepoDir: async (x) => (x === "/root/garmin" ? x : null),
+    repoDir: async () => null,
+    sessionCwd: () => null,
+    intents: { get: (id) => rows.get(id), list: () => [...rows.values()], post: () => ({ ok: false }), cancel: () => false },
+    backlog: {
+      add: (text, repoDir, label, _t, _a, opts) => {
+        const id = opts.id;
+        if (!rows.has(id)) rows.set(id, { id, cwd: repoDir, state: "queued", createdAt: 1, label, origin: opts.origin, manual: opts.manual, payload: { kind: "prompt", steps: opts.steps ?? [text] }, target: { kind: "repo" }, trigger: { kind: "idle" } });
+        return { id, status: "queued" };
+      },
+      reorder: () => {},
+    },
+    json: (res, data, status = 200) => { res.status = status; res.body = data; },
+    readJson: async (req) => req.body,
+    announceProposal: (row) => pushes.push(proposalNotice(row)),
+  };
+  const call = async (body) => {
+    const req = { method: "POST", socket: { remoteAddress: "127.0.0.1" }, headers: {}, body };
+    const res = {};
+    assert.equal(await handleAgentIntents(req, res, "/api/agent/backlog", new URL("http://x/api/agent/backlog"), d), true);
+    return res;
+  };
+  const body = { key: "crash-123", dir: "/root/garmin", prompt: "look at crash group 123", label: "crash 123", proposedBy: "crash-findings.py" };
+  const first = await call(body);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.existing, false);
+  const row = rows.get("agent-crash-123");
+  assert.equal(row.origin, "proposed:crash-findings.py");
+  assert.equal(row.manual, true, "a proposal waits for the person's tap");
+  assert.equal(first.body.shownAs, "proposed by crash-findings.py — fire, schedule or delete it");
+  assert.equal(pushes.length, 1);
+  assert.equal(pushes[0].title, "garmin: crash-findings.py proposes work");
+  assert.equal(pushes[0].body, "crash 123");
+  assert.equal(pushes[0].key, "proposal:agent-crash-123");
+  assert.deepEqual(pushes[0].backlog, { cwd: "/root/garmin", ids: ["agent-crash-123"] });
+
+  const again = await call(body);
+  assert.equal(again.body.existing, true, "a retry under the same key is the same row");
+  assert.equal(pushes.length, 1, "no second push on the retry");
+
+  const bad = await call({ ...body, key: "k2", proposedBy: "  !!  " });
+  assert.equal(bad.status, 400);
+  assert.equal(rows.has("agent-k2"), false, "a refused proposer writes nothing");
+
+  const plain = await call({ key: "k3", dir: "/root/garmin", prompt: "x" });
+  assert.equal(plain.status, 200);
+  assert.equal(rows.get("agent-k3").origin, "agent", "without proposedBy the add is the agent's, unchanged");
+  assert.equal(pushes.length, 1, "and sends no proposal push");
+});
+
+test("proposal names are short and safe, and only waiting rows count", () => {
+  assert.equal(proposerName("crash-findings.py"), "crash-findings.py");
+  assert.equal(proposerName("my script/../x"), "my-script-..-x", "a name, never a path: only the separators change");
+  assert.equal(proposerName(""), null);
+  assert.equal(proposerName(42), null);
+  assert.ok(proposerName("x".repeat(80)).length + "proposed:".length <= 40, "origin stays within its 40-char cap");
+  assert.equal(proposedWords("proposed:nightly"), "proposed by nightly — fire, schedule or delete it");
+  const r = (over) => ({ origin: "proposed:s", manual: true, state: "queued", trigger: { kind: "idle" }, ...over });
+  assert.equal(isPendingProposal(r({})), true);
+  assert.equal(isPendingProposal(r({ state: "blocked" })), true);
+  assert.equal(isPendingProposal(r({ state: "running" })), false, "fired");
+  assert.equal(isPendingProposal(r({ state: "canceled" })), false, "deleted");
+  assert.equal(isPendingProposal(r({ archived: true })), false);
+  assert.equal(isPendingProposal(r({ trigger: { kind: "at" } })), false, "scheduled");
+  assert.equal(isPendingProposal(r({ origin: "agent" })), false);
+  assert.equal(isPendingProposal({ origin: "proposed:s", manual: true, status: "queued" }), true, "a BacklogItem reads the same");
+  assert.equal(isPendingProposal({ origin: "proposed:s", manual: true, status: "queued", at: { nextAt: 1 } }), false);
+  assert.deepEqual(pendingProposals([r({ id: 1 }), r({ id: 2, state: "done" }), r({ id: 3 })]).map((x) => x.id), [1, 3]);
 });

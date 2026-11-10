@@ -150,6 +150,13 @@ export interface RepoHealthMeasure {
    */
   recut: string | null;
   /**
+   * The engine says it understands `update --recut` — the flag behind the
+   * phone's re-cut tap. Declared by the engine, never inferred from its kind:
+   * a repo's own copy is as likely to be current as the bundled one, and an
+   * older copy that ignored the flag would refuse again. Absent = not declared.
+   */
+  acceptsRecut?: true;
+  /**
    * The subtree this `status` was taken over, echoed by the engine — `null`
    * for the whole repo, and ABSENT from an engine that has no scopes at all.
    *
@@ -423,6 +430,121 @@ export interface RepoHealthLongest {
   day: string | null;
 }
 
+/**
+ * One git-only reading, drawn as a line (`tools/repohealth/metrics/habits.mjs`).
+ *
+ * Deliberately NOT a `RepoHealthPlotSeries`: no `reading` (rank, slope), no
+ * `source`, no `variant`. These are drawn and worded, never graded against
+ * their own past, and the health index does not read them. `absent` is the
+ * metric's own reason (shallow clone, no tests recognised, a quiet window);
+ * a null point is a CUT in the line, never a zero.
+ */
+export interface RepoHealthHabitSeries {
+  /** `habits.fixAfterChange`, `habits.deletionRatio`, `habits.netNegative`,
+   *  `habits.testsWithCode`, `habits.commitSizeP95`. */
+  key: string;
+  /** A noun phrase that reads as the subject of "…is now". Printed verbatim. */
+  label: string;
+  /** Appended to a value; `""` for a fraction or ratio. */
+  unit: string;
+  points: RepoHealthPoint[];
+  last: number | null;
+  /** The numbers behind the value, as a sentence; `""` when there is none. */
+  detail: string;
+  absent?: string;
+}
+
+/** A list reading: its items, or the reason there are none to name. */
+export type RepoHealthHabitList<T> = ({ absent?: undefined } & T) | { absent: string };
+
+/**
+ * What the repo's own tools say (`tools/repohealth/metrics/native.mjs`), read
+ * at the newest commit only: each part is a list-shaped value or `{absent}`
+ * naming why (such as "osv-scanner is not installed"), never a zero for a tool
+ * that did not run. Not graded and not in the health index.
+ */
+export interface RepoHealthNativeAnalyzer {
+  /** `eslint`, `tsc`, `ruff`, `mypy`, `dart`, `shellcheck`, `detekt`, `ktlint`. */
+  key: string;
+  /** A noun phrase, printed verbatim ("eslint findings per 1,000 lines"). */
+  label: string;
+  /** The tool that ran (`flutter` for a Flutter app's Dart reading). */
+  tool: string;
+  findings: number | null;
+  /** Tracked lines of the tool's language, the divisor. */
+  lines: number | null;
+  per1000: number | null;
+  /** A caveat that belongs beside the number (`root tsconfig.json only`). */
+  note?: string;
+  absent?: string;
+}
+
+export interface RepoHealthPlotNative {
+  /** Advisories by severity and the packages they hit; `items` is capped,
+   *  `itemsTotal` is the full count (say "20 of N"). */
+  vulns: RepoHealthHabitList<{
+    total: number;
+    packages: number;
+    lockfiles: number;
+    bySeverity: Record<string, number>;
+    items: { package: string; version: string; severity: string; ids: string[] }[];
+    itemsTotal: number;
+  }>;
+  /** Absent today, with the reason; shaped like the other lists for later. */
+  dependencyAge: { absent: string };
+  analyzers: RepoHealthNativeAnalyzer[];
+  /** A fact list from config files, not a score. A setting the file does not
+   *  state is null. */
+  strictness: RepoHealthHabitList<{
+    facts: { kind: "typescript" | "mypy" | "dart"; path: string; settings: Record<string, boolean | null> }[];
+    total: number;
+  }>;
+  /** Coverage files found newer than the last commit; the engine never runs tests. */
+  coverage: RepoHealthHabitList<{
+    files: { path: string; kind: string; covered: number; total: number; percent: number }[];
+    total: number;
+  }>;
+  /** Set when the whole family went unread. */
+  absent?: string;
+}
+
+/**
+ * The git-only readings. Every part can be absent on its own: `absent` on the
+ * whole object is the family unread (shallow clone, no history read);
+ * otherwise a series, a list or `weeks` carries its own reason or null.
+ * Absent from an engine older than the field.
+ */
+export interface RepoHealthPlotHabits {
+  /** The trailing window every rate is taken over; null when unread. */
+  windowDays: number | null;
+  series: RepoHealthHabitSeries[];
+  /** The four weeks the deletion ratio is made of, oldest first; null when
+   *  the ratio is absent. */
+  weeks: { added: number; deleted: number }[] | null;
+  /** Files where churn x size is highest, in the trailing window. */
+  hotspots: RepoHealthHabitList<{ items: { path: string; churn: number; loc: number; score: number }[] }>;
+  /** Tracked binaries and build output at the newest commit. `scope` is
+   *  always `"tracked"`: the working tree is never read, so untracked litter
+   *  is not counted and the phone must say so. */
+  litter: RepoHealthHabitList<{
+    scope: "tracked";
+    count: number;
+    bytes: number;
+    kinds: Record<string, number>;
+    items: { path: string; bytes: number; kind: string }[];
+  }>;
+  /** Markdown that names repo paths which do not resolve at the newest
+   *  commit. `refs` and `broken` are candidate references, not proof. */
+  docsDrift: RepoHealthHabitList<{
+    docs: number;
+    refs: number;
+    broken: number;
+    docsWithBroken: number;
+    items: { path: string; broken: number; of: number; missing: string[] }[];
+  }>;
+  absent?: string;
+}
+
 /** Where a repo declares its own readings, repo-relative and COMMITTED. The
  *  engine's `tools/repohealth/own.mjs` names the same path. */
 export const REPOHEALTH_OWN_FILE = sharedRel("health.json");
@@ -436,7 +558,18 @@ export interface RepoHealthOwnSeries extends RepoHealthPlotSeries {
   /** The declaration's `better`, attributed to the repo — never the engine's
    *  opinion. Null where the declaration's own field was not one of the two. */
   better: "lower" | "higher" | null;
+  /**
+   * The repo marked this reading a GATE (`health.json` `"gate": { "fails":
+   * "below" | "above", "at": n }`, checked by the engine's `own.mjs`): a line it
+   * calls critical. A failing gate caps the health index
+   * (`healthindex/coverage.ts`); `invalid` is a declaration the engine refused,
+   * which the index counts as an UNKNOWN gate, never a passed one. Absent = no gate.
+   */
+  gate?: RepoHealthGateDecl;
 }
+
+/** A declared gate: the failing side of `at`, or the engine's sentence for a refused declaration. */
+export type RepoHealthGateDecl = { fails: "below" | "above"; at: number } | { invalid: string };
 
 /**
  * The repo's own readings. `declared` is whether HEAD's tree holds the file;
@@ -478,6 +611,12 @@ export interface RepoHealthPlot {
   /** Absent on a host or a tool older than the field — the sheet then draws
    *  the column and the name it has, never a blank it presents as a reading. */
   longest?: RepoHealthLongest;
+  /** The git-only readings — see `RepoHealthPlotHabits`. Absent on an engine
+   *  older than the field. */
+  habits?: RepoHealthPlotHabits;
+  /** The repo's own analyzers, vulnerable dependencies and coverage files: see
+   *  `RepoHealthPlotNative`. Absent on an engine older than the field. */
+  native?: RepoHealthPlotNative;
   /** The repo's OWN readings, apart from `series` — see `RepoHealthPlotOwn`. */
   own?: RepoHealthPlotOwn;
   /** Present when the latest row carries the repo's `central` block — see

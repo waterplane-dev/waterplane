@@ -45,6 +45,8 @@ export interface ApiCtx {
   /** Resolve an attention item whose cause the listing saw go away (a failed
    *  push since pushed another way) — `clients.ts`' resolver, which re-sends the feed. */
   resolveAttention?: (key: string, note: string) => number;
+  /** `clients.ts`' notify — the agent route's one push for a script's new proposal. */
+  notify?: import("../notifytypes.js").Notify;
   /** Build runs in flight — `/api/repos` marks a repo whose build is running —
    *  and the agent's build-button route (`agentbuild.ts`: `list`, `run`). */
   builds?: Pick<import("../builds.js").BuildManager, "runningIn" | "list" | "run">;

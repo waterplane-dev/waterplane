@@ -40,3 +40,14 @@ test("heldDownWords names an entry this build does not know", () => {
   const text = heldDownOf({ value: 40, mean: 70, cappedBy: "someFutureEntry" });
   assert.doesNotMatch(String(text), /undefined/);
 });
+
+import { COVERAGE_METHOD_WORDS } from "./healthIndexChartWords.ts";
+
+test("the hero line names a coverage or gate cap, without verdict words", () => {
+  assert.equal(heldDownOf({ value: 60, mean: 100, cappedBy: null, capKind: "coverage", coverage: { measured: 3, applicable: 5 } }), "held at 60 by what could not be measured", "the ratio is the coverage line's, not said twice");
+  assert.equal(heldDownOf({ value: 49, mean: 100, cappedBy: null, capKind: "gate" }), "held under 50 by a failing gate");
+  assert.equal(heldDownOf({ value: 90, mean: 90, cappedBy: null, capKind: null }), null);
+  for (const word of ["grade", "healthy", "unhealthy", "bad", "should", "worse", "better"]) {
+    assert.doesNotMatch(COVERAGE_METHOD_WORDS, new RegExp(`\\b${word}\\b`, "i"), word);
+  }
+});

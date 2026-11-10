@@ -40,11 +40,12 @@ import { activeHost, browserKV, listHosts, realHosts, setHostPins } from "./host
 import { baseOfDial, invalidateSavedHostBase, isNativeShell, netOwedNow, plainBaseNow, plainHostRoute, readTicketLeft, routeBase, savedBasePinned, savedHostBase, setReadTicket, setRouteBase, tokenWithheld, whenNetRead, wsUrl } from "./hostUrl";
 import { isDemo } from "./demo/mode";
 import { deviceModel, deviceName } from "./deviceInfo";
-import { createLanRouter, fallbackGone, lanDialOf, lanDropOnSave, lanOnlyBase, lanOnlySentence, lanProbeAnswered, parseLanIdentity, pinSyncPlan, refusalFits, troubleSentence, welcomePinPlan, type LanIdentity, type LanRouter, type LanVerdict, type RouteTrouble, type TokenState } from "./lanRoute";
+import { createLanRouter, fallbackGone, lanDialOf, lanDropOnSave, lanOnlyBase, lanOnlySentence, lanProbeAnswered, newNonce, parseLanIdentity, pinSyncPlan, refusalFits, troubleSentence, verifyLanAnswer, welcomePinPlan, type LanIdentity, type LanRouter, type LanVerdict, type RouteTrouble, type TokenState } from "./lanRoute";
 import { hasShellTls, shellTls, shellTlsPins, shellTlsRefusal } from "./sdk/shellTls";
 import { resyncShellLink } from "./shellLink";
 import { currentNet, onShellNet } from "./shellNet";
 import { LS, lsDel, lsJson, lsSetJson } from "./storage";
+import type { LanTest } from "./hostTestWords";
 
 /** What this needs of `HostConnection` — structural, like `link.ts`'s source. */
 export interface LanConn {
@@ -102,6 +103,25 @@ async function mintDeviceTokenOver(tailnet: string, deviceName: string): Promise
     const j = (await r.json()) as Partial<DeviceTokenResponse>;
     return typeof j.token === "string" && j.token ? { token: j.token } : "failed";
   } catch { return "failed"; }
+}
+
+/**
+ * The Edit screen's "test" under the Wi-Fi address (`HostSetup.tsx`): the probe the route makes, then — for the desktop in use,
+ * the only one whose identity this phone holds — the same HMAC check, so the answer says whether THIS desktop is there.
+ */
+export async function testLanAddress(lan: string, hostId: string): Promise<LanTest> {
+  const t0 = performance.now();
+  try {
+    const r = await bgFetch(`${lan}/api/health`, { cache: "no-store", credentials: "omit" }, 4000);
+    const took = performance.now() - t0;
+    if (!lanProbeAnswered(r.status)) return { s: "bad", aborted: false };
+    const id = activeHost()?.id === hostId ? storedIdentity() : null;
+    if (!id) return { s: "ok", ms: took, proven: null };
+    const nonce = newNonce();
+    return { s: "ok", ms: took, proven: await verifyLanAnswer(id, nonce, await lanVerify(lan, nonce)) };
+  } catch (e) {
+    return { s: "bad", aborted: (e as Error)?.name === "AbortError" || performance.now() - t0 >= 3900 };
+  }
 }
 
 let router: LanRouter | null = null;

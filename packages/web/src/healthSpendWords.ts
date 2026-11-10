@@ -162,7 +162,7 @@ export function spendLeadWords(contextChars: number | null | undefined): { lead:
     lead: "Dotted line: tokens each Claude request here re-sent — paid in money and in wait time.",
     more:
       "Right axis, per week. It is paid twice because every request reads all of it again before the answer starts. " +
-      `Of the five readings, CLAUDE.md + skill descriptions${chars} is in every request; ` +
+      `Of the index's readings, CLAUDE.md + skill descriptions${chars} is in every request; ` +
       "file length, re-touched files, escape hatches and untested modules reach it only when the agent opens those files.",
   };
 }

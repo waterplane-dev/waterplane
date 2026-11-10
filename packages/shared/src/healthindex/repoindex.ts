@@ -1,5 +1,6 @@
 // healthindex/repoindex: What `RepoTarget.healthIndex` carries, and the route's response DTO. Barrel: ../healthindex.ts (read the header there).
 import { type HealthEntry, type HealthIndexSeries } from "./types.js";
+import { type HealthCoverage, type HealthCapKind } from "./coverage.js";
 import { type HealthCommitSeries } from "./commits.js";
 import { type HealthMove } from "./move.js";
 import { type HealthWords } from "./words.js";
@@ -23,6 +24,10 @@ export interface RepoHealthIndex {
   alert?: "warn" | "severe" | null;
   /** That worst alert's sentence; null with it. */
   alertText?: string | null;
+  /** Which cap set the value (`coverage.ts`); null = the mean did. Absent = an older host. */
+  capKind?: HealthCapKind | null;
+  /** What applied and what was measured on the latest week, with the repo's gates. Absent = an older host. */
+  coverage?: HealthCoverage;
 }
 
 /** The wire summary for one repo, or null where there is no index (the field stays ABSENT, never 0). */
@@ -40,6 +45,8 @@ export function repoHealthIndexOf(series: HealthIndexSeries | null, move?: Healt
     cappedBy: last.cappedBy,
     alert: last.alerts[0]?.level ?? null,
     alertText: last.alerts[0]?.text ?? null,
+    capKind: last.capKind ?? null,
+    ...(last.coverage ? { coverage: last.coverage } : {}),
   };
 }
 

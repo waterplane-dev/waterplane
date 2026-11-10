@@ -502,7 +502,7 @@ test("each sheet id is declared once across features and extensions", () => {
 /** The most lines each facade may have. Lower it when you move code out. */
 const BACKLOG_FACADES = {
   "Backlog.tsx": 72,
-  "backlogFilter.ts": 59,
+  "backlogFilter.ts": 60, // +proposals.ts (2026-11-10: the launcher's proposals strip, a subject of its own)
 };
 
 /** Every file in the split folders, by path under `packages/web/src`, and its
@@ -539,6 +539,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlogFilter/clockGroups.ts": 200,
   "backlogFilter/cutCounts.ts": 330, // +drawnChips (a chip that cuts nothing is not drawn) and the pools it reads
   "backlogFilter/dropClock.ts": 150,
+  "backlogFilter/proposals.ts": 60, // the launcher's proposals strip: one cut for its number and doors
   "backlogFilter/nextFire.ts": 70, // the one `▶ next` predicate, shared with the Automation foot
   "backlogFilter/rowFilter.ts": 130,
   "backlogFilter/rowSort.ts": 60,
@@ -1018,7 +1019,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
   "webapi/webapiHost.ts": 156, // +on-device whole-picture OCR, +plugin README (About fold)
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 110, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut
+  "webapi/webapiRepoOps.ts": 112, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached

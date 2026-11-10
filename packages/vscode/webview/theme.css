@@ -462,3 +462,9 @@ button.ts-perreq-row { cursor: pointer; }
 /* A carried row's folded name list sits tight under its row (the panel's `.hint-more` above pads a flat list). */
 .carried-list .hint-more { padding: 2px 0 0; }
 .carried-list .hint-more > summary { padding: 2px 0; min-height: 0; }
+
+.loading { display: block; }
+.loading-line { display: flex; align-items: center; gap: 6px; }
+.loading-bar { margin-top: 6px; height: 4px; border-radius: 2px; background: var(--vscode-progressBar-background, currentColor); background: color-mix(in srgb, currentColor 15%, transparent); overflow: hidden; }
+.loading-fill { height: 100%; background: var(--vscode-progressBar-background, currentColor); transition: width 0.2s linear; }
+@media (prefers-reduced-motion: reduce) { .loading-fill { transition: none; } }

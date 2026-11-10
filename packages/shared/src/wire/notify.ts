@@ -79,9 +79,14 @@
  * open alert in a repo that is on the watch — one push per finding, keyed (repo, measure,
  * subject, version) and spent for good; more than three at once in one repo is a single push.
  * Critical and high severity are attention, the rest information. Default ON. Words only.
+ *
+ * `proposal` sits last (added 2026-11-10): a repo's SCRIPT proposed work with no session behind
+ * it (`POST /api/agent/backlog` with `proposedBy`) — one push per NEW proposal, keyed
+ * `proposal:<row id>`, attention, and resolved by the host once the row is fired, scheduled or
+ * deleted (`isPendingProposal`). A tap opens that row. Default ON. Nothing starts by itself.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "signin", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure",
+  "prompt", "approval", "limit", "signin", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure", "proposal",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */

@@ -208,7 +208,7 @@ function ownBlock(own: HealthOwnSubject | null | undefined): string | null {
   if (own.readings.length) {
     const lines = own.readings.map((r) =>
       `- ${r.label} (\`${r.key}\`): ${r.span}${r.better ? `; the repo wants it ${r.better}` : ""}. ${r.means.trim()}`);
-    return `This repo's own readings, declared in ${own.file} — not part of the index, which is built from its five readings only:\n\n${lines.join("\n")}`;
+    return `This repo's own readings, declared in ${own.file} — not part of the index, which is built from its ${HEALTH_ENTRY_ORDER.length} readings only:\n\n${lines.join("\n")}`;
   }
   if (own.declared) return `This repo declares readings of its own in ${own.file}, but none has a value yet${own.absent ? `: ${own.absent.trim()}` : "."}`;
   return `This repo declares no readings of its own; ${own.file} is where one would be declared.`;
@@ -299,7 +299,7 @@ export function healthIndexRemedyPrompt(w: IndexWeekSubject, repoName: string, c
     `${BRAND.displayName}'s health index for ${repoName} was ${Math.round(w.index)} in the week of ${w.week}` +
     `${w.delta !== null ? ` (${signedTenths(w.delta)} against the week before)` : ""}; each week is the ISO week starting that Monday.` +
     `${vsLine(ctx.vs, w.index)} ` +
-    `It is a score out of 100 against fixed good values for five readings of the repo, held within 30 points of its worst one, and it falls when a reading grows past its good value.${basketHead(ctx)} ` +
+    `It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo, held within 30 points of its worst one, and it falls when a reading grows past its good value.${basketHead(ctx)} ` +
     "That week's move split across the readings like this, in score points, biggest first:";
   const own = ownBlock(ctx.own);
   const engine = engineWords(ctx.engine);
@@ -325,7 +325,7 @@ export interface IndexTrendWeek {
   lnLink: number | null;
   contributions: Partial<Record<string, number>>;
   /** Why a gap week was marked; absent on an older host. */
-  gapReason?: "prereg" | "central" | "nothing";
+  gapReason?: "prereg" | "central" | "coverage" | "nothing";
 }
 
 /**
@@ -344,7 +344,7 @@ export interface IndexTrendWeek {
  * THE TREND COMES FIRST. The proposals are argued from what the git history
  * says moved the readings, not from the gauge alone.
  *
- * THE READINGS ARE NOT THE REPO. They are five generic measures the engine can
+ * THE READINGS ARE NOT THE REPO. They are generic measures the engine can
  * take of any tree. The change that would help this repo most may move none of
  * them, and advice steered by the index alone would optimise the gauge. So the
  * proposals start from the repo's OWN readings where it declares any, and where
@@ -362,7 +362,9 @@ export function healthTrendRemedyPrompt(
     if (w.lnLink === null) {
       const why = w.gapReason === "central"
         ? "move not compared: this repo changed which readings it overrides or disables"
-        : w.gapReason === "prereg" ? "move not compared: the engine's definitions changed" : "move not compared with the week before";
+        : w.gapReason === "prereg" ? "move not compared: the engine's definitions changed"
+        : w.gapReason === "coverage" ? "move not compared: which dimensions could be measured, or which gates the repo declares, changed"
+        : "move not compared with the week before";
       return `- ${w.week}: ${Math.round(w.index)} — ${w.gap ? why : "first scored week"}`;
     }
     const parts = HEALTH_ENTRY_ORDER
@@ -393,11 +395,11 @@ export function healthTrendRemedyPrompt(
   const hasOwn = !!ctx.own?.readings.length;
   const advice = [
     ...(hasOwn ? ["- Start from this repo's own readings above: say whether they moved over this span, and what moved them."] : []),
-    "- Say plainly that the five index readings are generic measures any tree can be given, and that the change which would help this repo most may move none of them. If that is so, say it, and propose it anyway.",
+    "- Say plainly that the index readings are generic measures any tree can be given, and that the change which would help this repo most may move none of them. If that is so, say it, and propose it anyway.",
     `- Where that lever has no measure${ctx.own && !hasOwn ? " — this repo has none of its own yet" : ""}, propose one of this repo's own — what it would count and why it tracks the thing that matters — as a proposal to declare it in ${ownFile} with a script that prints it.`,
     "- Keep it to the few changes worth their cost, about this repo rather than repos in general; a file that is generated or bundled is a case for excluding it from the readings, not for splitting it.",
   ];
-  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for five readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)} Each week, with what each reading added or took away in score points:
+  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules, duplicate code, dead exports, import cycles, files changed together, fixes after a change, tests changed with code — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)} Each week, with what each reading added or took away in score points:
 
 ${rows.join("\n")}
 ${holdingWords(ctx.now?.alerts, ctx.now?.cap)}

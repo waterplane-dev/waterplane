@@ -1,5 +1,5 @@
 import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
-import type { OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
+import type { AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
 import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
@@ -74,6 +74,9 @@ export const repoOpsApi = {
   // against the worktree before it ever reaches a spawn.
   repoHealth: (repoId: string, scope?: string | null) =>
     jget<RepoHealthView>(`/api/repos/${repoId}/repohealth${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
+  /** Agent readings (host `agentreadings.ts`): weekly figures off this desktop's conversation logs. */
+  agentReadings: (repoId: string) =>
+    jget<AgentReadingsResponse>(`/api/repos/${repoId}/agentreadings`),
   /** The weekly health score (`shared/healthindex.ts`) for the whole repo. */
   healthIndex: (repoId: string) =>
     jget<HealthIndexResponse>(`/api/repos/${repoId}/healthindex`),

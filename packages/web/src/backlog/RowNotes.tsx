@@ -7,13 +7,13 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, Wallet, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, Lightbulb, Wallet, X } from "lucide-react";
 import { RowFlagChoice } from "./RowFlagChoice";
 import { RowBudgetEdit } from "./RowBudgetEdit";
 import { launchWindowsOff } from "../budgetInput";
 import { RadioRows, Button } from "../kit";
 import type { RowFacts } from "./BacklogRow";
-import { AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT } from "@waterplane/shared";
+import { AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT, isPendingProposal, isProposed, proposedWords } from "@waterplane/shared";
 import { skipQueueNote } from "../sendIntent";
 import {
   HEADLINE_BY_WORDS, dropClockNote, requeuedWords, runAgainClosedNote, runAgainRowNote,
@@ -38,7 +38,10 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
     <>
                   {/* What wrote this row, when it was an agent. */}
                   {agentPosted && openText.has(it.id) && <span className="bl-smart-note">{AGENT_POSTED_WORDS}</span>}
-                  {it.manual && it.status === "queued" && <span className="bl-hold">{MANUAL_HOLD_TEXT}</span>}
+                  {/* A script's proposal says so on the row ALWAYS, in the strip's hue; while
+                      it waits that sentence replaces the plain hold note (it says the same, louder). */}
+                  {isProposed(it) && <span className="bl-proposed"><Lightbulb size={13} /> {proposedWords(it.origin)}</span>}
+                  {it.manual && it.status === "queued" && !isPendingProposal(it) && <span className="bl-hold">{MANUAL_HOLD_TEXT}</span>}
                   {/* **What dropping this row's clock does — as text.**
                       It was a `title` on the button, which on a phone is no
                       sentence at all, and the clause it carried is the whole

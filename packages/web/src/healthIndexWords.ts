@@ -10,16 +10,25 @@
  * missing from a RepoTarget draws NO chip, never `Health 0`.
  */
 import type { HealthEntry, HealthIndexPoint, RepoHealthIndex } from "@waterplane/shared";
-import { wordOf } from "@waterplane/shared";
+import { healthHeadlineWords, wordOf } from "@waterplane/shared";
 
-/** The five baskets in the order the index names them, with the plain names the phone shows. */
-export const HEALTH_ENTRY_ORDER: readonly HealthEntry[] = ["size", "retouch", "hatches", "context", "untested"];
+/** The baskets in the order the index names them, with the plain names the phone shows. */
+export const HEALTH_ENTRY_ORDER: readonly HealthEntry[] = [
+  "size", "retouch", "hatches", "context", "untested",
+  "dups", "deadExports", "cycles", "cochange", "fixAfterChange", "testsWithCode",
+];
 export const HEALTH_ENTRY_NAME: Record<HealthEntry, string> = {
   size: "File length",
   retouch: "Re-touched files",
   hatches: "Escape hatches",
   context: "CLAUDE.md + skills",
   untested: "Untested modules",
+  dups: "Duplicate code",
+  deadExports: "Dead exports",
+  cycles: "Import cycles",
+  cochange: "Files changed together",
+  fixAfterChange: "Fixes after a change",
+  testsWithCode: "Tests changed with code",
 };
 
 /**
@@ -47,6 +56,12 @@ export const HEALTH_GOOD_WORDS: Record<HealthEntry, string> = {
   hatches: "under 2 unexplained escape hatches per 1,000 lines",
   context: "CLAUDE.md + skill descriptions under the repo's warn line (16,000 characters by default)",
   untested: "under 20% of source files with no test reaching them",
+  dups: "under 0.25 near-duplicate block pairs per 1,000 lines",
+  deadExports: "under 1.5 exports per 1,000 lines that no other file uses",
+  cycles: "under 1% of the import graph's files in an import cycle",
+  cochange: "a change to one of the busiest files changing under 5 other files beside it",
+  fixAfterChange: "under 10% of recent source commits fixing what a commit in the week before changed",
+  testsWithCode: "at least 50% of recent source commits also changing a test",
 };
 
 /**
@@ -63,6 +78,12 @@ export const HEALTH_ENTRY_MEASURE: Record<HealthEntry, string> = {
   hatches: "a density: UNEXPLAINED escape hatches per 1,000 source lines — casts, lint and type-check disables that carry no reason on the line or in a comment directly above; the explained ones and TODO/FIXME marks are reported apart and never counted, and the count can rise while the density falls if the code grows faster",
   context: "an absolute size: the characters always loaded — CLAUDE.md plus every skill's description; skill bodies, loaded on demand, are not counted",
   untested: "a share: source modules no test imports (directly or through another module) or names by path, over all source files — imported is not covered, it says nothing about which branches ran",
+  dups: "a density: pairs of near-identical code blocks per 1,000 lines of the code a parser read — a language with no parser here is neither counted nor in the denominator",
+  deadExports: "a density: exported names no other file (tests included) mentions, per 1,000 source lines — a name reached without being written (a string, a framework hook) can be listed, so it is a list to check, never to delete blind",
+  cycles: "a share: files that sit in an import cycle, over the files the import graph read; only load-time imports count",
+  cochange: "a median over the last 14 days: for each of the busiest files, how many other files in its own group changed in the same commit, and the middle of those — it reads the latest fortnight's work, not the tree",
+  fixAfterChange: "a rate over the last 28 days: the share of source commits whose subject says fix or revert and that touch files another commit changed in the 7 days before — a message heuristic: a repo that never writes \"fix\" reads 0",
+  testsWithCode: "a rate over the last 28 days, where MORE is the good direction: the share of source-touching commits that also change a test file; batch and merge commits are not counted",
 };
 
 /** A signed whole number with a real minus sign (`shared/healthindex.ts`'s `signedPoints`, restated so this file carries no value import). */
@@ -96,6 +117,18 @@ export function weekWhenWords(week: string, currentWeek?: string | null): string
   return currentWeek && week === currentWeek ? "this week" : `in the week of ${week}`;
 }
 
+/**
+ * The chip title's coverage and gate clause, in shared's words
+ * (`healthHeadlineWords`): the coverage line and any failing gate. Empty where
+ * the host sent no coverage (an older host says nothing about it).
+ */
+function headlineClause(hi: RepoHealthIndex): string {
+  if (!hi.coverage || typeof hi.mean !== "number") return "";
+  const w = healthHeadlineWords({ value: hi.value, mean: hi.mean, cappedBy: hi.cappedBy ?? null, capKind: hi.capKind, coverage: hi.coverage });
+  const failing = hi.coverage.gates.filter((g) => g.state === "fail").map((g) => g.text);
+  return [w.coverage, ...failing].filter(Boolean).map((s) => ` ${s}`).join("");
+}
+
 /** The launcher chip, or null where the host sent no index. */
 export function healthChip(hi: RepoHealthIndex | null | undefined, repoName: string, currentWeek?: string | null): HealthChipView | null {
   if (!hi || typeof hi.value !== "number" || !Number.isFinite(hi.value)) return null;
@@ -108,7 +141,9 @@ export function healthChip(hi: RepoHealthIndex | null | undefined, repoName: str
   const arrow = !hasDelta || r === 0 ? null : r < 0 ? "down" : "up";
   // `alert` is optional on the wire (a host from before the absolute score
   // never sends it): absent says nothing, never "no alert".
-  const tone = hi.alert === "severe" ? "severe" : hi.alert === "warn" || hi.move === "drop" ? "warn" : hi.move === "rise" ? "calm" : null;
+  // A failing gate is the repo's own alert: at least a warn, said in the title.
+  const gateFails = !!hi.coverage?.gates.some((g) => g.state === "fail");
+  const tone = hi.alert === "severe" ? "severe" : hi.alert === "warn" || gateFails || hi.move === "drop" ? "warn" : hi.move === "rise" ? "calm" : null;
   const when = weekWhenWords(hi.week, currentWeek);
   const called = hi.move === "drop"
     ? " The latest week's move is unusual for this repo's own past: it slipped."
@@ -121,8 +156,8 @@ export function healthChip(hi: RepoHealthIndex | null | undefined, repoName: str
     title:
       `${repoName}: health index ${value}${hasDelta ? ` (${signedWhole(d)} ${when})` : ""}` +
       `${when === "this week" || !hasDelta ? `, week of ${hi.week}` : ""}. ` +
-      `A score out of 100 against fixed good values for five readings of the repo, held within 30 of its worst one.` +
-      `${hi.alertText ? ` ${hi.alertText}.` : ""}${called} Tap to open the readings.`,
+      `A score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo, held within 30 of its worst one.` +
+      `${headlineClause(hi)}${hi.alertText ? ` ${hi.alertText}.` : ""}${called} Tap to open the readings.`,
   };
 }
 
@@ -140,7 +175,7 @@ function listWords(xs: readonly string[]): string {
 /**
  * Which readings the index is built from, when the repo changed the basket —
  * "built from 4 of waterplane's 5 readings; Untested modules is disabled here"
- * — or null when it is the engine's five as they are. One sentence for the
+ * — or null when it is the engine's readings as they are. One sentence for the
  * section caption and the prompts' head, so the two cannot count differently.
  */
 export function indexBasketWords(basket: IndexBasket | null | undefined, product: string): string | null {
@@ -154,7 +189,7 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
   return `${parts.join("; ")}.`;
 }
 
-/** The sentence under the section: what the score is read against, whose five
+/** The sentence under the section: what the score is read against, whose
  *  readings it is built from (`product` is `BRAND.displayName`, passed in so
  *  this module stays free of value imports) and what the second line is.
  *  With the repo's disables or overrides on the latest week it says which
@@ -163,9 +198,9 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
 export function indexExplainWords(firstWeek: string, product: string, basket?: IndexBasket | null): string {
   const changed = indexBasketWords(basket, product);
   const good = HEALTH_ENTRY_ORDER.map((e) => wordOf(HEALTH_GOOD_WORDS, e, e)).join("; ");
-  const read = `A score out of 100 for ${product}'s five readings — never a repo's own — against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it. The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind four quiet ones.`;
+  const read = `A score out of 100 for ${product}'s ${HEALTH_ENTRY_ORDER.length} readings against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it (tests changed with code: as the share halves under it). The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind the quiet ones. It also never exceeds the share of the readings that could be measured, because a reading nobody could read counts for nothing, never for 100. The repo's own readings stay out of the average; the only way one counts is a gate the repo declares, and a failing gate holds the score under 50.`;
   const trend = `The second line is the trend: the score now against the first scored week, ${firstWeek}, and against last week.`;
-  if (!changed) return `${read} ${trend} The good values are the same in every repo, so it compares across repos.`;
+  if (!changed) return `${read} ${trend} The good values are the same in every repo, so repos compare where the same readings could be measured; the card says where one could not.`;
   return `${read} ${changed} ${trend} Beside another repo's score it compares like with like only on the readings both read the same way.`;
 }
 
@@ -190,8 +225,9 @@ export function gapWords(count: number): string {
 }
 
 /** Why a week's move is not compared, as the readout says it. */
-export function carriedWords(gapReason: "prereg" | "central" | "nothing" | null | undefined): string {
+export function carriedWords(gapReason: "prereg" | "central" | "coverage" | "nothing" | null | undefined): string {
   if (gapReason === "central") return "move not compared: this repo changed which readings it overrides or disables that week";
+  if (gapReason === "coverage") return "move not compared: which dimensions could be measured, or which gates the repo declares, changed that week";
   if (gapReason === "prereg") return "move not compared: the engine's definitions changed that week";
   return "move not compared with the week before";
 }

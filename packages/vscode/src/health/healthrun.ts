@@ -273,16 +273,21 @@ export class HealthRun {
     const env = src.dir ? { ...base, [envName("VSCODE_HEALTH_READ_FROM")]: src.dir } : base;
     const args = src.scope ? ["--scope=" + src.scope] : [];
     const status = await this.step(s, folder, "status", env, args);
-    if (status.cancelled) return; // keep the previous doc: a stopped read read nothing
+    if (status.cancelled) return this.stopped(s); // keep the previous doc: a stopped read read nothing
     const pre = foldHealth(this.foldIn(s, folder, status, null));
     const plot = pre.doc?.series ? await this.step(s, folder, "plot", env, args) : null;
-    if (plot?.cancelled) return;
+    if (plot?.cancelled) return this.stopped(s);
     const out = foldHealth(this.foldIn(s, folder, status, plot));
     // The index is the whole repo's, read off the same file the engine just read; a scope has none.
     if (out.doc?.series && !src.scope) out.doc.index = healthIndexOfFile(src.file, this.now());
     s.doc = out.doc;
     s.why = out.why;
     s.readAt = this.now();
+  }
+
+  /** A stopped read leaves any doc as it was; with none, it says so, so the view shows a way back rather than Loading. */
+  private stopped(s: Slot): void {
+    if (!s.doc) s.why = "The health read was stopped; tap re-read to try again.";
   }
 
   private foldIn(s: Slot, folder: string, status: HealthStepResult, plot: HealthStepResult | null) {

@@ -369,6 +369,8 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null, ownDeclar
     ...(absenceOf(last, "classics") === undefined ? {} : { absent: absenceOf(last, "classics") }),
   };
 
+  const habits = buildHabits(rows, points, prereg);
+
   // The declaration's own complaints, and the overrides a backfill could not
   // run — once for the document, beside the variants they explain.
   const cen = last?.central;
@@ -398,6 +400,95 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null, ownDeclar
     context,
     classics,
     longest,
+    habits,
+    native: buildNative(rows),
+  };
+}
+
+/**
+ * The git-only readings (`metrics/habits.mjs`, `metrics/workspace.mjs`) as the
+ * phone draws them. NOT in `SERIES`: those are pre-registered narrative
+ * subjects the health index and the event log read, and these are drawn only —
+ * no rank, no slope, no event — until one of them has pointed at a fix.
+ *
+ * A habit series carries its own absence: a sub-reading the latest row could
+ * not take says why in the metric's words, and the family-level reason wins
+ * where the whole family went unread. A list (`hotspots`, `litter`,
+ * `docsDrift`) is `{items, …}` or `{absent}`, never an empty list standing in
+ * for "unknown".
+ */
+function buildHabits(rows, points, prereg) {
+  const last = rows[rows.length - 1];
+  const fam = last?.habits;
+  const sub = (r, k) => r?.habits?.value?.[k]?.value ?? null;
+  const familyAbsent = fam && fam.value ? undefined : (fam && typeof fam.reason === "string" && fam.reason) || "no reading";
+  const nf = (n) => Number(n).toLocaleString("en-US");
+  const series = [
+    {
+      key: "habits.fixAfterChange", sub: "fix", label: "the share of commits that fix a change from the last week", unit: "",
+      get: (v) => v.rate,
+      detail: (v, d) => `${nf(v.fixesAfter)} of ${nf(v.commits)} commits fixed or reverted a file another commit changed within ${d.fixDays} days; ${nf(v.fixes)} were worded as fixes in all.`,
+    },
+    {
+      key: "habits.deletionRatio", sub: "deletion", label: "lines deleted per line added", unit: "",
+      get: (v) => v.ratio,
+      detail: (v, d) => `${nf(v.deleted)} lines deleted against ${nf(v.added)} added over ${d.days} days, moves not counted.`,
+    },
+    {
+      key: "habits.netNegative", sub: "netNegative", label: "the share of commits that delete more than they add", unit: "",
+      get: (v) => v.share,
+      detail: (v) => `${nf(v.negative)} of ${nf(v.commits)} commits.`,
+    },
+    {
+      key: "habits.testsWithCode", sub: "testsWithCode", label: "the share of source commits that also change a test", unit: "",
+      get: (v) => v.rate,
+      detail: (v) => `${nf(v.withTests)} of ${nf(v.commits)} commits that changed source.`,
+    },
+    {
+      key: "habits.commitSizeP95", sub: "commitSize", label: "p95 changed lines per commit", unit: "lines",
+      get: (v) => v.p95,
+      detail: (v) => `The median is ${nf(v.median)} lines, over ${nf(v.commits)} commits.`,
+    },
+  ];
+  const ctx = { days: fam?.value?.windowDays ?? null, fixDays: prereg.FIX_AFTER_DAYS };
+  const out = series.map((s) => {
+    const pts = points((r) => {
+      const v = sub(r, s.sub);
+      return v ? s.get(v) : null;
+    });
+    const v = sub(last, s.sub);
+    const reason = last?.habits?.value?.[s.sub]?.reason;
+    const absent = pts.length && pts[pts.length - 1].v === null
+      ? familyAbsent ?? (typeof reason === "string" && reason ? reason : "no reading")
+      : undefined;
+    return {
+      key: s.key,
+      label: s.label,
+      unit: s.unit,
+      points: pts,
+      last: pts.length ? pts[pts.length - 1].v : null,
+      detail: v ? s.detail(v, ctx) : "",
+      ...(absent === undefined ? {} : { absent }),
+    };
+  });
+
+  const weeks = sub(last, "deletion")?.weeks;
+  const listOf = (rec) => {
+    if (rec?.value) return { ...rec.value };
+    return { absent: (rec && typeof rec.reason === "string" && rec.reason) || "no reading" };
+  };
+  const ws = last?.workspace?.value;
+  const wsAbsent = ws ? undefined : "no reading";
+  const hot = last?.habits?.value?.hotspots;
+  return {
+    windowDays: fam?.value?.windowDays ?? null,
+    series: out,
+    // Four weeks, oldest first, the deletion ratio is made of.
+    weeks: Array.isArray(weeks) ? weeks : null,
+    hotspots: familyAbsent ? { absent: familyAbsent } : listOf(hot),
+    litter: wsAbsent ? { absent: wsAbsent } : listOf(ws.litter),
+    docsDrift: wsAbsent ? { absent: wsAbsent } : listOf(ws.docsDrift),
+    ...(familyAbsent ? { absent: familyAbsent } : {}),
   };
 }
 
@@ -420,7 +511,8 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null, ownDeclar
 function buildOwn(rows, prereg, declared) {
   let latest = null;
   for (let i = rows.length - 1; i >= 0; i--) {
-    if (rows[i]?.own && typeof rows[i].own === "object") { latest = rows[i].own; break; }
+    // A `notRun` row (commands unapproved) carries gates for the index, not a measurement.
+    if (rows[i]?.own && typeof rows[i].own === "object" && !rows[i].own.notRun) { latest = rows[i].own; break; }
   }
   const out = { file: OWN_FILE, declared: !!declared, series: [] };
   if (latest && typeof latest.refused === "string") {
@@ -447,6 +539,8 @@ function buildOwn(rows, prereg, declared) {
       unit: typeof d.unit === "string" ? d.unit : "",
       means: typeof d.means === "string" ? d.means : "",
       better: d.better === "lower" || d.better === "higher" ? d.better : null,
+      // The repo's gate on this reading, as declared (`own.mjs` `gateOf`); judged by the index, never here.
+      ...(d.gate && typeof d.gate === "object" ? { gate: d.gate } : {}),
       points: pts,
       last: pts.length ? pts[pts.length - 1].v : null,
       reading: read,
@@ -459,4 +553,52 @@ function buildOwn(rows, prereg, declared) {
   }
   if (declared && !latest) out.absent = "declared, not measured yet — the next refresh that measures a new commit takes the first reading";
   return out;
+}
+
+const ANALYZER_LABELS = {
+  eslint: "eslint findings per 1,000 lines",
+  tsc: "TypeScript compiler errors per 1,000 lines",
+  ruff: "ruff findings per 1,000 lines",
+  mypy: "mypy errors per 1,000 lines",
+  dart: "Dart analyzer findings per 1,000 lines",
+  shellcheck: "shellcheck findings per 1,000 lines",
+  detekt: "detekt findings per 1,000 lines",
+  ktlint: "ktlint findings per 1,000 lines",
+};
+
+/**
+ * The native-tool readings (`metrics/native.mjs`) as the phone draws them:
+ * the NEWEST row's values only, since earlier rows hold "read at the newest
+ * commit only". Not in `SERIES`, for the reason `buildHabits` states. Each
+ * part says on its own why it is missing; an analyzer for a tool that was not
+ * run is a row with `absent`, never a zero.
+ */
+function buildNative(rows) {
+  const last = rows[rows.length - 1];
+  const fam = last?.native?.value;
+  const miss = { absent: "no reading" };
+  if (!fam) return { absent: "no reading", vulns: miss, dependencyAge: miss, analyzers: [], strictness: miss, coverage: miss };
+  const listOf = (rec) => (rec?.value ? { ...rec.value } : { absent: (rec && typeof rec.reason === "string" && rec.reason) || "no reading" });
+  const an = fam.analyzers && typeof fam.analyzers === "object" ? fam.analyzers : {};
+  const analyzers = Object.keys(ANALYZER_LABELS).map((key) => {
+    const rec = an[key];
+    const v = rec?.value;
+    if (v) {
+      return {
+        key, label: ANALYZER_LABELS[key], tool: v.tool, findings: v.findings, lines: v.lines, per1000: v.per1000,
+        ...(v.note ? { note: v.note } : {}),
+      };
+    }
+    return {
+      key, label: ANALYZER_LABELS[key], tool: key, findings: null, lines: null, per1000: null,
+      absent: (rec && typeof rec.reason === "string" && rec.reason) || "no reading",
+    };
+  });
+  return {
+    vulns: listOf(fam.vulns),
+    dependencyAge: listOf(fam.dependencyAge),
+    analyzers,
+    strictness: listOf(fam.strictness),
+    coverage: listOf(fam.coverage),
+  };
 }

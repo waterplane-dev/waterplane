@@ -110,6 +110,11 @@ export const ROW_KEYS = Object.freeze([
   "untested",
   "classics",
   "graph",
+  "habits",
+  "workspace",
+  "native",
+  // Which index dimensions each active pack could read (`reach.mjs`) — the index's coverage.
+  "reach",
   "tripwires",
   // Not a measurement: the chain state `tripwires.mjs` needs to tell a
   // TRANSITION from a STATE. It lives on the row because it used to live in a

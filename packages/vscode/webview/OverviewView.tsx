@@ -31,7 +31,10 @@ import { TokenStatsBody } from "../../extensions/token-stats/web/TokenStatsBody.
 import { ledgerAbsent, ledgerBackends } from "../../extensions/token-stats/web/backendLedger.ts";
 import { COPILOT_LEDGER, type CorpusDoc, type LiveState, type ToExtension } from "../src/protocol";
 import { Absent } from "./Absent";
+import { Loading } from "./Loading";
 import { TabLinks } from "./TabLinks";
+import { fmtAge } from "../src/data/running";
+import { useNow } from "./HealthView";
 
 export function OverviewView({ doc, why, scanning, live, post, askedLedger = null, here = null }: {
   doc: CorpusDoc | null;
@@ -45,10 +48,14 @@ export function OverviewView({ doc, why, scanning, live, post, askedLedger = nul
   live: LiveState | null;
   post: (m: ToExtension) => void;
 }) {
+  // The bar sits ABOVE the figures; with a saved scan on screen it says how old those figures are.
+  const now = useNow(!!scanning && !!doc, 15_000);
   const progress = scanning
-    ? <div className="empty ctx-note" role="status">Reading logs: {fmtCount(scanning.done)} of {fmtCount(scanning.total)}…</div>
+    ? <Loading done={scanning.done} total={scanning.total}>
+        Reading logs: {fmtCount(scanning.done)} of {fmtCount(scanning.total)}…{doc ? ` Showing the scan from ${fmtAge(now - doc.scannedAt)}.` : ""}
+      </Loading>
     : null;
-  if (!doc) return <>{progress}<Absent>{why ?? "No Claude Code logs have been read on this machine yet."}</Absent></>;
+  if (!doc) return <>{progress ?? (why ? null : <Loading>Reading logs…</Loading>)}{why ? <Absent>{why}</Absent> : null}</>;
   const d = live?.doc ?? null;
   const copilot = doc.copilot && !ledgerAbsent(COPILOT_LEDGER.label, doc.copilot) ? [{ ...COPILOT_LEDGER }] : [];
   const claudeEmpty = tokenTotal(doc.totals) === 0;

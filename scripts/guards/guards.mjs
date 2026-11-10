@@ -65,6 +65,11 @@ export const GUARDS = [
   { test: "uiteaser", tier: "edit", paths: ["scripts/ui/**"] },
   { test: "uifilm", tier: "edit", paths: ["scripts/ui/**", "packages/web/src/core/session/TermArea.tsx", "packages/web/src/ZoomPair.tsx", "packages/web/src/features/demoTour/DemoHook.tsx"] },
   { test: "repohealth-packs", tier: "edit", paths: ["tools/repohealth/**"] },
+  { test: "reqpinned", tier: "edit", paths: ["tools/reqpinned.mjs", "docs/requirements/**"] },
+  { test: "flakyrate", tier: "edit", paths: ["tools/flakyrate.mjs", "scripts/run-e2e.mjs"] },
+  { test: "repohealth-habits", tier: "edit", paths: ["tools/repohealth/metrics/habits.mjs", "tools/repohealth/metrics/workspace.mjs", "tools/repohealth/git.mjs"] },
+  { test: "repohealth-native", tier: "edit", paths: ["tools/repohealth/metrics/native.mjs", "packages/shared/src/repohealthnative.ts"] },
+  { test: "repohealth-python", tier: "edit", paths: ["tools/repohealth/packs/python.mjs", "tools/repohealth/lang/python-*.mjs"] },
   { test: "screenfixtures", tier: "edit", paths: ["tools/screenfixtures.mjs", "packages/host/test/fixtures/**"] },
   { test: "capsqueeze", tier: "edit", paths: ["tools/capsqueeze.mjs", "tools/healthreadings.mjs", "tools/codelines.mjs"] }, // the decision; the staged-diff check itself runs in precommit.mjs
   { test: "healthreadings", tier: "edit", paths: ["tools/healthreadings.mjs", "tools/codelines.mjs", "eslint.config.js", ".claude/skills/**", ".*-shared/health.json"] }, // the shared config dir by glob: this file cannot import BRAND

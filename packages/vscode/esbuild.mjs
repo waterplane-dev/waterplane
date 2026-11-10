@@ -73,7 +73,7 @@ const phoneReads = {
 // The repo-health engine (tools/repohealth.mjs) is bundled as it is. Two of its modules are
 // swapped: statefile.mjs (the series goes to VS Code's global storage, never into the folder),
 // judge.mjs (the one module that spends tokens — nothing here does), narrate.mjs + html.mjs
-// (the two that write into the folder — nothing here does), and own.mjs's child_process (below). Its two imports of
+// (the two that write into the folder — nothing here does), and own.mjs's and metrics/native.mjs's child_process (below). Its two imports of
 // packages/shared/dist resolve to shared's source like everything else here.
 const tools = path.resolve(here, "../../tools") + path.sep;
 const redirect = (name, filter, to) => ({
@@ -89,11 +89,16 @@ const healthUnused = redirect("health-unused", /(^|\/)(narrate|html)\.mjs$/, "sr
 // own.mjs spawns the commands a repo declares (its own readings, an override of a central one).
 // The extension runs only git: own.mjs's child_process is a spawnSync that throws, so each such
 // reading lands ABSENT with that reason (src/shims/healthnorun.ts) — git.mjs keeps the real one.
-const ownMjs = path.join(tools, "repohealth", "own.mjs");
+// metrics/native.mjs (a repo's analyzers, scanner, type checker) gets the same promise through
+// src/shims/healthnotool.ts, whose spawnSync returns an error result instead of throwing.
+const noRunShims = new Map([
+  [path.join(tools, "repohealth", "own.mjs"), "src/shims/healthnorun.ts"],
+  [path.join(tools, "repohealth", "metrics", "native.mjs"), "src/shims/healthnotool.ts"],
+]);
 const healthNoRun = {
   name: "health-norun",
   setup(b) {
-    b.onResolve({ filter: /^(node:)?child_process$/ }, (a) => (a.importer === ownMjs ? { path: at("src/shims/healthnorun.ts") } : null));
+    b.onResolve({ filter: /^(node:)?child_process$/ }, (a) => (noRunShims.has(a.importer) ? { path: at(noRunShims.get(a.importer)) } : null));
   },
 };
 

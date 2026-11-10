@@ -6,7 +6,7 @@ import {
   SPENT_ONCE_TEXT,
   describeRule,
   intentKind,
-  isAgentPosted,
+  isAgentPosted, isProposed, proposedWords,
   isTimedWorkRow,
   queuesBacklogItem,
 } from "@waterplane/shared";
@@ -88,7 +88,7 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
    */
   /** …and, on a row an AGENT posted through the host's loopback route, that an
    *  agent did (`AGENT_POSTED_WORDS`, the backlog row's words too). */
-  const agentFragment = isAgentPosted(i) ? AGENT_POSTED_WORDS : "";
+  const agentFragment = isAgentPosted(i) ? AGENT_POSTED_WORDS : isProposed(i) ? proposedWords(i.origin) : "";
   /**
    * …and, on a one-off with a CLOCK, what that clock is. Such a row is `work`
    * (recurrence, not trigger kind, decides the list): work verbs, titled by its

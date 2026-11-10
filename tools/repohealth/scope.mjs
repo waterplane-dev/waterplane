@@ -143,6 +143,8 @@ export function scopeHistory(history, scope, prereg) {
   // `git.mjs`'s `readHunks`. A range is a fact about one file, so cutting the
   // path is the whole translation.
   const hunks = history.hunks ? new Map() : undefined;
+  // `churn` (rename-aware line counts, `git.readChurn`) is re-rooted the same way.
+  const churn = history.churn ? new Map() : undefined;
   for (const c of history.commits) {
     const paths = (history.touches?.get(c.sha) ?? c.filesTouched ?? [])
       .filter((p) => p.startsWith(pre))
@@ -158,6 +160,12 @@ export function scopeHistory(history, scope, prereg) {
       for (const [p, v] of num) if (p.startsWith(pre)) m.set(p.slice(pre.length), v);
       lines.set(c.sha, m);
     }
+    const ch = churn && history.churn.get(c.sha);
+    if (ch) {
+      const m = new Map();
+      for (const [p, v] of ch) if (p.startsWith(pre)) m.set(p.slice(pre.length), v);
+      churn.set(c.sha, m);
+    }
     const h = hunks && history.hunks.get(c.sha);
     if (h) {
       const m = new Map();
@@ -165,7 +173,12 @@ export function scopeHistory(history, scope, prereg) {
       hunks.set(c.sha, m);
     }
   }
-  return { commits, touches, batch, lines, ...(hunks ? { hunks } : {}) };
+  return {
+    commits, touches, batch, lines,
+    ...(hunks ? { hunks } : {}),
+    ...(churn ? { churn } : {}),
+    ...(history.shallow ? { shallow: true } : {}),
+  };
 }
 
 /**

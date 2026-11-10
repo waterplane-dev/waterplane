@@ -88,7 +88,7 @@ function afterMigration(db: IDBDatabase): Promise<IDBDatabase> {
   const copy = copyLegacyStores(db, thisLegacyDbNames()).catch(() => { /* best-effort */ });
   return Promise.race([copy, new Promise((r) => setTimeout(r, MIGRATE_WAIT_MS))]).then(() => db);
 }
-const DB_VERSION = 14;
+const DB_VERSION = 15;
 
 function upgrade(db: IDBDatabase) {
   if (!db.objectStoreNames.contains("transcripts")) db.createObjectStore("transcripts");
@@ -160,6 +160,10 @@ function upgrade(db: IDBDatabase) {
   // (`link/linkSeriesStore.ts`). A record, and nobody else has a copy; losing it costs only the
   // charts their past. Pruned to thirty days by its writer.
   if (!db.objectStoreNames.contains("linkseries")) db.createObjectStore("linkseries");
+  // v15 — an extension's records that live on THIS phone and nowhere else of its own making
+  // (`sdk/extDeviceBlobs.ts`), keyed `<pluginId>/<key>`: the vault's phone mirror (sealed records,
+  // the wrap, the local log). Never localStorage. A lost store is a pull again, not a loss of the vault.
+  if (!db.objectStoreNames.contains("devblobs")) db.createObjectStore("devblobs");
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;

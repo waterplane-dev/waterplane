@@ -85,7 +85,11 @@ import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
 import { measureGraph } from "./repohealth/metrics/graph.mjs";
-import { OWN_FILE, declaresOwn, measureOwn } from "./repohealth/own.mjs";
+import { measureHabits } from "./repohealth/metrics/habits.mjs";
+import { measureWorkspaceAt, workspaceElsewhere } from "./repohealth/metrics/workspace.mjs";
+import { measureNative, nativeElsewhere } from "./repohealth/metrics/native.mjs";
+import { OWN_FILE, declaresOwn, measureOwn, notRunOwn } from "./repohealth/own.mjs";
+import { measureReach } from "./repohealth/reach.mjs";
 import { declarationsByIndex, measureCentral } from "./repohealth/central.mjs";
 
 /**
@@ -382,6 +386,9 @@ function update({ fixture, recut = false }) {
   // cost). Attached to the unscoped history and re-scoped with it.
   if (missing.size) {
     raw.hunks = git.readHunks(ROOT);
+    // Rename-aware line counts and the shallow flag, for `habits`.
+    raw.churn = git.readChurn(ROOT);
+    raw.shallow = git.isShallow(ROOT);
     history = scopeHistory(raw, SCOPE, CFG);
   }
   // The health.json in force at each commit, for `central` — whole tree only,
@@ -416,15 +423,29 @@ function update({ fixture, recut = false }) {
       untested: measureUntested(snap, history, index, CFG),
       classics: measureClassics(snap, history, index, CFG),
       graph: measureGraph(snap, history, index, CFG),
+      habits: measureHabits(snap, history, index, CFG),
+      // Tree lists (tracked litter, docs naming missing paths): the newest
+      // commit only — see `metrics/workspace.mjs`.
+      workspace: { value: index === history.commits.length - 1
+        ? measureWorkspaceAt(ROOT, commit.sha, git, CFG, SCOPE)
+        : workspaceElsewhere() },
+      // The repo's own analyzers, scanner and coverage files: the newest
+      // commit of a whole-tree series only, run in the checkout — `metrics/native.mjs`.
+      native: { value: index === history.commits.length - 1 && !SCOPE
+        ? measureNative(ROOT, { files: git.listHeadPaths(ROOT), commitTs: commit.ts })
+        : nativeElsewhere() },
+      // Which index dimensions the active packs could read, over THIS commit's files (`reach.mjs`): the index's coverage.
+      reach: measureReach(CFG, snap),
       ...tripwireFields(measureTripwires(snap, history, index, CFG, prevRow)),
     };
     // The repo's OWN readings (`own.mjs`): HEAD only, the whole tree only. Not
     // one of the measurements above — no definition here moves when a repo
-    // declares one, and nothing that reads the five index entries reads this.
+    // declares one; the index reads only a reading the repo marked as a gate.
     // `--no-own`: the host has not approved this repo's committed commands, so
     // none of them runs (neither its readings here nor its central overrides).
-    if (!SCOPE && !NO_OWN && index === history.commits.length - 1) {
-      const own = measureOwn(ROOT, commit.sha, git);
+    if (!SCOPE && index === history.commits.length - 1) {
+      // Unapproved: nothing runs, but a declared gate is still carried so the index counts it unknown.
+      const own = NO_OWN ? notRunOwn(ROOT, commit.sha, git) : measureOwn(ROOT, commit.sha, git);
       if (own) row.own = own;
     }
     // The repo's say over the CENTRAL readings (`central.mjs`): a disable is
@@ -454,11 +475,20 @@ function update({ fixture, recut = false }) {
   // again: re-measure that one row's own + central readings and rewrite it.
   const headIdx = history.commits.length - 1;
   const headKnown = headIdx >= 0 ? known.get(history.commits[headIdx].sha) : null;
-  if (!SCOPE && !NO_OWN && headKnown && !headKnown.own && declaresOwn(ROOT, headKnown.sha, git)) {
+  if (!SCOPE && !NO_OWN && headKnown && (!headKnown.own || headKnown.own.notRun) && declaresOwn(ROOT, headKnown.sha, git)) {
     const own = measureOwn(ROOT, headKnown.sha, git);
     const central = measureCentral(ROOT, git.readFileAt(ROOT, headKnown.sha, OWN_FILE), { atHead: true });
     const redone = { ...headKnown, ...(own ? { own } : {}), ...(central ? { central } : {}) };
     if (own || central) {
+      replaceRow(SERIES, redone);
+      rows[rows.indexOf(headKnown)] = redone;
+    }
+  }
+  // Unapproved and already measured: carry the declared gates as unknown, so the index never reads a missing `own` as "no gate".
+  if (!SCOPE && NO_OWN && headKnown && !headKnown.own) {
+    const own = notRunOwn(ROOT, headKnown.sha, git);
+    if (own) {
+      const redone = { ...headKnown, own };
       replaceRow(SERIES, redone);
       rows[rows.indexOf(headKnown)] = redone;
     }
@@ -573,6 +603,10 @@ function status() {
       // differ exactly when a re-cut is pending, which is the thing a reader
       // is trying to find out.
       engineVersion: CFG.VERSION,
+      // `update --recut` is understood here. The phone offers its re-cut tap
+      // only to an engine that says so — a repo's own older copy would ignore
+      // the flag and refuse again.
+      acceptsRecut: true,
       // Which languages this engine could read here, with two counts each. A
       // repo where this is `common` alone is one whose source no pack claims,
       // and saying so once here is cheaper than repeating it in every row.

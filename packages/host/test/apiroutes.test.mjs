@@ -131,6 +131,7 @@ const ROUTES = [
   "POST /api/repos/:id/optins/choice/*",
   "GET /api/repos/:id/repohealth",
   "GET /api/repos/:id/healthindex",
+  "GET /api/repos/:id/agentreadings",
   "POST /api/repos/:id/repohealth/scopes",
   "POST /api/repos/:id/repohealth/refresh",
   "POST /api/repos/:id/artifacts/seen",

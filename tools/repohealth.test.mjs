@@ -81,6 +81,10 @@ import { measureCochange } from "./repohealth/metrics/cochange.mjs";
 import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { measureGraph } from "./repohealth/metrics/graph.mjs";
+import { measureHabits } from "./repohealth/metrics/habits.mjs";
+import { measureReach } from "./repohealth/reach.mjs";
+import { workspaceElsewhere } from "./repohealth/metrics/workspace.mjs";
+import { nativeElsewhere } from "./repohealth/metrics/native.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
 import { events, render } from "./repohealth/narrate.mjs";
 import { PLAIN_REASON, SERIES, numbersIn, reading } from "./repohealth/readings.mjs";
@@ -109,6 +113,9 @@ const CFG = configure(ROOT, git);
 /** `retouch` needs the line-level history (`git.readHunks`); read once, lazily. */
 let HUNKS_MEMO = null;
 const HUNKS = () => (HUNKS_MEMO ??= git.readHunks(ROOT));
+/** `habits` needs rename-aware line counts (`git.readChurn`); same lazy read. */
+let CHURN_MEMO = null;
+const CHURN = () => (CHURN_MEMO ??= git.readChurn(ROOT));
 
 /** Every module of the tool, as text, for the checks that are about code shape. */
 function toolSources() {
@@ -164,7 +171,10 @@ function fixtureRowsUnderTest(fixture) {
  * replays all 155 commits in order and is the only form in which a transition
  * series means anything at all.
  */
-const CHAINED = new Set(["tripwires", "tripwireState"]);
+// `workspace` is read from the tree at the NEWEST commit only (a list of names
+// a person acts on), so an earlier row holds its `read at the newest commit only`
+// reason and a replay cannot reproduce the newest row from one sha alone.
+const CHAINED = new Set(["tripwires", "tripwireState", "workspace", "native"]);
 const REPRODUCIBLE_FROM_ONE_SHA = ROW_KEYS.filter((k) => !CHAINED.has(k));
 
 /** Recompute one row exactly as the CLI does, for a sha the fixture names. */
@@ -190,6 +200,10 @@ function recompute(sha, history, prevRow, knownIndex) {
     untested: m(measureUntested),
     classics: m(measureClassics),
     graph: m(measureGraph),
+    habits: m(measureHabits),
+    workspace: { value: workspaceElsewhere() },
+    native: { value: nativeElsewhere() },
+    reach: measureReach(CFG, snap),
     tripwires: Array.isArray(tw) ? tw : (tw?.value ?? []),
     tripwireState: tw?.state ?? null,
   };
@@ -234,7 +248,7 @@ test("the recorded history still reproduces", (t) => {
     return;
   }
 
-  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS(), churn: CHURN() };
   const full = process.env.REPOHEALTH_FULL === "1";
 
   if (full) {
@@ -1014,7 +1028,7 @@ test("a scoped history holds only the commits that touched the subtree", (t) => 
   // the slash would keep it.
   const lookalike = commit({ "toolsish/c.mjs": "c\n" }, "lookalike");
 
-  const history = { ...git.readHistory(repo, CFG), hunks: git.readHunks(repo) };
+  const history = { ...git.readHistory(repo, CFG), hunks: git.readHunks(repo), churn: git.readChurn(repo) };
   assert.deepEqual(history.commits.map((c) => c.sha), [both, outside, inside, lookalike]);
   const scoped = scopeHistory(history, "tools", CFG);
   assert.deepEqual(scoped.commits.map((c) => c.sha), [both, inside], "exactly the commits under tools/");
@@ -1032,7 +1046,7 @@ test("a scoped history holds only the commits that touched the subtree", (t) => 
 });
 
 test("a scoped snapshot is the subtree, measured as a repo", () => {
-  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS(), churn: CHURN() };
   const head = history.commits[history.commits.length - 1];
   const whole = buildSnapshot(ROOT, head.sha, git, CFG);
   const part = buildSnapshot(ROOT, head.sha, git, CFG, "packages/web");
@@ -1067,7 +1081,7 @@ test("the per-type cut of the tree adds up to the same tree", () => {
   // are one quantity cut two ways. If the two totals can differ, they are two
   // measurements wearing one label, and a reader comparing the top edges is
   // being shown a difference that is really a bug in one of the cuts.
-  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS(), churn: CHURN() };
   const head = history.commits[history.commits.length - 1];
   const snap = buildSnapshot(ROOT, head.sha, git, CFG);
   const value = measureClassics(snap, history, history.commits.length - 1, CFG).value;

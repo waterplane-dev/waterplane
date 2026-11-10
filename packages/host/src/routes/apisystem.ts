@@ -20,7 +20,7 @@ import { collectDebug, drainUpload, serveDownload } from "../speedtest.js";
 import { sendBody, notModified, statTag } from "../httpio.js";
 import { webBundleFile, webBundleManifest } from "../webbundle.js";
 import { claudeBin } from "../backends/index.js";
-import { handleAgentIntents } from "../agentintents.js";
+import { handleAgentIntents, proposalNotice } from "../agentintents.js";
 import { handleAgentFollowUp } from "../agentfollowup.js";
 import { handleAgentBuilds } from "../agentbuild.js";
 import { handlePeerRoutes } from "../peers/routes.js";
@@ -284,6 +284,8 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     repoDir: async (id) => (await findTarget(ctx.root, id))?.worktreePath ?? null,
     json,
     readJson: (r) => readJson(r),
+    // A script's NEW proposal (`proposedBy`): one push of its own kind, keyed per row.
+    announceProposal: (row) => ctx.notify?.("proposal", proposalNotice(row)),
   })),
 
   // `POST /api/agent/followup` — an agent flags its OWN session for follow up; sets, never clears (`agentfollowup.ts`).

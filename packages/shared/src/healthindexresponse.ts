@@ -12,7 +12,7 @@
  * a command on the desktop, a re-measure in the extension.
  */
 import {
-  assessHealthMove, centralOf, HEALTH_ENTRIES, HEALTH_ENTRY_LABEL, healthEntryReadings, healthIndex, healthIndexCommits,
+  assessHealthMove, centralOf, HEALTH_ENTRIES, HEALTH_ENTRY_LABEL, HEALTH_OPTIONAL_ENTRIES, healthEntryReadings, healthIndex, healthIndexCommits,
   healthMoveWords, healthWeeks, isoWeekOf,
   type HealthIndexResponse, type HealthSeriesRow,
 } from "./healthindex.js";
@@ -55,7 +55,8 @@ export function noScoredWeekWords(rows: readonly HealthSeriesRow[]): string {
     return typeof w === "string" && w ? w : null;
   };
   const rec = last as unknown as Record<string, unknown>;
-  const missing = HEALTH_ENTRIES.filter((e) => !disabled.includes(e) && values[e] === undefined).map((e) => {
+  // Only a core entry blocks a score; an optional one absent is unknown, not missing (`HEALTH_OPTIONAL_ENTRIES`).
+  const missing = HEALTH_ENTRIES.filter((e) => !disabled.includes(e) && !HEALTH_OPTIONAL_ENTRIES.includes(e) && values[e] === undefined).map((e) => {
     const reason = why(rec[e]) ?? (e === "untested" || e === "hatches" ? why(rec.classics) : null);
     return reason ? `${HEALTH_ENTRY_LABEL[e]} (${reason})` : HEALTH_ENTRY_LABEL[e];
   });

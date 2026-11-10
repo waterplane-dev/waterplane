@@ -8,7 +8,9 @@
  * engine and the phone write about it stay unjudged: a reading compared to its
  * own past has no side to be on. The owner approved (2026-10-15) a separate
  * number that DOES take a side, and the side is the same for every input: each
- * metric is read as lower-is-better. That opinion lives here and nowhere else.
+ * metric is read as lower-is-better, except `testsWithCode` (a share of commits
+ * that DID change a test, where more is better: `HEALTH_HIGHER_IS_BETTER`).
+ * That opinion lives here and nowhere else.
  *
  * Why it is ABSOLUTE now, and not chained (owner, 2026-10-17):
  *
@@ -46,11 +48,14 @@
  *   is its reading — `perDay`'s semantics one level up: every family here is a
  *   STATE of the tree, and a state read earlier in the week is just an older
  *   reading. Batch rows are kept, as `perDay` keeps them.
- * - **No score over a partial basket.** A week where any ENABLED entry is
- *   absent has no score and no point — a score over four of five entries would
+ * - **No score over a partial basket.** A week where any ENABLED CORE entry
+ *   (the first five) is absent has no score and no point — a score over four of five entries would
  *   read as a jump the week the fifth came back. Size needs BOTH `lineMean`
  *   and `max`, so rows from engines before `lineMean` existed score nothing;
- *   history comes back by re-measuring, never by guessing.
+ *   history comes back by re-measuring, never by guessing. The six entries P2
+ *   added (`HEALTH_OPTIONAL_ENTRIES`) are UNKNOWN where absent instead — a
+ *   Kotlin repo has no parser for duplicates, a quiet month no commit rate —
+ *   and the coverage cap counts them as measured by nobody, never as 100.
  * - **The trend is the second line.** Between consecutive SCORED weeks,
  *   `lnLink = ln(score / previous score)` feeds the move detector
  *   (`assessHealthMove`) exactly as the chained links did. A prereg or
@@ -60,6 +65,13 @@
  * - **Nothing here invents a reading**: a value that is not a finite number is
  *   absent for that week; no scored week means no series (`null`), never a
  *   number nobody measured.
+ * - **Coverage and gates (2026-11-09, `healthindex/coverage.ts` argues it).**
+ *   picture-app read 100 with most of its code never opened: an entry the
+ *   active packs cannot read over more than a fifth of the source files is
+ *   UNKNOWN (out of the mean), the headline is at most `100 · measured /
+ *   applicable`, and a gate the repo declares on one of its own readings
+ *   holds it under 50 while it fails. A change in what was measured marks
+ *   the week a `coverage` gap.
  * - **A repo may disable or override an entry.** Disabled: the entry leaves
  *   the mean, the cap and the alerts. Overridden: the repo's number is the
  *   value read (for size it replaces `lineMean`; the longest file stays the
@@ -72,10 +84,13 @@
  *   the file.
  */
 
-/** The five baskets the score reads, in the order the body names them. */
+/** The baskets the score reads, in the order the body names them. */
 
 export {
   HEALTH_ENTRIES,
+  HEALTH_OPTIONAL_ENTRIES,
+  HEALTH_HIGHER_IS_BETTER,
+  HEALTH_SCORE_FLOOR,
   HEALTH_GOOD,
   HEALTH_CONTEXT_GOOD_SHARE,
   HEALTH_SCORE_CAP_GAP,
@@ -102,6 +117,8 @@ export type {
 } from "./healthindex/types.js";
 export {
   healthScore,
+  healthScoreAtLeast,
+  healthEntryScore,
   isoWeekOf,
   healthWeeks,
   healthContextGood,
@@ -152,6 +169,28 @@ export type {
 export {
   repoHealthIndexOf,
 } from "./healthindex/repoindex.js";
+export {
+  HEALTH_DIMENSIONS,
+  HEALTH_DIMENSION_DEFS,
+  HEALTH_COVERAGE_MAX_UNREAD,
+  HEALTH_GATE_CAP,
+  healthReachOf,
+  healthGatesOf,
+  healthCoverage,
+  healthCoverageCap,
+  healthHeadline,
+  healthHeadlineWords,
+} from "./healthindex/coverage.js";
+export type {
+  HealthDimension,
+  HealthDimensionDef,
+  HealthCoverageItem,
+  HealthGate,
+  HealthCoverage,
+  HealthCapKind,
+  HealthHeadlineSubject,
+  HealthHeadlineWords,
+} from "./healthindex/coverage.js";
 export type {
   RepoHealthIndex,
   HealthIndexResponse,

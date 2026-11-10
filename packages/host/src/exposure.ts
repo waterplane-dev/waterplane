@@ -164,6 +164,28 @@ function readTriage(file: string): Triage {
   } catch (e) { return { ok: false, why: e instanceof Error ? e.message : String(e) }; }
 }
 
+/**
+ * The crash-group marks for this worktree (`agentreadings.ts`'s escaped-defect count): the instant
+ * of each mark on a crash group — a finding with an app version, or a mark that recorded one.
+ * A sentence instead when there is no series or the triage file cannot be read. Never throws.
+ */
+export function exposureCrashMarks(worktree: string): { at: number[] } | { why: string } {
+  try {
+    const s = seriesFor(worktree);
+    if (!s) return { why: "No exposure watch reading is stored for this repo, so there are no crash marks to count." };
+    const tri = readTriage(s.triageFile);
+    if (!tri.ok) return { why: `${s.triageFile} is unreadable (${tri.why}).` };
+    const crashIds = new Set((s.row.findings ?? []).filter((f) => f.group || f.appVersion).map(exposureTriageId));
+    const at: number[] = [];
+    for (const [id, m] of Object.entries(tri.data ?? {})) {
+      if (crashIds.has(id) || m.markedVersion) at.push(Date.parse(m.at));
+    }
+    return { at };
+  } catch (e) {
+    return { why: `The exposure watch could not be read: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 /** The exposure rows for this worktree: none when no series names it. Never throws. */
 export function exposureChecksFor(worktree: string): ComplianceCheck[] {
   try {

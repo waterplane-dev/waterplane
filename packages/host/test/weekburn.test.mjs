@@ -206,6 +206,26 @@ test("the health summary rides into the prompt when the host has one", async () 
   assert.equal(healthSummaryText(undefined), null);
 });
 
+test("the health summary says a coverage or gate cap in shared's one wording, so the agent fixes the cause", () => {
+  const item = (key, kind, label, state, reason) => ({ key, kind, label, state, ...(reason ? { reason } : {}) });
+  const gate = { key: "parity", name: "Parity", unit: "%", fails: "below", at: 60, value: 40, state: "fail", text: 'Gate "Parity" fails: 40%, the repo requires at least 60%.' };
+  const gated = healthSummaryText({
+    value: 49, mean: 90, week: "2026-10-19", cappedBy: null, capKind: "gate",
+    coverage: { measured: 2, applicable: 2, reach: true, items: [], gates: [gate], key: "k" },
+  });
+  assert.match(gated, /Capped at 49: a gate the repo declared fails \("Parity"\)/);
+  assert.match(gated, /Gate "Parity" fails: 40%/);
+  const partial = healthSummaryText({
+    value: 60, mean: 90, week: "2026-10-19", cappedBy: null, capKind: "coverage",
+    coverage: { measured: 3, applicable: 5, reach: true, key: "k", gates: [], items: [
+      item("size", "entry", "file length", "measured"),
+      item("untested", "entry", "untested modules", "unknown", "no Dart test rule (391 of 537 source files)"),
+    ] },
+  });
+  assert.match(partial, /only 3 of 5 dimensions could be measured/);
+  assert.match(partial, /Unknown: untested modules: no Dart test rule/);
+});
+
 test("the person's task and a repo's note ride into the prompt; the status carries each repo's reading for the preview", async () => {
   const { wb, added } = rig({ health: (dir) => (dir === "/r/b" ? { value: 50, week: "2026-10-19" } : undefined) });
   const r = await wb.update({ repos: ["/r/a"], task: "  Raise parser coverage ", notes: { "/r/a": "no new deps", "/r/b": "" } });

@@ -78,6 +78,8 @@ import {
   type RepoHealthReading,
   type RepoHealthSeries,
 } from "./repohealth.js";
+import { readHabits } from "./repohealthhabits.js";
+import { readNative } from "./repohealthnative.js";
 
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 const isCount = (v: unknown): v is number =>
@@ -190,6 +192,7 @@ export function parseRepoHealthMeasure(stdout: string): RepoHealthMeasure | null
   const commits = isCount(o.commits) ? o.commits : null;
   const engineVersion = isStr(o.engineVersion) ? o.engineVersion : null;
   const recut = isStr(o.recut) ? o.recut : null;
+  const acceptsRecut = o.acceptsRecut === true;
 
   // A pack the census could not describe is dropped from the list rather than
   // voiding it: one unreadable entry must not hide the four that read fine.
@@ -221,7 +224,11 @@ export function parseRepoHealthMeasure(stdout: string): RepoHealthMeasure | null
   // engine with no scopes sends no key and this stays undefined; a current one
   // always echoes, `null` for the whole repo.
   const scope = o.scope === undefined ? undefined : isStr(o.scope) ? o.scope : null;
-  return { commits, packs, groups, engineVersion, recut, ...(scope === undefined ? {} : { scope }) };
+  return {
+    commits, packs, groups, engineVersion, recut,
+    ...(acceptsRecut ? { acceptsRecut: true as const } : {}),
+    ...(scope === undefined ? {} : { scope }),
+  };
 }
 
 /**
@@ -464,6 +471,11 @@ export function parseRepoHealthPlot(stdout: string): RepoHealthPlot | null {
     classics,
   };
   if (longest) plot.longest = longest;
+  // Optional and dropped whole when malformed — `repohealthhabits.ts`.
+  const habits = readHabits(o.habits);
+  if (habits) plot.habits = habits;
+  const native = readNative(o.native);
+  if (native) plot.native = native;
   const own = readOwn(o.own);
   if (own) plot.own = own;
   const cen = o.central as Record<string, unknown> | null | undefined;
@@ -523,6 +535,12 @@ function readOwn(v: unknown): RepoHealthPlotOwn | null {
       key: s.key, source: "repo", label: s.label, unit: s.unit, means: s.means, better: s.better,
       points, last: s.last, reading, detail: s.detail,
     };
+    // The gate, named field by field: a usable one, or the engine's refusal sentence. Anything else is dropped (no gate claimed).
+    const g = s.gate as { fails?: unknown; at?: unknown; invalid?: unknown } | null | undefined;
+    if (g && typeof g === "object") {
+      if ((g.fails === "below" || g.fails === "above") && typeof g.at === "number" && Number.isFinite(g.at)) one.gate = { fails: g.fails, at: g.at };
+      else if (isStr(g.invalid)) one.gate = { invalid: g.invalid };
+    }
     if (isStr(s.absent)) one.absent = s.absent;
     series.push(one);
   }

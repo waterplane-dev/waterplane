@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, Bot, CalendarClock, Check, CircleAlert, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, GitBranch, HardDrive, ShieldAlert, HeartPulse, Info, Hourglass, Images, KeyRound, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CalendarClock, Check, CircleAlert, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, GitBranch, HardDrive, ShieldAlert, HeartPulse, Info, Hourglass, Images, KeyRound, Lightbulb, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -42,6 +42,7 @@ export const NOTIF_ICON: Record<string, LucideIcon> = {
   undelivered: AlertTriangle,
   git: GitBranch,
   exposure: ShieldAlert,
+  proposal: Lightbulb,
 };
 
 export function NotificationsSheet() {

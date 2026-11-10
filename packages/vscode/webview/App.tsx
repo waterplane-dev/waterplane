@@ -44,18 +44,18 @@ export function App() {
 
       <main id={`panel-${tab}`} tabIndex={-1}>
         {tab === "session" && (
-          <SessionView doc={session?.doc ?? null} why={session ? session.why : "Waiting for the extension…"}
+          <SessionView doc={session?.doc ?? null} why={session?.why}
             prompts={prompts.list} terminal={prompts.terminal} selectedTurn={turn} onSelectTurn={setTurn} post={post} />
         )}
-        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus ? corpus.why : "Waiting for the extension…"} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger}
+        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus?.why} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger}
           here={sessions && sessions.rows.length ? { folder: sessions.folder, ids: new Set(sessions.rows.map((r) => r.id)) } : null} />}
         {tab === "always-on" && (
-          <WeightView doc={weight?.doc ?? null} why={weight ? weight.why : "Waiting for the extension…"}
+          <WeightView doc={weight?.doc ?? null} why={weight?.why}
             prompts={prompts.list} terminal={prompts.terminal} post={post} />
         )}
         {tab === "health" && (
           folder ? (
-            <HealthView folder={folder} doc={h?.doc ?? null} why={h ? h.why : "Waiting for the extension…"} run={h?.run ?? null}
+            <HealthView folder={folder} doc={h?.doc ?? null} why={h?.why} run={h?.run ?? null}
               prompts={prompts.list} terminal={prompts.terminal} post={post} />
           ) : (
             <div className="empty absent" role="note">No folder is open, so there is no history to measure.</div>

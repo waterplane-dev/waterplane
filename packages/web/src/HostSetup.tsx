@@ -21,6 +21,9 @@ import { sealedMode } from "./deviceToken";
 import { pickLockPath } from "./appLock";
 import { LS, lsBool } from "./storage";
 import { isDemo } from "./demoEntry";
+import { Explain } from "./Explain";
+import { testLanAddress } from "./lanLink";
+import { lanTestWords, staleLanOffer, tailnetOkWords, type LanTest } from "./hostTestWords";
 
 /**
  * Add or edit one desktop — Android shell only.
@@ -50,7 +53,7 @@ import { isDemo } from "./demoEntry";
 type Probe =
   | { s: "idle" }
   | { s: "busy" }
-  | { s: "ok"; root: string; protocol: number }
+  | { s: "ok"; root: string; protocol: number; ms: number }
   | { s: "bad"; why: string; hint?: string };
 
 const PROBE_TIMEOUT_MS = 6000;
@@ -62,6 +65,16 @@ const DESKTOP_GUIDE = `https://${BRAND.domain}/#install`;
  *  makes it protected is that the person typed it (`vouchedAfter`), not that they read it here. */
 const CONFIRM_ADDRESS_TEXT =
   "Type this desktop's address to confirm it. It is an https address that counts as protected only once you have typed it yourself, so the saved one is not shown: an older version of this app may have saved an address you never chose.";
+
+/** A plain-http address, said once in a line under the field it is about; the full sentence behind the `?`. */
+function PlainWarn() {
+  return (
+    <SetWarn>
+      Not protected: anyone on this network could read and take over.{" "}
+      <Explain of="why this address is not protected" label="why"><p>{PLAIN_ROUTE_WARNING}</p></Explain>
+    </SetWarn>
+  );
+}
 
 export type HostSetupMode = "first" | "add" | "edit";
 
@@ -106,6 +119,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   const [ssids, setSsids] = useState<string[]>(host?.lan?.ssids ?? []);
   const [auto, setAuto] = useState(host?.lan?.auto ?? false);
   const [probe, setProbe] = useState<Probe>({ s: "idle" });
+  const [lanTest, setLanTest] = useState<LanTest | "busy" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [ssidNote, setSsidNote] = useState<string | null>(null);
   const [needLocation, setNeedLocation] = useState(false);
@@ -123,17 +137,26 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
     lan: lanBase ? { base: lanBase, ssids, auto } : undefined,
     vouched: base && vouchedAfter(host ?? null, base, opened) ? (true as const) : undefined,
   };
-  const plain = (!!base && savedRowPlain(draft, hasShellTls())) || (!!lanBase && savedRowPlain(draft, hasShellTls(), lanBase));
+  const plainTail = !!base && savedRowPlain(draft, hasShellTls());
+  const plainLan = !!lanBase && savedRowPlain(draft, hasShellTls(), lanBase);
 
   useEffect(() => { if (pair && mode !== "edit") setPairing(true); }, [pair, mode]);
 
   // Typing invalidates a previous verdict — a green tick next to an edited
   // address is worse than no tick.
   useEffect(() => { setProbe({ s: "idle" }); setProblem(null); }, [text]);
+  useEffect(() => { setLanTest(null); }, [lanText]);
+
+  async function testLan(): Promise<void> {
+    if (!lanBase) return;
+    setLanTest("busy");
+    setLanTest(await testLanAddress(lanBase, host?.id ?? ""));
+  }
 
   async function test(): Promise<boolean> {
     if (!base) return false;
     setProbe({ s: "busy" });
+    const t0 = performance.now();
     const ctl = new AbortController();
     const fuse = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
     try {
@@ -159,7 +182,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         setProbe({ s: "bad", why: `not a ${BRAND.name} daemon`, hint: "Something else is listening on that port." });
         return false;
       }
-      setProbe({ s: "ok", root: d.root || "?", protocol: d.protocol ?? 0 });
+      setProbe({ s: "ok", root: d.root || "?", protocol: d.protocol ?? 0, ms: performance.now() - t0 });
       return true;
     } catch (e) {
       const aborted = (e as Error)?.name === "AbortError";
@@ -250,7 +273,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   if (noRoute) {
     return (
       <div className={mode === "first" ? "auth-gate" : undefined}>
-        <div className={mode === "first" ? "auth-card" : "form"}>
+        <div className={mode === "first" ? "auth-card" : "form host-form"}>
           <SetWarn>{noRoute.sentence}</SetWarn>
           <SetLine style={{ marginTop: 10 }}>
             {onEditLan && <Button onClick={() => onEditLan(noRoute.host)}><Settings2 size={13} /> change LAN settings</Button>}
@@ -263,7 +286,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
 
   return (
     <div className={mode === "first" ? "auth-gate" : undefined}>
-      <div className={mode === "first" ? "auth-card" : "form"}>
+      <div className={mode === "first" ? "auth-card" : "form host-form"}>
         {mode === "first" && !fromPairLink && (
           // The first thing a fresh install shows: what this app is, and that it does nothing until
           // the desktop half exists. A pairing link skips it, because that person has a desktop.
@@ -314,12 +337,22 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             </SetLine>
           </>
         )}
-        <SetNote style={{ marginBottom: 12 }}>
-          The address the {BRAND.name} daemon prints at boot — usually its Tailscale IP.
-          Port {" "}
-          <code>8770</code> is assumed unless you type another one.
-        </SetNote>
+        {mode !== "first" && (
+          <input
+            className="auth-input"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="name"
+            placeholder={`name — ${namePlaceholder}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        )}
 
+        <SetNote style={{ marginTop: mode === "first" ? 0 : 10 }}>
+          <b>Tailnet address</b> — the one the {BRAND.name} daemon prints at boot. Port <code>8770</code> unless you type another.
+        </SetNote>
         <input
           className="auth-input"
           inputMode="url"
@@ -331,50 +364,52 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && base && mode === "first") void test().then((ok) => { if (ok) save(true); }); }}
         />
-
-        {base && <SetNote style={{ marginTop: 8, opacity: 0.75 }}>will use <code>{base}</code></SetNote>}
         {text.trim() && !base && (
-          <SetNote style={{ marginTop: 8, color: "var(--dead)" }}>
+          <SetNote style={{ marginTop: 6, color: "var(--dead)" }}>
             Not an address. Use a host name or IP, optionally with a port — http or https only.
           </SetNote>
         )}
-
-        <input
-          className="auth-input"
-          style={{ marginTop: 10 }}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder={`name — ${namePlaceholder}`}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
-        {probe.s === "busy" && (
-          <SetNote style={{ marginTop: 10 }}>
-            <Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> checking…
-          </SetNote>
+        {base && (
+          <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {probe.s === "busy"
+              ? <SetNote as="span"><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> testing <code>{base}</code>…</SetNote>
+              : <><Button onClick={() => void test()}><Plug size={13} /> test this address</Button>{probe.s === "idle" && <SetNote as="span" style={{ opacity: 0.75 }}><code>{base}</code></SetNote>}</>}
+          </SetLine>
         )}
         {probe.s === "ok" && (
-          <SetNote style={{ marginTop: 10, color: "var(--ok)" }}>
-            <CheckCircle2 size={13} style={{ verticalAlign: "-2px" }} /> daemon found — root <code>{probe.root}</code>
-            {probe.protocol !== PROTOCOL_VERSION && ` · protocol ${probe.protocol}, this app speaks ${PROTOCOL_VERSION}`}
+          <SetNote style={{ marginTop: 6, color: "var(--ok)" }}>
+            <CheckCircle2 size={13} style={{ verticalAlign: "-2px" }} /> {tailnetOkWords(probe.ms, probe.root)}
+            {probe.protocol !== PROTOCOL_VERSION && ` It speaks protocol ${probe.protocol}, this app ${PROTOCOL_VERSION}.`}
           </SetNote>
         )}
         {probe.s === "bad" && (
-          <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>
+          <SetNote style={{ marginTop: 6, color: "var(--dead)" }}>
             <XCircle size={13} style={{ verticalAlign: "-2px" }} /> {probe.why}
             {probe.hint && <div style={{ opacity: 0.8, marginTop: 4 }}>{probe.hint}</div>}
           </SetNote>
+        )}
+        {plainTail && <PlainWarn />}
+
+        {mode === "first" && (
+          <input
+            className="auth-input"
+            style={{ marginTop: 10 }}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="name"
+            placeholder={`name — ${namePlaceholder}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         )}
 
         {mode !== "first" && (
           <details style={{ marginTop: 14 }} open={!!host?.lan}>
             {/* raw: the <summary> of a hand-rolled <details>, not SetNote's fold (a div) */}
-            <summary className="set-note"><Router size={13} style={{ verticalAlign: "-2px" }} /> on the same Wi-Fi (optional)</summary>
+            <summary className="set-note"><Router size={13} style={{ verticalAlign: "-2px" }} /> <b>Home Wi-Fi address</b> (optional)</summary>
             <SetNote style={{ marginTop: 6 }}>
-              The desktop's address on your home network. The app uses it only on the Wi-Fi names
-              below, only after the desktop proves who it is, and only when the switch is on.
+              Used only on the Wi-Fi names below, after the desktop proves who it is, with the switch on.
             </SetNote>
             <input
               className="auth-input"
@@ -389,13 +424,31 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             {lanText.trim() && !lanBase && (
               <SetNote style={{ marginTop: 6, color: "var(--dead)" }}>Not an address.</SetNote>
             )}
-            {lanSuggest.length > 0 && (
+            {lanBase && (
+              <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+                {lanTest === "busy"
+                  ? <SetNote as="span"><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> testing <code>{lanBase}</code>…</SetNote>
+                  : <Button onClick={() => void testLan()}><Router size={13} /> test this address</Button>}
+              </SetLine>
+            )}
+            {lanTest && lanTest !== "busy" && (() => { const w = lanTestWords(lanTest); return <SetNote style={{ marginTop: 6, color: w.tone === "ok" ? "var(--ok)" : w.tone === "dead" ? "var(--dead)" : undefined }}>{w.text}</SetNote>; })()}
+            {(() => {
+              const now = staleLanOffer(lanBase, lanTest === "busy" ? null : lanTest, lanSuggest);
+              return now ? (
+                <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+                  <SetNote as="span">The desktop reports <code>{now}</code> now.</SetNote>
+                  <Button onClick={() => setLanText(now)}>use {now}</Button>
+                </SetLine>
+              ) : null;
+            })()}
+            {lanSuggest.length > 0 && !lanText.trim() && (
               <div className="set-chips" style={{ marginTop: 6 }}>
                 {lanSuggest.map((ip) => (
                   <Button key={ip} onClick={() => setLanText(ip)}>{ip}</Button>
                 ))}
               </div>
             )}
+            {plainLan && <PlainWarn />}
             <div className="set-chips" style={{ marginTop: 8 }}>
               {ssids.map((s) => (
                 <Button key={s} onClick={() => setSsids(ssids.filter((x) => x !== s))} aria-label={`remove ${s}`}>
@@ -413,19 +466,16 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             )}
             {lanBase && (
               <SetSwitch label="switch to LAN automatically" icon={Router} on={auto} onChange={() => setAuto(!auto)}
-                note={ssids.length === 0 ? "No Wi-Fi name yet, so it never switches — add the one at home." : undefined} />
+                note={ssids.length === 0 ? "Never switches until you add your home Wi-Fi." : undefined} />
             )}
           </details>
         )}
-
-        {plain && <SetWarn>{PLAIN_ROUTE_WARNING}</SetWarn>}
 
         {problem && <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</SetNote>}
 
         <SetLine style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
           {base ? (
             <>
-              {probe.s !== "busy" && <Button onClick={() => void test()}>test</Button>}
               {/* Offered even on a failed probe: a desktop that is merely asleep
                   is the common case, and refusing to save the (correct) address
                   would strand someone on this screen with nothing to do. */}

@@ -1,5 +1,5 @@
 {
-  "prereg": "2026-10-30a+c75fa639",
+  "prereg": "2026-11-09b+e7385787",
   "lastSha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
   "rows": [
     {
@@ -7,7 +7,7 @@
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 383,
@@ -438,6 +438,238 @@
           "resolved": 32
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 5,
+              "median": 120,
+              "p95": 436
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 7361,
+              "deleted": 111,
+              "ratio": 0.015079472897704116,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 7361,
+                  "deleted": 111
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 4,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 152,
+                  "loc": 383,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 58216
+                },
+                {
+                  "churn": 139,
+                  "loc": 139,
+                  "path": "packages/host/src/git.ts",
+                  "score": 19321
+                },
+                {
+                  "churn": 140,
+                  "loc": 132,
+                  "path": "packages/web/src/GitView.tsx",
+                  "score": 18480
+                },
+                {
+                  "churn": 70,
+                  "loc": 222,
+                  "path": "packages/host/src/main.ts",
+                  "score": 15540
+                },
+                {
+                  "churn": 39,
+                  "loc": 291,
+                  "path": "packages/host/src/api.ts",
+                  "score": 11349
+                },
+                {
+                  "churn": 80,
+                  "loc": 105,
+                  "path": "packages/host/src/repos.ts",
+                  "score": 8400
+                },
+                {
+                  "churn": 32,
+                  "loc": 149,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 4768
+                },
+                {
+                  "churn": 13,
+                  "loc": 203,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 2639
+                },
+                {
+                  "churn": 17,
+                  "loc": 103,
+                  "path": "packages/web/src/api.ts",
+                  "score": 1751
+                },
+                {
+                  "churn": 7,
+                  "loc": 173,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 1211
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 5,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 4,
+              "rate": 0.5,
+              "withTests": 2
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 29,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -454,7 +686,7 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 676,
@@ -921,6 +1153,238 @@
           "resolved": 36
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 15,
+              "median": 91,
+              "p95": 618
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 8880,
+              "deleted": 262,
+              "ratio": 0.029504504504504505,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 8880,
+                  "deleted": 262
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 13,
+              "fixes": 3,
+              "fixesAfter": 3,
+              "rate": 0.23076923076923078
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 519,
+                  "loc": 676,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 350844
+                },
+                {
+                  "churn": 239,
+                  "loc": 307,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 73373
+                },
+                {
+                  "churn": 108,
+                  "loc": 325,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 35100
+                },
+                {
+                  "churn": 139,
+                  "loc": 191,
+                  "path": "packages/host/src/git.ts",
+                  "score": 26549
+                },
+                {
+                  "churn": 102,
+                  "loc": 257,
+                  "path": "packages/host/src/main.ts",
+                  "score": 26214
+                },
+                {
+                  "churn": 145,
+                  "loc": 178,
+                  "path": "packages/web/src/Backlog.tsx",
+                  "score": 25810
+                },
+                {
+                  "churn": 137,
+                  "loc": 135,
+                  "path": "packages/host/src/update.ts",
+                  "score": 18495
+                },
+                {
+                  "churn": 140,
+                  "loc": 132,
+                  "path": "packages/web/src/GitView.tsx",
+                  "score": 18480
+                },
+                {
+                  "churn": 97,
+                  "loc": 159,
+                  "path": "packages/web/src/Terminal.tsx",
+                  "score": 15423
+                },
+                {
+                  "churn": 76,
+                  "loc": 194,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 14744
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 15,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 13,
+              "rate": 0.3076923076923077,
+              "withTests": 4
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 1,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 32,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -937,7 +1401,7 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 1088,
@@ -1420,6 +1884,238 @@
           "resolved": 44
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 19,
+              "median": 100,
+              "p95": 1549
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 11577,
+              "deleted": 612,
+              "ratio": 0.05286343612334802,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 11577,
+                  "deleted": 612
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 17,
+              "fixes": 3,
+              "fixesAfter": 3,
+              "rate": 0.17647058823529413
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 1163,
+                  "loc": 1088,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 1265344
+                },
+                {
+                  "churn": 361,
+                  "loc": 524,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 189164
+                },
+                {
+                  "churn": 438,
+                  "loc": 323,
+                  "path": "packages/web/src/Backlog.tsx",
+                  "score": 141474
+                },
+                {
+                  "churn": 252,
+                  "loc": 432,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 108864
+                },
+                {
+                  "churn": 255,
+                  "loc": 396,
+                  "path": "packages/host/src/main.ts",
+                  "score": 100980
+                },
+                {
+                  "churn": 239,
+                  "loc": 307,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 73373
+                },
+                {
+                  "churn": 239,
+                  "loc": 237,
+                  "path": "packages/host/src/oracle.ts",
+                  "score": 56643
+                },
+                {
+                  "churn": 185,
+                  "loc": 301,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 55685
+                },
+                {
+                  "churn": 167,
+                  "loc": 219,
+                  "path": "packages/host/src/git.ts",
+                  "score": 36573
+                },
+                {
+                  "churn": 158,
+                  "loc": 188,
+                  "path": "packages/web/src/Gallery.tsx",
+                  "score": 29704
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 19,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 17,
+              "rate": 0.4117647058823529,
+              "withTests": 7
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 2,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 35,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -1441,7 +2137,7 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -1938,6 +2634,238 @@
           "resolved": 46
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 31,
+              "median": 99,
+              "p95": 1123
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 13298,
+              "deleted": 993,
+              "ratio": 0.07467288314032185,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 13298,
+                  "deleted": 993
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 28,
+              "fixes": 3,
+              "fixesAfter": 3,
+              "rate": 0.10714285714285714
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 1521,
+                  "loc": 1300,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 1977300
+                },
+                {
+                  "churn": 718,
+                  "loc": 713,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 511934
+                },
+                {
+                  "churn": 715,
+                  "loc": 404,
+                  "path": "packages/web/src/Backlog.tsx",
+                  "score": 288860
+                },
+                {
+                  "churn": 328,
+                  "loc": 452,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 148256
+                },
+                {
+                  "churn": 318,
+                  "loc": 441,
+                  "path": "packages/host/src/main.ts",
+                  "score": 140238
+                },
+                {
+                  "churn": 292,
+                  "loc": 350,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 102200
+                },
+                {
+                  "churn": 260,
+                  "loc": 360,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 93600
+                },
+                {
+                  "churn": 271,
+                  "loc": 323,
+                  "path": "packages/host/src/git.ts",
+                  "score": 87533
+                },
+                {
+                  "churn": 260,
+                  "loc": 282,
+                  "path": "packages/web/src/Gallery.tsx",
+                  "score": 73320
+                },
+                {
+                  "churn": 258,
+                  "loc": 242,
+                  "path": "packages/host/src/oracle.ts",
+                  "score": 62436
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 31,
+              "negative": 2,
+              "share": 0.06451612903225806
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 28,
+              "rate": 0.39285714285714285,
+              "withTests": 11
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 3,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 37,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -1959,7 +2887,7 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -2456,6 +3384,238 @@
           "resolved": 46
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 32,
+              "median": 91,
+              "p95": 1123
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 13345,
+              "deleted": 1019,
+              "ratio": 0.07635818658673661,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 13345,
+                  "deleted": 1019
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 29,
+              "fixes": 3,
+              "fixesAfter": 3,
+              "rate": 0.10344827586206896
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 1521,
+                  "loc": 1300,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 1977300
+                },
+                {
+                  "churn": 718,
+                  "loc": 713,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 511934
+                },
+                {
+                  "churn": 715,
+                  "loc": 404,
+                  "path": "packages/web/src/Backlog.tsx",
+                  "score": 288860
+                },
+                {
+                  "churn": 328,
+                  "loc": 452,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 148256
+                },
+                {
+                  "churn": 318,
+                  "loc": 441,
+                  "path": "packages/host/src/main.ts",
+                  "score": 140238
+                },
+                {
+                  "churn": 292,
+                  "loc": 350,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 102200
+                },
+                {
+                  "churn": 260,
+                  "loc": 360,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 93600
+                },
+                {
+                  "churn": 271,
+                  "loc": 323,
+                  "path": "packages/host/src/git.ts",
+                  "score": 87533
+                },
+                {
+                  "churn": 260,
+                  "loc": 282,
+                  "path": "packages/web/src/Gallery.tsx",
+                  "score": 73320
+                },
+                {
+                  "churn": 258,
+                  "loc": 242,
+                  "path": "packages/host/src/oracle.ts",
+                  "score": 62436
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 32,
+              "negative": 2,
+              "share": 0.0625
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 29,
+              "rate": 0.3793103448275862,
+              "withTests": 11
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 3,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 37,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -2477,7 +3637,7 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 3217,
@@ -3056,6 +4216,238 @@
           "resolved": 99
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 4,
+              "median": 125,
+              "p95": 162
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 15795,
+              "deleted": 1089,
+              "ratio": 0.06894586894586895,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 4,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.25
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 127,
+                  "loc": 3217,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 408559
+                },
+                {
+                  "churn": 65,
+                  "loc": 215,
+                  "path": "packages/host/src/origin.ts",
+                  "score": 13975
+                },
+                {
+                  "churn": 19,
+                  "loc": 586,
+                  "path": "packages/host/src/api.ts",
+                  "score": 11134
+                },
+                {
+                  "churn": 19,
+                  "loc": 350,
+                  "path": "packages/host/src/git.ts",
+                  "score": 6650
+                },
+                {
+                  "churn": 10,
+                  "loc": 539,
+                  "path": "packages/web/src/ImageAnnotator.tsx",
+                  "score": 5390
+                },
+                {
+                  "churn": 22,
+                  "loc": 92,
+                  "path": "deploy/install-service.sh",
+                  "score": 2024
+                },
+                {
+                  "churn": 7,
+                  "loc": 288,
+                  "path": "packages/web/src/api.ts",
+                  "score": 2016
+                },
+                {
+                  "churn": 30,
+                  "loc": 30,
+                  "path": "deploy/uninstall-service.sh",
+                  "score": 900
+                },
+                {
+                  "churn": 4,
+                  "loc": 211,
+                  "path": "packages/web/src/SecretSheet.tsx",
+                  "score": 844
+                },
+                {
+                  "churn": 3,
+                  "loc": 264,
+                  "path": "packages/web/src/Gallery.tsx",
+                  "score": 792
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 4,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 4,
+              "rate": 0.5,
+              "withTests": 2
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 64,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "1,300 → 3,136 lines, past the 2,000-line mark",
@@ -3101,7 +4493,7 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 3322,
@@ -3683,6 +5075,238 @@
           "resolved": 110
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 5,
+              "median": 126,
+              "p95": 2544
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 17941,
+              "deleted": 1487,
+              "ratio": 0.0828827824535979,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 17941,
+                  "deleted": 1487
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 5,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.2
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 264,
+                  "loc": 3322,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 877008
+                },
+                {
+                  "churn": 91,
+                  "loc": 1924,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 175084
+                },
+                {
+                  "churn": 262,
+                  "loc": 513,
+                  "path": "packages/web/src/TranscriptView.tsx",
+                  "score": 134406
+                },
+                {
+                  "churn": 116,
+                  "loc": 945,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 109620
+                },
+                {
+                  "churn": 66,
+                  "loc": 1066,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 70356
+                },
+                {
+                  "churn": 213,
+                  "loc": 213,
+                  "path": "packages/web/src/Markdown.tsx",
+                  "score": 45369
+                },
+                {
+                  "churn": 35,
+                  "loc": 1066,
+                  "path": "packages/host/src/main.ts",
+                  "score": 37310
+                },
+                {
+                  "churn": 146,
+                  "loc": 231,
+                  "path": "packages/host/src/scaffold.ts",
+                  "score": 33726
+                },
+                {
+                  "churn": 156,
+                  "loc": 209,
+                  "path": "packages/web/src/ZoomableImage.tsx",
+                  "score": 32604
+                },
+                {
+                  "churn": 176,
+                  "loc": 176,
+                  "path": "packages/host/src/fanout.ts",
+                  "score": 30976
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 5,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 5,
+              "rate": 0.6,
+              "withTests": 3
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 69,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "`\\bTODO\\b` went 0 → 3 occurrences; 4 of 17 hatch kinds are now in use",
@@ -3725,7 +5349,7 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 6514,
@@ -4370,6 +5994,238 @@
           "resolved": 205
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 7,
+              "median": 126,
+              "p95": 2544
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 39956,
+              "deleted": 2303,
+              "ratio": 0.05763840224246671,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                },
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 7,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.14285714285714285
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 390,
+                  "loc": 6514,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 2540460
+                },
+                {
+                  "churn": 123,
+                  "loc": 1982,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 243786
+                },
+                {
+                  "churn": 213,
+                  "loc": 1089,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 231957
+                },
+                {
+                  "churn": 262,
+                  "loc": 576,
+                  "path": "packages/web/src/TranscriptView.tsx",
+                  "score": 150912
+                },
+                {
+                  "churn": 81,
+                  "loc": 1378,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 111618
+                },
+                {
+                  "churn": 45,
+                  "loc": 1651,
+                  "path": "packages/host/src/main.ts",
+                  "score": 74295
+                },
+                {
+                  "churn": 213,
+                  "loc": 295,
+                  "path": "packages/web/src/Markdown.tsx",
+                  "score": 62835
+                },
+                {
+                  "churn": 176,
+                  "loc": 257,
+                  "path": "packages/host/src/fanout.ts",
+                  "score": 45232
+                },
+                {
+                  "churn": 157,
+                  "loc": 282,
+                  "path": "packages/web/src/FanoutSheet.tsx",
+                  "score": 44274
+                },
+                {
+                  "churn": 72,
+                  "loc": 597,
+                  "path": "packages/web/src/Gallery.tsx",
+                  "score": 42984
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 7,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 7,
+              "rate": 0.7142857142857143,
+              "withTests": 5
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 111,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "`\\bas unknown as\\b` went 0 → 6 occurrences; 7 of 17 hatch kinds are now in use",
@@ -4429,7 +6285,7 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 7853,
@@ -5097,6 +6953,238 @@
           "resolved": 311
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 17,
+              "median": 541,
+              "p95": 2678
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 57542,
+              "deleted": 3688,
+              "ratio": 0.06409231517847833,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                },
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 39601,
+                  "deleted": 2201
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 15,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.06666666666666667
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 2579,
+                  "loc": 7853,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 20252887
+                },
+                {
+                  "churn": 602,
+                  "loc": 2371,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 1427342
+                },
+                {
+                  "churn": 424,
+                  "loc": 1986,
+                  "path": "packages/host/src/main.ts",
+                  "score": 842064
+                },
+                {
+                  "churn": 320,
+                  "loc": 1599,
+                  "path": "packages/shared/src/index.ts",
+                  "score": 511680
+                },
+                {
+                  "churn": 336,
+                  "loc": 865,
+                  "path": "packages/shared/src/queue.ts",
+                  "score": 290640
+                },
+                {
+                  "churn": 213,
+                  "loc": 1089,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 231957
+                },
+                {
+                  "churn": 262,
+                  "loc": 782,
+                  "path": "packages/web/src/TranscriptView.tsx",
+                  "score": 204884
+                },
+                {
+                  "churn": 144,
+                  "loc": 981,
+                  "path": "packages/host/src/api.ts",
+                  "score": 141264
+                },
+                {
+                  "churn": 361,
+                  "loc": 361,
+                  "path": "packages/shared/src/hints.ts",
+                  "score": 130321
+                },
+                {
+                  "churn": 346,
+                  "loc": 346,
+                  "path": "packages/host/src/tree.ts",
+                  "score": 119716
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 17,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 14,
+              "rate": 0.5714285714285714,
+              "withTests": 8
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 147,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "1,982 → 2,371 lines, past the 2,000-line mark",
@@ -5147,7 +7235,7 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 9631,
@@ -5892,6 +7980,238 @@
           "resolved": 496
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 33,
+              "median": 517,
+              "p95": 3335
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 91646,
+              "deleted": 10866,
+              "ratio": 0.11856491281670777,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 17941,
+                  "deleted": 1487
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 73705,
+                  "deleted": 9379
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 23,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.043478260869565216
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 3943,
+                  "loc": 9631,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 37975033
+                },
+                {
+                  "churn": 873,
+                  "loc": 2847,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 2485431
+                },
+                {
+                  "churn": 878,
+                  "loc": 1672,
+                  "path": "packages/host/src/main.ts",
+                  "score": 1468016
+                },
+                {
+                  "churn": 1172,
+                  "loc": 1172,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 1373584
+                },
+                {
+                  "churn": 920,
+                  "loc": 920,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 846400
+                },
+                {
+                  "churn": 883,
+                  "loc": 883,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 779689
+                },
+                {
+                  "churn": 868,
+                  "loc": 862,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 748216
+                },
+                {
+                  "churn": 336,
+                  "loc": 1084,
+                  "path": "packages/shared/src/queue.ts",
+                  "score": 364224
+                },
+                {
+                  "churn": 332,
+                  "loc": 832,
+                  "path": "packages/web/src/TranscriptView.tsx",
+                  "score": 276224
+                },
+                {
+                  "churn": 522,
+                  "loc": 522,
+                  "path": "packages/web/src/SendSheet.tsx",
+                  "score": 272484
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 33,
+              "negative": 0,
+              "share": 0
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 22,
+              "rate": 0.5909090909090909,
+              "withTests": 13
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 191,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -5944,7 +8264,7 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 10303,
@@ -6713,6 +9033,238 @@
           "resolved": 561
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 50,
+              "median": 197,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 111355,
+              "deleted": 17144,
+              "ratio": 0.15395806205379192,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 17941,
+                  "deleted": 1487
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 93414,
+                  "deleted": 15657
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 34,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.029411764705882353
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4638,
+                  "loc": 10303,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 47785314
+                },
+                {
+                  "churn": 1051,
+                  "loc": 2977,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 3128827
+                },
+                {
+                  "churn": 1547,
+                  "loc": 1449,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2241603
+                },
+                {
+                  "churn": 1168,
+                  "loc": 1806,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2109408
+                },
+                {
+                  "churn": 1467,
+                  "loc": 1388,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2036196
+                },
+                {
+                  "churn": 995,
+                  "loc": 1003,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 997985
+                },
+                {
+                  "churn": 889,
+                  "loc": 892,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 792988
+                },
+                {
+                  "churn": 759,
+                  "loc": 721,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 547239
+                },
+                {
+                  "churn": 1386,
+                  "loc": 318,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 440748
+                },
+                {
+                  "churn": 572,
+                  "loc": 761,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 435292
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 50,
+              "negative": 1,
+              "share": 0.02
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 32,
+              "rate": 0.625,
+              "withTests": 20
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 202,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -6773,7 +9325,7 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 10897,
@@ -7562,6 +10114,238 @@
           "resolved": 629
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 54,
+              "median": 386,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 122958,
+              "deleted": 18036,
+              "ratio": 0.1466842336407554,
+              "weeks": [
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                },
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 83002,
+                  "deleted": 15733
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 38,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.02631578947368421
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4826,
+                  "loc": 10897,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 52588922
+                },
+                {
+                  "churn": 1062,
+                  "loc": 3168,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 3364416
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1650,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2691150
+                },
+                {
+                  "churn": 1168,
+                  "loc": 1867,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2180656
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1410,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2102310
+                },
+                {
+                  "churn": 995,
+                  "loc": 999,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 994005
+                },
+                {
+                  "churn": 889,
+                  "loc": 892,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 792988
+                },
+                {
+                  "churn": 803,
+                  "loc": 880,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 706640
+                },
+                {
+                  "churn": 1386,
+                  "loc": 318,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 440748
+                },
+                {
+                  "churn": 572,
+                  "loc": 761,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 435292
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 54,
+              "negative": 1,
+              "share": 0.018518518518518517
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 36,
+              "rate": 0.6388888888888888,
+              "withTests": 23
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 219,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -7622,7 +10406,7 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -8419,6 +11203,238 @@
           "resolved": 655
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 54,
+              "median": 386,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 130055,
+              "deleted": 19757,
+              "ratio": 0.15191265233939488,
+              "weeks": [
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                },
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 90099,
+                  "deleted": 17454
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 38,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.02631578947368421
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4826,
+                  "loc": 11582,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 55894732
+                },
+                {
+                  "churn": 1062,
+                  "loc": 3245,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 3446190
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1628,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2655268
+                },
+                {
+                  "churn": 1168,
+                  "loc": 1875,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2190000
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1414,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2108274
+                },
+                {
+                  "churn": 995,
+                  "loc": 1081,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1075595
+                },
+                {
+                  "churn": 889,
+                  "loc": 892,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 792988
+                },
+                {
+                  "churn": 803,
+                  "loc": 946,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 759638
+                },
+                {
+                  "churn": 1386,
+                  "loc": 318,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 440748
+                },
+                {
+                  "churn": 572,
+                  "loc": 761,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 435292
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 54,
+              "negative": 1,
+              "share": 0.018518518518518517
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 36,
+              "rate": 0.6388888888888888,
+              "withTests": 23
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 226,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -8479,7 +11495,7 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -9277,6 +12293,238 @@
           "resolved": 658
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 55,
+              "median": 417,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 132181,
+              "deleted": 20018,
+              "ratio": 0.15144385350390752,
+              "weeks": [
+                {
+                  "added": 15795,
+                  "deleted": 1089
+                },
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 92225,
+                  "deleted": 17715
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 39,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.02564102564102564
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4826,
+                  "loc": 11582,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 55894732
+                },
+                {
+                  "churn": 1062,
+                  "loc": 3245,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 3446190
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1628,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2655268
+                },
+                {
+                  "churn": 1168,
+                  "loc": 1875,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2190000
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1414,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2108274
+                },
+                {
+                  "churn": 995,
+                  "loc": 1081,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1075595
+                },
+                {
+                  "churn": 889,
+                  "loc": 892,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 792988
+                },
+                {
+                  "churn": 803,
+                  "loc": 946,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 759638
+                },
+                {
+                  "churn": 1386,
+                  "loc": 318,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 440748
+                },
+                {
+                  "churn": 305,
+                  "loc": 1445,
+                  "path": "packages/web/src/pull.ts",
+                  "score": 440725
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 55,
+              "negative": 1,
+              "share": 0.01818181818181818
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 37,
+              "rate": 0.6486486486486487,
+              "withTests": 24
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 227,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -9337,7 +12585,7 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 12294,
@@ -10153,6 +13401,238 @@
           "resolved": 720
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 58,
+              "median": 386,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 150690,
+              "deleted": 22549,
+              "ratio": 0.14963833034707014,
+              "weeks": [
+                {
+                  "added": 17941,
+                  "deleted": 1487
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 66273,
+                  "deleted": 7396
+                },
+                {
+                  "added": 66476,
+                  "deleted": 13666
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 42,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.023809523809523808
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4919,
+                  "loc": 12294,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 60474186
+                },
+                {
+                  "churn": 1191,
+                  "loc": 3711,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 4419801
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1660,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2707460
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1673,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2494443
+                },
+                {
+                  "churn": 1168,
+                  "loc": 1996,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2331328
+                },
+                {
+                  "churn": 995,
+                  "loc": 1103,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1097485
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 803,
+                  "loc": 939,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 754017
+                },
+                {
+                  "churn": 1386,
+                  "loc": 400,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 554400
+                },
+                {
+                  "churn": 572,
+                  "loc": 939,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 537108
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 58,
+              "negative": 1,
+              "share": 0.017241379310344827
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 40,
+              "rate": 0.65,
+              "withTests": 26
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 5,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 252,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -10221,7 +13701,7 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 12802,
@@ -11051,6 +14531,238 @@
           "resolved": 762
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 59,
+              "median": 386,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 161073,
+              "deleted": 23169,
+              "ratio": 0.14384161218826247,
+              "weeks": [
+                {
+                  "added": 17941,
+                  "deleted": 1487
+                },
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 93414,
+                  "deleted": 15657
+                },
+                {
+                  "added": 49718,
+                  "deleted": 6025
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 43,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.023255813953488372
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4919,
+                  "loc": 12802,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 62973038
+                },
+                {
+                  "churn": 1191,
+                  "loc": 3961,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 4717551
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1686,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2749866
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1673,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2494443
+                },
+                {
+                  "churn": 1168,
+                  "loc": 2039,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2381552
+                },
+                {
+                  "churn": 995,
+                  "loc": 1103,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1097485
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 803,
+                  "loc": 939,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 754017
+                },
+                {
+                  "churn": 572,
+                  "loc": 994,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 568568
+                },
+                {
+                  "churn": 1386,
+                  "loc": 400,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 554400
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 59,
+              "negative": 1,
+              "share": 0.01694915254237288
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 40,
+              "rate": 0.65,
+              "withTests": 26
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 267,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "1,996 → 2,039 lines, past the 2,000-line mark",
@@ -11134,7 +14846,7 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 13977,
@@ -12001,6 +15713,238 @@
           "resolved": 848
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 55,
+              "median": 466,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 169638,
+              "deleted": 23046,
+              "ratio": 0.13585399497754042,
+              "weeks": [
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 83002,
+                  "deleted": 15733
+                },
+                {
+                  "added": 62475,
+                  "deleted": 6099
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 39,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4792,
+                  "loc": 13977,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 66977784
+                },
+                {
+                  "churn": 1191,
+                  "loc": 4594,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 5471454
+                },
+                {
+                  "churn": 1631,
+                  "loc": 1732,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2824892
+                },
+                {
+                  "churn": 1491,
+                  "loc": 1697,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2530227
+                },
+                {
+                  "churn": 1168,
+                  "loc": 2071,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2418928
+                },
+                {
+                  "churn": 995,
+                  "loc": 1172,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1166140
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 803,
+                  "loc": 939,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 754017
+                },
+                {
+                  "churn": 572,
+                  "loc": 998,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 570856
+                },
+                {
+                  "churn": 1386,
+                  "loc": 400,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 554400
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 55,
+              "negative": 1,
+              "share": 0.01818181818181818
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 36,
+              "rate": 0.6666666666666666,
+              "withTests": 24
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 295,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "1,491 → 2,046 lines, past the 2,000-line mark",
@@ -12093,7 +16037,7 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 13975,
@@ -12959,6 +16903,238 @@
           "resolved": 854
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 57,
+              "median": 466,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 170752,
+              "deleted": 23173,
+              "ratio": 0.1357114411544228,
+              "weeks": [
+                {
+                  "added": 2146,
+                  "deleted": 398
+                },
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 90099,
+                  "deleted": 17454
+                },
+                {
+                  "added": 56492,
+                  "deleted": 4505
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 41,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4812,
+                  "loc": 13975,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 67247700
+                },
+                {
+                  "churn": 1191,
+                  "loc": 4594,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 5471454
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1746,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 2889630
+                },
+                {
+                  "churn": 1517,
+                  "loc": 1707,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 2589519
+                },
+                {
+                  "churn": 1174,
+                  "loc": 2077,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2438398
+                },
+                {
+                  "churn": 1036,
+                  "loc": 1189,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 1231804
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 810,
+                  "loc": 944,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 764640
+                },
+                {
+                  "churn": 572,
+                  "loc": 998,
+                  "path": "packages/host/src/deliver.ts",
+                  "score": 570856
+                },
+                {
+                  "churn": 1386,
+                  "loc": 400,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 554400
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 57,
+              "negative": 1,
+              "share": 0.017543859649122806
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 38,
+              "rate": 0.6842105263157895,
+              "withTests": 26
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 296,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -13045,7 +17221,7 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 15599,
@@ -13928,6 +18104,238 @@
           "resolved": 911
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 59,
+              "median": 466,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 217994,
+              "deleted": 26119,
+              "ratio": 0.11981522427222768,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 39601,
+                  "deleted": 2201
+                },
+                {
+                  "added": 82534,
+                  "deleted": 18117
+                },
+                {
+                  "added": 95859,
+                  "deleted": 5801
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 43,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4814,
+                  "loc": 15599,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 75093586
+                },
+                {
+                  "churn": 1100,
+                  "loc": 4948,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 5442800
+                },
+                {
+                  "churn": 1517,
+                  "loc": 3074,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 4663258
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1913,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 3166015
+                },
+                {
+                  "churn": 1139,
+                  "loc": 2330,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2653870
+                },
+                {
+                  "churn": 1069,
+                  "loc": 2401,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 2566669
+                },
+                {
+                  "churn": 1270,
+                  "loc": 939,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 1192530
+                },
+                {
+                  "churn": 679,
+                  "loc": 1551,
+                  "path": "packages/host/src/assess.ts",
+                  "score": 1053129
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 810,
+                  "loc": 906,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 733860
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 59,
+              "negative": 1,
+              "share": 0.01694915254237288
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 40,
+              "rate": 0.675,
+              "withTests": 27
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 313,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "1,707 → 2,251 lines, past the 2,000-line mark",
@@ -14081,7 +18489,7 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 15723,
@@ -14969,6 +19377,238 @@
           "resolved": 933
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 64,
+              "median": 386,
+              "p95": 3335
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 227730,
+              "deleted": 26609,
+              "ratio": 0.11684450884819743,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 93414,
+                  "deleted": 15657
+                },
+                {
+                  "added": 49718,
+                  "deleted": 6025
+                },
+                {
+                  "added": 84598,
+                  "deleted": 4927
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 47,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 4862,
+                  "loc": 15723,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 76445226
+                },
+                {
+                  "churn": 1148,
+                  "loc": 5065,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 5814620
+                },
+                {
+                  "churn": 1517,
+                  "loc": 3074,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 4663258
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1913,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 3166015
+                },
+                {
+                  "churn": 1139,
+                  "loc": 2330,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2653870
+                },
+                {
+                  "churn": 1069,
+                  "loc": 2422,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 2589118
+                },
+                {
+                  "churn": 1270,
+                  "loc": 939,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 1192530
+                },
+                {
+                  "churn": 679,
+                  "loc": 1551,
+                  "path": "packages/host/src/assess.ts",
+                  "score": 1053129
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                },
+                {
+                  "churn": 810,
+                  "loc": 906,
+                  "path": "packages/web/src/ActivitySheet.tsx",
+                  "score": 733860
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 64,
+              "negative": 1,
+              "share": 0.015625
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 44,
+              "rate": 0.7045454545454546,
+              "withTests": 31
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 320,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -15122,7 +19762,7 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 16081,
@@ -16016,6 +20656,238 @@
           "resolved": 946
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 73,
+              "median": 386,
+              "p95": 3335
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 234070,
+              "deleted": 26922,
+              "ratio": 0.11501687529371556,
+              "weeks": [
+                {
+                  "added": 0,
+                  "deleted": 0
+                },
+                {
+                  "added": 95841,
+                  "deleted": 15741
+                },
+                {
+                  "added": 47291,
+                  "deleted": 5941
+                },
+                {
+                  "added": 90938,
+                  "deleted": 5240
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 56,
+              "fixes": 0,
+              "fixesAfter": 0,
+              "rate": 0
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 5310,
+                  "loc": 16081,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 85390110
+                },
+                {
+                  "churn": 1405,
+                  "loc": 5286,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 7426830
+                },
+                {
+                  "churn": 1517,
+                  "loc": 3074,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 4663258
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1913,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 3166015
+                },
+                {
+                  "churn": 1139,
+                  "loc": 2330,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2653870
+                },
+                {
+                  "churn": 1069,
+                  "loc": 2422,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 2589118
+                },
+                {
+                  "churn": 638,
+                  "loc": 2903,
+                  "path": "packages/web/src/TokenStatsSheet.tsx",
+                  "score": 1852114
+                },
+                {
+                  "churn": 1270,
+                  "loc": 939,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 1192530
+                },
+                {
+                  "churn": 679,
+                  "loc": 1551,
+                  "path": "packages/host/src/assess.ts",
+                  "score": 1053129
+                },
+                {
+                  "churn": 889,
+                  "loc": 940,
+                  "path": "packages/shared/src/clihealth.ts",
+                  "score": 835660
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 73,
+              "negative": 1,
+              "share": 0.0136986301369863
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 53,
+              "rate": 0.7358490566037735,
+              "withTests": 39
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 325,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [],
       "tripwireState": {
         "hatchSeen": [
@@ -16169,7 +21041,7 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 16343,
@@ -17113,6 +21985,238 @@
           "resolved": 1102
         }
       },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 127,
+              "median": 397,
+              "p95": 3356
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 290810,
+              "deleted": 36334,
+              "ratio": 0.12494068292011967,
+              "weeks": [
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 83002,
+                  "deleted": 15733
+                },
+                {
+                  "added": 62475,
+                  "deleted": 6099
+                },
+                {
+                  "added": 123318,
+                  "deleted": 13686
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 107,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.009345794392523364
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 8566,
+                  "loc": 16343,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 139994138
+                },
+                {
+                  "churn": 1502,
+                  "loc": 5375,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 8073250
+                },
+                {
+                  "churn": 1517,
+                  "loc": 3074,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 4663258
+                },
+                {
+                  "churn": 1142,
+                  "loc": 3073,
+                  "path": "packages/web/src/TokenStatsSheet.tsx",
+                  "score": 3509366
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1913,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 3166015
+                },
+                {
+                  "churn": 1149,
+                  "loc": 2338,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2686362
+                },
+                {
+                  "churn": 1069,
+                  "loc": 2422,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 2589118
+                },
+                {
+                  "churn": 1270,
+                  "loc": 939,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 1192530
+                },
+                {
+                  "churn": 1420,
+                  "loc": 804,
+                  "path": "tools/repohealth/narrate.mjs",
+                  "score": 1141680
+                },
+                {
+                  "churn": 679,
+                  "loc": 1551,
+                  "path": "packages/host/src/assess.ts",
+                  "score": 1053129
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 127,
+              "negative": 2,
+              "share": 0.015748031496062992
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 104,
+              "rate": 0.7019230769230769,
+              "withTests": 73
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 387,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
+        }
+      },
       "tripwires": [
         {
           "detail": "`@ts-ignore\\b` went 0 → 5 occurrences; 9 of 17 hatch kinds are now in use",
@@ -17321,7 +22425,7 @@
       "day": "2026-09-22",
       "ts": 1790110804,
       "batch": false,
-      "prereg": "2026-10-30a+c75fa639",
+      "prereg": "2026-11-09b+e7385787",
       "size": {
         "value": {
           "appTsx": 16389,
@@ -18276,6 +23380,238 @@
           "internal": 1146,
           "largestCycle": 2,
           "resolved": 1146
+        }
+      },
+      "habits": {
+        "value": {
+          "commitSize": {
+            "value": {
+              "commits": 141,
+              "median": 388,
+              "p95": 3335
+            }
+          },
+          "deletion": {
+            "value": {
+              "added": 298838,
+              "deleted": 37017,
+              "ratio": 0.1238697889826595,
+              "weeks": [
+                {
+                  "added": 22015,
+                  "deleted": 816
+                },
+                {
+                  "added": 90099,
+                  "deleted": 17454
+                },
+                {
+                  "added": 55378,
+                  "deleted": 4378
+                },
+                {
+                  "added": 131346,
+                  "deleted": 14369
+                }
+              ]
+            }
+          },
+          "fix": {
+            "value": {
+              "commits": 121,
+              "fixes": 1,
+              "fixesAfter": 1,
+              "rate": 0.008264462809917356
+            }
+          },
+          "hotspots": {
+            "value": {
+              "items": [
+                {
+                  "churn": 8642,
+                  "loc": 16389,
+                  "path": "packages/web/src/App.tsx",
+                  "score": 141633738
+                },
+                {
+                  "churn": 1523,
+                  "loc": 5356,
+                  "path": "packages/host/src/sessions.ts",
+                  "score": 8157188
+                },
+                {
+                  "churn": 1517,
+                  "loc": 3074,
+                  "path": "packages/host/src/intents/manager.ts",
+                  "score": 4663258
+                },
+                {
+                  "churn": 1158,
+                  "loc": 3083,
+                  "path": "packages/web/src/TokenStatsSheet.tsx",
+                  "score": 3570114
+                },
+                {
+                  "churn": 1655,
+                  "loc": 1913,
+                  "path": "packages/web/src/activityRows.ts",
+                  "score": 3166015
+                },
+                {
+                  "churn": 1205,
+                  "loc": 2392,
+                  "path": "packages/host/src/main.ts",
+                  "score": 2882360
+                },
+                {
+                  "churn": 1069,
+                  "loc": 2422,
+                  "path": "packages/shared/src/intent.ts",
+                  "score": 2589118
+                },
+                {
+                  "churn": 1270,
+                  "loc": 939,
+                  "path": "packages/host/src/backlog.ts",
+                  "score": 1192530
+                },
+                {
+                  "churn": 1420,
+                  "loc": 804,
+                  "path": "tools/repohealth/narrate.mjs",
+                  "score": 1141680
+                },
+                {
+                  "churn": 1243,
+                  "loc": 849,
+                  "path": "packages/web/src/repoHealthWords.ts",
+                  "score": 1055307
+                }
+              ]
+            }
+          },
+          "netNegative": {
+            "value": {
+              "commits": 141,
+              "negative": 2,
+              "share": 0.014184397163120567
+            }
+          },
+          "testsWithCode": {
+            "value": {
+              "commits": 118,
+              "rate": 0.7372881355932204,
+              "withTests": 87
+            }
+          },
+          "windowDays": 28
+        }
+      },
+      "workspace": {
+        "value": {
+          "docsDrift": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "litter": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "native": {
+        "value": {
+          "analyzers": {
+            "dart": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "detekt": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "eslint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ktlint": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "mypy": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "ruff": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "shellcheck": {
+              "reason": "read at the newest commit only",
+              "value": null
+            },
+            "tsc": {
+              "reason": "read at the newest commit only",
+              "value": null
+            }
+          },
+          "coverage": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "dependencyAge": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "strictness": {
+            "reason": "read at the newest commit only",
+            "value": null
+          },
+          "vulns": {
+            "reason": "read at the newest commit only",
+            "value": null
+          }
+        }
+      },
+      "reach": {
+        "value": {
+          "packs": [
+            {
+              "files": 0,
+              "name": "kotlin",
+              "reads": [
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 0,
+              "name": "python",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            },
+            {
+              "files": 6,
+              "name": "shell",
+              "reads": []
+            },
+            {
+              "files": 399,
+              "name": "typescript",
+              "reads": [
+                "cycles",
+                "deadExports",
+                "dups",
+                "hatches",
+                "untested"
+              ]
+            }
+          ]
         }
       },
       "tripwires": [],

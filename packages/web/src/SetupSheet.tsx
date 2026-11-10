@@ -55,8 +55,10 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
+  Activity, AlertTriangle, Bot, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
 } from "lucide-react";
+import { AgentReadingsRegion } from "./AgentReadingsRegion";
+import { AGENT_REGION_WORDS } from "./agentReadingsWords";
 import { isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
 import type {
   ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, ComplianceTriageRequest, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
@@ -106,8 +108,10 @@ const STATUS_ICON = {
  *  `watch` is region 4: the checklist rows `isWatchCheck` names (the daily exposure watch and
  *  Scorecard), drawn by the same `SetupRegion` as set-up so a finding looks and acts the same in
  *  both — split off because a convention the repo is wired to and an advisory the world published
- *  about its dependencies are different questions with different owners. */
-export type ReadingsRegion = "setup" | "series" | "optins" | "watch";
+ *  about its dependencies are different questions with different owners.
+ *  `agents` is region 5 (`AgentReadingsRegion.tsx`): weekly readings off this desktop's own
+ *  conversation logs — against its own past like the series, counted in nothing. */
+export type ReadingsRegion = "setup" | "series" | "optins" | "watch" | "agents";
 
 // `CLAUDE_MD_KEY` / `DESC_KEY` (the weight stack's two series) live in
 // `repoHealthPlot.ts`, a leaf both regions read, so region 2 never imports this sheet back.
@@ -404,8 +408,12 @@ export function SetupSheet({
               onClick={() => { setRegion("optins"); setScope(null); }}>
               <ToggleRight size={14} /> opt-ins
             </FilterChip>
+            <FilterChip on={region === "agents"} clears={false}
+              onClick={() => { setRegion("agents"); setScope(null); }}>
+              <Bot size={14} /> agents
+            </FilterChip>
             <Explain of="what this region compares">{region === "optins" ? OPTINS_REGION_WORDS
-              : region === "watch" ? WATCH_REGION_WORDS : regionWords(region)}</Explain>
+              : region === "watch" ? WATCH_REGION_WORDS : region === "agents" ? AGENT_REGION_WORDS : regionWords(region)}</Explain>
           </div>
 
           {region === "setup" || region === "watch" ? (<>
@@ -448,6 +456,8 @@ export function SetupSheet({
           </>) : region === "optins" ? (
             <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
               onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
+          ) : region === "agents" ? (
+            <AgentReadingsRegion repo={repo} />
           ) : (
             <SeriesRegion
               repo={repo}

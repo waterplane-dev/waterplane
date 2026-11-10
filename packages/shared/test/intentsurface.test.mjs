@@ -37,7 +37,7 @@ const SURFACE = [
   "intentReasonText:value", "intentVerdict:value", "isAgentPosted:value", "isAgentWithdrawn:value", "isAssessRow:value",
   "isBacklogRow:value", "isBuildRow:value", "isCaptureRow:value", "isFanoutRow:value",
   "isLaunchRow:value", "isPeerPosted:value", "isScheduleRow:value", "isTimedWorkRow:value",
-  "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "postsScheduledBuild:value", "queuesBacklogItem:value",
+  "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "ORIGIN_PROPOSED_PREFIX:value", "PROPOSER_MAX:value", "isPendingProposal:value", "isProposed:value", "pendingProposals:value", "proposedWords:value", "proposerName:value", "proposerOf:value", "postsScheduledBuild:value", "queuesBacklogItem:value",
   "reopensConversation:value", "scheduleIdFromOrigin:value", "scheduleItemOrigin:value", "timedWorkKey:value",
   "ClockMember:type", "Slot:type", "SlotRow:type", "findSlot:value", "latestClock:value", "parseSlotKey:value",
   "slotMates:value", "slotOf:value", "slotOthersText:value", "slotRowOfIntent:value", "slotRowOfItem:value", "slotsOf:value",

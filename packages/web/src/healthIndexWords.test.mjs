@@ -123,6 +123,15 @@ test("the explain sentence lists every fixed good value, pinned to shared's HEAL
   assert.match(HEALTH_GOOD_WORDS.hatches, new RegExp(`under ${HEALTH_GOOD.hatches} `));
   assert.match(HEALTH_GOOD_WORDS.untested, new RegExp(`under ${Math.round(HEALTH_GOOD.untested * 100)}%`));
   assert.match(HEALTH_GOOD_WORDS.context, new RegExp(`${n(HEALTH_CONTEXT_GOOD_SHARE * HEALTH_INDEX_DEFAULT_WARN_CHARS)} characters`));
+  // P2's six (calibrated in docs/analysis/health-metrics/P2.md).
+  assert.match(HEALTH_GOOD_WORDS.dups, new RegExp(`under ${HEALTH_GOOD.dups} near-duplicate`));
+  assert.match(HEALTH_GOOD_WORDS.deadExports, new RegExp(`under ${HEALTH_GOOD.deadExports} exports`));
+  assert.match(HEALTH_GOOD_WORDS.cycles, new RegExp(`under ${Math.round(HEALTH_GOOD.cycles * 100)}% `));
+  assert.match(HEALTH_GOOD_WORDS.cochange, new RegExp(`under ${HEALTH_GOOD.cochange} other files`));
+  assert.match(HEALTH_GOOD_WORDS.fixAfterChange, new RegExp(`under ${Math.round(HEALTH_GOOD.fixAfterChange * 100)}%`));
+  assert.match(HEALTH_GOOD_WORDS.testsWithCode, new RegExp(`at least ${Math.round(HEALTH_GOOD.testsWithCode * 100)}%`));
+  const { HEALTH_ENTRIES } = await import("@waterplane/shared");
+  assert.deepEqual(Object.keys(HEALTH_GOOD_WORDS), [...HEALTH_ENTRIES], "every entry has its good line in words, in the index's order");
   assert.match(indexExplainWords("w", "p"), new RegExp(`within ${HEALTH_SCORE_CAP_GAP} of its worst`));
 });
 
@@ -152,12 +161,12 @@ test("'this week' only when the latest measured week IS the current one; otherwi
 test("the basket sentence counts what the repo disabled and names what it overrode; none = null", () => {
   assert.equal(indexBasketWords(null, "P"), null);
   assert.equal(indexBasketWords({ disabled: [], overridden: [] }, "P"), null);
-  assert.equal(indexBasketWords({ disabled: ["untested"] }, "P"), "Built from 4 of P's 5 readings; Untested modules is disabled here.");
+  assert.equal(indexBasketWords({ disabled: ["untested"] }, "P"), "Built from 10 of P's 11 readings; Untested modules is disabled here.");
   assert.equal(
     indexBasketWords({ disabled: ["untested", "size"], overridden: ["hatches"] }, "P"),
-    "Built from 3 of P's 5 readings; File length and Untested modules are disabled here; Escape hatches reads this repo's own version.");
+    "Built from 9 of P's 11 readings; File length and Untested modules are disabled here; Escape hatches reads this repo's own version.");
   const cap = indexExplainWords("2026-08-03", "P", { disabled: ["untested"] });
-  assert.match(cap, /Built from 4 of P's 5 readings; Untested modules is disabled here\./);
+  assert.match(cap, /Built from 10 of P's 11 readings; Untested modules is disabled here\./);
   assert.doesNotMatch(cap, /compares across repos/, "a changed basket does not claim cross-repo comparability");
 });
 
@@ -292,4 +301,24 @@ test("the region's fixed words", () => {
   assert.match(axisModeWords("commits"), /per day, its last commit/);
   assert.match(commitsAbsentWords("waterplane"), /older waterplane/);
   assert.match(barsWeeksOnlyWords("2026-10-12"), /per week.*week of 2026-10-12/);
+});
+
+test("the chip's title says what was measured and names a failing gate; a failing gate is at least a warn", () => {
+  const coverage = {
+    measured: 3, applicable: 5, reach: true, key: "",
+    items: [
+      { key: "size", kind: "entry", label: "file length", state: "measured" },
+      { key: "untested", kind: "entry", label: "untested modules", state: "unknown", reason: "no rule for how a Dart test names a module (391 of 537 source files)" },
+    ],
+    gates: [{ key: "p", name: "Parity", unit: "%", fails: "below", at: 60, value: 42, state: "fail", text: `Gate "Parity" fails: 42%, the repo requires at least 60%.` }],
+  };
+  const chip = healthChip({ value: 49, deltaWeek: null, week: "w", move: null, mean: 100, cappedBy: null, capKind: "gate", alert: null, coverage }, "r");
+  assert.equal(chip.label, "Health 49");
+  assert.equal(chip.tone, "warn");
+  assert.match(chip.title, /3 of 5 dimensions measured\. Unknown: untested modules: no rule for how a Dart test names a module/);
+  assert.match(chip.title, /Gate "Parity" fails: 42%/);
+  // An older host sends no coverage: the title says nothing about it.
+  const old = healthChip({ value: 100, deltaWeek: null, week: "w", move: null }, "r");
+  assert.doesNotMatch(old.title, /dimensions measured|Gate/);
+  assert.match(carriedWords("coverage"), /which dimensions could be measured/);
 });

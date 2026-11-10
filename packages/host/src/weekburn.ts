@@ -26,7 +26,7 @@
  */
 import { join } from "node:path";
 import {
-  cleanWeekBurnPrefs, envName, healthCapWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
+  cleanWeekBurnPrefs, envName, healthHeadlineWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
   isWeekBurnOrigin, RESET_MATCH_MS, WEEKBURN_MEASURE_MS, WEEKBURN_ORIGIN,
   type BudgetPass, type Intent, type RepoHealthIndex, type UsageHistoryDoc, type UsageInfo,
   type WeekBurnPrefs, type WeekBurnStatus,
@@ -115,9 +115,10 @@ export function cleanWeekBurnStore(x: unknown): WeekBurnStore {
 export function healthSummaryText(s: RepoHealthIndex | undefined | null): string | null {
   if (!s || !Number.isFinite(s.value)) return null;
   const lines = [`Health index ${Math.round(s.value)}/100 (week of ${s.week}${s.deltaWeek != null ? `, ${s.deltaWeek >= 0 ? "+" : ""}${Math.round(s.deltaWeek)} on the week` : ""}).`];
-  if (s.mean != null && s.cappedBy !== undefined) {
-    const cap = healthCapWords({ value: s.value, mean: s.mean, cappedBy: s.cappedBy });
-    if (cap) lines.push(cap);
+  if (s.mean != null && (s.cappedBy !== undefined || s.capKind !== undefined)) {
+    // The ONE wording (shared `healthHeadlineWords`): the cap that set the number, what could not be measured, the repo's gates.
+    const w = healthHeadlineWords({ value: s.value, mean: s.mean, cappedBy: s.cappedBy ?? null, capKind: s.capKind, coverage: s.coverage });
+    for (const l of [w.cap, w.coverage, ...w.gates]) if (l) lines.push(l);
   }
   if (s.alertText) lines.push(s.alertText);
   return lines.join("\n");

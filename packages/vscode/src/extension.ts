@@ -14,6 +14,7 @@
  * reads only what was appended. The week's headline at startup is the small `HeadlineSummary` the
  * last finished scan left in `globalState` (zero IO), printed with its age.
  */
+import { buildText } from "./buildstamp.js";
 import { realpathSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -22,7 +23,7 @@ import * as vscode from "vscode";
 import { BRAND, fmtUsd, healthSpendWeeks } from "@waterplane/shared";
 import { repoOfWorktree } from "../../host/src/costwindow.js";
 import {
-  anyLive, claudeConfigDir, listSessions, projectDirFor, RECENT_MS, recentRows, SessionLedger, summaryOf, thisRepoWeek, weighFolder, WINDOW_MS,
+  anyLive, claudeConfigDir, listSessions, projectDirFor, RECENT_MS, recentRows, loadCorpus, saveCorpus, SessionLedger, summaryOf, thisRepoWeek, weighFolder, WINDOW_MS,
 } from "./data/index.js";
 import type { HeadlineSummary } from "./data/index.js";
 import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
@@ -115,6 +116,10 @@ class Ext implements vscode.Disposable {
   private lens!: InstructionLens;
   private corpus: { doc: CorpusDoc | null; why?: string } = { doc: null };
   private scanning: { done: number; total: number } | null = null;
+  /** The running scan's promise, so an explicit rescan asked during one still has something to show progress for. */
+  private scanP: Promise<void> | null = null;
+  /** The saved fold (`corpus.v1.json`) is read once per config dir, when the panel first needs it — never on activation. */
+  private corpusLoaded = false;
   /** The waterplane desktop on this machine, as last read (`hostlink.ts`); null before the first read. */
   private live: LiveState | null = null;
   /** Re-reads the desktop's live facts while the panel is on screen — a limit bar is a clock. */
@@ -267,6 +272,7 @@ class Ext implements vscode.Disposable {
       this.cancelScan();
       this.lastScanAt = 0;
       this.corpus = { doc: null };
+      this.corpusLoaded = false;
       this.summary = null;
       void this.ctx.globalState.update(SUMMARY_KEY, undefined);
       this.pushSummary();
@@ -430,7 +436,7 @@ class Ext implements vscode.Disposable {
   // ---- corpus (explicit only, in a worker) ---------------------------------------------------
   private rescan(): void {
     this.panel.show();
-    void this.scan();
+    this.rescanShown();
   }
 
   /** Stop a running scan: its worker is terminated and its result, if one still arrives, dropped. */
@@ -444,8 +450,37 @@ class Ext implements vscode.Disposable {
     }
   }
 
+  private corpusFile(): string { return path.join(this.ctx.globalStorageUri.fsPath, "corpus.v1.json"); }
+
+  /**
+   * Show the last finished fold while the scan that replaces it runs. Async and off the activation
+   * path (called when the panel is shown or says `ready`); a scan that finished first wins.
+   */
+  private async loadCachedCorpus(): Promise<void> {
+    if (this.corpusLoaded || this.disposed) return;
+    this.corpusLoaded = true;
+    const dir = this.configDir();
+    const doc = await loadCorpus(this.corpusFile(), dir, buildText);
+    if (!doc || this.disposed || this.corpus.doc || dir !== this.configDir()) return;
+    this.corpus = this.corpus.why ? { doc, why: this.corpus.why } : { doc };
+    this.post({ t: "corpus", ...this.corpus, ...(this.scanning ? { scanning: this.scanning } : {}) });
+    if (this.activeFolder) this.postHealth(this.activeFolder);
+  }
+
+  /** An asked-for scan (the command, the "Re-read" link): the same scan, with VS Code's own spinner until it ends. */
+  private rescanShown(): void {
+    const p = this.scan();
+    void vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `${BRAND.name}: reading Claude Code logs` }, () => p);
+  }
+
   private scan(): Promise<void> {
-    if (this.scanning) return Promise.resolve();
+    if (this.scanning) return this.scanP ?? Promise.resolve();
+    const p = this.scanRun().finally(() => { if (this.scanP === p) this.scanP = null; });
+    this.scanP = p;
+    return p;
+  }
+
+  private scanRun(): Promise<void> {
     this.scanning = { done: 0, total: 0 };
     this.statusBar.setScan(this.scanning);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning });
@@ -461,7 +496,9 @@ class Ext implements vscode.Disposable {
         this.worker = null;
         void w.terminate();
         this.corpus = next;
+        this.corpusLoaded = true;
         this.lastScanAt = Date.now();
+        if (next.doc && !next.why) void saveCorpus(this.corpusFile(), job.configDir, next.doc, buildText);
         if (next.doc && !next.why) {
           this.summary = summaryOf(next.doc, job.configDir);
           void this.ctx.globalState.update(SUMMARY_KEY, this.summary);
@@ -508,6 +545,7 @@ class Ext implements vscode.Disposable {
     if (this.liveTimer2) clearInterval(this.liveTimer2);
     this.liveTimer2 = null;
     if (!visible || this.disposed) return;
+    void this.loadCachedCorpus();
     void this.readLive();
     this.liveTimer2 = setInterval(() => void this.readLive(), LIVE_MS);
     // Revealing the panel again is not a reason to re-read 9k logs: a scan under 10 minutes old stands.
@@ -633,7 +671,16 @@ class Ext implements vscode.Disposable {
     const folder = this.activeFolder;
     this.showTab("health");
     if (!folder) { void vscode.window.showInformationMessage("Open a folder to measure its repo health."); return; }
-    void this.health.refresh(this.healthRoot(folder));
+    this.refreshShown(folder);
+  }
+
+  /** A health run, with VS Code's status-bar spinner until it ends (stopping it stays the panel's stop button). */
+  private refreshShown(folder: string): void {
+    const root = this.healthRoot(folder);
+    void vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: `${BRAND.name}: measuring repo health`, cancellable: false },
+      () => this.health.refresh(root),
+    );
   }
 
   /** Open a file the plot named, only if it really lives inside the folder (symlinks resolved). */
@@ -671,12 +718,13 @@ class Ext implements vscode.Disposable {
     const mine = this.session.folder === this.activeFolder;
     this.post({
       t: "session", folder: this.activeFolder ?? "", doc: mine ? this.session.doc : null,
-      why: mine ? this.session.why : "Reading this folder's sessions…",
+      ...(mine && this.session.why ? { why: this.session.why } : {}),
       following: !this.activeFolder || !this.pinned.has(this.activeFolder),
     }, to);
     if (this.activeFolder && this.rows.folder === this.activeFolder) this.post(this.sessionsMsg(this.activeFolder), to);
     this.post({ t: "weight", ...this.weight }, to);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning ?? undefined }, to);
+    void this.loadCachedCorpus();
     if (this.live) this.post({ t: "live", live: this.live }, to);
     else void this.readLive();
     this.sendPrompts(to);
@@ -705,7 +753,7 @@ class Ext implements vscode.Disposable {
           }
           break;
         }
-        case "rescan": void this.scan(); void this.readLive(); break;
+        case "rescan": this.rescanShown(); void this.readLive(); break;
         case "liveRead": void this.readLive(); break;
         case "desktop":
           await vscode.workspace.getConfiguration(BRAND.slug).update("desktopUrl", m.on ? DEFAULT_DESKTOP_URL : "", vscode.ConfigurationTarget.Global);
@@ -742,7 +790,7 @@ class Ext implements vscode.Disposable {
         }
         case "healthRead": if (this.known(m.folder)) { this.postHealth(m.folder, from); void this.health.read(this.healthRoot(m.folder)); } break;
         case "healthScope": if (this.known(m.folder)) void this.health.setScope(this.healthRoot(m.folder), typeof m.scope === "string" ? m.scope : null); break;
-        case "healthRefresh": if (this.known(m.folder)) void this.health.refresh(this.healthRoot(m.folder)); break;
+        case "healthRefresh": if (this.known(m.folder)) this.refreshShown(m.folder); break;
         case "healthForget": if (this.known(m.folder)) void this.health.forget(this.healthRoot(m.folder)); break;
         case "healthCancel": if (this.known(m.folder)) this.health.cancel(this.healthRoot(m.folder)); break;
         case "openFile": if (this.known(m.folder)) await this.openFile(m.folder, m.path); break;

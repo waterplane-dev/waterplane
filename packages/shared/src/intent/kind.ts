@@ -64,10 +64,10 @@ export const isAgentPosted = (i: { origin?: string }): boolean => i.origin === O
  * a broken run beside the one that actually ran, and offered `re-fire` on it.
  */
 export const AGENT_WITHDREW_DETAIL = "called off by the agent that posted it";
-/** Did the agent that posted this row call it off itself? Exact on all three:
+/** Did the agent (or the proposing script) that posted this row call it off itself? Exact on all three:
  *  an agent's row the PERSON called off is theirs to read as they like. */
 export const isAgentWithdrawn = (i: { origin?: string; state?: string; result?: { detail?: string } }): boolean =>
-  i.origin === ORIGIN_AGENT && i.state === "canceled" && i.result?.detail === AGENT_WITHDREW_DETAIL;
+  (i.origin === ORIGIN_AGENT || isProposed(i)) && i.state === "canceled" && i.result?.detail === AGENT_WITHDREW_DETAIL;
 /** A job a PEER desktop posted here: `origin` is `peer:<name>` (the name this
  *  host lists the peer by; `origin` is capped at 40). Written by the host on the
  *  token-gated peer route and nowhere else. */
@@ -79,6 +79,63 @@ export const peerOfOrigin = (origin: string | undefined): string | undefined => 
   if (!origin?.startsWith(ORIGIN_PEER_PREFIX)) return undefined;
   return origin.slice(ORIGIN_PEER_PREFIX.length) || undefined;
 };
+/**
+ * **Work a repo's SCRIPT proposed** — a cron job, a findings collector — with
+ * no session behind it: `origin` is `proposed:<name>`, the short name the
+ * script gave (`POST /api/agent/backlog` with `proposedBy`, `agentintents.ts`,
+ * the only writer). Always `manual`: a proposal waits for the person's fire,
+ * schedule or delete, and nothing applies itself. `origin` is capped at 40, so
+ * the name is at most `PROPOSER_MAX` characters.
+ */
+export const ORIGIN_PROPOSED_PREFIX = "proposed:";
+export const PROPOSER_MAX = 40 - ORIGIN_PROPOSED_PREFIX.length;
+export const isProposed = (i: { origin?: string }): boolean =>
+  !!i.origin?.startsWith(ORIGIN_PROPOSED_PREFIX) && i.origin.length > ORIGIN_PROPOSED_PREFIX.length;
+/** Which script proposed it; undefined for any other origin or an empty name. */
+export const proposerOf = (origin: string | undefined): string | undefined => {
+  if (!origin?.startsWith(ORIGIN_PROPOSED_PREFIX)) return undefined;
+  return origin.slice(ORIGIN_PROPOSED_PREFIX.length) || undefined;
+};
+/**
+ * A script's own name as an origin suffix, or null when nothing usable is
+ * left: letters, digits, `.`, `_` and `-` only (anything else becomes `-`),
+ * trimmed of edge punctuation, at most `PROPOSER_MAX` characters.
+ */
+export function proposerName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const edge = (c: string | undefined): boolean => c === "-" || c === "." || c === "_";
+  let name = raw.trim().replace(/[^A-Za-z0-9._-]+/g, "-");
+  let a = 0;
+  while (a < name.length && edge(name[a])) a++;
+  name = name.slice(a, a + PROPOSER_MAX);
+  let b = name.length;
+  while (b > 0 && edge(name[b - 1])) b--;
+  return name.slice(0, b) || null;
+}
+/** The row mark of a proposal — the backlog row and the Activity row say it alike. */
+export const proposedWords = (origin: string | undefined): string =>
+  `proposed by ${proposerOf(origin) ?? "a script"} — fire, schedule or delete it`;
+/**
+ * **A proposal still waiting for the person** — the ONE predicate behind the
+ * launcher's proposals strip, its number and the rows its tap opens, and the
+ * host's clearing of the proposal's push. Proposed, not archived, still
+ * `manual`, no clock (scheduling it gave it one), and not yet started or
+ * settled. Reads an `Intent` (`state`, `trigger`) or a `BacklogItem`
+ * (`status`, `at`) alike: the backlog's `queued` is every waiting state.
+ */
+export function isPendingProposal(r: {
+  origin?: string; archived?: boolean; manual?: boolean;
+  state?: string; status?: string; trigger?: { kind: string }; at?: unknown;
+}): boolean {
+  if (!isProposed(r) || r.archived || !r.manual) return false;
+  if (r.at || r.trigger?.kind === "at") return false;
+  const s = r.state ?? r.status;
+  return s === "queued" || s === "blocked";
+}
+/** Every pending proposal, in list order — count it and list it from this one call. */
+export function pendingProposals<T extends Parameters<typeof isPendingProposal>[0]>(rows: readonly T[]): T[] {
+  return rows.filter(isPendingProposal);
+}
 /** The one wording of that mark, for the backlog row and the Activity row. */
 export const AGENT_POSTED_WORDS = "posted by an agent — edit or delete it like any other";
 /** What a `manual` row says it is waiting for — rung 1's detail, and the

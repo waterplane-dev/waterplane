@@ -10,6 +10,7 @@ import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { repoOfWorktree } from "../tokenstats.js";
+import { agentReadingsFor, agentReadingsStore } from "../agentreadings.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
@@ -257,6 +258,15 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
       spend = healthSpendWeeks(doc.days, [...new Set([wt, real].map(repoOfWorktree))]);
     } catch { spend = undefined; }
     json(res, spend ? { ...r, spend } : r);
+    return true;
+  }),
+  // Agent readings (`agentreadings.ts`): what only this desktop's conversation
+  // logs can say about the repo, weekly. A read of the repo's own logs, swept
+  // incrementally (stat, re-read only what moved) — never a full re-scan.
+  route<RepoReq>("GET", "agentreadings", async ({ res, wt }, ctx) => {
+    let items = null;
+    try { items = ctx.backlog.list(); } catch { /* the bug count says it could not be read */ }
+    json(res, await agentReadingsFor(agentReadingsStore(ctx.root), wt, items));
     return true;
   }),
   route<RepoReq>("POST", "repohealth/scopes", async ({ req, res, wt }) => {

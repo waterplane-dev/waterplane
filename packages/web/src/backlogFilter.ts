@@ -57,3 +57,4 @@ export * from "./backlogFilter/titleWords.ts";
 export * from "./backlogFilter/rowWords.ts";
 export * from "./backlogFilter/retimeMany.ts";
 export * from "./backlogFilter/badgeCut.ts";
+export * from "./backlogFilter/proposals.ts";

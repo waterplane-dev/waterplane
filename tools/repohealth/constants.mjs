@@ -149,8 +149,22 @@
  * `graphImports`, which resolves `tsconfig` aliases and workspace packages).
  * No existing field moves, but rows written before it carry no `graph`, so a
  * series on disk is re-measured, never continued.
+ *
+ * `2026-11-09a` adds two row families, `habits` (fix-after-change, deletion
+ * ratio, net-negative commits, tests changed with code, commit size, hotspots;
+ * `metrics/habits.mjs`) and `workspace` (tracked litter and docs drift, read at
+ * the newest commit only; `metrics/workspace.mjs`), plus `untested` passing the
+ * pack's graph context to `imports()`. The pack halves move with it: `dart@2`
+ * (graph, test reach, clones, dead exports) and `python@4` (analyzer, graph).
+ * One bump for all of them, so a series on disk is re-measured once.
+ *
+ * `2026-11-09b` adds the row family `native` (`metrics/native.mjs`): what the
+ * repo's own installed tools say at the newest commit only — vulnerable
+ * dependencies, analyzer findings per 1,000 lines, type-strictness facts and
+ * coverage files already on disk. Older rows hold its "newest commit only"
+ * reason. No existing field moves.
  */
-export const PREREG_VERSION = "2026-10-30a";
+export const PREREG_VERSION = "2026-11-09b";
 
 export const PREREG = Object.freeze({
   // ── what counts as source ────────────────────────────────────────────────
@@ -272,6 +286,25 @@ export const PREREG = Object.freeze({
    * bursts and a quarter-long window averages them away.
    */
   COCHANGE_WINDOW_DAYS: 14,
+
+  // ── universal git readings (`metrics/habits.mjs`, `metrics/workspace.mjs`) ─
+  /**
+   * The trailing window every habit reading is taken over. Four weeks, not
+   * the two the re-touch window uses: these are RATES OF COMMITS (a fix
+   * share, a test share, a net-negative share) and a fortnight in this
+   * repo's bursts can hold under ten commits. Pinned before any value was
+   * seen; a thin window is carried by its denominator, as `retouch` does,
+   * never cut by a threshold.
+   */
+  HABITS_WINDOW_DAYS: 28,
+  /** A fix counts as "after a change" when a DIFFERENT commit changed one of
+   *  its files within this many days before it. */
+  FIX_AFTER_DAYS: 7,
+  /** Entries named in the hotspot, litter and docs-drift lists. */
+  HABITS_LIST_N: 10,
+  /** The docs-drift reading reads every markdown blob at HEAD; past this
+   *  many it is absent with that reason rather than slow. */
+  DOCS_MAX_FILES: 3000,
   /**
    * Co-change is counted within one SOURCE GROUP. A commit that touches
    * shared and web together is the build order of a monorepo, not evidence

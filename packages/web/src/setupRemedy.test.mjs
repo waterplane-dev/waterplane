@@ -648,7 +648,7 @@ test("the repo's own readings are listed apart, and the advice starts from them"
   assert.match(p, /This repo's own readings, declared in \.waterplane-shared\/health\.json — not part of the index/);
   assert.match(p, /- Screen fixtures \(`fixtures`\): 5 on 2026-09-08 \(its only reading so far\); the repo wants it higher\. Signals with a real capture\./);
   assert.match(p, /- Start from this repo's own readings above: say whether they moved/);
-  assert.ok(p.indexOf("Start from this repo's own") < p.indexOf("Say plainly that the five"));
+  assert.ok(p.indexOf("Start from this repo's own") < p.indexOf("Say plainly that the index readings"));
   assert.doesNotMatch(p, /no slot for one/);
   assert.match(healthIndexRemedyPrompt(INDEX_WEEK, "myapp", ctx), /This repo's own readings, declared in/);
 });
@@ -690,7 +690,7 @@ test("the index prompts name the repo's disables and overrides, the engine's det
   const trend = healthTrendRemedyPrompt(weeks, "2026-08-17", "myapp", ctx);
   const week = healthIndexRemedyPrompt({ week: "2026-10-19", prevWeek: "2026-10-12", index: 103, delta: 2, movers: [{ key: "size", name: "File length", points: 2 }] }, "myapp", ctx);
   for (const p of [trend, week]) {
-    assert.ok(p.includes("Built from 4 of"), p);
+    assert.ok(p.includes("Built from 10 of"), p);
     assert.ok(p.includes("Untested modules is disabled here; File length reads this repo's own version."));
     assert.ok(p.includes("in .cfg/health.json (`central`)"));
     assert.ok(p.includes("- Untested modules (`untested`): disabled — still measured, left out of the index. The repo's reason: tests are in another repo"));

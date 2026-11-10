@@ -15,6 +15,7 @@ import { NextTurnCost } from "../../web/src/NextTurnCost";
 import type { AgentRun, ContextSample } from "@waterplane/shared";
 import type { PromptDef, SessionDoc, ToExtension } from "../src/protocol";
 import { Absent } from "./Absent";
+import { Loading } from "./Loading";
 import { CostBlock, ListPrice } from "./Money";
 import { sessionTotal } from "../src/data/sessiontotal";
 import { TurnList } from "./TurnList";
@@ -40,7 +41,8 @@ export function SessionView({ doc, why, prompts, terminal, selectedTurn, onSelec
   // CURRENT figures (and let go when it is no longer on the roster).
   const [pickedId, setPickedId] = useState<string | null>(null);
 
-  if (!doc) return <Absent>{why ?? "No Claude Code session has been read for this folder yet."}</Absent>;
+  // No reading and no reason is a reading that has not arrived; an absence always carries its why.
+  if (!doc) return why ? <Absent>{why}</Absent> : <Loading>Reading this session’s log…</Loading>;
 
   const samples = doc.samples;
   const events = doc.events;

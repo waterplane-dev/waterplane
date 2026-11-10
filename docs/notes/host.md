@@ -5441,6 +5441,14 @@ session could only write the prompt into a file for the person to paste into the
   "no `auto`" (which the ladder reads as a person's tap and fires at once). The phone's backlog row
   says it, and `▶ next` skips it as it skips a clock still ahead. A `when` or `fire` on this route is
   refused in words — timed work is the intents route.
+  **`proposedBy` — a script's proposal** (R-automation-078): the same add with origin
+  `proposed:<name>` (shared `proposerName`: `[A-Za-z0-9._-]`, at most 31 chars so origin stays ≤40;
+  anything else is refused in words). Still `manual`, same key semantics. A NEW one sends ONE push,
+  kind `proposal`, attention, keyed `proposal:<row id>` (`proposalNotice`; the route's
+  `announceProposal` dep); `server/intentDeps.ts`' `settleProposalPushes` resolves that key on any
+  store change once the row is no longer `isPendingProposal` (fired, given a clock — the send sheet's
+  upsert re-writes it as the person's row — or deleted). The socket strips a `proposed:` origin like
+  `agent`. The phone's launcher strip and row mark: `backlogFilter/proposals.ts`, `ProposalsStrip.tsx`.
 - **`GET /api/agent/queue` + `POST /api/agent/queue/order` — the run order, by prompt.** Several
   rows on one reset fire in `order ?? createdAt` order, and the person asked to say which goes
   first by telling their agent rather than dragging. The queue lists EVERY waiting row (not settled,
@@ -7013,6 +7021,23 @@ already drifted: no `commits` (so the x-axis row could never offer per-commit), 
 reason (a series from before `lineMean` read as "no scored week yet", which names no fix). The
 older-engine sentence stays the caller's, because the remedy differs: a command on the desktop, a
 re-measure in the extension, which never quotes the desktop's `rm`.
+
+**Coverage and gates — `coverage.ts` (2026-11-09).** picture-app (391 of 537 source files Dart)
+read 100: the Dart pack has no test rule and no escape-hatch patterns, so `untested` skipped every
+Dart file while the share was divided by all 537, and hatches counted TODOs over most of the code.
+The engine now writes `reach` on every row (`tools/repohealth/reach.mjs`: per active source pack,
+its file count at HEAD and which index dimensions it reads, by the same tests the metrics apply).
+`coverage.ts` calls a per-language entry UNKNOWN when packs that cannot read it hold over a fifth
+of the source files; an unknown entry leaves the mean, the worst cap and the alerts, and the
+headline is at most `100 · measured / applicable` — an unread dimension is credited with nothing,
+because the score over the read part is an upper bound and showing it claims the rest is perfect
+(a range was rejected: its low end is near 0 under the worst cap and says nothing). A repo's own
+reading may carry `gate: { fails, at }` (`own.mjs` refuses one that fails on the side `better`
+calls better); a failing gate holds the headline at 49, one under the warn line, and a gate with no
+reading is unknown, never passed. `HEALTH_DIMENSIONS` names the entries later packages add
+(dups, dead exports, cycles, co-change, fix-after-change, tests-with-code, analyzer, vulnerable
+deps) with `scored: false` until they join the index. `healthHeadlineWords` is the one wording of
+every cap, the coverage line and the gates, for the phone card, the chip title and VS Code.
 
 ## A clock may name a session, because the CONVERSATION outlives it
 
@@ -8951,3 +8976,40 @@ verdict either way.
 
 `git/check` and `git/pushto` are routes of their own because an older host ignores an unknown body
 field: a `check: true` on `git/push` would have pushed the whole branch.
+
+## Agent readings — agentreadings.ts, agentscan.ts, agentclass.ts
+
+Four weekly figures per repo that no git-only engine can take, because they come off the claude
+conversation logs this desktop keeps (`GET /api/repos/:id/agentreadings`, drawn in the
+repo-readings sheet's *agents* region, `AgentReadingsRegion.tsx`, every sentence in `agentReadingsWords.ts`):
+
+- **Exploration cost** — the median input-side tokens (fresh input + cache read + cache write) a
+  FRESH session spent before its first `Edit`/`Write`/`MultiEdit`/`NotebookEdit` call, including
+  the request that made the edit. Fresh means not a fork (a copied record names another session in
+  `session_id`/`sessionId` — the CLI's `--fork-session` and `convfork.ts` both leave that), not a
+  continuation (first prompt is the CLI's "continued from a previous conversation" summary) and
+  not headless (`entrypoint` `sdk-*`; on the owner's desktop 156 of 300 recent logs were the naming
+  and review helpers). The LOWER median, so the kind split shown is one real session's.
+- **Rework spend** — the week's tokens filed by conversation class. `agentclass.ts`'s `RULES`
+  wording is the rule, sent on the wire and quoted by the `?`; unsure is `unknown`, never feature.
+  A review-repair workflow is recognised by its `Workflow` call's `scriptPath`, joined to its agents
+  through the launch result's `runId` and the `subagents/workflows/<wf_…>/` directory (the same
+  join `turnagents.ts` makes).
+- **Compactions per committed session** — `compact_boundary` rows over sessions with a Bash
+  `git commit` whose tool result was not an error, in the week the log last moved; the figure over
+  every session stands beside it.
+- **Escaped defects** — crash groups marked in the exposure watch's triage file
+  (`exposure.ts` `exposureCrashMarks`, week of the mark's latest change) and backlog items whose
+  category is `bug` (week added; a deleted item is gone).
+
+Cost is bounded the way `tokenstats.ts` bounds it: per-log summaries persisted in
+`agentreadings.json`, weeks derived on every answer, and a sweep that walks only the repo's own
+project-directory slugs and re-reads only logs whose size or mtime moved. Measured on the owner's
+desktop: the first sweep of this repo read 16,321 logs in 33 s (async, yielding); the next one was a
+325 ms stat sweep. Because the first sweep is that long, an answer waits `SWEEP_WAIT_MS` (8 s) and
+otherwise says the desktop is still reading — the sweep carries on and the next ask is answered from
+the store. A slug prefix can also match a sibling repo (`app` and `app-old`), so the record's own
+`cwd` decides which repo a log belongs to.
+
+These are readings, not health-index entries. Rework share and exploration cost are the candidates
+for an index entry once enough weeks are on record to set a good line.

@@ -609,4 +609,9 @@ if (flakes.length) {
     appendFileSync(FLAKES_FILE, flakes.map((file) => JSON.stringify({ at, file, why: whyLines(failedOutput.get(file) ?? "") }) + "\n").join(""));
   } catch (e) { console.error(`  (could not log the flakes to ${FLAKES_FILE}: ${e.message})`); }
 }
+// One line per finished run, beside the flakes: `tools/flakyrate.mjs` needs the denominator.
+try {
+  mkdirSync(dirname(FLAKES_FILE), { recursive: true });
+  appendFileSync(join(dirname(FLAKES_FILE), "e2e-runs.jsonl"), JSON.stringify({ at: new Date().toISOString(), scripts: scripts.length, failed: failures.length, flaky: flakes.length }) + "\n");
+} catch { /* a log, never a verdict */ }
 process.exit(blocking.length ? 1 : 0);

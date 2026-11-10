@@ -85,6 +85,6 @@ export {
   ORIGIN_AGENT, ORIGIN_FANOUT_FOLLOWUP, ORIGIN_FANOUT_RUN, ORIGIN_FANOUT_TARGET, ORIGIN_PEER_PREFIX,
   ORIGIN_SCHEDULE_BUILD, ORIGIN_SCHEDULE_PREFIX, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK,
   clockKey, intentKind, intentPaused, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
-  isFanoutRow, isLaunchRow, isPeerPosted, isScheduleRow, isTimedWorkRow, peerOfOrigin,
+  isFanoutRow, isLaunchRow, isPeerPosted, isScheduleRow, isTimedWorkRow, peerOfOrigin, ORIGIN_PROPOSED_PREFIX, PROPOSER_MAX, isPendingProposal, isProposed, pendingProposals, proposedWords, proposerName, proposerOf,
   postsScheduledBuild, queuesBacklogItem, scheduleIdFromOrigin, scheduleItemOrigin, timedWorkKey,
 } from "./intent/kind.js";

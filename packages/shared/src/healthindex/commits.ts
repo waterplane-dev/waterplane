@@ -11,7 +11,7 @@ export interface HealthCommitPoint {
   index: number;
   mean: number;
   cappedBy: HealthEntry | null;
-  /** Prereg or central fingerprint differs from the previous scored row: do not join the line. */
+  /** Prereg, central or coverage (what was measured, which gates) differs from the previous scored row: do not join the line. */
   gap: boolean;
 }
 
@@ -47,7 +47,7 @@ export function thinCommitPoints(points: readonly HealthCommitPoint[], max: numb
 export function healthIndexCommits(rows: readonly HealthSeriesRow[], contextWarnChars: number | null, max = 240): HealthCommitSeries | null {
   const sorted = rows.filter((r) => r && typeof r.ts === "number").sort((a, b) => a.ts - b.ts);
   const all: HealthCommitPoint[] = [];
-  let prev: { prereg: string | null; central: string } | null = null;
+  let prev: { prereg: string | null; central: string; coverage: string } | null = null;
   for (const row of sorted) {
     const week = isoWeekOf(row.day);
     const s = week ? healthRowScore(row, contextWarnChars) : null;
@@ -57,9 +57,9 @@ export function healthIndexCommits(rows: readonly HealthSeriesRow[], contextWarn
     all.push({
       sha7: typeof row.sha === "string" ? row.sha.slice(0, 7) : "",
       day: row.day, ts: row.ts, week, index: s.index, mean: s.mean, cappedBy: s.cappedBy,
-      gap: prev !== null && (prev.prereg !== prereg || prev.central !== central),
+      gap: prev !== null && (prev.prereg !== prereg || prev.central !== central || prev.coverage !== s.coverage.key),
     });
-    prev = { prereg, central };
+    prev = { prereg, central, coverage: s.coverage.key };
   }
   if (all.length === 0) return null;
   const points = thinCommitPoints(all, max);

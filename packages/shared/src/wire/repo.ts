@@ -266,7 +266,7 @@ export interface RepoTarget {
   /**
    * The repo's health score (`shared/healthindex.ts`): one number out of 100
    * over the repo-health series, against fixed good values, every metric read
-   * lower-is-better. `deltaWeek` is null on a gap or first scored week; `move`
+   * lower-is-better except tests changed with code (higher-is-better). `deltaWeek` is null on a gap or first scored week; `move`
    * is a CALLED move only (`assessHealthMove`); `mean`, `cappedBy` and `alert`
    * are absent from a host older than the absolute score. Absent = unknown —
    * no series or an older host — never 0.

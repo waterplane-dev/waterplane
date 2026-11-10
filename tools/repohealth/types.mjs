@@ -311,6 +311,10 @@
  *   dependency manifest and where no active pack reads one, with `depsReason`
  *   beside it saying which. `packages` is broken down by `Snapshot.groups`,
  *   so a key is a group's own path (`packages/web`, `.`) and not a label.
+ * @property {{value: {packs: {name: string, files: number, reads: string[]}[]}}} [reach]
+ *   Which index dimensions each active source pack could read, and how many
+ *   files (at HEAD) it holds (`reach.mjs`). The index's coverage; absent on
+ *   rows from an engine before the field.
  * @property {{kind: string, subject: string, detail: string}[]} tripwires
  */
 

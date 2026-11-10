@@ -230,6 +230,8 @@
 /* Forms / backlog */
 .form { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-4) 0; }
 .form .search, .form .send { margin: 0 var(--sp-10); }
+/* The desktop add/edit form is free text and inputs, not rows: it needs its own side gutter (rows carry theirs). */
+.form.host-form { padding: var(--sp-8) var(--sp-16) var(--sp-16); }
 .check-list { list-style: none; margin: 0; padding: 0; }
 .check-row { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-10) var(--sp-14); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
 .check-row.check-fail { border-left-color: var(--dead); }

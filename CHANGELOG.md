@@ -5,6 +5,26 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.25
+
+### New
+
+- **A "proposals" strip on the launcher shows work that scripts have suggested.** It reads like "3 proposals wait for you" and sits above the lists. Tapping it opens exactly those backlog rows, and the filter bar says "n of N" with a clear button. Each row says who proposed it and offers schedule beside fire. The strip goes as each row is fired, scheduled or deleted.
+- **A script with no session can propose work to an agent's backlog.** The row stays manual and you get one notification for it, which opens that row. Notification settings list the new `proposal` kind.
+- **Every session pane now carries `WATERPLANE_SESSION_ID`.** An agent or its script can name its own session, which fixes the conflict error when several sessions run in one repo.
+- **The repo readings sheet has an "agents" region.** It shows exploration cost, rework spend, compactions per committed session and escaped defects, per repo and per week. It reads your Claude session logs and says why when a reading can't be taken.
+- **The health index has eleven new entries.** They cover duplicate code, dead exports, import cycles, co-change, fix-after-change and tests changed with code. A reading that can't be taken counts as unknown, never as 100.
+- **Flutter repos now get import-graph, test-reach, clone and dead-export readings.** Before, they scored as nothing for these.
+- **Two more readings of your own are available.** One counts shipped requirements that a test names. The other is the end-to-end flaky rate, which is absent with a reason when there are fewer than 10 logged runs.
+- **Edit desktop has a test under each address.** The tailnet test says how long it took and which folder answered. The Wi-Fi test says whether this desktop proved itself, and offers the address the desktop reports now.
+- **The re-cut option is offered for any engine that supports it.** Before, only the bundled engine had it.
+- **The VS Code extension keeps the last scan for the next open.** It shows "loading" instead of "absent" and reports progress natively. A stopped first health read now says so.
+
+### Fixed
+
+- **The re-cut button now sits under the refusal it answers, not above it.**
+- **The VS Code extension no longer runs any program except git for its health readings.** Native readings there now show as absent with the reason, instead of stopping the extension.
+
 ## 0.1.24
 
 Folds 0.1.23, which was tagged but never released.

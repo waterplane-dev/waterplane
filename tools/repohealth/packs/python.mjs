@@ -233,12 +233,16 @@ function isDevList(path) {
   return /dev|test/i.test(file);
 }
 
+import { contentKey, identsOf, importsOf, signedBlocks } from "../lang/python-ast.mjs";
+import { buildPythonContext, resolvePythonImports } from "../lang/python-resolve.mjs";
+
 export default Object.freeze({
   name: "python",
   // 2: `imports` exists — the same import statements `mentions` reads, as
   // the edges `untested` follows from a test to what it runs.
   // 3: `hatchExplain` exists — which escapes carry their reason.
-  version: "3",
+  // 4: `analyzer` (a lexer, `lang/python-ast.mjs`) and the import graph exist.
+  version: "4",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: Object.freeze([".py"]),
@@ -447,14 +451,40 @@ export default Object.freeze({
     return this.mentions(text, path, opts);
   },
 
-  // No import-graph rule yet: `metrics/graph.mjs` reports this language absent
-  // rather than as a tree with no coupling. `imports` above is the safe-side
-  // rule `untested` needs; a graph needs every internal import resolved AND
-  // the unresolved ones counted, which this pack does not do.
-  graphConfigPath: null,
-  graphContext: null,
-  graphImports: null,
-  graphKeysFor: null,
+  /**
+   * The import graph. The resolver wants the tree's `.py` PATHS (not their
+   * text), so the config files are every `.py` file; see
+   * `lang/python-resolve.mjs` for how a root is found, what is external, and
+   * the edges that are deliberately not drawn.
+   */
+  graphConfigPath: "\\.py$",
+
+  graphContext(entries) {
+    return buildPythonContext(entries);
+  },
+
+  /**
+   * Every module one file LOADS, as `metrics/graph.mjs` reads them: one entry
+   * per loaded module, `candidates` whole-tree keys (never `relative`), a miss
+   * when this tree's own import finds no module, nothing for an external one.
+   * `null` when the lexer lost its place in the file (a string or bracket that
+   * never closes): imports unknown, never a shorter list.
+   */
+  graphImports(file, ctx) {
+    const records = importsOf(file.oid ?? contentKey(file.text), file.path ?? "", file.text);
+    if (records === null) return null;
+    return resolvePythonImports(records, file.path ?? "", ctx);
+  },
+
+  /**
+   * The keys a graph edge can name this module by: `a/b/c` for `a/b/c.py`,
+   * `a/b/__init__` for a package — one shape each, so a module and a package of
+   * one name never share a key.
+   */
+  graphKeysFor(path) {
+    return [path.replace(/\.py$/, "")];
+  },
+
   /**
    * Every `dir/name` key the module at `path` answers to: each non-empty
    * suffix of its own directory, joined to its basename.
@@ -484,13 +514,20 @@ export default Object.freeze({
   },
 
   /**
-   * No parser. `null` is the answer `dups` and `deadExports` need in order to
-   * report absent-with-a-reason instead of zero over 832 files nothing opened.
+   * The reader `dups` and `deadExports` need. It is a lexer in this process
+   * (`lang/python-ast.mjs`), so it is never absent: no interpreter is spawned,
+   * nothing waits on `python3`, and the cost per commit is one pass over the
+   * blobs whose oid has not been seen.
    */
   analyzer() {
-    return null;
+    return {
+      /** Signed duplicate-candidate blocks (every `def`, and long class or module assignments). */
+      blocks: (file, params) => signedBlocks(file.oid ?? contentKey(file.text), file.path, file.text, params),
+      /** `{exports, identifiers}`; see the header of `lang/python-ast.mjs` for what is NOT an export. */
+      idents: (file) => identsOf(file.oid ?? contentKey(file.text), file.path, file.text),
+    };
   },
 
-  /** The sentence `dups` and `deadExports` print when `analyzer()` is null. */
-  analyzerReason: "no Python parser is available in-process, so no Python file was read as code",
+  /** Kept for the capability shape; the analyzer above never returns null. */
+  analyzerReason: "the Python reader could not run",
 });

@@ -47,6 +47,7 @@ export { deviceId } from "../link/linkLog.ts";
 export { deviceModel, deviceName, setDeviceName } from "../deviceInfo.ts";
 /** An extension's downloaded engine files, kept in IndexedDB for offline use (works in the APK and on plain http). */
 export { extAssets, type ExtAssets } from "./extAssets.ts";
+export { extDeviceBlobs, type ExtDeviceBlobs } from "./extDeviceBlobs.ts";
 export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
 export type { StreamFrame } from "@waterplane/shared";

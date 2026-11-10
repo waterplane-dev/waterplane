@@ -59,6 +59,7 @@
     "GET /api/plugin-readme/:param": "not reachable in demo: no plugins installed, so the Plugins screen has no card to open an About fold on",
     "GET /api/plugin/:param/asset/:param": "not reachable in demo: no plugins installed, so no extension is switched on to download its engine files",
     "GET /api/push/key": "not reachable in demo: web push needs a real host's VAPID key",
+    "GET /api/repos/:param/agentreadings": "gap: agent readings come off a real desktop's conversation logs; the demo has none, and the region says it could not be read",
     "GET /api/repos/:param/archive": "not reachable in demo: no archived conversations on disk",
     "GET /api/repos/:param/archive/transcript": "not reachable in demo: no archived conversations on disk to read",
     "GET /api/repos/:param/archive/transcript/tools": "not reachable in demo: no archived conversations on disk to read",

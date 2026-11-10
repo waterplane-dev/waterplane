@@ -153,3 +153,27 @@ test("each day's repo rows carry the context they sent — the health score's sp
   const turns = doc.days.reduce((n, d) => n + d.byRepo.reduce((m, r) => m + r.turns, 0), 0);
   assert.equal(turns, doc.totals.turns);
 });
+
+// ── the saved fold: a new window shows the last scan while the next one runs ──
+
+test("corpus store: a saved fold round-trips; another version or config dir is ignored", async () => {
+  const { writeFileSync } = await import("node:fs");
+  const store = await scanned();
+  const doc = data.foldCorpus(store.files, NOW, store.stats);
+  const file = join(tmp("corpus"), "corpus.v1.json");
+  assert.equal(await data.loadCorpus(file, FIXTURES), null, "missing file");
+  await data.saveCorpus(file, FIXTURES, doc);
+  assert.deepEqual(await data.loadCorpus(file, FIXTURES), JSON.parse(JSON.stringify(doc)));
+  assert.equal(await data.loadCorpus(file, "/somewhere/else"), null, "other config dir");
+  writeFileSync(file, JSON.stringify({ v: data.CORPUS_VERSION + 1, configDir: FIXTURES, doc }));
+  assert.equal(await data.loadCorpus(file, FIXTURES), null, "other version");
+  await data.saveCorpus(file, FIXTURES, doc, "0.9.0 · abc");
+  assert.deepEqual(await data.loadCorpus(file, FIXTURES, "0.9.0 · abc"), JSON.parse(JSON.stringify(doc)), "same build");
+  assert.equal(await data.loadCorpus(file, FIXTURES, "0.9.1 · def"), null, "other build");
+  assert.equal(await data.loadCorpus(file, FIXTURES), null, "saved with a build, loaded without");
+  const { days: _d, ...old } = JSON.parse(JSON.stringify(doc));
+  writeFileSync(file, JSON.stringify({ v: data.CORPUS_VERSION, configDir: FIXTURES, build: null, doc: old }));
+  assert.equal(await data.loadCorpus(file, FIXTURES), null, "older shape missing a field the view reads");
+  writeFileSync(file, "{not json");
+  assert.equal(await data.loadCorpus(file, FIXTURES), null, "corrupt");
+});

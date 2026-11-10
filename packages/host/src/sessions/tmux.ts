@@ -21,6 +21,7 @@ import { cleanSessionBudget, logTag, netRetryStalls, sessionBudgetVerdict } from
 import { hostStateDir } from "../branddirs.js";
 import { spawnFailure } from "../ptycap.js";
 import { ptyEnv } from "../ptyenv.js";
+import { SESSION_ID_ENV } from "../reposkilltext.js";
 import { inCopyModeSync } from "../tmuxscroll.js";
 import { derive, knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
 import { hasAccountLimit } from "../usagesources.js";
@@ -238,6 +239,7 @@ export function reclaimStaleLive(core: SessionCore, tmuxNames: ReadonlySet<strin
 
 // ── tmux substrate: spawn / re-attach / discover ────────────────────
 
+
 /** What the binary must be spawned WITH: the descriptor's `spawnEnv`, then this launch's (`LaunchPlan.env`) over it. */
 export function backendPaneEnv(backend: Pick<BackendDescriptor, "spawnEnv">, launchEnv?: Readonly<Record<string, string>>): Record<string, string> {
   return { ...backend.spawnEnv, ...launchEnv };
@@ -290,7 +292,11 @@ export function spawnBackend(core: SessionCore, id: string, cwd: string, cols: n
   // The descriptor's `spawnEnv` first, THEN this launch's own (`LaunchPlan.env`):
   // a per-launch value (claude-local's base URL) wins over a standing one, and
   // BOTH ride the tmux command line (`tmuxEnvPrefix`) and the client's env.
-  const paneEnv = backendPaneEnv(backend, launchEnv);
+  // `SESSION_ID_ENV`: the session can name itself to the loopback agent
+  // routes (`resolveFollowUpSession`) instead of being guessed from its folder,
+  // which fails when several sessions run in one repo. Last, so no launch
+  // overrides it. Under tmux the id is stable across a host restart (`reattach`).
+  const paneEnv = { ...backendPaneEnv(backend, launchEnv), [SESSION_ID_ENV]: id };
   const env = { ...ptyEnv(), ...paneEnv };
   const BIN = backend.bin();
   // tmux is required (`tmuxreq.ts`): no binary ⇒ refuse in words naming the
