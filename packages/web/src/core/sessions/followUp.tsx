@@ -28,7 +28,7 @@ export const followUpClass = (f: FollowUp | undefined): string => (f ? ` fu-${f.
 export function followUpButtonTitle(s: SessionInfo, waiting: boolean, online: boolean): string {
   if (waiting) {
     const what = s.followUp ? "flagged here" : "flag cleared here";
-    return online ? `${what} — the desktop has not confirmed it yet` : `${what} — offline, so it is only on this phone until the link is back`;
+    return online ? `${what} — the desktop has not confirmed it yet` : `${what} — offline, so it is only on this device until the link is back`;
   }
   return s.followUp ? `${FOLLOWUP_CLEAR} — ${followUpText(s.followUp)}` : `${FOLLOWUP_SET} — a one-shot mark; opening the session does not clear it`;
 }

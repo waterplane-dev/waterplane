@@ -535,7 +535,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
       <Hint>
         {online
           ? "Connected. One message per session at a time, in order."
-          : "No connection. Everything here is kept on this phone and sent when the link is back."}
+          : "No connection. Everything here is kept on this device and sent when the link is back."}
         {retryable > 0 && (
           <> {retryable} gave up waiting. Try them again and they go back in the queue — now, or as soon as the link is back.</>
         )}
@@ -592,7 +592,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
               <span className="queue-lane-count">{held.length}</span>
             </div>
             <Hint style={{ paddingTop: 0 }}>
-              The desktop has these and will open them itself when the files land — this phone can be closed.
+              The desktop has these and will open them itself when the files land — this device can be closed.
             </Hint>
             {held.map((l) => (
               <div key={l.id} className="queue-row-wrap">
@@ -634,7 +634,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
           */}
         {lanes.length === 0 && held.length === 0 && (
           <Empty>{outstanding === 0
-            ? <span className="qs-clear"><CircleCheck size={14} /> Nothing queued — everything written on this phone has reached the desktop.</span>
+            ? <span className="qs-clear"><CircleCheck size={14} /> Nothing queued — everything written on this device has reached the desktop.</span>
             : <>Nothing queued to send. {outstanding === 1 ? "One thing" : `${outstanding} things`} written here {outstanding === 1 ? "is" : "are"} still being pushed to the desktop — settings, templates and notes travel on their own path and need no tap.</>}
           </Empty>
         )}

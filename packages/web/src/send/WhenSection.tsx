@@ -59,10 +59,10 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                 // button, this hint and the toast after the tap all say "when
                 // this repo is free". What that MEANS is the sentence after
                 // it; what it is CALLED does not change between three screens.
-                ? "When this repo is free: a slot on the desktop, and nothing else running in this checkout. The desktop holds it — this phone can be shut."
+                ? "When this repo is free: a slot on the desktop, and nothing else running in this checkout. The desktop holds it — this device can be shut."
                 : target.kind === "repos"
-                  ? "Each one starts when its own repo is free. The desktop holds them — this phone can be shut."
-                  : "Turn ended, no question open, no usage-limit block. The desktop holds it, so this phone can be shut."}
+                  ? "Each one starts when its own repo is free. The desktop holds them — this device can be shut."
+                  : "Turn ended, no question open, no usage-limit block. The desktop holds it, so this device can be shut."}
             </Hint>
           )}
           <div className="section section-head"><span>What it waits for</span></div>

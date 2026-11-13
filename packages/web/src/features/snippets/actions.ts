@@ -2,13 +2,13 @@
  * Every writer of the snippet list.
  */
 import { LS, lsSetJson } from "../../storage";
-import { loadSnippets } from "../../localState";
 import { onSettingsChange } from "../../settings";
 import type { Snippet } from "../../SnippetSheet";
-import { snippets } from "./store";
+import { missingStarters } from "../../snippetPicks";
+import { readSnippetView, snippets } from "./store";
 
 export function saveSnippets(next: Snippet[]): void {
-  snippets.set(next);
+  snippets.set({ list: next, starter: false });
   lsSetJson(LS.snippets, next);
 }
 
@@ -18,5 +18,10 @@ export function saveSnippets(next: Snippet[]): void {
  * localStorage until the next reload.
  */
 export function bootSnippetSync(): () => void {
-  return onSettingsChange(() => snippets.set(loadSnippets()), [LS.snippets]);
+  return onSettingsChange(() => snippets.set(readSnippetView()), [LS.snippets]);
+}
+
+/** "Add the starter snippets": APPENDS the ones whose text the list lacks; never replaces. */
+export function addStarters(current: Snippet[]): void {
+  saveSnippets([...current, ...missingStarters(current)]);
 }

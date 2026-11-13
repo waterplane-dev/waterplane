@@ -113,7 +113,7 @@ export function pullLine(o: Pick<AutomationInput, "repoDir" | "pull" | "repoName
   return {
     key: "pull", icon: "pull", verb: "download rules", door: { kind: "pull", repoDir: o.repoDir },
     text: o.pull.enabled
-      ? `Auto-download is on for ${name}: new files ${where}${o.pull.builds ? " and build artifacts" : ""} come to this phone by themselves.`
+      ? `Auto-download is on for ${name}: new files ${where}${o.pull.builds ? " and build artifacts" : ""} come to this device by themselves.`
       : `Auto-download is off for ${name}.`,
   };
 }

@@ -213,10 +213,22 @@
 .tr-quote { margin: var(--sp-8) 0; padding: var(--sp-2) var(--sp-10); color: var(--muted); border-left: 2px solid var(--line); }
 .tr-quote > :first-child { margin-top: 0; }
 .tr-quote > :last-child { margin-bottom: 0; }
-/* Tables scroll inside their own box — a wide table must never scroll the page. */
-.tr-table-wrap { margin: var(--sp-8) 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--r-8); }
+/* Tables scroll inside their own box — a wide table must never scroll the page.
+   Wrapping (`MdTable.tsx`, `tableFit.ts`): prose columns wrap at word gaps
+   (never `anywhere`, which `.tr-say` sets and which would let a column shrink
+   to one letter), short ones (`.tr-keep`) stay whole. `.tr-measure` is the
+   one-line-per-row layout, applied for a single read and removed before paint. */
+.tr-table-block { margin: var(--sp-8) 0; border: 1px solid var(--line); border-radius: var(--r-8); overflow: hidden; }
+.tr-table-head { display: flex; justify-content: flex-end; padding: var(--sp-2) var(--sp-6); background: var(--panel); border-bottom: 1px solid var(--line); }
+.tr-table-head .key { min-width: 0; padding: var(--sp-2) var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.tr-table-head .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
+.tr-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tr-table { border-collapse: collapse; width: 100%; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
-.tr-table th, .tr-table td { padding: var(--sp-6) var(--sp-10); border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+.tr-table th, .tr-table td { padding: var(--sp-6) var(--sp-10); border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; overflow-wrap: normal; }
+.tr-table.tr-wrap th, .tr-table.tr-wrap td { white-space: normal; overflow-wrap: break-word; }
+.tr-table.tr-wrap td.tr-keep { white-space: nowrap; }
+.tr-table.tr-measure { width: max-content; }
+.tr-table.tr-measure th, .tr-table.tr-measure td { white-space: nowrap; }
 .tr-table th { font-weight: var(--fw-semibold); background: var(--panel); position: sticky; top: 0; }
 .tr-table tr:last-child td { border-bottom: 0; }
 .tr-say a, .tr-you a { color: var(--accent); }

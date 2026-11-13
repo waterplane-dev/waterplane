@@ -112,7 +112,7 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
                       )}
             <div className="viewer-path mono">{open.repoName ? `${open.repoName} · ` : ""}{open.relPath}</div>
             <div className="viewer-path">created {fmtCreatedFull(open.ctime ?? open.mtime)}{openIdx >= 0 && imgs.length > 1 ? ` · ${openIdx + 1} / ${imgs.length}` : ""}</div>
-            {localUrl && <div className="viewer-doc-note"><Smartphone size={12} /> shown from the copy already on this phone — no host needed</div>}
+            {localUrl && <div className="viewer-doc-note"><Smartphone size={12} /> shown from the copy already on this device — no host needed</div>}
             {/* A doc with a toolbar of its own already says up there that it is a
                 saved copy; everything else says it here, where it is READ. */}
             {docCachedAt != null && !isRich(open.relPath) && (

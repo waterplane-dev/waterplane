@@ -24,7 +24,7 @@ import { join } from "node:path";
 import { HALT_OFF, HALT_REFUSAL, logTag, type HaltReceipt, type HaltState } from "@waterplane/shared";
 import { ROOT } from "./env.js";
 import { hostStateDir } from "./branddirs.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
 
 /** How long a halted process gets to flush (claude's transcript) before SIGKILL. */
 export const HALT_GRACE_MS = 1000;
@@ -37,8 +37,17 @@ function load(): HaltState {
   const p = path();
   if (!existsSync(p)) return (state = { ...HALT_OFF });
   const unreadable: HaltState = { on: true, since: Date.now(), receipt: null };
-  const v = readJsonGuarded<HaltState>(p, unreadable, (x) => typeof x === "object" && x !== null && typeof (x as HaltState).on === "boolean");
-  return (state = { on: v.on, since: v.on ? (v.since ?? Date.now()) : null, receipt: v.receipt ?? null });
+  // keepUnreadable: an unreadable latch file stays put, so EVERY boot reads it as halted.
+  // A torn one is moved aside by the store layer; the halted fallback is then written back
+  // under the real name, or the next boot would find no file and lift a halt nobody lifted.
+  const r = readJsonGuardedDetail<HaltState>(p, unreadable, (x) => typeof x === "object" && x !== null && typeof (x as HaltState).on === "boolean", { keepUnreadable: true });
+  const v = r.value;
+  state = { on: v.on, since: v.on ? (v.since ?? Date.now()) : null, receipt: v.receipt ?? null };
+  if (r.corrupt?.movedTo) {
+    try { writeJsonAtomic(p, state); }
+    catch (e) { console.error(`${logTag} halt: could not write the latch back after moving a damaged one aside — it holds until this process ends`, e); }
+  }
+  return state;
 }
 
 export function haltState(): HaltState { return { ...load() }; }

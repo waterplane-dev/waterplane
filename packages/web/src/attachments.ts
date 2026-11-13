@@ -195,9 +195,9 @@ export function attachLabel(s: AttachStatus): string {
   switch (s.state) {
     case "host": return "in the repo";
     case "sending": return "uploads before this message";
-    case "kept": return "not uploaded — the file is still on this phone";
+    case "kept": return "not uploaded — the file is still on this device";
     case "dead": return s.why ? `not uploaded — ${s.why}` : "not uploaded";
-    case "missing": return "not in the repo, and not on this phone";
+    case "missing": return "not in the repo, and not on this device";
     case "unknown": return "can't check without a connection";
   }
 }

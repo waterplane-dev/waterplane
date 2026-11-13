@@ -1,7 +1,7 @@
 /**
  * Every conversation log on this machine, summarised per file and cached — the
  * extension's copy of the host's token store (`tokenstats.ts`'s
- * `TokenStatsStore`), same shape (`Files`, version 6: summaries carry the first request's `b`), same refresh rule.
+ * `TokenStatsStore`), same shape (`Files`, version 7: summaries carry the first request's `b`, long-prompt keys), same refresh rule.
  *
  * A refresh is a STAT sweep: a file whose size and mtime are both unchanged is
  * kept as it was; anything that moved is re-read WHOLE by the host's own
@@ -21,7 +21,7 @@ const MAX_FILE = 256 * 1024 * 1024;
 /** Logs re-read between yields to the event loop (`tokenstats.ts`' `YIELD_EVERY`). */
 const YIELD_EVERY = 64;
 /** The store format. A different version on disk is discarded and rebuilt — it is a cache of logs still there. */
-const VERSION = 6;
+const VERSION = 7; // 7: Haiku 5.5 long-prompt requests tallied under `<alias>@long`
 
 export type { Files };
 

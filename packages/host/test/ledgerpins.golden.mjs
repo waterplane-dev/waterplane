@@ -6,7 +6,8 @@ import { dirname, join, basename } from "node:path";
 import * as C from "../dist/ctxlog.js";
 import * as T from "../dist/transcript.js";
 
-const norm = (v) => JSON.parse(JSON.stringify(v, (_k, x) => (x instanceof Map ? { __map: [...x.entries()] } : x instanceof Set ? { __set: [...x] } : x)));
+// `priceGen` is a cache key (which price list priced the cursor), not a reading: left out of the digest.
+const norm = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === "priceGen" ? undefined : x instanceof Map ? { __map: [...x.entries()] } : x instanceof Set ? { __set: [...x] } : x)));
 let SCRUB = [];
 export const digest = (v) => {
   let s = JSON.stringify(norm(v));

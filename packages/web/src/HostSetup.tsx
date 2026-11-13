@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { nativePlugin } from "./shellBridge";
 import { BRAND, envName, PLAIN_ROUTE_WARNING, PROTOCOL_VERSION, addressNeedsConfirm, normalizeHostBase, normalizeHostName, normalizeSsid, defaultHostName, vouchedAfter, type PairTarget, type SavedHost } from "@waterplane/shared";
-import { CheckCircle2, ExternalLink, FlaskConical, KeyRound, Loader2, Plug, Plus, Router, Settings2, Smartphone, Wifi, X, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, FlaskConical, Globe, KeyRound, Loader2, Plug, Plus, Router, Settings2, ShieldCheck, Smartphone, Wifi, X, XCircle } from "lucide-react";
 import { SetNote, SetSwitch, SetLine, SetWarn } from "./SettingsKit";
 import { PairForm, type PairNoRoute } from "./PairForm";
 import { FoundDesktops } from "./FoundDesktops";
@@ -13,7 +13,7 @@ import { tryDemo } from "./demoEntry";
 import { openExternal } from "./openExternal";
 import { showToast } from "./toast";
 import { activeHostId, addAndActivate, addHost, browserKV, updateHost, type HostInput } from "./hosts";
-import { savedRowPlain } from "./hostUrl";
+import { hostBase, isNativeShell, savedRowPlain } from "./hostUrl";
 import { hasShellTls } from "./sdk/shellTls";
 import { Button } from "./kit/Button";
 import { plainSaveRefusal } from "./hostEditGuard";
@@ -23,7 +23,10 @@ import { LS, lsBool } from "./storage";
 import { isDemo } from "./demoEntry";
 import { Explain } from "./Explain";
 import { testLanAddress } from "./lanLink";
-import { lanTestWords, staleLanOffer, tailnetOkWords, type LanTest } from "./hostTestWords";
+import { lanHttpsFix, lanTestWords, lanTlsLine, routeCardTag, routeNowWords, staleLanOffer, tailnetOkWords, type LanTest } from "./hostTestWords";
+import { useHostRoute } from "./hostRoute";
+import { fmtSince, useLink } from "./link";
+import { Tag } from "./kit/Tag";
 
 /**
  * Add or edit one desktop — Android shell only.
@@ -78,6 +81,39 @@ function PlainWarn() {
 
 export type HostSetupMode = "first" | "add" | "edit";
 
+/** The top of the Edit screen: which of the two addresses this phone is on NOW, whether it answers, and why
+ *  that one. The two cards below carry the same answer as a tag, so the form and the panel never disagree. */
+function RouteNow({ active, saved }: { active: boolean; saved: string | null }) {
+  const route = useHostRoute();
+  const status = useLink((s) => s.status, true);
+  const lastSeen = useLink((s) => s.sync.lastSeenAt, true);
+  const w = routeNowWords({
+    active, route, status,
+    lastSeenAgo: status === "open" || !lastSeen ? null : fmtSince(lastSeen),
+    dial: active ? hostBase() : null,
+    saved,
+  });
+  const Icon = w.via === "lan" ? Router : w.via === "tailnet" ? Globe : Plug;
+  return (
+    <section className={`route-now${w.tone ? ` ${w.tone}` : ""}`} aria-live="polite">
+      <div className="route-now-head"><Icon size={18} /> {w.head}</div>
+      <div className="route-now-state">{w.state}</div>
+      {w.dial && <div className="route-now-dial"><code>{w.dial}</code></div>}
+      {w.why && <SetNote className="route-now-why">{w.why}</SetNote>}
+    </section>
+  );
+}
+
+/** One address's card head: its name and whether it is the one in use. */
+function CardHead({ icon: Icon, title, tag, live }: { icon: typeof Globe; title: string; tag: { text: string; inUse: boolean } | null; live?: boolean }) {
+  return (
+    <div className="route-card-head">
+      <Icon size={15} /> <b>{title}</b>
+      {tag && <Tag tone={tag.inUse && live ? "ok" : undefined} className={`route-card-tag${tag.inUse ? " in-use" : ""}`}>{tag.text}</Tag>}
+    </div>
+  );
+}
+
 interface NetState { transport?: string; ssid?: string | null; permission?: string }
 interface ShellNetPlugin { current?: () => Promise<NetState>; requestLocation?: () => Promise<NetState> }
 
@@ -95,7 +131,7 @@ function ssidWhy(st: NetState | null): string {
   return "Android did not say the Wi-Fi name — location may be switched off.";
 }
 
-export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onDone, onCancel, onEditLan }: {
+export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onDone, onCancel, onEditLan, linkDoors }: {
   mode: HostSetupMode;
   /** Open on "pair with code", prefilled (a deep link, or a typed code). */
   pair?: PairTarget | null;
@@ -110,6 +146,9 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   onCancel?: () => void;
   /** Open a row's LAN settings: the control on a pairing that left no route. */
   onEditLan?: (saved: SavedHost) => void;
+  /** Edit of the ACTIVE desktop: doors to the link's health and its tests, under "in use" (the
+   *  caller's; this form also renders before `App`, where there is no sheet to open). */
+  linkDoors?: ReactNode;
 }) {
   const [noRoute, setNoRoute] = useState<PairNoRoute | null>(null);
   const [name, setName] = useState(host?.name ?? "");
@@ -122,6 +161,9 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   const [lanTest, setLanTest] = useState<LanTest | "busy" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [ssidNote, setSsidNote] = useState<string | null>(null);
+  // Unsaved edits: a door to another sheet unmounts this form, and what was typed would go with it.
+  const formNow = JSON.stringify([name, text, lanText, ssids, auto]);
+  const [formAtOpen] = useState(formNow);
   const [needLocation, setNeedLocation] = useState(false);
   const [pairing, setPairing] = useState(mode !== "edit" && (mode === "first" || !!pair));
   // A desktop found on the tailnet that has a password: the pair form, on its address.
@@ -139,6 +181,15 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   };
   const plainTail = !!base && savedRowPlain(draft, hasShellTls());
   const plainLan = !!lanBase && savedRowPlain(draft, hasShellTls(), lanBase);
+  // Only the desktop in use has a route; every other row is not dialled at all.
+  const kvNow = browserKV();
+  const isActive = mode === "edit" && !!host && !!kvNow && activeHostId(kvNow) === host.id;
+  const routeNow = useHostRoute();
+  // Green only while the address in use actually answers; "in use" alone is the accent.
+  const live = useLink((s) => s.status === "open");
+  const tagFacts = { active: isActive, route: isActive ? routeNow?.route ?? null : null, hasLan: !!lanBase, auto, ssids: ssids.length };
+  const tailTag = mode === "edit" ? routeCardTag("tailnet", tagFacts) : null;
+  const lanTag = routeCardTag("lan", tagFacts);
 
   useEffect(() => { if (pair && mode !== "edit") setPairing(true); }, [pair, mode]);
 
@@ -190,7 +241,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         s: "bad",
         why: aborted ? "no answer within 6s" : "could not reach that address",
         hint: aborted
-          ? "The desktop may be asleep, or Tailscale is not up on this phone."
+          ? "The desktop may be asleep, or Tailscale is not up on this device."
           : "Check the address, and that Tailscale is connected on both ends.",
       });
       return false;
@@ -211,7 +262,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   /** Save. `activate`: make it the active host (reloads). */
   function save(activate: boolean): void {
     const kv = browserKV();
-    if (!kv) { setProblem("This phone's storage is not available."); return; }
+    if (!kv) { setProblem("This device's storage is not available."); return; }
     const trap = plainSaveRefusal(normalizeHostBase(text) ?? text, sealedMode(), lsBool(LS.appLock), isDemo() ? null : pickLockPath(nativePlugin("Keystore")));
     if (trap) { setProblem(trap); return; }
     if (mode === "edit" && host) {
@@ -294,7 +345,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             <div className="auth-title pair-title"><span className="pair-title-icon"><Smartphone size={18} /></span> Welcome to {BRAND.name}</div>
             <div className="pair-welcome">
               <SetNote>A remote control for Claude Code on your own computer. The coding happens on the desktop; this app lets you steer it from anywhere.</SetNote>
-              <SetNote><b>Set up the desktop first.</b> Install {BRAND.name} there (macOS, Linux, or Windows with WSL2), then come back and connect this phone.</SetNote>
+              <SetNote><b>Set up the desktop first.</b> Install {BRAND.name} there (macOS, Linux, or Windows with WSL2), then come back and connect this device.</SetNote>
               <Button title={`opens ${DESKTOP_GUIDE} in your browser`} onClick={() => { if (!openExternal(DESKTOP_GUIDE)) showToast("could not open the link"); }}><ExternalLink size={13} /> desktop setup guide</Button>
             </div>
           </>
@@ -337,6 +388,9 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             </SetLine>
           </>
         )}
+        {mode === "edit" && <RouteNow active={isActive} saved={host?.base ?? null} />}
+        {mode === "edit" && linkDoors && (formNow === formAtOpen ? linkDoors
+          : <SetNote style={{ margin: "10px 0" }}>Save or cancel first to open connection health or the tests — leaving this screen would drop what you changed.</SetNote>)}
         {mode !== "first" && (
           <input
             className="auth-input"
@@ -350,8 +404,10 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           />
         )}
 
-        <SetNote style={{ marginTop: mode === "first" ? 0 : 10 }}>
-          <b>Tailnet address</b> — the one the {BRAND.name} daemon prints at boot. Port <code>8770</code> unless you type another.
+        <section className={`route-card${tailTag?.inUse ? " in-use" : ""}`}>
+        {mode === "edit" && <CardHead icon={Globe} title="Tailnet address" tag={tailTag} live={live} />}
+        <SetNote style={{ marginTop: mode === "edit" ? 4 : 0 }}>
+          {mode !== "edit" && <><b>Tailnet address</b> — </>}the one the {BRAND.name} daemon prints at boot. Port <code>8770</code> unless you type another.
         </SetNote>
         <input
           className="auth-input"
@@ -373,7 +429,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
             {probe.s === "busy"
               ? <SetNote as="span"><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> testing <code>{base}</code>…</SetNote>
-              : <><Button onClick={() => void test()}><Plug size={13} /> test this address</Button>{probe.s === "idle" && <SetNote as="span" style={{ opacity: 0.75 }}><code>{base}</code></SetNote>}</>}
+              : <Button onClick={() => void test()}><Plug size={13} /> test this address</Button>}
           </SetLine>
         )}
         {probe.s === "ok" && (
@@ -389,6 +445,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           </SetNote>
         )}
         {plainTail && <PlainWarn />}
+        </section>
 
         {mode === "first" && (
           <input
@@ -405,11 +462,11 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         )}
 
         {mode !== "first" && (
-          <details style={{ marginTop: 14 }} open={!!host?.lan}>
+          <details className={`route-card${lanTag?.inUse ? " in-use" : ""}`} open={!!host?.lan}>
             {/* raw: the <summary> of a hand-rolled <details>, not SetNote's fold (a div) */}
-            <summary className="set-note"><Router size={13} style={{ verticalAlign: "-2px" }} /> <b>Home Wi-Fi address</b> (optional)</summary>
-            <SetNote style={{ marginTop: 6 }}>
-              Used only on the Wi-Fi names below, after the desktop proves who it is, with the switch on.
+            <summary><CardHead icon={Router} title={lanBase ? "Home Wi-Fi address" : "Home Wi-Fi address (optional)"} tag={lanTag} live={live} /></summary>
+            <SetNote style={{ marginTop: 4 }}>
+              Faster at home. Used only on the Wi-Fi networks listed below, with the switch on, after the desktop proves who it is.
             </SetNote>
             <input
               className="auth-input"
@@ -424,6 +481,15 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             {lanText.trim() && !lanBase && (
               <SetNote style={{ marginTop: 6, color: "var(--dead)" }}>Not an address.</SetNote>
             )}
+            {(() => {
+              const ip = lanHttpsFix(lanBase);
+              return ip ? (
+                <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+                  <SetNote as="span">Type the address without <code>https://</code>: the app encrypts it by itself, on the desktop's own TLS port.</SetNote>
+                  <Button onClick={() => setLanText(ip)}>use {ip}</Button>
+                </SetLine>
+              ) : null;
+            })()}
             {lanBase && (
               <SetLine style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
                 {lanTest === "busy"
@@ -449,7 +515,12 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
               </div>
             )}
             {plainLan && <PlainWarn />}
-            <div className="set-chips" style={{ marginTop: 8 }}>
+            {(() => {
+              const l = lanTlsLine({ lanBase, shell: isNativeShell(), enforcing: hasShellTls(), tls: host?.tls, tlsOff: host?.tlsOff });
+              return l ? <SetNote style={{ marginTop: 6, color: l.tone === "ok" ? "var(--ok)" : undefined }}>{l.tone === "ok" && <ShieldCheck size={13} style={{ verticalAlign: "-2px" }} />} {l.text}</SetNote> : null;
+            })()}
+            <SetNote style={{ marginTop: 10 }}><b>Only on these Wi-Fi networks</b>{ssids.length === 0 && ": none yet."}</SetNote>
+            <div className="set-chips" style={{ marginTop: 4 }}>
               {ssids.map((s) => (
                 <Button key={s} onClick={() => setSsids(ssids.filter((x) => x !== s))} aria-label={`remove ${s}`}>
                   <Wifi size={12} /> {s} <X size={12} />

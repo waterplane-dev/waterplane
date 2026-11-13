@@ -525,7 +525,7 @@ function ToolDoors() {
         title="what the link has been doing to your prompts"
         onClick={() => { track("overlay:nethealth"); open("nethealth"); }} />
       <SetAction id="tool-storage" compact label="storage" icon={HardDrive}
-        title="what this phone is holding, and what clearing any of it would cost"
+        title="what this device is holding, and what clearing any of it would cost"
         onClick={() => { track("overlay:storage"); open("storage"); }} />
       <SetAction id="tool-speedtest" compact label="speed test" icon={Gauge}
         title="connection speed test + diagnostics"

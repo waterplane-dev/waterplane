@@ -25,7 +25,7 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
   const verdict = state === "running" ? `${pct}% — ${rate ?? "waiting for bytes"}`
     : state === "failed" ? (p.error || "the transfer stopped and nothing said why")
     : state === "blocked" ? "paused — it resumes from where it stopped"
-    : state === "done" ? (p.savedTo ? `${got} · ${p.saveVia === "browser" ? "handed to" : "saved to"} ${p.savedTo}` : p.evicted ? `${got} — the bytes were cleared to make room; fetching again is one tap` : `${got} · on this phone`)
+    : state === "done" ? (p.savedTo ? `${got} · ${p.saveVia === "browser" ? "handed to" : "saved to"} ${p.savedTo}` : p.evicted ? `${got} — the bytes were cleared to make room; fetching again is one tap` : `${got} · on this device`)
     : pct > 0 ? `queued — ${pct}% already here from an earlier attempt` : "queued";
   return {
     key: `pull:${p.item.id}`,
@@ -63,7 +63,7 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
     lastRun: null,
     attempts: p.attempts,
     actions: [
-      act("save", "save to phone", {
+      act("save", "save to device", {
         primary: state === "done" && !p.evicted,
         disabledReason: state === "done" && !p.evicted ? undefined : "there is nothing downloaded to save yet",
       }),
@@ -75,7 +75,7 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
         // did nothing and a toast that said it had.
         primary: state !== "done",
         disabledReason: state === "running" ? "it is downloading"
-          : state === "done" && !p.evicted ? "it is already on this phone — save it out instead"
+          : state === "done" && !p.evicted ? "it is already on this device — save it out instead"
           : undefined,
       }),
       act("discard", "drop it", { danger: true, alwaysShown: true }),

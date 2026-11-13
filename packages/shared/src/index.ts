@@ -78,6 +78,7 @@ export * from "./wire/repo.js";
 export * from "./wire/alwayson.js";
 /** Agent readings: per-repo weekly figures only this desktop's conversation logs can give. */
 export * from "./wire/agentreadings.js";
+export * from "./agentseries.js";
 
 /** The reader view's document — the CLI's own conversation log, parsed. */
 export * from "./wire/transcript.js";
@@ -271,6 +272,7 @@ export * from "./calday.js";
 /** What those tokens WOULD have cost at Anthropic's published list prices — a
  *  counterfactual, not a bill, and the module says so at length. */
 export * from "./pricing.js";
+export * from "./pricelist.js";
 
 /** The durable Intent — one "do this, there, when that is true", owned by the
  *  HOST, and the one ladder that decides whether it may run yet. */
@@ -357,6 +359,8 @@ export * from "./chord.js";
  *  reads, the caps in seconds, and the one wording for a clip that is refused
  *  — so a person is told the same thing whichever end noticed. */
 export * from "./dictate.js";
+export * from "./dictatemodels.js";
+export * from "./wire/dictatesetup.js";
 export * from "./dictateterms.js";
 
 /** The zero-token repo-health series: where the tool and its artifacts live,
@@ -427,6 +431,9 @@ export * from "./weekburn.js";
 export * from "./branchmode.js";
 /** The PR card: the DTO and the one place a PR's blocker is worded. */
 export * from "./wire/pullrequest.js";
+export * from "./wire/skills.js";
+export * from "./skillstate.js";
+export * from "./skillwords.js";
 export * from "./prview.js";
 
 /** `wordOf(table, k, fallback)`: a table's word for a wire value this build

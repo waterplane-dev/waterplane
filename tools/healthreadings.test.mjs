@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -8,7 +8,7 @@ import { Linter } from "eslint";
 import tseslint from "typescript-eslint";
 import {
   capFromConfig, inCapScope, countNearCap, kbOf, bareHookDisables, isNoteLine, countCapSqueeze,
-  SEAMS, seamsUntested,
+  SEAMS, seamsUntested, hasRuntimeCode, isRepairSubject, repairedCommits, readSourceCommits,
 } from "./healthreadings.mjs";
 import { codeLineCount, lineCount } from "./codelines.mjs";
 import eslintConfig from "../eslint.config.js";
@@ -186,6 +186,79 @@ test("seamsUntested refuses rather than answer 0 for what it could not count", (
   assert.throws(() => seamsUntested(["a.ts", "gone.ts", "gone/"], ["a.ts"], []), /gone\.ts, gone\/.*stale/);
 });
 
+test("a types-only seam is not counted: no test can reach what never runs", () => {
+  assert.equal(hasRuntimeCode('/** doc */\nimport type { A } from "./a";\nexport interface B { a: A }\nexport type C = B | null;\n'), false);
+  assert.equal(hasRuntimeCode('import { A } from "./a";\nexport type B = A;\n'), false, "an import used only as a type is erased");
+  assert.equal(hasRuntimeCode("export type A = 1;\nexport const B = 2;\n"), true);
+  assert.equal(hasRuntimeCode('import "./side-effect";\n'), true, "a side-effect import runs");
+  assert.equal(hasRuntimeCode("export enum E { A }\n"), true);
+  assert.equal(hasRuntimeCode("export const El = () => <b/>;\n", "x.tsx"), true);
+  const runtime = (p) => p !== "src/queue/types.ts";
+  assert.deepEqual(seamsUntested(["src/queue/"], ["src/queue/a.ts", "src/queue/types.ts"], ["src/queue/a.ts", "src/queue/types.ts"], runtime),
+    ["src/queue/a.ts"]);
+});
+
 test("every seam names a file in the tree, so the declared list is not already stale", () => {
   assert.deepEqual(SEAMS.filter((s) => !existsSync(new URL(`../${s}`, import.meta.url))), []);
+});
+
+// ── repairRate ──────────────────────────────────────────────────────────────
+
+test("the repair matcher takes this repo's wording and the generic one, whole words only", () => {
+  for (const s of ["vault 7a repair: x", "vault view-for UI review repairs: y", "vault journey 5 screen-review fixes: z",
+    "Revert x", "fixed y", "review fixes for q"]) assert.ok(isRepairSubject(s), s);
+  for (const s of ["vault 7a review: x", "prefix handling", "repairman visit", "suffixes", "vault 7a: Connect this phone"]) {
+    assert.ok(!isRepairSubject(s), s);
+  }
+});
+
+const DAY = 86400;
+const T0 = 1_800_000_000;
+const SRC = "packages/web/src/x.ts";
+const mk = (hash, days, subject, files = [SRC]) => ({ hash, time: T0 + days * DAY, subject, files });
+
+test("a repair counts inside 7 days, not at 8, not before, not on another file", () => {
+  const rate = (...cs) => repairedCommits(cs);
+  assert.equal(rate(mk("a", 0, "feat"), mk("b", 6, "x repair")).repaired.length, 1);
+  assert.equal(rate(mk("a", 0, "feat"), mk("b", 8, "x repair")).repaired.length, 0);
+  assert.equal(rate(mk("a", 3, "feat"), mk("b", 0, "x repair")).repaired.length, 0);
+  assert.equal(rate(mk("a", 0, "feat"), mk("b", 1, "x repair", ["packages/web/src/y.ts"])).repaired.length, 0);
+  assert.equal(rate(mk("a", 0, "feat"), mk("b", 1, "x repair", ["docs/a.md"])).repaired.length, 0);
+  const got = rate(mk("a", 0, "feat"), mk("b", 1, "x repair"), mk("c", 2, "other"));
+  assert.equal(got.total, 2);
+  assert.equal(got.repaired[0].commit.hash, "a");
+  assert.deepEqual(got.repaired[0].repairs.map((r) => r.hash), ["b"]);
+});
+
+test("repairRate on a temp repo: number is repaired over plain commits, --list names the pair", () => {
+  const dir = mkdtempSync(join(tmpdir(), "repairrate-"));
+  try {
+    const now = 1_800_000_000 + 30 * DAY;
+    const commit = (days, subject, file, body) => {
+      mkdirSync(dirname(join(dir, file)), { recursive: true });
+      writeFileSync(join(dir, file), body);
+      const date = `${T0 + days * DAY} +0000`;
+      const env = { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date };
+      execFileSync("git", ["add", file], { cwd: dir, env });
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", subject], { cwd: dir, env });
+    };
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    commit(20, "feature one", "packages/web/src/x.ts", "1");
+    commit(22, "one repair", "packages/web/src/x.ts", "2");
+    commit(23, "feature two", "packages/web/src/z.ts", "3");
+    const got = repairedCommits(readSourceCommits({ cwd: dir, now }));
+    assert.equal(got.total, 2);
+    assert.equal(got.repaired.length, 1);
+    assert.equal(got.repaired[0].commit.subject, "feature one");
+    // a commit older than the 28-day window is not read
+    assert.equal(readSourceCommits({ cwd: dir, now: now + 40 * DAY }).length, 0);
+    const run = (...a) => spawnSync("node", [new URL("./healthreadings.mjs", import.meta.url).pathname, "repairRate", ...a], { cwd: dir, encoding: "utf8" });
+    // the CLI reads the real clock, so a fixed 2027 history is out of window: absent, not a wrong number
+    const cli = run();
+    assert.equal(cli.status, 1);
+    assert.equal(cli.stdout, "");
+    assert.match(cli.stderr, /repairRate/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

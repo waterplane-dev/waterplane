@@ -84,3 +84,39 @@ export function transportPaths(text: string): string[] {
   const out = m ? m.map(trimPath) : [];
   return [...new Set([...out, ...imagePaths(text)])];
 }
+
+/**
+ * How long the desktop holds a prompt for an inbox file the phone has not
+ * finished uploading (`awaitInboxFiles`, host `routes/session.ts`). A cap, not
+ * a promise: past it the prompt is typed anyway, exactly as before the hold.
+ * Inside the phone's own patience — its retries JOIN the held delivery
+ * (`inputsInFlight`) and it gives a submit eight 90 s windows.
+ */
+export const INBOX_HOLD_MS = 5 * 60_000;
+/** Only a name the phone minted this recently is waited for (see below). */
+export const INBOX_FRESH_MS = 2 * 60 * 60_000;
+
+/**
+ * The `.claude/inbox/` paths in a prompt that the phone minted RECENTLY — the
+ * ones whose bytes may still be on their way.
+ *
+ * The phone names an upload before it sends it (`plannedInboxPath`:
+ * `<stem>-<Date.now() base 36><6 id chars><ext>`), so the prompt naming a
+ * picture can reach the desktop before the picture does. The minted stamp is
+ * what separates that from a path that will simply never exist (an old file
+ * the sweep removed, a hand-typed name): only a name stamped within
+ * `INBOX_FRESH_MS` of `now` is returned, so an old or foreign path never holds
+ * a prompt. No stamp ⇒ not returned.
+ */
+export function freshInboxRefs(text: string, now: number, freshMs = INBOX_FRESH_MS): string[] {
+  if (typeof text !== "string" || !text) return [];
+  const out: string[] = [];
+  for (const p of transportPaths(text)) {
+    if (!p.startsWith(".claude/inbox/")) continue;
+    const m = /-([0-9a-z]{8})[0-9a-z]{6}(?:\.[A-Za-z0-9]+)?$/.exec(p);
+    if (!m) continue;
+    const at = parseInt(m[1], 36);
+    if (Number.isFinite(at) && Math.abs(now - at) <= freshMs) out.push(p);
+  }
+  return out;
+}

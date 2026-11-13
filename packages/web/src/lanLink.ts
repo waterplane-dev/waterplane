@@ -362,7 +362,7 @@ export function startLanRoute(conn: LanConn): void {
     // the network moved is no reason to forget it. A withheld dial never gets this far.
     if (tokenWithheld()) return;
     dropDeviceToken();
-    if (routeBase() !== null) fail("the desktop refused this phone's token");
+    if (routeBase() !== null) fail("the desktop refused this device's token");
     if (!reminted) { reminted = true; void ensureToken(); }
   };
   onBearerRejected(() => rejectToken());

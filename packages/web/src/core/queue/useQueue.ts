@@ -26,7 +26,7 @@ import {
   type LaunchIntent, type OpenDelivery, type SendBlockReason, type SerialWatch, type SessionInfo,
 } from "@waterplane/shared";
 import {
-  isCreateOp, loadOutbox, noteDeadUpload, saveOutbox, OUTBOX_CAP, OUTBOX_HARD_MAX, type OutboxEntry,
+  isCreateOp, loadOutbox, noteDeadUpload, rescueStrandedPendingDrafts, saveOutbox, OUTBOX_CAP, OUTBOX_HARD_MAX, type OutboxEntry,
 } from "../../outbox";
 import { noteOutstanding, noteSendFailed } from "../../link";
 import { reportShellQueueDepth } from "../../shellLink";
@@ -37,7 +37,7 @@ import { useStore } from "../../sdk/store.ts";
 import { useLatest } from "../../sdk/hooks.ts";
 import { prefRef } from "../prefs.ts";
 import type { UploadApi } from "../../sdk/types.ts";
-import { blockedStore, outboxStore, seedOutbox } from "./store.ts";
+import { blockedStore, outboxStore, persistFailedAtStore, seedOutbox } from "./store.ts";
 import {
   FLUSH_SWEEP_MS, PENDING_PREFIX, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates, laneStateOf,
   budgetHeldLaneSet, budgetReleased,
@@ -278,7 +278,8 @@ export function useQueue(input: QueueDeps): QueueApi {
    * derives from `outboxRef.current`, which this keeps current immediately.
    */
   function writeOutboxImpl(list: OutboxEntry[]): OutboxEntry[] {
-    saveOutbox(list);
+    // A refused write changes nothing below: the in-memory queue is the truth.
+    persistFailedAtStore.set(saveOutbox(list) ? null : Date.now());
     outboxRef.current = list;
     outboxStore.set(list);
     // Tell the APK's background service how much is still undelivered. It
@@ -750,6 +751,20 @@ export function useQueue(input: QueueDeps): QueueApi {
     if (back) showToast(padMigratedToast(back));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only recovery of the previous tab's rows, read off `outboxRef`
   }, []);
+
+  // Words typed on a `pending:` screen whose create is gone (dropped, retried,
+  // or adopted while the person stood elsewhere) go to the pad, said — never
+  // left under an id no screen loads again (`rescueStrandedPendingDrafts`).
+  useEffect(() => {
+    const live = new Set(outbox.filter(isCreateOp).map((e) => pendingLaneId(e.ackId)));
+    const r = rescueStrandedPendingDrafts(
+      (id) => id === given.activeId || live.has(id),
+      (id) => pendingKept.current.get(id.slice(PENDING_PREFIX.length))?.cwd,
+    );
+    if (r.moved) showToast(`the words written for a session that never opened are on the pad (${r.moved})`);
+    else if (r.refused) showToast("words written for a session that never opened are kept on this device — the pad is full");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKept is a ref
+  }, [outbox, given.activeId]);
 
   const fns = c;
   const pick = <K extends keyof QueueCtx>(...keys: K[]) => Object.fromEntries(keys.map((k) => [k, fns[k]])) as Pick<QueueCtx, K>;

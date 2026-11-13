@@ -126,3 +126,16 @@ On the context window & cost screen, the conversation name, the door buttons and
 - asked: 2026-11-06
 - shipped: 34ecfc00
 
+### R-layout-030 · requested
+The circled control sits at the very right edge of the screen.
+- asked: 2026-11-07
+
+### R-layout-031 · shipped
+Text in panels, such as Settings' Plugins door and the plugin list, has comfortable side margins and does not run into its container's edges.
+- asked: 2026-11-09
+- shipped: ad691235
+
+### R-layout-032 · requested
+The UI has comfortable, even margins on both sides and tuned spacing on every screen.
+- asked: 2026-11-10, 2026-11-11
+

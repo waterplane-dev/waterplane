@@ -99,7 +99,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
         <Button key="star" className={`star-btn${active.starred ? " starred" : ""}${waiting ? " star-pending" : ""}`}
           data-hint="session.star"
           title={waiting
-            ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this phone until the link is back")
+            ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this device until the link is back")
             : active.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"}
           onClick={() => { dismiss(); toggleStar(active.id, !active.starred); }}>
           <Star size={ICON} fill={active.starred ? "currentColor" : "none"} />{label && <> {active.starred ? "starred" : "star"}</>}

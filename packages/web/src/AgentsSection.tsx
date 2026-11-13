@@ -49,7 +49,7 @@ export const AgentsSection = forwardRef<HTMLElement, { onOpenSession?: (id: stri
             ]} lo={0} hi={hi} fmt={(v) => String(Math.round(v))} {...span} />
             <SetNote as="span">
               One reading every 10 seconds and one on every change, while this app is open — kept in memory
-              only, so a reload starts it again. A break is a stretch this phone was not watching, never bridged.
+              only, so a reload starts it again. A break is a stretch this device was not watching, never bridged.
               {marks.length > 0 && <> Your marks: amber above {cfg.warn || "—"}, red above {cfg.alarm || "—"} (Settings → Appearance).</>}
             </SetNote>
           </>

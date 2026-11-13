@@ -66,3 +66,17 @@ A prompt sends from the app as it does in CLI mode when the CLI labels the compo
 - asked: 2026-11-06
 - shipped: d10eceb4
 
+### R-messaging-015 · requested
+The send queue decides each message's fate correctly from each acknowledgement or verdict it receives.
+- asked: 2026-11-10
+
+
+### R-messaging-016 · shipped
+The snippet picker (compose bar, Send sheet, pad) inserts a tapped snippet at once (one snippet stays one tap) and lets the person tick several with the circle on each row, each showing its tap-order number; an Insert button above the list appends them, in tap order and one per line, to the draft. Typed words are never overwritten, and closing the picker drops the ticks.
+- asked: 2026-11-12 (owner)
+- shipped: 2026-11-12
+
+### R-messaging-017 · shipped
+A person who has no snippet list at all is shown shipped starter snippets (marked by one line above the list), which are written to the synced list only when they save an edit in the manage sheet. An existing list, an adopted copy from another device and an emptied list never show or receive starters; the manage sheet can append the starters that are missing, never replace.
+- asked: 2026-11-12 (owner)
+- shipped: 2026-11-12

@@ -30,6 +30,8 @@ import { runExposureWatch } from "../exposurerun.js";
 import { MAX_UPLOAD, headerFilename, json, parseMultipart, readBody, readJson, serveTreeFile } from "./apiio.js";
 import { dispatchApi, route, type ApiCtx, type ApiEntry, type ApiRoute, type RepoReq } from "./apitable.js";
 import { REPO_WORK_ROUTES } from "./apirepowork.js";
+import { AGENT_POINTS_REPO_ROUTES } from "./apiagentpoints.js";
+import { SKILLS_REPO_ROUTES } from "./apiskills.js";
 import { REPO_PR_ROUTES } from "./apiprs.js";
 import { REPO_SPEND_ROUTES } from "./apigitspend.js";
 import { REPO_CHECK_ROUTES } from "./apigitcheck.js";
@@ -367,7 +369,7 @@ const REPO_FILE_ROUTES: readonly ApiEntry<RepoReq>[] = [
 ];
 
 /** The repo scope's table, in order. Only same-`kind` entries can shadow each other. */
-const REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [...REPO_FILE_ROUTES, ...REPO_WORK_ROUTES, ...REPO_SPEND_ROUTES, ...REPO_CHECK_ROUTES, ...REPO_PR_ROUTES];
+const REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [...REPO_FILE_ROUTES, ...REPO_WORK_ROUTES, ...AGENT_POINTS_REPO_ROUTES, ...SKILLS_REPO_ROUTES, ...REPO_SPEND_ROUTES, ...REPO_CHECK_ROUTES, ...REPO_PR_ROUTES];
 
 /**
  * `/api/repos/:id/…`: resolve the target FIRST — an unknown id is a 404 for

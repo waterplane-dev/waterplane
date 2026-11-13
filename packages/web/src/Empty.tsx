@@ -107,7 +107,7 @@ export function Empty({ res, empty = true, thing, offlineNote, note, noun = "lis
         // the desktop" was the first draft, and a template that has to agree in
         // number with a caller's noun is a template that will be wrong for
         // half of them.
-        body = <>No connection — this phone could not reach the desktop, so {what} cannot be read.{offlineNote ? <> {offlineNote}</> : null}</>;
+        body = <>No connection — this device could not reach the desktop, so {what} cannot be read.{offlineNote ? <> {offlineNote}</> : null}</>;
         break;
       case "error":
         body = <>The host could not read {what}{res.error ? <>: {res.error}</> : "."}</>;

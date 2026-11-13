@@ -208,7 +208,7 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
               {!compact && bad && (
                 <div className="attach-acts">
                   {s.state === "kept" && onReattach && (
-                    <Button title="put this phone's copy back in the send queue, under the same path — the message needs no change"
+                    <Button title="put this device's copy back in the send queue, under the same path — the message needs no change"
                       onClick={() => onReattach(r.relPath)}><RotateCw size={14} /> re-attach</Button>
                   )}
                   {onReplace && (

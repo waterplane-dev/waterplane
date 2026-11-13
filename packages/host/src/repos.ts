@@ -12,7 +12,7 @@ export function targetId(worktreePath: string): string {
   return createHash("sha1").update(worktreePath).digest("hex").slice(0, 10);
 }
 
-async function gitWorktrees(repoDir: string): Promise<{ path: string; branch: string }[]> {
+export async function gitWorktrees(repoDir: string): Promise<{ path: string; branch: string }[]> {
   try {
     const { stdout } = await pexec("git", ["worktree", "list", "--porcelain"], { cwd: repoDir });
     const out: { path: string; branch: string }[] = [];

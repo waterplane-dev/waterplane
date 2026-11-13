@@ -49,14 +49,14 @@ export function closeContext(): void {
 }
 
 /**
- * The door to the repo readings sheet's Setup region: what this repo and this desktop WILL put in
- * every turn, beside what this conversation's first request did carry. The context sheet is NOT
+ * The door to the repo readings sheet's agents region, whose first card is what this repo and this
+ * desktop WILL put in every turn, beside what this conversation's first request did carry. The context sheet is NOT
  * closed — Back returns to it.
  */
 export function openSetupFromContext(repoId: string): void {
   const c = core();
   c.say.track("action:ctx.setup");
-  c.nav.openSetup(repoId, { region: "setup", focus: "context-weight" });
+  c.nav.openSetup(repoId, { region: "agents" });
 }
 
 /** The door to the all-sessions token screen. The context sheet stays under it. */

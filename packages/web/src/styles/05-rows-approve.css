@@ -377,7 +377,9 @@
 .approve.login { background: var(--star-wash); border-top: 1px solid var(--star); }
 .login-head { display: flex; align-items: center; gap: var(--sp-8); margin-bottom: var(--sp-8); }
 .login-title { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--star); }
-.netretry-line { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--warn, var(--muted)); }
+.netretry-line { display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--warn, var(--muted)); }
+.netretry-error { margin: var(--sp-4) 0 var(--sp-8); overflow-wrap: anywhere; }
+.netretry-opts .approve-btn { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); white-space: nowrap; }
 .login-age { flex: none; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); font-variant-numeric: tabular-nums; }
 .approve.login .approve-btn.primary { background: var(--star); border-color: var(--star); color: var(--on-star); }
 /* The URL itself, as the last resort every automatic path here needs: it wraps

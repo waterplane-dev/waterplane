@@ -10,7 +10,8 @@ import { fixtureWanted, noteHealth } from "../clihealth.js";
 import { asksYesNo } from "../shelllinks.js";
 import { ROW_WINDOW, composerFramesAmbiguous } from "../composer.js";
 import { deliveryCommandFacts, worksUnannounced } from "../slash.js";
-import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS, sleep } from "./deliverknobs.js";
+import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS } from "./deliverknobs.js";
+import { realClock } from "../waitclock.js";
 import type { DeliverOpts, DeliveryResult } from "./delivertypes.js";
 import { composerHoldsOnlyHint, foreignInComposer, makeScreenReader } from "./deliverscreen.js";
 import { makeLogProof, makeSubmitProof } from "./deliverproof.js";
@@ -32,6 +33,7 @@ export async function runDelivery(
   key: string,
   shape: DeliveryShape,
 ): Promise<{ result: DeliveryResult; detail?: string }> {
+  const clock = opts.clock ?? realClock;
   /**
    * File one health observation about THIS delivery — or file nothing, when the
    * session's backend is outside the health record's scope.
@@ -83,11 +85,11 @@ export async function runDelivery(
   /** When this delivery began — the recency floor every log lookup below is
    *  matched against, so an identical prompt fired at the same session this
    *  morning can never be mistaken for proof about this one. */
-  const startedAt = Date.now();
+  const startedAt = clock.now();
   const shell = !hasTurns({ sessions, sessionId });
-  const { screen, probe, placeEcho, proven, snapshot, waitForEcho, lastSeen } = makeScreenReader(sessions, sessionId, text, key, shape, { firstLineProbe: shell && /[\r\n]/.test(text) });
-  const ranAnyway = makeLogProof(sessions, sessionId, text, startedAt, key);
-  const proof = makeSubmitProof(sessions, sessionId, text, startedAt);
+  const { screen, probe, placeEcho, proven, snapshot, waitForEcho, lastSeen } = makeScreenReader(sessions, sessionId, text, key, shape, { firstLineProbe: shell && /[\r\n]/.test(text) }, clock);
+  const ranAnyway = makeLogProof(sessions, sessionId, text, startedAt, key, clock);
+  const proof = makeSubmitProof(sessions, sessionId, text, startedAt, clock);
   const { armSourceProof, proofKind, submitProofWithin } = proof;
 
   /**
@@ -101,11 +103,11 @@ export async function runDelivery(
     // the user asked for that view.
     if (esc) {
       sessions.write(sessionId, "\x1b"); // Esc: close any open view/overlay
-      await sleep(150);
+      await clock.sleep(150);
     }
     for (let i = 0; i < 6; i++) {
       sessions.write(sessionId, "\x15"); // ctrl-U: kill one input line
-      await sleep(120);
+      await clock.sleep(120);
     }
   };
 
@@ -144,13 +146,13 @@ export async function runDelivery(
    * this ladder: one question asked before anything is typed.
    */
   const channelHold = async (): Promise<string | null> => {
-    const deadline = Date.now() + CHANNEL_CONNECT_WAIT_MS;
+    const deadline = clock.now() + CHANNEL_CONNECT_WAIT_MS;
     for (;;) {
       if (!sessions.get(sessionId)?.running) return null; // the not-running paths answer that
       const hold = sessions.sendHold?.(sessionId) ?? null; // a test double may not have it
       if (!hold) return null;
-      if (!hold.connecting || Date.now() >= deadline) return hold.sentence;
-      await sleep(250);
+      if (!hold.connecting || clock.now() >= deadline) return hold.sentence;
+      await clock.sleep(250);
     }
   };
   {
@@ -167,12 +169,12 @@ export async function runDelivery(
     for (let i = 0; i < 40 && !settled; i++) {
       if (!sessions.get(sessionId)?.running) return { result: "retry" };
       if ((sessions.idleMs(sessionId) ?? 0) >= 250) settled = true;
-      else await sleep(150);
+      else await clock.sleep(150);
     }
     // Not settled after 6 s means a TUI that simply never stops repainting (a
     // spinner does exactly that). Type anyway — the echo check below is what
     // decides whether it landed, and waiting longer buys nothing.
-  } else if (!(await sessions.waitReady(sessionId, 1200, 45000))) {
+  } else if (!(await sessions.waitReady(sessionId, 1200, 45000, clock))) {
     // 45 s, not 30: a fan-out boots several `claude` processes at once, and the
     // last batch on a loaded machine can take well over half a minute to draw
     // its first prompt. Timing out early is what leaves a repo silently un-fed.
@@ -226,7 +228,7 @@ export async function runDelivery(
   const trust = trustRuleFor(live?.backend);
   if (!shell && trust.asks(await screen())) {
     if (!trust.autoAccept) return { result: "retry", detail: trust.refusal };
-    const { keys, nav } = await trustAnswerKeys(() => sessions.screenText(sessionId, 60));
+    const { keys, nav } = await trustAnswerKeys(() => sessions.screenText(sessionId, 60), clock);
     if (!keys || (!nav && /noexit/.test(await screen()))) {
       return { result: "retry", detail: "claude is asking whether to trust this folder and this app could not read the box — answer it in the terminal" };
     }
@@ -234,12 +236,12 @@ export async function runDelivery(
     // Quiet is not ready here: claude boots AFTER the Yes, and words typed into
     // that boot vanish (measured on 2.1.296 — an empty composer, `unconfirmed`).
     // Wait for the composer's own status line, the box gone, then settle.
-    for (let t = Date.now(); Date.now() - t < 20000; await sleep(200)) {
+    for (let t = clock.now(); clock.now() - t < 20000; await clock.sleep(200)) {
       if (!sessions.get(sessionId)?.running) return { result: "retry" };
       const now = await screen();
       if (/shifttabtocycle|forshortcuts/.test(now) && !/trustthisfolder|noexit/.test(now)) break;
     }
-    await sessions.waitReady(sessionId, 1500, 20000);
+    await sessions.waitReady(sessionId, 1500, 20000, clock);
   }
 
   // Type with echo verification, and type AT MOST ONCE.
@@ -387,9 +389,9 @@ export async function runDelivery(
        */
       let mixedUp: string | null = null;
       const trustUp = !shell && trust.asks(await screen()); // a box painted over the words: cursor on "No, exit"
-      if (trustUp && trust.autoAccept) return answerLateTrust(() => sessions.screenText(sessionId, 60), (k) => sessions.write(sessionId, k));
+      if (trustUp && trust.autoAccept) return answerLateTrust(() => sessions.screenText(sessionId, 60), (k) => sessions.write(sessionId, k), clock);
       if (!noTurn && !trustUp && (sessions.isHooked(sessionId) || proof.deliverySrc)) {
-        const pressedAt = Date.now();
+        const pressedAt = clock.now();
         armSourceProof();
         sessions.write(sessionId, "\r");
         if (await submitProofWithin(PROMPT_HOOK_WAIT_MS)) {
@@ -495,5 +497,5 @@ export async function runDelivery(
     shape.echo = before;
     note("deliver.echo", "good", await echoFixture());
   }
-  return submitAndConfirm({ sessions, sessionId, text, historyKind, shape, note, snapshot, noTurn, unannounced, proof, ranAnyway });
+  return submitAndConfirm({ clock, sessions, sessionId, text, historyKind, shape, note, snapshot, noTurn, unannounced, proof, ranAnyway });
 }

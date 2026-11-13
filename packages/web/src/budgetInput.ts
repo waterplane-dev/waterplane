@@ -99,7 +99,7 @@ function capCantRide(b: SessionBudget, backends: BackendList, to: string | undef
   const id = to ?? undefined;
   // `backendInfo` reads an absent id as claude, the backend it starts — never "this backend" for a named one.
   const label = backendInfo(backends, id)?.label || "this backend";
-  const desk = "nothing is picked, so a later run opens on the desktop's own defaults, which this phone cannot see";
+  const desk = "nothing is picked, so a later run opens on the desktop's own defaults, which this device cannot see";
   if (b.unit === "native") {
     const now = launchSpendUnit(backends, id);
     const was = b.nativeUnit?.trim();

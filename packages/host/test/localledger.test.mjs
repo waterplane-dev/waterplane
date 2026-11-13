@@ -11,7 +11,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, utimesSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseUserPrices, emptyUserPrices } from "@waterplane/shared";
@@ -144,4 +144,20 @@ test("an endpoint whose catalogue is down keeps its models: the remembered catal
   forgetCatalogueCache();
   sharers = rememberCatalogues(dir, [{ id: "claude-endpoint", ids: [] }]);
   assert.deepEqual(sharers[0].known, []);
+});
+
+test("a corrupt catalogue file is kept aside when new ids are remembered, never overwritten", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ll-cat-corrupt-"));
+  const file = join(dir, "backend-catalogue.json");
+  writeFileSync(file, "{not json");
+  forgetCatalogueCache();
+  const orig = console.error;
+  console.error = () => {};
+  let sharers;
+  try { sharers = rememberCatalogues(dir, [{ id: "claude-local", ids: [Q] }]); } finally { console.error = orig; }
+  assert.deepEqual(sharers[0].known, [Q], "the live ids still count");
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { v: 1, ids: { "claude-local": [Q] } });
+  const kept = readdirSync(dir).filter((n) => n.startsWith("backend-catalogue.json.corrupt-"));
+  assert.equal(kept.length, 1, "the corrupt bytes survive under a .corrupt- name");
+  assert.equal(readFileSync(join(dir, kept[0]), "utf8"), "{not json");
 });

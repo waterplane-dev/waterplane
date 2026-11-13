@@ -127,6 +127,32 @@ test("the attempts cap is the ONLY thing that expires an entry", () => {
   assert.deepEqual(spent.expire.map((e) => e.reason), ["delivery kept failing"]);
 });
 
+test("an entry whose round just ended still holds its lane on that pass", () => {
+  // The upload ran out of attempts on this pass; the prompt naming its path
+  // sits behind it in the same lane and must not overtake it.
+  const p = plan([
+    q({ ackId: "img", mode: "upload", attempts: 8 }),
+    q({ ackId: "prompt", mode: "input" }),
+  ]);
+  assert.deepEqual(ids(p.expire), ["img"]);
+  assert.deepEqual(ids(p.send), []);
+  assert.equal(why(p, "prompt"), "lane");
+});
+
+test("a prompt naming a FAILED upload is held, never sent with a dead path", () => {
+  const rel = ".claude/inbox/shot-abc.png";
+  const p = plan([
+    q({ ackId: "img", mode: "upload", status: "failed", upload: { repoId: "r", name: "shot-abc.png", relPath: rel, size: 1, type: "image/png" } }),
+    q({ ackId: "prompt", mode: "input", text: `${rel} look at this` }),
+    q({ ackId: "after", mode: "input", text: "and then this" }),
+  ]);
+  assert.deepEqual(ids(p.send), []);
+  assert.equal(why(p, "prompt"), "uploadFailed");
+  assert.equal(why(p, "after"), "lane");
+  // Another lane, not naming it, is untouched.
+  assert.deepEqual(ids(plan([q({ ackId: "img", mode: "upload", status: "failed", upload: { repoId: "r", name: "x", relPath: rel, size: 1, type: "image/png" } }), q({ ackId: "o", sessionId: "s2", text: "hi" })]).send), ["o"]);
+});
+
 test("the attempts cap may not be spent in less than MIN_TRY_MS of trying", () => {
   // The complaint this floor exists for: eight receipt windows dropped by a bad
   // radio in a few seconds are not evidence about the message, and "delivery
@@ -530,4 +556,15 @@ test("idle wording ranks the session budget just under the account's", () => {
   assert.match(own, /own budget/);
   assert.equal(queueIdleReason([b("sessionGone"), b("sessionBudget")], { online: true, queued: 2 }), own);
   assert.equal(queueIdleReason([b("sessionBudget"), b("budget")], { online: true, queued: 2 }), blockedReasonText("budget"));
+});
+
+test("freshInboxRefs returns only inbox paths the phone minted recently", async () => {
+  const { freshInboxRefs, INBOX_FRESH_MS } = await import("../dist/index.js");
+  const at = 1794392295239; // the 2026-11-11 collage's own stamp
+  const fresh = `.claude/inbox/combined-2-screens-2across-${at.toString(36)}d85343.png`;
+  const text = `${fresh} (marked: collage) look, and .claude/inbox/old-file.png and docs/a.png`;
+  assert.deepEqual(freshInboxRefs(text, at + 3 * 60_000), [fresh]);
+  // Past the freshness window it is an old path, never waited for.
+  assert.deepEqual(freshInboxRefs(text, at + INBOX_FRESH_MS + 1), []);
+  assert.deepEqual(freshInboxRefs("", at), []);
 });

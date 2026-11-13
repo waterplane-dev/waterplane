@@ -74,7 +74,7 @@ export function MergeCard({ card, accepted, rejected, onAccept, onReject, repoId
                 {oh.id ? <span className="act-when mono">{oh.id}</span> : null}
               </span>
               {o.missing
-                ? <span className="act-stale"><AlertTriangle size={11} /> not on this phone</span>
+                ? <span className="act-stale"><AlertTriangle size={11} /> not on this device</span>
                 : <span className="act-text act-text-full">{o.text}</span>}
               {/* Each original's own pictures: a merge is approved on what it
                   REPLACES, and a screenshot one of the N carried is part of
@@ -87,7 +87,7 @@ export function MergeCard({ card, accepted, rejected, onAccept, onReject, repoId
       {card.missingIds.length ? (
         <div className="act-stale">
           <AlertTriangle size={11} /> {card.missingIds.length} of the items this merge names
-          {card.missingIds.length === 1 ? " is" : " are"} not on this phone, so
+          {card.missingIds.length === 1 ? " is" : " are"} not on this device, so
           {card.missingIds.length === 1 ? " its words are" : " their words are"} not shown above.
         </div>
       ) : null}

@@ -418,7 +418,10 @@ final class Installs {
             case PackageInstaller.STATUS_FAILURE_BLOCKED: base = "the phone blocked the install"; break;
             case PackageInstaller.STATUS_FAILURE_CONFLICT: base = "it conflicts with the app already installed"; break;
             case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE: base = "this build is not compatible with this phone"; break;
-            case PackageInstaller.STATUS_FAILURE_INVALID: base = "the file is not a valid app"; break;
+            // Android reports a downgrade as INVALID too; "not a valid app" read as a broken file.
+            case PackageInstaller.STATUS_FAILURE_INVALID:
+                base = message != null && message.contains("VERSION_DOWNGRADE")
+                        ? "this build is older than the copy installed" : "the file is not a valid app"; break;
             case PackageInstaller.STATUS_FAILURE_STORAGE: base = "there is not enough room"; break;
             default: base = "the install failed"; break;
         }

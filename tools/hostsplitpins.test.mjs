@@ -63,6 +63,7 @@ const DELIVER_SIGS = {
   deliverToNewSession: DELIVER_FN,
   DeliveryResult: '"ok" | "retry" | "unconfirmed" | "unsubmitted"',
   DeliverOpts: [
+    "clock: Clock | undefined",
     "interactive: boolean | undefined",
     "ackId: string | undefined",
     "watch: boolean | undefined",

@@ -64,3 +64,41 @@ test("the week-on-week trend is absent where an undated record could fall in its
   const longAgo = NOW - 40 * 86_400_000;
   assert.ok(statsInsights(base({ days, undated: 3, undatedUntil: longAgo }), NOW).some((i) => i.id === "trend"), "every such log is older than the fortnight");
 });
+
+import { spanInsights, windowInput } from "./statsInsights.ts";
+
+const win = (over = {}) => ({
+  from: 0, to: 1, fromHour: 0, hours: [], convos: [], totals: tot(960, 40, 100), cost: cost(40, 60),
+  agentTotals: tot(0, 0), agentCost: cost(0), unpriced: tot(0, 0), pricesAsOf: "", scannedAt: 0, ...over,
+});
+
+test("span insights read the span's fold, and say how each share moved on the span before", () => {
+  const prev = windowInput(win({ cost: cost(25, 75) }));
+  const w = spanInsights(windowInput(win()), prev, "the week before").find((i) => i.id === "writes");
+  assert.match(w.head, /40% of cost/);
+  assert.equal(w.delta, "Up 15 points on the week before (25%).");
+});
+
+test("with no span before, a span insight carries no delta and no trend", () => {
+  const out = spanInsights(windowInput(win()), null, "");
+  assert.ok(out.find((i) => i.id === "writes"));
+  assert.equal(out.some((i) => i.delta), false);
+  assert.equal(out.some((i) => i.id === "trend"), false);
+});
+
+test("the span's trend compares per-request cost against the span before", () => {
+  const prev = windowInput(win({ totals: tot(960, 40, 100), cost: cost(20, 30) }));
+  const t = spanInsights(windowInput(win()), prev, "the 30 days before").find((i) => i.id === "trend");
+  assert.match(t.head, /100% more than the 30 days before/);
+});
+
+test("a span never names re-caching after breaks — its fold does not measure it", () => {
+  assert.equal(windowInput(win()).cold, null);
+});
+
+test("a span's model mix is summed over its hours and drops unpriced models", () => {
+  const h = (model, t, u) => ({ model, totals: tot(t, 0), cost: cost(0, u) });
+  const x = windowInput(win({ hours: [{ hour: "", t: 0, totals: tot(0, 0), cost: cost(0), byRepo: [], byModel: [h("opus", 300, 50), h("free", 10, 0)] },
+    { hour: "", t: 0, totals: tot(0, 0), cost: cost(0), byRepo: [], byModel: [h("opus", 200, 30)] }] }), new Set(["free"]));
+  assert.deepEqual(x.models, [{ label: "opus", tok: 500, usd: 80 }]);
+});

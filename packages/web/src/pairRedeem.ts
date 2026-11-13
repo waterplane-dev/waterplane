@@ -72,7 +72,7 @@ export const PAIR_LINK_INVALID = "That pairing link isn't valid";
 
 /** The sentence shown over a form a LINK filled in. */
 export function pairLinkSentence(t: PairTarget): string {
-  return `A pairing link asks to connect this phone to ${t.base.replace(/^https?:\/\//, "")}. Nothing is sent until you tap pair.`;
+  return `A pairing link asks to connect this device to ${t.base.replace(/^https?:\/\//, "")}. Nothing is sent until you tap pair.`;
 }
 
 /** The redeem answer, read defensively off the wire. */
@@ -138,7 +138,7 @@ export type StoreResult =
 
 /** Why a plain reply leaves a row alone, and the way out. */
 export const PAIR_ROW_KEPT =
-  "Nothing changed: this phone already holds that desktop's keys, and this pairing cannot prove it came from the same desktop. Get a new code on the desktop and pair again, or remove the desktop from this phone's list to start over.";
+  "Nothing changed: this device already holds that desktop's keys, and this pairing cannot prove it came from the same desktop. Get a new code on the desktop and pair again, or remove the desktop from this device's list to start over.";
 
 /** A row a plain reply may not touch: it holds something only a proof or the person put there. */
 function holdsProof(h: SavedHost): boolean {
@@ -222,7 +222,7 @@ const shown = (base: string): string => base.replace(/^https?:\/\//, "");
 
 /** The person said no to a second question, after the desktop had already spent the code. */
 export const PAIR_SEALED_KEPT =
-  "Nothing changed: this phone kept the desktop as it was saved and dropped the new sign-in. That code is spent, so pairing again needs a new one.";
+  "Nothing changed: this device kept the desktop as it was saved and dropped the new sign-in. That code is spent, so pairing again needs a new one.";
 
 /** The row a seal lands on: the one with its desktop id, else one at the address asked, so one
  *  desktop never gets two rows. Null: a new desktop to this phone. */
@@ -344,5 +344,5 @@ export function pairedNoRoute(host: Pick<SavedHost, "name" | "base" | "lan">, as
   if (!base || host.base === base || host.lan?.base !== base) return null;
   if (net?.tailnet !== false || !needsTunnel(host.base)) return null;
   if (decideLanRoute({ host, net, probe: null, macVerified: null, lastFailure: null }).next === "probe") return null;
-  return `Paired with ${host.name}, but this phone cannot reach it yet: Tailscale is off, and its LAN address is only used with "switch to LAN automatically" on and this Wi-Fi on its list. Nothing was changed. Turn Tailscale on, or set both in Connection health › change LAN settings.`;
+  return `Paired with ${host.name}, but this device cannot reach it yet: Tailscale is off, and its LAN address is only used with "switch to LAN automatically" on and this Wi-Fi on its list. Nothing was changed. Turn Tailscale on, or set both in Connection health › change LAN settings.`;
 }

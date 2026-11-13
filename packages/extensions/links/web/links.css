@@ -1,0 +1,38 @@
+/* ── links (LinksSheet.tsx): pinned and found rows, the env tag, the up/down line, the edit and
+   add forms. Colours are the theme's tokens only. */
+.links-rows { list-style: none; margin: 0; padding: 0 14px 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.links-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 2px 12px 8px; }
+.links-pin > :not(.links-title) { margin-left: 22px; }
+.links-row > .form-hint { padding-left: 0; padding-top: 2px; padding-bottom: 2px; }
+.links-title { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; }
+.links-open { flex: 1; min-width: 0; min-height: 44px; background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: calc(14.5px * var(--ui-font, 1)); font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.links-label { flex: 1; min-width: 0; font-size: calc(14.5px * var(--ui-font, 1)); font-weight: 600; overflow-wrap: anywhere; }
+.links-title .links-act { flex: none; margin-right: -8px; width: 44px; height: 44px; min-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; color: var(--muted); }
+.links-row > .links-url { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.links-probe { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.links-ok { color: var(--ok); flex: none; }
+.links-bad { color: var(--dead); flex: none; }
+.links-dim { color: var(--muted); flex: none; }
+.links-env { flex: none; color: var(--muted); }
+.links-env-prod { color: var(--warn); }
+.links-env-staging { color: var(--accent); }
+.links-env-dev { color: var(--muted); }
+.segmented.links-seg { padding: 0; background: none; border: 0; }
+.links-by-row .links-seg { flex: 1; }
+.links-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.links-chipset { display: contents; }
+.links-by-row { display: flex; align-items: center; gap: 8px; }
+.links-cmd { display: block; margin-top: 4px; padding: 6px 8px; background: var(--well); border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; user-select: all; }
+.links-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 8px; }
+.links-add .links-form { padding: 4px 14px 12px; }
+.links-form label { display: flex; flex-direction: column; gap: 3px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); }
+.links-form input, .links-form select { font: inherit; color: var(--fg); background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.links-search { display: flex; align-items: center; gap: 6px; padding: 8px 14px 4px; }
+.links-search .search { flex: 1; min-width: 0; margin: 0; }
+.links-search .key { flex: none; min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.links-controls { display: flex; flex-direction: column; gap: 6px; padding: 6px 14px; }
+.links-more { padding: 0 14px 8px; }
+.links-by { font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); }
+.links-group { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; padding: 6px 14px; background: none; border: 0; color: var(--fg); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.links-group-title { overflow-wrap: anywhere; }
+.links-group-n { margin-left: auto; font-weight: 400; color: var(--muted); flex: none; }

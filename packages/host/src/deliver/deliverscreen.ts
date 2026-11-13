@@ -27,7 +27,8 @@ import {
 } from "../composer.js";
 import { rivalTexts } from "../opendeliveries.js";
 import { resolveBackend } from "../backends/index.js";
-import { FALLBACK_HOLD_MS, sleep } from "./deliverknobs.js";
+import { FALLBACK_HOLD_MS } from "./deliverknobs.js";
+import { realClock, type Clock } from "../waitclock.js";
 
 /** A prompt this long whose words contain the held text whole is our own text
  *  drawn in a way no echo rule placed (a viewport slice under `SLICE_MIN`) —
@@ -139,6 +140,7 @@ export function makeScreenReader(
    *  nothing spliced between, so the needle is cut from the FIRST line — a
    *  head that straddles the newline is on no single row (`PROBE_LEN`). */
   opts: { firstLineProbe?: boolean } = {},
+  clock: Clock = realClock,
 ) {
   // Detection reads the RENDERED current screen, not an ANSI-stripped byte
   // window. One claude-TUI repaint of a busy screen is tens of KB, so every
@@ -388,7 +390,7 @@ export function makeScreenReader(
    * the composer of a session that was working fine.
    */
   const waitForEcho = async (ms: number) => {
-    const deadline = Date.now() + ms;
+    const deadline = clock.now() + ms;
     let heldSince: number | undefined;
     for (;;) {
       // `proven`, not merely "matched": a prefix hit that a rival could equally
@@ -412,12 +414,12 @@ export function makeScreenReader(
       // accepted if no frame ever comes (a stub, an unrecognised redraw), so
       // nothing that degraded to it before stops delivering.
       if (proven(rule) && fellBack && fullReader) {
-        heldSince ??= Date.now();
-        if (Date.now() - heldSince < FALLBACK_HOLD_MS && Date.now() < deadline) { await sleep(200); continue; }
+        heldSince ??= clock.now();
+        if (clock.now() - heldSince < FALLBACK_HOLD_MS && clock.now() < deadline) { await clock.sleep(200); continue; }
       }
       if (proven(rule)) { shape.echo = rule; return true; }
-      if (Date.now() >= deadline) { shape.echo = "none"; return false; }
-      await sleep(200);
+      if (clock.now() >= deadline) { shape.echo = "none"; return false; }
+      await clock.sleep(200);
     }
   };
   return { screen, probe, placeEcho, proven, snapshot, waitForEcho, lastSeen: () => seen };

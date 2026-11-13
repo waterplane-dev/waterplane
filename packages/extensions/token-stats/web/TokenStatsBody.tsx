@@ -9,8 +9,8 @@ import {
   hasScrapedWindows, periodStates, windowStartHour, type BillingProfile, type PeriodState, type UsageBudget,
 } from "@waterplane/shared";
 import { periodCap, periodReadSpan, primaryUsdPeriod } from "@waterplane/sdk";
-import { InsightsPanel, ScopeCard, ScopeTag } from "./TokenInsights.tsx";
-import { statsInsights } from "./statsInsights.ts";
+import { InsightsPanel, ScopeCard, ScopeTag, type InsightsScope } from "./TokenInsights.tsx";
+import { spanFoldText, spanInsights, statsInsights, windowInput } from "./statsInsights.ts";
 import {
   type CutRefusal, isCut, LIVE_WINDOWS, type LiveWindowId, seriesCut, windowCut, windowGrids, type WindowCut,
   windowSpecs,
@@ -28,7 +28,7 @@ import {
 } from "./span.ts";
 import { WeekCard } from "./WeekCard.tsx";
 import { PeriodCard } from "./PeriodCard.tsx";
-import { convoInWeek, docFor, foldStateText, scopeSpan, weekSpan } from "./weekBands.ts";
+import { convoInWeek, docFor, foldStateText, prevSpan, scopeSpan, weekSpan } from "./weekBands.ts";
 import { type WindowScope } from "./WindowHeats.tsx";
 import { LimitWindows } from "./LimitWindows.tsx";
 import { BackendLedgerView } from "./BackendLedgerView.tsx";
@@ -85,9 +85,10 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors, afterOverTime }: {
   /** Doors to what every turn carries (always-on context); drawn first in the scroll region. */
   doors?: ReactNode;
+  afterOverTime?: ReactNode; // drawn after the Over time box: the phone's agent readings, none in VS Code
   /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
   lead?: ReactNode;
   /**
@@ -641,6 +642,36 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
     };
   })();
   const insights = useMemo(() => (doc ? statsInsights(doc, Date.now()) : []), [doc]);
+  /** The insights cut to the span — the span's own fold, against the span before it (a second
+   *  fold, read only while the cut is on). Whole record stays one tap away. */
+  const [insightsCut, setInsightsCut] = useState(true);
+  const recordFrom = doc?.days.length ? dayToMs(doc.days[0].day) : null;
+  const prev = ss ? prevSpan(ss, wk, calDays, recordFrom) : null;
+  const prevRead = useRemoteResource<CostWindowDoc>(
+    `costwindow-prev:${prev?.key ?? "none"}:${fresh}`,
+    () => ledgers.costWindow(prev!.from, prev!.to, fresh > 0),
+    { enabled: !!prev && insightsCut, offline: !online },
+  );
+  const prevDoc = docFor(prevRead.data, prev?.from ?? null);
+  const spanItems = useMemo(() => {
+    if (!scopeDoc) return null;
+    const unpriced = new Set((doc?.models ?? []).filter((m) => m.priced === false).map((m) => m.key));
+    return spanInsights(windowInput(scopeDoc, unpriced), prevDoc ? windowInput(prevDoc, unpriced) : null, prev?.words ?? "");
+  }, [scopeDoc, prevDoc, prev?.words, doc]);
+  const insightsScope: InsightsScope | null = ss
+    ? {
+      on: insightsCut, set: setInsightsCut, words: scopeWords,
+      items: spanItems,
+      note: !scopeDoc
+        ? spanFoldText("This span", scopeRes)
+        : [
+          "Re-caching after breaks is counted over the whole record only.",
+          !prev ? "The record does not reach back a whole span before this one, so nothing is compared."
+            : !prevDoc ? spanFoldText(`${prev.words[0].toUpperCase()}${prev.words.slice(1)}`, prevRead)
+              : null,
+        ].filter(Boolean).join(" "),
+    }
+    : null;
 
   /**
    * ── The grammar of this screen ──────────────────────────────────────────────
@@ -827,7 +858,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
 
           {doc && grand > 0 && (
             <div className="list ts-list">
-              <InsightsPanel items={insights} />
+              <InsightsPanel items={insights} scope={insightsScope} />
 
               <TotalsCard doc={doc} money={money} table={table} active={active}
                 dcut={dcut && calDays != null ? { cut: dcut, calendarDays: calDays, caption: rangeCaption } : null}
@@ -848,6 +879,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
                 dailyFilled={dailyFilled} daily={daily} trend={trend} mixFilled={mixFilled} mixRows={mixRows}
                 bands={bands} days={days} agentDays={agentDays} hourWords={hourWords} hourRows={hourRows}
                 hourArea={hourArea} setHourShape={setHourShape} hourlyFilled={hourlyFilled} hourly={hourly} />
+              {afterOverTime}
 
               <div className="empty ts-foot">
                 {doc.scannedAt

@@ -341,12 +341,12 @@ const FOREIGN = { ...WIFI, ssid: "Cafe", tailnet: false };
 test("Tailscale off on a foreign Wi-Fi: the sentence never says the tailnet is in use", async () => {
   const v = await pinnedRig(ROW, true, { net: async () => FOREIGN }).router.evaluate("start");
   assert.equal(v.route, "tailnet");
-  assert.equal(v.sentence, `Tailscale is off on this phone: turn it on to reach the desktop. Not on LAN: "Cafe" is not one of this desktop's saved networks.`);
+  assert.equal(v.sentence, `Tailscale is off on this device: turn it on to reach the desktop. Not on LAN: "Cafe" is not one of this desktop's saved networks.`);
 });
 
 test("off mobile data, with LAN off, and a failure in use: the same, and the reason stays", async () => {
   const mobile = await pinnedRig(ROW, true, { net: async () => ({ ...FOREIGN, transport: "cellular", ssid: null }) }).router.evaluate("start");
-  assert.match(mobile.sentence, /^Tailscale is off on this phone.*the phone is on mobile data\.$/);
+  assert.match(mobile.sentence, /^Tailscale is off on this device.*the phone is on mobile data\.$/);
   const off = { ...ROW, lan: { ...ROW.lan, auto: false } };
   assert.match((await pinnedRig(off, true, { net: async () => FOREIGN }).router.evaluate("start")).sentence, /^Tailscale is off.*switching to LAN automatically is off\.$/);
   const { router } = pinnedRig(ROW, true, { net: async () => FOREIGN });

@@ -126,6 +126,8 @@ export interface BackendInfo {
     modes?: true;
     /** The phone's slash sheet lists the backend's OWN commands (`slash` keeps meaning claude's set and header chips). */
     commands?: true;
+    /** The skills and plugins switch (settings files of the claude family) is offered; absent = not offered, never `false`. */
+    skillSwitch?: true;
     /** How the core's repo instructions reach this backend by default (the session's actual: `SessionInfo.told`). */
     told?: "plugin-dir" | "env-file" | "config" | "flag" | "none";
     /**

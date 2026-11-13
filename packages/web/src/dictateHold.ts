@@ -87,7 +87,7 @@ export function holdRefusal(held: readonly HeldClip[], bytes: number): string | 
   }
   const total = held.reduce((n, c) => n + c.bytes, 0);
   if (total + bytes > HOLD_MAX_BYTES) {
-    return "there is already more audio waiting than this phone will hold — this one was not kept";
+    return "there is already more audio waiting than this device will hold — this one was not kept";
   }
   return null;
 }

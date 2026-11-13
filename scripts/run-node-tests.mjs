@@ -16,8 +16,13 @@
 // Which files failed is read off the runner's own events (a second reporter, `lib-failfiles.mjs`),
 // never off the spec text. A failed `todo` is not a failure. A failure no file is named for (the
 // runner itself) is a break.
+//
+// The vault's tests, when the globs include them, run as a SECOND `node --test` after the rest,
+// with `NODE_V8_COVERAGE` set: `tools/vaultcoverage.mjs` folds what they executed into the
+// `vaultHostUncovered` reading's cache (its header says when it does not). Imported only when the
+// tool is in the tree — the public snapshot has neither it nor the vault.
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +38,7 @@ const FLAKES_FILE = join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache")
 const scratch = mkdtempSync(join(tmpdir(), "failfiles-"));
 
 /** One `node --test` run; resolves with its exit code and the failures the reporter recorded. */
-function run(files, { echo }, n) {
+function run(files, { echo, env }, n) {
   const failOut = join(scratch, `fail-${n}.jsonl`);
   const args = [
     "--import", "./scripts/lib-testtmp.mjs", "--test", "--test-timeout=120000",
@@ -43,7 +48,7 @@ function run(files, { echo }, n) {
   ];
   return new Promise((resolve) => {
     const out = [];
-    const child = spawn(process.execPath, args, { cwd: REPO, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, args, { cwd: REPO, stdio: ["ignore", "pipe", "pipe"], env: env ? { ...process.env, ...env } : process.env });
     const take = (stream) => (d) => { out.push(d); if (echo) stream.write(d); };
     child.stdout.on("data", take(process.stdout));
     child.stderr.on("data", take(process.stderr));
@@ -58,8 +63,35 @@ function run(files, { echo }, n) {
 }
 
 const rel = (f) => { const r = relative(REPO, f); return r && !r.startsWith("..") ? r : f; };
-const first = await run(globs, { echo: true }, 0);
-if (first.code === 0) { rmSync(scratch, { recursive: true, force: true }); process.exit(0); }
+
+const VC = existsSync(join(REPO, "tools/vaultcoverage.mjs")) ? await import("../tools/vaultcoverage.mjs").catch(() => null) : null;
+const measuredFiles = VC ? new Set(globSync(VC.UNIT_GLOB, { cwd: REPO })) : new Set();
+const asked = measuredFiles.size ? [...new Set(globs.flatMap((g) => globSync(g, { cwd: REPO })))] : [];
+const measuredAsked = asked.filter((f) => measuredFiles.has(f));
+// Only a run of EVERY vault test file is a unit half; a few files alone would stamp a partial one.
+const cov = measuredFiles.size && measuredAsked.length === measuredFiles.size ? VC.coverageEnv(REPO) : null;
+const covEnv = (file) => (cov && measuredFiles.has(rel(file)) ? cov : undefined);
+
+let measuredCode = 0, measuredNamed = true;
+/** The whole first run: as asked, or the rest then the vault's files under coverage. */
+async function firstRun() {
+  if (!cov) return run(globs, { echo: true }, 0);
+  const rest = asked.filter((f) => !measuredFiles.has(f));
+  const a = rest.length ? await run(rest, { echo: true }, 0) : { code: 0, fails: [], text: "" };
+  const b = await run(measuredAsked, { echo: true, env: cov }, "v");
+  measuredCode = b.code;
+  measuredNamed = b.fails.length > 0 && b.fails.every((f) => f.file);
+  return { code: a.code || b.code, fails: [...a.fails, ...b.fails], text: a.text + b.text };
+}
+/** Fold the vault half: failed when its own run failed and was not re-run, or a file of it failed alone too. */
+const foldMeasured = (broken) => {
+  if (!cov) return;
+  const bad = measuredCode !== 0 && (broken === null || !measuredNamed || broken.some((f) => measuredFiles.has(rel(f))));
+  VC.foldForRunner("unit", cov.NODE_V8_COVERAGE, bad ? 1 : 0);
+};
+
+const first = await firstRun();
+if (first.code === 0) { foldMeasured([]); rmSync(scratch, { recursive: true, force: true }); process.exit(0); }
 
 const files = [...new Set(first.fails.map((f) => f.file))];
 const unnamed = first.fails.some((f) => !f.file) || !first.fails.length;
@@ -69,13 +101,14 @@ if (retrying) {
   let n = 1;
   for (const file of files) {
     console.log(`\n[run-node-tests] ${rel(file)} failed beside other files — running it once more alone, to tell a load flake from a break`);
-    const alone = await run([file], { echo: false }, n++);
+    const alone = await run([file], { echo: false, env: covEnv(file) }, n++);
     if (alone.code === 0) { flaky.push(file); console.log(`[run-node-tests] ${rel(file)} passed alone — a load flake, not blocking`); continue; }
     broken.push(file);
     process.stdout.write(`\n──────── ${rel(file)} (alone) ────────\n${alone.text}\n[run-node-tests] ${rel(file)} FAILED alone too\n`);
   }
 }
 rmSync(scratch, { recursive: true, force: true });
+foldMeasured(retrying ? broken : null);
 
 // The summary is the LAST lines on purpose: a push refused from the phone shows only the tail.
 const names = (file) => first.fails.filter((f) => f.file === file).map((f) => f.name).slice(0, 4);

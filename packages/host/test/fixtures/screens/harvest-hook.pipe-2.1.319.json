@@ -1,0 +1,12 @@
+{
+  "session_id": "<string>",
+  "transcript_path": "<string>",
+  "cwd": "<string>",
+  "scratchpad_dir": "<string>",
+  "hook_event_name": "SessionStart",
+  "source": "<string>",
+  "seconds_since_last_response": "<number>",
+  "context_tokens": "<number>",
+  "prompt_cache_likely_expired": "<boolean>",
+  "estimated_cache_write_usd": "<number>"
+}

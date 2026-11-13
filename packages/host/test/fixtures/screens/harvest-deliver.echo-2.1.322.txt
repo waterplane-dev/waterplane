@@ -1,0 +1,68 @@
+Xxxxxxx `xxxx` (00 xxxxxxx xxxxx) xx `xxxxxx/xxxx` xxxxxx xx xxxx xxxxxxx.
+
+Xxxx xx xxxx xxx xxxxx'x xxx xxxxxx xxxxxx. Xx xx xxxx xxx xxxx xxxxx xx xxx xxxxxx, xx xx-xxx xxx xxxxxxx xxxx xxxxxxxx xxx xxx xxxxx xx xx.
+
+```
+Xxx xxx-xxxx xxxxx xxxxxxx xx — xxx xxx xxxx (xxxx 0)
+
+x xxxx 0
+x xxxxxxxxx 0
+x xxxxxxx 0
+x xxxx 0
+x xxxxxxxx_xx 000000.000000
+
+✖ xxxxxxx xxxxx:
+
+xxxx xx xxxxxxxx/xxxx/xxxx/xxxxxxx.xxxx.xxx:00:0
+⚠ 0.0.000 xxxxxxxx xxx: xxx xxxxxx xx xxxxx xxxx xx x xxxxxx xxxx xxx xxxxxx xx xx Xxxxxx (0.000000xx) # xxxx xxx xxxxxx xx Xxxxxx xxx XXX xxxx 'xxxx+x xx xxxx xx Xxx' xx xxx xxxxxx — x xxxxx-xxxx xxxx xxxx, xxxxx XXX_XXXX_XX xxxx xx xxx xx xxxxxxx (xxxxx xxxxx) — xxx xx 00 xxxxxxx xxx xxxxxx xxxxx xxxx xxx xxxx. Xxx xxxxx xxx xxxxxxXxxxxXx xxxxx xxx xxx xxx; xxxx xxxxxxXxxxxxxx (xxx xxxxxx xxxxxx'x 'xxx x xxx xx?') xxxx xxx, xx x xxxxxx-xxxxx xxxx xx xxxx x xxxxxx xxxxx xx xxxxxxxxxx.
+  XxxxxxxxxXxxxx [XXX_XXXXXXXXX]: xxxxxxxx-xx-xxxxxx
+  
+  xxxxx !== xxxx
+  
+      xx XxxxXxxxxxx.<xxxxxxxxx> (xxxx:///xxxxxxx/xxx/xxx-xxxx.XxxXxx/xxxxxxxx/xxxx/xxxx/xxxxxxx.xxxx.xxx:00:00)
+      xx Xxxx.xxxXxXxxxxXxxxx (xxxx:xxxxx_xxxxx:000:00)
+      xx Xxxx.xxx (xxxx:xxxxxxxx/xxxx_xxxxxx/xxxx:0000:00)
+      xx Xxxx.xxxxxxxXxxxxxxXxxxxxxx (xxxx:xxxxxxxx/xxxx_xxxxxx/xxxx:000:00)
+      xx Xxxx.xxxxXxx (xxxx:xxxxxxxx/xxxx_xxxxxx/xxxx:0000:00)
+      xx Xxxx.xxx (xxxx:xxxxxxxx/xxxx_xxxxxx/xxxx:0000:00)
+      xx xxxxx xxxxxXxxxxxxXxxxxXxxxxxxxx (xxxx:xxxxxxxx/xxxx_xxxxxx/xxxxxxx:000:0) {
+    xxxxxxxxxXxxxxxx: xxxxx,
+    xxxx: 'XXX_XXXXXXXXX',
+    xxxxxx: xxxxx,
+    xxxxxxxx: xxxx,
+    xxxxxxxx: 'xxxxxxXxxxx',
+    xxxx: 'xxxxxx'
+  }
+[xxxx-xxx] XXXXXXX: 0000 xxxx xxx(x) xxxx xxx xxxxxxx xx xxxxx xxxx (xxxxx xx xxx xxxxxxx): xxxxx-* x000, xxx-* x000, xxxxxxxxxx-xxxx-* x00, xxxxxxxxx-* x00, xxxxxxxxxx-xxxxxxxxxx-* x00, xxxxx-xxxx-xxxx-* x00, xxx 0000 xxxx xx 000 xxxxx xxxxx
+[xxxx-xxx] XXXXXXX: 0 xxxxxxx xxxx xx xxx xxx'x xxxx xxx (xxxxxxx xxxx xx): xxxx-xxxxx.xxx-* x0, xxxxxxx.xxx-* x0, xxxx-XxxX0X-xxxx-* x0
+  xx (000x)
+Xxxx xxxxxxx. Xxx xx, xx xxxxxx xxxx: xxx xxxx --xx-xxxxxx
+
+[xxxxxx xxxxxxx:xxxx-xxxxxxxx] 
+(!) Xxxx xxxxxx xxx xxxxxx xxxx 0000 xX xxxxx xxxxxxxxxxxx. Xxxxxxxx:
+- Xxxxx xxxxxxx xxxxxx() xx xxxx-xxxxx xxx xxxxxxxxxxx
+- Xxx xxxxx.xxxxxxxxXxxxxxx.xxxxxx.xxxxXxxxxxxxx xx xxxxxxx xxxxxxxx: xxxxx://xxxxxxxx.xx/xxxxxxxxx/XxxxxxXxxxxxx.xxxxXxxxxxxxx
+- Xxxxxx xxxxx xxxx xxxxx xxx xxxx xxxxxxx xxx xxxxx.xxxxxXxxxXxxxxxxXxxxx.
+xxxxx: xxxxxx xx xxxx xxxx xxxx xx 'xxxxx://xxxxxx.xxx/XxxxxxxxXxx/xxxx.xxx'
+```
+
+Xxxx xxx xxxxx xxx xxx xx. Xx-xxx xxx xxxxx xxxx xxxxxx xxxxx xx xxxxxx, xxxx xxxxxx xxx xxx. Xxxxx xxx xxxx xx xx — X'xx xxxxx xx xxxx xxx xxxxx.
+⁂ screen ⁂
+▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  Xxxx 0.0 xxxx xxxxxx xxxxxx · Xxxxxx Xxxxx
+ ▝▝   ▝▝   ~/xxx/xxxx · /xx xxxxxxxxxx…
+
+                                                         xxxx+x xx xxxx xx Xxx
+────────────────────────────────────────────────────────────────────────────────
+❯ (!) Xxxx xxxxxx xxx xxxxxx xxxx 0000 xX xxxxx xxxxxxxxxxxx. Xxxxxxxx:
+  - Xxxxx xxxxxxx xxxxxx() xx xxxx-xxxxx xxx xxxxxxxxxxx
+  - Xxx xxxxx.xxxxxxxxXxxxxxx.xxxxxx.xxxxXxxxxxxxx xx xxxxxxx xxxxxxxx:
+  xxxxx://xxxxxxxx.xx/xxxxxxxxx/XxxxxxXxxxxxx.xxxxXxxxxxxxx
+  - Xxxxxx xxxxx xxxx xxxxx xxx xxxx xxxxxxx xxx xxxxx.xxxxxXxxxXxxxxxxXxxxx.
+  xxxxx: xxxxxx xx xxxx xxxx xxxx xx 'xxxxx://xxxxxx.xxx/XxxxxxxxXxx/xxxx.xxx'
+  ```
+
+  Xxxx xxx xxxxx xxx xxx xx. Xx-xxx xxx xxxxx xxxx xxxxxx xxxxx xx xxxxxx,
+  xxxx xxxxxx xxx xxx. Xxxxx xxx xxxx xx xx — X'xx xxxxx xx xxxx xxx xxxxx.
+────────────────────────────────────────────────────────────────────────────────
+  xxxxx xxxxx xx xxxxxx

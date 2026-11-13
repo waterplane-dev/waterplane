@@ -42,7 +42,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
     <Sheet title="Peer desktops" icon={<Link2 size={ICON} />} onClose={onClose}>
       <Hint>
         A paired desktop can be handed a job by a session on the other, and its answer comes back to that session. Pairing
-        gives each desktop the other's address and a fresh secret in each direction; the secrets are made on this phone,
+        gives each desktop the other's address and a fresh secret in each direction; the secrets are made on this device,
         sent once and not kept here.
       </Hint>
       <Hint>

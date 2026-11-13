@@ -125,7 +125,7 @@ test("the row tag: words from the shared wording, target by address, sentence wh
   const none = peerTagFacts({ peerWait: { ...w, peerBase: "http://100.64.0.50:8770" } }, [mac, pc], mac.id, now);
   assert.equal(none.target, null);
   assert.match(none.title, /not one of the desktops saved/);
-  assert.match(noHostText("pc"), /pc is not saved on this phone/);
+  assert.match(noHostText("pc"), /pc is not saved on this device/);
   assert.equal(peerTagFacts({}, [mac, pc], mac.id, now), null);
   assert.equal(peerTagFacts({ peerWait: { ...w, state: "bogus" } }, [mac, pc], mac.id, now), null);
 });

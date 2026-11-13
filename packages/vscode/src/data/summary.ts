@@ -8,7 +8,7 @@
  * was folded from is somebody else's number and is dropped by the caller (`configDir`).
  * Pure: no vscode, no IO.
  */
-import { fmtCount, fmtUsd, localDayKey } from "@waterplane/shared";
+import { addLocalDays, fmtCount, fmtUsd, localDayKey } from "@waterplane/shared";
 import type { CostBreakdown, TokenTotals } from "@waterplane/shared";
 import { HEADLINE_DAYS, headline, headlineSpan } from "../../../extensions/token-stats/web/headline.js";
 import type { HeadlineDay } from "../../../extensions/token-stats/web/headline.js";
@@ -113,7 +113,7 @@ export function weekSplit(s: HeadlineSummary): string {
 export function copilotWeekWords(corpus: CorpusDoc | null, now = Date.now()): string | null {
   const led = corpus?.copilot;
   if (!led?.available) return null;
-  const from = localDayKey(now - 6 * 86_400_000);
+  const from = localDayKey(addLocalDays(now, -6));
   let n = 0;
   for (const d of led.days) if (d.day >= from) for (const v of Object.values(d.kinds)) n += v;
   return n > 0 ? `7 d: Copilot ${fmtCount(n)} tokens` : null;

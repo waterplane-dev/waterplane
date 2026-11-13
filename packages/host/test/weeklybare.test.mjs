@@ -140,3 +140,31 @@ test("still blocked after the attempt at the bare time ⇒ re-armed about a day 
     assert.ok(s.limitTimer, "a timer is armed, not a give-up");
   } finally { done(); }
 });
+
+// A local day is 23 or 25 hours on a DST switch: "the same bare time tomorrow" is the next LOCAL occurrence,
+// never `+ 24 h` (which lands an hour off the stated clock time and fires an hour early or late).
+function inBerlin(fn) {
+  const prev = process.env.TZ;
+  process.env.TZ = "Europe/Berlin";
+  try { fn(); } finally { if (prev === undefined) delete process.env.TZ; else process.env.TZ = prev; }
+}
+
+test("daily: an ordinary day rolls to the same local clock time tomorrow", () => {
+  inBerlin(() => {
+    const reset = new Date(2026, 10, 5, 19, 0, 0).getTime();
+    const now = new Date(2026, 10, 5, 19, 2, 10).getTime();
+    const r = nextLimitAttempt(input({ attempts: 3, resetAt: reset, now, blockedSince: now - 5 * MIN }));
+    assert.equal(r.at, new Date(2026, 10, 6, 19, 2, 0).getTime());
+  });
+});
+
+test("daily: the next occurrence keeps the local clock time across both DST switches (Berlin)", () => {
+  inBerlin(() => {
+    for (const [d0, d1, d2] of [[[2026, 9, 24], [2026, 9, 25], [2026, 9, 26]], [[2026, 2, 28], [2026, 2, 29], [2026, 2, 30]]]) {
+      const reset = new Date(d0[0], d0[1], d0[2], 19, 0, 0).getTime();
+      const now = new Date(d1[0], d1[1], d1[2], 19, 2, 10).getTime();
+      const r = nextLimitAttempt(input({ attempts: 3, resetAt: reset, now, blockedSince: now - 5 * MIN }));
+      assert.equal(r.at, new Date(d2[0], d2[1], d2[2], 19, 2, 0).getTime(), `${d2}: 19:02 local, not an hour off`);
+    }
+  });
+});

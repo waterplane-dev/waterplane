@@ -16,6 +16,7 @@ export function blockedReasonText(r: SendBlockReason): string {
     // two chances for one of them to keep saying the old thing.
     case "sessionBudget": return "held — this session is over its own budget; raise or clear it to send";
     case "sessionGone": return "that session is gone — aim it at another session or at the repo's backlog";
+    case "uploadFailed": return "the picture it names never uploaded — retry that upload, or re-attach it and rewrite this message";
     case "gate": return "queued — auto-send is off, tap Send now";
     case "backoff": return "a send just failed — retrying in a moment";
     case "held": return "held until the agent finishes this turn";
@@ -50,7 +51,7 @@ export function queueIdleReason(
   // so when it is true it is the answer for every row at once.
   // `sessionGone` sits above the three self-resolving waits: it is the only
   // reason here that never clears on its own.
-  const order: SendBlockReason[] = ["gate", "budget", "sessionBudget", "sessionGone", "backoff", "serial", "held", "pendingCreate", "lane", "inflight"];
+  const order: SendBlockReason[] = ["gate", "budget", "sessionBudget", "sessionGone", "uploadFailed", "backoff", "serial", "held", "pendingCreate", "lane", "inflight"];
   // `serialText` is the caller's NAMED serial sentence (`serialWaitText`), when
   // it could say who holds the repo; the generic line otherwise.
   for (const r of order) if (blocked.some((b) => b.reason === r)) return r === "serial" && opts.serialText ? opts.serialText : blockedReasonText(r);

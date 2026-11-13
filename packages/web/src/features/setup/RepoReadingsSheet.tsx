@@ -7,6 +7,8 @@
 import type { RepoTarget } from "@waterplane/shared";
 import { SetupSheet } from "../../SetupSheet";
 import { useCore, useStore } from "../../sdk";
+import { CLAUDE, skillSwitchGate } from "../../backendCaps";
+import { openSkillsFor } from "../../skillsDoor";
 import { setupAim, setupRepo } from "./store";
 import {
   closeRepoHealth, closeSetup, openAllSessions, openCaptureFromReadings, openInstructionFile, openRepoFile, remedy, seedSend, sessionDoorsFor,
@@ -15,6 +17,8 @@ import {
 /** The checklist door (and the settings door, with no repo). */
 export function RepoReadingsSheet() {
   const core = useCore();
+  // Repos run claude unless a session says otherwise; this door is the repo's, so claude's fact decides.
+  const skillsGate = skillSwitchGate(core.world.backends, CLAUDE);
   const repoId = useStore(setupRepo);
   const aim = useStore(setupAim);
   return <SetupSheet repos={core.world.repos} initialRepoId={repoId ?? undefined}
@@ -30,6 +34,8 @@ export function RepoReadingsSheet() {
     // The context-weight row's doors: what a live session of this repo carried, and every session.
     sessionDoorsFor={sessionDoorsFor}
     onAllSessions={openAllSessions}
+    onSkills={skillsGate ? undefined : (id) => openSkillsFor(id, CLAUDE)}
+    skillsCant={skillsGate}
     onOpenInstructionFile={openInstructionFile}
     onClose={closeSetup} />;
 }
@@ -42,6 +48,8 @@ export function RepoReadingsSheet() {
  */
 export function RepoHealthAliasSheet({ repo }: { repo: RepoTarget }) {
   const core = useCore();
+  // Repos run claude unless a session says otherwise; this door is the repo's, so claude's fact decides.
+  const skillsGate = skillSwitchGate(core.world.backends, CLAUDE);
   return <SetupSheet
     repos={core.world.repos}
     initialRepoId={repo.id}
@@ -54,6 +62,8 @@ export function RepoHealthAliasSheet({ repo }: { repo: RepoTarget }) {
     onCapture={openCaptureFromReadings}
     sessionDoorsFor={sessionDoorsFor}
     onAllSessions={openAllSessions}
+    onSkills={skillsGate ? undefined : (id) => openSkillsFor(id, CLAUDE)}
+    skillsCant={skillsGate}
     onOpenInstructionFile={openInstructionFile}
     onClose={closeRepoHealth}
   />;

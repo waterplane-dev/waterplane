@@ -180,11 +180,16 @@ export function phoneChecks(pkg: string, label: string, ph: PhoneHalf, row?: App
 }
 
 /** Which of a repo's packages this phone actually has an answer about — the
- *  flavor that installs (`dev.waterplane.app.dev`), else the base package. */
-function phonePkg(f: AppRepoFacts, known: Set<string>): string | undefined {
+ *  flavor that installs (`dev.waterplane.app.dev`), else the base package.
+ *  The phone's own package wins, then a known flavor, then the base: a phone
+ *  holding the Play copy (`dev.waterplane.app`) beside the dev shell joined the
+ *  repo to the Play copy, and the card offered a build Android refused as a
+ *  downgrade while the dev shell's own updates went unshown (owner, 2026-11-10). */
+function phonePkg(f: AppRepoFacts, known: Set<string>, self?: string): string | undefined {
   if (!f.pkg) return undefined;
-  const all = [f.pkg, ...(f.variants ?? [])];
-  return all.find((p) => known.has(p)) ?? f.pkg;
+  const variants = f.variants ?? [];
+  if (self && (self === f.pkg || variants.includes(self))) return self;
+  return variants.find((p) => known.has(p)) ?? f.pkg;
 }
 
 /**
@@ -201,7 +206,7 @@ export function readiness(facts: readonly AppRepoFacts[] | null, rows: readonly 
   const out: AppReadiness[] = [];
   const taken = new Set<string>();
   for (const f of facts ?? []) {
-    const pkg = phonePkg(f, known);
+    const pkg = phonePkg(f, known, ph.sources?.self);
     const row = pkg ? rows.find((r) => r.pkg === pkg) : undefined;
     const label = row?.label ?? ph.log.find((e) => e.pkg === pkg && e.label)?.label ?? f.repoName;
     const checks = repoChecks(f, ph.ago);

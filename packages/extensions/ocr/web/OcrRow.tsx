@@ -15,7 +15,7 @@ export function OcrRow() {
   const on = useExtensionEnabled(OCR_ID);
   return (
     <SetCustom id="ocr-reader" label="text in marks" icon={ScanText}>
-      {on && s.k === "checking" && <SetNote><Loader2 size={12} /> Checking the reader on this phone…</SetNote>}
+      {on && s.k === "checking" && <SetNote><Loader2 size={12} /> Checking the reader on this device…</SetNote>}
       {on && s.k === "downloading" && <SetNote><Download size={12} /> {s.line}</SetNote>}
       {on && s.k === "ready" && <SetNote><CheckCircle2 size={12} /> {s.line}</SetNote>}
       {on && s.k === "error" && (

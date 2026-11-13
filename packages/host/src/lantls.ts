@@ -184,8 +184,8 @@ function leafHolds(s: Stored, key: KeyObject, sans: string[], now: Date): boolea
  */
 export function ensureSelfSigned(root: string, ips: string[], names: string[] = lanTlsNames(), now: Date = new Date()): LanTlsMaterial | LanTlsRefusal {
   const file = lanTlsFile(root);
-  const read = readJsonGuardedDetail<Stored | null>(file, null, (v) => p256((v as Stored | null)?.key) !== null);
-  if (read.corrupt && !read.corrupt.movedTo) return { refused: `${file} could not be read (${read.corrupt.error})` };
+  const read = readJsonGuardedDetail<Stored | null>(file, null, (v) => p256((v as Stored | null)?.key) !== null, { keepUnreadable: true });
+  if (read.corrupt?.unreadable) return { refused: `${file} could not be read (${read.corrupt.error})` };
   if (read.corrupt) console.warn(`${logTag} LAN TLS: the old key is unusable, minting a new one. Every phone's pin of this host is now wrong: pair them again.`);
   const sans = [...names.map((n) => `dns:${n}`), ...ips.map((ip) => `ip:${ip}`)].sort();
   const key = (read.value && p256(read.value.key)) || generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey;

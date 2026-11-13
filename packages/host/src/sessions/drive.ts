@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { execFileP } from "../proc.js";
 import { rmSync } from "node:fs";
 import type { ClosedBy, SessionInfo, SessionShell, SessionShellDetail } from "@waterplane/shared";
-import { blockWallOf, ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
+import { laneStateOf, ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
 import { namesStoreReader } from "../backends/index.js";
 import { trustRule } from "../backends/derive.js";
 import { readCliRecord } from "../agents.js";
@@ -24,6 +24,7 @@ import { foregroundWrapperPids, killShellGroup, readPsTable, readPsTableAsync, r
 import { exitCopyMode as tmuxExitCopyMode, exitCopyModeSync as tmuxExitCopyModeSync, paneWantsMouse, parseWheel, scroll as tmuxScroll } from "../tmuxscroll.js";
 import type { Session, SessionCore } from "./core.js";
 import { TMUX_SERVER, tmuxLiteral, tmuxName } from "./knobs.js";
+import { realClock, type Clock } from "../waitclock.js";
 
 /** What a shell-stopping pass settled on — `kill()`/`remove()`'s
  *  `onShellsStopped` and `killOneShell`'s reason for `shell.killed`. */
@@ -270,10 +271,14 @@ function clearReplySuggestion(core: SessionCore, s: { info: SessionInfo }): void
  * Resolve once the session has produced output AND been idle for `quietMs`
  * — i.e. has likely finished printing its current screen and is awaiting
  * input. Used by the backlog to feed text reliably into a fresh `claude`.
+ *
+ * `clock` is the delivery's (`waitclock.ts`), so a test runs the 45 s wait in
+ * virtual time. `lastDataAt` is stamped on wall time by the PTY's data handler,
+ * which `realClock` reads too; a test stamps it on its own clock.
  */
-export async function waitReady(core: SessionCore, id: string, quietMs = 1000, timeoutMs = 30000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+export async function waitReady(core: SessionCore, id: string, quietMs = 1000, timeoutMs = 30000, clock: Clock = realClock): Promise<boolean> {
+  const start = clock.now();
+  while (clock.now() - start < timeoutMs) {
     const s = core.sessions.get(id);
     if (!s || !s.info.running) return false;
     // Hook-driven when the pipe is live: "no turn in flight" is the exact
@@ -283,10 +288,10 @@ export async function waitReady(core: SessionCore, id: string, quietMs = 1000, t
     // perfectly ready session times out un-fed (whole repos skipped in a
     // fan-out). A short settle is still required so we don't type into a TUI
     // that is mid-draw.
-    const quiet = Date.now() - s.lastDataAt;
+    const quiet = clock.now() - s.lastDataAt;
     if (s.sawData && s.hooksActive && !s.turnActive && quiet >= Math.min(quietMs, 400)) return true;
     if (s.sawData && quiet >= quietMs) return true;
-    await new Promise((r) => setTimeout(r, 150));
+    await clock.sleep(150);
   }
   return false;
 }
@@ -327,10 +332,8 @@ export function autoFireBlocker(core: SessionCore, id: string, quietMs: number):
   // `turnActive` is deliberately NOT delegated: the rung below is not "is a
   // turn running" but "how do we KNOW", and the answer differs per session.
   const wall = sessionWall({
-    limitBlocked: s.info.limit?.blocked,
-    awaitingInput: s.info.awaitingInput,
-    promptKind: s.info.prompt?.kind,   // claude's trust box is fine — delivery accepts it
-    block: blockWallOf(s.info),      // signed out, or the host's net retry holds it
+    ...laneStateOf(s.info),   // claude's trust box is fine — delivery accepts it (checked below per backend)
+    turnActive: undefined,
   });
   if (wall === "limit") return "the session is blocked on a usage limit";  // the item would bounce
   if (wall === "auth") return "the session is signed out — it needs a sign-in (/login)";

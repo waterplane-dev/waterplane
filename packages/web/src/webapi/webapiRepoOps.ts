@@ -1,5 +1,6 @@
 import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
-import type { AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
+import type { SkillInventoryDoc, SkillRecommendResponse, SkillWriteRequest, SkillWriteResponse } from "@waterplane/shared";
+import type { AgentMarkersResponse, AgentPointsResponse, AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
 import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
@@ -37,6 +38,10 @@ export const repoOpsApi = {
   // Setup compliance checklist (per-repo).
   compliance: (repoId: string) => jget<ComplianceReport>(`/api/repos/${repoId}/compliance`),
   // `confirm`: the report's token for a confirm-gated fix, sent with that one id alone.
+  // Skills & plugins switch: read, one-file write (a refusal is a body with `ok:false`), the one tapped model call.
+  skills: (repoId: string) => jget<SkillInventoryDoc>(`/api/repos/${repoId}/skills`),
+  skillsWrite: (repoId: string, req: SkillWriteRequest) => jpost<SkillWriteResponse>(`/api/repos/${repoId}/skills/write`, req),
+  skillsRecommend: (repoId: string) => jpost<SkillRecommendResponse>(`/api/repos/${repoId}/skills/recommend`, {}, SLOW_OP_TIMEOUT_MS),
   complianceFix: (repoId: string, fixes: string[], confirm?: string) =>
     jpost<ComplianceFixResult>(`/api/repos/${repoId}/compliance/fix`, confirm ? { fixes, confirm } : { fixes }),
   // The context-weight thresholds for one repo. A patch: an absent field keeps
@@ -77,6 +82,12 @@ export const repoOpsApi = {
   /** Agent readings (host `agentreadings.ts`): weekly figures off this desktop's conversation logs. */
   agentReadings: (repoId: string) =>
     jget<AgentReadingsResponse>(`/api/repos/${repoId}/agentreadings`),
+  /** Session points (host `agentreadings.ts`): one per conversation and subagent log, one repo's or, with no id, every repo's (capped, `cut` says how many older ones are left off). */
+  agentPoints: (repoId: string | null) =>
+    jget<AgentPointsResponse>(repoId ? `/api/repos/${repoId}/agentpoints` : "/api/agentpoints"),
+  /** What changed beside those points: instruction commits and tags, model, CLI and listing steps. */
+  agentMarkers: (repoId: string) =>
+    jget<AgentMarkersResponse>(`/api/repos/${repoId}/agentmarkers`),
   /** The weekly health score (`shared/healthindex.ts`) for the whole repo. */
   healthIndex: (repoId: string) =>
     jget<HealthIndexResponse>(`/api/repos/${repoId}/healthindex`),

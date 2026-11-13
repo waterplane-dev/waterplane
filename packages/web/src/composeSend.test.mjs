@@ -108,7 +108,7 @@ test("the pad row promises that nothing runs it", () => {
  */
 test("a command that opens a view is worded as the phone's, and says to stay", () => {
   const t = sendModeToast("idle", { online: true, holder: "phone", phoneHold: "opens-a-view" });
-  assert.match(t, /held on this phone/);
+  assert.match(t, /held on this device/);
   assert.match(t, /opens a view rather than starting a turn/);
   assert.match(t, /Leave the app open/);
   assert.doesNotMatch(t, /desktop/, "the desktop is not holding this one — do not claim it is");

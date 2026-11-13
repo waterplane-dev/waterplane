@@ -122,7 +122,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   the Backlog form names the row on the Backlog, while Activity, the chain picker and `clockDirectory`
   show the headline (the picker SNAPSHOTS it into `after.title`). One exception, pinned by name; also
   stated in `web-send`.
-- `SetupSheet.tsx` (+ `AlwaysOnRows.tsx`, the always-on list under the `context-weight` row: repo rows, this desktop's rows, unsized rows say so, doors to sessions that carried them) + `setupRemedy.ts` — **`Repo readings`: ONE sheet, FIVE regions** (`ReadingsRegion`
+- `SetupSheet.tsx` (+ `AlwaysOnRows.tsx`, the always-on list: repo rows, this desktop's rows, unsized rows say so, doors to sessions that carried them — drawn as the agents region's FIRST card; the `context-weight` row keeps its threshold, twin and a door there) + `setupRemedy.ts` — **`Repo readings`: ONE sheet, FIVE regions** (`ReadingsRegion`
   = `setup` · `series` · `optins` · `watch` — the exposure watch and Scorecard checks — · `agents`), **and the seam is the COMPARATOR, never time.** Against the
   conventions (`ComplianceCheck`) = a fact against a line somebody chose: stripe, pass/warn/fail,
   counted in the badge, sometimes a `fix`. Against its own past (the series, drawn in
@@ -160,7 +160,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   (`useRepoRefresh`), so a row's chip never reads an older number than the sheet. Every sentence is
   `repoHealthWords.ts`'s, the charts are `web-numbers`'.
 - Region 5, **Agent readings** (`AgentReadingsRegion` + `agentReadingsWords`; the web router has no room for two more names): the host's weekly figures off this desktop's conversation logs.
-  Counted in NOTHING, no stripe, no status hue, not the health index. Each reading's `?` quotes the HOST's rule (`doc.rules`), never a phone-side copy; an absent reading prints the host's sentence, the weeks table a dash. The week row is a choice (dates, no counts). A total keeps its split: rework names all three classes with the kind bar under it, exploration draws the median session's own kinds. Host rules ⇒ `host-ledgers`. [Why](../../../docs/notes/host.md#agent-readings--agentreadingsts-agentscants-agentclassts).
+  Counted in NOTHING, no stripe, no status hue, not the health index. Each reading's `?` quotes the HOST's rule (`doc.rules`), never a phone-side copy; an absent reading prints the host's sentence, the weeks table a dash. Every reading is a weekly bar chart (`AgentWeekBars.tsx`, geometry `agentWeekPlot.ts`); a tap on any bar picks the week for all, answered in a text line; a week not taken is a dashed outline, a real zero a floor tick. A total keeps its split: rework names all three classes with the kind bar under it, exploration draws the median session's own kinds. Host rules ⇒ `host-ledgers`. [Why](../../../docs/notes/host.md#agent-readings--agentreadingsts-agentscants-agentclassts).
 - `OptInRegion.tsx` + `optInSeed.ts` — region 3, **Opt-ins**: offers, not readings (the shared opt-in
   catalog, `optins.ts`, and its header are the design). **Counted in NOTHING** — no stripe, no status hue, never
   in the badge. **Every count and list is `optInCut`'s**; the folded `declined`/`unfit` heads are the

@@ -20,6 +20,15 @@ import type { OutboxEntry } from "../../outbox";
 export const outboxStore = createStore<OutboxEntry[]>([]);
 
 /**
+ * When the last write of the queue to localStorage was refused (quota, private
+ * mode), or null while the last write held. The queue itself keeps working in
+ * memory either way — this only says the on-disk copy is stale, so a reload
+ * would lose what is queued. `writeOutbox` is its one writer; nothing words it
+ * yet.
+ */
+export const persistFailedAtStore = createStore<number | null>(null);
+
+/**
  * Which rung of the ladder refused each queued entry, by ackId — the flusher's
  * own verdict, written by `flushOutbox` and nowhere else.
  */

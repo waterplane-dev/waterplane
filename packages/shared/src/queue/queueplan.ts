@@ -117,6 +117,10 @@ export type SendBlockReason =
   /** The session this lane names no longer exists. Terminal: nothing but a
    *  re-aim (or a rewrite) will ever get this delivered. */
   | "sessionGone"
+  /** The text names an inbox file whose upload FAILED, so the path will never
+   *  resolve. Held, not sent: retrying that upload (or re-attaching the
+   *  picture and rewriting the row) is what lets it go. */
+  | "uploadFailed"
   /** The user's own switches (auto-send off / reconnect hold). Not decided here
    *  — `sendEligible` answers it, and the caller appends these. */
   | "gate";
@@ -198,6 +202,10 @@ export function selectSendable<T extends SendQueueEntry>(
   // Lanes held by an entry that is already on the wire (a `pending` one whose
   // receipt hasn't landed, or one this pass has just picked).
   const busy = new Set<string>();
+  // Inbox paths whose upload is `failed` — see the `uploadFailed` block below.
+  const deadUploads = entries
+    .filter((e) => e.mode === "upload" && e.status === "failed" && e.upload)
+    .map((e) => e.upload!.relPath);
   for (const e of entries) {
     if (e.status === "pending" || inflight.has(e.ackId)) {
       busy.add(e.sessionId);
@@ -213,6 +221,13 @@ export function selectSendable<T extends SendQueueEntry>(
   for (const e of entries) {
     if (e.status !== "queued") continue;
     if (inflight.has(e.ackId)) { block(e, "inflight"); continue; } // already out; its lane is marked busy
+    // A prompt naming a picture whose upload has FAILED. Sending it hands the
+    // agent a path that will never resolve while the phone reports success —
+    // and a failed upload no longer holds the lane, so nothing else stops it.
+    // It holds its lane in turn: what was queued after it was written after it.
+    if (e.mode !== "upload" && deadUploads.length && deadUploads.some((p) => e.text?.includes(p))) {
+      busy.add(e.sessionId); block(e, "uploadFailed"); continue;
+    }
     // Parked until the agent finishes this turn. Two consequences while it
     // waits, both deliberate: the entry HOLDS its lane (anything queued behind
     // it is meant to arrive after it, not overtake it), and it is exempt from
@@ -281,6 +296,14 @@ export function selectSendable<T extends SendQueueEntry>(
     const tryingFor = e.firstTryAt == null ? Infinity : opts.now - e.firstTryAt;
     if ((e.attempts ?? 0) >= opts.maxAttempts && tryingFor >= (opts.minTryMs ?? 0)) {
       expire.push({ ackId: e.ackId, reason: "delivery kept failing" });
+      // It HOLDS its lane on this pass too. An expired entry is not dropped: the
+      // caller parks it on a round backoff (`nextRound`), which holds the lane
+      // from the next pass on — but on THIS pass it fell through with the lane
+      // free, and whatever was queued behind it went out. Behind an upload
+      // that is the prompt naming the picture: Send & run typed a path whose
+      // bytes were still on their way (2026-11-11, the collage landed 53 s
+      // after the agent had been told to read it).
+      busy.add(e.sessionId);
       continue;
     }
     // Past the usage ceiling the account is under, and one at a time in this

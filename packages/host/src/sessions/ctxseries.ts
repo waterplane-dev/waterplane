@@ -12,7 +12,7 @@
  */
 import { join } from "node:path";
 import type { ContextEvent, ContextSample, ContextSeriesDoc, ContextWindowSource, Effort, SourceCompaction, TranscriptToolDetail } from "@waterplane/shared";
-import { MAX_SAMPLES, downsample, resolveContextWindow, sourceCompactionsProblems, sourceContextSampleProblems } from "@waterplane/shared";
+import { MAX_SAMPLES, downsample, priceGeneration, priceListChangedAt, resolveContextWindow, sourceCompactionsProblems, sourceContextSampleProblems } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { STORE_FILE_RE } from "./knobs.js";
@@ -373,7 +373,7 @@ export class CtxSlice {
     // $6.34 prompt) — the sweep always found "nothing new" because the graph
     // had already read it.
     const from = s.sparkFrom;
-    if (from && from.path === path && from.mtime === mtime && from.agentTok === agentTok && s.info.contextSpark) return false;
+    if (from && from.path === path && from.mtime === mtime && from.agentTok === agentTok && from.priceGen === priceGeneration() && s.info.contextSpark) return false;
     let next: SeriesCursor | null;
     // Best-effort in the strongest sense: this runs on the idle path of every
     // session, and a graph is not worth taking a turn boundary down for.
@@ -394,7 +394,7 @@ export class CtxSlice {
       const r = autoCompactFor(s.info.cwd);
       if (r.value.kind === "size" && r.value.tokens > 0) spark.autoCompactSetTok = r.value.tokens;
     } catch { /* the axis falls back to the window */ }
-    s.sparkFrom = { path, mtime, agentTok };
+    s.sparkFrom = { path, mtime, agentTok, priceGen: priceGeneration() };
     const before = s.info.contextSpark;
     s.info.contextSpark = spark;
     return turnMoved || !before || JSON.stringify(before) !== JSON.stringify(spark);
@@ -594,7 +594,8 @@ export class CtxSlice {
     if (!log?.cid) return null;
     const path = transcriptPath(log.cwd, log.cid);
     const mtime = logMtime(path);
-    if (mtime != null && since && mtime <= since) return "unchanged";
+    // A price list installed since the phone's copy re-prices the same tokens.
+    if (mtime != null && since && mtime <= since && priceListChangedAt() <= since) return "unchanged";
     // Shares the live session's cursor, so opening the graph on a session the
     // idle scan has been following costs a stat and nothing else. A CLOSED
     // session has no cursor and pays for one full read, which is the right
@@ -606,7 +607,8 @@ export class CtxSlice {
     return {
       sessionId: id,
       claudeSessionId: log.cid,
-      updatedAt: parsed.mtime,
+      // Raised to a newer price-list install, so the next poll's "unchanged" test holds again.
+      updatedAt: Math.max(parsed.mtime, priceListChangedAt()),
       samples: parsed.samples,
       events: parsed.events,
       turns: parsed.turns,

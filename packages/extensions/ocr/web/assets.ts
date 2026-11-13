@@ -125,7 +125,7 @@ export async function ensure(): Promise<void> {
       const blob = await pull(f, signal, (n) => { if (live()) ocrState.set({ k: "downloading", line: progressLine(i + 1, need.length, before + n, total) }); });
       if (blob.size !== f.bytes) throw new Error(`${f.file} arrived with ${blob.size} bytes instead of ${f.bytes} — not kept. Try again.`);
       if ((await sha256Hex(new Uint8Array(await blob.arrayBuffer()))) !== f.sha256) throw new Error(`${f.file} did not match the desktop's checksum — not kept. Try again.`);
-      if (!(await files.put(f.file, blob))) throw new Error("This phone would not store the reader (out of space, or storage is blocked for this page).");
+      if (!(await files.put(f.file, blob))) throw new Error("This device would not store the reader (out of space, or storage is blocked for this page).");
       verified[f.file] = f.sha256;
       mem.write(VERIFIED, verified);
       before += f.bytes;

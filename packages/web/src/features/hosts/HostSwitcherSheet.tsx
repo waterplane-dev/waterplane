@@ -7,10 +7,11 @@
  * cannot do a verb does not draw it; nothing here is ever greyed.
  */
 import { useState } from "react";
-import { Check, FlaskConical, Globe, KeyRound, Link2, LogOut, Pencil, Plus, QrCode, Router, Server, ShieldOff, Trash2 } from "lucide-react";
+import { Activity, Check, FlaskConical, Gauge, Timer, Globe, KeyRound, Link2, LogOut, Pencil, Plus, QrCode, Router, Server, ShieldOff, Trash2 } from "lucide-react";
 import { Sheet } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { HostSetup } from "../../HostSetup";
+import { DEFAULT_SPEED_MB, openConnTest, openNetHealth } from "../../connTest";
 import { isDemoHost } from "../../hosts";
 import { leaveDemo, tryDemo } from "../../demoEntry";
 import { hasShellTls, useBackStep, useCore } from "../../sdk";
@@ -60,6 +61,14 @@ export function HostSwitcherSheet() {
           lanSuggest={isActive || !host ? c.conn.info.lanIps : []}
           onDone={showHostList}
           onCancel={showHostList}
+          // The tests measure the link this phone is on, which is the active desktop's only.
+          linkDoors={isActive ? (
+            <SetLine style={{ margin: "10px 0", flexWrap: "wrap", gap: 8 }}>
+              <Button title="the link's history: ping, losses, what is not on the desktop yet" onClick={openNetHealth}><Activity size={ICON} /> connection health</Button>
+              <Button title="20 round trips: delay, jitter, losses" onClick={() => openConnTest("ping")}><Timer size={ICON} /> connection test</Button>
+              <Button title={`download and upload throughput, ${DEFAULT_SPEED_MB} MB each way`} onClick={() => openConnTest("speed")}><Gauge size={ICON} /> speed test · {DEFAULT_SPEED_MB} MB</Button>
+            </SetLine>
+          ) : undefined}
         />
       </Sheet>
     );
@@ -73,7 +82,7 @@ export function HostSwitcherSheet() {
       actions={<Button onClick={showAddHost}><Plus size={ICON} /> add</Button>}
     >
       {hosts.length === 0 ? (
-        <Empty thing="saved desktops">No desktops saved on this phone. Add one with its Tailscale address.</Empty>
+        <Empty thing="saved desktops">No desktops saved on this device. Add one with its Tailscale address.</Empty>
       ) : (
         <div className="list">
           {hostRows(hosts, activeId).map((h) => {
@@ -118,7 +127,7 @@ export function HostSwitcherSheet() {
                 )}
                 <div className="row-acts">
                   {(h.tlsOff || (active && route?.trouble)) && (
-                    <Button title="pair this phone with the desktop again, with a code from its screen" onClick={() => pairHostByCode(h)}><KeyRound size={ICON} /> pair by code</Button>
+                    <Button title="pair this device with the desktop again, with a code from its screen" onClick={() => pairHostByCode(h)}><KeyRound size={ICON} /> pair by code</Button>
                   )}
                   {pinned && (
                     <Button aria-label={`use plain HTTP for ${h.name}`} title="use plain HTTP for this desktop" onClick={() => void askPlainHttp(h)}><ShieldOff size={ICON} /></Button>
@@ -145,7 +154,7 @@ export function HostSwitcherSheet() {
         </SetLine>
       )}
       <Hint>
-        Each desktop keeps its own drafts, queue and caches on this phone; switching reloads the app onto the other one.
+        Each desktop keeps its own drafts, queue and caches on this device; switching reloads the app onto the other one.
       </Hint>
     </Sheet>
   );

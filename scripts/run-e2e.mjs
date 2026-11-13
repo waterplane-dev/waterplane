@@ -106,6 +106,14 @@ const matched = [...where.keys()]
   .filter((f) => !filters.length || filters.some((x) => f.includes(x)))
   .sort();
 const scripts = matched.filter((f) => !BY_HAND.has(f));
+
+// The vault's e2e also measures what it executed of the vault host (`tools/vaultcoverage.mjs`, the
+// `vaultHostUncovered` reading's cache): its child gets `NODE_V8_COVERAGE`, folded after the retries.
+// Imported only when the tool is in the tree — the public snapshot has neither it nor the vault.
+const VC = existsSync(join(repoRoot, "tools/vaultcoverage.mjs")) ? await import("../tools/vaultcoverage.mjs").catch(() => null) : null;
+const COV_E2E = VC ? VC.E2E_FILE.split("/").pop() : null;
+const covHalf = VC && scripts.includes(COV_E2E) ? VC.coverageEnv(repoRoot) : null;
+process.on("exit", () => { if (covHalf) rmSync(covHalf.NODE_V8_COVERAGE, { recursive: true, force: true }); });
 for (const f of matched.filter((x) => BY_HAND.has(x))) console.log(`[run-e2e] not run here: ${f} (${BY_HAND.get(f)}). By hand: node ${where.get(f)}`);
 
 if (!scripts.length) {
@@ -368,7 +376,7 @@ function runChild(file, say) {
   return new Promise((resolve) => {
     const tmuxDir = makeTmuxDir();
     tmuxDirs.add(tmuxDir);
-    const env = serviceLocale(tmuxIsoEnv(envFor(file), tmuxDir));
+    const env = serviceLocale(tmuxIsoEnv({ ...envFor(file), ...(covHalf && file === COV_E2E ? covHalf : {}) }, tmuxDir));
     const live = JOBS === 1;
     const child = spawn(process.execPath, [where.get(file)], { cwd: repoRoot, env, stdio: live ? "inherit" : ["ignore", "pipe", "pipe"], detached: true });
     // stdout and stderr into ONE buffer in arrival order, so a FAIL line sits where it was
@@ -567,6 +575,8 @@ if (retrying) {
     process.stdout.write(`\n──────── ${file} (alone) ────────\n${text}${text.endsWith("\n") || !text ? "" : "\n"}[run-e2e] ${file} FAILED alone too with exit ${code} (${secs}s)\n`);
   }
 }
+
+if (covHalf) VC.foldForRunner("e2e", covHalf.NODE_V8_COVERAGE, failures.includes(COV_E2E) && aloneVerdict.get(COV_E2E) !== true ? 1 : 0);
 
 /**
  * The lines that say WHY, out of a failed script's output: every FAIL line with the indented

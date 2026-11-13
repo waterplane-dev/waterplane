@@ -5,6 +5,35 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.26
+
+### New
+
+- **Dollar figures now come from Anthropic's published price list.** The host reads the price page once a day and at boot, and keeps the last good read. Token stats and the VS Code status bar say which list priced a figure and when it was read. Past spend re-prices when the rates change. A desktop setup row shows the state, and `WATERPLANE_PRICE_FETCH=0` turns it off.
+- **A "skills & plugins" screen switches skills and plugins on and off per repo.** You edit a draft, pick the level, and save to one named settings file. Each row shows its weight and how often it was used. Skills an author has locked count nothing and say so. Doors lead to it from the context-weight row and the request breakdown.
+- **Recommend suggests which skills to switch off.** It is one tapped call that returns a pre-ticked list with the savings. Nothing applies until you tap Apply.
+- **Token stats have an "Agent readings over time" card.** It shows start context, looks before the first edit, requests per committing session and subagent start, by day or week. Markers show where instructions, model, CLI version, memory or skills changed. Tapping a marker compares 14 days before and after, with the band of normal variation.
+- **Disk space ships in the release, off until you switch it on.** It now covers Linux and Windows through WSL, including Windows caches and old temp files. The scan runs in two parts, so rows appear as soon as the fast part is measured.
+- **Links ships in the release, off until you switch it on.** Its cloud search uses this desktop's gcloud sign-in.
+- **Snippets can be ticked and inserted together, one per line.** A plain tap on a row still inserts one at once. The most recently used come first on this phone. A person with no list sees eight starter snippets.
+- **Local dictation can be set up from a tap.** The Settings row shows the state, model choice, progress and any failure reason. The installer has an optional `--dictation` step. The fallback pill says the phone recogniser is weaker and may send audio to Google.
+- **A busy CPU on the desktop sheet names the culprits.** At 80% or more it lists the top three programs and the coding sessions behind it. Tapping a session opens it.
+- **The speed-test sheet has a connection test.** It makes 20 timed round trips and gives the median, jitter, best and worst, lost packets and a one-sentence verdict. Connection health and the desktop's edit form have doors to the connection test, the speed test and the desktop addresses.
+- **Reader tables wrap long prose columns instead of scrolling sideways.** Short cells stay on one line. A toggle goes back to one line per row.
+- **The model wheel button shows a Sparkles badge when the CLI confirmed ultracode is on.**
+
+### Fixed
+
+- **A retry now wakes the phone when the link drops in a pocket.** Before, a lost socket could stay lost for minutes until the screen came on.
+- **A prompt no longer overtakes the picture it names.** A failed upload holds back the prompt that names it. The host also waits up to 5 minutes for fresh inbox files before typing.
+- **The first prompt sent on a new screen while offline now rides inside the create.** The desktop types it once the link is back, even if the link comes back only briefly.
+- **Words written on a pending screen that nothing can reach any more go to the pad.** Before, they were lost after the X or a retry.
+- **The close check no longer reads an unknown unmerged count as nothing to lose.** It now says so. It also measures against the right base branch in repos that don't use main or master.
+- **The update button no longer refuses because an agent ran an install in some repo.** Only an install that names the CLI's package counts.
+- **The network retry card keeps its text readable.** The line and error sit above the buttons, and Retry now also works while waiting.
+- **The request chip stays hidden while the link is connecting.** The header already says so.
+- **Screens that also run in a desktop browser say "this device", not "this phone".**
+
 ## 0.1.25
 
 ### New

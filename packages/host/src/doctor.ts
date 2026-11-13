@@ -233,7 +233,7 @@ export async function checkDictate(): Promise<Check> {
         status: "ok",
         detail: `${s.reason} — the phone falls back to the browser's own recogniser.`,
         fix: `${process.platform === "darwin" ? "brew install whisper-cpp" : "install whisper.cpp (whisper-cli on PATH)"}, then put a model in ~/.local/share/${BRAND.configDirName}/models `
-          + "(ggml-large-v3-turbo.bin is ~30x realtime on Apple silicon).",
+          + "(ggml-large-v3-turbo.bin is ~30x realtime on Apple silicon), or tap set up local dictation in the phone's Settings.",
       };
 }
 

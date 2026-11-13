@@ -4,7 +4,8 @@
  * submit ladder. Moved whole as the run's last statement
  * (docs/notes/host-architecture.md, "The deliver slices").
  */
-import { LOCAL_MOVE_POLLS, LOCAL_SUBMIT_TRIES, UNANNOUNCED_POLLS, UNANNOUNCED_TRIES, sleep } from "./deliverknobs.js";
+import { LOCAL_MOVE_POLLS, LOCAL_SUBMIT_TRIES, UNANNOUNCED_POLLS, UNANNOUNCED_TRIES } from "./deliverknobs.js";
+import { realClock, type Clock } from "../waitclock.js";
 import type { DeliveryResult, DeliveryRun } from "./delivertypes.js";
 import { resolveBackend } from "../backends/index.js";
 import { trustRule, type TrustRule } from "../backends/derive.js";
@@ -35,9 +36,9 @@ const TRUST_PAINT_MS = 3000;
  * rows are there; `1⏎` (`trustKeys(null)`) only beside a drawn "1. Yes", because on today's
  * unnumbered box that Return lands on "No, exit" (docs/notes/host.md, `deliver.ts`).
  */
-export async function trustAnswerKeys(read: () => Promise<string>): Promise<{ keys: string; nav: boolean }> {
+export async function trustAnswerKeys(read: () => Promise<string>, clock: Clock = realClock): Promise<{ keys: string; nav: boolean }> {
   let nav = readNavBox(await read());
-  for (let t = Date.now(); !nav && !NUMBERED_YES.test(await read()) && Date.now() - t < TRUST_PAINT_MS; await sleep(150)) {
+  for (let t = clock.now(); !nav && !NUMBERED_YES.test(await read()) && clock.now() - t < TRUST_PAINT_MS; await clock.sleep(150)) {
     nav = readNavBox(await read());
   }
   if (nav) return { keys: trustKeys(nav), nav: true };
@@ -53,15 +54,15 @@ export async function trustAnswerKeys(read: () => Promise<string>): Promise<{ ke
  * words. Before (2026-10-31): the blind Return quit claude; with only the Return withheld, the
  * session hung, since `settle.ts` can never call a delivery `absent` without a conversation log.
  */
-export async function answerLateTrust(read: () => Promise<string>, write: (keys: string) => void): Promise<{ result: DeliveryResult; detail: string }> {
-  const { keys } = await trustAnswerKeys(read);
+export async function answerLateTrust(read: () => Promise<string>, write: (keys: string) => void, clock: Clock = realClock): Promise<{ result: DeliveryResult; detail: string }> {
+  const { keys } = await trustAnswerKeys(read, clock);
   if (!keys) return { result: "retry", detail: "claude is asking whether to trust this folder and this app could not read the box — answer it in the terminal" };
   write(keys);
   return { result: "retry", detail: "claude asked whether to trust this folder after the words were typed — answered Yes, and the words go again" };
 }
 
 export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: DeliveryResult; detail?: string }> {
-  const { sessions, sessionId, text, historyKind, shape, note, snapshot, noTurn, unannounced, proof, ranAnyway } = run;
+  const { clock, sessions, sessionId, text, historyKind, shape, note, snapshot, noTurn, unannounced, proof, ranAnyway } = run;
   const { armSourceProof, submitProof, proofKind, submitProofWithin } = proof;
   // The text echoed in the composer ⇒ input is being accepted (NOT swallowed
   // by a usage view / prompt). That's our delivery confirmation.
@@ -73,7 +74,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
   // (bounded — a spinner may never stop) instead of a blind 150 ms.
   for (let i = 0; i < 6; i++) {
     if ((sessions.idleMs(sessionId) ?? 999) >= 250) break;
-    await sleep(150);
+    await clock.sleep(150);
   }
   // Submit — and, when the session can prove it, VERIFY the turn started.
   //
@@ -132,7 +133,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
       sessions.write(sessionId, "\r");
       let moved = false;
       for (let i = 0; i < LOCAL_MOVE_POLLS && !moved; i++) {
-        await sleep(150);
+        await clock.sleep(150);
         moved = (await snapshot()) !== before;
       }
       if (moved) {
@@ -254,7 +255,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
   const lateTurnProof = async () => {
     for (let i = 0; i < 6; i++) {
       if (sessions.isHooked(sessionId) && turnStarted()) return true;
-      await sleep(150);
+      await clock.sleep(150);
     }
     return false;
   };
@@ -277,7 +278,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
       const before = sessions.scrollback(sessionId).length;
       armSourceProof();
       sessions.write(sessionId, "\r");
-      await sleep(700);
+      await clock.sleep(700);
       if (sessions.scrollback(sessionId).length - before > 80) break;
     }
     // Two fallbacks, one branch, and they are different facts. The hook pipe is
@@ -377,7 +378,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
   /** Read twice, 300 ms apart, so one torn frame never decides. */
   const composerLetGo = async () => {
     for (let i = 0; i < 2; i++) {
-      if (i) await sleep(300);
+      if (i) await clock.sleep(300);
       if ((await composerHolds(sessions, sessionId, text)) === true) return false;
     }
     return true;
@@ -390,7 +391,7 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
     // Poll instead of sleeping a fixed slice: the hook reports the turn start
     // within milliseconds, so the common case costs one press and ~150 ms.
     for (let i = 0; i < submitPolls && !submitted; i++) {
-      await sleep(150);
+      await clock.sleep(150);
       submitted = turnStarted();
     }
     if (!submitted && boxBefore) {

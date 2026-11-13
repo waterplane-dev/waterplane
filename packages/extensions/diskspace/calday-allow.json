@@ -1,0 +1,12 @@
+{
+  "packages/extensions/diskspace/host/index.mts": [
+    [
+      "tmpMinAgeMs: 24 * 3600_000",
+      "a file-age threshold, elapsed"
+    ],
+    [
+      "winTempMinAgeMs: 7 * 24 * 3600_000",
+      "a file-age threshold, elapsed"
+    ]
+  ]
+}

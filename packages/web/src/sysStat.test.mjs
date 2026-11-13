@@ -16,7 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  cpuSplitText, loadText, memNote, memSlices, procFoldText, rssSumText, slowAgeSec, swapText, tempText,
+  cpuCulpritsText, cpuSplitText, loadText, memNote, memSlices, procFoldText, rssSumText, slowAgeSec, swapText, tempText,
   uptimeText,
 } from "./sysStat.ts";
 
@@ -149,4 +149,33 @@ test("cpuSplitText: Windows' one figure is not split, and the WSL VM's figure sa
   assert.doesNotMatch(win, /kernel,|0% in the kernel/);
   assert.match(cpuSplitText({ ...base, sysPct: 5, source: "wsl-vm" }), /Inside the WSL VM only/);
   assert.doesNotMatch(cpuSplitText({ ...base, sysPct: 5 }), /WSL/);
+});
+
+test("a hot CPU row names the top programs by CPU, folded, and only when hot", () => {
+  const byCpu = [
+    { name: "node", cpuPct: 975.4, rssBytes: GB, procs: 12 },
+    { name: "kernel_task", cpuPct: 310, rssBytes: GB, procs: 1, pid: 0 },
+    { name: "claude", cpuPct: 90, rssBytes: GB, procs: 23 },
+    { name: "Chrome", cpuPct: 40, rssBytes: GB, procs: 30 },
+  ];
+  const sys = (userPct, sysPct) => ({ cpu: { userPct, sysPct, idlePct: 100 - userPct - sysPct, spanMs: 4000 }, procs: { at: 0, byCpu, byMem: [], count: 900, rssSumBytes: 0, cap: 8 } });
+  assert.equal(cpuCulpritsText(sys(67, 32)), "Using it most: node 975% (12 processes) · kernel_task 310% · claude 90% (23 processes).");
+  assert.equal(cpuCulpritsText(sys(50, 20)), null);
+  assert.match(cpuCulpritsText(sys(67, 32), 3), /read 3s earlier/);
+  assert.equal(cpuCulpritsText({ cpu: sys(90, 5).cpu }), null);
+});
+
+test("a hot CPU names its sessions by tab label, busiest first; a closed one stays, named as such", async () => {
+  const { hotSessions } = await import("./sysStat.ts");
+  const bySession = [
+    { sessionId: "a", cpuPct: 492, rssBytes: GB, procs: 4, top: "node" },
+    { sessionId: "b", cpuPct: 60, rssBytes: GB, procs: 1, top: "claude" },
+  ];
+  const sys = (u) => ({ cpu: { userPct: u, sysPct: 0, idlePct: 100 - u, spanMs: 4000 }, procs: { at: 0, byCpu: [], byMem: [], count: 9, rssSumBytes: 0, cap: 8, bySession } });
+  const labels = { a: "app · tests" };
+  assert.deepEqual(hotSessions(sys(95), (id) => labels[id]), [
+    { id: "a", label: "app · tests", detail: "492% · mostly node · 4 processes" },
+    { id: "b", label: "a session no longer open", detail: "60% · mostly claude" },
+  ]);
+  assert.deepEqual(hotSessions(sys(50), (id) => labels[id]), []);
 });

@@ -11,12 +11,15 @@
 import { listApiRoutes, type ApiEntry } from "./apitable.js";
 import { SYSTEM_ROUTES } from "./apisystem.js";
 import { HOST_ROUTES } from "./apihost.js";
+import { SKILLS_HOST_ROUTES } from "./apiskills.js";
+import { DICTATE_ROUTES } from "./apidictate.js";
 import { SESSION_ROUTES } from "./apisession.js";
 import { STATS_ROUTES } from "./apistats.js";
 import { WEEKBURN_ROUTES } from "./apiweekburn.js";
+import { AGENT_POINTS_ROUTES } from "./apiagentpoints.js";
 import { REPO_SCOPE } from "./apirepofiles.js";
 
-export const API_ROUTES: readonly ApiEntry[] = [...SYSTEM_ROUTES, ...HOST_ROUTES, ...SESSION_ROUTES, ...STATS_ROUTES, ...WEEKBURN_ROUTES, REPO_SCOPE];
+export const API_ROUTES: readonly ApiEntry[] = [...SYSTEM_ROUTES, ...HOST_ROUTES, ...SKILLS_HOST_ROUTES, ...DICTATE_ROUTES, ...SESSION_ROUTES, ...STATS_ROUTES, ...WEEKBURN_ROUTES, ...AGENT_POINTS_ROUTES, REPO_SCOPE];
 
 /** `METHOD pattern` / `MOUNT name`, in table order, the repo scope expanded. */
 export const listRoutes = (): string[] => listApiRoutes(API_ROUTES);

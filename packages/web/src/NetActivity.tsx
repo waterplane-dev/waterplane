@@ -44,6 +44,10 @@ const LINGER_MS = 400;
 
 export function NetActivity() {
   const ops = useLink((s) => s.ops);
+  // While the socket is down the header already says "connecting" — a second
+  // spinner naming one stuck request ("loading repos · 8s") is the same news
+  // twice. The link indicator owns that moment; this strip waits for "open".
+  const linkUp = useLink((s) => s.status === "open");
   // Re-render on a timer only while something is actually in flight — the
   // elapsed counter has to tick, but an idle app must not repaint every second.
   const [, setTick] = useState(0);
@@ -81,6 +85,7 @@ export function NetActivity() {
   if (oldest && age >= WORDS_MS) wordsRef.current = true;
   if (!shownRef.current) return null;
   if (!oldest && !lingering) return null;
+  if (!linkUp) return null;
 
   const secs = Math.floor(age / 1000);
   const stalled = !!oldest && age >= STALL_MS;

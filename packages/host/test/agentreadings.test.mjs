@@ -201,6 +201,38 @@ test("every reading is absent with a sentence where it cannot be taken — never
   assert.match(onlyHeadless.compact.absent, /None of the 1 session this week ran a git commit \(2 compactions/);
 });
 
+test("start, before-the-first-edit and requests: the agent series' weekly buckets, one population each, absent below the minimum", async () => {
+  const { seriesOf, START_PARTS } = await import("@waterplane/shared");
+  const fresh = (i, o = {}) => ({ id: `c${i}`, t0: mon + i, repo: "/r/app", fresh: true, headless: false, req: 10 + i, commit: i < 5, start: 1000 * (i + 1), parts: { skills: 100 * (i + 1), claudeMd: 50 }, look: i, ...o });
+  const points = [
+    ...[0, 1, 2, 3, 4, 5].map((i) => fresh(i)),
+    fresh(6, { headless: true, fresh: false, start: 1, look: undefined }),
+    ...[0, 1, 2, 3, 4].map((i) => ({ id: `c0/a${i}`, t0: mon, repo: "/r/app", fresh: true, headless: false, sub: true, start: 500 + i, req: 1 })),
+  ];
+  const series = seriesOf(points, { grain: "week" });
+  const convs = [0, 1, 2, 3, 4, 5].map((i) => ({ conv: conv({ t0: mon + i, ex: [1, 100 * (i + 1), 10, 2] }), agents: [] }));
+  const [w, empty] = foldAgentWeeks(convs, [W1, W2], NO_ESC, series);
+  assert.equal(w.start.fresh, 6);
+  assert.deepEqual(w.start.tok, { median: 3500, n: 6 });
+  assert.deepEqual(w.start.parts.map((p) => p.id), START_PARTS.map((p) => p.id).filter((id) => id === "claudeMd" || id === "skills"));
+  assert.deepEqual(w.start.parts.find((p) => p.id === "skills").chars, { median: 350, n: 6 });
+  assert.deepEqual(w.start.sub, { median: 502, n: 5 });
+  // Tokens and looks over the SAME six fresh sessions that edited.
+  assert.equal(w.explore.sessions, 6);
+  assert.deepEqual(w.explore.looks, { median: 2.5, n: 6 });
+  assert.deepEqual(w.requests, { median: 12, n: 5 });
+  assert.match(empty.start.absent, /No session or subagent started/);
+  assert.match(empty.requests.absent, /^0 fresh sessions that committed here; a median needs at least 5\.$/);
+  // Under the minimum, the merged reading is absent as a whole — never a token median beside no look median.
+  const few = foldAgentWeeks(convs.slice(0, 3), [W1], NO_ESC, seriesOf(points.slice(0, 3), { grain: "week" }))[0];
+  assert.match(few.explore.absent, /^3 fresh sessions that reached an edit here; a median needs at least 5\. 0 fresh sessions never edited; 0 left out/);
+  // Without the series (an older caller) none of the three fields is there.
+  const old = foldAgentWeeks(convs, [W1], NO_ESC)[0];
+  assert.equal("start" in old, false);
+  assert.equal("requests" in old, false);
+  assert.equal("looks" in old.explore, false);
+});
+
 test("rework: tokens by the week they were spent; review-repair agents are rework, other agents follow their conversation", () => {
   const c1 = conv({ c: "feature", rr: ["wf_r1"], wk: { [W1]: [10, 0, 90, 0, 0, 1], [W2]: [1, 0, 0, 0, 0, 1] } });
   const repairAgent = { m: 1, s: 1, wf: "wf_r1", wk: { [W1]: [0, 0, 50, 0, 0, 1] } };
@@ -214,6 +246,26 @@ test("rework: tokens by the week they were spent; review-repair agents are rewor
   assert.deepEqual(w1.rework.sessions, { rework: 1, feature: 1, unknown: 1 });
   assert.equal(w1.rework.repairRuns, 1);
   assert.equal(w2.rework.totalTok, 1);
+});
+
+test("activity: conversations that spent this week, the ones that started in it, and the own/subagent token split", () => {
+  const c1 = conv({ t0: mon, wk: { [W1]: [10, 0, 90, 0, 0, 1] } });
+  const sub = { m: 1, s: 1, wk: { [W1]: [0, 0, 50, 0, 0, 1] } };
+  const c2 = conv({ t0: mon - 7 * 86_400_000, wk: { [W1]: [0, 0, 30, 0, 0, 1] } });
+  const idle = conv({ t0: mon, wk: { [W2]: [1, 0, 0, 0, 0, 1] } });
+  const [w1] = foldAgentWeeks([{ conv: c1, agents: [sub] }, { conv: c2, agents: [] }, { conv: idle, agents: [] }], [W1], NO_ESC);
+  assert.deepEqual(w1.activity, { sessions: 2, started: 1, agents: 1, mainTok: 130, agentTok: 50 });
+  assert.equal(w1.activity.mainTok + w1.activity.agentTok, w1.rework.totalTok);
+  assert.match(foldAgentWeeks([], [W1], NO_ESC)[0].activity.absent, /No conversation/);
+});
+
+test("spend: the ledger's week, absent with a sentence for a week it has no row, the field absent when no ledger was handed in", () => {
+  const spend = { [W1]: { requests: 4, pricedRequests: 3, usd: 1.5, ctxTok: 400 } };
+  const [w1, w2] = foldAgentWeeks([], [W1, W2], { ...NO_ESC, spend });
+  assert.deepEqual(w1.spend, spend[W1]);
+  assert.match(w2.spend.absent, /no request from this repo/);
+  assert.equal(foldAgentWeeks([], [W1], { ...NO_ESC, spend: { absent: "The token ledger could not be read." } })[0].spend.absent, "The token ledger could not be read.");
+  assert.equal("spend" in foldAgentWeeks([], [W1], NO_ESC)[0], false);
 });
 
 test("compactions: per committed session in the week the log last moved, with every session's figure beside it", () => {
@@ -304,4 +356,159 @@ test("a fork's copied prefix is the parent's: no week, no compaction, no commit,
   assert.equal(s.cp, 1);
   assert.equal(s.cm, undefined);
   assert.deepEqual(s.wk, { "2026-11-09": [1, 5, 50, 5, 0, 1] });
+});
+
+// ── start readings and points (agent readings P1) ─────────────────────────
+
+const att = (a, ts = T(2, 9), extra = {}) => JSON.stringify({ type: "attachment", timestamp: ts, cwd: "/r/app", version: "2.1.322", attachment: a, ...extra });
+const instr = { type: "instructions", files: [
+  { path: "/h/.claude/CLAUDE.md", type: "User", content: "a".repeat(100) },
+  { path: "/r/app/CLAUDE.md", type: "Project", content: "b".repeat(200) },
+  { path: "/h/.claude/projects/x/memory/MEMORY.md", type: "AutoMem", content: "c".repeat(50) },
+] };
+const startLog = (tail = []) => [
+  att({ type: "prompt_snapshot", systemPrompt: ["s".repeat(40)], tools: [{ name: "Read", schema: { a: 1 } }] }),
+  att(instr),
+  att({ type: "skill_listing", content: "k".repeat(30), skillCount: 2, names: ["x", "y"] }),
+  att({ type: "deferred_tools_delta", addedNames: ["T"], addedLines: ["d".repeat(10)] }),
+  att({ type: "agent_listing_delta", addedTypes: ["Explore"], addedLines: ["g".repeat(7)] }),
+  att({ type: "hook_success", hookEvent: "SessionStart", content: "h".repeat(25), stdout: "h".repeat(25) }),
+  att({ type: "session_context", context: "e".repeat(9) }),
+  att({ type: "date", date: "2026-11-02" }),
+  user(T(2), "fix the login screen"),
+  asst("m1", T(2), usage(10, 1000, 200), [{ type: "tool_use", id: "a", name: "Read", input: {} }, { type: "tool_use", id: "b", name: "Bash", input: { command: "cd /r/app && grep -rn foo src" } }]),
+  asst("m1", T(2), usage(10, 1000, 200), [{ type: "tool_use", id: "c", name: "Bash", input: { command: "npm test" } }]),
+  asst("m2", T(2), usage(5, 2000, 100), [{ type: "tool_use", id: "d", name: "Bash", input: { command: "git log --oneline | head" } }, { type: "tool_use", id: "e", name: "Edit", input: {} }, { type: "tool_use", id: "f", name: "Read", input: {} }]),
+  ...tail,
+].join("\n") + "\n";
+
+test("start readings: model, cli, first-request tokens, parts from the attachments before it, looks before the first edit, requests", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-"));
+  const text = startLog([att({ type: "skill_listing", content: "z".repeat(999) }, T(3))]);
+  const s = await summarizeConv(writeLog(dir, "S1.jsonl", text), "S1", Buffer.byteLength(text), 1, 64);
+  assert.equal(s.sr.md, "claude-opus-5-5");
+  assert.equal(s.sr.cli, "2.1.322");
+  assert.equal(s.sr.st, 1210);
+  assert.deepEqual(s.sr.pt, { system: 40, tools: JSON.stringify({ a: 1 }).length, claudeMd: 300, memory: 50, skills: 30, deferredTools: 10, agents: 7, hooks: 25, session: 9 + 10 });
+  // Read, grep behind a `cd … &&`; `npm test` is not a look; the Bash `git log` and the Read after the Edit are not counted (a look in the same row as the edit comes first: git log).
+  assert.equal(s.sr.lk, 3);
+  assert.equal(s.sr.rq, 2);
+});
+
+test("a log without attachments still has its start; parts are absent, never zero", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-"));
+  const text = convLog();
+  const s = await summarizeConv(writeLog(dir, "S1.jsonl", text), "S1", Buffer.byteLength(text), 1);
+  assert.equal(s.sr.st, 1210);
+  assert.equal(s.sr.pt, undefined);
+  assert.equal(s.sr.cli, undefined);
+  assert.equal(s.sr.lk, 1);
+});
+
+test("a session that never edits has no look count", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-"));
+  const text = [user(T(2), "why?"), asst("m1", T(2), usage(1, 10, 5), [{ type: "tool_use", id: "a", name: "Grep", input: {} }])].join("\n") + "\n";
+  const s = await summarizeConv(writeLog(dir, "S1.jsonl", text), "S1", Buffer.byteLength(text), 1);
+  assert.equal(s.sr.lk, undefined);
+  assert.equal(s.sr.rq, 1);
+});
+
+test("what is a look", async () => {
+  const { isLookCall } = await import("../dist/agentclass.js");
+  for (const c of ["grep -rn x .", "cd a && grep x", "cd 'a b' && cd c && rg x", "ls -la", "sed -n 1,5p f", "git status", "git -c x=y log".replace("-c x=y ", ""), "cat f | head", "find . -name x"]) assert.equal(isLookCall("Bash", c), true, c);
+  for (const c of ["npm test", "sed -i s/a/b/ f", "git commit -m x", "git push", "lsof -i", "echo grep", "cd a && npm run build"]) assert.equal(isLookCall("Bash", c), false, c);
+  for (const n of ["Read", "Grep", "Glob", "LS", "NotebookRead"]) assert.equal(isLookCall(n, undefined), true);
+  assert.equal(isLookCall("WebFetch", undefined), false);
+  assert.equal(isLookCall("Edit", undefined), false);
+});
+
+test("a subagent log reports its start, and a fork reports none of the parent's", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-"));
+  const text = [att({ type: "skill_listing", content: "k".repeat(5) }), asst("a1", T(4), usage(3, 100, 7), [{ type: "tool_use", id: "a", name: "Read", input: {} }, { type: "tool_use", id: "b", name: "Write", input: {} }])].join("\n") + "\n";
+  const a = await summarizeAgentLog(writeLog(dir, "agent-a.jsonl", text), "S1/subagents/agent-a", Buffer.byteLength(text), 1, 64);
+  assert.deepEqual(a.sr, { cli: "2.1.322", st: 110, pt: { skills: 5 }, lk: 1, rq: 1, md: "claude-opus-5-5" });
+  assert.equal(a.t0, Date.parse(T(2, 9)));
+  const P = (row) => JSON.stringify({ ...JSON.parse(row), session_id: "PARENT" });
+  const f = [P(user(T(2), "x", {}, "S2")), P(asst("m1", T(2), usage(10, 1000, 200), [{ type: "tool_use", id: "t", name: "Edit", input: {} }], "S2")), asst("m2", T(9), usage(1, 5, 5), [], "S2")].map((l, i) => i === 2 ? JSON.stringify({ ...JSON.parse(l), session_id: "S2" }) : l).join("\n") + "\n";
+  const s = await summarizeConv(writeLog(dir, "S2.jsonl", f), "S2", Buffer.byteLength(f), 1);
+  assert.equal(s.nf, "fork");
+  assert.deepEqual(s.sr, { rq: 1 });
+});
+
+test("points: one per conversation and subagent log, repo-wide too, newest first; an older store version is rebuilt", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wp-agentpoints-"));
+  process.env.CLAUDE_CONFIG_DIR = home;
+  const projects = join(home, "projects");
+  const text = startLog();
+  writeLog(join(projects, "-r-app"), "S1.jsonl", text);
+  writeLog(join(projects, "-r-app", "S1", "subagents"), "agent-x.jsonl", asst("a1", T(4), usage(0, 700, 0)) + "\n");
+  const other = convLog({ sid: "S9" }).replaceAll('"/r/app"', '"/r/lib"').replaceAll("S1", "S9");
+  writeLog(join(projects, "-r-lib"), "S9.jsonl", other);
+  // A store written by an older version is ignored, not trusted.
+  mkdirSync(join(home, "state"), { recursive: true });
+  writeFileSync(join(home, "state", "agentreadings.json"), JSON.stringify({ v: 2, store: { "-r-app": { S1: { m: 1, s: 1, c: "unknown", wk: {}, cp: 0 } } } }));
+  const store = new AgentReadingsStore(join(home, "state"), () => undefined);
+  const { agentPointsFor } = await import("../dist/agentreadings.js");
+  const now = Date.parse(T(10));
+  const one = await agentPointsFor(store, ["/r/app"], now);
+  assert.equal(one.ok, true);
+  assert.equal(one.points.length, 2);
+  const conv = one.points.find((p) => p.id === "S1");
+  assert.equal(conv.repo, "/r/app");
+  assert.equal(conv.fresh, true);
+  assert.equal(conv.look, 3);
+  assert.equal(conv.start, 1210);
+  assert.equal(conv.commit, false);
+  assert.equal(conv.sub, undefined);
+  const sub = one.points.find((p) => p.sub);
+  assert.equal(sub.start, 700);
+  assert.equal(sub.commit, undefined);
+  assert.match(one.rules.look, /Grep/);
+  const all = await agentPointsFor(store, ["/r/app", "/r/lib"], now);
+  assert.deepEqual(all.points.map((p) => p.repo).sort(), ["/r/app", "/r/app", "/r/lib"]);
+  assert.equal(all.cut, 0);
+  delete process.env.CLAUDE_CONFIG_DIR;
+});
+
+test("the weekly region folds EVERY point: a repo past the wire caps keeps its older weeks whole, the phone's list stays capped", async () => {
+  const { AGENT_POINTS_CAP } = await import("@waterplane/shared");
+  const home = mkdtempSync(join(tmpdir(), "wp-agentcap-"));
+  process.env.CLAUDE_CONFIG_DIR = home;
+  const dir = join(home, "projects", "-r-app");
+  const n = AGENT_POINTS_CAP + 2;
+  for (let i = 0; i < n; i++) {
+    // The two oldest sessions start a day before the rest.
+    const ts = i < 2 ? T(2) : T(5);
+    writeLog(dir, `C${i}.jsonl`, user(ts, "hello", {}, `C${i}`) + "\n" + asst(`m${i}`, ts, usage(1, 100, 10), [], `C${i}`) + "\n");
+  }
+  const store = new AgentReadingsStore(join(home, "state"), () => undefined);
+  await store.sweep(["/r/app"]);
+  const now = Date.parse(T(10));
+  const capped = store.points(["/r/app"], now);
+  assert.equal(capped.points.length, AGENT_POINTS_CAP);
+  assert.equal(capped.cut, 2);
+  const whole = store.points(["/r/app"], now, false);
+  assert.equal(whole.points.length, n);
+  assert.equal(whole.cut, 0);
+  delete process.env.CLAUDE_CONFIG_DIR;
+});
+
+test("the capped list leaves headless and forked conversations off, so they spend no cap and cut nothing", async () => {
+  const { AGENT_POINTS_CAP } = await import("@waterplane/shared");
+  const home = mkdtempSync(join(tmpdir(), "wp-agentcapfresh-"));
+  process.env.CLAUDE_CONFIG_DIR = home;
+  const dir = join(home, "projects", "-r-app");
+  // One OLD fresh conversation, then a full cap of newer headless ones: the old one must survive.
+  writeLog(dir, "F0.jsonl", user(T(2), "hello", {}, "F0") + "\n" + asst("mf", T(2), usage(1, 100, 10), [], "F0") + "\n");
+  for (let i = 0; i < AGENT_POINTS_CAP + 1; i++) {
+    const body = (user(T(5), "hi", {}, `H${i}`) + "\n" + asst(`mh${i}`, T(5), usage(1, 100, 10), [], `H${i}`) + "\n").replaceAll('"entrypoint":"cli"', '"entrypoint":"sdk-cli"');
+    writeLog(dir, `H${i}.jsonl`, body);
+  }
+  const store = new AgentReadingsStore(join(home, "state"), () => undefined);
+  await store.sweep(["/r/app"]);
+  const capped = store.points(["/r/app"], Date.parse(T(10)));
+  assert.deepEqual(capped.points.map((p) => p.id), ["F0"]);
+  assert.equal(capped.cut, 0);
+  assert.equal(store.points(["/r/app"], Date.parse(T(10)), false).points.length, AGENT_POINTS_CAP + 2);
+  delete process.env.CLAUDE_CONFIG_DIR;
 });

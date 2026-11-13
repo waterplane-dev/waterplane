@@ -14,7 +14,7 @@ import { Empty } from "../Empty";
 import { SessionName } from "../SessionName";
 import { CLOSE_CHOICES, type CloseChoice, closeChoiceDraft, closeChoiceLabel, closeChoiceOf, closeEffectWords } from "../autoSessions";
 import type { SendSheetModel } from "./useSendSheet";
-import { firstSession, cwdOf, dirsOf } from "./sendTargets";
+import { launchOnReturn } from "../sendIntent/sendSeedMode.ts"; import { firstSession, cwdOf, dirsOf } from "./sendTargets";
 
 export function ToSection({ m }: { m: SendSheetModel }) {
   const {
@@ -139,8 +139,8 @@ export function ToSection({ m }: { m: SendSheetModel }) {
             onChange={(k) => setTarget(k === "session"
               ? firstSession(live, seed.cwdHint)
               : k === "repo"
-                ? withLaunch(withBudget({ kind: "repo", cwd: cwdOf(target, repos, seed.cwdHint) }, budgetOfTarget(target)), launchOfTarget(target))
-                : withLaunch(withBudget({ kind: "repos", dirs: dirsOf(target, seed.cwdHint) }, budgetOfTarget(target)), launchOfTarget(target)))} />
+                ? withLaunch(withBudget({ kind: "repo", cwd: cwdOf(target, repos, seed.cwdHint) }, budgetOfTarget(target)), launchOnReturn(target, seed.target))
+                : withLaunch(withBudget({ kind: "repos", dirs: dirsOf(target, seed.cwdHint) }, budgetOfTarget(target)), launchOnReturn(target, seed.target)))} />
           {/* The missing segment, as the sentence it is. `Unavailable` is the
               house form for exactly this — what a surface cannot do, said
               without being asked for, never a shape you can aim a thumb at. */}

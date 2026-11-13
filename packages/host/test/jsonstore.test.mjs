@@ -71,6 +71,44 @@ test("readJsonGuarded: a corrupt file is moved aside, logged once, fallback retu
   assert.ok(!readdirSync(dir).includes("store.json"), "the real name is free for the next write");
 });
 
+test("readJsonGuardedDetail: an UNREADABLE file is kept aside like a corrupt one, so the next save cannot replace bytes nobody read", (t) => {
+  if (process.getuid?.() === 0 || process.platform === "win32") return t.skip("root reads a mode-000 file; Windows has no chmod");
+  const { dir } = stateDir();
+  const p = join(dir, "roster.json");
+  writeFileSync(p, '{"precious": true}');
+  chmodSync(p, 0o000);
+  const { value: got, lines } = quietly(() => readJsonGuardedDetail(p, { fresh: 1 }));
+  assert.deepEqual(got.value, { fresh: 1 });
+  assert.equal(lines.length, 1);
+  assert.ok(got.corrupt?.movedTo, "the unreadable file reports where it went");
+  assert.equal(got.corrupt.unreadable, true);
+  // The load-then-save shape every store has: the save lands on the same name.
+  writeJsonAtomic(p, { fresh: 1 });
+  const kept = readdirSync(dir).filter((n) => n.startsWith("roster.json.corrupt-"));
+  assert.equal(kept.length, 1, "the original bytes survive the save");
+  assert.equal(got.corrupt.movedTo, join(dir, kept[0]));
+  chmodSync(join(dir, kept[0]), 0o600);
+  assert.equal(readFileSync(join(dir, kept[0]), "utf8"), '{"precious": true}');
+  assert.deepEqual(JSON.parse(readFileSync(p, "utf8")), { fresh: 1 });
+});
+
+test("readJsonGuardedDetail: keepUnreadable leaves an unreadable file in place and says unreadable; a torn one is still moved", (t) => {
+  if (process.getuid?.() === 0 || process.platform === "win32") return t.skip("root reads a mode-000 file; Windows has no chmod");
+  const { dir } = stateDir();
+  const p = join(dir, "latch.json");
+  writeFileSync(p, '{"precious": true}');
+  chmodSync(p, 0o000);
+  const { value: got } = quietly(() => readJsonGuardedDetail(p, { fresh: 1 }, undefined, { keepUnreadable: true }));
+  assert.equal(got.corrupt.unreadable, true);
+  assert.equal(got.corrupt.movedTo, null);
+  assert.deepEqual(readdirSync(dir), ["latch.json"], "left where it is: fixing the permissions brings it back");
+  chmodSync(p, 0o600);
+  assert.deepEqual(readJsonGuardedDetail(p, { fresh: 1 }, undefined, { keepUnreadable: true }).value, { precious: true });
+  writeFileSync(p, "{ torn");
+  const torn = quietly(() => readJsonGuardedDetail(p, { fresh: 1 }, undefined, { keepUnreadable: true })).value;
+  assert.ok(torn.corrupt.movedTo && !torn.corrupt.unreadable, "a parse failure is moved aside and is not 'unreadable'");
+});
+
 test("readJsonGuarded: valid JSON of the wrong shape counts as corrupt", () => {
   const { dir } = stateDir();
   const p = join(dir, "subs.json");
@@ -166,6 +204,26 @@ test("auth.json corrupt: LAN denied, every token refused, a feed row says so", a
   const n = authLostNotice(b.lost);
   assert.match(n.body, /auth\.json\.corrupt-/);
   assert.match(n.body, /LAN/);
+});
+
+test("auth.json unreadable: Tailscale stays gated on every boot, not only the first", async (t) => {
+  if (process.getuid?.() === 0 || process.platform === "win32") return t.skip("root reads a mode-000 file; Windows has no chmod");
+  const { AuthManager, authLostNotice } = await import("../dist/auth.js");
+  const { root, dir } = stateDir();
+  const a = new AuthManager(root);
+  a.setPassword("correct horse battery");
+  a.setGateTailscale(true);
+  const file = join(dir, "auth.json");
+  chmodSync(file, 0o000);
+  try {
+    const b = quietly(() => new AuthManager(root)).value;
+    assert.equal(b.needsToken("tailscale"), true);
+    assert.match(authLostNotice(b.lost).body, /permissions/);
+    assert.equal(readdirSync(dir).includes("auth.json"), true, "left in place, not moved aside");
+    const c = quietly(() => new AuthManager(root)).value;
+    assert.equal(c.needsToken("tailscale"), true, "the second boot is still gated");
+  } finally { chmodSync(file, 0o600); }
+  assert.ok(new AuthManager(root).verify("correct horse battery"), "fixing the permissions brings the password back");
 });
 
 test("auth.json corrupt with gateTailscale in its bytes: Tailscale stays gated until the password is set again", async () => {

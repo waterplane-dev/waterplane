@@ -42,8 +42,7 @@
  * the earliest possible reset, never a loop.
  */
 
-/** A bare clock time recurs once a day (`daily`). */
-const DAY_MS = 86_400_000;
+import { nextLocalOccurrence } from "@waterplane/shared";
 
 /**
  * The widening delay, by attempt index, when nobody has dated the reset.
@@ -180,7 +179,7 @@ export function nextLimitAttempt(i: LimitRetryInput): LimitRetry {
     // The next occurrence of the bare time, strictly after now: the attempt that
     // fired at today's 7pm and came back still blocked is re-asked here a moment
     // later and gets TOMORROW's 7pm, never a past instant that would fire at once.
-    const next = target > i.now ? target : target + Math.ceil((i.now - target + 1) / DAY_MS) * DAY_MS;
+    const next = nextLocalOccurrence(target, i.now);
     // Attempt 0 keeps its one cheap probe when the reset is beyond the horizon
     // (an upgraded plan serves at once); every later attempt sits the wait out.
     const probe = i.attempts === 0 && next - i.now > horizon && rungAt < next;

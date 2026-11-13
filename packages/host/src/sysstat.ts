@@ -51,7 +51,7 @@
 import os from "node:os";
 import { lstat, readFile, readdir, stat, statfs } from "node:fs/promises";
 import type {
-  CpuBusy, DiskSnapshot, DiskVolume, FanRow, MemBreakdown, ProcRow, ProcSnapshot, SysStat, Thermal,
+  CpuBusy, DiskSnapshot, DiskVolume, FanRow, MemBreakdown, ProcRow, ProcSnapshot, SessionCpuRow, SysStat, Thermal,
 } from "@waterplane/shared";
 import { ROOT, env } from "./env.js";
 import { BRAND, envName, PLUGIN_READER_NAME_RE, PLUGIN_THERMAL_TIMEOUT_MS } from "@waterplane/shared";
@@ -281,18 +281,78 @@ export function sampleMemory(): Promise<MemBreakdown | null> {
  * exists so the phone can say that rather than let somebody total the column.
  */
 export function parsePsTable(text: string, cap = PROC_CAP): Omit<ProcSnapshot, "at"> {
+  const rows: PsRow[] = [];
+  for (const line of text.split("\n")) {
+    const m = /^(\d+)\s+(\d+)\s+([\d.]+)\s+(\S.*)$/.exec(line.trim());
+    if (m) rows.push(psRow(m[1], "0", m[2], m[3], m[4]));
+  }
+  return foldProcs(rows.filter(okRow), cap);
+}
+
+/** One `ps` line, before any folding. `ppid` 0 = not read. */
+export interface PsRow { pid: number; ppid: number; rssBytes: number; cpuPct: number; name: string }
+
+function psRow(pid: string, ppid: string, rssKiB: string, cpu: string, comm: string): PsRow {
+  return { pid: Number(pid), ppid: Number(ppid), rssBytes: Number(rssKiB) * 1024, cpuPct: Number(cpu), name: comm.slice(comm.lastIndexOf("/") + 1) || comm };
+}
+const okRow = (r: PsRow) => Number.isFinite(r.rssBytes) && Number.isFinite(r.cpuPct);
+
+/** `ps -Ao pid=,ppid=,rss=,pcpu=,comm=` → rows; junk lines (warnings, blanks) are dropped. */
+export function parsePsRows(text: string): PsRow[] {
+  const rows: PsRow[] = [];
+  for (const line of text.split("\n")) {
+    const m = /^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\S.*)$/.exec(line.trim());
+    if (m) rows.push(psRow(m[1], m[2], m[3], m[4], m[5]));
+  }
+  return rows.filter(okRow);
+}
+
+/** How many session rows ship, and the floor below which a session is left out. */
+export const SESSION_CPU_CAP = 8;
+export const SESSION_CPU_MIN_PCT = 1;
+
+/**
+ * CPU per waterplane session: each process is walked up its parents (at most
+ * `SESSIONOF_MAX_HOPS`-ish, 16) until it reaches one of our panes' pids — the
+ * pane process itself counts. A process under no pane is not in any row; a
+ * reparented orphan (a daemon a tool left behind) is honestly no session's.
+ */
+export function cpuBySession(rows: PsRow[], panes: { sessionId: string; panePid: number }[], cap = SESSION_CPU_CAP): SessionCpuRow[] {
+  if (!panes.length) return [];
+  const paneOf = new Map(panes.map((p) => [p.panePid, p.sessionId]));
+  const parent = new Map(rows.map((r) => [r.pid, r.ppid]));
+  const acc = new Map<string, { cpuPct: number; rssBytes: number; procs: number; byName: Map<string, number> }>();
+  for (const r of rows) {
+    let cur = r.pid, sid: string | undefined;
+    for (let hop = 0; hop < 16 && cur > 1; hop++) {
+      sid = paneOf.get(cur);
+      if (sid) break;
+      const next = parent.get(cur);
+      if (next == null || next === cur) break;
+      cur = next;
+    }
+    if (!sid) continue;
+    let a = acc.get(sid);
+    if (!a) acc.set(sid, a = { cpuPct: 0, rssBytes: 0, procs: 0, byName: new Map() });
+    a.cpuPct += r.cpuPct; a.rssBytes += r.rssBytes; a.procs++;
+    a.byName.set(r.name, (a.byName.get(r.name) ?? 0) + r.cpuPct);
+  }
+  return [...acc.entries()]
+    .map(([sessionId, a]) => ({
+      sessionId, cpuPct: Math.round(a.cpuPct * 10) / 10, rssBytes: a.rssBytes, procs: a.procs,
+      top: [...a.byName.entries()].sort((x, y) => y[1] - x[1])[0][0],
+    }))
+    .filter((x) => x.cpuPct >= SESSION_CPU_MIN_PCT)
+    .sort((x, y) => y.cpuPct - x.cpuPct)
+    .slice(0, cap);
+}
+
+/** The program fold behind `parsePsTable`, over rows already read. */
+export function foldProcs(psRows: PsRow[], cap = PROC_CAP): Omit<ProcSnapshot, "at"> {
   const byName = new Map<string, ProcRow>();
   let count = 0;
   let rssSumBytes = 0;
-  for (const line of text.split("\n")) {
-    const m = /^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(.+?)\s*$/.exec(line);
-    if (!m) continue;
-    const pid = Number(m[1]);
-    const rss = Number(m[2]) * 1024;
-    const cpu = Number(m[3]);
-    const raw = m[4];
-    if (!Number.isFinite(rss) || !Number.isFinite(cpu)) continue;
-    const name = raw.slice(raw.lastIndexOf("/") + 1) || raw;
+  for (const { pid, rssBytes: rss, cpuPct: cpu, name } of psRows) {
     count++;
     rssSumBytes += rss;
     const row = byName.get(name);
@@ -311,6 +371,11 @@ export function parsePsTable(text: string, cap = PROC_CAP): Omit<ProcSnapshot, "
   return { byMem: top("rssBytes"), byCpu: top("cpuPct"), count, rssSumBytes, cap };
 }
 
+/** Our tmux panes, handed in by `main.ts` (the sessions facade; sysstat imports no session slice).
+ *  Unset or null = no per-session CPU, never an empty one. */
+let sessionPanes: (() => Promise<{ sessionId: string; panePid: number }[] | null>) | null = null;
+export function setSessionPanes(fn: typeof sessionPanes): void { sessionPanes = fn; }
+
 async function readProcs(): Promise<{ snap: ProcSnapshot } | { note: string }> {
   if (!procListEnabled()) {
     return { note: `The process list is switched off on this desktop (${envName("SYSSTAT_PROCS")}=0).` };
@@ -319,11 +384,15 @@ async function readProcs(): Promise<{ snap: ProcSnapshot } | { note: string }> {
     return { note: `No process reader for ${process.platform} — this one reads \`ps\`.` };
   }
   try {
-    const { stdout } = await pexecFile("ps", ["-Ao", "pid=,rss=,pcpu=,comm="],
-      { timeout: 4000, maxBuffer: 8 * 1024 * 1024 });
-    const parsed = parsePsTable(stdout);
+    const [{ stdout }, panes] = await Promise.all([
+      pexecFile("ps", ["-Ao", "pid=,ppid=,rss=,pcpu=,comm="], { timeout: 4000, maxBuffer: 8 * 1024 * 1024 }),
+      (sessionPanes?.() ?? Promise.resolve(null)).catch(() => null),
+    ]);
+    const rows = parsePsRows(stdout);
+    const parsed = foldProcs(rows);
     if (!parsed.count) return { note: "`ps` answered, and nothing could be read out of it." };
-    return { snap: { at: Date.now(), ...parsed } };
+    // No pane listing (tmux down, no server) ⇒ no `bySession`, never an empty one.
+    return { snap: { at: Date.now(), ...parsed, ...(panes ? { bySession: cpuBySession(rows, panes) } : {}) } };
   } catch (e) {
     // The runner's own words, `evictLocalModel`'s rule: there is no richer
     // vocabulary for "why" than what the OS already said.

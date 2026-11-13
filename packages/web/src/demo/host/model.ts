@@ -164,6 +164,8 @@ export interface DemoModel {
     /** `true` = answer `/api/repos/<id>/repohealth` from `repohealth.ts`'s fictional series for the
      *  demo repos. Absent = the honest 404. */
     repoHealth?: true;
+    /** `true` = answer `/api/repos/<id>/skills` and `/compliance` from `skills.ts` (scenario `skills-switch`). Absent = the honest 404. */
+    skills?: true;
   };
   /** The host-wide auto-continue switch and resume mode (`limit.config`); absent = switched off. */
   limitConfig?: { enabled: boolean; mode?: Frame<"limit.config">["mode"] };

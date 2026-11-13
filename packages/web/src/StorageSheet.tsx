@@ -169,7 +169,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
 
   return (
     <div className="sheet">
-      <SheetHead title="Storage on this phone" onClose={onClose}>
+      <SheetHead title="Storage on this device" onClose={onClose}>
         {loading && <Loader2 size={13} className="spin" />}
       </SheetHead>
 
@@ -210,7 +210,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
           ) : (
             <Unavailable className="form-hint" cants={[{
               label: "free saved downloads",
-              reason: "nothing finished here has been saved out to the phone yet.",
+              reason: "nothing finished here has been saved out to the device yet.",
             }]} />
           )}
 
@@ -224,7 +224,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                   old builds (`artifacts.ts` keeps 3 of each), so "fetch it
                   again" is a promise about the build, not about the file. */}
               <Hint>
-                These were never saved to the phone. They come back as a tap only while the desktop
+                These were never saved to the device. They come back as a tap only while the desktop
                 still has that build — it keeps the newest few of each.
               </Hint>
               <ConfirmButton className="send danger" confirm={`Yes — free ${fmtBytes(dl.unsavedBytes)}`}
@@ -268,7 +268,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
       {groups && (
         <section className="set-group">
           <h3 className="set-title">
-            Only on this phone — {tallyText(groups.keep.count, groups.keep.bytes, "entry")}
+            Only on this device — {tallyText(groups.keep.count, groups.keep.bytes, "entry")}
           </h3>
           <Hint>
             The desktop cannot send these back. Each one goes on its own, and says what it takes with it.

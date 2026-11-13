@@ -22,7 +22,7 @@
 import { basename } from "node:path";
 import type { CostBreakdown, ModelSlice, TokenDay, TokenGroup, TokenHour, TokenHourSlot, TokenTotals } from "@waterplane/shared";
 import {
-  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourKey, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
+  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourKey, isPriced, priceKeyLabel, tokenTotal, zeroCost, zeroTotals,
 } from "@waterplane/shared";
 import { CROSS } from "../../../host/src/tokenscan.js";
 import type { Tally } from "../../../host/src/tokenscan.js";
@@ -187,7 +187,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
 
   const modelRows: TokenGroup[] = [...models.entries()]
     // Labelled by the alias; the raw id stays as the key.
-    .map(([key, t]) => ({ key, label: normalizeModel(key) ?? key, ...t, cost: modelCost.get(key) ?? zeroCost(), priced: isPriced(key) }))
+    .map(([key, t]) => ({ key, label: priceKeyLabel(key), ...t, cost: modelCost.get(key) ?? zeroCost(), priced: isPriced(key) }))
     .sort((a, b) => tokenTotal(b) - tokenTotal(a));
   const repoRows: TokenGroup[] = [...repos.entries()]
     .map(([key, t]) => ({

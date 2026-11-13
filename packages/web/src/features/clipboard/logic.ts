@@ -7,7 +7,7 @@
  *  view unmounts the xterm, so with no cached transcript there is no source. */
 export function emptyDumpText(hasSession: boolean): string {
   return hasSession
-    ? "No text to copy yet.\n\nThe terminal is not on screen (reader view), and no transcript for this session is cached on this phone. Open the reader once while connected, then try again."
+    ? "No text to copy yet.\n\nThe terminal is not on screen (reader view), and no transcript for this session is cached on this device. Open the reader once while connected, then try again."
     : "No session on screen.";
 }
 

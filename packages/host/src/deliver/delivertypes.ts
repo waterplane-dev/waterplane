@@ -5,6 +5,7 @@
 import type { DeliveryShape, HistoryEntry, SendView, SentCommand, SentSource } from "@waterplane/shared";
 import type { SessionManager } from "../sessions.js";
 import type { noteHealth } from "../clihealth.js";
+import type { Clock } from "../waitclock.js";
 import type { makeLogProof, makeSubmitProof } from "./deliverproof.js";
 
 /** What a delivery attempt did — see `deliverPrompt()` for the contract. */
@@ -41,6 +42,8 @@ export type DeliveryResult = "ok" | "retry" | "unconfirmed" | "unsubmitted";
  * rule failing. See the submit branch in `runDelivery`.
  */
 export interface DeliverOpts {
+  /** The clock every wait in the ladder reads (default `realClock`); a test hands in virtual time. */
+  clock?: Clock;
   /** Human-typed: don't wait for the turn to end (see above). */
   interactive?: boolean;
   /**
@@ -104,6 +107,7 @@ export interface DeliverOpts {
  * through `proof`'s getters, never copied out.
  */
 export interface DeliveryRun {
+  clock: Clock;
   sessions: SessionManager;
   sessionId: string;
   text: string;

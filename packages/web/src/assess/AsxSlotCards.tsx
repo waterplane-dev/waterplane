@@ -21,7 +21,7 @@ import { Tag } from "../kit/Tag";
 function Words({ row, m }: { row: SlotCardRow; m: AssessModel }) {
   const { p } = m;
   return row.text == null
-    ? <span className="act-stale"><AlertTriangle size={11} /> {row.id} — its words are not on this phone</span>
+    ? <span className="act-stale"><AlertTriangle size={11} /> {row.id} — its words are not on this device</span>
     : <>
       <span className="act-text act-text-full">{row.text}</span>
       <ItemFiles text={row.text} repoId={p.repoId} outbox={p.outbox} online={p.online} />

@@ -138,7 +138,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   signin: { name: "Signed out", note: "The CLI was signed out and sessions stopped behind it, and again when you are signed back in and can continue them. One push per change; nothing is typed until you tap continue." },
   burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
   weekburn: { name: "Week-end burn", note: "Once a week, if you are on pace to leave budget unused: pick repos to spend it on." },
-  disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this phone off. Words only; nothing is deleted." },
+  disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this device off. Words only; nothing is deleted." },
   agent: { name: "Large subagent", note: "A running subagent passed the context size you set on the context sheet (default 500k) — one push per agent, naming it. It warns only; nothing is stopped." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
   proposal: { name: "Proposed by a script", note: "A repo's own script (a cron job, a findings collector) proposed work for you to fire, schedule or delete. One push per proposal; it clears once you have done one of the three. Nothing starts by itself." },

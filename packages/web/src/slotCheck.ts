@@ -240,7 +240,7 @@ export function assessChoicesOf(o: {
 export function splitConfirmLines(c: SplitCard, repoName: string): string[] {
   return [
     `In ${repoName}, this row is archived (its words kept):`,
-    c.original.text ?? `${c.id} — its words are not on this phone`,
+    c.original.text ?? `${c.id} — its words are not on this device`,
     "and two rows are posted on the same clock:",
     `1. ${c.texts[0] ?? ""}`,
     `2. ${c.texts[1] ?? ""}`,

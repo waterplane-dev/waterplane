@@ -110,7 +110,7 @@ A route that is not protected (R-security-021) is warned about loudly: an unfold
 - note: not yet tried on a real phone.
 
 ### R-security-023 · shipped
-A desktop that opts in to the LAN (`WATERPLANE_ALLOW_PUBLIC=1`) also answers on an encrypted port that the Android app pins, so the device token, the app's pages and downloads cross the Wi-Fi as ciphertext to that desktop and nothing else. Nothing listens there without the opt-in, the password gate is the same, and the port is not reachable from loopback or the tailnet. The Wi-Fi owner can still stop the connection, and a person who gets into the desktop's files can read its keys: this protects the network path, not the desktop.
+A desktop that opts in to the LAN (`WATERPLANE_ALLOW_PUBLIC=1`) also answers on an encrypted port that the Android app pins, so the device token, the app's pages and downloads cross the Wi-Fi as ciphertext to that desktop and nothing else. Nothing listens there without the opt-in, the password gate is the same, and the port is not reachable from loopback or the tailnet. It is on by default with the opt-in (default port + 1, 8771), `WATERPLANE_TLS=0` turns it off, and a busy port is logged while the host carries on plain. The Wi-Fi owner can still stop the connection, and a person who gets into the desktop's files can read its keys: this protects the network path, not the desktop.
 - asked: 2026-11-03 (owner)
 - shipped: ce1e392c, 1da2c03a
 - note: SECURITY.md lists what pinning does not defend. A browser on the LAN is not covered (its page arrives unprotected). Not tried on a phone.
@@ -127,4 +127,14 @@ The exposure report names this repository's own private origin as the scored rep
 Pairing and the encrypted link run between the phone and the desktop with no cloud service in between, and waterplane runs no cloud service of its own for updates: they come from the desktop or from the public GitHub and Google Play releases.
 - asked: 2026-11-03
 - shipped: db775c2b, 1da2c03a, c7661bd2
+
+### R-security-027 · shipped
+The documentation describes HTTPS and always-on encryption accurately, including that the Wi-Fi address is typed plain and the app encrypts it on the pinned TLS port.
+- asked: 2026-11-10
+- shipped: e442fbed
+
+### R-security-028 · shipped
+The phone-side passive mode for kids' devices only calls API routes that the host's passive allowlist permits.
+- asked: 2026-11-10
+- shipped: 7cdcc498
 

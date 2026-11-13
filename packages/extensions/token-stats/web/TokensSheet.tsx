@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import type { TokenConvo } from "@waterplane/shared";
 import { core, explainCostPrompt, ledgers, useCore } from "@waterplane/sdk";
+import { AgentSeriesCard } from "./AgentSeriesCard.tsx";
 import { AlwaysOnDoors } from "./AlwaysOnDoors.tsx";
 import { ledgerBackends } from "./backendLedger.ts";
 import { TokenStatsSheet } from "./TokenStatsSheet.tsx";
@@ -46,7 +47,7 @@ export function TokensSheet() {
   const doors = <AlwaysOnDoors hasSession={!!active}
     onSession={() => { c.say.track("action:tokens.ctxDoor"); c.nav.close("tokens"); c.nav.openContext(null); }}
     onRepo={() => { c.say.track("action:tokens.setupDoor"); c.nav.close("tokens"); c.nav.openSetup(c.world.activeRepo?.id ?? null, { region: "setup" }); }} />;
-  return <TokenStatsSheet doors={doors} readings={c.world.usageReadings} openedOn={openedOn} onClearOn={c.world.clearTokensOn}
+  return <TokenStatsSheet doors={doors} afterOverTime={<AgentSeriesCard online={c.conn.status === "open"} />} readings={c.world.usageReadings} openedOn={openedOn} onClearOn={c.world.clearTokensOn}
     online={c.conn.status === "open"} views={views} backends={c.world.backends}
     ledgerTabs={ledgerBackends(c.world.backends, views.map((v) => v.id))} usage={u} spend={{ profile: c.world.billing?.profile ?? null, budget: c.world.budget?.budget ?? null, periods: c.world.budget?.periods ?? null }} onRefreshUsage={ledgers.refreshUsage}
     onClose={() => { c.world.clearTokensOn(); c.nav.close("tokens"); }}

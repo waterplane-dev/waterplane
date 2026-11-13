@@ -50,6 +50,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** One launch, with everything the caller did not care about left out. */
 const plan = (req) => claudeBackend.prepare({ launch: {}, hookPort: PORT, ...req });
 
+test("the --settings blob never carries skillOverrides or enabledPlugins (flagSettings would lock them)", () => {
+  for (const blob of [HOOKS, hookSettingsArg(PORT, ["Bash(rm:*)"])]) {
+    const o = JSON.parse(blob);
+    assert.equal("skillOverrides" in o, false);
+    assert.equal("enabledPlugins" in o, false);
+  }
+});
+
 test("a fresh conversation mints its own session id", () => {
   const { args, sessionId } = plan({});
   assert.match(sessionId, UUID_RE, "a fresh launch must mint an id, not leave it to detection");

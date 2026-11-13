@@ -39,7 +39,13 @@ export type HostCoreMsg =
   // `tlsSpki` (optional, additive): the encrypted LAN listener, `tlsSpki` being
   // lowercase hex SHA-256 of the leaf's SPKI DER. A phone believes these three
   // only when the URL this socket dialled is protected, never on a plain route.
-  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number; updateKey?: string; tlsPort?: number; tlsSpki?: string }
+  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number; updateKey?: string; tlsPort?: number; tlsSpki?: string;
+      /** The rates this host read off Anthropic's price page, so the phone's own cost hints match the
+       *  host's. Absent = the host prices from its built-in table (or is older): the phone uses its own. */
+      prices?: { rates: Record<string, { input: number; output: number; cacheRead?: number }>;
+        /** Long-prompt cards (Haiku 5.5 past 100K tokens); absent from an older host. */
+        longPrompt?: Record<string, { input: number; output: number; cacheRead?: number; overTokens: number }>;
+        fetchedAt: number } }
   /**
    * The daemon is going down (SIGTERM/SIGINT — `npm run restart` is one),
    * broadcast before the flush. Additive: an old phone ignores it. With
@@ -239,8 +245,11 @@ export type HostCoreMsg =
    *  session's worktree, plus its background shells (the same `shellList` a
    *  status poll would publish) — a close sheet asking "what's at stake here"
    *  needs both facts in the one reply, not a second round trip. Absent means
-   *  the same as `SessionInfo.shellList` absent: could not read, not "none". */
-  | { t: "session.closecheck"; id: string; isRepo: boolean; branch: string; dirty: boolean; unmerged: number; isMain: boolean; mainBranch: string; shells?: SessionShell[] }
+   *  the same as `SessionInfo.shellList` absent: could not read, not "none".
+   *  `unmergedUnknown: true` = the host could not measure `unmerged` (no base
+   *  branch found, or git failed); `unmerged` is then 0 and means nothing.
+   *  Absent = measured (an older host). */
+  | { t: "session.closecheck"; id: string; isRepo: boolean; branch: string; dirty: boolean; unmerged: number; unmergedUnknown?: boolean; isMain: boolean; mainBranch: string; shells?: SessionShell[] }
   | { t: "recent.list"; recent: RecentSession[] }
   | { t: "closed.list"; closed: ClosedSession[] }
   /** New images detected in a session's worktree this turn. */

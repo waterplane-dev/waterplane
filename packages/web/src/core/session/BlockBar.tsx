@@ -17,8 +17,8 @@ import { netRetryCancel, netRetryNow, netRetryTurnOff } from "../../netRetryCfg"
  *    (open / copy / paste code / url, `LinkActions`); signed out with no link
  *    yet, the card that sends `/login`.
  *  - `net` — the desktop retrying a turn the CLI gave up on a network error
- *    (R-connection-024): the countdown line, cancel / dismiss, retry now once it
- *    gave up, and the host-wide turn off.
+ *    (R-connection-024): the countdown line, retry now, cancel / dismiss, and
+ *    the host-wide turn off.
  *  - `limit` / `spend` — nothing here, on purpose: a wall has one session-level
  *    surface, the toolbar's limit control, and a second would be a second place
  *    to learn the same wall.
@@ -125,7 +125,9 @@ function SignedOutCard({ onSendLogin }: { onSendLogin: () => void }) {
  * HIDDEN (`retry.dismissed`): work waiting on the session stays stalled and keeps
  * its note on its own row. `turn off` is the host-wide switch (Settings ›
  * Sessions › retry on network errors), offered only while a retry is pending.
- * `retry now` once it gave up: `session.netRetryNow`, the stalled row's message.
+ * `retry now` while waiting or gave up (not while a retry's turn is running):
+ * `session.netRetryNow` — the host fires a waiting rung early, a gave-up one
+ * restarts at try 1.
  */
 function NetRetryCard({ id, retry }: { id: string; retry: SessionNetRetry }): ReactNode {
   const [now, setNow] = useState(() => Date.now());
@@ -138,14 +140,18 @@ function NetRetryCard({ id, retry }: { id: string; retry: SessionNetRetry }): Re
   const line = netRetryLine(retry, now);
   if (!line || retry.dismissed) return null;
   const gaveUp = retry.state === "gaveup";
+  const sent = retry.state === "sent";
+  // The line and the error read as one block ABOVE the verbs: squeezed beside
+  // three tiles it wrapped word by word and the error ran under the buttons.
   return (
     <div className="approve netretry" role="status">
-      <div className="approve-opts">
-        <span className="netretry-line">
-          <WifiOff size={14} aria-hidden="true" /> {line}
-        </span>
-        {gaveUp && (
-          <button className="approve-btn" onClick={() => netRetryNow(id)} title={NET_RETRY_NOW_NOTE}>
+      <div className="netretry-line">
+        <WifiOff size={14} aria-hidden="true" /> {line}
+      </div>
+      <div className="approve-hint netretry-error">{retry.error}</div>
+      <div className="approve-opts netretry-opts">
+        {!sent && (
+          <button className="approve-btn primary" onClick={() => netRetryNow(id)} title={NET_RETRY_NOW_NOTE}>
             <PlugZap size={14} aria-hidden="true" /> retry now
           </button>
         )}
@@ -160,7 +166,6 @@ function NetRetryCard({ id, retry }: { id: string; retry: SessionNetRetry }): Re
           </button>
         )}
       </div>
-      <div className="approve-hint">{retry.error}</div>
     </div>
   );
 }

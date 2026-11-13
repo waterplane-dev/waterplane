@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  AGENT_READING_WEEKS, transcriptDirName, type AgentReadingAbsent, type AgentReadingsDoc, type AgentReadingsResponse,
+  AGENT_POINTS_CAP, AGENT_POINT_WEEKS, AGENT_SUB_POINTS_CAP, AGENT_READING_WEEKS, LOOK_RULE_TEXT, isAgentAbsent, repoSpendByWeek, seriesOf, transcriptDirName, type AgentPoint, type AgentPointsResponse, type AgentReadingAbsent, type AgentReadingsDoc, type AgentReadingsResponse,
   type BacklogItem,
 } from "@waterplane/shared";
 import { RULES, countByWeek, foldAgentWeeks, lastWeeks, type AgentLogSummary, type ConvSummary, type EscapedInputs, type ResolvedConv } from "./agentclass.js";
@@ -38,7 +38,7 @@ import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 import { walkLogs } from "./tokenscan.js";
 
 /** Bump when a summary's shape or a classification rule changes: the store then rebuilds from the logs. */
-const VERSION = 2;
+const VERSION = 3;
 const MAX_FILE = 256 * 1024 * 1024;
 const FLUSH_MS = 5_000;
 const YIELD_EVERY = 32;
@@ -144,26 +144,57 @@ export class AgentReadingsStore {
 
   /** This repo's conversations with their agents. `repos` are the repo's path spellings (as given, realpath). */
   conversations(repos: readonly string[]): ResolvedConv[] {
+    return this.resolve(repos).map((r) => ({ conv: r.conv, agents: r.subs.map((x) => x.e) }));
+  }
+
+  private resolve(repos: readonly string[]): { id: string; repo: string; conv: ConvSummary; subs: { id: string; e: AgentLogSummary }[] }[] {
     const want = new Set(repos);
     const repoSlugs = repos.map(transcriptDirName);
-    const out: ResolvedConv[] = [];
+    const out: { id: string; repo: string; conv: ConvSummary; subs: { id: string; e: AgentLogSummary }[] }[] = [];
     for (const [slug, files] of Object.entries(this.store)) {
       if (!repoSlugs.some((r) => slugBelongs(slug, r))) continue;
-      const agents = new Map<string, AgentLogSummary[]>();
+      const agents = new Map<string, { id: string; e: AgentLogSummary }[]>();
       for (const [k, e] of Object.entries(files)) {
         if (!isAgent(e)) continue;
         const conv = k.split("/")[0]!;
-        (agents.get(conv) ?? agents.set(conv, []).get(conv)!).push(e);
+        (agents.get(conv) ?? agents.set(conv, []).get(conv)!).push({ id: k, e });
       }
       for (const [k, e] of Object.entries(files)) {
         if (isAgent(e)) continue;
         // The record's own cwd decides, so `app-other` never lands in `app`
         // through the slug prefix; a log with no cwd counts only in the repo's own slug.
-        const belongs = e.w ? want.has(repoOfWorktree(e.w)) : repoSlugs.includes(slug);
-        if (belongs) out.push({ conv: e, agents: agents.get(k) ?? [] });
+        const repo = e.w ? repoOfWorktree(e.w) : undefined;
+        const belongs = repo !== undefined ? want.has(repo) : repoSlugs.includes(slug);
+        if (belongs) out.push({ id: k, repo: repo ?? repos[0]!, conv: e, subs: agents.get(k) ?? [] });
       }
     }
     return out;
+  }
+
+  /**
+   * Session points for these repos: one per conversation and one per subagent log that began inside
+   * the last `AGENT_POINT_WEEKS` weeks, newest first, each kind cut to its own cap (the capped list holds fresh conversations only) (the oldest go; `cut`
+   * says how many). A log with no dated record has no start time and is left out, not placed.
+   * `capped: false` keeps every point (the weekly region folds them on the host, so a busy repo's
+   * older weeks are medians over ALL their sessions; only the wire to the phone needs the caps).
+   */
+  points(repos: readonly string[], now: number, capped = true): { points: AgentPoint[]; cut: number } {
+    const since = Date.parse(`${lastWeeks(now, AGENT_POINT_WEEKS)[0]}T00:00:00Z`);
+    const all: AgentPoint[] = [];
+    for (const { id, repo, conv, subs } of this.resolve(repos)) {
+      if (conv.t0 !== undefined && conv.t0 >= since) all.push(pointOf(id, repo, conv.t0, conv.sr, { fresh: !conv.nf, headless: conv.nf === "headless", commit: !!conv.cm }));
+      for (const { id: sid, e } of subs) {
+        if (e.t0 !== undefined && e.t0 >= since) all.push(pointOf(sid, repo, e.t0, e.sr, { fresh: true, headless: false, sub: true }));
+      }
+    }
+    all.sort((a, b) => b.t0 - a.t0);
+    if (!capped) return { points: all, cut: 0 };
+    // A headless, forked or continued conversation is no reading's session (`seriesReadingOf`, `derivedMarkers`
+    // want `fresh`): it stays off the wire, so it neither spends the conversation cap nor moves `coverFrom`
+    // (the axis start) for readings that never read it. `cut` counts only points a reading could have used.
+    const convs = all.filter((p) => !p.sub && p.fresh), subs = all.filter((p) => p.sub);
+    const keep = [...convs.slice(0, AGENT_POINTS_CAP), ...subs.slice(0, AGENT_SUB_POINTS_CAP)].sort((a, b) => b.t0 - a.t0);
+    return { points: keep, cut: convs.length + subs.length - keep.length };
   }
 
   private schedule(): void {
@@ -180,6 +211,19 @@ export class AgentReadingsStore {
       this.dirty = false;
     } catch { /* a readings cache is not worth taking the daemon down for */ }
   }
+}
+
+function pointOf(id: string, repo: string, t0: number, sr: ConvSummary["sr"], f: { fresh: boolean; headless: boolean; commit?: boolean; sub?: boolean }): AgentPoint {
+  return {
+    id, t0, repo, fresh: f.fresh, headless: f.headless,
+    ...(f.sub ? { sub: true } : {}),
+    ...(sr?.md ? { model: sr.md } : {}), ...(sr?.cli ? { cli: sr.cli } : {}),
+    ...(sr?.st !== undefined ? { start: sr.st } : {}),
+    ...(sr?.pt ? { parts: sr.pt } : {}),
+    ...(sr?.lk !== undefined ? { look: sr.lk } : {}),
+    req: sr?.rq ?? 0,
+    ...(f.commit !== undefined ? { commit: f.commit } : {}),
+  };
 }
 
 /** The backlog's bug items for this repo, by the week they were added — or why there is no count. */
@@ -206,9 +250,19 @@ export function agentReadingsStore(root: string): AgentReadingsStore {
   return (shared ??= new AgentReadingsStore(hostStateDir(root)));
 }
 
+/** The token ledger's day rows for the spend reading — a warm read, as the health line's;
+ *  a ledger that fails is a sentence on that reading, never the answer's error. */
+export async function agentLedger(read: () => Promise<{ days: Parameters<typeof repoSpendByWeek>[0] }>): Promise<{ days: Parameters<typeof repoSpendByWeek>[0] } | AgentReadingAbsent> {
+  try { return { days: (await read()).days }; } catch (e) {
+    return { absent: `The token ledger could not be read: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 /** The route's whole answer. */
 export async function agentReadingsFor(
   store: AgentReadingsStore, worktree: string, backlog: readonly BacklogItem[] | null, now = Date.now(), waitMs = SWEEP_WAIT_MS,
+  /** The token ledger's day rows, or why they could not be read; omitted = no spend reading at all. */
+  ledger?: { days: Parameters<typeof repoSpendByWeek>[0] } | AgentReadingAbsent,
 ): Promise<AgentReadingsResponse> {
   const repos = repoSpellings(worktree);
   let swept;
@@ -231,13 +285,39 @@ export async function agentReadingsFor(
   const escaped: EscapedInputs = {
     crash: "why" in crash ? { absent: crash.why } : countByWeek(crash.at),
     bugs: bugsByWeek(backlog, repos),
+    ...(ledger ? { spend: isAgentAbsent(ledger) ? ledger : repoSpendByWeek(ledger.days, repos) } : {}),
   };
   const doc: AgentReadingsDoc = {
     ok: true,
     repo: repos[0]!,
-    weeks: foldAgentWeeks(store.conversations(repos), lastWeeks(now, AGENT_READING_WEEKS), escaped),
+    // Start, looks and requests are the agent series' weekly buckets (the token-stats card's
+    // function), over EVERY point, not the capped list the points route sends the phone: a cap
+    // would leave an old week with a median over its newest sessions, or none at all.
+    weeks: foldAgentWeeks(store.conversations(repos), lastWeeks(now, AGENT_READING_WEEKS), escaped,
+      seriesOf(store.points(repos, now, false).points, { grain: "week" })),
     rules: RULES,
     scannedAt: swept.at, logs: swept.logs, reread: swept.reread,
   };
   return doc;
+}
+
+/**
+ * The points route's whole answer, for one repo (`worktrees` = its one worktree) or every repo the
+ * host knows (`worktrees` = each repo's primary path). Same sweep-with-a-wait as the readings.
+ */
+export async function agentPointsFor(store: AgentReadingsStore, worktrees: readonly string[], now = Date.now(), waitMs = SWEEP_WAIT_MS): Promise<AgentPointsResponse> {
+  const repos = [...new Set(worktrees.flatMap(repoSpellings))];
+  let swept;
+  try {
+    const sweep = store.sweep(repos);
+    sweep.catch(() => {});
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), waitMs); });
+    swept = await Promise.race([sweep, late]).finally(() => clearTimeout(timer));
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  if (!swept) return { ok: false, pending: true, error: "This desktop is reading its conversation logs for the first time. It carries on in the background; read again in a minute." };
+  const { points, cut } = store.points(repos, now);
+  return { ok: true, points, cut, repos, rules: { look: LOOK_RULE_TEXT }, scannedAt: swept.at, logs: swept.logs, reread: swept.reread };
 }

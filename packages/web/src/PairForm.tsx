@@ -87,7 +87,7 @@ export function PairForm({ mode, initial, fromLink, onDone, onNoRoute }: {
         if (why && sealedMode()) { setProblem(why); return; }
       }
       const kv = browserKV();
-      if (!kv) { setProblem("This phone's storage is not available."); return; }
+      if (!kv) { setProblem("This device's storage is not available."); return; }
       const row = readHosts(kv).find((h) => h.base === target.base) ?? null;
       const plain = isPlainRoute(target.base, routeContext(target.base, row, hasShellTls(), await currentNet()));
       const mark = await codeMark(target.code);
@@ -204,7 +204,7 @@ export function PairForm({ mode, initial, fromLink, onDone, onNoRoute }: {
       )}
       <ol className="pair-steps">
         <li>On the desktop, run <code>{BRAND.slug} pair</code>: it prints the address and a code. Or open Settings › <b>pair another phone</b> on the desktop's web page or a phone already paired: it shows a QR.</li>
-        <li>Type the address and code below, or scan the QR with this phone's camera app (this app has no scanner). It opens this app, or a page with <b>Open in app</b>.</li>
+        <li>Type the address and code below, or scan the QR with this device's camera app (this app has no scanner). It opens this app, or a page with <b>Open in app</b>.</li>
       </ol>
       <input
         className="auth-input"

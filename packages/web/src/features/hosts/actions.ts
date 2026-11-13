@@ -41,7 +41,7 @@ export function activeDesktopId(): string | null {
  */
 export function openFromOtherDesktop(hostId: string, rest: string): void {
   const h = realHosts(listHosts()).find((x) => x.id === hostId);
-  if (!h) { core().say.toast("That alert came from a desktop this phone no longer has saved."); return; }
+  if (!h) { core().say.toast("That alert came from a desktop this device no longer has saved."); return; }
   core().say.track("action:hosts.switchFromAlert");
   core().say.toast(`Switching to ${h.name}…`);
   // A summary of several items has no single target: land on the list that shows them.
@@ -83,7 +83,7 @@ export function pairActiveByCode(): void {
 
 async function switchToPlainHttp(host: SavedHost): Promise<void> {
   const kv = browserKV();
-  const r = kv ? setHostTlsOff(kv, host.id, true) : { ok: false as const, why: "Could not reach this phone's saved desktops." };
+  const r = kv ? setHostTlsOff(kv, host.id, true) : { ok: false as const, why: "Could not reach this device's saved desktops." };
   if (!r.ok) { core().say.toast(r.why); return; }
   // A pin that stays here is removed at the next boot (`syncShellPins`); the row already says plain.
   try { await shellTls.removePin(host.id); } catch { /* next boot */ }

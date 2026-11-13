@@ -1,7 +1,7 @@
 /** Advance a cursor over what the CLI appended: updateContextLog. Moved from ctxlog.ts. */
 import { statSync } from "node:fs";
 import type { TokenTotals } from "@waterplane/shared";
-import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
+import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, priceGeneration, priceKeyOf, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { opensTurn } from "../transcript/transcriptlog.js";
 import { isAnchor, usageRecordOf } from "./usagerecord.js";
@@ -21,7 +21,9 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
   // A file that shrank, went backwards in time, or is a different path is a
   // different conversation as far as this is concerned — a fork writes a new
   // log under a new id, and a rewritten one cannot be appended to.
-  const reusable = prev && prev.path === path && prev.size > 0;
+  // A cursor priced at rates no longer in force (`pricefetch.ts` installed a
+  // new price list) is re-read whole: its `cost` is money at the old rates.
+  const reusable = prev && prev.path === path && prev.size > 0 && prev.priceGen === priceGeneration();
   const cur = reusable ? prev : blank(path);
   // A stat, not a read: this runs on every poll, and a probe that READ the
   // file re-read up to MAX_READ of a big log each time only to learn its size.
@@ -179,6 +181,9 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // sentences named one model. `pricing.ts` still prices the RAW id, which is
     // where the dated snapshot belongs.
     const raw = rec.model;
+    // The key this one request prices under: a Haiku 5.5 request past a
+    // 100K-token prompt pays the long card for all of it (`priceKeyOf`).
+    const pk = priceKeyOf(raw, bag);
     const mid = raw ? normalizeModel(raw) ?? raw : null;
     let mi = mid ? cur.models.indexOf(mid) : -1;
     if (mid && mi < 0) { mi = cur.models.length; cur.models.push(mid); cur.modelTok.push(0); }
@@ -192,7 +197,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
       // newest one, and it would charge the whole conversation at whatever ran
       // last). An unpriced model adds to `unpriced` and to no cost line — see
       // the field.
-      const c = costOf(bag, raw, localDay(t));
+      const c = costOf(bag, pk, localDay(t));
       if (c) addCost(cur.cost, c);
       else cur.unpriced += tokenTotal(bag);
     }
@@ -222,11 +227,11 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
       // than the work, and it is the one the sentence leads with.
       const wrote = costOf(
         { input: 0, output: 0, cacheRead: 0, cacheWrite: bag.cacheWrite, cacheWrite1h: bag.cacheWrite1h },
-        raw, localDay(t),
+        pk, localDay(t),
       );
       const asRead = costOf(
         { input: 0, output: 0, cacheRead: bag.cacheWrite, cacheWrite: 0, cacheWrite1h: 0 },
-        raw, localDay(t),
+        pk, localDay(t),
       );
       if (wrote) {
         cur.cold.usd += wrote.total;
@@ -250,7 +255,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
       row.rebuildTok += bag.cacheWrite;
       const c = costOf(
         { input: 0, output: 0, cacheRead: 0, cacheWrite: bag.cacheWrite, cacheWrite1h: bag.cacheWrite1h },
-        raw, localDay(t),
+        pk, localDay(t),
       );
       if (c) row.rebuildUsd += c.total;
       cur.pendingRebuild = null;

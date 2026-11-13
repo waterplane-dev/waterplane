@@ -4,6 +4,11 @@
       "count": 1
     }
   },
+  "packages/extensions/links/host/parse.mts": {
+    "regexp/no-super-linear-move": {
+      "count": 1
+    }
+  },
   "packages/extensions/scorecard/host/gitslug.mts": {
     "regexp/no-super-linear-backtracking": {
       "count": 1
@@ -279,11 +284,6 @@
     }
   },
   "packages/host/src/signkey.ts": {
-    "regexp/no-super-linear-backtracking": {
-      "count": 3
-    }
-  },
-  "packages/host/src/sysstat.ts": {
     "regexp/no-super-linear-backtracking": {
       "count": 3
     }

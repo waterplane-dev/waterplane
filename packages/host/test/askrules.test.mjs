@@ -12,7 +12,7 @@
 import "../../../scripts/lib-tmuxiso.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BRAND, SUGGESTED_ASK_RULES, envName, promptFingerprint } from "@waterplane/shared";
@@ -129,6 +129,27 @@ test("a corrupt file reads as no rules; a failed write changes nothing", () => {
     assert.throws(() => s.set({ rules: [] }));
     assert.equal(s.get().rules.length, 1, "memory unchanged after a failed write");
   } finally { chmodSync(dir, 0o700); }
+});
+
+test("an unreadable file stays in place: every boot says the list is lost, a save keeps its bytes aside", () => {
+  if (process.getuid?.() === 0) return; // root reads through chmod 000
+  const root = mkdtempSync(join(tmpdir(), `${BRAND.slug}-askroot-`));
+  new AskRulesStore(root).set({ rules: [{ id: "a", rule: "Bash(fly deploy*)" }] });
+  const dir = hostStateDir(root);
+  const file = join(dir, "askrules.json");
+  chmodSync(file, 0o000);
+  try {
+    for (const boot of [1, 2]) {
+      const s = new AskRulesStore(root);
+      assert.deepEqual(s.get(), { rules: [] });
+      assert.equal(s.lost()?.movedTo, null, `boot ${boot}: reported lost`);
+      assert.ok(readdirSync(dir).includes("askrules.json"), `boot ${boot}: the file was not moved aside`);
+    }
+    const s = new AskRulesStore(root);
+    s.set({ rules: [{ id: "b", rule: "Bash(npm publish*)" }] });
+    assert.equal(s.lost(), null);
+    assert.ok(readdirSync(dir).some((f) => f.startsWith("askrules.json.corrupt-")), "the unread bytes are kept aside by the save");
+  } finally { try { chmodSync(file, 0o600); } catch { /* moved aside */ } }
 });
 
 // Captured off the interactive TUI, 2026-10-15, CLI 2.1.301, with

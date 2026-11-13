@@ -129,10 +129,10 @@ export function QualityPanel({ ctl, ui, onClose }: { ctl: DesktopController; ui:
       <SourcePicker c={c} />
       <ul className="check-list">
         <Toggle label="Crop to view" on={c.cropToView}
-          hint="Zoomed in, stream only what is on screen, at this phone's own resolution — small text stays sharp for a fraction of the bytes."
+          hint="Zoomed in, stream only what is on screen, at this device's own resolution — small text stays sharp for a fraction of the bytes."
           onFlip={() => setChoice({ cropToView: !c.cropToView })} />
         <Toggle label="Data saver on cellular" on={c.cellularSaver}
-          hint="Start in Data saver when this phone is on a cellular connection, and say so."
+          hint="Start in Data saver when this device is on a cellular connection, and say so."
           onFlip={() => setChoice({ cellularSaver: !c.cellularSaver })} />
       </ul>
       <Chips label="data cap — pause after this many MB in one view" opts={CAP_STEPS} value={c.capMb as (typeof CAP_STEPS)[number]}

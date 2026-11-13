@@ -486,7 +486,7 @@ export function ScheduleSheet({
         {queued && (
           <div className="approve-hint">
             {sendFailed
-              ? <>the send gave up — this rule is on this phone and nowhere else, and it will not arm itself.
+              ? <>the send gave up — this rule is on this device and nowhere else, and it will not arm itself.
                   Its words are kept; re-send it from the queue, or edit it here to replace the copy that failed.</>
               : <>waiting for the link — it is armed on the desktop as soon as the queue drains, and the time above holds
                   (the rule is a wall clock, not a countdown from when it is saved).</>}

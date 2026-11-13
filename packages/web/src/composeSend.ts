@@ -104,8 +104,8 @@ export function sendModeToast(
     // host-side work item to settle on. This tab keeps that one wait.
     if (o.phoneHold === "opens-a-view") {
       return o.online
-        ? "held on this phone — it opens a view rather than starting a turn, so it goes in when this turn ends. Leave the app open"
-        : "held on this phone — it goes in when the link is back and this turn has ended. Leave the app open";
+        ? "held on this device — it opens a view rather than starting a turn, so it goes in when this turn ends. Leave the app open"
+        : "held on this device — it goes in when the link is back and this turn has ended. Leave the app open";
     }
     // The other case the desktop cannot hold: a prompt chained behind a session
     // that does not exist yet. There is no session id for a pinned item to name

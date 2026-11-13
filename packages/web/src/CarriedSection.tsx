@@ -26,6 +26,7 @@ import { carriedRows, carriedWords, fmtCount } from "@waterplane/shared";
 import { useState, type PointerEvent } from "react";
 import { Row, RowSub, RowTitle } from "./kit/Row";
 import { Tag } from "./kit/Tag";
+import { Button } from "./kit/Button";
 import { ScrubHint } from "./kit/chart/ScrubHint";
 import {
   CLASS_WORDS, carriedLegend, carriedOrder, carriedReadout, carriedStrip, classOf, namesInline,
@@ -38,20 +39,24 @@ type Fmt = (n: number) => string;
 export const CARRIED_ABSENT =
   "This desktop did not measure what the first request carried (an older host, or a log whose start held no attachment record).";
 
-export function CarriedSection({ carried, fmt = fmtCount }: {
+export function CarriedSection({ carried, fmt = fmtCount, onSkills, skillsCant }: {
   /** `ContextSeriesDoc.carried`; undefined ⇒ the absence sentence, never an empty list. */
   carried: SessionCarried | undefined;
   fmt?: Fmt;
+  /** The skill-listing row's door to the skills & plugins switch; absent (VS Code) draws none. */
+  onSkills?: () => void;
+  /** The sentence in its place when this backend has no such switch. */
+  skillsCant?: string;
 }) {
   return (
     <>
       <div className="ctx-chart-title">What every turn carries</div>
-      {!carried ? <div className="empty ctx-note">{CARRIED_ABSENT}</div> : <CarriedBody carried={carried} fmt={fmt} />}
+      {!carried ? <div className="empty ctx-note">{CARRIED_ABSENT}</div> : <CarriedBody carried={carried} fmt={fmt} onSkills={onSkills} skillsCant={skillsCant} />}
     </>
   );
 }
 
-function CarriedBody({ carried, fmt }: { carried: SessionCarried; fmt: Fmt }) {
+function CarriedBody({ carried, fmt, onSkills, skillsCant }: { carried: SessionCarried; fmt: Fmt; onSkills?: () => void; skillsCant?: string }) {
   const [picked, setPicked] = useState<string | null>(null);
   const rows = carriedOrder(carriedRows(carried, fmt));
   const strip = carriedStrip(rows, carried.firstRequestTok);
@@ -101,6 +106,9 @@ function CarriedBody({ carried, fmt }: { carried: SessionCarried; fmt: Fmt }) {
                       ))}
                     </ul>
                   )}
+                  {r.key === "skill_listing" && (onSkills
+                    ? <div className="sheet-actions"><Button onClick={onSkills} title="Turn skills and plugins off or down; new sessions only">switch skills &amp; plugins →</Button></div>
+                    : skillsCant ? <RowSub>{skillsCant}</RowSub> : null)}
                   {r.names && r.names.length > 0 && (namesInline(r.names, total) ? (
                     <RowSub className="carried-inline">{r.names.join(", ")}</RowSub>
                   ) : (

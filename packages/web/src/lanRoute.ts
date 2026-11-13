@@ -120,10 +120,10 @@ export type RouteTrouble = "keyChanged" | "noAnswer";
 
 export interface LanVerdict { route: LanRoute; sentence: string; lanBase: string | null; trouble?: RouteTrouble }
 
-export const NO_PASSWORD_SENTENCE = "Using the tailnet: set a password on the host to use LAN — without one it cannot give this phone a token.";
-export const NO_TOKEN_SENTENCE = "Using the tailnet: the desktop did not give this phone a device token.";
+export const NO_PASSWORD_SENTENCE = "Using the tailnet: set a password on the host to use LAN — without one it cannot give this device a token.";
+export const NO_TOKEN_SENTENCE = "Using the tailnet: the desktop did not give this device a device token.";
 export const NO_IDENTITY_SENTENCE = "Using the tailnet: the desktop's LAN identity could not be read over the tailnet.";
-export const NO_PROTECTED_LAN_SENTENCE = "Using the tailnet: this desktop has a key on this phone, and its LAN address has no encrypted address to check.";
+export const NO_PROTECTED_LAN_SENTENCE = "Using the tailnet: this desktop has a key on this device, and its LAN address has no encrypted address to check.";
 
 const TAILNET_SAID = "Using the tailnet: ";
 
@@ -131,7 +131,7 @@ const TAILNET_SAID = "Using the tailnet: ";
  *  address needs it. A sentence that does not claim the tailnet stays as it is. */
 export function tailscaleOffSentence(sentence: string): string {
   if (!sentence.startsWith(TAILNET_SAID)) return sentence;
-  return `Tailscale is off on this phone: turn it on to reach the desktop. Not on LAN: ${sentence.slice(TAILNET_SAID.length)}`;
+  return `Tailscale is off on this device: turn it on to reach the desktop. Not on LAN: ${sentence.slice(TAILNET_SAID.length)}`;
 }
 
 /** The sentence Connection health answers with "set the LAN password", Tailscale on or off. */
@@ -152,7 +152,7 @@ export function troubleSentence(trouble: RouteTrouble, base: string, fallback: b
 
 /** The route a row with no tailnet address is on, in place of "using the tailnet". */
 export function lanOnlySentence(base: string): string {
-  return `This phone reaches the desktop at ${addressOf(base)}. No tailnet address is saved for it.`;
+  return `This device reaches the desktop at ${addressOf(base)}. No tailnet address is saved for it.`;
 }
 
 /** A row whose own address is a plain LAN one: what `tlsBaseOf` would rewrite. */

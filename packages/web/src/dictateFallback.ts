@@ -32,8 +32,17 @@ export function dictateFallbackWhy(f: FallbackFacts): string | null {
   if (!f.canRecord) return `${lead}: this browser gives the app no way to record audio`;
   if (!f.status) return null;
   if (f.status.available) return null;
-  return `${lead}: ${f.status.reason ?? "the desktop says whisper is not available"}`;
+  let reason = (f.status.reason ?? "the desktop says whisper is not available").trim();
+  while (reason.endsWith(".")) reason = reason.slice(0, -1);
+  return `${lead}: ${reason}. ${WEAKER} ${DOOR_TAIL}`;
 }
+
+/** What the phone's recogniser costs the person — said once, in the tap's sentence. */
+const WEAKER = "It is weaker on code words and mixed languages, and on Android it may send your audio to Google.";
+/** The way out; the pill opens Settings at that row when the sentence ends with this. */
+const DOOR_TAIL = "Settings › Writing & reading › Local dictation sets whisper up.";
+/** Whether a fallback sentence points at the Local dictation row (the https and no-recorder cases have a different fix). */
+export const fallbackHasDoor = (why: string): boolean => why.endsWith(DOOR_TAIL);
 
 /**
  * A link listener that calls `ask` once each time the link comes back.

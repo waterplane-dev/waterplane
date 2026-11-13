@@ -234,7 +234,7 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
         if (e && repo) { c.nav.openBuild(repo, { schedule: e }); return; }
         // Never fall through to the Send sheet: a prompt saved under this id
         // would REPLACE the build rule.
-        c.say.toast(e ? `that rule's repo is not listed on this phone — edit it from its card in ${SHEET.automation}` : "that rule is not in the list yet — try again in a moment");
+        c.say.toast(e ? `that rule's repo is not listed on this device — edit it from its card in ${SHEET.automation}` : "that rule is not in the list yet — try again in a moment");
         return;
       }
       if (kind === "schedule" || isTimedWorkRow(i)) { c.nav.openSend(c.send.seedFromIntent(i)); return; }

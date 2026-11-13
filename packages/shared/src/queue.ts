@@ -65,6 +65,8 @@ export type {
   LaneSessionState,
   SessionWall,
 } from "./queue/queuelane.js";
+export { laneStateOf } from "./queue/queuelanestate.js";
+export type { LaneSource, LaneStateOpts } from "./queue/queuelanestate.js";
 export {
   selectSendable,
 } from "./queue/queueplan.js";

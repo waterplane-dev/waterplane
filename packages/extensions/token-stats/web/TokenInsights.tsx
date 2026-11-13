@@ -18,17 +18,43 @@ import { Lightbulb, SearchCheck, BarChart3 } from "lucide-react";
 import { firstRequestWords } from "./headline.ts";
 import { firstBarPcts, FIRST_BAR_CAPTION } from "./firstBars.ts";
 import { agentModelInsight, fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
-import type { Insight } from "./statsInsights.ts";
+import type { Insight, SpanInsight } from "./statsInsights.ts";
 import { Button } from "@waterplane/kit";
 
-export function InsightsPanel({ items }: { items: Insight[] }) {
-  if (!items.length) return null;
+/** The span cut of the insights: the span's own findings, each with its move against the span
+ *  before. `items` null = the span's fold has not answered; `note` says why, or what is left out. */
+export interface InsightsScope {
+  on: boolean;
+  set: (on: boolean) => void;
+  /** The span in words — "the last 30 days". */
+  words: string;
+  items: SpanInsight[] | null;
+  note?: string;
+}
+
+export function InsightsPanel({ items, scope }: { items: Insight[]; scope?: InsightsScope | null }) {
+  const cut = !!scope?.on;
+  const shown: SpanInsight[] = cut ? scope!.items ?? [] : items;
+  if (!items.length && !scope) return null;
   return (
     <div className="ts-insights">
-      <div className="ts-insights-head"><Lightbulb size={14} /> What drives the cost <ScopeTag muted>whole record · not cut to the span</ScopeTag></div>
-      {items.map((i) => (
+      <div className="ts-insights-head">
+        <Lightbulb size={14} /> What drives the cost{" "}
+        {!scope && <ScopeTag muted>whole record · not cut to the span</ScopeTag>}
+      </div>
+      {scope && (
+        <span className="ts-seg-chips" role="group" aria-label="insights over">
+          <Button className={cut ? "active" : undefined} onClick={() => scope.set(true)}>{scope.words}</Button>
+          <Button className={!cut ? "active" : undefined} onClick={() => scope.set(false)}>whole record</Button>
+        </span>
+      )}
+      {cut && scope?.note && <div className="ts-insight-body">{scope.note}</div>}
+      {cut && scope?.items && !shown.length && <div className="ts-insight-body">Nothing in {scope.words} is large enough to name.</div>}
+      {!cut && scope && !items.length && <div className="ts-insight-body">Nothing on record is large enough to name.</div>}
+      {shown.map((i) => (
         <div key={i.id} className="ts-insight">
           <div className="ts-insight-head">{i.head}</div>
+          {i.delta && <div className="ts-insight-body">{i.delta}</div>}
           <div className="ts-insight-body">{i.body}</div>
           {i.tryThis && <div className="ts-insight-try"><b>Try:</b> {i.tryThis}</div>}
         </div>

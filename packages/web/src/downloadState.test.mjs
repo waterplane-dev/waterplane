@@ -71,7 +71,7 @@ test("bytes here but never saved out offers the hand-off, not another download",
   const r = rec({ state: "done", received: 1000 });
   const st = downloadStatus(r);
   assert.equal(st.phase, "have");
-  assert.equal(st.label, "save to phone");
+  assert.equal(st.label, "save to device");
   assert.equal(st.pct, 100);
   assert.equal(downloadAction(r), "save");
 });
@@ -213,7 +213,7 @@ test("a file whose app copy was dropped after the save is in Downloads, never an
 test("a file that WAS saved and is gone from Downloads says so, and offers to put it back", () => {
   const st = downloadStatus(saved({ savedPresent: false }));
   assert.match(st.detail, /not in Downloads any more/);
-  assert.match(st.detail, /still on this phone/);
+  assert.match(st.detail, /still on this device/);
   assert.equal(st.label, "save again");
   assert.equal(downloadAction(saved({ savedPresent: false })), "save");
 });

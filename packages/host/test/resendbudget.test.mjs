@@ -21,7 +21,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,6 +30,7 @@ process.env.WATERPLANE_SETTLE_MAX_GAP_MS = "20";
 process.env.WATERPLANE_RESEND_TRIES = "3";
 
 const { OpenDeliveries } = await import("../dist/opendeliveries.js");
+const { hostStateDir } = await import("../dist/branddirs.js");
 const { forgetSpentTurns } = await import("../dist/settle.js");
 
 /**
@@ -112,4 +113,64 @@ test("a re-send that lands stops the ladder at once", async (t) => {
   assert.equal(sent, 1);
   assert.equal(row.verdict, "landed");
   assert.equal(row.resends, 1);
+});
+
+// The at-most-once argument is "write the marker, then act". A marker that
+// could not be written is not a marker: on a full disk the host used to type
+// the prompt anyway and, after a restart, could type it again.
+test("a re-send whose marker cannot be written is NOT typed, and the row says so", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root ignores directory permissions");
+  forgetSpentTurns();
+  t.after(forgetSpentTurns);
+  let sent = 0;
+  const root = mkdtempSync(join(tmpdir(), "waterplane-resend-ro-"));
+  const stateDir = hostStateDir(root);
+  mkdirSync(stateDir, { recursive: true });
+  const q = new OpenDeliveries(root, absentSessions(), async () => { sent++; return "ok"; }, () => {});
+  const row = add(q);
+  chmodSync(stateDir, 0o555); // the disk "fills" after the row was added
+  t.after(() => chmodSync(stateDir, 0o755));
+  await settleRow(q, row);
+  assert.equal(sent, 0, "no marker on disk, so nothing is typed");
+  assert.equal(row.verdict, "absent", "a non-retrying verdict: the host did not type it and will not by itself");
+  assert.match(row.reason, /could not be recorded/);
+  assert.equal(row.resends ?? 0, 0, "the budget was not spent on an attempt that never happened");
+});
+
+// The stop has to outlive the process too. The "absent" ending that refused to
+// type reaches memory only while the disk refuses writes; if it is not written
+// as soon as the disk takes one again, a restart reloads the row as open and the
+// host types the prompt it told the person to re-send by hand.
+test("the verdict that stopped a re-send is written once the disk takes it, so a restart does not type it", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root ignores directory permissions");
+  forgetSpentTurns();
+  t.after(forgetSpentTurns);
+  let sent = 0;
+  const redeliver = async () => { sent++; return "ok"; };
+  const root = mkdtempSync(join(tmpdir(), "waterplane-resend-heal-"));
+  const stateDir = hostStateDir(root);
+  mkdirSync(stateDir, { recursive: true });
+  const q = new OpenDeliveries(root, absentSessions(), redeliver, () => {});
+  const row = add(q);
+  chmodSync(stateDir, 0o555);
+  t.after(() => chmodSync(stateDir, 0o755));
+  await settleRow(q, row);
+  assert.equal(row.verdict, "absent");
+  chmodSync(stateDir, 0o755); // room again, no other row changes
+  q.start();
+  try {
+    const file = join(stateDir, "deliveries.json");
+    for (let i = 0; i < 80; i++) {
+      try { if (JSON.parse(readFileSync(file, "utf8"))[0]?.verdict === "absent") break; } catch { /* not there yet */ }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  } finally { q.stop(); }
+  // A restart: a second store on the same root.
+  const q2 = new OpenDeliveries(root, absentSessions(), redeliver, () => {});
+  const reloaded = q2.get?.(row.id) ?? q2.entries?.find?.((e) => e.id === row.id);
+  q2.start();
+  await new Promise((r) => setTimeout(r, 800));
+  q2.stop();
+  assert.equal(sent, 0, "the reloaded row is not open, so nothing is typed after the restart");
+  if (reloaded) assert.equal(reloaded.verdict, "absent");
 });

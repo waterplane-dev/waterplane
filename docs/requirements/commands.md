@@ -74,3 +74,8 @@ After a slash command the reader cannot show, the app asks whether to switch to 
 In the edit dialogue the command line is shown shortened, not as the long raw command.
 - asked: 2026-10-12
 
+### R-commands-017 · shipped
+Entering /workflows is sent as a TUI-local view command and runs, instead of being filed as a swallowed Return.
+- asked: 2026-11-08
+- shipped: 46514f62
+

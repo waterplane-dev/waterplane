@@ -22,8 +22,8 @@ globalThis.localStorage = {
   get length() { return store.size; },
 };
 
-const { pendingFns, usePendingState } = await import("./pending.ts");
-const { loadDraft, saveDraft } = await import("../../outbox.ts");
+const { foldIntoCreate, pendingFns, usePendingState } = await import("./pending.ts");
+const { loadDraft, loadPadDoc, rescueStrandedPendingDrafts, saveDraft } = await import("../../outbox.ts");
 
 // After the imports, so no module's load-time check sees a browser. These timers never fire: `track`'s
 // flush and the link log's write are neither this file's subject nor something to keep a test open for.
@@ -195,11 +195,44 @@ test("a refused create is retried under a FRESH ack, its words carried forward i
 
   const rows = c.outboxRef.current;
   assert.equal(rows.some((e) => ["c1", "p1", "p2", "cmd"].includes(e.ackId)), false, "two copies is how a retry runs twice");
+  // The first rides inside the fresh create (`foldIntoCreate`); the rest chain behind it.
+  assert.equal(rows.find((e) => e.ackId === opts.ackId).op.prompt, "first");
   const chain = rows.filter((e) => e.createAck === opts.ackId);
-  assert.deepEqual(chain.map((e) => e.text), ["first", "second", "/compact"]);
-  assert.deepEqual(chain.map((e) => e.kind), ["prompt", "prompt", "command"]);
+  assert.deepEqual(chain.map((e) => e.text), ["second", "/compact"]);
+  assert.deepEqual(chain.map((e) => e.kind), ["prompt", "command"]);
   assert.ok(rows.some((e) => e.ackId === "other"), "another create's failed words stay where they are");
   assert.equal(c.active, `pending:${opts.ackId}`);
+});
+
+test("a retry carries the half-written words on the refused screen to the new one", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const dead = create("c1", { status: "failed" });
+  saveDraft("pending:c1", "not sent yet");
+  const { c, fns } = fakeQueue([dead], { pendingEntry: dead });
+  fns.retryPendingCreate();
+  const fresh = c.ops[0].opts.ackId;
+  assert.equal(loadDraft(`pending:${fresh}`), "not sent yet");
+  assert.equal(loadDraft("pending:c1"), "");
+});
+
+// ── stranded drafts (2026-11-12: words written offline after + now, gone) ─────
+
+test("a draft on a pending screen nothing can reach any more becomes a pad note, with its repo", () => {
+  saveDraft("pending:gone", "words\fand then this");
+  saveDraft("pending:live", "still on screen");
+  saveDraft("pending:later:/repo", "the later screen finds its own draft");
+  saveDraft("s1", "a real session's draft");
+  const r = rescueStrandedPendingDrafts((id) => id === "pending:live", (id) => (id === "pending:gone" ? "/repo" : undefined));
+  assert.deepEqual(r, { moved: 1, refused: 0 });
+  const [note, ...rest] = loadPadDoc().notes;
+  assert.equal(rest.length, 0);
+  assert.equal(note.text, "words");
+  assert.deepEqual(note.steps, ["and then this"]);
+  assert.equal(note.cwd, "/repo");
+  assert.equal(loadDraft("pending:gone"), "", "cleared once the pad holds it");
+  assert.equal(loadDraft("pending:live"), "still on screen");
+  assert.equal(loadDraft("pending:later:/repo"), "the later screen finds its own draft");
+  assert.equal(loadDraft("s1"), "a real session's draft");
 });
 
 test("only a failed create is retried", () => {
@@ -305,4 +338,39 @@ test("an entry with no upload path fails nothing", () => {
   const { c, fns } = fakeQueue(rows);
   fns.failDependentUploads({ ackId: "up", sessionId: "s1" }, "why");
   assert.equal(c.outboxRef.current, rows);
+});
+
+// ── the first prompt rides inside the create (2026-11-12: + now offline, Send, must run) ──
+
+test("Send on a pending screen whose open has not gone out puts the prompt INSIDE the create, with its files", () => {
+  const { c, fns } = fakeQueue([create("c1")]);
+  fns.queueSessionPrompt("/repo", "  look at .claude/inbox/a.png  ", "c1");
+  const rows = c.outboxRef.current;
+  assert.equal(rows.length, 1, "no second row: the desktop types it");
+  assert.equal(rows[0].op.prompt, "look at .claude/inbox/a.png");
+  assert.deepEqual(rows[0].op.needs, [".claude/inbox/a.png"]);
+  assert.equal(rows[0].op.ackId, "c1", "the same ackId — the op has never been sent");
+  fns.queueSessionPrompt("/repo", "and then this", "c1");
+  const chain = c.outboxRef.current.filter((e) => e.createAck === "c1");
+  assert.deepEqual(chain.map((e) => [e.text, e.holdUntilIdle]), [["and then this", true]], "the second chains behind, as before");
+});
+
+test("a create that may already be on the desktop is never rewritten: the prompt chains behind it", () => {
+  for (const over of [{ attempts: 1 }, { tries: 1 }, { firstTryAt: 5 }, { status: "pending" }, { status: "failed" }]) {
+    assert.equal(foldIntoCreate([create("c1", over)], "c1", "hi"), null, JSON.stringify(over));
+  }
+});
+
+test("no fold over a prompt the op has, ahead of a chained row, into a shell, or for a command", () => {
+  const withPrompt = create("c1");
+  withPrompt.op = { ...withPrompt.op, prompt: "already" };
+  assert.equal(foldIntoCreate([withPrompt], "c1", "hi"), null);
+  assert.equal(foldIntoCreate([create("c1"), behind("p1", "c1")], "c1", "hi"), null);
+  const shell = create("c1");
+  shell.op = { ...shell.op, launch: { backend: "sh" } };
+  assert.equal(foldIntoCreate([shell], "c1", "ls", new Set(["sh"])), null);
+  const { c, fns } = fakeQueue([create("c1")]);
+  fns.queueSessionPrompt("/repo", "/compact", "c1", "command");
+  assert.equal(c.outboxRef.current[0].op.prompt, undefined);
+  assert.equal(c.outboxRef.current.length, 2);
 });

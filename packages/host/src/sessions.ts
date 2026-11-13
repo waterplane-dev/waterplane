@@ -39,6 +39,7 @@ import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
 import { endSession } from "./sessions/endsession.js";
 import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions, withHostApi } from "./reposkill.js";
+import type { Clock } from "./waitclock.js";
 import { env } from "./env.js"; import { answerTermQueries, lateQueryLog } from "./termqueries.js"; import { hostTermColors } from "./themeoverlay.js";
 /** Matches DECSET/DECRST private-mode sequences, e.g. `\x1b[?1049h`, `\x1b[?1000;1006h`. */
 const PRIVATE_MODE_RE = /\x1b\[\?([0-9;]+)([hl])/g;
@@ -546,7 +547,7 @@ export class SessionManager extends EventEmitter {
   liveGrid(id: string): string { return drive.liveGrid(this.core, id); } setMode(id: string, m: PermissionMode): Promise<mode.ModeReply> { return mode.setMode(this.core, id, m); } // ← session.mode (sessions/livemode.ts)
   submitPromptBox(id: string): Promise<{ ok: boolean; placed: boolean }> { return boxes.submitPromptBox(this.core, id); }
 
-  waitReady(id: string, quietMs = 1000, timeoutMs = 30000): Promise<boolean> { return drive.waitReady(this.core, id, quietMs, timeoutMs); }
+  waitReady(id: string, quietMs = 1000, timeoutMs = 30000, clock?: Clock): Promise<boolean> { return drive.waitReady(this.core, id, quietMs, timeoutMs, clock); }
   readyForAutoFire(id: string, quietMs: number): boolean { return drive.readyForAutoFire(this.core, id, quietMs); }
   autoFireBlocker(id: string, quietMs: number): string | null { return drive.autoFireBlocker(this.core, id, quietMs); }
   resize(id: string, cols: number, rows: number): void { drive.resize(this.core, id, cols, rows); }

@@ -173,4 +173,6 @@ test("the store is written by writeOutbox alone, ref first, never through an upd
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])),
     "writeOutbox: persist → ref → store → shell depth, in that order (the flusher reads the ref synchronously)");
   assert.doesNotMatch(hook, /outboxStore\.set\(\s*\(/, "never a functional updater — the ref is the truth");
+  assert.match(body, /persistFailedAtStore\.set\(\s*saveOutbox\(list\)\s*\?\s*null\s*:\s*Date\.now\(\)\s*\)/,
+    "saveOutbox's result must reach persistFailedAtStore — a dropped return value hides a refused write");
 });

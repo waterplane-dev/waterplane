@@ -27,7 +27,7 @@ export const CORE_SCREEN: Readonly<Partial<Record<FactName, readonly string[]>>>
 /** Core's store readers, per fact. */
 export const CORE_STORE: Readonly<Partial<Record<FactName, readonly string[]>>> = {
   transcript: ["claude-jsonl"], context: ["claude-jsonl"], conversations: ["claude-jsonl"], tokens: ["claude-jsonl"],
-  agents: ["claude-agents"],
+  agents: ["claude-agents"], skills: ["claude-settings"],
 };
 /** The facts a CONTRIBUTED reader (`api.screenReader` / `api.storeReader`) may answer. */
 const CONTRIBUTED_SCREEN: ReadonlySet<FactName> = new Set(["dialogs"]);
@@ -142,6 +142,8 @@ function build(caps: DeriveIn["caps"], facts: BackendFacts, sources: BackendSour
       // unless one does — claude's frame does not move.
       ...(askSource("mode") ? { modes: true as const } : {}),
       ...(askSource("commands") ? { commands: true as const } : {}),
+      // The skills and plugins switch: claude's settings files (P2).
+      ...(has("skills") ? { skillSwitch: true as const } : {}),
     }),
   });
 }

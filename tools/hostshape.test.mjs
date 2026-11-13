@@ -73,8 +73,9 @@ const MAX_LINES = {
   "sidecar.ts":          90,
   // The ONE delivery implementation (CLAUDE.md: never fork it), 1,442 lines; a facade over
   // `deliver/` — `deliverPrompt`, `deliverToNewSession`, the audit row (host-architecture.md,
-  // "The deliver slices"). Moved, never copied: it only shrinks.
-  "deliver.ts":          157,
+  // "The deliver slices"). Moved, never copied: it only shrinks. +1 on 2026-11-12 for the
+  // injected wait clock (`waitclock.ts`), the seam that lets the ladder be tested in virtual time.
+  "deliver.ts":          158,
   // The echo proof deliver.ts rests on, 894 of the 900 cap until 2026-10-21 (d01ebdd4): split by
   // subject into the text rule (echo.ts) and the box on rendered rows (composer.ts). Its notes were
   // trimmed once to fit (a8203f2b) — over this line, cut by subject again, never the comments.
@@ -91,7 +92,8 @@ const MAX_API_TABLE_LINES = 500;
  *  caps and ratchets around it count every line, notes included. */
 const MAX_SLICE_LINES = 900;
 /** …and the two newer folders hold the stricter line the split brief set: 500. */
-const TIGHT_DIRS = { capture: 500, backlog: 500, "routes/work": 500, sidecar: 500, deliver: 500 };
+// deliver: 501 since 2026-11-12 — deliverrun.ts's one line binding the injected wait clock.
+const TIGHT_DIRS = { capture: 500, backlog: 500, "routes/work": 500, sidecar: 500, deliver: 501 };
 
 /** Folder → the facade whose slices live there, and the files there that are
  *  NOT slices (they have their own numbers above, or none). */

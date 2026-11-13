@@ -208,6 +208,16 @@ export function failureText(error: string | undefined): string {
       "with nobody there to answer it. Retry with the phone in hand: if Play Protect asks, install anyway. If it " +
       "refuses without asking, Play Store › Play Protect says why";
   }
+  // An older versionCode than the copy installed. The platform's status is INVALID ("not a valid app"
+  // on the native side), which reads as a broken file; it is a stale build — often the Play flavor's
+  // APK against the Play Store's copy, which only Play updates (owner, 2026-11-10).
+  const down = /VERSION_DOWNGRADE.*?version code (\d+) is older than current (\d+)/i.exec(error);
+  if (down || /VERSION_DOWNGRADE/.test(error)) {
+    const codes = down ? ` (version code ${down[1]}, the phone has ${down[2]})` : "";
+    return `this build is older than the copy already on this phone${codes}, and Android never installs an older ` +
+      "version over a newer one — a retry fails the same way. Build a newer one; a copy from the Play Store updates " +
+      "only through the Play Store (INSTALL_FAILED_VERSION_DOWNGRADE)";
+  }
   if (/Session was abandoned/i.test(error)) {
     return "the install was dropped before it finished — Android abandons one when the app is closed mid-install or " +
       "the confirm dialog goes unanswered. A retry starts a fresh one";

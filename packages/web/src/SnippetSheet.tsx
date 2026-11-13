@@ -25,6 +25,8 @@ interface Props {
   textPlaceholder?: string;
   /** Shown as a "defaults" button when the list ships with a built-in set. */
   onReset?: () => void;
+  /** Shown as a "starters" button while some shipped starter is missing; it only ever appends. */
+  onAddStarters?: () => void;
   trackId?: string;
 }
 
@@ -48,6 +50,7 @@ export function SnippetSheet({
   emptyText = "No snippets yet. Tap “new” to add one.",
   textPlaceholder = "Snippet text…",
   onReset,
+  onAddStarters,
   trackId = "action:snippet.save",
 }: Props) {
   const [editing, setEditing] = useState<Snippet | null>(null); // the row being edited (or a fresh draft)
@@ -102,6 +105,7 @@ export function SnippetSheet({
             confirm={<><RotateCcw size={16} /> sure?</>}
             onConfirm={onReset}><RotateCcw size={16} /> defaults</ConfirmButton>
         )}
+        {onAddStarters && <Button onClick={onAddStarters} title="add the shipped starter snippets that are not in the list yet — nothing is replaced"><Plus size={16} /> starters</Button>}
         <Button onClick={() => setEditing({ id: seqId("sn"), title: "", text: "" })}><Plus size={16} /> new</Button>
       </SheetHead>
       {/* Prompt templates and the header row are authored content: they follow

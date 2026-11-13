@@ -157,7 +157,7 @@ export function pairedTitle(p: PairedRow): string {
 
 /** What is true of the pairing, in words; empty when both halves are there. */
 export function pairedNote(p: PairedRow): string {
-  if (!p.other) return `${p.row.addr} is not one of the desktops saved on this phone — only ${p.host.name}'s side is listed`;
+  if (!p.other) return `${p.row.addr} is not one of the desktops saved on this device — only ${p.host.name}'s side is listed`;
   if (p.mirrorUnknown) return `${p.other.name} could not be reached, so its side is not known`;
   if (!p.mirror) return `only ${p.host.name}'s side exists — ${p.other.name} has no row for it`;
   const hostSide = p.row.outbound && p.row.inbound ? "" : p.row.outbound ? `${p.host.name} can call ${p.other.name} but not the reverse` : `${p.other.name} can call ${p.host.name} but not the reverse`;
@@ -191,8 +191,8 @@ export function sidesText(verb: "paired" | "unpaired", sides: readonly SideResul
 export function peerReplyWhy(status: number, body: unknown): string {
   const e = body && typeof body === "object" ? (body as { error?: unknown }).error : null;
   if (typeof e === "string" && e) return e;
-  if (status === 403) return "this phone is not allowed to manage peers there";
-  if (status === 401) return "this phone is not signed in there";
+  if (status === 403) return "this device is not allowed to manage peers there";
+  if (status === 401) return "this device is not signed in there";
   return `status ${status}`;
 }
 
@@ -224,7 +224,7 @@ export function peerTagFacts(s: Pick<SessionInfo, "peerWait">, hosts: readonly S
   const target = hostForPeerBase(w.peerBase, hosts);
   const sessionId = w.peerSessionId ?? null;
   let title: string;
-  if (!target) title = `${w.peer} is not one of the desktops saved on this phone — add it to open its session`;
+  if (!target) title = `${w.peer} is not one of the desktops saved on this device — add it to open its session`;
   else if (target.id === activeId) title = `${w.peer} is the desktop in use`;
   else title = `switch to ${target.name}${sessionId ? " and open the job's session" : ""}`;
   return { text, target, sessionId, title };
@@ -276,5 +276,5 @@ export function peerJobRowFacts(r: PeerJobLedgerRow, now: number): PeerJobRowFac
 
 /** The sentence when a tap finds no saved host. */
 export function noHostText(peer: string): string {
-  return `${peer} is not saved on this phone — add it under Hosts to open its session`;
+  return `${peer} is not saved on this device — add it under Hosts to open its session`;
 }

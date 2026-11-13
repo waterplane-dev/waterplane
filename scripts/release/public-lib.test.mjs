@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
+  applyAccept, buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
   publicSuppressions, rewriteHostedLinks, stripSessionIds,
   isTargetGit, npmTarballProblems, parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
 } from "./public-lib.mjs";
@@ -102,14 +102,50 @@ test("personal: LAN addresses are warnings, not hits", () => {
   assert.equal(scanText("a.ts", "v110.1.2.3", buildContext()).warnings.length, 0);
 });
 
-test("accept tokens are stable and change with the line", () => {
-  const a = hitToken("p.ts", 3, "r", "  x = 1 ");
-  assert.equal(a, hitToken("p.ts", 3, "r", "x = 1"));
-  assert.notEqual(a, hitToken("p.ts", 3, "r", "x = 2"));
+test("accept tokens are stable and name the text, not its place", () => {
+  const a = hitToken("p.ts", "r", "  x = 1 ");
+  assert.equal(a, hitToken("p.ts", "r", "x = 1"));
+  assert.notEqual(a, hitToken("p.ts", "r", "x = 2"));
+  assert.notEqual(a, hitToken("q.ts", "r", "x = 1"), "the same text in another file is another entry");
+  assert.match(a, /^p\.ts:[0-9a-f]{10}$/);
   const set = parseAccept(`# why\n${a}  # reviewed\n\n`);
   assert.deepEqual([...set], [a]);
   const [h] = scanText("p.ts", "t=ghp_" + "c".repeat(36), buildContext()).hits;
   assert.ok(parseAccept(h.token).has(h.token));
+});
+
+test("accept: the same fixture moved to another line is still accepted", () => {
+  const fixture = "t=ghp_" + "c".repeat(36);
+  const [low] = scanText("p.ts", fixture, buildContext()).hits;
+  const [high] = scanText("p.ts", `a\nb\nc\n${fixture}`, buildContext()).hits;
+  assert.notEqual(low.line, high.line);
+  assert.equal(low.token, high.token);
+  assert.ok(parseAccept(low.token).has(high.token));
+  const [other] = scanText("o.ts", fixture, buildContext()).hits;
+  assert.ok(!parseAccept(low.token).has(other.token), "another file is not accepted");
+  const [changed] = scanText("p.ts", "t=ghp_" + "d".repeat(36), buildContext()).hits;
+  assert.ok(!parseAccept(low.token).has(changed.token), "changed text is not accepted");
+});
+
+test("accept: an old path:line:hash entry is read as path:hash", () => {
+  const t = hitToken("a/b.mjs", "r", "x");
+  const [, hash] = /:([0-9a-f]{10})$/.exec(t);
+  const set = parseAccept(`a/b.mjs:41:${hash}  # old form\n${t}\n# a/b.mjs:9:${hash}\n`);
+  assert.deepEqual([...set], [t], "old and new form of one entry are one entry");
+  assert.deepEqual([...parseAccept(`weird:dir/b.mjs:7:${hash}`)], [`weird:dir/b.mjs:${hash}`], "parsed from the right");
+});
+
+test("accept: applyAccept drops accepted hits (wherever the line is) and reports the stale entries", () => {
+  const fixture = "t=ghp_" + "c".repeat(36);
+  const [h] = scanText("p.ts", fixture, buildContext()).hits;
+  const [moved] = scanText("p.ts", `a\nb\n${fixture}`, buildContext()).hits;
+  const [other] = scanText("o.ts", fixture, buildContext()).hits;
+  const accepted = parseAccept(`${h.token}\np.ts:0000000000\np.ts:12:1111111111\n`);
+  const r = applyAccept([moved, other], accepted);
+  assert.deepEqual(r.accepted, [moved]);
+  assert.deepEqual(r.blocking, [other], "another file stays blocking");
+  assert.deepEqual(r.stale, ["p.ts:0000000000", "p.ts:1111111111"]);
+  assert.equal(applyAccept([h], new Set()).blocking.length, 1);
 });
 
 test("changelog: section for a version, with and without v / dash heading", () => {
@@ -317,4 +353,20 @@ test("publicSuppressions: keeps the published paths' entries untouched, drops th
   assert.deepEqual(JSON.parse(r.text), { "packages/shared/src/a.ts": all["packages/shared/src/a.ts"] });
   assert.ok(!r.text.includes("vault"));
   assert.equal(r.text, JSON.stringify(JSON.parse(r.text), null, 2));
+});
+
+test("accept: a multi-line key block is accepted by its whole block, never by its BEGIN line alone", () => {
+  // With no line number in the token, hashing only `-----BEGIN … KEY-----` would let one reviewed fixture
+  // key accept every other key block in the same file.
+  const pem = (body) => ["-----BEGIN " + "PRIVATE KEY-----", body, "-----END " + "PRIVATE KEY-----"];
+  const file = [...pem("AAAAfixture"), "", ...pem("BBBBreal")].join("\n");
+  const hits = scanText("test/k.test.mjs", file, buildContext()).hits.filter((h) => h.rule === "private-key-block");
+  assert.equal(hits.length, 2);
+  assert.notEqual(hits[0].token, hits[1].token, "two different keys never share a token");
+  const { blocking, accepted } = applyAccept(hits, parseAccept(hits[0].token));
+  assert.deepEqual(accepted.map((h) => h.line), [1]);
+  assert.deepEqual(blocking.map((h) => h.line), [5]);
+  // the same block moved down the file is still the accepted one
+  const moved = scanText("test/k.test.mjs", ["// moved", ...pem("AAAAfixture")].join("\n"), buildContext()).hits;
+  assert.equal(moved[0].token, hits[0].token);
 });

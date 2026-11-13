@@ -119,12 +119,14 @@ function GuestRead({ def, fresh, online, onRead }: {
   return null;
 }
 
-export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn, doors }: {
+export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn, doors, afterOverTime }: {
   /** Usage readings per source, and the one the launcher chip opened this sheet on (see `TokenStatsBody`). */
   readings?: readonly UsageReading[];
   openedOn?: string | null;
   /** Doors drawn first in the body — see `TokenStatsBody`. */
   doors?: ReactNode;
+  /** Drawn after the Over time box — see `TokenStatsBody`. */
+  afterOverTime?: ReactNode;
   onClearOn?: () => void;
   /** The socket's verdict, not `navigator.onLine` — see `useRemoteResource`. */
   online: boolean;
@@ -171,7 +173,7 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
         onRefreshUsage={onRefreshUsage}
         onClose={onClose} onRescan={() => setFresh((n) => n + 1)}
         nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} ledgerTabs={ledgerTabs} fresh={fresh}
-        readings={readings} openedOn={openedOn} onClearOn={onClearOn} doors={doors} />
+        readings={readings} openedOn={openedOn} onClearOn={onClearOn} doors={doors} afterOverTime={afterOverTime} />
     </div>
   );
 }

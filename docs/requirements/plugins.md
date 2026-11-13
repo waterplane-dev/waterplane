@@ -167,7 +167,7 @@ Android apps are an optional feature, on only when the desktop has an Android re
 
 ### R-plugins-035 · shipped
 The very top of Settings has a Plugin manager button that opens a screen listing every plugin available, as a plugin manager would.
-- shipped: 9c44c5a6, 7ae6dadb
+- shipped: 9c44c5a6, 7ae6dadb, 902bb413
 - asked: 2026-11-08
 
 ### R-plugins-036 · shipped
@@ -176,9 +176,9 @@ Each plugin card in the manager shows whether it is on, off or failed to load, a
 - asked: 2026-11-08
 
 ### R-plugins-037 · shipped
-Tapping a plugin's settings in the manager closes the manager and opens Settings narrowed to that plugin; the plugin's settings stay searchable in Settings as before, and the narrowed view says what it hides and clears.
+Tapping a plugin's settings in the manager opens Settings narrowed to that plugin above the manager; the plugin's settings stay searchable in Settings as before, the narrowed view says what it hides and clears, and Back returns to the plugin manager.
+- asked: 2026-11-08, 2026-11-08, 2026-11-09
 - shipped: 9c44c5a6, 7ae6dadb
-- asked: 2026-11-08
 
 ### R-plugins-038 · shipped
 The manager's filters (All, On, Off, Beta or Experimental, Private) sit above the list, each with its count; choosing one shows exactly those plugins and says "n of N" with a clear button.
@@ -199,3 +199,18 @@ A plugin's maturity "preview" is printed Beta everywhere; Experimental and Stabl
 A plugin counts as Private exactly when its own ship.json says it is not shipped, and that agrees with the public release's allow-list; a test holds the two together.
 - shipped: 1781723a
 - asked: 2026-11-08
+
+### R-plugins-042 · shipped
+Every plugin has a README that says in plain words what it does and where in the UI to find it, and the plugin's description is drawn from it.
+- asked: 2026-11-09
+- shipped: 61f1092f, 793ec2dd, 519eceab, 2bce5b46
+
+### R-plugins-043 · shipped
+Plugin status shows as coloured badges: Stable green, Beta orange, Experimental and failed red, Private purple.
+- asked: 2026-11-09
+- shipped: 2279f7c1
+
+### R-plugins-044 · requested
+The Mac sensors plugin reports the correct API version.
+- asked: 2026-11-09
+

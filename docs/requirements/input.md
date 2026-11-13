@@ -89,3 +89,12 @@ With a physical keyboard, Ctrl+E opens the jump dialog in the browser as in VS C
 - asked: 2026-10-26
 - shipped: f658fc8e
 
+### R-input-019 · shipped
+Name fields on the New sheet (project, folder, branch) open a lowercase keyboard.
+- asked: 2026-11-07
+- shipped: 646c99a2
+
+### R-input-020 · requested
+Wrong suggestions never appear on screen at all, rather than showing and then disappearing by themselves.
+- asked: 2026-11-07
+

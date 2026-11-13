@@ -26,3 +26,13 @@ export function localDaysBetween(a: number, b: number): number {
     (Date.UTC(db.getFullYear(), db.getMonth(), db.getDate()) - Date.UTC(da.getFullYear(), da.getMonth(), da.getDate())) / MS_PER_DAY,
   );
 }
+
+/**
+ * The first occurrence of `target`'s local clock time that is strictly after `after`: `target` itself when it is
+ * still ahead, else the same wall-clock time on the following local days. For a bare "7pm" that recurs daily.
+ */
+export function nextLocalOccurrence(target: number, after: number): number {
+  let k = Math.max(0, Math.floor((after - target) / MS_PER_DAY) - 1);
+  while (addLocalDays(target, k) <= after) k++;
+  return addLocalDays(target, k);
+}

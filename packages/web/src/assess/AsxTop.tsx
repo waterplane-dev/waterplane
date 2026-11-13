@@ -87,7 +87,7 @@ export function AsxTop({ m }: { m: AssessModel }) {
 
       {!p.online ? (
         <Hint tone="warn">
-          No connection — this is the last proposal this phone was told about. Applying starts work on the
+          No connection — this is the last proposal this device was told about. Applying starts work on the
           desktop, so it waits for the link; nothing here expires while it is down.
         </Hint>
       ) : null}

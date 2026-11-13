@@ -100,6 +100,18 @@ const KEY_RE = /^[A-Za-z_$][\w$-]{0,63}$/;
 /** An identifier-shaped key that is really an ID (`toolu_014eSw…` keying a map):
  *  digits beside both cases, or a long run of digits. */
 const ID_KEY_RE = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{12,}$|\d{6,}/;
+/** Free-form subtrees: what the MODEL or the user put there (a tool's arguments
+ *  and result). Below one, every key and every string is content — `{name:"client-x"}`
+ *  or a key `ACME-TOKEN` is the person's, not the CLI's — so keys collapse to
+ *  `<key>` and values to their kind; only the nesting survives. */
+export const OPAQUE_KEYS: ReadonlySet<string> = new Set(["tool_input", "tool_response", "tool_result"]);
+/** A transcript `tool_use` block's `input` and a record's tool result
+ *  (`toolUseResult`, `tool_use_result`, `mcp_server`): their KEYS are the tool's
+ *  own schema (`questions`, `multiSelect`, `stdout` — what the readers are tested
+ *  on), but every VALUE below is the model's or the tool's, so no
+ *  `name`/`type`/`role` string survives there. `tools/harvestfixtures.mjs`
+ *  checks a harvested file against these same two sets. */
+export const VALUE_OPAQUE_KEYS: ReadonlySet<string> = new Set(["input", "toolUseResult", "tool_use_result", "mcp_server"]);
 const MAX_DEPTH = 16;
 const MAX_ITEMS = 40;
 /** What a leaf becomes — and stays, when a skeleton is put through again. */
@@ -111,9 +123,12 @@ const LEAVES = new Set(["<string>", "<number>", "<boolean>", "<deeper>", "<other
  * of every leaf, the names in `NAME_KEYS`, and an array as its DISTINCT
  * element shapes. Idempotent, so a skeleton put through again is unchanged.
  */
-export function skeletonOf(v: unknown, key = "", depth = 0): unknown {
+export function skeletonOf(v: unknown, key = "", depth = 0, opaque = false, valuesOpaque = false): unknown {
   if (v === null) return null;
+  if (!opaque && OPAQUE_KEYS.has(key)) opaque = true;
+  if (!valuesOpaque && VALUE_OPAQUE_KEYS.has(key)) valuesOpaque = true;
   if (typeof v === "string") {
+    if (opaque || valuesOpaque) return LEAVES.has(v) ? v : "<string>";
     // An MCP tool's name says which servers this account connected: config, not schema.
     if (NAME_KEYS.has(key) && NAME_RE.test(v)) return v.startsWith("mcp__") ? "<mcp>" : v;
     return LEAVES.has(v) ? v : "<string>";
@@ -125,7 +140,7 @@ export function skeletonOf(v: unknown, key = "", depth = 0): unknown {
     const seen = new Set<string>();
     const out: unknown[] = [];
     for (const x of v) {
-      const s = skeletonOf(x, key, depth + 1);
+      const s = skeletonOf(x, key, depth + 1, opaque, valuesOpaque);
       const k = JSON.stringify(s);
       if (seen.has(k)) continue;
       seen.add(k);
@@ -137,9 +152,9 @@ export function skeletonOf(v: unknown, key = "", depth = 0): unknown {
   if (typeof v === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-      const name = KEY_RE.test(k) && !ID_KEY_RE.test(k) ? k : "<key>";
+      const name = !opaque && KEY_RE.test(k) && !ID_KEY_RE.test(k) ? k : "<key>";
       if (name in out) continue;
-      out[name] = skeletonOf(x, name, depth + 1);
+      out[name] = skeletonOf(x, name, depth + 1, opaque, valuesOpaque);
     }
     return out;
   }

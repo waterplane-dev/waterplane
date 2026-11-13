@@ -76,3 +76,65 @@ test("an IANA zone name never reaches a kept capture, chrome rows included", asy
   assert.match(kept, /Claude Code v2\.1\.303 \(UTC\)/);
   assert.doesNotMatch(kept, /Berlin/);
 });
+
+test("a signal captured by kind keeps one file per kind per version, skeleton-masked like any other", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "shelf-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const shelf = new FixtureShelf(dir);
+  let asked = 0;
+  const hookSrc = (ev) => () => { asked++; return JSON.stringify({ hook_event_name: ev, session_id: "secret", error: "server_error", cwd: "/Users/x/Europe/Berlin" }); };
+  shelf.offer("hook.pipe", "2.1.330", hookSrc("SessionStart"), "SessionStart");
+  shelf.offer("hook.pipe", "2.1.330", hookSrc("StopFailure"), "StopFailure");
+  shelf.offer("hook.pipe", "2.1.330", hookSrc("StopFailure"), "StopFailure");
+  await settle();
+  shelf.offer("hook.pipe", "2.1.330", hookSrc("StopFailure"), "StopFailure");
+  await settle();
+  assert.equal(asked, 2, "the second event is its own capture; a repeat of one is not asked");
+  assert.deepEqual(readdirSync(join(dir, "2.1.330")).sort(), ["hook.pipe.SessionStart.json", "hook.pipe.StopFailure.json"]);
+  const kept = readFileSync(join(dir, "2.1.330", "hook.pipe.StopFailure.json"), "utf8");
+  assert.deepEqual(JSON.parse(kept), { hook_event_name: "StopFailure", session_id: "<string>", error: "<string>", cwd: "<string>" });
+  assert.equal(shelf.wants("hook.pipe", "2.1.330", "StopFailure"), false);
+  assert.equal(shelf.wants("hook.pipe", "2.1.330", "PreToolUse"), true);
+  assert.equal(shelf.wants("hook.pipe", "2.1.331", "StopFailure"), true, "a new version is a new capture");
+});
+
+test("a kind a path could be built from wrongly is refused; the old kindless file still names itself", () => {
+  const shelf = new FixtureShelf("/x");
+  for (const k of ["../Stop", "a/b", "", "Stop.json", "1Stop", "x".repeat(41)]) assert.equal(shelf.fileFor("hook.pipe", "2.1.330", k), null, k);
+  assert.equal(shelf.fileFor("hook.pipe", "2.1.330"), join("/x", "2.1.330", "hook.pipe.json"));
+  assert.equal(shelf.fileFor("hook.pipe", "2.1.330", "Stop"), join("/x", "2.1.330", "hook.pipe.Stop.json"));
+});
+
+test("a kept (version, signal, event) is remembered: a repeat offer does no fs call", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "shelf-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let stats = 0;
+  const shelf = new FixtureShelf(dir, { exists: (f) => { stats++; return existsSync(f); } });
+  const src = () => JSON.stringify({ hook_event_name: "PreToolUse" });
+  shelf.offer("hook.pipe", "2.1.330", src, "PreToolUse");
+  await settle();
+  const after = stats;
+  for (let i = 0; i < 5; i++) shelf.offer("hook.pipe", "2.1.330", src, "PreToolUse");
+  assert.equal(shelf.wants("hook.pipe", "2.1.330", "PreToolUse"), false);
+  assert.equal(stats, after, "no stat once the file is known kept");
+  rmSync(join(dir, "2.1.330"), { recursive: true, force: true });
+  assert.equal(shelf.wants("hook.pipe", "2.1.330", "PreToolUse"), false, "remembered in memory, not re-read from disk");
+});
+
+test("only hook events the CLI sends are kept, and no more than maxKinds per version", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "shelf-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const shelf = new FixtureShelf(dir);
+  const src = () => "{}";
+  for (const k of ["Evil1", "Evil2", "stop"]) shelf.offer("hook.pipe", "2.1.330", src, k);
+  await settle();
+  assert.equal(existsSync(join(dir, "2.1.330")), false, "an unknown event name writes nothing");
+  assert.equal(shelf.fileFor("hook.pipe", "2.1.330", "Evil1"), null);
+  for (const k of ["SessionStart", "SessionEnd", "UserPromptSubmit", "Stop", "StopFailure", "Notification", "PreToolUse", "PostToolUse", "SubagentStop", "PreCompact"]) {
+    assert.ok(shelf.fileFor("hook.pipe", "2.1.330", k), k);
+  }
+  const capped = new FixtureShelf(dir, { maxKinds: 2 });
+  for (const k of ["Stop", "PreToolUse", "Notification"]) capped.offer("hook.pipe", "2.1.331", src, k);
+  await settle();
+  assert.equal(readdirSync(join(dir, "2.1.331")).length, 2, "the third kind is over the cap");
+});

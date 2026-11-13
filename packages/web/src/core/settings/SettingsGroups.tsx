@@ -37,7 +37,11 @@ import { track } from "../../usage.ts";
 import { useHostPush } from "../../features/hostTools";
 import { useHasKeyboard } from "../../ShortcutCard.tsx";
 import { Button } from "../../kit/Button";
+import { DictateLocalRow } from "../../DictateLocalRow.tsx";
+import { activeHostId, browserKV } from "../../hosts";
 import { offerTabsUnsync } from "../sessions/tabsSyncSaver";
+
+const activeHostKey = (): string => { const kv = browserKV(); return (kv && activeHostId(kv)) || "-"; };
 
 const ICON = 16;
 
@@ -308,7 +312,7 @@ export function AppearanceRows() {
           if (!await askConfirm({
             title: "Reset UI settings?",
             lines: [
-              "Theme, text and icon size, zooms, the strips, session tabs, layout switches and the ? button go back to their defaults on this phone.",
+              "Theme, text and icon size, zooms, the strips, session tabs, layout switches and the ? button go back to their defaults on this device.",
               "Drafts, queued prompts, header commands, pins and everything synced stay as they are.",
             ],
             confirmLabel: "Reset and reload",
@@ -317,7 +321,7 @@ export function AppearanceRows() {
           for (const k of UI_RESET_KEYS) lsDel(LS[k]);
           location.reload();
         })(); }}
-        note="Everything about how this phone draws the app, back to how it shipped. Your words and synced choices are kept."
+        note="Everything about how this device draws the app, back to how it shipped. Your words and synced choices are kept."
       />
     </>
   );
@@ -382,7 +386,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
           more={<>
             <p>The phone used to send its own system language, and whisper <b>told</b> a language does not transcribe another one — it translates into it. English spoken into a German phone came back as fluent German prose.</p>
             <p><b>auto</b> is the answer for anybody who works in two languages: the transcriber detects what was said. Pin one where a short clip or a sentence full of English identifiers gets detected wrong.</p>
-            {voice.engine === "browser" && <p>This phone is using the <b>browser's</b> recogniser, which has no auto-detect and is given its language when the recording starts — so <b>auto</b> here means this device's own language, and a change applies to the next recording.</p>}
+            {voice.engine === "browser" && <p>This device is using the <b>browser's</b> recogniser, which has no auto-detect and is given its language when the recording starts — so <b>auto</b> here means this device's own language, and a change applies to the next recording.</p>}
           </>}
         />
       )}
@@ -408,6 +412,11 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
         />
       )}
 
+      {/* The desktop's whisper, and a tap to set it up. Shown even when the
+          phone dictates with its own recogniser: that is when it matters. */}
+      {/* keyed on the active desktop: a host switch remounts the row, so no state or timer outlives the host it read */}
+      <DictateLocalRow key={activeHostKey()} id="dictate-local" />
+
       {/* Words the transcriber keeps getting wrong. Synced, unlike the
           language: a term is misheard the same way on every device.
           Written on every keystroke — this box is the only copy of
@@ -422,7 +431,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
             <p>One term per line. After a colon, what it keeps coming back as, comma-separated: <b>BA3: bee a three, be a 3</b>. A line starting with # is a comment.</p>
             {voice.engine === "host"
               ? <p>The desktop's transcriber is <b>told</b> these words before it listens, which is what makes it spell them your way. Whatever still comes out wrong is corrected afterwards from the list after the colon.</p>
-              : <p>This phone is using the <b>browser's</b> recogniser, which cannot be told words in advance — here the list only corrects what comes out, so the part after the colon does the work.</p>}
+              : <p>This device is using the <b>browser's</b> recogniser, which cannot be told words in advance — here the list only corrects what comes out, so the part after the colon does the work.</p>}
             <p>A term that arrives split (<b>BA 3</b>, <b>B.A.3</b>) is joined back without being listed, and one with a digit or an inner capital is re-cased (<b>ba3</b> → <b>BA3</b>). An ordinary word is never re-cased, so <b>Go</b> leaves "go" alone.</p>
           </>}
         >

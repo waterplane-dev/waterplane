@@ -43,6 +43,14 @@ The rest of the detail:
   restart; without it the host refuses to start sessions. `brew install tmux` on macOS,
   `sudo apt-get install -y tmux` on Debian/Ubuntu/WSL (or your distribution's package manager). The
   installer offers to install it for you.
+- **Local dictation (optional):** whisper.cpp's `whisper-cli` and one speech model, so the phone's
+  microphone is transcribed on the desktop; without it the phone uses its own, less accurate, cloud
+  recogniser. The installer asks on the terminal (default no); `--dictation[=turbo-q8|turbo|small]`
+  does it without asking, `--no-dictation` skips the question. It installs whisper.cpp with
+  `brew install whisper-cpp` (macOS), downloads the model (turbo-q8, about 874 MB) from Hugging Face
+  into `~/.local/share/waterplane/models`, checks its sha256, and needs 2 GB of free space beyond it.
+  The model is never bundled. Any failure is a warning; the install goes on. You can also do it later
+  from the phone: Settings → Local dictation.
 - **npm:** any npm runs `npm ci`; an npm older than 11.10 prints "Unknown project config
   min-release-age", which is harmless for `npm ci` (it installs the lockfile exactly). Upgrade npm
   only if you will `npm install` new dependencies yourself.
@@ -253,8 +261,14 @@ drive the desktop from the next room, or already run another VPN, use the LAN mo
    app from **Settings → pair another phone**.
 
 What you give up: plain HTTP on a LAN is not a secure context, so no push, no home-screen install and
-no clipboard in the browser (the Android app is unaffected), and nothing defends it against a man in
-the middle on that network. Use it on a network you trust. [SECURITY.md](../SECURITY.md) has the
+no clipboard in the browser (the Android app is unaffected), and a browser has nothing against a man in
+the middle on that network. Use it on a network you trust.
+
+The Android app does better. The daemon also listens with TLS on the next port (8771 for 8770;
+`WATERPLANE_TLS_PORT`, off with `WATERPLANE_TLS=0`; a busy port is logged and the daemon carries on
+plain). The app learns the desktop's key over Tailscale or when it pairs, pins it, and then dials
+`https://<address>:8771` by itself. In **Edit desktop** type the Wi-Fi address plain, for example
+`192.168.0.64`, not `https://`; the screen says per desktop whether that link is encrypted. [SECURITY.md](../SECURITY.md) has the
 detail.
 
 ## Run it as a background service

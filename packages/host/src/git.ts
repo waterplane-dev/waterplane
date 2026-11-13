@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
 import { lastFetch } from "./gitlog.js";
+import { landedBase, unlandedCount } from "./landedbase.js";
 import { fetchFailure } from "./gitfetchfail.js";
 import { PushProgress } from "./pushprogress.js";
 import { pushForPr, rulesFor } from "./prpush.js";
@@ -257,12 +258,14 @@ export interface CloseCheck {
   branch: string;
   /** Uncommitted changes in the working tree (staged or unstaged or untracked). */
   dirty: boolean;
-  /** Commits on this branch not yet reachable from the main branch. */
+  /** Commits on this branch whose patch is not on the base branch (cherry-picked ones are landed). */
   unmerged: number;
   /** Branch this worktree is on IS the main branch. */
   isMain: boolean;
-  /** Name of the resolved main branch (main/master), or "" if none found. */
+  /** Name of the base branch (see landedbase.ts), or "" if none found. */
   mainBranch: string;
+  /** True when `unmerged` could not be measured (no base found, or git failed): `unmerged` is then 0 and means nothing. */
+  unmergedUnknown?: boolean;
 }
 
 /** Pre-close safety check: is there uncommitted or un-merged-to-main work here? */
@@ -284,22 +287,17 @@ export async function gitCloseCheck(wt: string): Promise<CloseCheck> {
     out.dirty = stdout.trim().length > 0;
   } catch { /* leave dirty=false */ }
 
-  // Resolve the main branch (prefer main, then master).
-  for (const cand of ["main", "master"]) {
-    try {
-      await git(wt, ["rev-parse", "--verify", "--quiet", cand]);
-      out.mainBranch = cand;
-      break;
-    } catch { /* try next */ }
-  }
-  out.isMain = !!out.mainBranch && branch === out.mainBranch;
+  // The base this branch is measured against: landedbase.ts owns the order.
+  const lb = await landedBase(wt);
+  out.mainBranch = lb.base ?? "";
+  out.isMain = !!lb.base && branch === lb.base;
 
-  // Count commits on HEAD not reachable from main.
-  if (out.mainBranch && !out.isMain) {
-    try {
-      const { stdout } = await git(wt, ["rev-list", "--count", `${out.mainBranch}..HEAD`]);
-      out.unmerged = Number(stdout.trim()) || 0;
-    } catch { /* leave 0 */ }
+  // Commits on HEAD whose patch is not on the base. Unknown (no base, or git could not say) is
+  // flagged, never 0: the phone read 0 as "nothing to lose".
+  if (!out.isMain) {
+    const n = lb.ref ? await unlandedCount(wt, lb.ref) : null;
+    if (n === null) out.unmergedUnknown = true;
+    else out.unmerged = n;
   }
   return out;
 }
@@ -364,16 +362,13 @@ export async function gitBlob(wt: string, rel: string, side: "old" | "new", stag
  * The full delta of a worktree vs its main branch — committed AND uncommitted
  * tracked changes — plus a list of untracked files. Used to give an independent
  * reviewer the evidence to judge whether a backlog item was implemented.
- * Falls back to `git diff HEAD` (uncommitted only) when no main branch exists.
+ * Falls back to `git diff HEAD` (uncommitted only) when no base branch exists (landedbase.ts).
  */
 export async function gitReviewDiff(wt: string, cap = 60_000): Promise<{ diff: string; untracked: string[]; empty: boolean }> {
-  let mainBranch = "";
-  for (const cand of ["main", "master"]) {
-    try { await git(wt, ["rev-parse", "--verify", "--quiet", cand]); mainBranch = cand; break; } catch { /* next */ }
-  }
+  const lb = await landedBase(wt);
   let diff = "";
   try {
-    const { stdout } = await git(wt, ["diff", "--no-color", mainBranch || "HEAD"]);
+    const { stdout } = await git(wt, ["diff", "--no-color", lb.ref || "HEAD"]);
     diff = stdout;
   } catch { /* not a repo / no HEAD */ }
 

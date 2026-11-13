@@ -4,10 +4,13 @@
  */
 import { useCore } from "../../sdk";
 import { SnippetSheet } from "../../SnippetSheet";
-import { saveSnippets } from "./actions";
+import { addStarters, saveSnippets } from "./actions";
+import { missingStarters } from "../../snippetPicks";
 import { useSnippets } from "./store";
 
 export function SnippetsSheet() {
   const core = useCore();
-  return <SnippetSheet snippets={useSnippets()} onSave={saveSnippets} onClose={() => core.nav.close("snippets")} />;
+  const list = useSnippets();
+  return <SnippetSheet snippets={list} onSave={saveSnippets} onClose={() => core.nav.close("snippets")}
+    onAddStarters={missingStarters(list).length ? () => addStarters(list) : undefined} />;
 }

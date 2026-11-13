@@ -41,7 +41,6 @@ import { useChord } from "./useChord";
 import { NAMED_KEY, type ChordMod } from "./chordState.ts";
 import { CMD_HISTORY_MAX, loadCmdHistory } from "../../localState";
 import type { HeaderCmd } from "../../headerCmds";
-import type { Snippet } from "../../SnippetSheet";
 import { useVoice } from "../../useVoice";
 import { baseName } from "../../format";
 import { LS, lsSetJson } from "../../storage";
@@ -496,7 +495,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     setClearArmed(false);
   }
   /** Append a snippet's text to the compose box (newline-separated if non-empty). */
-  function appendSnippet(s: Snippet) {
+  function appendSnippet(s: { text: string }) {
     setCompose((c) => (c && !/\s$/.test(c) ? c + "\n" : c) + s.text);
     setHistIdx(-1);
     setClearArmed(false);

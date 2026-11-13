@@ -34,7 +34,6 @@ const ALLOW = {
   // after P4: the Downloads sheet's two door buttons ("android apps", drawn only while the
   // extension owns the screen: the files pane's hint, and the rules pane's pointer, which moved
   // with the shell-settings rows into PullShellSettings.tsx) and four false positives / P6 words.
-  "packages/web/src/PromptComposer.tsx": 1,
   "packages/web/src/PullSheet.tsx": 1,
   "packages/web/src/PullShellSettings.tsx": 1,
   "packages/web/src/settingsIndex.ts": 1,

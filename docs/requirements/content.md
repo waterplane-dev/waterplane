@@ -90,3 +90,7 @@ Documentation with good images explains how the vault is used, how it works and 
 - asked: 2026-11-05
 - shipped: 3772166c
 
+### R-content-019 · requested
+The vault is kept out of public media material.
+- asked: 2026-11-08
+

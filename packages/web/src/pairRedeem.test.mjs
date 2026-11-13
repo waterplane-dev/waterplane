@@ -578,7 +578,7 @@ test("paired at the LAN address with Tailscale off: the receipt says when no rou
   const off = { transport: "wifi", ssid: "home", permission: "granted", tailnet: false };
   const row = (lan) => ({ name: "studio", base: NET.base, lan: { base: WIFI.base, ...lan } });
   const says = pairedNoRoute(row({ ssids: ["home"], auto: false }), WIFI.base, off);
-  assert.match(says, /^Paired with studio, but this phone cannot reach it yet/);
+  assert.match(says, /^Paired with studio, but this device cannot reach it yet/);
   assert.match(says, /Connection health › change LAN settings/);
   assert.match(says, /switch to LAN automatically/);
   assert.ok(pairedNoRoute(row({ ssids: [], auto: true }), WIFI.base, off), "no Wi-Fi name saved");

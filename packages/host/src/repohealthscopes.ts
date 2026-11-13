@@ -29,8 +29,8 @@
  * leading slash. The engine normalises again on its own side — two checks, not
  * one, because this file writes what the daemon will later hand to a spawn.
  */
-import { writeJsonAtomic } from "./jsonstore.js";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { mkdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { repoStateDir } from "./branddirs.js";
 
@@ -69,25 +69,19 @@ export function cleanScope(wt: string, raw: unknown): string | null {
  *  anything that is no longer a directory dropped — a scope whose folder was
  *  renamed is not a reading, and its stale series file says so on its own. */
 export function readScopes(wt: string): string[] {
-  try {
-    const path = fileFor(wt);
-    if (!existsSync(path)) return [];
-    const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    const list = Array.isArray(raw) ? raw : (raw as { scopes?: unknown })?.scopes;
-    if (!Array.isArray(list)) return [];
-    const out: string[] = [];
-    for (const v of list) {
-      const s = cleanScope(wt, v);
-      if (s && !out.includes(s)) out.push(s);
-      if (out.length >= MAX_SCOPES) break;
-    }
-    return out;
-  } catch {
-    // Unreadable or corrupt is the same as none: a repo whose scope list cannot
-    // be parsed still has a repo-wide series, and taking the sheet down over it
-    // would hide the readings that do exist.
-    return [];
+  // Absent, or kept aside as `.corrupt-<ts>` when corrupt or of the wrong shape (the next
+  // writeScopes replaces the name). A repo whose scope list cannot be read still has a
+  // repo-wide series, and taking the sheet down over it would hide the readings that do exist.
+  const raw = readJsonGuarded<unknown>(fileFor(wt), null, (v) => Array.isArray(v) || Array.isArray((v as { scopes?: unknown } | null)?.scopes));
+  const list = Array.isArray(raw) ? raw : (raw as { scopes?: unknown } | null)?.scopes;
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const v of list) {
+    const s = cleanScope(wt, v);
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length >= MAX_SCOPES) break;
   }
+  return out;
 }
 
 /**

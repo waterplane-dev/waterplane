@@ -209,6 +209,27 @@ export function capReason(list: BackendList, id: string | undefined, cap: AnyCap
   return reasonText(cap, b.label);
 }
 
+/**
+ * Does this backend have skills and plugins this app can switch (`caps.skillSwitch`, a host fact)?
+ * Unlike `hasCap`, an unknown answers **false**: a host that never sent the `backends` frame
+ * predates the screen's routes, and asking it would be a 404. Read here and nowhere else.
+ */
+export function hasSkillSwitch(list: BackendList, id?: string): boolean {
+  return backendInfo(list, id)?.caps.skillSwitch === true;
+}
+
+/** The sentence shown where the skills switch would have been, worded once, named by the backend's own label. */
+export function skillSwitchReason(label: string): string {
+  return `${label} has no skills or plugins this app can switch — not available for this backend.`;
+}
+
+/** The gate, as one answer: null when the screen is offered, else the sentence that stands in for it. */
+export function skillSwitchGate(list: BackendList, id?: string): string | null {
+  if (hasSkillSwitch(list, id)) return null;
+  const b = backendInfo(list, id);
+  return b ? skillSwitchReason(b.label) : "This desktop is too old to switch skills and plugins from here — update it there.";
+}
+
 /** The usage-limits row for a backend whose usage IS read but whose limit wall is not detected. */
 export function usageReadNoWallText(label: string): string {
   return `${label}'s quota is read (see usage), but no limit wall is detected here, so a session is never held for a reset.`;

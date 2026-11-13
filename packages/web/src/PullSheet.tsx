@@ -170,7 +170,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   const patch = (fields: Partial<AutoPullConfig>) => onSaveConfig(repoDir, { ...cfg, ...fields });
 
   // An EVICTED record is `done` — it was downloaded — but its bytes were
-  // cleared, so listing it under "On this phone" is the one claim it must not
+  // cleared, so listing it under "On this device" is the one claim it must not
   // make. It belongs with the rows a tap would start, which is what it is.
   const active = records.filter((r) => r.state !== "done" || r.evicted);
   // Newest build on top — the one you came here for is the one just made.
@@ -231,7 +231,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       {pane === "files" ? (
       <>
       <Hint>
-        Files a repo produces download to this phone on their own, resuming where they stopped.
+        Files a repo produces download to this device on their own, resuming where they stopped.
         {!online && " Offline right now — queued files start when the link is back."}
       </Hint>
       {/* The install line, once, above the rows — and only where there is
@@ -321,7 +321,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
 
       {finished.length > 0 && (
         <>
-          <div className="section">On this phone <span className="section-hint">· {finished.length}</span></div>
+          <div className="section">On this device <span className="section-hint">· {finished.length}</span></div>
           <div className="list">
             {finished.map((r) => <PullRow key={r.item.id} rec={r} repos={repos} onDismiss={onDismiss} caps={caps} allow={allow} siblings={siblings}
               onAllow={(pkg) => { const next = toggleAllow(allow, pkg); setAllow(next); writeInstallAllow(next); }} />)}
@@ -333,7 +333,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       ) : (
       <>
       {/* ── What this phone does with what arrives ───────────────── */}
-      <div className="section">This phone <span className="section-hint">· the same on every repo</span></div>
+      <div className="section">This device <span className="section-hint">· the same on every repo</span></div>
       <div className="set-group">
         <SetLine>
           <Button className={auto ? "active" : ""}
@@ -342,7 +342,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </Button>
           <SetNote as="span">
             The master switch. Off, nothing is fetched without a tap — whatever the per-repo rules below say.
-            {isNativeShell() ? "" : ` It is this browser's own: the ${BRAND.displayName} app keeps a separate one, so with the app on this phone too, off here means each file downloads once — in the app.`}
+            {isNativeShell() ? "" : ` It is this browser's own: the ${BRAND.displayName} app keeps a separate one, so with the app on this device too, off here means each file downloads once — in the app.`}
           </SetNote>
         </SetLine>
 
@@ -589,7 +589,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
           <RowSub className="dim">{error}{attempts > 1 ? ` · ${attempts} tries` : ""}</RowSub>
         )}
         {/* A save that failed is said ONCE. `downloadStatus().detail` above is
-            already "on this phone — saving it out failed: …", so a second span
+            already "on this device — saving it out failed: …", so a second span
             repeating the same words in warn colour printed every failure twice —
             which is most of what made a finished row six lines tall. The colour
             moved onto the status line instead. */}
@@ -678,7 +678,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
             (never a greyed-out button: see `Unavailable.tsx`). */}
         {state === "done" && !evicted && downloadAction(rec) === "save" && (
           <Button title="put it where a file manager can see it"
-            onClick={() => { track("action:pull.save"); void saveNow(item.id); }}><Save size={16} /> save to phone</Button>
+            onClick={() => { track("action:pull.save"); void saveNow(item.id); }}><Save size={16} /> save to device</Button>
         )}
         {/* A row this device asked for (`download.ts`) is not in the host's queue,
             so telling the host to drop it names an id it has never heard of.
@@ -687,9 +687,9 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow, siblings }: {
             — so that one arms (`Confirm.tsx`) like every other deliberate delete
             here. A row still waiting has nothing to lose. */}
         {state === "done" && !evicted ? (
-          <ConfirmButton className="key danger" title="delete the downloaded file from this phone"
+          <ConfirmButton className="key danger" title="delete the downloaded file from this device"
             confirmTitle="tap again to delete these bytes"
-            onConfirm={() => { void pulls.remove(item.id); if (!rec.local) onDismiss(item.id); showToast(`deleted ${item.name} from this phone`); }}>
+            onConfirm={() => { void pulls.remove(item.id); if (!rec.local) onDismiss(item.id); showToast(`deleted ${item.name} from this device`); }}>
             <Trash2 size={16} /> delete
           </ConfirmButton>
         ) : (
@@ -820,7 +820,7 @@ export function PullBrowserAsk({ records }: { records: PullRecord[] }) {
   return (
     <div className="outbox-recover ask">
       <Smartphone size={14} />
-      <span>Auto-download in this browser too? If the {BRAND.displayName} app is on this phone, it already fetches these — keep both on and every file downloads twice.</span>
+      <span>Auto-download in this browser too? If the {BRAND.displayName} app is on this device, it already fetches these — keep both on and every file downloads twice.</span>
       <Button onClick={() => answer(true)}
         title="turn auto-download off in this browser only — the app keeps fetching">
         <Smartphone size={14} /> off — app has it

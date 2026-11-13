@@ -1,5 +1,5 @@
 import { useEffect, type MutableRefObject } from "react";
-import { PROTOCOL_VERSION } from "@waterplane/shared";
+import { PROTOCOL_VERSION, installPriceList } from "@waterplane/shared";
 import { removePadNotes } from "../../outbox";
 import { saveSessionsSnap, saveSnap } from "../../localState";
 import { noteSynced } from "../../link";
@@ -56,6 +56,9 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
       switch (msg.t) {
         case "welcome":
           updates.noteWelcome(msg, connRef.current.dialUrl);
+          // The host's read of Anthropic's price page, so a cost hint drawn here prices like the
+          // host does; none ⇒ this bundle's built-in table.
+          installPriceList(msg.prices ?? null);
           // Both ends have always EXCHANGED a protocol version and neither ever
           // compared it. There are three independently-updating copies of this
           // bundle — the browser's service-worker cache, the Android shell's OTA

@@ -121,7 +121,7 @@ export class Player<T> {
       try { if ((await VideoDecoder.isConfigSupported(c)).supported) { config = c; break; } } catch { /* next */ }
     }
     if (this.closed) return;
-    if (!config) { this.hold = null; this.ev.onUnsupported(`this phone cannot decode ${codec}`); return; }
+    if (!config) { this.hold = null; this.ev.onUnsupported(`this device cannot decode ${codec}`); return; }
     this.closeDecoder();
     try {
       const dec = new VideoDecoder({ output: (f) => this.output(f), error: (e) => this.failed(e) });

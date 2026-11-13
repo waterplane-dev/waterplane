@@ -24,7 +24,7 @@
  */
 import { PLAIN_ROUTE_WARNING, SYNCED_SETTING_KEYS, stateRel } from "@waterplane/shared";
 import { useEffect, useRef, useState } from "react";
-import { Activity, CircleCheck, CloudUpload, Globe, ListOrdered, RotateCcw, KeyRound, Router, Settings2 } from "lucide-react";
+import { Activity, CircleCheck, CloudUpload, Gauge, Globe, ListOrdered, RotateCcw, KeyRound, Router, Server, Settings2, Timer } from "lucide-react";
 import { readStorageState, storageState, type StorageState } from "./persist";
 import {
   PULSE_CAP, fmtMs as ms, fmtRate, fmtSince as since, fmtTotal, lastSyncEver, linkVerdict,
@@ -38,6 +38,7 @@ import { SheetHead } from "./Sheet";
 import { useHostRoute, useHostRouteEditor, useHostRoutePair } from "./hostRoute";
 import { asksLanPassword } from "./lanRoute";
 import { openSettingsAt } from "./settingsFocus";
+import { DEFAULT_SPEED_MB, openConnTest } from "./connTest";
 import { Button } from "./kit/Button";
 import { SetLine, SetNote, SetWarn } from "./SettingsKit";
 import { plainHostRoute } from "./hostUrl";
@@ -240,7 +241,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
           * actually there.
           */}
         <section className="set-group" ref={focus === "sends" && notDelivered === 0 ? focusRef : undefined}>
-          <h3 className="set-title">On this phone only</h3>
+          <h3 className="set-title">On this device only</h3>
           {link.outstanding > 0 ? (
             <SetNote as="span" className="nh-unsaved">
               <CloudUpload size={ICON} style={{ verticalAlign: "-2px" }} />{" "}
@@ -252,7 +253,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
           ) : (
             <SetNote as="span" className="nh-saved">
               <CircleCheck size={ICON} style={{ verticalAlign: "-2px" }} />{" "}
-              Everything written on this phone has reached the desktop and is stored there. Nothing is
+              Everything written on this device has reached the desktop and is stored there. Nothing is
               waiting on this device{notDelivered > 0 ? " — except the sends below, which stopped and will not go on their own" : ""}.
             </SetNote>
           )}
@@ -271,7 +272,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
           <section className="set-group" ref={focus === "sends" ? focusRef : undefined}>
             <h3 className="set-title">The sends that stopped</h3>
             <SetNote as="span">
-              {notDelivered === 1 ? "One message" : `${notDelivered} messages`} written on this phone
+              {notDelivered === 1 ? "One message" : `${notDelivered} messages`} written on this device
               stopped short of a session. Nothing was lost and nothing expires: each one keeps its full
               words and the repo they were written for, in Activity, with the button that puts it back
               in that repo&apos;s backlog — where it opens a new session of its own.
@@ -286,6 +287,13 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
 
         <section className="set-group" ref={focus === "link" ? focusRef : undefined}>
           <h3 className="set-title">Link right now</h3>
+          {/* The charts are what the link HAS done; these measure it now, on a tap. The
+              desktop's addresses are the other half of "why is it slow" — they are one tap away too. */}
+          <SetLine>
+            <Button title="20 round trips: delay, jitter, losses" onClick={() => openConnTest("ping")}><Timer size={ICON} /> connection test</Button>
+            <Button title={`download and upload throughput, ${DEFAULT_SPEED_MB} MB each way`} onClick={() => openConnTest("speed")}><Gauge size={ICON} /> speed test · {DEFAULT_SPEED_MB} MB</Button>
+            {editRoute && <Button title="this desktop's tailnet and home Wi-Fi addresses" onClick={editRoute}><Server size={ICON} /> desktop addresses</Button>}
+          </SetLine>
           <PingHistory h={history} />
           <div className="nh-stats">
             <Stat label="socket" value={link.status} note={pulse.enabled ? undefined : "strip is off — no probes running"} />
@@ -469,7 +477,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
             />
             <Stat label="used" value={fmtStorage(store.usage)}
               note={store.quota ? `of ${fmtStorage(store.quota)} — tap to itemise` : "tap to itemise"}
-              title="what this phone is holding, store by store, and what clearing any of it would cost"
+              title="what this device is holding, store by store, and what clearing any of it would cost"
               onClick={onOpenStorage} />
           </div>
           {store.supported && !store.persisted && (
@@ -494,7 +502,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
               {codes.length > 0 && (
                 <SetNote as="span">
                   Close codes: {codes.map(([c, n]) => `${c}×${n}`).join(", ")}
-                  {" — "}1000 is a clean close, 1001 the phone backgrounding, 1006 the tunnel dying under the socket.
+                  {" — "}1000 is a clean close, 1001 the device backgrounding, 1006 the tunnel dying under the socket.
                 </SetNote>
               )}
             </>

@@ -5,7 +5,7 @@
  * Separate documents on purpose — never summed, never merged. Moved out of
  * `api.ts` (host-architecture.md, "api.ts — the HTTP routes as tables").
  */
-import { PRICES_AS_OF, zeroCost, zeroTotals, type BackendTokensDoc, type CostWindowDoc } from "@waterplane/shared";
+import { priceListSource, zeroCost, zeroTotals, type BackendTokensDoc, type CostWindowDoc } from "@waterplane/shared";
 import { BACKEND_LEDGER_MAX_AGE_MS, besideSpend } from "../besidespend.js";
 import { costMeta } from "../costwindow.js";
 import { hostStoreDir } from "../hoststore.js";
@@ -22,7 +22,7 @@ const COST_WINDOW_MAX_MS = 35 * 24 * 3_600_000;
 const emptyCostWindow = (scannedAt: number): CostWindowDoc => ({
   from: 0, to: 0, fromHour: 0, hours: [], convos: [],
   totals: zeroTotals(), cost: zeroCost(), agentTotals: zeroTotals(), agentCost: zeroCost(), unpriced: zeroTotals(),
-  pricesAsOf: PRICES_AS_OF, scannedAt,
+  ...priceListSource(), scannedAt,
 });
 
 export const STATS_ROUTES: readonly ApiEntry[] = [

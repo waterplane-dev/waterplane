@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Activity, Copy, Cpu, Monitor, Fan, Gauge, HardDrive, MemoryStick, PowerOff, Thermometer } from "lucide-react";
+import { Activity, Bot, ChevronRight, Copy, Cpu, Monitor, Fan, Gauge, HardDrive, MemoryStick, PowerOff, Thermometer } from "lucide-react";
 import {
   RING_CAP, acquireLocalRtWatch, cpuSeries, cpuTempSeries, evictLocalModel, fanSeries, gbText, gpuSeries,
   gpuTempSeries, heldBytes, heldSeries, localRtState, machineText, memUsedSeries, seriesCeiling, useLocalRt,
@@ -8,6 +8,7 @@ import {
 import type { LocalRtFocus } from "./LocalRtBar";
 import { SysGraph } from "./SysGraph";
 import { AgentsSection } from "./AgentsSection";
+import { useAgents } from "./agentCount";
 import { roomyCeiling } from "./graphGeom";
 import { useLink } from "./link";
 import { dur, hhmm, until } from "./format";
@@ -18,7 +19,7 @@ import { SetWarn, SetNote } from "./SettingsKit";
 import { copyText } from "./api";
 import { showToast } from "./toast";
 import {
-  cpuSplitText, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
+  cpuCulpritsText, cpuSplitText, hotSessions, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
   rssSumText, slowAgeSec, swapText, tempText, uptimeText,
 } from "./sysStat";
 import { Button } from "./kit/Button";
@@ -155,6 +156,9 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
   // The volume holding the home folder (the host lists ours first) — the one
   // the top section names, because it is where repos, builds and swap land.
   const homeDisk = sys?.disks?.volumes[0];
+  // Which coding sessions the hot CPU belongs to, labelled as their tabs are.
+  const agentRows = useAgents((x) => x.rows);
+  const hot = hotSessions(sys, (id) => agentRows.find((a) => a.id === id)?.label);
 
   const modelsPart = (
     <>
@@ -242,7 +246,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                 the line or bridged across — those are a different kind of event, not a small number.
               </SetNote>
               <SetNote as="span">
-                It is a series of READINGS, not a time axis: nothing is measured while this phone is
+                It is a series of READINGS, not a time axis: nothing is measured while this device is
                 in a pocket or off the tunnel, so the marks are not evenly spaced in time. Kept in
                 memory only — a chart rebuilt from an old buffer after a reload would look exactly as
                 current as this one, which is the failure this whole readout exists to avoid.
@@ -269,7 +273,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
               <SetNote as="span">
                 Same shape as the memory graph above, but fixed 0-100% rather than fitted to the
                 data — a line drawn to a floating ceiling makes 20% look identical to 80% across two
-                readings. A gap is a stretch this phone was not watching, drawn as a break, never
+                readings. A gap is a stretch this device was not watching, drawn as a break, never
                 bridged.
               </SetNote>
             </>
@@ -309,8 +313,21 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                     <span className="lrt-name"><Cpu size={11} aria-hidden="true" /> CPU busy</span>
                     <span className="lrt-size">{Math.round(sys.cpu.userPct + sys.cpu.sysPct)}%</span>
                     <span className="lrt-vram">{cpuSplitText(sys.cpu)}</span>
+                    {cpuCulpritsText(sys, procAge) && <span className="lrt-vram">{cpuCulpritsText(sys, procAge)}</span>}
                   </div>
-                ) : (
+                ) : null}
+                {/* The sessions behind it: every process under a session's
+                    pane summed, so a test run a session started counts as that
+                    session's. Tap opens it. */}
+                {sys?.cpu && hot.map((h) => (
+                  <button key={`hot-${h.id}`} className="lrt-row lrt-agent-row" onClick={() => onOpenSession?.(h.id)}
+                    title={`open ${h.label}`}>
+                    <span className="lrt-name"><Bot size={12} aria-hidden="true" /> {h.label}</span>
+                    <span className="lrt-size">{h.detail}</span>
+                    <ChevronRight size={14} aria-hidden="true" className="lrt-agent-go" />
+                  </button>
+                ))}
+                {sys?.cpu ? null : (
                   <div className="lrt-row">
                     <span className="lrt-name"><Cpu size={11} aria-hidden="true" /> CPU load</span>
                     <span className="lrt-size">{Math.round(r.sample.cpuPct)}%</span>
@@ -411,7 +428,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
               <SetNote as="span">
                 CPU busy, then memory in use, over the last {cpuS.length} readings — both drawn against the
                 whole machine (0-100%, 0 to {gbText(memTotal)}), never fitted to the data, so a flat line
-                means a flat machine. A break is a stretch this phone was not watching, never bridged.
+                means a flat machine. A break is a stretch this device was not watching, never bridged.
                 Kept in memory only, so a reload starts it again rather than drawing an old buffer as
                 current.
               </SetNote>
@@ -674,7 +691,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
         {r.stale && r.at != null && (
           <SetNote as="p">
             Read {dur(r.at)} ago, at {hhmm(r.at)}
-            {online ? "" : " — this phone is not connected to the desktop right now"}.
+            {online ? "" : " — this device is not connected to the desktop right now"}.
             {s.seenAt != null && s.seenAt !== r.at ? ` Last frame from the desktop ${dur(s.seenAt)} ago.` : ""}
           </SetNote>
         )}

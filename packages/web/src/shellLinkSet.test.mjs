@@ -29,7 +29,7 @@ test("the settings line says each link's state apart, and nothing for one link",
   assert.equal(linksStateText([{ label: "studio", state: "connected" }]), null);
   assert.equal(
     linksStateText([{ label: "studio", state: "connected" }, { label: "zenbook", state: "reconnecting" }, { label: "mini", state: "auth" }]),
-    "studio connected · zenbook not answering — retrying · mini needs this phone signed in there",
+    "studio connected · zenbook not answering — retrying · mini needs this device signed in there",
   );
 });
 
@@ -67,7 +67,7 @@ test("a removed desktop's token is absent, and two rows on one address carry the
 
 test("a refused token words itself apart from a missing one", () => {
   assert.equal(linkStateWord("signedOut"), "signed out there — pair again");
-  assert.equal(linkStateWord("auth"), "needs this phone signed in there");
+  assert.equal(linkStateWord("auth"), "needs this device signed in there");
   assert.equal(linkStateWord("locked"), "locked — open the app");
 });
 

@@ -183,9 +183,9 @@ export function syncSentence(s: SyncState, thing = "these", plural = true): stri
   const are = plural ? "are" : "is";
   const were = plural ? "were" : "was";
   switch (s.phase) {
-    case "synced": return `saved on the desktop — ${thing} ${are} on more than this phone`;
-    case "pending": return `not on the desktop yet — ${thing} ${are} still only on this phone`;
-    case "offline": return `no connection — ${thing} ${are} only on this phone until the link is back`;
+    case "synced": return `saved on the desktop — ${thing} ${are} on more than this device`;
+    case "pending": return `not on the desktop yet — ${thing} ${are} still only on this device`;
+    case "offline": return `no connection — ${thing} ${are} only on this device until the link is back`;
     case "superseded": return `another device wrote a newer version — ${thing} ${were} replaced, and nothing of yours was deleted`;
     case "failed": return `the send gave up — ${thing} never reached the desktop, and the words are still here`;
     default: return null;

@@ -112,7 +112,7 @@ export type {
   HealthVerdict,
   HealthCheck,
 } from "./clihealth/healthrecord.js";
-export { FIXTURE_FORMS, ECHO_SPLIT, FIXTURE_ROWS, fixtureExt, decodeFixture, maskRow, maskGrid, skeletonOf, fixtureSample } from "./clihealth/healthfixture.js";
+export { FIXTURE_FORMS, ECHO_SPLIT, FIXTURE_ROWS, fixtureExt, decodeFixture, maskRow, maskGrid, skeletonOf, fixtureSample, OPAQUE_KEYS, VALUE_OPAQUE_KEYS } from "./clihealth/healthfixture.js";
 export {
   unhealthySignals,
   healthRollup,

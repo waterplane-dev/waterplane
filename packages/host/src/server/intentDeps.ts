@@ -11,7 +11,7 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, blockOf, blockWallOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, netRetryStalls, pendingProposals, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, blockOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, laneStateOf, needsSlot, netRetryStalls, pendingProposals, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -107,12 +107,13 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
       const origin = ctx.sessions.originOf(s.id);
       return {
         id: s.id, cwd: s.cwd, running: s.running, turnStartedAt: s.turnStartedAt,
+        // The lane facts are the shared mapping (`laneStateOf`), the phone's twin. The host layers
+        // its own on top: `turnActive` additionally carries `autoFireBlocker`'s answer (the only
+        // place the silence heuristic for an UNHOOKED session lives; the more specific reasons
+        // below it — limit, a question box — still win, `sessionBlocker` checks them first).
+        // Another CLI's trust box waits for a person: `autoAcceptsTrust` makes it a question.
+        ...laneStateOf(s, { autoAcceptsTrust: backendAutoAcceptsTrust(s.backend) }),
         turnActive: s.turnActive || (s.running && ctx.sessions.autoFireBlocker(s.id, ctx.backlog.idleMs) !== null) || undefined,
-        limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind, awaitingInput: s.awaitingInput,
-        // Signed out, or the host's net retry holds it: `sessionWall`'s `auth`/`net`.
-        block: blockWallOf(s),
-        // Another CLI's trust box waits for a person: `sessionWall` names it a question.
-        ...(s.prompt?.kind === "trust" && !backendAutoAcceptsTrust(s.backend) ? { trustAutoAccepted: false } : {}),
         convId: s.claudeSessionId,
         // Opened for QUEUED work — the only kind of session the serial rung
         // lets hold a repo (`intentSerialHolders`). The origin is the fact; the

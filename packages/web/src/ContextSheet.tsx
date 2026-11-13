@@ -67,7 +67,7 @@ const CHART_H = 220;
  *  are equally hard to read rather than that one is the answer to the other. */
 const SPEND_H = 110;
 
-export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan, replanCant, replanNote, agentWarn, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onOpenSetup, setupCant, onOpenAllSessions, onClose }: {
+export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan, replanCant, replanNote, agentWarn, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onOpenSetup, setupCant, onOpenSkills, skillsCant, onOpenAllSessions, onClose }: {
   sessionId: string;
   /** The session's own name, so the sheet says WHICH conversation this is. */
   title: string;
@@ -181,6 +181,9 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
    */
   onOpenSetup?: () => void;
   setupCant?: string;
+  /** The skill-listing card's door to the skills & plugins switch, or the sentence that stands in for it. */
+  onOpenSkills?: () => void;
+  skillsCant?: string;
   /** The all-sessions token screen. */
   onOpenAllSessions?: () => void;
   onClose: () => void;
@@ -403,7 +406,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
       </Empty>
 
       {/* Attachments are written before the first answer: measured without a single sample. */}
-      {!samples.length && doc && <CarriedSection carried={doc.carried} />}
+      {!samples.length && doc && <CarriedSection carried={doc.carried} onSkills={onOpenSkills} skillsCant={skillsCant} />}
 
       {samples.length > 0 && (
         <div className="list">
@@ -492,7 +495,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
               width={width} span={span} />
 
             {/* What the FIRST request carried, part by part (after the skills, owner D). */}
-            {doc && <CarriedSection carried={doc.carried} />}
+            {doc && <CarriedSection carried={doc.carried} onSkills={onOpenSkills} skillsCant={skillsCant} />}
 
             {/* HOW the two lower charts are counted — method, so folded. */}
             {(spendNotes || agents.length > 0) && (

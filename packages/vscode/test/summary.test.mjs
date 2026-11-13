@@ -95,3 +95,16 @@ test("copilotWeekWords: the last seven days of Copilot Chat's ledger, else null"
   assert.equal(data.copilotWeekWords({ copilot: { available: false, reason: "x" } }, now), null);
   assert.equal(data.copilotWeekWords(null, now), null);
 });
+
+// "Seven days" is seven LOCAL calendar days, not 6 x 24 h: on the 23 h day after spring-forward, 00:30
+// minus 144 elapsed hours is still the 23rd's evening.
+test("copilotWeekWords: the window starts on the local date six days back, across the spring switch (Berlin)", () => {
+  const prev = process.env.TZ;
+  process.env.TZ = "Europe/Berlin";
+  try {
+    const day = (d) => ({ day: `2026-03-${d}`, kinds: { prompt: 1000, output: 0 }, turns: 1 });
+    const led = { available: true, totals: { kinds: {}, turns: 0 }, days: [day(23), day(24), day(30)], models: [] };
+    assert.equal(data.copilotWeekWords({ copilot: led }, new Date(2026, 2, 30, 0, 30).getTime()), "7 d: Copilot 2k tokens", "the 24th and the 30th, not the 23rd");
+    assert.equal(data.copilotWeekWords({ copilot: led }, new Date(2026, 2, 30, 12).getTime()), "7 d: Copilot 2k tokens", "noon agrees");
+  } finally { if (prev === undefined) delete process.env.TZ; else process.env.TZ = prev; }
+});

@@ -19,7 +19,7 @@ export function LeadPick({ m }: { m: RuleModel }) {
             onClick={() => patchRule({ offsetMin: -m })}>{leadLabel(m)}</button>
         ))}
         <button className={`row-chip${leadOpen ? " on" : ""}`}
-          title="type a lead the chips don't cover — it is kept on this phone and offered beside them next time"
+          title="type a lead the chips don't cover — it is kept on this device and offered beside them next time"
           onClick={() => setLeadOpen((v) => !v)}>another…</button>
       </div>
       {leadOpen && (
@@ -40,7 +40,7 @@ export function LeadPick({ m }: { m: RuleModel }) {
           {/* Echoes what it READ, so a bare `4` meant as hours shows
               up as 4m on the row being typed on. */}
           <Hint>
-            {leadWords(leadRaw) ?? `Read as ${leadLabel(leadOk(leadRaw)!)} before the reset. Kept on this phone — offered as a chip on the next rule you write.`}
+            {leadWords(leadRaw) ?? `Read as ${leadLabel(leadOk(leadRaw)!)} before the reset. Kept on this device — offered as a chip on the next rule you write.`}
           </Hint>
         </>
       )}

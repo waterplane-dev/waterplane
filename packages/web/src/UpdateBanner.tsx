@@ -68,7 +68,7 @@ export function UpdateBanner() {
     <div className="staged-bar" role="status">
       <ArrowUpCircle size={15} />
       <span className="staged-bar-text">
-        {picking ? "Hide this for how long?" : "A newer build is ready and verified on this phone."}
+        {picking ? "Hide this for how long?" : "A newer build is ready and verified on this device."}
       </span>
       {!picking && <Button
         className="staged-bar-go"

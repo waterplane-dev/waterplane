@@ -399,7 +399,7 @@ export class ChannelSlice {
           // The hook pipe going LIVE is one fact about a session, not one per
           // turn it ran: broadcast, and one `hook.pipe` good (claude's health
           // board; `noteFor` files nothing outside `healthScope`).
-          if (inBand) { this.core.emit("updated", s.info); this.core.noteFor(s, "hook.pipe", "good", { fixture: () => (s.lastHook ? JSON.stringify(s.lastHook) : null) }); }
+          if (inBand) { this.core.emit("updated", s.info); this.core.noteFor(s, "hook.pipe", "good"); }
         }
       }
       // Until a reconcile has answered with a list, the screen reader keeps

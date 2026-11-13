@@ -63,7 +63,7 @@ const KEY_CHANGED_ASK = {
 const RESTORED_ASK = {
   title: "Take updates from the restored desktop?",
   lines: [
-    "This desktop is offering a build older than one this phone already took. A desktop restored from a backup or rolled back does this, and so does an old update played again.",
+    "This desktop is offering a build older than one this device already took. A desktop restored from a backup or rolled back does this, and so does an old update played again.",
     "Allow it only if you restored or rolled back this desktop yourself.",
   ],
   confirmLabel: "Trust it",

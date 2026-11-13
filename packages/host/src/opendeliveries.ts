@@ -205,6 +205,8 @@ export class OpenDeliveries extends EventEmitter {
   private entries: OpenDelivery[] = [];
   private path: string;
   private timer: NodeJS.Timeout | null = null;
+  /** The last write failed: memory holds rows the file does not. The tick retries. */
+  private unsaved = false;
   /** Rows whose settle or re-delivery is in flight, so a tick cannot re-enter
    *  one. The persisted `resentAt` covers restarts; this covers overlap. */
   private busy = new Set<string>();
@@ -352,6 +354,11 @@ export class OpenDeliveries extends EventEmitter {
   }
 
   private async tick(): Promise<void> {
+    // A verdict that only reached memory (the disk refused it) is written as
+    // soon as the disk takes a write again — not "whenever another row happens
+    // to change". Until it is on disk a restart reloads the row as open, and the
+    // absent verdict that stopped the re-send would be gone with the process.
+    if (this.unsaved) this.persist();
     const now = Date.now();
     for (const q of [...this.entries]) {
       if (q.verdict !== "open" || this.busy.has(q.id) || now < q.nextAskAt) continue;
@@ -488,9 +495,21 @@ export class OpenDeliveries extends EventEmitter {
     // Written BEFORE the delivery, and persisted synchronously: a crash between
     // the two must leave a row that says "the host tried" rather than one that
     // invites a copy the budget has not paid for.
+    const before = { resentAt: q.resentAt, resends: q.resends };
     q.resentAt = Date.now();
     q.resends = tried + 1;
-    this.persist();
+    if (!this.persist()) {
+      // The marker is not on disk, so "write it, then act" cannot hold: typing
+      // now and crashing (or restarting) would leave a row that never says the
+      // host tried, and the next boot could type the same prompt again. Nothing
+      // is typed. The row goes back to what it truthfully was — no attempt was
+      // made, so none is counted — and ends on a non-retrying verdict a person
+      // reads; the words are kept.
+      q.resentAt = before.resentAt;
+      q.resends = before.resends;
+      this.finish(q, "absent", "nothing ran — the host's re-send attempt could not be recorded (its state file is not writable), so it did not type it. The words are kept: send a fresh copy once the disk has room");
+      return;
+    }
     this.onChange();
 
     let res: Redelivered;
@@ -560,11 +579,17 @@ export class OpenDeliveries extends EventEmitter {
 
   flush(): void { this.persist(); }
 
-  private persist(): void {
+  /** True when the list is on disk. Best-effort for every caller that only
+   *  keeps state; the one that guards an act on it (`onAbsent`) reads it. */
+  private persist(): boolean {
     try {
       mkdirSync(hostStateDir(this.root), { recursive: true });
       writeJsonAtomic(this.path, this.entries, { space: 2 });
+      this.unsaved = false;
+      return true;
     } catch { /* best-effort — the in-memory list still works for this boot */ }
+    this.unsaved = true;
+    return false;
   }
 }
 

@@ -148,6 +148,26 @@ test("--reading prints exactly one JSON number on stdout", async (t) => {
   assert.equal(typeof JSON.parse(out), "number");
 });
 
+test("several hook.pipe.<Event>.json captures count hook.pipe once: ten rows, one proven signal", async (t) => {
+  const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
+  const { CLI_SIGNALS } = await import(new URL("../packages/shared/dist/clihealth/healthcatalog.js", import.meta.url).href);
+  const dir = mkdtempSync(join(tmpdir(), "captures-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const health = join(dir, "clihealth.json");
+  writeFileSync(health, JSON.stringify({ version: "9.9.9", signals: {} }));
+  const cap = join(dir, "cap", "9.9.9");
+  mkdirSync(cap, { recursive: true });
+  for (const ev of ["Stop", "PreToolUse", "StopFailure", "SessionStart"]) writeFileSync(join(cap, `hook.pipe.${ev}.json`), "{}");
+  const run = (...a) => execFileSync(process.execPath, [script, ...a, "--cli", "9.9.9", "--health", health, "--captures", join(dir, "cap")], { encoding: "utf8" });
+  assert.equal(CLI_SIGNALS.length, 10);
+  assert.equal(JSON.parse(run("--reading")), 9, "four hook.pipe files prove ONE of the ten signals, not four");
+  const rows = JSON.parse(run("--json")).rows;
+  assert.equal(rows.length, 10);
+  assert.equal(rows.filter((r) => r.id === "hook.pipe").length, 1);
+  assert.deepEqual(rows.filter((r) => r.proof.length > 0).map((r) => r.id), ["hook.pipe"]);
+  assert.ok(JSON.parse(execFileSync(process.execPath, [script, "--unproven"], { encoding: "utf8" })) <= 10);
+});
+
 test("--reading is ABSENT — exit 1, nothing on stdout — without a live record to ask", (t) => {
   const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
   const empty = mkdtempSync(join(tmpdir(), "captures-"));
@@ -232,6 +252,21 @@ test("leaks: a home path, an address or an opaque run refuses a sample; masked w
   assert.match(leaks("cwd /Users/alice/repo").join(), /home/);
   assert.match(leaks("ask bob@example.com").join(), /email/);
   assert.match(leaks("key sk-ant-abcdefghijklmnopqrstuvwxyz0123").join(), /opaque/);
+});
+
+test("leaks: a verbatim key or value under tool_input / tool_response refuses a hook capture", () => {
+  const bad = (o) => leaks(JSON.stringify(o)).join();
+  assert.match(bad({ tool_input: { name: "acme-merger-plan" } }), /tool's arguments/);
+  assert.match(bad({ tool_response: { "ACME-TOKEN": "<string>" } }), /tool's arguments/);
+  assert.match(bad({ hook_event_name: "Stop", x: { tool_input: [{ type: "client-x" }] } }), /tool's arguments/);
+  assert.deepEqual(leaks(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { "<key>": "<string>" } })), []);
+});
+
+test("leaks: a verbatim value under a tool's own-schema result (toolUseResult, input) refuses; its keys do not", () => {
+  const bad = (o) => leaks(JSON.stringify(o)).join();
+  assert.match(bad({ type: "user", toolUseResult: { type: "client-x" } }), /tool's arguments/);
+  assert.match(bad({ message: { content: [{ type: "tool_use", input: { questions: [{ label: "acme" }] } }] } }), /tool's arguments/);
+  assert.deepEqual(leaks(JSON.stringify({ type: "user", toolUseResult: { stdout: "<string>", interrupted: "<boolean>" } })), []);
 });
 
 test("planHarvest: role from the reader, cli from the version, a listed path is never added twice", () => {
@@ -330,4 +365,64 @@ test("--debt prints exactly one JSON number on stdout", (t) => {
   const r = spawnSync(process.execPath, [script, "--debt", "--captures", join(dir, "missing")], { encoding: "utf8" });
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
+});
+
+// ── Per-event captures: `hook.pipe.<Event>.json` beside the old `hook.pipe.json` ──
+
+test("listSamples: a per-event hook capture has a kind; the old one-per-version file is still read", (t) => {
+  const dir = captureDir({
+    "2.1.330/hook.pipe.json": "{}",
+    "2.1.330/hook.pipe.StopFailure.json": "{}",
+    "2.1.330/hook.pipe.Stop.json": "{}",
+    "2.1.330/hook.pipe.bad-kind.json": "x",
+    "2.1.330/hook.pipe.Stop.md": "x",
+  });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { samples, skipped } = listSamples(dir, KNOWN);
+  assert.deepEqual(samples.map((s) => [s.id, s.kind, s.ext]), [
+    ["hook.pipe", "Stop", "json"], ["hook.pipe", "StopFailure", "json"], ["hook.pipe", undefined, "json"],
+  ]);
+  assert.equal(skipped.length, 2, skipped.join("; "));
+});
+
+test("fixturePath: per-event captures get their own repo path; the old shape is unchanged", () => {
+  assert.equal(fixturePath({ id: "hook.pipe", version: "2.1.330", ext: "json" }), "screens/harvest-hook.pipe-2.1.330.json");
+  assert.equal(fixturePath({ id: "hook.pipe", kind: "StopFailure", version: "2.1.330", ext: "json" }), "screens/harvest-hook.pipe-StopFailure-2.1.330.json");
+});
+
+test("planHarvest: a per-event capture is planned, refused on a leak and listed once; the signal stays hook.pipe", () => {
+  const samples = [
+    { id: "hook.pipe", kind: "StopFailure", version: "2.1.330", ext: "json", file: "a" },
+    { id: "hook.pipe", kind: "Stop", version: "2.1.330", ext: "json", file: "b" },
+    { id: "hook.pipe", kind: "PreToolUse", version: "2.1.330", ext: "json", file: "c" },
+  ];
+  const text = { a: '{"hook_event_name":"StopFailure"}', b: '{"x":"someone@example.com"}', c: "{}" };
+  const manifest = { signals: { "hook.pipe": [{ path: "screens/harvest-hook.pipe-PreToolUse-2.1.330.json", role: "match" }] } };
+  const plan = planHarvest(samples, manifest, { read: (f) => text[f], readSignal: () => true });
+  assert.deepEqual(plan.map((p) => [p.path, p.action, p.role ?? p.why]), [
+    ["screens/harvest-hook.pipe-StopFailure-2.1.330.json", "new", "match"],
+    ["screens/harvest-hook.pipe-Stop-2.1.330.json", "refused", "carries an email address"],
+    ["screens/harvest-hook.pipe-PreToolUse-2.1.330.json", "present", undefined],
+  ]);
+  const next = withEntries(manifest, plan);
+  assert.deepEqual(Object.keys(next.signals), ["hook.pipe"], "still ONE signal");
+  assert.equal(next.signals["hook.pipe"][1].path, "screens/harvest-hook.pipe-StopFailure-2.1.330.json");
+});
+
+test("per-event captures count as ONE signal's proof, and each is harvest debt until listed", () => {
+  const samples = [
+    { id: "hook.pipe", version: "2.1.330", ext: "json" },
+    { id: "hook.pipe", kind: "StopFailure", version: "2.1.330", ext: "json" },
+    { id: "hook.pipe", kind: "Stop", version: "2.1.330", ext: "json" },
+  ];
+  assert.deepEqual([...sf.capturedOn(samples, "2.1.330")], ["hook.pipe"]);
+  const manifest = { signals: { "hook.pipe": [{ path: "screens/harvest-hook.pipe-Stop-2.1.330.json", role: "match" }] } };
+  assert.deepEqual(sf.harvestDebt(samples, manifest, true), { value: 2 });
+});
+
+test("--debt counts per-event files too", (t) => {
+  const script = fileURLToPath(new URL("./screenfixtures.mjs", import.meta.url));
+  const dir = captureDir({ "9.9.9/hook.pipe.json": "{}", "9.9.9/hook.pipe.StopFailure.json": "{}", "9.9.9/hook.pipe.Stop.json": "{}" });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.equal(execFileSync(process.execPath, [script, "--debt", "--captures", dir], { encoding: "utf8" }), "3\n");
 });

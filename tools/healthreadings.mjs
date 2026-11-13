@@ -10,6 +10,8 @@
  *   node tools/healthreadings.mjs bareHookDeps  # exhaustive-deps disables with no reason
  *   node tools/healthreadings.mjs capSqueeze    # commits that deleted only notes from a file near the cap
  *   node tools/healthreadings.mjs seamUntested  # seam modules (SEAMS) no test reaches, at HEAD
+ *   node tools/healthreadings.mjs repairRate    # share of source commits (28 days) a repair commit touched again within 7 days
+ *   node tools/healthreadings.mjs repairRate --list   # those commits, each with its repairs, instead of the number
  *
  * Pure counters are exported for tools/healthreadings.test.mjs.
  */
@@ -17,6 +19,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import { codeLineCount, lineCount } from "./codelines.mjs";
 
 export const MARGIN = 50;
@@ -125,6 +128,45 @@ export function countCapSqueeze({ cwd = ".", cap = DEFAULT_CAP, days = SQUEEZE_D
   return n;
 }
 
+export const REPAIR_DAYS = 28;
+export const REPAIR_WITHIN_DAYS = 7;
+/** A commit subject that repairs earlier work: this repo says "repair" / "review fixes", the world says fix / revert. */
+export const REPAIR_SUBJECT = /\brepair(s|ed)?\b|review fix(es)?|screen-review fix|\bfix(es|ed)?\b|\brevert\b/i;
+export const isRepairSubject = (subject) => REPAIR_SUBJECT.test(String(subject));
+
+/**
+ * `commits`: [{hash, time (unix seconds), subject, files}]. A non-repair commit is repaired when a repair
+ * commit dated after it and within `withinDays` touches at least one of its in-scope files. Returns
+ * {total, repaired: [{commit, repairs}]}; total counts the non-repair commits that touch source.
+ */
+export function repairedCommits(commits, withinDays = REPAIR_WITHIN_DAYS) {
+  const scoped = commits
+    .map((c) => ({ ...c, files: new Set((c.files ?? []).filter(inCapScope)) }))
+    .filter((c) => c.files.size);
+  const repairs = scoped.filter((c) => isRepairSubject(c.subject));
+  const plain = scoped.filter((c) => !isRepairSubject(c.subject));
+  const span = withinDays * 86400;
+  const repaired = [];
+  for (const c of plain) {
+    const hit = repairs.filter((r) => r.time > c.time && r.time - c.time <= span && [...r.files].some((f) => c.files.has(f)));
+    if (hit.length) repaired.push({ commit: c, repairs: hit });
+  }
+  return { total: plain.length, repaired };
+}
+
+/** Reads non-merge commits of the last `days` days before `now` (unix seconds) that touch source. Throws if git cannot be read. */
+export function readSourceCommits({ cwd = ".", now = Math.floor(Date.now() / 1000), days = REPAIR_DAYS } = {}) {
+  const log = git(["log", "--no-merges", "--no-renames", `--since=${now - days * 86400}`, `--until=${now}`,
+    "--name-only", "--format=%x00%H%x01%ct%x01%s"], cwd);
+  const out = [];
+  for (const chunk of log.split("\0").filter((c) => c.trim())) {
+    const [head, ...rest] = chunk.split("\n");
+    const [hash, time, subject] = head.split("\x01");
+    out.push({ hash, time: Number(time), subject, files: rest.filter(Boolean) });
+  }
+  return out;
+}
+
 /**
  * The modules CLAUDE.md calls the one implementation or the security boundary: a bug in one deletes typed
  * words or widens access, and in the generic untested share (hundreds of modules) it cannot be seen. The ONE
@@ -151,15 +193,28 @@ const inSeam = (seam, path) => (seam.endsWith("/")
   : path === seam);
 
 /**
+ * Does this module emit anything once its types are erased? A types-only module (interfaces, type aliases,
+ * `import type`) has no behaviour a test could pin, so a seam counting it asks for a test of nothing.
+ */
+export function hasRuntimeCode(text, path = "module.ts") {
+  const { outputText } = ts.transpileModule(text, { fileName: path, compilerOptions: {
+    module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, removeComments: true,
+  } });
+  // tsc marks an emptied module `export {};` so it stays a module: that line is not behaviour.
+  return outputText.split("\n").some((l) => l.trim() !== "" && l.trim() !== "export {};");
+}
+
+/**
  * Which seams `untested` (metrics/untested's list) holds, sorted as it is. `sources` is every source module
  * in the tree. Throws when the count would be a guess: no list, or a seam that names no module, because a
- * renamed seam otherwise drops out of the number and reads as a test somebody wrote.
+ * renamed seam otherwise drops out of the number and reads as a test somebody wrote. `runtime(path)` false
+ * drops a module from the count: types alone are checked by tsc, and no test can reach what never runs.
  */
-export function seamsUntested(seams, sources, untested) {
+export function seamsUntested(seams, sources, untested, runtime = () => true) {
   if (!Array.isArray(untested)) throw new Error("no untested list to count from");
   const stale = seams.filter((s) => !sources.some((p) => inSeam(s, p)));
   if (stale.length) throw new Error(`no source module at ${stale.join(", ")}: SEAMS is stale`);
-  return untested.filter((p) => seams.some((s) => inSeam(s, p)));
+  return untested.filter((p) => seams.some((s) => inSeam(s, p)) && runtime(p));
 }
 
 function gitFiles() {
@@ -208,6 +263,23 @@ const READINGS = {
       process.exit(1);
     }
   },
+  repairRate() {
+    let got;
+    try { got = repairedCommits(readSourceCommits()); } catch (e) {
+      process.stderr.write(`repairRate: git unreadable: ${e.message}\n`);
+      process.exit(1);
+    }
+    if (!got.total) {
+      process.stderr.write("repairRate: no non-repair source commits in the last 28 days\n");
+      process.exit(1);
+    }
+    if (process.argv.includes("--list")) {
+      const short = (c) => `${c.hash.slice(0, 8)} ${c.subject}`;
+      process.stdout.write(got.repaired.map((r) => `${short(r.commit)}\n${r.repairs.map((x) => `    ${short(x)}\n`).join("")}`).join(""));
+      process.exit(0);
+    }
+    return got.repaired.length / got.total;
+  },
   // Imported here, not at the top: the engine needs shared's dist, and the other readings do not.
   async seamUntested() {
     try {
@@ -220,7 +292,9 @@ const READINGS = {
       const snap = buildSnapshot(root, "HEAD", git, cfg);
       const got = measureUntested(snap, null, 0, cfg); // history and index: the metric reads neither
       if (got.value === null) throw new Error(got.reason);
-      const hits = seamsUntested(SEAMS, snap.files.map((f) => f.path), got.value);
+      const textOf = new Map(snap.files.map((f) => [f.path, f.text]));
+      const hits = seamsUntested(SEAMS, snap.files.map((f) => f.path), got.value,
+        (p) => hasRuntimeCode(textOf.get(p) ?? "x", p)); // unreadable text counts, never drops
       if (hits.length) process.stderr.write(hits.join("\n") + "\n");
       return hits.length;
     } catch (e) {

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { installPriceList, priceListChangedAt, PRICES } from "@waterplane/shared";
 import { BookmarkStore } from "../dist/bookmarks.js";
 import { archivedToolDetails, archivedTranscript, listArchive } from "../dist/archive.js";
 
@@ -34,7 +35,7 @@ test("the store keeps bookmarks per directory across a restart, and refuses a ba
   assert.equal(b.set("/r", ID3, null), null, "removing nothing is not an error");
 });
 
-test("the archive stamps, filters and searches bookmarks; a vanished log is not listed", () => {
+test("the archive stamps, filters and searches bookmarks; a vanished log is not listed", async () => {
   const home = tmp("home");
   process.env.CLAUDE_CONFIG_DIR = home;
   const cwd = tmp("repo");
@@ -75,7 +76,19 @@ test("the archive stamps, filters and searches bookmarks; a vanished log is not 
   assert.equal(doc.source, "jsonl");
   assert.equal(doc.claudeSessionId, ID1);
   assert.equal(doc.turns[0].prompt, "Fix the scroll jank");
-  assert.equal(archivedTranscript(cwd, ID1, Date.now()), "unchanged");
+  const polled = Date.now();
+  assert.equal(archivedTranscript(cwd, ID1, polled), "unchanged");
+  // A price list installed after the phone's copy re-prices the same turns: the log's mtime alone
+  // must not answer "unchanged", and the document carries the install time.
+  await new Promise((r) => setTimeout(r, 5));
+  const first = Object.keys(PRICES)[0];
+  installPriceList({ rates: { [first]: { ...PRICES[first], input: PRICES[first].input + 1 } }, fetchedAt: Date.now() });
+  try {
+    const repriced = archivedTranscript(cwd, ID1, polled);
+    assert.notEqual(repriced, "unchanged", "a new price list re-prices an archived conversation");
+    assert.equal(repriced.updatedAt, priceListChangedAt());
+    assert.equal(archivedTranscript(cwd, ID1, repriced.updatedAt), "unchanged", "the next poll is cheap again");
+  } finally { installPriceList(null); }
   assert.equal(archivedTranscript(cwd, "../../x"), null);
   assert.equal(archivedTranscript(cwd, ID3), null);
   assert.equal(archivedToolDetails(cwd, "../x", "t1"), null);

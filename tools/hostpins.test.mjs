@@ -153,9 +153,10 @@ const PINS = [
     // +1 sessions/sidechannel.ts (2026-10-22): a source turn's end re-asks for a fresh context sample (≤1.5 s).
     // +1 gitnotify.ts (2026-10-30): the minute tick asking git about each open push failure (a terminal push is no host-run outcome); idle while none is open, stopped in shutdown.ts.
     // +1 plugins/pluginregistry.ts (2026-11-01): `autoOn`'s 15-minute re-probe (unref'd, armed only when an entry has `autoOn`, cleared in shutdownAll).
+    // +1 pricefetch.ts (2026-11-12): the daily read of Anthropic's price page (unref'd; off with WATERPLANE_PRICE_FETCH=0).
     today: {
       "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 2, "opendeliveries.ts": 1,
-      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "gitnotify.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1, "plugins/pluginregistry.ts": 1,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "gitnotify.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1, "plugins/pluginregistry.ts": 1, "pricefetch.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },
@@ -173,7 +174,10 @@ const PINS = [
     // poll and the signed-out announcement's short gather; a busy member's look-again — new facts.
     // sessions/apiretry.ts (2026-10-27, R-connection-024): the retry rung, the one log re-read after a Stop, the Text/Return gap — a new fact.
     // server/clients.ts: the one-second grace before a distrusted socket is `terminate()`d (2026-10-22 security pass).
-    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxread.ts": 2, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 2, "sessions/resume.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 1, "sessions/signinwait.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
+    // server/deliveries.ts (2026-11-11): the inbox hold's poll — a prompt waits for the picture it names — a new fact.
+    //   MOVED (2026-11-12): the poll is `clock.sleep` on the injected `waitclock.ts` Clock (1 → 0), so a test runs it in virtual time.
+    // sessions/drive.ts (2026-11-13): `waitReady`'s 150 ms poll is `clock.sleep` on the same Clock (1 → 0), threaded from the delivery.
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxread.ts": 2, "sessions/convid.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 2, "sessions/resume.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 1, "sessions/signinwait.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
   },
   {
     name: "summary spends (runSummaryTask calls)",

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import type { SessionInfo, WorktreeLeftover } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
+import { commitsAhead, primaryBranch, unlandedCount } from "./landedbase.js";
 
 /**
  * A worktree nobody is using, and whether it can go.
@@ -24,15 +25,6 @@ const TIMEOUT = 15_000;
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await pexec("git", args, { cwd, timeout: TIMEOUT, maxBuffer: 8 * 1024 * 1024 });
   return stdout;
-}
-
-/** The primary checkout's path and branch: `git worktree list`'s first entry. */
-async function primaryOf(wt: string): Promise<{ path: string; branch: string | null }> {
-  const out = await git(wt, ["worktree", "list", "--porcelain"]);
-  const first = out.split("\n\n")[0] ?? "";
-  const path = /^worktree (.+)$/m.exec(first)?.[1]?.trim() ?? "";
-  const branch = /^branch refs\/heads\/(.+)$/m.exec(first)?.[1]?.trim() ?? null;
-  return { path, branch };
 }
 
 /** Files under the gitignored transport dirs — nothing in git would save them. */
@@ -101,7 +93,7 @@ export class WorktreeGone extends Error {
 export async function worktreeLeftover({ wt, branch, sessions, ownerLive }: LeftoverInput): Promise<WorktreeLeftover> {
   if (!existsSync(wt)) throw new WorktreeGone(wt);
   const blockers: string[] = [];
-  const primary = await primaryOf(wt);
+  const primary = await primaryBranch(wt);
   const base = primary.branch ?? "";
   if (!primary.path || primary.path === wt) blockers.push("This is the repo's main checkout, not a worktree.");
   if (!base) blockers.push("The main checkout is on no branch, so there is nothing to check this worktree's commits against.");
@@ -109,10 +101,15 @@ export async function worktreeLeftover({ wt, branch, sessions, ownerLive }: Left
   let ahead = 0;
   let unlanded = 0;
   if (base) {
-    ahead = Number((await git(wt, ["rev-list", "--count", "HEAD", "--not", `refs/heads/${base}`])).trim()) || 0;
-    // `+` = a commit whose patch is not on base. A cherry-picked agent commit
-    // has a new SHA on main but the same patch, so it is `-` and counts as landed.
-    if (ahead > 0) unlanded = (await git(wt, ["cherry", `refs/heads/${base}`, "HEAD"])).split("\n").filter((l) => l.startsWith("+")).length;
+    // landedbase.ts counts by patch: a cherry-picked agent commit has a new SHA on main but the
+    // same patch, so it counts as landed. The BASE stays the primary checkout's branch (what this
+    // removal is judged against); a count git cannot read throws, as it always did, never "0".
+    const ref = `refs/heads/${base}`;
+    const a = await commitsAhead(wt, ref);
+    const n = await unlandedCount(wt, ref);
+    if (a === null || n === null) throw new Error(`Could not count the commits of ${branch} that are not on ${base}.`);
+    ahead = a;
+    unlanded = n;
   }
   if (unlanded > 0) blockers.push(`${plural(unlanded, "commit")} on ${branch} ${unlanded === 1 ? "is" : "are"} not on ${base}.`);
 
@@ -149,7 +146,7 @@ export async function removeLeftover(input: LeftoverInput): Promise<RemoveResult
     return { ok: false, error: `Could not check the worktree: ${(err as Error).message}` };
   }
   if (leftover.blockers.length) return { ok: false, leftover, error: leftover.blockers.join(" ") };
-  const primary = await primaryOf(wt);
+  const primary = await primaryBranch(wt);
   try {
     // No --force: git refuses a dirty or locked worktree on its own.
     await git(primary.path, ["worktree", "remove", wt]);

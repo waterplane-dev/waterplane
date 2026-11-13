@@ -49,13 +49,14 @@ const QUEUE_BLOCK: Record<SendBlockReason, BlockReason | null> = {
   lane: "sessionBusy",
   inflight: "sessionBusy",
   pendingCreate: "sessionBusy",
-  backoff: null,
+  backoff: null, uploadFailed: "filesMissing",
 };
 
 /** The queue's own sentence for each, kept as the per-row `detail` so the four
  *  lane-shaped reasons do not all collapse into "the session is working". */
 const QUEUE_DETAIL: Partial<Record<SendBlockReason, string>> = {
   held: "held until the agent finishes this turn",
+  uploadFailed: "the picture it names never uploaded — retry that upload, or re-attach it and rewrite this message",
   lane: "another message for that session is going out first",
   inflight: "a delivery for that session is already in flight",
   pendingCreate: "waiting for its session to open",

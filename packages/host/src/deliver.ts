@@ -14,6 +14,7 @@ import { noteAmbiguousDelivery, noteDeliveryEnded, noteDeliveryStarted } from ".
 import { recordSent } from "./sentlog.js";
 import type { DeliverOpts, DeliveryResult } from "./deliver/delivertypes.js";
 import { runDelivery } from "./deliver/deliverrun.js";
+import { realClock } from "./waitclock.js";
 
 export type { DeliverOpts, DeliveryResult } from "./deliver/delivertypes.js";
 
@@ -80,7 +81,7 @@ export async function deliverPrompt(
   historyKind: HistoryEntry["kind"] = "backlog",
   opts: DeliverOpts = {},
 ): Promise<DeliveryResult> {
-  const startedAt = Date.now();
+  const startedAt = (opts.clock ?? realClock).now();
   /**
    * This delivery's stable name, for the two ledgers that must be able to tell
    * one delivery from another: the spent-turn ledger (`settle.ts`) and the

@@ -10,7 +10,7 @@
  */
 import { useEffect, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  AppWindow, ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
+  AppWindow, ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip,
   Plus, Quote, SendHorizontal, Terminal as TerminalIcon, Trash2, Waypoints, X, Zap,
 } from "lucide-react";
 import { sessionPickLabel } from "@waterplane/shared";
@@ -31,7 +31,9 @@ import { PIPE_PAD } from "../../cliKeys";
 import { baseName } from "../../format";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
-import { useSnippets } from "../../features/snippets";
+import { useSnippetView } from "../../features/snippets";
+import { SnippetPicker } from "../../SnippetPicker";
+import { joinSnippets } from "../../snippetPicks";
 import { openBacklogCut, openBacklogIn } from "../../features/backlog";
 import { takeBoxReturn, useBoxReturn } from "../../features/images";
 import type { ComposeApi } from "./useCompose";
@@ -86,7 +88,7 @@ export function ComposeBar(p: ComposeBarProps) {
   // and autocorrect are both wrong there, as they are in CLI mode.
   const literal = cliMode || isShellBackend(null, active.backend);
 
-  const snippets = useSnippets();
+  const snippetView = useSnippetView();
   const { dragOver, dropProps } = useFileDrop();
   // The box remounts at two rows under every sheet, and CLI mode swaps its
   // value: measure again on both, or a long draft reads through a porthole.
@@ -341,22 +343,11 @@ export function ComposeBar(p: ComposeBarProps) {
           </div>
         )}
         {snippetOpen && (
-          <div className="snippet-pop">
-            <div className="snippet-pop-head">
-              <span>Snippets</span>
-              <Button onPointerDown={keepFocus} onClick={() => { setSnippetOpen(false); setOverlay("snippets"); }} title="Manage snippets"><Pencil size={14} /> manage</Button>
-              <Button onPointerDown={keepFocus} onClick={() => setSnippetOpen(false)} title="Close"><X size={14} /></Button>
-            </div>
-            <div className="snippet-pop-list">
-              {snippets.length === 0 && <Empty>No snippets yet — tap “manage” to add one.</Empty>}
-              {snippets.map((s) => (
-                <button key={s.id} className="snippet-pop-item" onPointerDown={keepFocus} title={s.text} onClick={() => { track("action:snippet.insert"); appendSnippet(s); }}>
-                  <span className="snippet-pop-title">{s.title}</span>
-                  <span className="snippet-pop-preview">{s.text.replace(/\s+/g, " ").trim()}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <SnippetPicker list={snippetView.list} starter={snippetView.starter} keepFocus={keepFocus}
+            emptyText="No snippets yet — tap “manage” to add one."
+            onManage={() => { setSnippetOpen(false); setOverlay("snippets"); }}
+            onClose={() => setSnippetOpen(false)}
+            onInsert={(picked) => { track("action:snippet.insert"); if (picked.length > 1) track("action:snippet.insert.multi"); appendSnippet({ text: joinSnippets(picked) }); }} />
         )}
         {secretAskLine ? (
           /* **A password asked on screen** (`useCompose`'s secret state): a

@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
-import { waitForHost } from "./lib-e2e.mjs";
-const PORT = 8811;
+import { freePort, waitForHost } from "./lib-e2e.mjs";
+const PORT = await freePort(); // never a fixed port: anything else listening on it fails the suite
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-f-`));
 // Stub `claude` that prints its args then blocks — asserts session.fork spawns
 // a second session forking EXACTLY the source conversation (--resume <its

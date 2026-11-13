@@ -281,3 +281,31 @@ export function agentPct(agentUsd: number, usd: number): number | null {
 
 /** The key's hour as an instant — re-exported so the card does not reach into shared twice. */
 export { hourKeyMs };
+
+/**
+ * The span just before the one on screen, for the insights' "vs before" line: the week before
+ * the live week, the window before a live window (same length, ending where it starts), or the
+ * same number of calendar days ending at the span's first midnight. `words` name it in a sentence
+ * ("on the week before"). Null where it would reach past the record's first day (`recordFrom`) —
+ * a comparison against a span the record only half holds is a floor that reads as a change.
+ */
+export function prevSpan(
+  ss: { from: number; toHour: number } | "week" | null,
+  week: { from: number; openedAt: number } | null,
+  calDays: number | null,
+  recordFrom: number | null,
+): { from: number; to: number; key: string; words: string } | null {
+  if (!ss || recordFrom == null) return null;
+  let from: number, to: number, words: string;
+  if (ss === "week") {
+    if (!week) return null;
+    from = windowStartHour(week.openedAt - WEEK_MS); to = week.from; words = "the week before";
+  } else if (Number.isFinite(ss.toHour)) {
+    from = ss.from - (ss.toHour - ss.from); to = ss.from; words = "the window before";
+  } else if (calDays != null) {
+    const d = new Date(ss.from); d.setDate(d.getDate() - calDays);
+    from = d.getTime(); to = ss.from; words = `the ${calDays} days before`;
+  } else return null;
+  if (from < recordFrom || to <= from) return null;
+  return { from, to, key: `${from}:${to}`, words };
+}

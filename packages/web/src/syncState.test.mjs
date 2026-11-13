@@ -27,12 +27,12 @@ test("a key nobody has written or heard about says NOTHING", () => {
   assert.equal(syncSentence(syncStateOf(K)), null);
 });
 
-test("a local write with a live link is `pending`, and says it is only on this phone", () => {
+test("a local write with a live link is `pending`, and says it is only on this device", () => {
   resetSyncState();
   setSyncOnline(true);
   noteLocalWrite(K, T0);
   assert.equal(syncStateOf(K).phase, "pending");
-  assert.match(syncSentence(syncStateOf(K), "your notes"), /only on this phone/);
+  assert.match(syncSentence(syncStateOf(K), "your notes"), /only on this device/);
 });
 
 test("the same write with NO link is `offline` — a different fact, and a different sentence", () => {
@@ -52,7 +52,7 @@ test("the host's echo is the receipt — it turns pending into synced", () => {
   noteLocalWrite(K, T0);
   noteSynced(K, T0);
   assert.equal(syncStateOf(K).phase, "synced");
-  assert.match(syncSentence(syncStateOf(K), "your notes"), /on more than this phone/);
+  assert.match(syncSentence(syncStateOf(K), "your notes"), /on more than this device/);
 });
 
 test("an echo OLDER than our write does not confirm it", () => {
@@ -173,7 +173,7 @@ test("a send that GAVE UP never reads as queued — it is not on its way", () =>
 
 test("a queued EDIT of a stored row still reads as not-yet-there", () => {
   // The host listing carries the pre-edit copy; what is on screen is the edit,
-  // and the edit is only on this phone.
+  // and the edit is only on this device.
   assert.equal(queueSync({ queued: true, onHost: true, online: true }), "pending");
 });
 
@@ -203,15 +203,15 @@ test("the head's word claims ALL only when all are there, and counts otherwise",
 });
 
 test("the head's title agrees in number with what it counts", () => {
-  assert.match(syncSummary(["synced"]).title, /the one row here is on more than this phone/);
-  assert.match(syncSummary(["synced", "synced"]).title, /all 2 rows here are on more than this phone/);
+  assert.match(syncSummary(["synced"]).title, /the one row here is on more than this device/);
+  assert.match(syncSummary(["synced", "synced"]).title, /all 2 rows here are on more than this device/);
   assert.match(syncSummary(["synced", "pending", "offline"]).title, /1 of the 3 rows here is on more/);
   assert.match(syncSummary(["synced", "synced", "failed"]).title, /2 of the 3 rows here are on more/);
 });
 
 test("the chip sentence agrees in number with its caller", () => {
-  assert.match(syncSentence({ phase: "synced" }, "your notes", true), /your notes are on more than this phone/);
-  assert.match(syncSentence({ phase: "synced" }, "this schedule", false), /this schedule is on more than this phone/);
+  assert.match(syncSentence({ phase: "synced" }, "your notes", true), /your notes are on more than this device/);
+  assert.match(syncSentence({ phase: "synced" }, "this schedule", false), /this schedule is on more than this device/);
 });
 
 // ── outstandingSync: how much this phone is still holding alone ─────────────

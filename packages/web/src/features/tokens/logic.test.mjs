@@ -108,3 +108,14 @@ test("usageTitle: no 5-hour window names the week and says why", async () => {
   assert.doesNotMatch(t, /5-hour session \?/);
   assert.match(t, /No 5-hour window on this plan/);
 });
+
+test("infoFigures: a host that has read nothing yet says reading, a failed read stays ?", async () => {
+  const { infoFigures, usageNotReadYet } = await import("./logic.ts");
+  const boot = { ok: false, sessionPct: null, weeklyPct: null, sessionResetAt: null, weeklyResetAt: null, checkedAt: 0 };
+  assert.equal(usageNotReadYet(boot), true);
+  assert.equal(infoFigures(boot).reading, true);
+  assert.equal(usageNotReadYet({ ...boot, checkedAt: now }), false);   // failed scrape: honest `?`
+  assert.equal(infoFigures({ ...boot, checkedAt: now }).reading, undefined);
+  assert.equal(usageNotReadYet(null), false);
+  assert.equal(usageNotReadYet(u()), false);
+});

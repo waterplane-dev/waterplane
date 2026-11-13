@@ -32,12 +32,13 @@
 
 import { basename } from "node:path";
 import {
-  COST_CONVOS_CAP, PRICES_AS_OF, addCost, addTotals, clipClosedText, costOf, hourFloor, hourKeyMs, tokenTotal, undatedLogsOf, undatedSince,
-  zeroCost, zeroTotals,
+  COST_CONVOS_CAP, addCost, addTotals, clipClosedText, costOf, hourFloor, hourKeyMs, tokenTotal, undatedLogsOf, undatedSince,
+  priceListSource, zeroCost, zeroTotals,
   type ClosedSession, type CostBreakdown, type CostConvo, type CostConvoHour, type CostConvoRest, type CostHour, type CostHourRepo,
   type CostLaunch, type CostWindowDoc, type Intent, type ModelSlice, type SessionInfo, type SessionOrigin,
   type TokenTotals,
 } from "@waterplane/shared";
+import { notePriceGap } from "./pricegap.js";
 import { CROSS, type FileSummary, type Tally } from "./tokenscan.js";
 
 /** slug (project dir name) → path below it, no extension → summary (`tokenstats.ts`' store). */
@@ -242,7 +243,7 @@ export function foldCostWindow(
         if (sub) { addTotals(agentTotals, v); addTotals(cv.agentTotals, v); for (const b of agentSide) addTotals(b.totals, v); }
         // An unpriced model adds tokens and no money — never a zero charge,
         // which reads as free.
-        if (!c) { addTotals(unpriced, v); continue; }
+        if (!c) { addTotals(unpriced, v); notePriceGap(model, hourKeyMs(hour)); continue; }
         ch.usd += c.total;
         addCost(cost, c); addCost(cv.cost, c); addCost(ha.cost, c);
         for (const b of touched) addCost(b.cost, c);
@@ -329,7 +330,7 @@ export function foldCostWindow(
     convos: convoRows,
     ...(folded.length ? { convosTotal: ranked.length, rest } : {}),
     totals, cost, agentTotals, agentCost, unpriced,
-    pricesAsOf: PRICES_AS_OF,
+    ...priceListSource(),
     scannedAt,
     // Only logs written since the window opened can hold an undated record IN it.
     undated: undatedRecords(files, fromHour),

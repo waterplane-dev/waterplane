@@ -16,6 +16,7 @@ import type { TurnEndNet, TurnFacts } from "@waterplane/shared";
 import { workingLine } from "@waterplane/shared";
 import { claudeHookWatched, postClaudeHook, type ClaudeHookPayload } from "../backends/claude-sources.js";
 import { derive } from "../backends/derive.js";
+import { offerFixture } from "../clihealth.js";
 import { samePromptText } from "../echo.js";
 import type { Session, SessionCore } from "./core.js";
 import { HEALTH_SPAWN_GRACE_MS, STOP_VERIFY_BYTES, STOP_VERIFY_MS, SUBMIT_RING } from "./knobs.js";
@@ -220,6 +221,9 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   // Before the source hears it: the first hook is what flips the pipe live,
   // and that edge's fixture capture reads this payload's shape.
   s.lastHook = payload;
+  // One skeleton per hook EVENT per CLI version (`clifixtures.ts`): the contract
+  // test (`hookcontract.test.mjs`) checks the stub and this host against them.
+  if (s.backend.healthScope) offerFixture("hook.pipe", ev, () => JSON.stringify(payload));
   // The question a box is about to draw, before the log has it (2.1.304
   // writes the call only once it is answered). A turn boundary retires it.
   if (ev === "PreToolUse" && payload.tool_name === "AskUserQuestion" && typeof payload.tool_use_id === "string") {

@@ -67,7 +67,7 @@ export function detailLines(m: Meter, s: { width?: number; height?: number; code
   ];
   if (s?.bitrateKbps != null) lines.push(`${s.auto ? "Auto is at" : "bitrate cap"}: ${Math.round(s.bitrateKbps)} kbit/s`);
   const ms = latencyMs(m);
-  lines.push(ms == null ? "latency: — (no frame drawn yet)" : `latency: ${ms} ms from arrival on this phone to the screen (not counting the network)`);
+  lines.push(ms == null ? "latency: — (no frame drawn yet)" : `latency: ${ms} ms from arrival on this device to the screen (not counting the network)`);
   return lines;
 }
 

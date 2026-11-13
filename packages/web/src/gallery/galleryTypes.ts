@@ -120,7 +120,7 @@ export const THUMB_WARM = 24;
 export const MARK_TITLE: Record<string, string> = {
   new: "new — not opened on this device yet",
   opened: `opened in ${BRAND.name} on this device`,
-  downloaded: "downloaded to this phone",
+  downloaded: "downloaded to this device",
 };
 
 /** "created" timestamp, falling back to mtime. Compact relative for recent, else date. */

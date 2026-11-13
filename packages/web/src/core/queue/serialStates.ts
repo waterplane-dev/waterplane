@@ -2,7 +2,7 @@
 // for `busySerialGroups` and one sentence naming who holds a group. Pure, and
 // imports nothing but shared — `activity/activityQueueRow.ts` reads it too, and
 // `logic.ts` (which imports the activity barrel) would be a cycle.
-import { blockWallOf, serialHolders, serialWaitText, waitedSessionName } from "@waterplane/shared";
+import { laneStateOf as sharedLaneStateOf, serialHolders, serialWaitText, waitedSessionName } from "@waterplane/shared";
 import type { LaneSessionState, SessionInfo } from "@waterplane/shared";
 import { trustAutoAccepted, type BackendList } from "../../backendCaps.ts";
 
@@ -12,15 +12,9 @@ import { trustAutoAccepted, type BackendList } from "../../backendCaps.ts";
  * yet arrived ⇒ a trust box reads as auto-accepted, today's behaviour.
  */
 export function laneStateOf(s: SessionInfo, backends?: BackendList): LaneSessionState {
-  const trust = s.prompt?.kind === "trust" ? trustAutoAccepted(backends ?? null, s.backend) : undefined;
-  return {
-    turnActive: s.turnActive, limitBlocked: s.limit?.blocked, promptKind: s.prompt?.kind,
-    awaitingInput: s.awaitingInput,
-    // Signed out, or the host's net retry holds it — `blockWallOf`, never `blockOf`'s kind: a
-    // net give-up with nothing more scheduled and first-launch setup alone are badges, not walls.
-    block: blockWallOf(s),
-    ...(trust === false ? { trustAutoAccepted: false } : {}),
-  };
+  // The mapping itself is shared (`shared/queue/queuelanestate.ts`), the host's twin; only the
+  // backend knowledge is the phone's own.
+  return sharedLaneStateOf(s, { autoAcceptsTrust: trustAutoAccepted(backends ?? null, s.backend) });
 }
 
 /**

@@ -1,0 +1,8 @@
+{
+  "packages/extensions/android-apps/web/demofixture.ts": [
+    [
+      "const DAY = 24 * HOUR",
+      "demo fixture: offsets for fake timestamps"
+    ]
+  ]
+}

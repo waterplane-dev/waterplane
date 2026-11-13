@@ -6,7 +6,8 @@
 import type { SessionManager } from "../sessions.js";
 import { awaitLanded } from "../settle.js";
 import { channelUp, liveSourceFor } from "../livesources.js";
-import { LOG_PROOF_MS, SOURCE_LANDED_MS, sleep } from "./deliverknobs.js";
+import { LOG_PROOF_MS, SOURCE_LANDED_MS } from "./deliverknobs.js";
+import { realClock, type Clock } from "../waitclock.js";
 
 export function makeLogProof(
   sessions: SessionManager,
@@ -14,6 +15,7 @@ export function makeLogProof(
   text: string,
   startedAt: number,
   key: string,
+  clock: Clock = realClock,
 ) {
   /**
    * The witness that is not a rendering: did the CLI's own conversation log
@@ -37,7 +39,7 @@ export function makeLogProof(
   // revisits. Without it, two deliveries of the same words inside the recency
   // window both read the one turn and both report success, and only one of them
   // ran.
-  const ranAnyway = () => awaitLanded(sessions, sessionId, text, startedAt, LOG_PROOF_MS, undefined, key);
+  const ranAnyway = () => awaitLanded(sessions, sessionId, text, startedAt, LOG_PROOF_MS, undefined, key, clock);
   return ranAnyway;
 }
 
@@ -51,6 +53,7 @@ export function makeSubmitProof(
   sessionId: string,
   text: string,
   startedAt: number,
+  clock: Clock = realClock,
 ) {
   /**
    * **The CLI naming the words it just took.**
@@ -106,7 +109,7 @@ export function makeSubmitProof(
   const armSourceProof = () => {
     if (!deliverySrc || sourceArmed) return;
     sourceArmed = true;
-    const pressedAt = Date.now();
+    const pressedAt = clock.now();
     try {
       deliverySrc.src.landed(deliverySrc.session, text, pressedAt, SOURCE_LANDED_MS)
         .then((v) => { if (v === true) sourceLanded = true; }, () => { /* no answer is no proof */ });
@@ -119,11 +122,11 @@ export function makeSubmitProof(
    *  host it has landed hundreds of milliseconds AFTER the write that caused
    *  it. Only ever spent where the delivery is otherwise out of proofs. */
   const submitProofWithin = async (ms: number) => {
-    const deadline = Date.now() + ms;
+    const deadline = clock.now() + ms;
     for (;;) {
       if (submitProof()) return true;
-      if (Date.now() >= deadline) return false;
-      await sleep(150);
+      if (clock.now() >= deadline) return false;
+      await clock.sleep(150);
     }
   };
   return {

@@ -7,7 +7,8 @@
  * first time that signal is seen to WORK (`packages/host/src/clifixtures.ts`,
  * under `<state>/clifixtures/<version>/<signal>.txt|json`). This lists them
  * and, with `--write`, copies each one the repo does not have yet into
- * `packages/host/test/fixtures/screens/harvest-<signal>-<version>.<ext>` and
+ * `packages/host/test/fixtures/screens/harvest-<signal>-<version>.<ext>`
+ * (`harvest-<signal>-<Event>-<version>.json` for a per-event hook capture) and
  * adds its entry to `fixtures/signals.json` — `cli` from the version it was
  * captured on, `role` from running the signal's reader over it
  * (`packages/host/test/signalreaders.mjs`): `match` if it reads, else `guard`.
@@ -37,10 +38,12 @@ const MANIFEST = join(FIXTURES, "signals.json");
 const TEST = "packages/host/test/harvested.test.mjs";
 
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
-const FILE_RE = /^([a-z]+\.[a-z]+)\.(txt|json)$/;
+/** `<signal>.<ext>`, or `<signal>.<Kind>.<ext>` for a signal captured once per kind (a hook event). */
+const FILE_RE = /^([a-z]+\.[a-z]+)(?:\.([A-Za-z][A-Za-z0-9]{0,39}))?\.(txt|json)$/;
 
 /**
- * Every capture in a capture dir: `{ id, version, ext, file }`. A version dir
+ * Every capture in a capture dir: `{ id, version, ext, file }` (plus `kind` for
+ * a per-kind capture, `hook.pipe.<Event>.json`; the old `hook.pipe.json` has none). A version dir
  * that is not a plain `X.Y.Z`, a file that is not `<signal>.<ext>` and a
  * signal the catalog does not have are all skipped and SAID — a capture with a
  * version that cannot be told is no fixture, never a current one.
@@ -55,7 +58,7 @@ export function listSamples(dir, known) {
     for (const name of readdirSync(vdir).sort()) {
       const m = FILE_RE.exec(name);
       if (!m || !known.has(m[1])) { skipped.push(`${version}/${name}: not a known signal's capture`); continue; }
-      samples.push({ id: m[1], version, ext: m[2], file: join(vdir, name) });
+      samples.push({ id: m[1], version, ext: m[3], file: join(vdir, name), ...(m[2] ? { kind: m[2] } : {}) });
     }
   }
   return { samples, skipped };
@@ -75,9 +78,24 @@ export function opaqueRun(text) {
   return null;
 }
 
+// The SAME key sets `skeletonOf` masks by (one list, in shared): a second copy
+// here once missed `toolUseResult` while the skeleton missed it too.
+const { OPAQUE_KEYS, VALUE_OPAQUE_KEYS } = await import(pathToFileURL(join(ROOT, "packages/shared/dist/clihealth.js")).href);
+const LEAF_TOKENS = new Set(["<string>", "<number>", "<boolean>", "<deeper>", "<other>", "<mcp>", "<key>"]);
+/** Belt and braces for `skeletonOf`: below an opaque key (the model's tool
+ *  arguments) nothing but leaf tokens and `<key>`; below a value-opaque key
+ *  (a tool's own schema) keys may stay, but every value is a leaf token. */
+function freeFormValue(v, free = false, values = false) {
+  if (v === null || typeof v !== "object") return (free || values) && v !== null && !LEAF_TOKENS.has(v);
+  if (Array.isArray(v)) return v.some((x) => freeFormValue(x, free, values));
+  return Object.entries(v).some(([k, x]) => (free && !LEAF_TOKENS.has(k))
+    || freeFormValue(x, free || OPAQUE_KEYS.has(k), values || VALUE_OPAQUE_KEYS.has(k)));
+}
+
 /** What would leave this desktop that the redaction exists to keep here. */
 export function leaks(text) {
   const out = [];
+  try { if (freeFormValue(JSON.parse(text))) out.push("a verbatim value under a tool's arguments or result"); } catch { /* not JSON */ }
   if (/\/(?:Users|home)\/[^/\s~<]/.test(text)) out.push("a home directory path");
   if (/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/.test(text)) out.push("an email address");
   if (/\b(?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/[A-Z][A-Za-z_]+/.test(text)) out.push("a timezone name (where the owner lives)");
@@ -85,7 +103,7 @@ export function leaks(text) {
   return out;
 }
 
-export const fixturePath = (s) => `screens/harvest-${s.id}-${s.version}.${s.ext}`;
+export const fixturePath = (s) => `screens/harvest-${s.id}-${s.kind ? `${s.kind}-` : ""}${s.version}.${s.ext}`;
 
 /**
  * One line of the plan per sample: `new` (with the role its reader gives it),

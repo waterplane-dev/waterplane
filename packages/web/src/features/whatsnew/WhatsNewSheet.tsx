@@ -68,7 +68,7 @@ export function WhatsNewSheet() {
           );
         })}
         <Explain of="where this comes from" label="Where this comes from">
-          The rows are written by hand for each release. Each state line is read from this phone and
+          The rows are written by hand for each release. Each state line is read from this device and
           the desktop as they are now, and is left out while it has not been read yet. Every verb opens
           a screen; nothing here changes a setting. To find this again: Updates › what's new, or search
           Settings for "what's new".

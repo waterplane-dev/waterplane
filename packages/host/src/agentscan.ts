@@ -14,9 +14,10 @@
  */
 import { open } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { CONTINUED_RE, EDIT_TOOLS, classifyRework, weekOfMs, type AgentLogSummary, type ConvSummary, type WeekTally } from "./agentclass.js";
+import { CONTINUED_RE, EDIT_TOOLS, classifyRework, isLookCall, startPartsOf, weekOfMs, type AgentLogSummary, type ConvSummary, type StartSummary, type WeekTally } from "./agentclass.js";
+import type { StartPart } from "@waterplane/shared";
 import { SCAN_CHUNK } from "./tokenscan.js";
-import { firstSightIn, usageRecordOf } from "./ctxlog/usagerecord.js";
+import { firstSightIn, isAnchor, usageRecordOf, type UsageRecord } from "./ctxlog/usagerecord.js";
 
 const SLICE_MS = 8;
 const breathe = () => new Promise<void>((r) => setImmediate(r));
@@ -95,6 +96,59 @@ function bumpWeek(wk: Record<string, WeekTally>, ts: number, u: { input: number;
 }
 
 /**
+ * The start-of-session readings, taken in the same pass as everything else: the model and the
+ * first-request tokens off the first counted usage record (`isAnchor`, as `tokenscan.ts`), the
+ * attachments written BEFORE that request as chars per part, the CLI version off the first record
+ * that has one, the read-only calls before the first edit, and the counted requests. A fork's
+ * copied prefix is the parent's session, so a fork reports no model/start/parts/look (absent,
+ * never the parent's number); the caller says so with `forked`.
+ */
+class StartReading {
+  private model: string | undefined;
+  private cli: string | undefined;
+  private start: number | undefined;
+  private parts: Partial<Record<StartPart, number>> = {};
+  private looks = 0;
+  private edited = false;
+  private req = 0;
+  private seenTools = new Set<string>();
+  /** `"type":"attachment"` rows are only wanted until the anchor request has been seen. */
+  get wantsAttachments(): boolean { return this.start === undefined; }
+  version(row: Record<string, unknown>): void {
+    if (this.cli === undefined && typeof row.version === "string" && row.version) this.cli = row.version;
+  }
+  attachment(row: Record<string, unknown>): void {
+    if (this.start !== undefined) return;
+    for (const [part, chars] of startPartsOf(row)) this.parts[part] = (this.parts[part] ?? 0) + chars;
+  }
+  /** A counted usage record (all-four-zero already dropped). */
+  request(u: UsageRecord, prefix: boolean): void {
+    if (prefix) return;
+    this.req++;
+    this.model ??= u.model ?? undefined;
+    if (this.start === undefined && isAnchor(u)) this.start = u.carried;
+  }
+  /** One tool_use block, in order. */
+  tool(name: string, id: unknown, command: unknown, prefix: boolean): void {
+    if (prefix || this.edited) return;
+    if (typeof id === "string") { if (this.seenTools.has(id)) return; this.seenTools.add(id); }
+    if (EDIT_TOOLS.has(name)) { this.edited = true; return; }
+    if (isLookCall(name, command)) this.looks++;
+  }
+  result(forked: boolean): StartSummary | undefined {
+    if (!this.req && this.cli === undefined) return undefined;
+    return {
+      ...(!forked && this.model ? { md: this.model } : {}),
+      ...(this.cli ? { cli: this.cli } : {}),
+      ...(!forked && this.start !== undefined ? { st: this.start } : {}),
+      ...(!forked && this.start !== undefined && Object.keys(this.parts).length ? { pt: this.parts } : {}),
+      ...(!forked && this.edited ? { lk: this.looks } : {}),
+      rq: this.req,
+    };
+  }
+}
+
+/**
  * Summarise one top-level conversation log. `id` is the file's own session id
  * (its basename). Null when it holds nothing countable.
  */
@@ -141,6 +195,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
   const repairCalls = new Set<string>();
   const rr: string[] = [];
   let any = false;
+  const sr = new StartReading();
 
   const handle = (line: string): void => {
     if (!line || line.charCodeAt(0) !== 123 /* { */) return;
@@ -163,15 +218,18 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
     const wantUsage = line.includes('"usage"');
     const wantTitle = line.includes('"aiTitle"');
     const wantPrompt = prompt === undefined && line.includes('"type":"user"');
+    const wantAttach = sr.wantsAttachments && line.includes('"type":"attachment"');
     const wantResult = (commits.size > 0 || repairCalls.size > 0) && line.includes('"tool_result"');
     if (!prefix && line.includes('"compact_boundary"')) cp++;
-    if (!(isHead || wantUsage || wantTitle || wantPrompt || wantResult)) return;
+    if (!(isHead || wantUsage || wantTitle || wantPrompt || wantResult || wantAttach)) return;
     const row = pre ?? parse(line);
     if (!row) return;
     head++;
     const ts = tsOf(row);
     if (Number.isFinite(ts)) { if (t0 === undefined) t0 = ts; t1 = ts; }
     if (!cwd && typeof row.cwd === "string") cwd = row.cwd;
+    sr.version(row);
+    if (row.type === "attachment") sr.attachment(row);
     if (isHead) {
       if (typeof row.entrypoint === "string" && row.entrypoint.startsWith("sdk")) nf ??= "headless";
       for (const k of ["sessionId", "session_id"] as const) {
@@ -205,6 +263,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
     const u = usageRecordOf(row, firstSight);
     if (u && (u.input || u.output || u.cacheRead || u.cacheWrite)) {
       any = true;
+      sr.request(u, prefix);
       if (!prefix && Number.isFinite(ts)) bumpWeek(wk, ts, u);
       if (!edited) { ex[0] += u.input; ex[1] += u.cacheRead; ex[2] += u.cacheWrite; ex[3]++; }
     }
@@ -213,6 +272,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
       if (tu?.type !== "tool_use" || typeof tu.name !== "string") continue;
       if (EDIT_TOOLS.has(tu.name)) edited = true;
       const input = (tu.input ?? {}) as { command?: unknown; scriptPath?: unknown; name?: unknown };
+      sr.tool(tu.name, tu.id, input.command, prefix);
       if (prefix) continue;
       if (tu.name === "Bash" && typeof tu.id === "string" && typeof input.command === "string" && COMMIT_RE.test(input.command)) commits.add(tu.id);
       if (tu.name === "Workflow" && typeof tu.id === "string"
@@ -224,6 +284,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
   if (!any && t0 === undefined) return null;
   // A fork's first prompt is the parent's: its own work is a different task, so it is not classed by it.
   const cls: { c: ConvSummary["c"]; word?: string } = forked ? { c: "unknown" } : classifyRework(prompt, title);
+  const start = sr.result(forked);
   return {
     m: mtime, s: size,
     ...(cwd ? { w: cwd } : {}),
@@ -234,22 +295,39 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
     wk, cp,
     ...(cm ? { cm: 1 as const } : {}),
     ...(rr.length ? { rr } : {}),
+    ...(start ? { sr: start } : {}),
   };
 }
 
-/** Summarise one subagent log: its tokens by week and its workflow run directory. */
+/** Summarise one subagent log: its tokens by week, its workflow run directory and its start readings. */
 export async function summarizeAgentLog(path: string, rel: string, size: number, mtime: number, chunkBytes?: number): Promise<AgentLogSummary | null> {
   const firstSight = firstSightIn(new Set<string>());
   const wk: Record<string, WeekTally> = {};
+  const sr = new StartReading();
+  let t0: number | undefined;
+  let head = 0;
   const handle = (line: string): void => {
-    if (!line || line.charCodeAt(0) !== 123 || !line.includes('"usage"')) return;
+    if (!line || line.charCodeAt(0) !== 123) return;
+    const wantAttach = sr.wantsAttachments && line.includes('"type":"attachment"');
+    if (!(head < HEAD_RECORDS || wantAttach || line.includes('"usage"'))) return;
     const row = parse(line);
     if (!row) return;
+    head++;
+    const ts = tsOf(row);
+    if (Number.isFinite(ts) && t0 === undefined) t0 = ts;
+    sr.version(row);
+    if (row.type === "attachment") sr.attachment(row);
     const u = usageRecordOf(row, firstSight);
-    if (!u || !(u.input || u.output || u.cacheRead || u.cacheWrite)) return;
-    bumpWeek(wk, tsOf(row), u);
+    if (u && (u.input || u.output || u.cacheRead || u.cacheWrite)) { sr.request(u, false); bumpWeek(wk, ts, u); }
+    if (row.type === "assistant") {
+      for (const b of blocksOf(row)) {
+        const tu = b as { type?: unknown; name?: unknown; id?: unknown; input?: unknown };
+        if (tu?.type === "tool_use" && typeof tu.name === "string") sr.tool(tu.name, tu.id, ((tu.input ?? {}) as { command?: unknown }).command, false);
+      }
+    }
   };
   if (!await eachLine(path, size, handle, chunkBytes)) return null;
   const wf = /\/workflows\/(wf_[^/]+)\//.exec(`/${rel}`)?.[1];
-  return { m: mtime, s: size, ...(wf ? { wf } : {}), wk };
+  const start = sr.result(false);
+  return { m: mtime, s: size, ...(wf ? { wf } : {}), wk, ...(t0 !== undefined ? { t0 } : {}), ...(start ? { sr: start } : {}) };
 }

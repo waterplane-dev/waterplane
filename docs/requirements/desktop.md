@@ -123,3 +123,8 @@ Remote desktop full screen shows its controls only on demand behind a movable ha
 - asked: 2026-10-21, 2026-10-21
 - shipped: 629c0a4a
 
+### R-desktop-020 · shipped
+The separate screenshot button (menu "shot" and Settings door) is removed; the live desktop view's camera button is the one screenshot.
+- asked: 2026-11-08
+- shipped: 7832bdbe
+

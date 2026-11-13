@@ -597,6 +597,10 @@ export interface TokenStatsDoc {
   top?: TokenConvo[];
 
   pricesAsOf: string;
+  /** `list`: the rates were read off Anthropic's price page on `pricesAsOf`.
+   *  `builtin`: the table shipped with this version, dated `pricesAsOf`.
+   *  Absent on an older host — which always meant the built-in table. */
+  pricesFrom?: "list" | "builtin";
   /** First and last counted turn, epoch ms. Null when there is nothing. */
   firstAt: number | null;
   lastAt: number | null;

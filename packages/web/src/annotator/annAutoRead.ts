@@ -72,7 +72,7 @@ export function autoReadActions(d: AutoReadDeps) {
       if (!crop) why = "this mark is too small to read";
       else words = cleanRead(await untilAborted(reader.read(crop, { signal: ctl.signal }), ctl.signal));
     } catch {
-      why = ctl.signal.aborted ? `not read within ${READ_TIMEOUT_MS / 1000} s` : "this phone could not read it";
+      why = ctl.signal.aborted ? `not read within ${READ_TIMEOUT_MS / 1000} s` : "this device could not read it";
     } finally {
       clearTimeout(timer);
     }

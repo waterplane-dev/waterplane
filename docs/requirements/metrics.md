@@ -246,10 +246,10 @@ The reach dashboard is also available as a private cloud dashboard only the owne
 - asked: 2026-11-06
 
 
-### R-metrics-051 · requested
+### R-metrics-051 · shipped
 The repo-health reading checks a Dart/Flutter project like any other: which Dart modules no test reaches, duplicated code, exports nothing uses, and import cycles. Generated Dart is left out, and anything the reader cannot tell is shown as absent, never as zero.
 - asked: 2026-11-09 (health-metrics plan, package P5)
-
+- shipped: e1811395
 
 ### R-metrics-052 · requested
 The repo-health readings include git-only measures that work in any language: how many commits fix a change from the last week, how much is deleted per line added (moves not counted) and how many commits delete more than they add, how many source commits also change a test, p95 commit size, the files where churn and size multiply, tracked binaries and build output, and docs naming paths that no longer exist. A reading that cannot be taken (shallow clone, no tests recognised) says why instead of showing zero.
@@ -274,3 +274,38 @@ The health index scores six more readings the engine already takes, each against
 The repo-readings sheet has an Agent readings region with four weekly figures only this desktop's own claude conversation logs can give: exploration cost (median tokens a fresh session reads before its first file edit), rework spend (share of tokens in sessions whose first prompt or title says fix, repair, broken, again, bug, regression, revert or not working, plus review-repair workflow agents, beside feature and unknown — never filed as feature when unsure), compactions per session that committed, and escaped defects (crash groups marked in the exposure watch and backlog items marked bug). Each shows its split, each `?` quotes the rule the desktop applied, a week where a reading cannot be taken says why instead of showing zero, and none of them is part of the health score. The desktop reads a repo's logs once and afterwards only the ones that changed.
 - asked: 2026-11-09 (health-metrics plan, package P7)
 - shipped: host agentreadings.ts + agentscan.ts + agentclass.ts, GET /api/repos/:id/agentreadings, web AgentReadingsRegion.tsx
+
+### R-metrics-057 · shipped
+The Play install numbers on the reach dashboard are current, refreshed on demand by a Refresh Play button that shows each app's report count, rather than stuck at an old reading date.
+- asked: 2026-11-07
+- shipped: 2dae7963, 5c4a85bc
+
+### R-metrics-058 · shipped
+The VS Code tile on the reach dashboard shows its downloads (including updates) and their growth beside installs, current rather than frozen at an old date.
+- asked: 2026-11-09
+- shipped: abdc445a, 59f36c6d
+
+### R-metrics-059 · shipped
+The traffic-archive script accepts a Google service-account key file as input as well as a minted token.
+- asked: 2026-11-08
+- shipped: cc0e4a61
+
+### R-metrics-060 · requested
+Code survival is not used as a health metric; feature housekeeping is measured by cleanup and removal of code instead.
+- asked: 2026-11-09
+
+
+### R-metrics-061 · shipped
+Every Agent readings figure is a weekly bar chart over the same twelve weeks, and tapping a bar picks that week for every chart (no separate row of week chips); the picked week's figure is a text line under each chart and a week not taken is drawn as an outline, never a zero bar. The region also carries what used to live only on other screens: the repo's weekly spend at list price with its request count, price per priced request and context per request (the token ledger's per-repo rows), and who did the work — conversations, how many started that week, subagents, and the own-versus-subagent token split.
+- asked: 2026-11-11
+- shipped: host agentclass.ts + routes/apirepowork.ts, shared healthspend.ts repoSpendByWeek, web AgentWeekBars.tsx + agentWeekPlot.ts
+
+### R-metrics-062 · shipped
+The always-on list (what every turn in a repo carries: its instruction files, subagents, MCP servers, hooks and this desktop's own files, with the doors to what each live session actually carried) is the first card of the agents region rather than under the set-up checklist's context-weight row. That row keeps its sentence, its threshold and its two-clocks figure, and gains a "what it is made of" door to the list; the context sheet's repo-readings door lands on the agents region.
+- asked: 2026-11-11
+- shipped: web SetupSheet.tsx, AgentReadingsRegion.tsx, features/context/actions.ts
+
+### R-metrics-063 · shipped
+The Agent readings region leads with three weekly readings that show whether an instruction change (CLAUDE.md, skills, memory, plugins) made agents cheaper or not, in any repo: Start context (the median tokens a fresh session's first request carried, measured off the logs, with the median characters per part under the same part names as the session's "what every turn carries" list, and the subagents' own start as a separate line — never mixed with the skills screen's estimated weights), Before the first edit (tokens sent and look calls made before a fresh session's first file edit, both over the same sessions, the look rule quoted in its `?`; this replaces Exploration cost) and Requests per committing session (in the week each session started). A week with fewer than five sessions behind a median says so instead of showing one. They are the same weekly figures the token-stats over-time card draws.
+- asked: 2026-11-12 (agent efficiency readings, package P3)
+- shipped: host agentclass.ts (foldAgentWeeks + RULES), agentreadings.ts; shared wire/agentreadings.ts; web AgentReadingsRegion.tsx, agentReadingsWords.ts

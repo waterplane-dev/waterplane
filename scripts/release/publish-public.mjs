@@ -6,12 +6,14 @@
 //   node scripts/release/publish-public.mjs --tag v0.2.0 --to ../public-clone --commit   # write + commit
 //
 //   --tag <tag>      what to publish (default HEAD, with a warning: releases are tags)
+//   --rev <commit>   scan this commit instead, before any tag exists (the train's check ahead of
+//                    tagging); without --tag there is no warning. Nothing is published from it.
 //   --to <path>      a local clone of the public repo; may be empty (git init'ed on --commit)
 //   --write          copy the snapshot over --to's working tree (never touches its .git, the
 //                    directory of a clone or the file of a linked worktree)
 //   --commit         --write, then make the commit. "Initial public release" if the target has
 //                    no commits, else "Release <version>" with that CHANGELOG section as body.
-//   --accept <file>  reviewed false positives, one `path:line:hash` per line (the report prints each)
+//   --accept <file>  reviewed false positives, one `path:hash` per line (the older `path:line:hash` still reads) (the report prints each)
 //   --report <file>  also write the report as markdown
 //   --allowlist <f>  use this allow-list instead of the one inside the tag
 //   --media-to <p>   a local clone of the media repo (deploy/public-media.json): the hosted files
@@ -32,7 +34,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
+  applyAccept, buildContext, hitText, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
   isTargetGit, parseAllowlist, publicSuppressions, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
 } from "./public-lib.mjs";
 
@@ -42,7 +44,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // ------------------------------------------------------------------------ args
 
 function parseArgs(argv) {
-  const o = { tag: null, to: null, write: false, commit: false, accept: null, report: null, allowlist: null, mediaTo: null };
+  const o = { tag: null, rev: null, to: null, write: false, commit: false, accept: null, report: null, allowlist: null, mediaTo: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -51,6 +53,7 @@ function parseArgs(argv) {
       return v;
     };
     if (a === "--tag") o.tag = val();
+    else if (a === "--rev") o.rev = val();
     else if (a === "--to") o.to = resolve(val());
     else if (a === "--write") o.write = true;
     else if (a === "--commit") { o.commit = true; o.write = true; }
@@ -58,7 +61,7 @@ function parseArgs(argv) {
     else if (a === "--report") o.report = resolve(val());
     else if (a === "--allowlist") o.allowlist = resolve(val());
     else if (a === "--media-to") o.mediaTo = resolve(val());
-    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 25).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
+    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 26).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
     else die(`unknown argument ${a}`);
   }
   if (o.write && !o.to) die("--write/--commit need --to <path>");
@@ -111,8 +114,10 @@ let NAME = "project";
 let GITHUB_ORG = null;
 try { ({ NAME, GITHUB_ORG } = await import("../lib-brand.mjs")); } catch { warnings.push("scripts/lib-brand.mjs unavailable (run `npm run build:shared`): report title is generic"); }
 
-const ref = opts.tag ?? "HEAD";
-if (!opts.tag) warnings.push("no --tag given: publishing HEAD. Releases should be tags (`git tag vX.Y.Z`).");
+const ref = opts.tag ?? opts.rev ?? "HEAD";
+if (opts.tag && opts.rev) die("--tag and --rev are two answers to one question: give one");
+if (opts.rev && opts.write) die("--rev only scans: a release is published from its tag (--tag)");
+if (!opts.tag && !opts.rev) warnings.push("no --tag given: publishing HEAD. Releases should be tags (`git tag vX.Y.Z`).");
 const commit = gitOk(repoRoot, ["rev-parse", "--verify", `${ref}^{commit}`]);
 if (!commit) die(`cannot resolve ${ref}`);
 if (opts.tag && !gitOk(repoRoot, ["describe", "--exact-match", "--tags", commit])) warnings.push(`${ref} is not an annotated or lightweight tag on that commit`);
@@ -211,7 +216,6 @@ try {
   }
   const ctx = buildContext({ emails, home: homedir(), hostnames: names });
   const accepted = opts.accept ? parseAccept(readFileSync(opts.accept, "utf8")) : new Set();
-  const usedAccept = new Set();
 
   let hits = [];
   const lineWarnings = [];
@@ -245,8 +249,8 @@ try {
       const realSnap = realpathSync(snapDir);
       for (const f of findings) {
         const p = relative(realSnap, realpathSync(f.File)).split(sep).join("/");
-        const text = (readFileSync(join(snapDir, p), "utf8").split(/\r?\n/)[f.StartLine - 1]) ?? "";
-        hits.push({ path: p, line: f.StartLine, rule: `gitleaks:${f.RuleID}`, category: "secret", excerpt: f.Description ?? f.RuleID, token: hitToken(p, f.StartLine, `gitleaks:${f.RuleID}`, text) });
+        const text = hitText(readFileSync(join(snapDir, p), "utf8").split(/\r?\n/), f.StartLine - 1, (f.EndLine ?? f.StartLine) - 1);
+        hits.push({ path: p, line: f.StartLine, rule: `gitleaks:${f.RuleID}`, category: "secret", excerpt: f.Description ?? f.RuleID, token: hitToken(p, `gitleaks:${f.RuleID}`, text) });
       }
       gitleaks = `ran, ${findings.length} finding(s)`;
     }
@@ -255,12 +259,10 @@ try {
   // de-duplicate (gitleaks and the built-in pass often see the same line), then apply --accept
   const seen = new Set();
   hits = hits.filter((h) => { const k = `${h.path}:${h.line}:${h.rule}`; if (seen.has(k)) return false; seen.add(k); return true; });
-  const accepted_hits = [];
-  hits = hits.filter((h) => {
-    if (accepted.has(h.token)) { usedAccept.add(h.token); accepted_hits.push(h); return false; }
-    return true;
-  });
-  const staleAccepts = [...accepted].filter((t) => !usedAccept.has(t));
+  const split = applyAccept(hits, accepted);
+  hits = split.blocking;
+  const accepted_hits = split.accepted;
+  const staleAccepts = split.stale;
 
   // 4. links out of included markdown into what is not published
   const includedSet = new Set(included);

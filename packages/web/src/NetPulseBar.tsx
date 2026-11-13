@@ -250,7 +250,7 @@ function Saved({ outstanding, ever, stuck }: { outstanding: number; ever: boolea
   if (!ever || stuck > 0) return null;
   return (
     <span className="np-saved" role="button" data-hint="net.pulse.saved"
-      title="everything written on this phone has reached the desktop and been stored there — nothing is waiting on this device. Tap for the detail"
+      title="everything written on this device has reached the desktop and been stored there — nothing is waiting on this device. Tap for the detail"
       onClick={(e) => openHealth("sends", e)}>
       <CircleCheck size={10} aria-hidden="true" /><span className="np-sv-t">&nbsp;saved</span>
     </span>

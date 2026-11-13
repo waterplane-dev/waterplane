@@ -8,11 +8,19 @@
  * reads the list through `useSnippets()`.
  */
 import { createStore, useStore } from "../../sdk";
-import { loadSnippets } from "../../localState";
 import type { Snippet } from "../../SnippetSheet";
+import { loadSnippetView } from "../../localState";
+import type { SnippetView } from "../../snippetPicks";
 
-export const snippets = createStore<Snippet[]>(loadSnippets());
+/** What this device shows RIGHT NOW: its saved list, or the starters while no list exists at all (`logic.snippetView`). Reads storage; writes nothing. */
+export const readSnippetView = (): SnippetView => loadSnippetView();
+
+export const snippets = createStore<SnippetView>(readSnippetView());
+
+export function useSnippetView(): SnippetView {
+  return useStore(snippets);
+}
 
 export function useSnippets(): Snippet[] {
-  return useStore(snippets);
+  return useStore(snippets).list;
 }

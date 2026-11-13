@@ -154,7 +154,7 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // difference between the two shapes this wait can take.
         if (!e || isPendingId(e.sessionId)) {
           toggleHoldQueued(ackId);
-          showToast("held on this phone — it goes in when this session opens. Leave the app open");
+          showToast("held on this device — it goes in when this session opens. Leave the app open");
           return;
         }
         handToDesktop(ackId);

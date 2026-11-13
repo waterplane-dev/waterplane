@@ -20,7 +20,24 @@ import type { BackendDescriptor } from "./backends/types.js";
 export interface InstallerProc { pid: number; cmd: string }
 
 /** Package-manager verbs that replace an installed command. */
-const PM_RE = /(?:^|[\s/])(?:npm|pnpm|yarn|bun|brew|volta)(?:\.\w+)?\s+(?:-g\s+)?(?:install|i|add|update|upgrade|up|reinstall|global\s+add)\b/;
+const PM_RE = /(?:^|[\s/'"`;&|(])(?:npm|pnpm|yarn|bun|brew|volta)(?:\.\w+)?\s+(?:-g\s+)?(?:install|i|add|update|upgrade|up|reinstall|global\s+add)\b/g;
+
+/**
+ * Does an install command name `name` as a PACKAGE it installs — an argument after the verb, up to
+ * the next shell separator, such as `@anthropic-ai/claude-code@latest`, `claude-code`, `opencode-ai`.
+ * Never a bare substring of the line: every Claude Code Bash call runs as
+ * `zsh -c source ~/.claude/shell-snapshots/… && eval '…'`, so `.claude` sits on the line of any
+ * `npm i` an agent runs in any repo (2026-11-13: the update button refused on such a line).
+ */
+function namesPackage(low: string, name: string): boolean {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pkg = new RegExp(`^(?:@[\\w.-]+/)?${esc}(?:-[\\w.-]+)?(?:@\\S*)?$`);
+  for (const m of low.matchAll(PM_RE)) {
+    const args = low.slice(m.index + m[0].length).split(/[;&|()\n'"`<>]|\\012/)[0];
+    if (args.split(/\s+/).some((t) => pkg.test(t))) return true;
+  }
+  return false;
+}
 
 /**
  * The first process in a `ps -axo pid=,command=` dump that is installing `bin`: a package manager
@@ -36,7 +53,7 @@ export function installerIn(psText: string, bin: string, selfPid = -1): Installe
     const pid = Number(m[1]); const cmd = m[2].trim();
     if (pid === selfPid) continue;
     const low = cmd.toLowerCase();
-    const viaPm = PM_RE.test(low) && low.includes(name);
+    const viaPm = namesPackage(low, name);
     const self = new RegExp(`(?:^|/)${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\.exe)?\\s+(?:update|install)\\b`).test(low);
     if (viaPm || self) return { pid, cmd };
   }

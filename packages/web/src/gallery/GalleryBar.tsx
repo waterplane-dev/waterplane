@@ -91,8 +91,8 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
           <CloudOff size={14} />
           <span>
             {staleWhy
-              ? `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — ${staleWhy}.`
-              : `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — refreshing…`}
+              ? `Showing the list this device last saw, ${fmtCreated(cachedAt)} — ${staleWhy}.`
+              : `Showing the list this device last saw, ${fmtCreated(cachedAt)} — refreshing…`}
           </span>
           {staleWhy && <Button onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</Button>}
         </div>

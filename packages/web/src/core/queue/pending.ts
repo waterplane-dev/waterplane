@@ -101,7 +101,7 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[], 
 }
 
 export function pendingFns(c: QueueCtx): PendingFns {
-  const { outboxRef, pendingKept, activeIdRef, connRef, wantNavRef, buffers, pendingEntry } = c;
+  const { outboxRef, pendingKept, activeIdRef, connRef, wantNavRef, buffers, pendingEntry, backendsRef } = c;
   const writeOutbox = (list: OutboxEntry[]) => c.writeOutbox(list);
   const addOutbox = (e: OutboxEntry, frontOfLane?: boolean) => c.addOutbox(e, frontOfLane);
   const queueOp: QueueCtx["queueOp"] = (op, laneKey, text, opts) => c.queueOp(op, laneKey, text, opts);
@@ -171,6 +171,10 @@ export function pendingFns(c: QueueCtx): PendingFns {
     if (backend) (payload as { launch?: LaunchOpts }).launch = { backend };
     queueOp(payload as DurableOp, e.sessionId, e.text, { cwd: e.cwd, focus: true, ackId: createAck });
     for (const x of behind) queueSessionPrompt(x.cwd, x.text, createAck, x.kind === "command" ? "command" : "prompt");
+    // The half-written words on the refused screen go with it to the new one;
+    // the old id is never loaded again.
+    const from = pendingLaneId(e.ackId), draft = loadDraft(from);
+    if (draft && saveDraft(pendingLaneId(createAck), draft)) saveDraft(from, "");
     enterPending(createAck);
     showToast(connRef.current.status === "open" ? "trying again…" : "queued — it opens when the link is back");
   }
@@ -201,8 +205,9 @@ export function pendingFns(c: QueueCtx): PendingFns {
     noteShellAdopted(createAck, sessionId);
     if (activeIdRef.current !== from) return;
     const draft = loadDraft(from);
-    if (draft) saveDraft(sessionId, draft);
-    saveDraft(from, "");
+    // The pending lane's draft is deleted only once the session's own draft holds
+    // the words: a refused write keeps them where they were typed.
+    if (!draft || saveDraft(sessionId, draft)) saveDraft(from, "");
     if (!buffers.current.has(sessionId)) buffers.current.set(sessionId, []);
     setActiveId(sessionId);
     setLastVisitedId(sessionId);
@@ -222,6 +227,12 @@ export function pendingFns(c: QueueCtx): PendingFns {
    * caveat as every other hold in this app.
    */
   function queueSessionPrompt(cwd: string, text: string, createAck: string, kind: "prompt" | "command" = "prompt"): void {
+    // The first prompt for an open that has not gone out yet rides INSIDE it,
+    // so the desktop types it the moment the session is up — no second
+    // delivery from a phone that may have lost the link again by then.
+    const shells = new Set((backendsRef?.current ?? []).filter((b) => b.kind === "shell").map((b) => b.id));
+    const folded = kind === "prompt" ? foldIntoCreate(outboxRef.current, createAck, text, shells) : null;
+    if (folded) { writeOutbox(folded); return; }
     addOutbox({
       ackId: newAckId(), sessionId: `create:${cwd}`, cwd, text,
       ts: Date.now(), status: "queued", attempts: 0, kind, mode: "input",
@@ -300,4 +311,51 @@ export function pendingFns(c: QueueCtx): PendingFns {
     enterPending, enterOldestPending, enterLater, retryPendingCreate, adoptPendingSession, queueSessionPrompt, holdForLaunch,
     failPendingCreates, failDependentUploads,
   };
+}
+
+/**
+ * **The first prompt written on a pending screen goes INSIDE the create.**
+ *
+ * Reported 2026-11-12: offline, `+ now`, Send — and the person expects that
+ * prompt to run once the link is back, as surely as `+ later` would. Queued as
+ * a `session.input` behind the create it needed the PHONE twice: once for the
+ * create and again, after `op.ack` named the session, to type it — and a link
+ * that came back for a moment and went again left it parked on the phone. A
+ * `session.create` carries `prompt` (and `needs` for the inbox files it names),
+ * which the host types itself once the session is up: one op, one ackId,
+ * at-most-once like every create.
+ *
+ * Only while the create has never been on the wire: a retry must be the same
+ * bytes, so an op that may already be in the host's ledger is never rewritten
+ * (then the chained row is the path, as before). Not over a prompt the op
+ * already has, nor ahead of a row already chained behind it — order is the
+ * person's. Not into a shell, whose first line is not a prompt. Null = not
+ * folded; the caller queues the row as before.
+ */
+export function foldIntoCreate(
+  outbox: readonly OutboxEntry[], createAck: string, text: string, shellBackends: ReadonlySet<string> = new Set(),
+): OutboxEntry[] | null {
+  const prompt = text.trim();
+  if (!prompt) return null;
+  const i = outbox.findIndex((e) => e.ackId === createAck && isCreateOp(e));
+  const e = outbox[i];
+  if (!e || e.status !== "queued" || e.attempts || e.tries || e.firstTryAt || e.sentAt) return null;
+  const op = e.op as DurableOp & { t: "session.create" };
+  if (op.prompt || op.replaceSessionId || op.companionOf) return null;
+  if (op.launch?.backend && shellBackends.has(op.launch.backend)) return null;
+  if (outbox.some((x) => x.createAck === createAck && x.mode === "input")) return null;
+  const needs = [...new Set([...(op.needs ?? []), ...inboxNeeds(prompt)])];
+  const next = outbox.slice();
+  next[i] = { ...e, text: prompt, op: { ...op, prompt, ...(needs.length ? { needs } : {}) } };
+  return next;
+}
+
+/**
+ * The inbox paths a prompt names — what a `session.create` must not run
+ * without. Matched on the shape of the path: the host stats them itself.
+ */
+export function inboxNeeds(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/\.claude\/inbox\/[A-Za-z0-9._-]+/g)) out.add(m[0]);
+  return [...out];
 }

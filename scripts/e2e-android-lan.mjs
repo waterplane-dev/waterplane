@@ -2,6 +2,7 @@
 // pinned TLS route, a wrong pin, signed updates, the read ticket, <video>, the background link.
 //
 //   node scripts/e2e-android-lan.mjs [--only=1,2,3] [--keep]
+//   E2E_BUDGET_MS=3000000 node scripts/e2e-android-lan.mjs --only=1,13   # the hidden app's catch-up (item 13), ~25 min
 //
 // Needs: `npm run build`, a debug APK of THIS tree (`cd packages/app && npx cap sync android &&
 // cd android && ./gradlew assembleDevDebug`; override with E2E_APK), the AVD `wp_p8pro_1`.
@@ -354,12 +355,17 @@ function relayStart() {
   };
   const upgrade = (route) => (req, sock, head) => {
     const tlsRoute = route === "tls";
-    R.ws.push({ route, path: req.url, at: Date.now(), ua: String(req.headers["user-agent"] || "") });
-    R.socks.add(sock); sock.on("close", () => R.socks.delete(sock)); // an upgraded socket is no longer the server's: closeAllConnections misses it
+    const rec = { route, path: req.url, at: Date.now(), ua: String(req.headers["user-agent"] || ""), closedAt: 0, up: 0, down: 0, endBy: "" };
+    sock.on("end", () => { rec.endBy ||= "phone"; });
+    R.ws.push(rec);
+    sock.on("data", (d) => { rec.up += d.length; });
+    R.socks.add(sock); sock.on("close", () => { R.socks.delete(sock); rec.closedAt = Date.now(); }); // an upgraded socket is no longer the server's: closeAllConnections misses it
     const onUp = (u) => {
       const hh = { ...req.headers, host: `${lan}:${tlsRoute ? H.tlsPort : H.port}` };
       u.write(`${req.method} ${req.url} HTTP/1.1\r\n` + Object.entries(hh).map(([k, v]) => `${k}: ${v}`).join("\r\n") + "\r\n\r\n");
       if (head?.length) u.write(head);
+      u.on("data", (d) => { rec.down += d.length; });
+      u.on("end", () => { rec.endBy ||= "host"; });
       u.pipe(welcomeRewrite(sock)).pipe(sock); sock.pipe(u);
       u.on("error", () => sock.destroy()); sock.on("error", () => u.destroy());
     };
@@ -798,6 +804,250 @@ async function main() {
     await pageTarget(40_000);
     raw("status with the page back: " + JSON.stringify(await plugin("Link", "status")));
     await plugin("Link", "stop");
+  });
+
+  // ── 13: the HIDDEN app keeps the open session current (bgFresh, useTermFeed.ts park/catchUp). ──
+  // The owner's report: background link on and connected, "in the background" = every 1 min, and the open
+  // session does not move while the app is hidden. A session that prints by itself (the stub's `STUB_TICK`),
+  // a counter of every attach/detach the page sends and every pty frame it gets (kept in the page, read back
+  // on return, so a renderer that could not be evaluated while hidden still tells its own story), and the
+  // device's view of the app and WebView renderer processes (procstate, freezer) sampled from adb meanwhile.
+  // Runs: E2E_BG_RUNS (screen = HOME with the screen on; doze = screen off, unplugged, force-idle;
+  // live = the "live" setting as a control), each held E2E_BG_HOLD_MS (default 7 min, past Chromium's 5 min).
+  await step(13, "hidden app catches up", async () => {
+    const n = 13;
+    const HOLD = Number(process.env.E2E_BG_HOLD_MS) || 7 * 60_000;
+    const TICK_MS = 5000;
+    const RUNS = (process.env.E2E_BG_RUNS || "screen,dozedrop,live").split(",").filter(Boolean);
+    let PV = 1;
+    try { PV = (await import("../packages/shared/dist/index.js")).PROTOCOL_VERSION ?? 1; } catch { /* keep 1 */ }
+    sh(`pm grant ${PKG} android.permission.POST_NOTIFICATIONS`);
+    sh("settings put system screen_off_timeout 1800000");
+    // the page dials the row's address (patched to the relay after item 1) only from a fresh load: reload, so
+    // its socket crosses the relay too and both sockets' lifetimes are on record (R.ws closedAt/bytes)
+    await evSafe("location.reload(); return true");
+    await sleep(4000);
+    await pageTarget(40_000);
+    { let d = null; await until(async () => { d = dialogButtons(); return d.yes && d.no; }, 12_000, 1500); if (d?.yes) { raw("update-key dialog on reload: accepted"); tapXY(d.yes); await sleep(2500); } }
+    await connected();
+    const person = personInput({ sh, ev: evSafe, until, sleep, raw, stubLog: () => join(H.root, "stub.log") });
+    await person.tap('button[title^="new session in e2erepo" i]');
+    await until(async () => (await evSafe(`return !!document.querySelector(${JSON.stringify(COMPOSER)})`)) === true, 20_000, 400);
+    await until(() => /[\u276f>]/.test(tmuxPanes()), 20_000, 500);
+    await sleep(1500);
+    const r = await person.prompt(`STUB_TICK ${TICK_MS}`);
+    const ticking = await until(() => /TICK \d+ \d{13}/.test(tmuxPanes()), 30_000, 1000);
+    if (!delivered(r) && !ticking) return fail(n, "a session that prints by itself (STUB_TICK)", JSON.stringify(r));
+    pass(n, `a session that prints a numbered TICK every ${TICK_MS / 1000} s with nobody typing`);
+    const lastTick = () => Math.max(0, ...[...tmuxPanes().matchAll(/TICK (\d+) \d{13}/g)].map((m) => Number(m[1])));
+
+    // the background link, exactly as item 9 starts it on the pinned address
+    const tok = await evSafe("return localStorage.getItem('" + LS + "deviceToken')");
+    const url = `wss://${lan}:${R.tls}/ws`;
+    const s0 = await plugin("Link", "start", { url, protocol: PV, label: "e2e", wsProtocol: WS_PROTOCOL, links: [{ hostId: ctx.row.id, url, label: "e2e", token: typeof tok === "string" ? tok : undefined }] });
+    raw("ShellLink.start: " + JSON.stringify(s0));
+    const linkUp = await until(async () => JSON.stringify(await plugin("Link", "status")).includes('"connected"'), 40_000, 1000);
+    const linkStatus = await plugin("Link", "status");
+    raw("ShellLink.status: " + JSON.stringify(linkStatus));
+    check(n, !!linkUp, "the background link is up (ShellLinkService connected)", JSON.stringify(linkStatus).slice(0, 240));
+
+    /** The app's and the WebView renderer's process records, as the activity manager holds them. */
+    const procs = () => {
+      const dump = sh("dumpsys activity processes", 20_000);
+      const blocks = dump.split(/\n(?=\s*\*[A-Za-z]+\* .*ProcessRecord\{)/);
+      const out = [];
+      for (const b of blocks) {
+        const head = /ProcessRecord\{\S+ (\d+):([^/}]+)/.exec(b);
+        if (!head || !(head[2].startsWith(PKG) || /sandboxed_process|webview/i.test(head[2]))) continue;
+        const g = (re) => (re.exec(b) || [])[1] ?? "?";
+        const pid = head[1];
+        const cg = sh(`su 0 cat /proc/${pid}/cgroup`, 5000).split("\n").map((l) => l.split("::")[1]).find(Boolean);
+        const kfrozen = cg ? sh(`su 0 cat /sys/fs/cgroup${cg.trim()}/cgroup.freeze`, 5000).trim() : "?";
+        out.push({ pid, name: head[2].replace(/:org\.chromium\.content\.app\./, ":"), adj: g(/oom adj:.* cur=(-?\d+)/), procState: g(/curProcState=(\d+)/), frozen: g(/isFrozen=(\w+)/), cgFreeze: kfrozen, cached: g(/cached=(\w+)/) });
+      }
+      return out;
+    };
+    const instrument = `
+      let prev = null; try { prev = JSON.parse(sessionStorage.getItem("__bg") || "null"); } catch { /* none */ }
+      const L = window.__bg = window.__bgNewDoc && prev ? prev : { since: Date.now(), out: [], in: [], ticks: [], vis: [] };
+      if (window.__bgNewDoc && prev) L.vis.push([Date.now(), "NEW DOCUMENT (reload)", document.visibilityState]);
+      const keep = () => { try { sessionStorage.setItem("__bg", JSON.stringify(window.__bg)); } catch { /* full */ } };
+      window.__bgKeep = keep;
+      if (!window.__bgPatched) {
+        window.__bgPatched = true;
+        const P = WebSocket.prototype, orig = P.send, seen = new WeakSet(), origClose = P.close;
+        P.close = function (...a) {
+          const at = (new Error().stack || "").split(String.fromCharCode(10)).slice(2, 5).map((l) => l.trim().replace(/https?:[^ )]+[/]/, "")).join(" < ");
+          window.__bg.out.push([Date.now(), "close() called", at, document.visibilityState]); window.__bgKeep();
+          return origClose.apply(this, a);
+        };
+        P.send = function (d) {
+          const L = window.__bg;
+          try {
+            if (typeof d === "string") { const m = JSON.parse(d); if (/^session\\.(attach|detach)$/.test(m.t) || m.t === "ping") { L.out.push([Date.now(), m.t, m.resumeSeq ?? null, document.visibilityState]); window.__bgKeep(); } }
+          } catch { /* not ours */ }
+          if (!seen.has(this)) {
+            seen.add(this);
+            window.__bg.out.push([Date.now(), "socket", this.url, document.visibilityState]); window.__bgKeep();
+            this.addEventListener("message", (e) => {
+              const L = window.__bg;
+              if (typeof e.data !== "string") return;
+              let m; try { m = JSON.parse(e.data); } catch { return; }
+              if (m.t === "pty") {
+                let txt = ""; try { txt = atob(m.dataB64); } catch { /* binary */ }
+                const ts = [...txt.matchAll(/TICK (\\d+) \\d{13}/g)].map((x) => Number(x[1]));
+                L.in.push([Date.now(), "pty", m.seq ?? null, txt.length, ts.length ? Math.max(...ts) : null, document.visibilityState]);
+              } else if (m.t === "session.history" || m.t === "pong") L.in.push([Date.now(), m.t, null, 0, null, document.visibilityState]);
+              if (document.visibilityState === "hidden") window.__bgKeep();
+            });
+            this.addEventListener("close", (e) => { window.__bg.out.push([Date.now(), "close", e.code, document.visibilityState]); window.__bgKeep(); });
+          }
+          return orig.call(this, d);
+        };
+        for (const ev of ["visibilitychange", "freeze", "resume", "pagehide", "pageshow"]) document.addEventListener(ev, () => { window.__bg.vis.push([Date.now(), ev, document.visibilityState]); window.__bgKeep(); });
+        for (const ev of ["pagehide", "pageshow", "online", "offline"]) window.addEventListener(ev, () => { window.__bg.vis.push([Date.now(), "w:" + ev, document.visibilityState]); window.__bgKeep(); });
+        setInterval(() => { window.__bg.ticks.push(Date.now()); if (document.visibilityState === "hidden") window.__bgKeep(); }, 10_000);
+      }
+      return true;`;
+
+    let held = null;
+    if (process.env.E2E_BG_FOLLOW_RELOAD !== "0") {
+      const pg = await pageTarget(15_000);
+      held = new WebSocket(pg.webSocketDebuggerUrl.replace(/^ws:\/\/[^/]+/, `ws://127.0.0.1:${DT_PORT}`));
+      await new Promise((res, rej) => { held.once("open", res); held.once("error", rej); });
+      held.on("error", () => { /* the page went away */ });
+      held.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+      held.send(JSON.stringify({ id: 2, method: "Page.addScriptToEvaluateOnNewDocument", params: { source: `(()=>{window.__bgNewDoc=true;${instrument}})()` } }));
+      raw("held a DevTools session that re-instruments every new document (E2E_BG_FOLLOW_RELOAD=0 to skip)");
+    }
+    for (const run of RUNS) {
+      const mode = run === "live" ? "live" : "60000";
+      await evSafe(`localStorage.setItem(${JSON.stringify(LS + "bgFresh")}, ${JSON.stringify(mode)}); return true`);
+      const inst = await evSafe(instrument);
+      if (inst !== true) { fail(n, `[${run}] instrument the page`, JSON.stringify(inst)); continue; }
+      await sleep(3000);
+      say(`── 13/${run}: bgFresh=${mode}, hold ${Math.round(HOLD / 1000)} s ──`);
+      raw(`[${run}] before: procs ${JSON.stringify(procs())}`);
+      raw(`[${run}] update status before hiding: ${JSON.stringify(await statusSafe())}`);
+      const wsBefore = R.ws.length;
+      raw(`[${run}] relay sockets open before: ${JSON.stringify(R.ws.filter((w) => !w.closedAt).map((w) => ({ ua: w.ua.slice(0, 30), route: w.route, up: w.up, down: w.down })))}`);
+      sh("logcat -c");
+      sh("input keyevent KEYCODE_HOME");
+      const t0 = Date.now();
+      await sleep(3000);
+      if (run.startsWith("doze")) {
+        sh("input keyevent KEYCODE_SLEEP"); await sleep(2000);
+        raw(`[${run}] battery unplug: ${sh("dumpsys battery unplug")}`);
+        raw(`[${run}] deviceidle enable: ${sh("dumpsys deviceidle enable")}`);
+        raw(`[${run}] force-idle: ${sh("dumpsys deviceidle force-idle")}`);
+      }
+      const samples = [];
+      let lastEval = 0, dropped = false, retryAlarm = "";
+      while (Date.now() - t0 < HOLD) {
+        const at = Math.round((Date.now() - t0) / 1000);
+        // runs named *drop: at 90 s every socket through the relay is cut (a Wi-Fi hop, a NAT timeout) — who dials again while hidden?
+        // While the relay is down the service is between retries: its wake-up alarm must be set
+        // (ShellLinkService.armWake), or a phone that suspends now never dials again. The emulator never
+        // suspends, so the alarm's presence is what this can prove; that it fires is the real phone's.
+        if (run.includes("drop") && !dropped && at >= 90) {
+          dropped = true; await relayStop(); await sleep(6000);
+          retryAlarm = sh("dumpsys alarm | grep -c 'link-retry'").trim();
+          raw(`[${run}] +${at}s CUT every relay socket; retry alarms set while it was down: ${retryAlarm}`);
+          await relayStart(); raw(`[${run}] relay listening again on the same ports`);
+        }
+        const p = procs();
+        let pg = null;
+        if (Date.now() - lastEval >= 60_000) { // CDP sparingly: an evaluate is itself work for the renderer
+          lastEval = Date.now();
+          const t = Date.now();
+          pg = await evSafe("const L=window.__bg;return {v:document.visibilityState,out:L.out.length,inPty:L.in.filter(x=>x[1]==='pty').length,maxTick:Math.max(0,...L.in.map(x=>x[4]||0)),timer:L.ticks.length}", { timeout: 8000 });
+          pg = { ms: Date.now() - t, ...(typeof pg === "object" ? pg : { value: pg }) };
+        }
+        const open = R.ws.filter((w) => !w.closedAt).map((w) => `${/okhttp/i.test(w.ua) ? "svc" : "page"}/${w.route} +${Math.round((w.at - t0) / 1000)}s ${w.up}B^ ${w.down}Bv`);
+        const s = { at, stub: lastTick(), open, idle: run.startsWith("doze") ? sh("dumpsys deviceidle get deep").trim() : undefined, procs: p.map((x) => `${x.pid}:${x.name.slice(-28)} adj=${x.adj} ps=${x.procState} frozen=${x.frozen}/${x.cgFreeze}`), pg };
+        samples.push(s);
+        raw(`[${run}] +${at}s ${JSON.stringify(s)}`);
+        await sleep(20_000);
+      }
+      // back
+      if (run.startsWith("doze")) {
+        raw(`[${run}] unforce: ${sh("dumpsys deviceidle unforce")} | ${sh("dumpsys battery reset")}`);
+        sh("input keyevent KEYCODE_WAKEUP"); await sleep(1000); sh("wm dismiss-keyguard"); await sleep(1000);
+      }
+      const lc = sh("logcat -d -v time", 20_000).split("\n").filter((l) => new RegExp(`shell-link|ShellLink|${SLUG}|sandboxed_process|chromium|cr_|deviceidle|Console|Capacitor`, "i").test(l) || (/freez/i.test(l) && new RegExp(`webview|${SLUG}|uid_4294|sandboxed`, "i").test(l)));
+      raw(`[${run}] logcat while hidden (${lc.length} lines, last 150):\n${lc.slice(-150).join("\n")}`);
+      const socketsHidden = R.ws.filter((w) => !w.closedAt || w.closedAt >= t0);
+      const stubAtReturn = lastTick();
+      const tBack = Date.now();
+      launch();
+      const caught = await until(async () => {
+        const v = await evSafe("const L=window.__bg;if(!L)return {gone:true};return {v:document.visibilityState,max:Math.max(0,...L.in.map(x=>x[4]||0))}", { timeout: 8000 });
+        if (v?.gone) return "page reloaded (instrument lost)";
+        return v?.v === "visible" && v.max >= stubAtReturn ? `max ${v.max}` : false;
+      }, 60_000, 250);
+      const toCurrent = Date.now() - tBack;
+      raw(`[${run}] back: ${caught} after ${toCurrent} ms; desktop at TICK ${stubAtReturn}, now ${lastTick()}`);
+      const nav = await evSafe("return {nav: performance.getEntriesByType('navigation')[0]?.type, age: Math.round(performance.now()), discarded: document.wasDiscarded ?? null, live: !!window.__bg}", { timeout: 15_000 });
+      raw(`[${run}] page after return: ${JSON.stringify(nav)}`);
+      let L = await evSafe("return window.__bg ?? null", { timeout: 15_000 });
+      if (!L || L.__error) { L = await evSafe("const s=sessionStorage.getItem('__bg');return s?JSON.parse(s):null", { timeout: 15_000 }); raw(`[${run}] the live log is gone (page reloaded); using the copy kept in sessionStorage`); }
+      raw(`[${run}] page log: ${JSON.stringify(L)}`);
+      raw(`[${run}] ShellLink.status after return: ${JSON.stringify(await plugin("Link", "status"))}`);
+      const life = (w) => `${/okhttp/i.test(w.ua) ? "svc" : "page"}/${w.route} ${Math.round((w.at - t0) / 1000)}s..${w.closedAt ? Math.round((w.closedAt - t0) / 1000) + "s" : "open"}${w.endBy ? " end by " + w.endBy : ""} ${w.up}B^ ${w.down}Bv`;
+      raw(`[${run}] relay sockets alive at any point while hidden: ${JSON.stringify(socketsHidden.filter((w) => w.at < tBack).map(life))}`);
+      raw(`[${run}] relay ws dials during the run: ${JSON.stringify(R.ws.slice(wsBefore).map(life))}`);
+      if (!L || L.__error) { fail(n, `[${run}] read the page's log back`, JSON.stringify(L)); continue; }
+      const hidden = (x) => x[0] >= t0 && x[0] < tBack;
+      const attaches = L.out.filter((x) => hidden(x) && x[1] === "session.attach");
+      const detaches = L.out.filter((x) => hidden(x) && x[1] === "session.detach");
+      const pings = L.out.filter((x) => hidden(x) && x[1] === "ping");
+      const closes = L.out.filter((x) => hidden(x) && x[1] === "close");
+      const ptyHidden = L.in.filter((x) => hidden(x) && x[1] === "pty");
+      const histHidden = L.in.filter((x) => hidden(x) && x[1] === "session.history");
+      const maxHidden = Math.max(0, ...ptyHidden.map((x) => x[4] || 0));
+      const timerHidden = L.ticks.filter((t) => t >= t0 && t < tBack).length;
+      raw(`[${run}] page events while hidden: ${JSON.stringify(L.out.filter(hidden).map((x) => [Math.round((x[0] - t0) / 1000), x[1], x[2]]))}`);
+      raw(`[${run}] page frames in while hidden: ${JSON.stringify(L.in.filter(hidden).map((x) => [Math.round((x[0] - t0) / 1000), x[1], x[2], x[3], x[4]]))}`);
+      raw(`[${run}] page lifecycle: ${JSON.stringify(L.vis.filter((x) => x[0] >= t0).map((x) => [Math.round((x[0] - t0) / 1000), x[1], x[2]]))}`);
+      const gaps = []; let prev = t0; for (const t of L.ticks.filter((t) => t >= t0 && t < tBack)) { gaps.push(Math.round((t - prev) / 1000)); prev = t; }
+      const rel = (x) => `+${Math.round((x[0] - t0) / 1000)}s`;
+      const frozenSeen = samples.flatMap((s) => s.procs).filter((p) => /frozen=true|\/1/.test(p));
+      const row = {
+        run, bgFresh: mode, hiddenS: Math.round((tBack - t0) / 1000),
+        timer10s: `${timerHidden}/${Math.floor((tBack - t0) / 10_000)}`, timerGapsS: gaps.join(","),
+        attaches: attaches.map(rel).join(" "), detaches: detaches.map(rel).join(" "), pings: pings.length, closes: closes.map((x) => `${rel(x)}:${x[2]}`).join(" "),
+        ptyHidden: ptyHidden.length, historyHidden: histHidden.length, maxTickHidden: maxHidden, stubTicksAtReturn: stubAtReturn,
+        vis: L.vis.filter(hidden).map((x) => `${rel(x)}:${x[1]}`).join(" "),
+        frozenSamples: `${new Set(frozenSeen).size ? [...new Set(frozenSeen)].slice(0, 4).join(" ; ") : "none"}`,
+        backToCurrentMs: caught ? toCurrent : `>60000 (${caught})`, pageAfter: nav,
+        sockets: socketsHidden.filter((w) => w.at < tBack).map(life).join(" | "),
+      };
+      say(`[13/${run}] ${JSON.stringify(row)}`);
+      // The contract, as measured 2026-11-12: the WebView FREEZES a page hidden for 5 min (the
+      // page-lifecycle `freeze` event at +300 s in every run, Doze or not, "live" or not) and a frozen
+      // page runs no timer — no catch-up, no reconnect. That is the platform's, not ours to undo, so the
+      // page is held to its promise only up to the freeze; past it, what counts is the background link
+      // (notifications) and how fast the screen is current on return.
+      const FREEZE_S = 300;
+      const awake = Math.min(tBack, t0 + (FREEZE_S - 10) * 1000);
+      if (mode === "live") {
+        check(n, ptyHidden.some((x) => x[0] < awake), `[${run}] hidden with "live", the session kept streaming until the page froze`, `pty frames ${ptyHidden.length}, last tick ${maxHidden} of ${stubAtReturn}`);
+      } else {
+        const want = Math.max(1, Math.floor((awake - t0) / 60_000) - 1);
+        const before = attaches.filter((x) => x[0] < awake).length;
+        check(n, before >= want, `[${run}] hidden with "every 1 min", a catch-up attach went out about once a minute until the page froze`, `${before} attaches in the first ${Math.round((awake - t0) / 1000)} s (want >= ${want})`);
+      }
+      if (run.includes("drop")) {
+        const svcAfterCut = R.ws.filter((w) => w.at >= t0 + 90_000 && w.at < tBack && /okhttp/i.test(w.ua));
+        check(n, Number(retryAlarm) > 0, `[${run}] between retries the background link holds a wake-up alarm`, `dumpsys alarm 'link-retry' lines: ${retryAlarm || "none"}`);
+        check(n, svcAfterCut.length > 0, `[${run}] cut while hidden, the background link dials again by itself`, svcAfterCut.map(life).join(" | ") || "no service dial after the cut");
+      }
+      check(n, !!caught && toCurrent < 10_000, `[${run}] brought back, the terminal is current within 10 s`, `${toCurrent} ms (${caught})`);
+      await sleep(5000);
+    }
+    try { held?.close(); } catch { /* gone */ }
+    await plugin("Link", "stop");
+    say("closed sessions: " + await closeSessions(H.port, WS_PROTOCOL));
   });
 
   skip(10, "a user-installed CA does not defeat the pin", "needs a root shell to put a CA in the user store and a CA-valid relay on the pinned address; not built in this pass");

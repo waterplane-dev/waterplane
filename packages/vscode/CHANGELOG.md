@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.7 - 2026-11-13
+
+### New
+
+- **Agent readings show what a session starts with.** The weekly readings add start context (with its parts), read-only looks before the first edit, and requests per committing session. A reading with fewer than five sessions is shown as absent, with the reason.
+- **Agent readings over time, with markers.** A new card beside Over time marks changes such as instruction commits, model and CLI versions, and memory or skills listing steps. Tapping a marker compares the 14 days before and after it, with the band of normal variation, worded neutrally.
+- **Weekly readings are bar charts.** Tapping a bar picks that week for every reading. Spend and who-did-the-work join them.
+- **Dollar figures say where their prices come from.** Status bar tooltips name either Anthropic's price list with the date it was read, or the built-in price table with its date.
+- **Fable 5.2 is priced** at $8 in and $40 out, with cache reads at $0.20. Sonnet 5.5 reads the cache at its published $0.10.
+
+### Fixed
+
+- **The Copilot week no longer starts a day early** on the 23- and 25-hour days when the clocks change.
+
 ## 0.9.6 - 2026-11-10
 
 ### New
@@ -16,14 +30,6 @@
 
 - **The extension starts no program except git.** Native-tool readings no longer try to run anything inside VS Code; each one is shown as absent with that reason.
 - **A stopped first health read says so** instead of looking like an empty result.
-
-## Unreleased
-
-### New
-
-- **All sessions opens on the last scan.** The finished figures are kept on disk, so a new window or a reload shows them at once, with their age, while the refresh scan runs. They are replaced when it ends.
-- **A reading that has not arrived says so.** Session, Always-on, Repo health, All sessions and Prompts show a spinning "Reading ..." line instead of an empty "nothing found" message. All sessions adds a progress bar above its figures while logs are read.
-- **Re-reading the logs and measuring repo health show VS Code's own spinner** in the status bar until they finish.
 
 ## 0.9.5 - 2026-11-09
 

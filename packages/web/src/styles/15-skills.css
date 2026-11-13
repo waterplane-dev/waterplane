@@ -1,0 +1,33 @@
+/* 15-skills.css: the skills & plugins screen (features/skills). Cards, the four-way selector, the folds. */
+.sk-scroll { padding-bottom: var(--sp-12); }
+/* The scroll is a flex column: an overflow-x:auto chip row would shrink to 0 px (as the gallery's did). */
+.sk-scroll > * { flex-shrink: 0; }
+/* Controls are inset like the Backlog's (hints inset themselves). */
+.sk-scroll > .segmented, .sk-scroll > .sk-search, .sk-scroll > .fchips, .sk-scroll > .sk-card, .sk-scroll > .sk-suggest, .sk-scroll > .sk-fold, .sk-scroll > .sk-share, .sk-scroll > .sk-explain, .sk-scroll > .sk-suggest-btn { margin-left: var(--sp-10); margin-right: var(--sp-10); }
+.sk-scroll > .sk-suggest-btn { margin-top: var(--sp-4); }
+.sk-level { padding-left: 0; padding-right: 0; }
+.sk-search { margin-top: var(--sp-4); margin-bottom: var(--sp-4); box-sizing: border-box; }
+.sk-sort { margin-bottom: var(--sp-4); }
+.sk-explain { display: flex; flex-wrap: wrap; }
+.sk-foot { display: flex; flex-direction: column; gap: var(--sp-4); width: 100%; }
+.sk-foot-btns { display: flex; gap: var(--sp-8); }
+.sk-chev { transition: transform .15s; margin-right: var(--sp-4); flex: none; }
+details[open] > summary > .sk-chev { transform: rotate(90deg); }
+.sk-fold > summary { list-style: none; }
+.sk-fold > summary::-webkit-details-marker { display: none; }
+.sk-card { overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: var(--r-8); margin: var(--sp-6) 0; padding: var(--sp-4) var(--sp-8); background: var(--panel); }
+.sk-card.sk-changed { border-color: var(--pick-edge); background: var(--pick-fill); }
+.sk-card .row { padding-left: 0; padding-right: 0; border: 0; flex-direction: column; align-items: stretch; gap: var(--sp-4); }
+.sk-ver { color: var(--muted); font-weight: normal; }
+.segmented.sk-sel { gap: var(--sp-4); padding: 0; background: none; border-bottom: 0; margin-top: var(--sp-4); }
+.sk-sel .seg { min-width: 0; min-height: 44px; padding: var(--sp-6) var(--sp-4); font-size: calc(var(--fs-13) * var(--ui-font, 1)); white-space: normal; text-align: center; }
+.sk-link { background: none; border: 0; color: var(--muted); text-decoration: underline; min-width: 0; min-height: 44px; padding: 0 var(--sp-4); }
+.sk-inherit, .sk-share { display: flex; }
+.sk-fold { margin-top: var(--sp-6); }
+.sk-fold > summary { cursor: pointer; color: var(--muted); min-height: 44px; display: flex; align-items: center; }
+.sk-sub { display: flex; flex-direction: column; padding: var(--sp-4) 0; border-top: 1px solid var(--line); }
+.sk-sub-meta { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.sk-bundled { margin-top: var(--sp-8); }
+.sk-suggest { margin: var(--sp-6) 0; }
+.sk-tick { min-width: 44px; min-height: 44px; padding: 0; vertical-align: middle; }
+.sk-tick.on { background: var(--pick-fill); border-color: var(--pick-edge); color: var(--fg); }

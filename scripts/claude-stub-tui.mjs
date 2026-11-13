@@ -195,6 +195,11 @@
 // ordinary (not dim) text; an empty or missing file clears it. Only the screen changes —
 // no byte reaches $STUB_LOG, so the host's own keystrokes stay countable.
 //
+// A submitted prompt `STUB_TICK <ms>` (any mode with the default submit) starts a ticker: every <ms> a
+// line `TICK <n> <epoch ms>` is printed below the frame, forever. Output that keeps arriving with no one
+// typing, numbered, so a test can say which tick a hidden phone last received (e2e-android-lan.mjs
+// item 13, background catch-up).
+//
 // Every byte received is appended to $STUB_LOG so the test can count copies.
 //
 // Only the INTERACTIVE session's bytes, though. `<ENV>_CLAUDE_BIN` is also what
@@ -323,7 +328,14 @@ function hookTurn(prompt, failed = false) {
   if (stubSignedOut()) void started.then(() => hook("StopFailure", { error: "authentication_failed" }));
   else if (failed) hook("StopFailure", { error: "server_error" }); else hook("Stop");
   if (typeof prompt === "string" && prompt) EXT?.submit?.(prompt);
+  const tick = typeof prompt === "string" && /^STUB_TICK (\d+)$/.exec(prompt.trim());
+  if (tick && !ticker) {
+    let n = 0;
+    ticker = setInterval(() => { n++; out(`\x1b[2K  TICK ${n} ${Date.now()}\r\n`); }, Math.max(200, Number(tick[1])));
+  }
 }
+/** `STUB_TICK <ms>`'s interval, once started. */
+let ticker = null;
 
 
 /** answer mode: turns still owed a transient give-up row (`STUB_NETFAIL`). */

@@ -94,8 +94,10 @@ const check = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label
   }
 
   plan = selectSendable([q("burnt", "s1", { attempts: 8 }), q("next", "s1")], opts);
-  check(plan.expire[0]?.reason === "delivery kept failing" && plan.send[0]?.ackId === "next",
-    "an entry out of attempts is given up on and the lane moves on");
+  // The expired entry still holds its lane on THIS pass (79b2d0cf): the caller parks it on a round
+  // backoff, and what was queued behind it (a prompt naming its picture) waits rather than overtakes.
+  check(plan.expire[0]?.reason === "delivery kept failing" && !plan.send.some((e) => e.ackId === "next"),
+    "an entry out of attempts is given up on, and holds its lane on the pass that gave up");
 
   // Who is allowed to go: the two "hold the queue" switches, and the two things
   // that override them. The stall this guards against is silent — a message the

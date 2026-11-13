@@ -83,5 +83,3 @@ export const UNANNOUNCED_TRIES = 2;
  */
 export const LOG_PROOF_MS = 2500;
 
-/** The `sleep` `runDelivery` declared as its first local. */
-export { sleep } from "../proc.js";

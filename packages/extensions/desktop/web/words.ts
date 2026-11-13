@@ -41,7 +41,7 @@ export function entryAvailability(p: ProbeState): true | string {
 /** No WebCodecs (or no H.264 in it): the view streams stills and says why. */
 export function noVideoSentence(secure: boolean): string {
   return secure
-    ? "This phone's browser can't decode H.264 video — showing stills."
+    ? "This device's browser can't decode H.264 video — showing stills."
     : `This connection can't decode video (not a secure context) — showing stills. Open ${BRAND.displayName} over https to get video.`;
 }
 
@@ -75,13 +75,13 @@ export function controlSteps(mode: "touch" | "trackpad" | "view", status: Deskto
   const needs = status.control.needs ?? [];
   const out: ControlStep[] = [];
   if (needs.includes("setting")) {
-    out.push({ need: "setting", button: TURN_ON, text: `Control is switched off here ("${CONTROL_SWITCH}"). Tap ${TURN_ON} — clicks and keys from this phone then reach every app on the desktop.` });
+    out.push({ need: "setting", button: TURN_ON, text: `Control is switched off here ("${CONTROL_SWITCH}"). Tap ${TURN_ON} — clicks and keys from this device then reach every app on the desktop.` });
   }
   if (needs.includes("accessibility")) {
     out.push({ need: "accessibility", button: ASK_ACCESS, text:
       "macOS has not given wp-desktop Accessibility, so it drops every click and key. On the Mac, System Settings → Privacy & Security → Accessibility: turn on wp-desktop. " +
       "macOS's dialog only opens that pane — its \"Open System Settings\" grants nothing until the switch is on. " +
-      "This phone cannot flip it: until it is on, nothing from here clicks, so this step needs the Mac itself (or another remote-control app)." });
+      "This device cannot flip it: until it is on, nothing from here clicks, so this step needs the Mac itself (or another remote-control app)." });
   }
   return out;
 }

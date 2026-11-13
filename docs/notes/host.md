@@ -8983,7 +8983,15 @@ Four weekly figures per repo that no git-only engine can take, because they come
 conversation logs this desktop keeps (`GET /api/repos/:id/agentreadings`, drawn in the
 repo-readings sheet's *agents* region, `AgentReadingsRegion.tsx`, every sentence in `agentReadingsWords.ts`):
 
-- **Exploration cost** — the median input-side tokens (fresh input + cache read + cache write) a
+- **Start context**, **Before the first edit** (look calls), **Requests per committing session**
+  (2026-11-12, R-metrics-063) — the agent series' weekly buckets (shared `seriesOf` over the same
+  points `GET /api/agentpoints` serves, so this region and the token-stats card never disagree),
+  handed to `foldAgentWeeks` as its fourth argument. Every median needs `SERIES_MIN_N` (5) sessions;
+  the token median of Before the first edit follows that minimum too, so its two figures stand over
+  one set of sessions or neither is taken. `medianRequests` stays on the wire for older phones and is
+  not drawn: the look median says what it said. Requests count a session in the week it STARTED
+  (Compactions: the week its log last moved) and the `?` says so.
+- **Before the first edit** (was *Exploration cost*) — the median input-side tokens (fresh input + cache read + cache write) a
   FRESH session spent before its first `Edit`/`Write`/`MultiEdit`/`NotebookEdit` call, including
   the request that made the edit. Fresh means not a fork (a copied record names another session in
   `session_id`/`sessionId` — the CLI's `--fork-session` and `convfork.ts` both leave that), not a
@@ -9013,3 +9021,30 @@ the store. A slug prefix can also match a sibling repo (`app` and `app-old`), so
 
 These are readings, not health-index entries. Rework share and exploration cost are the candidates
 for an index entry once enough weeks are on record to set a good line.
+
+**Drawn as weekly bars, and two more readings (2026-11-11).** The week-chip rows were replaced by
+one bar chart per reading (`AgentWeekBars.tsx` paints, `agentWeekPlot.ts` is the pure geometry:
+stacks accumulated bottom-first in value space, a zero-based axis whose printed top is `yScale`'s
+last tick, a ratio under 5 scaled before `yScale` because it floors its step at 1). The bars ARE the
+week picker — a tap anywhere in a week's slot picks it for every chart — and each chart answers in a
+text line under it. A week not taken is a dashed outline and a real zero a floor tick, so the two
+never look alike; a chart with nothing in any week is a sentence instead of an empty axis. Two
+readings joined from other screens: **spend** (the token ledger's per-repo day rows, the token-stats
+screen's *By repo*, folded by shared `repoSpendByWeek`: list-price dollars, requests, dollars per
+PRICED request, context per request) and **activity** (conversations, started, subagents, own vs
+subagent tokens — the same total as rework, cut by whose log it was in). The always-on list
+(`AlwaysOnRows.tsx`) is the region's first card; the set-up row keeps the threshold.
+
+**What changed beside the readings: `agentmarkers.ts` (2026-11-12).** The agent-readings card in the
+token-stats extension draws each reading over time with the changes that could explain a move
+(`GET /api/repos/:id/agentmarkers`, DTO `AgentMarkersDoc`). The host contributes the git half:
+commits touching the repo's instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/skills`,
+`.claude/agents`, `.claude/settings*.json`) and `instr/*` tags, plus the global instruction files'
+commits wherever their resolved path is versioned — `~/.claude/CLAUDE.md` is usually a symlink into
+a repo, so the path is realpath-resolved first. A source that is not in a git repository, or whose
+log fails, is one sentence in `absent`, never a guess: a missing source is unknown, not unchanged.
+The route unions those with shared `derivedMarkers` (model, CLI version, memory and skills-listing
+steps read off the points) and folds same-kind markers of one day. `switchMarkers` is the hook for
+the skills-switch save log; it is not wired until that log exists. There is no all-repos route:
+instruction history is read one repo at a time, and the all-repos view draws only the derived kinds
+and says so.

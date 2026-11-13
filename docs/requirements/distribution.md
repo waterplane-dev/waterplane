@@ -242,3 +242,27 @@ The Play listing has complete policy declarations, including a working video lin
 - asked: 2026-11-02
 - shipped: 62cca32f
 
+### R-distribution-051 · shipped
+The Play Store description of the app is precise and says what the app does, including the phone workbench and that Wi-Fi works without Tailscale.
+- asked: 2026-11-07
+- shipped: 0379c0f4
+
+### R-distribution-052 · shipped
+A Play import button is available where the user expects it, on the reach dashboard.
+- asked: 2026-11-07
+- shipped: 2dae7963
+
+### R-distribution-053 · requested
+The project's links include the VS Code page, the OpenSSF project, the npm page and the Play Store links.
+- asked: 2026-11-07
+
+### R-distribution-054 · shipped
+Down-scoping code stays private and is kept out of the public release.
+- asked: 2026-11-08
+- shipped: 8b47cee3
+
+### R-distribution-055 · shipped
+The installer ends by printing this desktop's URL and port and opens it in the browser when a screen is present (--no-open skips).
+- asked: 2026-11-09
+- shipped: adaa96c7
+

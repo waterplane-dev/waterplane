@@ -83,8 +83,8 @@ export function removeLines(w: HostWords, active: boolean, next: SavedHost | nul
   const what = wordsText(w);
   const n = w.drafts + w.notes + w.queued;
   const lines = [what
-    ? `${what} ${n === 1 ? "stays" : "stay"} saved on this phone; re-add the host to see them.`
-    : "Nothing unsent is saved for it on this phone."];
+    ? `${what} ${n === 1 ? "stays" : "stay"} saved on this device; re-add the host to see them.`
+    : "Nothing unsent is saved for it on this device."];
   if (active) {
     lines.push(next
       ? `It is the host in use: the app switches to ${next.name} first, then reloads.`
@@ -114,7 +114,7 @@ export function plainHttpLines(changed: boolean): string[] {
   const cost = "Anyone on this Wi-Fi could read what goes to this desktop, and could pretend to be it.";
   const back = "It stays that way until you pair again by code.";
   return changed
-    ? ["This phone was shown a different key for this desktop. Its key changed, or someone is in between.", "Pairing by code proves it is your desktop. Plain HTTP proves nothing.", cost, back]
+    ? ["This device was shown a different key for this desktop. Its key changed, or someone is in between.", "Pairing by code proves it is your desktop. Plain HTTP proves nothing.", cost, back]
     : ["For a desktop whose encrypted link was turned off.", cost, back];
 }
 
@@ -200,7 +200,7 @@ export const seenAgo = agoText;
 export function revokeLines(row: Pick<DeviceRow, "name" | "current">): string[] {
   return row.current
     ? [
-        "This is the phone you are holding. Revoking it signs this phone out of this desktop at once.",
+        "This is the device you are holding. Revoking it signs this device out of this desktop at once.",
         "It will need a new pairing code (or the password) to connect again.",
       ]
     : [`${row.name} will need a new pairing code to connect again.`];
@@ -228,9 +228,9 @@ export function switchFailText(
   const name = (id: string | null, fallback: string) => hosts.find((h) => h.id === id)?.name ?? fallback;
   const to = name(f.to, "the other desktop");
   if (f.stage === "park") {
-    return `Could not switch to ${to}: this phone's storage is full. Still on ${name(f.from, "the same desktop")} — free room under Storage on this phone, then switch again.`;
+    return `Could not switch to ${to}: this device's storage is full. Still on ${name(f.from, "the same desktop")} — free room under Storage on this device, then switch again.`;
   }
-  return `On ${to}, but this phone's storage is full: some of its saved drafts are not back yet. They are kept and return once there is room — see Storage on this phone.`;
+  return `On ${to}, but this device's storage is full: some of its saved drafts are not back yet. They are kept and return once there is room — see Storage on this device.`;
 }
 
 // ── Waiting elsewhere ──────────────────────────────────────────────────
@@ -370,7 +370,7 @@ export function elsewhereRowText(s: WaitingSummary): string {
 
 /** The sentence a row says in place of a number. */
 export function elsewhereSaidText(r: ElsewhereRow, now: number): string {
-  if (r.state === "signedOut") return `This phone is signed out on ${r.host.name} — pair again to see what waits there.`;
+  if (r.state === "signedOut") return `This device is signed out on ${r.host.name} — pair again to see what waits there.`;
   if (r.state === "stale") return `${r.host.name} is not answering — its last answer, ${agoText(now - r.since)}, said ${r.lastTotal} waiting.`;
   return elsewhereRowText(r.summary);
 }

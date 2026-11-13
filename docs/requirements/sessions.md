@@ -302,3 +302,13 @@ A session menu option copies the reference information for a coding session to t
 - asked: 2026-11-01
 - shipped: 505cf8ba
 
+### R-sessions-064 · shipped
+When a coding backend's CLI is missing, starting a session on it is refused naming that CLI, and the backend list marks it unavailable and offers the agents that can start.
+- asked: 2026-11-09
+- shipped: 4310500e
+
+### R-sessions-065 · shipped
+Every session's pane carries its own session ID in an environment variable, so an agent or its script can name its session to the loopback routes.
+- asked: 2026-11-10
+- shipped: 6a148c8e
+

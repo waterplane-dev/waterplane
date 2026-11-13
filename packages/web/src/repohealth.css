@@ -217,3 +217,4 @@
 /* ── The two closed rows at the end: how to read this, and the daily notes ── */
 .rh-region .hint-more.rh-notes { padding: 0 14px 10px; }
 .rh-region .rh-notes > .rh-doc { padding: 0 0 6px; }
+.rh-region .ar-bars svg { display: block; margin: 4px 0 2px; }

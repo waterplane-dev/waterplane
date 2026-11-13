@@ -120,6 +120,10 @@ deploy/release-pubkey.pem
 # folder (packages/host/src/plugins/builtin.ts) and builds, type-checks and tests
 # without it (tools/publictree.test.mjs, scripts/verify-public-tree.mjs).
 !packages/extensions/opencode/**
+# The vault's coverage reading measures only the vault below, so it is private while the vault is
+# (the test runners import it only when present). Flip it with the vault.
+!tools/vaultcoverage.mjs
+!tools/vaultcoverage.test.mjs
 # The vault extension (biometric-gated secrets) stays PRIVATE (owner decision,
 # 2026-10-05). The generic keystore bridge it uses (ShellKeystorePlugin.java,
 # nativeKeystore.ts) is public and names none of it (vault/publictree.json).
@@ -139,14 +143,6 @@ deploy/release-pubkey.pem
 !packages/extensions/vault/web/downscope/**
 !packages/extensions/vault/cli/commands/downscope.mjs
 !packages/extensions/vault/test/*downscope*
-# The disk-space extension (deletes caches, build output and models on this desktop)
-# stays PRIVATE (owner decision, 2026-10-07): a tool for this machine, not the project.
-# Public code names none of it (diskspace/publictree.json).
-!packages/extensions/diskspace/**
-# The links extension (this desktop's ports, tailnet front doors and GCP projects in one
-# list) stays PRIVATE (owner decision, 2026-10-10): a tool for this machine's projects.
-# Public code names none of it (links/publictree.json).
-!packages/extensions/links/**
 # The permissions extension (which Claude Code permission rules apply in a repo, read-only)
 # stays PRIVATE (owner decision, 2026-10-17): not shipped until it has been used.
 # Public code names none of it (permissions/publictree.json).

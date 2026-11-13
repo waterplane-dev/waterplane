@@ -474,7 +474,7 @@ export function removeHost(id: string): "dropped" | "switching" | null {
 /** Add a host and make it active: the first-run form, and "add + switch". */
 export function addAndActivate(input: HostInput): HostEditResult {
   const kv = browserKV();
-  if (!kv) return { ok: false, why: "This phone's storage is not available." };
+  if (!kv) return { ok: false, why: "This device's storage is not available." };
   const r = addHost(kv, input);
   if (!r.ok) return r;
   const from = kv.getItem(LS.hostActive);

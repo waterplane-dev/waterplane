@@ -32,7 +32,7 @@ export function assessDowngradeTally(rows: readonly AssessDisplayRow[]): { down:
 
 const sample = (s: string): string => {
   const one = (s || "").replace(/\s+/g, " ").trim();
-  if (!one) return "“” (the words for this one are not on this phone)";
+  if (!one) return "“” (the words for this one are not on this device)";
   return `“${one.length > SAMPLE_CHARS ? `${one.slice(0, SAMPLE_CHARS)}…` : one}”`;
 };
 
@@ -200,7 +200,7 @@ export function assessMergeLines(card: AssessMergeCard, opts: { repoName: string
   for (const r of card.originals.slice(0, ASSESS_SAMPLE)) lines.push(`replaces ${sample(r.text)}`);
   if (card.originals.length > ASSESS_SAMPLE) lines.push(`…and ${card.originals.length - ASSESS_SAMPLE} more`);
   if (card.missingIds.length) {
-    lines.push(`${card.missingIds.length} of the items it names ${card.missingIds.length === 1 ? "is" : "are"} not on this phone, so ${card.missingIds.length === 1 ? "its words are" : "their words are"} not shown above.`);
+    lines.push(`${card.missingIds.length} of the items it names ${card.missingIds.length === 1 ? "is" : "are"} not on this device, so ${card.missingIds.length === 1 ? "its words are" : "their words are"} not shown above.`);
   }
   return lines;
 }

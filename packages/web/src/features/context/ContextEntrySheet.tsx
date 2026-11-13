@@ -4,7 +4,8 @@
  */
 import { AGENT_LARGE_TOK, agentWindowWarnSetting, budgetSparkOf, liveAgentText, sessionBudgetLabel, type SessionInfo } from "@waterplane/shared";
 import { setPref, useCore, usePref } from "../../sdk";
-import { backendMark } from "../../backendCaps";
+import { backendIdOf, backendMark, skillSwitchGate } from "../../backendCaps";
+import { openSkillsFor } from "../../skillsDoor";
 import { ContextSheet } from "../../ContextSheet";
 import { openSessionBudget } from "../../sessionBudgetDoor";
 import { REPLAN_NOTE, budgetLine } from "./logic";
@@ -17,6 +18,7 @@ export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
   // actually be taken: the repo has to be one we know, or the button would
   // name a directory nothing could open.
   const repo = core.world.sessionRepo(subject);
+  const skillsGate = skillSwitchGate(backends, subject.backend);
   const title = core.world.sessionRowTitle(subject);
   // The ONE line (tokens) the chip, the toast, this sheet and the host's push share.
   const warnTok = agentWindowWarnSetting(usePref("agentWindowWarn"));
@@ -58,6 +60,8 @@ export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
     // conversation's split. No repo the desktop lists ⇒ that door is a sentence, never greyed.
     onOpenSetup={repo ? () => openSetupFromContext(repo.id) : undefined}
     setupCant={repo ? undefined : "this session's repo is not one the desktop lists"}
+    onOpenSkills={repo && !skillsGate ? () => openSkillsFor(repo.id, backendIdOf(subject)) : undefined}
+    skillsCant={repo ? skillsGate ?? undefined : undefined}
     onOpenAllSessions={openTokensFromContext}
     onClose={closeContext} />;
 }

@@ -22,6 +22,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { noteSessionClosing } from "../../features/shells";
 import { listedBlockOf } from "../../attention";
+import { closeGitWarnings } from "./closeWarn";
 
 type CloseCheck = Extract<HostMessage, { t: "session.closecheck" }>;
 
@@ -84,12 +85,7 @@ export function useSessionVerbs(conn: Connection, getSessions: () => SessionInfo
   }
   /** The host's answer to `closeSession`'s ask: close, or say what would be lost first. */
   function onCloseCheck(msg: CloseCheck) {
-    const warn: string[] = [];
-    if (msg.isRepo) {
-      if (msg.dirty) warn.push("• uncommitted changes (no commit done)");
-      if (!msg.isMain && msg.unmerged > 0)
-        warn.push(`• ${msg.unmerged} commit(s) not merged to ${msg.mainBranch || "main"}`);
-    }
+    const warn: string[] = closeGitWarnings(msg);
     // CLAUDE.md's decision: closing a session stops every background shell
     // under it, fully — no "leave running" option. Said here, on the confirm,
     // not only enforced silently at close time (`sessions/drive.ts`).

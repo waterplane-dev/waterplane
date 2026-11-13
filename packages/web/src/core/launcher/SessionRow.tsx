@@ -46,7 +46,11 @@ export const countBadges = (repo: RepoTarget | null, openGitFor: (repoId: string
   {gitPending(repo) && <button className="row-act count" title={gitTitle(repo)} onClick={() => openGitFor(repo.id)}><FileDiff size={14} />{repo.changedCount > 0 && repo.changedCount}{gitSyncText(repo) && <span className="git-ab">{gitSyncText(repo)}</span>}</button>}
 </>) : null;
 
-export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: LauncherModel; s: SessionInfo; repoName: string }) {
+// `headRepoId`: the repo whose outbox/git counts the group header above already
+// shows. A card in that repo leaves them off — the same two numbers on every
+// card under the header were the same fact told n+1 times. A card in a
+// worktree keeps them: its tree is not the header's.
+export function SessionRow({ p, m, s, repoName, headRepoId }: { p: LauncherProps; m: LauncherModel; s: SessionInfo; repoName: string; headRepoId?: string }) {
   const spendWarn = useSpendWarn()(s);
   const { backends, openGitFor } = p;
   const { status, liveSend } = p.conn;
@@ -205,7 +209,7 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
               above it: these read as one row of FACTS, and a chip built
               as a button would wear the strip's button styling. */}
           <NewImagesTag sessionId={s.id} />
-          {countBadges(sessionRepo(s), openGitFor)}
+          {sessionRepo(s)?.id !== headRepoId && countBadges(sessionRepo(s), openGitFor)}
         </span>
         {/* The session's READINGS, one section at the strip's right end:
             the way into its recent prompts (the outline, right under the
@@ -320,7 +324,7 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             the slack between, so the group sits right whether or not
             a session carries any badges at all. */}
         <span className="row-ctl">
-          <button className={`row-act${s.starred ? " starred" : ""}${s.id in pendingStars ? " star-pending" : ""}`} data-hint="session.star" title={s.id in pendingStars ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this phone until the link is back") : s.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"} onClick={() => toggleStar(s.id, !s.starred)}><Star size={ICON} fill={s.starred ? "currentColor" : "none"} /></button>
+          <button className={`row-act${s.starred ? " starred" : ""}${s.id in pendingStars ? " star-pending" : ""}`} data-hint="session.star" title={s.id in pendingStars ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this device until the link is back") : s.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"} onClick={() => toggleStar(s.id, !s.starred)}><Star size={ICON} fill={s.starred ? "currentColor" : "none"} /></button>
           <button className={`row-act fu-btn${followUpClass(s.followUp)}${s.id in pendingFollowUps ? " star-pending" : ""}`} data-hint="session.followup"
             aria-pressed={!!s.followUp} title={followUpButtonTitle(s, s.id in pendingFollowUps, status === "open")}
             onClick={() => toggleFollowUp(s.id, !s.followUp)}><FlagIcon on={!!s.followUp} size={ICON} /></button>

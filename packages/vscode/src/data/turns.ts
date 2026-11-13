@@ -21,7 +21,7 @@
  * stopped, so a poll reads what was appended, not the whole log.
  */
 import type { TokenTotals } from "@waterplane/shared";
-import { addTotals, costOf, tokenTotal, zeroTotals } from "@waterplane/shared";
+import { addTotals, costOfRequest, tokenTotal, zeroTotals } from "@waterplane/shared";
 import { statSync } from "node:fs";
 import { localDay, stamp } from "../../../host/src/convlog.js";
 import { localCommandOf, opensTurn, promptOf } from "../../../host/src/transcript/transcriptlog.js";
@@ -159,7 +159,7 @@ export function advanceTurns(path: string, prev?: TurnCursor | null): TurnCursor
       turn.requests++;
       addTotals(turn.kinds, bag);
       const raw = typeof msg.model === "string" ? msg.model : null;
-      const c = costOf(bag, raw, localDay(t));
+      const c = costOfRequest(bag, raw, localDay(t));
       if (c) turn.pricedUsd += c.total;
       else { turn.unpriced = true; turn.unpricedTok += tokenTotal(bag); }
       if (tok > 0) turn.ctxTok = tok;

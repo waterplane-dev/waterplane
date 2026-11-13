@@ -365,7 +365,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           const held = intents.filter((i) => keySet.has(intentRowKey(i.id)) && isBudgetHeld(i, heldNow, intentById)).length;
           return (
             <button className="repo-group-stat queued"
-              title={`${q} command${q > 1 ? "s" : ""} waiting to run in ${shown} — on this phone or held by the desktop${held ? `; ${held} held by the usage budget` : ""}. Tap to show only those.`}
+              title={`${q} command${q > 1 ? "s" : ""} waiting to run in ${shown} — on this device or held by the desktop${held ? `; ${held} held by the usage budget` : ""}. Tap to show only those.`}
               onClick={() => {
                 // When every row counted is this repo's queued
                 // WORK in one checkout, the tap opens its backlog
@@ -482,7 +482,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
               them was the Downloads sheet's rules pane, behind a
               picker holding every repo; from here the repo is
               already chosen. */}
-          {main && <button className="more-act" title="what this repo downloads to this phone by itself"
+          {main && <button className="more-act" title="what this repo downloads to this device by itself"
             onClick={() => { track("action:repo.pullrules"); setRepoMenu(null); openPullRules(main.worktreePath); }}><Download size={ICON} />download rules</button>}
           {main && <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />branch</button>}
           {/* The name this repo wears on the phone (`RepoShownAs`): per repo, so it is HERE and not in Settings. */}
@@ -586,7 +586,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
       {!collapsed && loose.map(wtRow)}
       {!collapsed && groupSessions.map((s) => (
         <Fragment key={s.id}>
-          <SessionRow p={p} m={m} s={s} repoName={repoName} />
+          <SessionRow p={p} m={m} s={s} repoName={repoName} headRepoId={main?.id} />
           {ownedBy(s.id).map(wtRow)}
         </Fragment>
       ))}

@@ -1,8 +1,8 @@
 import { useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { Camera, Images, Paperclip, Plus, Quote, Trash2, X } from "lucide-react";
-import { Empty } from "./Empty";
-import { loadSnippets } from "./localState";
-import type { Snippet } from "./SnippetSheet";
+import { Camera, Images, Paperclip, Plus, Quote, Trash2 } from "lucide-react";
+import { SnippetPicker } from "./SnippetPicker";
+import { joinSnippets, type SnippetView } from "./snippetPicks";
+import { loadSnippetView } from "./localState";
 import { track } from "./usage";
 import { useVoice } from "./useVoice";
 import { VoiceButton } from "./VoiceButton";
@@ -275,38 +275,26 @@ export function AttachButtons({ prompts, onPrompts, busy, unavailable, onFiles, 
  */
 function SnippetButton({ prompts, onPrompts, focusRef }:
   { prompts: MutableRefObject<string[]>; onPrompts: (next: string[]) => void; focusRef?: MutableRefObject<number> }) {
-  const [open, setOpen] = useState<Snippet[] | null>(null);
-  const insert = (sn: Snippet) => {
+  const [open, setOpen] = useState<SnippetView | null>(null);
+  const insert = (picked: { text: string }[]) => {
     track("action:snippet.insert");
+    if (picked.length > 1) track("action:snippet.insert.multi");
     const at = Math.min(Math.max(focusRef?.current ?? 0, 0), Math.max(prompts.current.length - 1, 0));
     const next = prompts.current.length ? prompts.current.slice() : [""];
     const c = next[at] ?? "";
-    next[at] = (c && !/\s$/.test(c) ? c + "\n" : c) + sn.text;
+    next[at] = (c && !/\s$/.test(c) ? c + "\n" : c) + joinSnippets(picked);
     onPrompts(next);
     setOpen(null);
   };
   return (
     <>
-      <Button className={open ? "on" : undefined} title="insert a saved snippet into the turn the caret is in"
-        onClick={() => setOpen((v) => (v ? null : loadSnippets()))}>
+      <Button className={open ? "on" : undefined} title="insert saved snippets into the turn the caret is in"
+        onClick={() => setOpen((v) => (v ? null : loadSnippetView()))}>
         <Quote size={16} /> snippet
       </Button>
       {open && (
-        <div className="snippet-pop">
-          <div className="snippet-pop-head">
-            <span>Snippets</span>
-            <Button onClick={() => setOpen(null)} title="Close"><X size={14} /></Button>
-          </div>
-          <div className="snippet-pop-list">
-            {open.length === 0 && <Empty>No snippets yet — add them from the compose bar's snippet button, under “manage”.</Empty>}
-            {open.map((sn) => (
-              <button key={sn.id} className="snippet-pop-item" title={sn.text} onClick={() => insert(sn)}>
-                <span className="snippet-pop-title">{sn.title}</span>
-                <span className="snippet-pop-preview">{sn.text.replace(/\s+/g, " ").trim()}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <SnippetPicker list={open.list} starter={open.starter} onInsert={insert} onClose={() => setOpen(null)}
+          emptyText="No snippets yet — add them from the compose bar's snippet button, under “manage”." />
       )}
     </>
   );

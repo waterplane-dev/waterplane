@@ -109,3 +109,34 @@ test("a notice fixture is stored ROT13'd: its words never sit in the file in pla
   assert.equal(plain, `xxxxxxx xxxxx Xxx\n${notice} · back at 3pm\n`, "decoded: the notice row verbatim, the rest masked");
   assert.equal(decodeFixture("prompt.box", "Abc"), "Abc", "only a notice is encoded");
 });
+
+test("skeletonOf: below tool_input / tool_response every key and string is content", () => {
+  const rec = { hook_event_name: "PreToolUse", tool_name: "Skill",
+    tool_input: { name: "acme-merger-plan", type: "client-x", "ACME-SECRET-TOKEN": "x", nested: [{ role: "boss-person", subtype: "deal" }] },
+    tool_response: { name: "acme-merger-plan", "other-key": 1 } };
+  const sk = skeletonOf(rec);
+  assert.doesNotMatch(JSON.stringify(sk), /acme|ACME|client-x|boss|deal|nested|other-key/);
+  assert.equal(sk.hook_event_name, "PreToolUse", "the CLI's own name above it is kept");
+  assert.deepEqual(skeletonOf(sk), sk, "idempotent");
+  const out = fixtureSample("hook.pipe", JSON.stringify(rec));
+  assert.doesNotMatch(out, /acme|ACME|client-x/);
+});
+
+test("skeletonOf: a transcript tool_use input keeps its schema keys but no value, not even a name/type/role", () => {
+  const rec = { type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", name: "AskUserQuestion",
+    input: { questions: [{ question: "q?", multiSelect: true, options: [{ label: "acme-deal", type: "client-x", name: "boss-person" }] }] } }] } };
+  const sk = skeletonOf(rec);
+  assert.doesNotMatch(JSON.stringify(sk), /acme|client-x|boss/, "no value under input survives");
+  const block = sk.message.content[0];
+  assert.equal(block.name, "AskUserQuestion", "the tool's name above input is the CLI's, kept");
+  assert.equal(block.input.questions[0].multiSelect, "<boolean>", "the schema keys the askbox reader is tested on survive");
+  assert.deepEqual(skeletonOf(sk), sk, "idempotent");
+});
+
+test("skeletonOf: a record's tool result (toolUseResult / tool_use_result / mcp_server) keeps its keys, never a value", () => {
+  for (const k of ["toolUseResult", "tool_use_result", "mcp_server"]) {
+    const sk = skeletonOf({ type: "user", [k]: { name: "acme", type: "client-x", stdout: "boss" } });
+    assert.doesNotMatch(JSON.stringify(sk), /acme|client-x|boss/, k);
+    assert.equal(sk[k].stdout, "<string>", `${k}: the result's own schema key stays`);
+  }
+});

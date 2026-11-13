@@ -25,6 +25,6 @@ test("a shell is never 'not told' — there is no agent to tell (review R5)", ()
 test("the words name the backend and the folder as written, and the dismissal names the way back", () => {
   assert.match(toldText("acme"), /^acme was not told about the outbox/);
   assert.match(toldText("acme"), /\.claude\/outbox\//, "the full transport path, as CLAUDE.md asks");
-  assert.match(toldGoneText("acme"), /Shown once for acme on this phone/);
+  assert.match(toldGoneText("acme"), /Shown once for acme on this device/);
   assert.match(toldGoneText("acme"), /icon beside the title brings it back/);
 });

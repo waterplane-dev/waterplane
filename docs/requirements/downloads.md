@@ -71,3 +71,13 @@ A queued automatic download row offers 'auto off here' to disable automatic down
 - asked: 2026-10-26
 - shipped: a70cdfb7
 
+### R-downloads-016 · shipped
+Download tiles on the reach dashboard are named specifically: the npm tile names its package and the VS Code tile names its extension, like the tiles beside them.
+- asked: 2026-11-07
+- shipped: b8a52968, dc96975c
+
+### R-downloads-017 · shipped
+Every download in the web app goes through the single download path, never through a separate download link.
+- asked: 2026-11-10
+- shipped: 7cdcc498
+

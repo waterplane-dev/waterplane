@@ -142,6 +142,24 @@ export interface ProcSnapshot {
   rssSumBytes: number;
   /** How many rows each list holds at most. */
   cap: number;
+  /** CPU per live waterplane session: every process under that session's tmux
+   *  pane (the CLI, its tools, builds and tests it started), summed. Busiest
+   *  first, capped, sessions under 1% left out. Absent when the panes could
+   *  not be listed — never an empty list standing in for "unknown". */
+  bySession?: SessionCpuRow[];
+}
+
+/** One session's share of the CPU, folded over its process tree. */
+export interface SessionCpuRow {
+  /** The waterplane session id — the phone resolves it to its tab label. */
+  sessionId: string;
+  /** Per-core percent summed, as `top`; can exceed 100. */
+  cpuPct: number;
+  rssBytes: number;
+  /** How many processes were folded in. */
+  procs: number;
+  /** The busiest program in it, by name, so "450%" says what is running. */
+  top: string;
 }
 
 /** One fan, as the sensor names it. */

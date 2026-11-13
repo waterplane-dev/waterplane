@@ -177,7 +177,11 @@ export class CliHealthStore {
   }
 
   /** Is a fixture of this signal still wanted on the installed CLI? (`clifixtures.ts`) */
-  wantsFixture(id: CliSignalId): boolean { return this.shelf.wants(id, this.health.version); }
+  wantsFixture(id: CliSignalId, kind?: string): boolean { return this.shelf.wants(id, this.health.version, kind); }
+
+  /** Keep a capture of `kind` of this signal without filing an observation —
+   *  for a signal whose captures come in kinds (a hook event). */
+  offerFixture(id: CliSignalId, kind: string, source: FixtureSource): void { this.shelf.offer(id, this.health.version, source, kind); }
 
   /**
    * Tell the record which `claude` is installed — driven by `update.ts`'s
@@ -316,6 +320,12 @@ export function noteHealth(
 /** Whether a `fixture` passed with the next `good` of this signal would be
  *  kept — false with no store. Lets a call site read an input that will not
  *  last (the composer) only when it is wanted, once per CLI version. */
-export function fixtureWanted(id: CliSignalId): boolean {
-  return current?.wantsFixture(id) ?? false;
+export function fixtureWanted(id: CliSignalId, kind?: string): boolean {
+  return current?.wantsFixture(id, kind) ?? false;
+}
+
+/** Keep a capture of one KIND of a signal's input (a hook event's payload),
+ *  once per kind per CLI version, filing no observation. No store ⇒ nothing. */
+export function offerFixture(id: CliSignalId, kind: string, source: FixtureSource): void {
+  current?.offerFixture(id, kind, source);
 }

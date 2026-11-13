@@ -148,7 +148,7 @@ test("an id this device has no words for is a row that SAYS so — never hidden,
   // tick that went nowhere.
   assert.equal(r.acceptBlocked, ASSESS_MISSING_BLOCKED);
   assert.match(r.acceptBlocked, /a tick would do nothing/);
-  assert.equal(assessMissingWords("ghost"), "the words for “ghost” are not on this phone");
+  assert.equal(assessMissingWords("ghost"), "the words for “ghost” are not on this device");
   assert.doesNotMatch(ASSESS_MISSING_BLOCKED, /applying still works/, "the promise this replaced");
   // ...and the strip's bulk button cannot cover it either.
   assert.equal(groupOf(gs, "done").acceptable, 0);

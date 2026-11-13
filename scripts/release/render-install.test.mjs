@@ -580,3 +580,45 @@ test("preflight: a missing claude is explained, never asked about, and the insta
   assert.ok(!/\[y\/N\]|Install it, then re-run/.test(r.out), r.out);
   assert.match(r.out, /REACHED/);
 });
+
+test("the installer's dictation model table equals DICTATE_MODELS and the base URL", async () => {
+  const { DICTATE_MODELS, DICTATE_MODEL_BASE_URL } = await import("../../packages/shared/dist/index.js");
+  const text = await render([entry()]);
+  const body = text.match(/dictate_models\(\) \{\n  cat <<'DICTATE_EOF'\n([\s\S]*?)\nDICTATE_EOF/);
+  assert.ok(body, "the table is in the script");
+  const rows = body[1].split("\n").map((l) => l.split("|"));
+  assert.deepEqual(rows, DICTATE_MODELS.map((m) => [m.id, m.file, String(m.bytes), m.sha256]));
+  assert.ok(text.includes(`DICTATE_BASE_URL='${DICTATE_MODEL_BASE_URL}'`), "base URL matches");
+});
+
+test("installer dictation flags: --no-dictation and no terminal both skip, a bad model is refused, nothing is fetched", async () => {
+  const text = (await render([entry()])).replace(/\nmain "\$@"\s*$/, "\n");
+  const dir = mkdtempSync(join(tmpdir(), "inst-"));
+  const f = join(dir, "install.sh");
+  writeFileSync(f, text + `\nDICTATION=\${D:-ask}; DICTATION_MODEL=\${M:-turbo-q8}; dictation_step; echo rc=$?\n`);
+  const run = (env) => { const r = spawnSync("sh", [f], { encoding: "utf8", stdin: "ignore", env: { PATH: process.env.PATH, HOME: dir, ...env } }); return (r.stdout || "") + (r.stderr || ""); };
+  assert.match(run({ D: "no" }), /^rc=0$/m);
+  assert.match(run({ D: "ask" }), /skipped local dictation.*--dictation.*Local dictation/);
+  assert.match(run({ D: "yes", M: "nope" }), /no such model/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("installer --dictation parsing: =small, a known model as the next word, and a bare flag", async () => {
+  const text = (await render([entry()])).replace(/\nmain "\$@"\s*$/, "\n");
+  const marker = '  DATA="${XDG_DATA_HOME:-$HOME/.local/share}/$SLUG"\n';
+  assert.ok(text.includes(marker), "marker present");
+  const dir = mkdtempSync(join(tmpdir(), "inst-"));
+  const f = join(dir, "install.sh");
+  writeFileSync(f, text.replace(marker, marker + '  echo "PARSED=$DICTATION/$DICTATION_MODEL"; exit 0\n') + '\nmain "$@"\n');
+  const run = (...args) => { const r = spawnSync("sh", [f, ...args], { encoding: "utf8", stdin: "ignore", env: { PATH: process.env.PATH, HOME: dir } }); return (r.stdout || "") + (r.stderr || ""); };
+  assert.match(run("--dictation=small"), /PARSED=yes\/small/);
+  assert.match(run("--dictation", "small"), /PARSED=yes\/small/);
+  assert.match(run("--dictation"), /PARSED=yes\/turbo-q8/);
+  assert.match(run("--no-dictation"), /PARSED=no\//);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("installer dictation: a Ctrl-C trap removes the in-progress .part", async () => {
+  const text = await render([entry()]);
+  assert.match(text, /trap '[^']*DICTATE_PART[^']*exit 130' INT TERM/);
+});

@@ -125,6 +125,11 @@ export async function runExplainTask(req: NameRequest): Promise<NameRun> {
   return runTextTask("explain", req);
 }
 
+/** And on the `skills` knob - the Recommend button (`skills/skillrecommend.ts`). */
+export async function runSkillsTask(req: NameRequest): Promise<NameRun> {
+  return runTextTask("skills", req);
+}
+
 async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun> {
   const started = Date.now();
   const since = (): number => Date.now() - started;
@@ -194,7 +199,7 @@ async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun
   if (limit.blocked) {
     // The verb is the TASK's, because this sentence is shown to a person and
     // "nothing was titled" is not true of a commit message that was not written.
-    return { text: "", failed: false, limited: true, detail: limitNote(limit, task === "name" ? "titled" : "written"), usage, usd, durationMs: since() };
+    return { text: "", failed: false, limited: true, detail: limitNote(limit, task === "name" ? "titled" : task === "skills" ? "suggested" : "written"), usage, usd, durationMs: since() };
   }
 
   if (detectHeadlessSignedOut(run.stdout, run.stderr)) {

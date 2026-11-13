@@ -53,3 +53,40 @@ export function healthSpendWeeks(days: readonly HealthSpendDay[], repos: readonl
   return [...weeks.values()].sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
 }
 
+
+/** One week of a repo's ledger rows, with the money the health line leaves out. */
+export interface RepoSpendWeek {
+  requests: number;
+  pricedRequests: number;
+  usd: number;
+  /** Absent when any of the week's rows lacked a context count (an older ledger). */
+  ctxTok?: number;
+}
+
+/**
+ * The agent readings' spend row: `repos`' ledger rows by ISO week (week →
+ * figures), money included. A week with no row is absent from the map — the
+ * caller says so, never a zero.
+ */
+export function repoSpendByWeek(
+  days: readonly { day: string; byRepo?: readonly { repo: string; turns: number; pricedTurns: number; usd: number; ctxTok?: number }[] }[],
+  repos: readonly string[],
+): Record<string, RepoSpendWeek> {
+  const keys = new Set(repos);
+  const out: Record<string, RepoSpendWeek & { noCtx?: true }> = {};
+  for (const d of days) {
+    const week = isoWeekOf(d.day);
+    if (!week) continue;
+    for (const r of d.byRepo ?? []) {
+      if (!keys.has(r.repo) || !(r.turns > 0)) continue;
+      const w = (out[week] ??= { requests: 0, pricedRequests: 0, usd: 0, ctxTok: 0 });
+      w.requests += r.turns;
+      w.pricedRequests += r.pricedTurns;
+      w.usd += r.usd;
+      if (typeof r.ctxTok === "number" && !w.noCtx) w.ctxTok = (w.ctxTok ?? 0) + r.ctxTok;
+      else { w.noCtx = true; delete w.ctxTok; }
+    }
+  }
+  for (const w of Object.values(out)) delete w.noCtx;
+  return out;
+}

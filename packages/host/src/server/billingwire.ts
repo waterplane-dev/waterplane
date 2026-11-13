@@ -16,9 +16,13 @@ import { hostStateDir } from "../branddirs.js";
 import { claudeBackend } from "../backends/index.js";
 import { costMeta } from "../costwindow.js";
 import { PeriodSpend, SPEND_REFRESH_MS, foldAnswer } from "../periodspend.js";
+import { startPriceFetch } from "../pricefetch.js";
 import type { ServerCtx } from "./ctx.js";
 
 export function createBillingWire(ctx: ServerCtx) {
+  // The rates every dollar here is priced at: Anthropic's price page over the built-in table
+  // (`pricefetch.ts`) — the cached read at once, a fresh one when it is over a day old.
+  if (!ctx.DOCTOR) startPriceFetch(hostStateDir(ctx.ROOT));
   /** A change of answer re-syncs the `/usage` poll and tells every phone, budget included. */
   const billing = new BillingStore(ctx.ROOT, {
     authStatus: () => runAuthStatus(claudeBackend.bin()),

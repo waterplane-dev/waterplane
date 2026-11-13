@@ -41,16 +41,20 @@ function ClaudeFace({ f, size, gauge = true }: { f: ClaudeFigures; size: number;
   return (
     <>
       {gauge && <Gauge size={size} />}
-      {/* No 5-hour window on this plan: collapsed to the week, the long press says why (`usageTitle`). */}
-      {!f.noSess && <>
-        <span className={(f.sess ?? 0) >= 80 ? "usage-hot" : ""}>{f.sess != null ? `${f.sess}%` : "?"}</span>
-        {f.sessResetAt != null && (
-          <span className="usage-unit usage-reset"><Clock size={11} /> {hhmm(f.sessResetAt)}</span>
-        )}
-        <span className="usage-sep">/</span>
+      {/* The host has not read `/usage` yet (`usageNotReadYet`): say so, never `?/? wk`. */}
+      {f.reading && <span className="usage-unit">reading…</span>}
+      {!f.reading && <>
+        {/* No 5-hour window on this plan: collapsed to the week, the long press says why (`usageTitle`). */}
+        {!f.noSess && <>
+          <span className={(f.sess ?? 0) >= 80 ? "usage-hot" : ""}>{f.sess != null ? `${f.sess}%` : "?"}</span>
+          {f.sessResetAt != null && (
+            <span className="usage-unit usage-reset"><Clock size={11} /> {hhmm(f.sessResetAt)}</span>
+          )}
+          <span className="usage-sep">/</span>
+        </>}
+        <span className={(f.wk ?? 0) >= 80 ? "usage-hot" : ""}>{f.wk != null ? `${f.wk}%` : "?"}</span>
+        <span className="usage-unit">wk</span>
       </>}
-      <span className={(f.wk ?? 0) >= 80 ? "usage-hot" : ""}>{f.wk != null ? `${f.wk}%` : "?"}</span>
-      <span className="usage-unit">wk</span>
     </>
   );
 }
@@ -124,10 +128,11 @@ export function SessionUsage({ backend }: { backend: string | null | undefined }
       {/* The reset belongs to the 5-hour window, so it sits beside that
           number — at the end of the strip it read as the week's. */}
       <Gauge size={11} />
-      {!f.noSess && <> sess {f.sess != null ? `${f.sess}%` : "?"}
+      {f.reading && <> reading…</>}
+      {!f.reading && !f.noSess && <> sess {f.sess != null ? `${f.sess}%` : "?"}
         {f.sessResetAt != null && <> resets {hhmm(f.sessResetAt)}</>}
         {" ·"}</>}
-      {" "}wk {f.wk != null ? `${f.wk}%` : "?"}
+      {!f.reading && <>{" "}wk {f.wk != null ? `${f.wk}%` : "?"}</>}
     </RowSub>
   );
   if (!segments.length) return claudeInline(infoFigures(usage), `${usageTitle(usage)}${TAP}`, null);

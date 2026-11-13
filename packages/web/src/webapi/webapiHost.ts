@@ -1,4 +1,4 @@
-import { parseWaitingSummary, timedFetch, type DictateAnswer, type DictateStatus, type HostStat, type WaitingSummary } from "@waterplane/shared";
+import { parseWaitingSummary, timedFetch, type DictateAnswer, type DictateSetupState, type DictateStatus, type HostStat, type WaitingSummary } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import { rootApi } from "./webapiRoot";
 import type { FileEntry, UploadError } from "./webapiTypes";
@@ -57,6 +57,26 @@ export const hostApi = {
     } catch {
       return { available: false, reason: "the host could not be reached" };
     }
+  },
+  /** Where the desktop's one-tap dictation setup stands (`GET /api/host/dictate/setup`). An older host or an
+   *  unreachable one reads as `null`: the caller says nothing rather than guess a state. */
+  dictateSetupState: async (): Promise<DictateSetupState | null> => {
+    try {
+      const r = await nfetch("/api/host/dictate/setup");
+      return r.ok ? ((await r.json()) as DictateSetupState) : null;
+    } catch { return null; }
+  },
+  /** Start the setup of ONE model on the desktop. 202 starts it; a 409 carries the reason it will not (already running…). */
+  dictateSetupStart: async (model: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+    try {
+      const r = await nfetch("/api/host/dictate/setup", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model }),
+      });
+      if (r.ok) return { ok: true };
+      let error = "the desktop refused to start the setup";
+      try { const j = (await r.json()) as { error?: unknown }; if (typeof j.error === "string") error = j.error; } catch { /* no body */ }
+      return { ok: false, error };
+    } catch { return { ok: false, error: "the desktop could not be reached" }; }
   },
   /**
    * One recording, transcribed on the desktop.

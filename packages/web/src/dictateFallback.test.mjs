@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { askOnLinkBack, dictateFallbackWhy } from "./dictateFallback.ts";
+import { askOnLinkBack, dictateFallbackWhy, fallbackHasDoor } from "./dictateFallback.ts";
 
 const ok = { available: true };
 
@@ -30,7 +30,21 @@ test("secure but no recording API", () => {
 
 test("the desktop's own reason is passed through", () => {
   const s = dictateFallbackWhy({ secure: true, canRecord: true, status: { available: false, reason: "no whisper model on this desktop" } });
-  assert.match(s, /no whisper model on this desktop$/);
+  assert.match(s, /no whisper model on this desktop\./);
+});
+
+test("the tap says the phone's recogniser is weaker, where the audio goes, and the setting that fixes it", () => {
+  const s = dictateFallbackWhy({ secure: true, canRecord: true, status: { available: false, reason: "no whisper model on this desktop." } });
+  assert.match(s, /weaker on code words and mixed languages/);
+  assert.match(s, /on Android it may send your audio to Google/);
+  assert.match(s, /Settings › Writing & reading › Local dictation/);
+  assert.doesNotMatch(s, /\.\./, "a reason that ends in a full stop is not doubled");
+  assert.equal(fallbackHasDoor(s), true);
+});
+
+test("https and no-recorder cases have a different fix: no door to Settings", () => {
+  assert.equal(fallbackHasDoor(dictateFallbackWhy({ secure: false, canRecord: false })), false);
+  assert.equal(fallbackHasDoor(dictateFallbackWhy({ secure: true, canRecord: false })), false);
 });
 
 test("a refusal with no reason still says whisper is out", () => {

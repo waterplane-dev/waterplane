@@ -45,7 +45,7 @@ import type { AssessDisplayRow } from "./arowsDisplay.ts";
  * would have been.
  */
 export function assessMissingWords(id: string): string {
-  return `the words for “${id}” are not on this phone`;
+  return `the words for “${id}” are not on this device`;
 }
 
 /**

@@ -40,7 +40,7 @@ export const toldText = (label: string): string =>
 
 /** The receipt on dismissal: where it comes back. */
 export const toldGoneText = (label: string): string =>
-  `Shown once for ${label} on this phone — the crossed-out speech icon beside the title brings it back.`;
+  `Shown once for ${label} on this device — the crossed-out speech icon beside the title brings it back.`;
 
 /**
  * "Your ask-before rules are not enforced here" — `SessionInfo.askRulesVia === "none"`, said once
@@ -55,7 +55,7 @@ export const askRulesDue = (via: string | undefined, backendId: string, seen: re
 export const askRulesText = (label: string): string =>
   `Ask-before rules are not enforced in a ${label} session: neither the CLI nor this app's gate can make it stop and ask, so a command your rules would hold back can run without a tap.`;
 export const askRulesGoneText = (label: string): string =>
-  `Shown once for ${label} on this phone — the shield-with-question-mark icon beside the title brings it back.`;
+  `Shown once for ${label} on this device — the shield-with-question-mark icon beside the title brings it back.`;
 export function markAskRulesSeen(backendId: string): void {
   const seen = toldSeen().filter((b) => b !== askRulesKey(backendId));
   lsSetJson(LS.toldNoticed, [...seen, askRulesKey(backendId)].slice(-SEEN_MAX));

@@ -108,7 +108,7 @@ export function HostNotifySettings() {
         />
       ) : push === "demo" ? (
         <SetCustom id="notif-push" label="OS push" icon={BellOff}
-          note="The demo sends no alerts — it never leaves this device. With your own desktop connected, alerts reach this phone." />
+          note="The demo sends no alerts — it never leaves this device. With your own desktop connected, alerts reach this device." />
       ) : push === "unsupported" ? (
         <SetCustom id="notif-push" label="OS push" icon={BellOff}
           note="This browser has no Web Push support — use the in-app feed." />

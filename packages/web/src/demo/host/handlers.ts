@@ -131,7 +131,8 @@ export const demoUsage = (at: number): Frame<"usage.status">["usage"] => ({
 export function helloFrames(md: DemoModel): HostMessage[] {
   const n = md.numbers ?? {};
   const out: (HostMessage | null)[] = [
-    { t: "backends", list: DEMO_BACKENDS },
+    // The skills switch is a host fact; the demo claims it only where the scenario carries the screen's data (`numbers.skills`).
+    { t: "backends", list: n.skills ? DEMO_BACKENDS.map((b) => ({ ...b, caps: { ...b.caps, skillSwitch: true } })) : DEMO_BACKENDS },
     { t: "session.list", sessions: sessions(md) },
     { t: "recent.list", recent: md.recent ?? [] },
     { t: "closed.list", closed: md.closed ?? [] },

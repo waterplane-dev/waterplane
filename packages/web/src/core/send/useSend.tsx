@@ -693,7 +693,7 @@ export function useSend(deps: SendDeps) {
   async function reattachKept(relPath: string, repoId: string, cwd: string): Promise<void> {
     track("action:resend.reattach");
     const blob = await keptBytes(relPath);
-    if (!blob) { showToast("those bytes are no longer on this phone"); return; }
+    if (!blob) { showToast("those bytes are no longer on this device"); return; }
     const ackId = newAckId();
     const name = relPath.split("/").pop() || "file";
     await idbSet("uploads", ackId, blob);

@@ -25,11 +25,11 @@
  */
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DEFAULT_AUTOPULL, familyKey, type AutoPullConfig, type PullItem } from "@waterplane/shared";
 import { hostStateDir, repoStateDir } from "./branddirs.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { isPlainObject, readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 /** Re-exported where it was born: the rule moved to `@waterplane/shared` when the
  *  post-build prune started asking the same question ("is this an older build
@@ -163,11 +163,8 @@ export class AutoPullManager extends EventEmitter {
 
   /** A repo's rule (defaults when there is no file). */
   config(repoDir: string): AutoPullConfig {
-    try {
-      return cleanConfig(JSON.parse(readFileSync(this.configPath(repoDir), "utf8")));
-    } catch {
-      return { ...DEFAULT_AUTOPULL };
-    }
+    // A corrupt or wrong-shaped file is kept aside before saveConfig replaces the name.
+    return cleanConfig(readJsonGuarded(this.configPath(repoDir), { ...DEFAULT_AUTOPULL }, isPlainObject));
   }
 
   /** Persist a repo's rule; returns what was actually written. */

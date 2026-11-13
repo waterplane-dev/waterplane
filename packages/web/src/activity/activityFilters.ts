@@ -71,7 +71,7 @@ export function activityHeadlineCut(all: readonly ActivityRow[], online: boolean
   const rows = all.filter((r) => r.dismissedAt == null);
   if (!online) {
     const held = rows.filter((r) => r.blockReason === "offline").length;
-    if (held) return { text: `${held} ${held === 1 ? "thing is" : "things are"} still on this phone — nothing expires while the link is down`, cut: null };
+    if (held) return { text: `${held} ${held === 1 ? "thing is" : "things are"} still on this device — nothing expires while the link is down`, cut: null };
   }
   const needs = rows.filter((r) => r.bucket === "needsYou").length;
   if (needs) return { text: `${needs} ${needs === 1 ? "row needs" : "rows need"} a decision from you`, cut: "needsYou" };

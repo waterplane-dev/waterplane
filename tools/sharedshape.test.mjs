@@ -121,7 +121,7 @@ const WIRE_BARRELS = [
   // 1,103 → 104, clihealth 940 → 123): header + explicit re-exports, a slice per subject.
   { barrel: "sessioncost.ts", dir: "sessioncost", maxBarrel: 124 },
   { barrel: "schedule.ts", dir: "schedule", maxBarrel: 102 },
-  { barrel: "queue.ts", dir: "queue", maxBarrel: 104 },
+  { barrel: "queue.ts", dir: "queue", maxBarrel: 106 },
   { barrel: "clihealth.ts", dir: "clihealth", maxBarrel: 123 },
 ];
 const MAX_WIRE_SLICE_LINES = 500;

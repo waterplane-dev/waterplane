@@ -51,3 +51,11 @@ test("a backend is named as the CLI it runs, never twice", () => {
   assert.equal(cliName("OpenAI Codex"), "OpenAI Codex CLI");
   assert.equal(cliName("Gemini CLI"), "Gemini CLI");
 });
+
+test("a Claude Code Bash wrapper running an unrelated install is not an install of claude", () => {
+  const wrap = (cmd) => `  606 /bin/zsh -c source /Users/me/.claude/shell-snapshots/snapshot-zsh-1-x.sh 2>/dev/null || true && eval '${cmd}' < /dev/null && pwd -P >| /tmp/claude-ab-cwd`;
+  assert.equal(installerIn(wrap("cd ~/dev/app && npm install"), "claude"), null, ".claude in the snapshot path is not the package");
+  assert.equal(installerIn(wrap("brew install whisper-cpp"), "claude"), null);
+  assert.equal(installerIn(wrap("npm i -g @anthropic-ai/claude-code@latest"), "claude")?.pid, 606, "a real install through the wrapper still counts");
+  assert.equal(installerIn("  707 brew upgrade --cask claude-code", "claude")?.pid, 707);
+});

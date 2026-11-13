@@ -2,7 +2,7 @@
 import { type ComponentProps } from "react";
 import { CircleHelp } from "lucide-react";
 import {
-  type CostBreakdown, DOLLARS_WHY, DOLLARS_WHY_HEAD, fmtCount, fmtExact, fmtUsd, type TokenConvo, type TokenStatsDoc, tokenTotal,
+  type CostBreakdown, DOLLARS_WHY, DOLLARS_WHY_HEAD, fmtCount, fmtExact, fmtUsd, priceSourceText, type TokenConvo, type TokenStatsDoc, tokenTotal,
   type TokenGroup, type TokenTotals, topGroups,
 } from "@waterplane/shared";
 import { ScopeCard, ScopeTag, TopConvos } from "./TokenInsights.tsx";
@@ -124,7 +124,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
       {money && <>
         <div className="empty ts-caveat">
           This is a <b>counterfactual, not a bill</b>: what the same traffic would have cost billed
-          through the API at published pay-as-you-go rates ({doc.pricesAsOf} price list).
+          through the API at published pay-as-you-go rates ({priceSourceText(doc)}).
           {/* Both of these are counted over the WHOLE corpus, so they
               are withheld under a window rather than restated about a
               span they were not measured over. */}

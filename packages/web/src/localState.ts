@@ -27,6 +27,7 @@ import type { BuildConfig, CaptureTarget, LaunchOpts, RepoTarget, ScheduleEntry,
 import { cleanHealth } from "@waterplane/shared";
 import type { CliHealthDoc } from "./CliHealthSheet";
 import type { Snippet } from "./SnippetSheet";
+import { snippetView, type SnippetView } from "./snippetPicks";
 import { LS, lsDel, lsGet, lsJson, lsNum, lsSetJson } from "./storage";
 import { type PendingMarks, parsePendingMarks } from "./pendingMarks";
 
@@ -89,6 +90,10 @@ export function loadCmdHistory(): string[] {
 // host so the same templates exist on every client (see settings.ts).
 export function loadSnippets(): Snippet[] {
   return lsJson(LS.snippets, []);
+}
+/** What the pickers show: the saved list, or the shipped starters while the key does not exist at all. Reads only. */
+export function loadSnippetView(): SnippetView {
+  return snippetView(lsGet(LS.snippets));
 }
 
 // Manual live-session row order (session ids, top first). Device-local — the row

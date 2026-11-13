@@ -7,6 +7,7 @@ import { cacheThumb } from "./thumbCache";
 import { useThumbSrc } from "./thumbSrc";
 import { Button } from "./kit/Button";
 import { bangLine, shellBlock } from "./bangLine";
+import { MdTable } from "./MdTable";
 
 /**
  * Markdown-lite renderer, shared by the reader view (TranscriptView) and the
@@ -281,7 +282,7 @@ function inlineDoc(text: string, q: string, key: string, files?: FileRefCtx): (s
   return out;
 }
 
-type Align = "left" | "center" | "right";
+type Align = "left" | "center" | "right"; // MdTable.tsx names the same three
 
 // GFM pipe-table row → cells. Splits on unescaped `|`, drops the optional
 // leading/trailing pipe. No lookbehind (older mobile Safari), so scan by hand.
@@ -460,23 +461,9 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         const body: string[][] = [];
         let j = li + 2;
         for (; j < lines.length && lines[j].includes("|"); j++) body.push(rowCells(lines[j]));
-        const cols = Math.max(header.length, ...body.map((r) => r.length));
-        const cell = (r: string[], c: number) => r[c] ?? "";
         nodes.push(
-          <div {...tag(start + li, start + j - 1, "tr-table-wrap")} key={`tw${k}`}>
-            <table className="tr-table">
-              <thead>
-                <tr>{Array.from({ length: cols }, (_, c) => (
-                  <th key={c} style={{ textAlign: aligns[c] ?? "left" }}>{inline(cell(header, c), q, `th${k}-${c}`, files)}</th>
-                ))}</tr>
-              </thead>
-              <tbody>{body.map((r, ri) => (
-                <tr key={ri}>{Array.from({ length: cols }, (_, c) => (
-                  <td key={c} style={{ textAlign: aligns[c] ?? "left" }}>{inline(cell(r, c), q, `td${k}-${ri}-${c}`, files)}</td>
-                ))}</tr>
-              ))}</tbody>
-            </table>
-          </div>,
+          <MdTable key={`tw${k}`} outer={tag(start + li, start + j - 1, "tr-table-block")} header={header} body={body} aligns={aligns}
+            cell={(text, r, c) => inline(text, q, r < 0 ? `th${k}-${c}` : `td${k}-${r}-${c}`, files)} />,
         );
         li = j - 1;
         continue;

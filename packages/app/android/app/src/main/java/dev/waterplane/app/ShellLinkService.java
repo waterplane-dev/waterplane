@@ -1,5 +1,6 @@
 package dev.waterplane.app;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -16,6 +17,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -176,6 +179,31 @@ public class ShellLinkService extends Service {
      *  network immediately on registration, so without this every service start
      *  tore down the socket it had just opened. */
     private static final long FRESH_SOCKET_MS = 10_000;
+
+    /**
+     * <b>A retry has to wake the phone, or it never happens.</b> The backoff runs on
+     * {@link #handler}, whose clock ({@code uptimeMillis}) stops while the CPU is
+     * suspended — and a phone in a pocket is suspended most of the time. A socket
+     * lost there (the host's 20 s ping check, Wi-Fi power save, the router) stayed
+     * lost until something else woke the phone: the screen, or the fifteen-minute
+     * WorkManager check. Seen on a real phone: no connection at all for 5½ minutes
+     * with the link switched on. So every retry also sets an inexact
+     * {@code ELAPSED_REALTIME_WAKEUP} alarm (no exact-alarm permission, no manifest
+     * entry: the listener form), and the dial it starts holds a partial wake lock
+     * until the socket opens or fails, at most {@link #DIAL_WAKE_MS}.
+     *
+     * <p>Battery: a desktop that stays unreachable (asleep, off, another network)
+     * would otherwise wake the phone once a minute all night. After
+     * {@link #WAKE_FAST_FOR_MS} down, the alarm slows to {@link #WAKE_SLOW_MS}; the
+     * handler's own backoff still dials every minute whenever the phone is awake
+     * anyway, and a network change still dials at once. In Doze the platform
+     * defers the alarm to its maintenance window, which is the most any app gets.
+     */
+    private static final long WAKE_FAST_FOR_MS = 10 * 60_000;
+    private static final long WAKE_SLOW_MS = 5 * 60_000;
+    /** OkHttp's default connect timeout (10 s, none set here) plus the TLS handshake and the
+     *  upgrade: long enough for one dial to finish, and the lock is let go on either answer. */
+    private static final long DIAL_WAKE_MS = 20_000;
 
     private static final long BACKOFF_MIN_MS = 2_000;
     private static final long BACKOFF_MAX_MS = 60_000;
@@ -750,6 +778,14 @@ public class ShellLinkService extends Service {
          *  cards waiting does not ring again. */
         @Nullable String lastSummaryKey;
         final Runnable connectRunnable = this::connect;
+        /** The retry's wake-up ({@link #WAKE_FAST_FOR_MS}); delivered on {@link #handler}. */
+        final AlarmManager.OnAlarmListener wakeAlarm = this::onWakeAlarm;
+        /** When this link lost its socket ({@code elapsedRealtime}, which runs through
+         *  suspend), or 0 while it has one. Picks the alarm's pace. */
+        long downSince = 0;
+        /** Held only while an alarm-started dial is in flight. Per link and not reference
+         *  counted: one desktop's answer never lets go of another's dial. */
+        @Nullable PowerManager.WakeLock dialLock;
 
         Link(ShellLinkSet.Spec spec) {
             this.spec = spec;
@@ -812,7 +848,60 @@ public class ShellLinkService extends Service {
         void close() {
             closed = true;
             handler.removeCallbacks(connectRunnable);
+            disarmWake();
             dropSocket();
+        }
+
+        /** Set the retry's wake-up, at the backoff's pace while the loss is fresh. */
+        private void armWake(long waitMs) {
+            long now = SystemClock.elapsedRealtime();
+            if (downSince == 0) downSince = now;
+            long at = now - downSince < WAKE_FAST_FOR_MS ? waitMs : WAKE_SLOW_MS;
+            AlarmManager am = getSystemService(AlarmManager.class);
+            if (am == null) return;
+            try {
+                am.cancel(wakeAlarm);
+                am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, now + at, "waterplane:link-retry", wakeAlarm, handler);
+            } catch (RuntimeException e) {
+                Log.w(TAG, spec.label + ": cannot set the retry alarm: " + e);
+            }
+        }
+
+        private void disarmWake() {
+            AlarmManager am = getSystemService(AlarmManager.class);
+            if (am != null) {
+                try { am.cancel(wakeAlarm); } catch (RuntimeException e) { Log.d(TAG, "alarm cancel: " + e); }
+            }
+        }
+
+        /** The phone was woken for this link: dial now, and stay awake until it answers. */
+        private void onWakeAlarm() {
+            if (stopping || authPaused || pinPaused || closed || socket != null) return;
+            Log.i(TAG, spec.label + ": woken to retry");
+            holdAwake();
+            handler.removeCallbacks(connectRunnable);
+            connect();
+            if (socket == null) letSleep(); // refused before dialling (a locked route)
+        }
+
+        private void holdAwake() {
+            try {
+                if (dialLock == null) {
+                    PowerManager pm = getSystemService(PowerManager.class);
+                    if (pm == null) return;
+                    dialLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "waterplane:link-dial");
+                    dialLock.setReferenceCounted(false);
+                }
+                dialLock.acquire(DIAL_WAKE_MS);
+            } catch (RuntimeException e) {
+                Log.w(TAG, spec.label + ": no wake lock: " + e);
+            }
+        }
+
+        private void letSleep() {
+            PowerManager.WakeLock l = dialLock;
+            if (l == null) return;
+            try { if (l.isHeld()) l.release(); } catch (RuntimeException e) { Log.d(TAG, "wake lock release: " + e); }
         }
 
         void ensureSocket(long delayMs) {
@@ -857,6 +946,9 @@ public class ShellLinkService extends Service {
                     connectedAt = System.currentTimeMillis();
                     lastFrameAt = connectedAt;
                     backoffMs = BACKOFF_MIN_MS;
+                    downSince = 0;
+                    disarmWake();
+                    letSleep();
                     refreshStatus();
                     // The one frame this side sends. The version is the web layer's,
                     // handed over at `start()` — see the class comment. `role:notify`
@@ -966,6 +1058,7 @@ public class ShellLinkService extends Service {
         void dropSocket() {
             WebSocket ws = socket;
             socket = null;
+            letSleep(); // a dial that failed, closed or was abandoned is answered
             if (ws != null) {
                 try { ws.cancel(); } catch (RuntimeException e) { Log.d(TAG, "cancel: " + e); }
             }
@@ -980,6 +1073,7 @@ public class ShellLinkService extends Service {
             long wait = backoffMs;
             backoffMs = Math.min(BACKOFF_MAX_MS, backoffMs * 2);
             ensureSocket(wait);
+            armWake(wait);
         }
 
         /** A network came back. Reset the backoff and go now — an exponential wait

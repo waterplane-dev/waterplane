@@ -269,7 +269,7 @@ export function buildPeriod(d: PeriodDraft): BuiltPeriod {
   if (from == null || to == null) return { ok: false, reason: "type both days as YYYY-MM-DD" };
   if (to <= from) return { ok: false, reason: "the last day has to be on or after the first" };
   if (from % HOUR_MS !== 0 || to % HOUR_MS !== 0) {
-    return { ok: false, reason: "this phone's midnight is not on a whole UTC hour, and the desktop keeps spend by the hour — a span here would count the wrong minutes" };
+    return { ok: false, reason: "this device's midnight is not on a whole UTC hour, and the desktop keeps spend by the hour — a span here would count the wrong minutes" };
   }
   return { ok: true, period: { id: `span-${d.from.trim()}`, kind: "span", unit: "usd", from, to } };
 }

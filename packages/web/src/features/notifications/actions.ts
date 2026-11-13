@@ -121,7 +121,7 @@ export function openNotif(n: NotificationItem): void {
   switch (t.to) {
     case "plugin":
       // A plugin's alert (a vault ask), or an alert naming a plugin's screen: that screen, else the row.
-      if (!c.nav.openPlugin(t.id)) showRow(n, "that screen is not available on this phone");
+      if (!c.nav.openPlugin(t.id)) showRow(n, "that screen is not available on this device");
       return;
     case "image":
       c.files.viewImage(n.image!, n.sessionId);

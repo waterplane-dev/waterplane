@@ -77,7 +77,12 @@ export function launcherReadings(readings: readonly UsageReading[], sessions: re
 /** The figures claude's segment prints; `null` = the CLI printed none (drawn `?`, as ever).
  *  `noSess` = the account has NO 5-hour window (`UsageInfo.sessionGoneSince`): the segment
  *  collapses to the week and its long press says why — never a `?` for a window that is not there. */
-export interface ClaudeFigures { sess: number | null; sessResetAt: number | null; wk: number | null; noSess?: boolean }
+export interface ClaudeFigures { sess: number | null; sessResetAt: number | null; wk: number | null; noSess?: boolean; reading?: boolean }
+
+/** The host has taken NO `/usage` reading yet (it just started: `checkedAt` 0, nothing kept to
+ *  offer). Drawn `reading…`, not `?/?` — a `?` there read as a failure. A failed scrape stamps
+ *  `checkedAt`, so it stays `?`. */
+export const usageNotReadYet = (u: UsageInfo | null): boolean => !!u && !u.ok && !u.checkedAt;
 
 export function claudeFigures(r: UsageReading): ClaudeFigures {
   const w = (id: string) => r.windows.find((x) => x.id === id);
@@ -88,7 +93,7 @@ export function claudeFigures(r: UsageReading): ClaudeFigures {
 /** The scrape itself as figures — the chip's fallback while no reading exists. */
 export const infoFigures = (u: UsageInfo | null): ClaudeFigures =>
   ({ sess: u?.sessionPct ?? null, sessResetAt: u?.sessionResetAt ?? null, wk: u?.weeklyPct ?? null,
-    ...(u?.sessionGoneSince != null ? { noSess: true } : {}) });
+    ...(u?.sessionGoneSince != null ? { noSess: true } : {}), ...(usageNotReadYet(u) ? { reading: true } : {}) });
 
 /**
  * What claude's segment prints: the scrape itself when the phone holds one (it

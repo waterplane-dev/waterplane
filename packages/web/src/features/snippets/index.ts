@@ -7,7 +7,7 @@ import type { FeatureManifest } from "../../sdk";
 import { SnippetsSheet } from "./SnippetsSheet";
 import { bootSnippetSync } from "./actions";
 
-export { useSnippets } from "./store";
+export { useSnippets, useSnippetView } from "./store";
 
 export const manifest: FeatureManifest = {
   id: "snippets",

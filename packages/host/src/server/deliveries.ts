@@ -13,18 +13,25 @@
  *
  * Never a second delivery path: every word still goes through `deliver.ts`.
  */
-import { basename } from "node:path";
+import { basename, join } from "node:path";
+import { existsSync } from "node:fs";
 import type { HostMessage, OpenDelivery, SendView } from "@waterplane/shared";
 import { deliverPrompt, deliverToNewSession, type DeliveryResult } from "../deliver.js";
+import { realClock, type Clock } from "../waitclock.js";
 import type { Redeliverer } from "../opendeliveries.js";
 import type { InputVerdict } from "../routes/types.js";
 import type { ServerCtx } from "./ctx.js";
-import { logTag } from "@waterplane/shared";
+import { INBOX_HOLD_MS, freshInboxRefs, logTag, safeRel } from "@waterplane/shared";
+
+/** How often a held prompt looks for its inbox files again. */
+const INBOX_POLL_MS = 1000;
 
 /** Everything `createDeliveries` built; `main.ts` assigns each into `ctx`. */
 export type Deliveries = ReturnType<typeof createDeliveries>;
 
-export function createDeliveries(ctx: ServerCtx) {
+/** `clock` is the inbox hold's wall time (a test hands in virtual time) and rides into every delivery it starts:
+ *  `startPrompt`, `deliverChain`, the re-send and `deliverInput`. */
+export function createDeliveries(ctx: ServerCtx, clock: Clock = realClock) {
   /**
    * Type a `session.create`'s `prompt` into the session it just made.
    *
@@ -60,7 +67,7 @@ export function createDeliveries(ctx: ServerCtx) {
     let why: string | undefined;
     try {
       res = await deliverToNewSession(ctx.sessions, sessionId, text, text.startsWith("/") ? "command" : "prompt",
-        { audit: { source: "create", actor: "user", detail: "first prompt of a new session" }, onDetail: (d) => { why = d; } });
+        { clock, audit: { source: "create", actor: "user", detail: "first prompt of a new session" }, onDetail: (d) => { why = d; } });
     } catch {
       res = "unconfirmed";
     }
@@ -118,7 +125,7 @@ export function createDeliveries(ctx: ServerCtx) {
     let step = 0;
     for (; step < steps.length; step++) {
       last = await deliverPrompt(ctx.sessions, sessionId, steps[step], steps[step].trimStart().startsWith("/") ? "command" : "prompt",
-        { audit: { source: "backlog", actor: "auto", detail: "a durable intent came due" } });
+        { clock, audit: { source: "backlog", actor: "auto", detail: "a durable intent came due" } });
       if (last !== "ok") break;
     }
     return { last, step };
@@ -136,6 +143,7 @@ export function createDeliveries(ctx: ServerCtx) {
     // is another re-send.
     const res = await deliverPrompt(ctx.sessions, q.sessionId, q.text, q.kind === "command" ? "command" : "prompt", {
       watch: false,
+      clock,
       audit: { source: q.source, actor: "auto", detail: "re-sent by the host: the conversation log proved it never ran" },
     });
     return res;
@@ -239,6 +247,15 @@ export function createDeliveries(ctx: ServerCtx) {
       return { ok: false, reason: "session not available" };
     }
     if (!info.remoteControl) return { ok: false, reason: "remote control is off for this session" };
+    // **A picture the prompt names has to be on disk before the prompt is typed.**
+    // The phone names an upload before it sends it, and orders the two in its
+    // own queue; that ordering slipped (2026-11-11: Send & run typed a collage's
+    // path, the agent found no file, the bytes landed 53 s later). This is the
+    // backstop that does not depend on the phone: wait for every FRESHLY minted
+    // inbox path the words name (`freshInboxRefs` — an old or hand-typed path
+    // is never waited for), up to `INBOX_HOLD_MS`, then type it either way.
+    // The phone's retries of this ackId join this promise (`inputsInFlight`).
+    await awaitInboxFiles(info.cwd, text, id);
     let res: Awaited<ReturnType<typeof deliverPrompt>>;
     // The sentence the delivery wrote about itself, if it wrote one. `retry` is
     // one enum value covering two different events, and only one of them ("that
@@ -261,7 +278,7 @@ export function createDeliveries(ctx: ServerCtx) {
       // later by the sweep, can name the row it retires. This is the path the 67
       // stuck rows came down.
       res = await deliverPrompt(ctx.sessions, id, text, text.trimStart().startsWith("/") ? "command" : "prompt",
-        { interactive: true, ackId, view, audit: { source: "compose", actor: "user" }, onDetail: (d) => { detail = d; } });
+        { interactive: true, clock, ackId, view, audit: { source: "compose", actor: "user" }, onDetail: (d) => { detail = d; } });
     } catch (e) {
       // A host fault, not a completed delivery: report it retryable so the phone
       // keeps the text queued rather than failing it (and so the verdict is not
@@ -281,6 +298,22 @@ export function createDeliveries(ctx: ServerCtx) {
       default:
         return { ok: false, state: "unconfirmed", reason: "typed, but never appeared on screen — check the session before re-sending" };
     }
+  }
+
+  /** Poll until every fresh inbox file `text` names exists under `cwd`, or the
+   *  hold runs out. Read-only: it types nothing and refuses nothing. */
+  async function awaitInboxFiles(cwd: string, text: string, id: string): Promise<void> {
+    const refs = freshInboxRefs(text, clock.now()).filter((p) => safeRel(p));
+    const missing = () => refs.filter((p) => !existsSync(join(cwd, p)));
+    let left = missing();
+    if (!left.length) return;
+    const t0 = clock.now();
+    console.log(`${logTag} inbox hold · ${id} · waiting for ${left.map((p) => basename(p)).join(", ")}`);
+    while (left.length && clock.now() - t0 < INBOX_HOLD_MS) {
+      await clock.sleep(INBOX_POLL_MS);
+      left = missing();
+    }
+    console.log(`${logTag} inbox hold · ${id} · ${left.length ? `gave up after ${Math.round((clock.now() - t0) / 1000)} s, typing anyway (${left.map((p) => basename(p)).join(", ")} absent)` : `landed after ${Math.round((clock.now() - t0) / 1000)} s`}`);
   }
 
   return { startPrompt, deliverChain, resendOpenDelivery, wireDeliverySettled, deliverySnapshot, deliverInput };

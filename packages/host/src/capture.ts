@@ -49,7 +49,7 @@
  */
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { BRAND, isCaptureRow } from "@waterplane/shared";
@@ -62,7 +62,7 @@ import { BACKENDS, ENABLED, MAX_RUNS, OFF_TEXT, OUT_RING } from "./capture/captu
 import { cleanTarget, probeCaptureBackends } from "./capture/captureconfig.js";
 import { intentToCaptureRun, withLease } from "./capture/capturehelpers.js";
 import { runCapturePass } from "./capture/capturepass.js";
-import { writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 // The slices, re-exported so no importer changes (`capture/capture*.ts`).
 export { diffRecord, shouldEmit, verdictLine, verificationLevel } from "./capture/captureverdict.js";
@@ -86,13 +86,11 @@ export class CaptureManager extends EventEmitter {
 
   /** The raw rows as they are on disk, so a refusal can quote the one that is wrong. */
   private readRaw(repoDir: string): unknown[] {
-    try {
-      const doc = JSON.parse(readFileSync(this.configPath(repoDir), "utf8"));
-      const arr = Array.isArray(doc) ? doc : doc?.targets;
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];   // no file / bad json → no targets
-    }
+    // no file → no targets; a corrupt or wrong-shaped one is kept aside as `.corrupt-<ts>`
+    // before save() replaces the name, and reads as no targets
+    const doc = readJsonGuarded<unknown>(this.configPath(repoDir), null, (v) => Array.isArray(v) || Array.isArray((v as { targets?: unknown } | null)?.targets));
+    const arr = Array.isArray(doc) ? doc : (doc as { targets?: unknown } | null)?.targets;
+    return Array.isArray(arr) ? arr : [];
   }
 
   /** A repo's configured capture targets (empty if none/unreadable). */

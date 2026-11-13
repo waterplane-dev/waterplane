@@ -35,12 +35,12 @@ test("the sentence names each kind with its number, and nothing when there is no
 
 test("the remove question says what STAYS, and where the app goes when it is the host in use", () => {
   assert.deepEqual(removeLines({ drafts: 3, notes: 0, queued: 1 }, false, null),
-    ["3 drafts and 1 queued prompt stay saved on this phone; re-add the host to see them."]);
+    ["3 drafts and 1 queued prompt stay saved on this device; re-add the host to see them."]);
   assert.deepEqual(removeLines({ drafts: 1, notes: 0, queued: 0 }, false, null),
-    ["1 draft stays saved on this phone; re-add the host to see them."]);
+    ["1 draft stays saved on this device; re-add the host to see them."]);
   const next = { id: "b", name: "laptop", base: "http://100.64.0.9:8770" };
   assert.deepEqual(removeLines({ drafts: 0, notes: 0, queued: 0 }, true, next), [
-    "Nothing unsent is saved for it on this phone.",
+    "Nothing unsent is saved for it on this device.",
     "It is the host in use: the app switches to laptop first, then reloads.",
   ]);
   assert.match(removeLines({ drafts: 0, notes: 0, queued: 0 }, true, null)[1], /connect screen/);
@@ -79,7 +79,7 @@ test("paired devices: route words, ages, and the revoke question for this phone 
   assert.equal(seenAgo(5 * 60_000), "5 min ago");
   assert.deepEqual(revokeLines({ name: "Pixel", current: false }), ["Pixel will need a new pairing code to connect again."]);
   const mine = revokeLines({ name: "Pixel", current: true }).join(" ");
-  assert.match(mine, /signs this phone out/);
+  assert.match(mine, /signs this device out/);
   assert.match(devicesEmptyText(false), /Set a host password to give each phone its own sign-in/);
   assert.doesNotMatch(devicesEmptyText(true), /password/);
 });
@@ -107,8 +107,8 @@ test("nextHostId: two flip, three go round, one or none is no toggle", () => {
 test("a switch that ran out of room names where the phone still is", () => {
   const hosts = [{ id: "mac", name: "MacStudio", base: "http://100.64.0.5:8770" }, { id: "zen", name: "zenbookJ", base: "http://100.64.0.9:8770" }];
   const park = switchFailText({ stage: "park", from: "mac", to: "zen" }, hosts);
-  assert.match(park, /Could not switch to zenbookJ: this phone's storage is full\. Still on MacStudio/);
-  assert.match(park, /Storage on this phone/);
+  assert.match(park, /Could not switch to zenbookJ: this device's storage is full\. Still on MacStudio/);
+  assert.match(park, /Storage on this device/);
   assert.match(switchFailText({ stage: "restore", from: "mac", to: "zen" }, hosts), /^On zenbookJ, but .* kept/);
   assert.match(switchFailText({ stage: "park", from: "mac", to: "gone" }, hosts), /switch to the other desktop/);
 });

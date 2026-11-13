@@ -60,7 +60,7 @@ export const readyLine = (names: readonly string[], bytes: number): string =>
 
 /** What the row says when switched off and a download is still on this phone. */
 export const keptLine = (bytes: number): string =>
-  `Off. Its reader (${mb(bytes)} MB) is still on this phone — delete it, or keep it for when you switch it back on.`;
+  `Off. Its reader (${mb(bytes)} MB) is still on this device — delete it, or keep it for when you switch it back on.`;
 
 export const OFF_LINE = "Off. Switch it on in Settings › Tools & diagnostics › plugins (Text in marks): it downloads its reader (English + German, about 8 MB) from this desktop once and then works offline.";
 

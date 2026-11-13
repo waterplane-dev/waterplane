@@ -40,6 +40,11 @@ export const LS_WORK = {
    */
   dictateLangs: lsKey("dictate.langs"),
   /**
+   * Snippet ids, most recently inserted first (`snippetPicks.ts` `byRecent`). Per device and
+   * never synced: an ORDER of the picker on this phone, never a rewrite of the synced list.
+   */
+  snippetRecent: lsKey("snippet.recent"),
+  /**
    * THE RETIRED GIVE-UPS LEDGER — read once, then never written again.
    *
    * It held a clipped 200-character head of every send that stopped, for a day,

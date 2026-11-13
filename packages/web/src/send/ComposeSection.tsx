@@ -68,7 +68,7 @@ export function ComposeSection({ m }: { m: SendSheetModel }) {
               ? states.length === 1 ? "The file it names will be there." : "Every file it names will be there."
               : online
                 ? `${blockers.length} of ${states.length} ${blockers.length === 1 ? "file is" : "files are"} not going to arrive. Fix or drop ${blockers.length === 1 ? "it" : "them"} above, or send anyway and the agent will find nothing at ${blockers.length === 1 ? "that path" : "those paths"}.`
-                : "No connection, so the repo can't be checked — what this says about the files is only what this phone knows."}
+                : "No connection, so the repo can't be checked — what this says about the files is only what this device knows."}
           </Hint>
         )}
       </PromptComposer>

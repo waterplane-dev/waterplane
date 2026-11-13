@@ -26,6 +26,8 @@
  * long thought in half is worse than a wait somebody can see.
  */
 
+import type { DictateModelChoice } from "./wire/dictatesetup.js";
+
 /** What the capture graph is opened at, and the only rate whisper.cpp reads. */
 export const DICTATE_RATE = 16_000;
 
@@ -55,6 +57,11 @@ export interface DictateStatus {
   engine?: string;
   /** The model file's basename, for a person deciding whether to swap it. */
   model?: string;
+  /** This desktop can set dictation up on a tap (macOS with brew, or whisper-cli
+   *  already present). Absent on an older host: offer nothing. */
+  canSetup?: boolean;
+  /** The models a setup may download; present with `canSetup`. */
+  models?: DictateModelChoice[];
 }
 
 /**

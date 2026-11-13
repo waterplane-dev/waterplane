@@ -114,6 +114,14 @@ function hostStatus(): Promise<DictateStatus> {
   return statusPromise;
 }
 
+const statusWatchers = new Set<() => void>();
+/** The desktop's dictation changed (local whisper was just set up): forget the memo and let every open
+ *  microphone ask again, so the engine switches without a reload. */
+export function dictateStatusChanged(): void {
+  statusPromise = null;
+  for (const fn of statusWatchers) fn();
+}
+
 /** Whether this document may open a microphone at all. False on an insecure
  *  origin, which is what a bare `http://100.x` tunnel is. */
 function canRecord(): boolean {
@@ -286,6 +294,7 @@ export function useVoice(box: VoiceBox): Voice {
       });
     };
     ask();
+    statusWatchers.add(ask);
     // A "no" asked while the desktop was down (a reboot, a host restart) is
     // asked again when the link comes back — otherwise the phone's recogniser
     // stays the engine until a reload, which is how it was found.
@@ -294,6 +303,7 @@ export function useVoice(box: VoiceBox): Voice {
     return () => {
       live = false;
       offLink();
+      statusWatchers.delete(ask);
       off();
       meantStopRef.current = true;
       recRef.current?.stop();

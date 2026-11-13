@@ -152,6 +152,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "enter-sends", group: "writing", label: "what Return does", keywords: "enter key send newline keyboard compose submit" },
   { id: "dictate-lang", group: "writing", label: "dictation is read as", keywords: "voice speech microphone mic whisper language german english translate transcribe auto detect" },
   { id: "dictate-langs", group: "writing", label: "languages on the microphone", keywords: "voice speech dictation picker list offer languages mic which" },
+  { id: "dictate-local", group: "writing", label: "local dictation", keywords: "voice speech whisper microphone model install setup local desktop download brew" },
   { id: "dictate-terms", group: "writing", label: "words dictation should know", keywords: "voice speech vocabulary glossary dictionary custom terms names jargon misheard recognise spelling whisper prompt" },
   { id: "close-kb-on-send", group: "writing", label: "keyboard after Send", keywords: "keyboard close hide dismiss blur send focus" },
   { id: "shortcut-card", group: "writing", label: "hold Ctrl to see shortcuts", keywords: "keyboard shortcut shortcuts chord hotkey cheat sheet ctrl cmd command alt option modifier hold card" },

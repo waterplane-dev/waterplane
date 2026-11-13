@@ -145,6 +145,12 @@ export const LS_VIEW = {
    */
   textDumpWrap: lsKey("textDumpWrap"),
   /**
+   * Whether a reader table too wide for the screen wraps its prose columns
+   * (`MdTable.tsx`). On by default: a sentence-long cell scrolled sideways for
+   * screens. Off = one line per row, the table scrolls in its own box.
+   */
+  readerTableWrap: lsKey("readerTableWrap"),
+  /**
    * RETIRED — the bulk-close dialog's custom "close older than N hours" field.
    * `CloseSheet.tsx` offers fixed idle-for/open-for edges as facet chips
    * instead of one typed number; `useLauncherModel.ts` `lsDel`s this once on

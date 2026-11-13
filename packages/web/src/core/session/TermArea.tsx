@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
-  List, Maximize2, Minimize2, Play, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
+  List, Maximize2, Minimize2, Play, Radar, RotateCw, ScrollText, Sparkles, Terminal as TerminalIcon, X,
 } from "lucide-react";
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
@@ -41,7 +41,7 @@ import { StowCorner } from "../../Stowable";
 import { KeysPop } from "./KeysPop";
 import { KeyRow } from "./KeyRow";
 import { ModeGlyph } from "./ModeSection";
-import { badgeMode, modeTitle } from "../../modePick";
+import { badgeMode, modeTitle, ultraState } from "../../modePick";
 import { tallyTitle, turnTally } from "../sessions/tags";
 import { TermCostStrip } from "../../TermCostStrip";
 import { nextReaderZoom, nextTermZoom, readerScale } from "../../uiScale";
@@ -246,18 +246,22 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           session: there is no process yet to send /model to or relaunch.
           It carries the footer's permission mode as a small second glyph
           (`badgeMode`: the LIVE reading only, and nothing for Manual — the CLI
-          labels that state with nothing either), so the mode shows closed. */}
+          labels that state with nothing either), so the mode shows closed.
+          Ultracode adds the popover's Sparkles glyph — only when the CLI CONFIRMED
+          it on (`ultraState`); unknown and off draw nothing. */}
       {!pending && !isShellBackend(wheel.backends, active.backend) && (() => {
         const badge = badgeMode(active);
-        const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}`;
+        const ultra = ultraState(active.ultracode) === "on";
+        const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}${ultra ? " — ultracode on" : ""}`;
         return (
-          <Button ref={wheelBtn} className={[wheelOpen && "active", badge && "mw-badged"].filter(Boolean).join(" ")} data-hint="term.modelwheel"
+          <Button ref={wheelBtn} className={[wheelOpen && "active", (badge || ultra) && "mw-badged"].filter(Boolean).join(" ")} data-hint="term.modelwheel"
             onPointerDown={keepFocus}
             aria-label={label} aria-expanded={wheelOpen}
             title={label}
             onClick={() => { track("action:modelwheel.open"); setWheelOpen((o) => !o); }}>
             <Radar size={ICON} />
             {badge && <span className="mw-badge"><ModeGlyph mode={badge} size={12} /></span>}
+            {ultra && <span className="mw-badge"><Sparkles size={12} aria-hidden /></span>}
           </Button>
         );
       })()}
@@ -623,12 +627,12 @@ export function TermArea(p: TermAreaProps): ReactNode {
                       {/* No screen saved, but the transcript sweep cached the conversation:
                           say where it is rather than leaving the person at "nothing". */}
                       {card && cachedTranscriptAt != null && (
-                        <span className="term-overlay-hint">The conversation was saved on this phone {ago(cachedTranscriptAt)} — the reader shows it.</span>
+                        <span className="term-overlay-hint">The conversation was saved on this device {ago(cachedTranscriptAt)} — the reader shows it.</span>
                       )}
                       {(hasScrollback(active.id) || (card && cachedTranscriptAt != null)) && (
                         <span className="term-overlay-acts">
                           {card && cachedTranscriptAt != null && (
-                            <Button title="the conversation as saved on this phone"
+                            <Button title="the conversation as saved on this device"
                               onClick={() => { track("action:read.offline"); setView(true); }}><BookOpen size={14} /> read it</Button>
                           )}
                           {hasScrollback(active.id) && (

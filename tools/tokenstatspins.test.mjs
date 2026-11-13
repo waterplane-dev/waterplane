@@ -71,8 +71,9 @@ test("P2: each ledger read is made once, and the caches are touched only by sdk/
   // The cost window (2026-10-09): the body reads the week (`weekcost:`) and the cut's span
   // (`costwindow:`); the fan-out sheet reads the last similar run for its cost hint.
   // 2026-10-15: the body's third read is the dollar period's (`periodcost:`, the month card).
+  // 2026-11-11: the fourth is the span before the cut's (`costwindow-prev:`), for the insights' deltas.
   assert.deepEqual(counts("ledgers.costWindow("), {
-    "extensions/token-stats/web/TokenStatsBody.tsx": 3,
+    "extensions/token-stats/web/TokenStatsBody.tsx": 4,
     "web/src/features/fanout/FanoutCostHint.tsx": 1,
   });
   const cache = {};
@@ -129,6 +130,8 @@ const HOOKS = {
     "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
     // the span's own cost window and its repos; the calibration, the calendar cut, the clock, insights
     "useRemoteResource", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
+    // 2026-11-11 (R-usage-031): the insights' span switch, the span before's read, the span's insights
+    "useState", "useRemoteResource", "useMemo",
   ],
 };
 

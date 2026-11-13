@@ -54,8 +54,9 @@ authorized caller can do once inside.**
   "loopback" there means any process on the Windows machine, the same local-machine boundary as on a
   Mac. The `Origin`/`Host` checks still apply to browsers on it.
 - Never bind a public interface. `WATERPLANE_ALLOW_PUBLIC=1` adds LAN interfaces behind a password gate
-  (below) and is an explicit opt-in. Plain HTTP on a LAN has no defence against a man in the middle: if
-  that network is not trusted, do not enable it.
+  (below) and is an explicit opt-in. A browser on the LAN speaks plain HTTP, which has no defence against
+  a man in the middle: if that network is not trusted, do not enable it. The Android app instead
+  reaches the desktop on the encrypted LAN port with a pinned key (see LAN TLS and the pin).
 
 ### In scope
 
@@ -368,8 +369,9 @@ itself arrives unprotected, and the token is still exposed to the relay.
 
 (`packages/host/src/lantls.ts`.) Only where `WATERPLANE_ALLOW_PUBLIC=1` already binds LAN addresses, the
 host also listens on `WATERPLANE_TLS_PORT` (default port + 1) on those same addresses, with the same
-handler and gate, so a caller there is still peer kind `lan` and needs its token. Off with
-`WATERPLANE_TLS=0`; never on loopback or the tailnet; nothing without the opt-in.
+handler and gate, so a caller there is still peer kind `lan` and needs its token. It is on by default
+with the opt-in and off with `WATERPLANE_TLS=0`; a busy port is logged and the host carries on plain.
+Never on loopback or the tailnet; nothing without the opt-in.
 
 The key is P-256 in `<state dir>/lan-tls.json` (0600), kept across restarts. The certificate is
 self-signed and re-issued on the same key when the addresses change, so the phone's pin (SHA-256 of the
@@ -386,6 +388,14 @@ from a CA; a self-signed one is read as self-signed) it serves the app, and the 
   which public CAs do not issue, and the app trusts no user-added CA.
 - A first install of the APK over the network (Android accepts any signature then).
 - Code already running in the page, a browser, and dropping packets.
+
+The app learns the desktop's key over Tailscale (or a sealed pairing) and pins it per saved desktop. In
+the Edit desktop screen the Wi-Fi address is typed plain (`192.168.0.64` or `http://192.168.0.64:8770`):
+the app then dials `https://<ip>:8771` with the pin by itself. A typed `https://` bare IP is dialled as
+written (the plain port never speaks TLS) and is never matched to the pin, so the screen offers "use
+<ip>"; an `https` name, such as a front door with a real certificate, is left alone. The screen says per
+row whether the link is encrypted, not yet encrypted (the key is learned by itself on the next
+Tailscale connection) or cannot be (an old APK).
 
 The pin is a property of current APK builds; an older APK ignores it and stays on plain LAN with the
 warnings. The way out of a pinned desktop whose TLS port is off is a confirmed "use plain HTTP for this
@@ -494,6 +504,16 @@ the accident, not a wrapper script the rule cannot see or an agent talking you i
   realpath rule the file routes apply to reads. The repo walks (tree search, artifact discovery,
   directory entry counts) neither descend into nor list the contents of a link whose target is outside
   the worktree; the link itself is shown as a link, nothing more.
+
+### Outbound reads the host makes on its own
+
+- **Anthropic's price page** (`pricefetch.ts`): one `GET` of the fixed HTTPS URL
+  `platform.claude.com/docs/en/about-claude/pricing.md`, at boot when the last read is over a day old,
+  once a day, and at most hourly when a ledger meets an unpriced Claude model. Generic user agent
+  (`waterplane-pricecheck`), no cookies, no identifiers, no body. A redirect is followed only to
+  HTTPS on `claude.com` or `anthropic.com` (or a subdomain); anywhere else is refused. The answer is
+  parsed strictly and a page that does not parse changes no price. The phone gets the host's read in
+  `welcome` and never fetches it itself. `WATERPLANE_PRICE_FETCH=0` turns it off.
 
 ### A repo's own repo-health engine
 

@@ -2,7 +2,7 @@
 import { relative, isAbsolute } from "node:path";
 import type { TranscriptBlock, TranscriptDoc, TranscriptToolDetail, TranscriptTurn } from "@waterplane/shared";
 import { squash } from "../echo.js";
-import { costOf, normalizeModel } from "@waterplane/shared";
+import { costOfRequest, normalizeModel } from "@waterplane/shared";
 import { MAX_TURNS, TOOL_INPUT_CAP, TOOL_RESULT_CAP, TEXT_CAP, oneLine, summarize } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 import { firstSightIn, usageRecordOf } from "../ctxlog/usagerecord.js";
@@ -258,7 +258,7 @@ export function parseTranscript(
       k.output += req.bag.output;
       k.cacheRead += req.bag.cacheRead;
       k.cacheWrite += req.bag.cacheWrite;
-      const c =costOf(req.bag, req.model, localDay(at ?? Date.now()));
+      const c = costOfRequest(req.bag, req.model, localDay(at ?? Date.now()));
       if (req.model) {
         const id = normalizeModel(req.model) ?? req.model;
         let m = (t.models ??= []).find((x) => x.id === id);

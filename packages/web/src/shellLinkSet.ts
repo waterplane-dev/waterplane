@@ -77,13 +77,13 @@ export function linkStateWord(state: string): string {
     case "connected": return "connected";
     case "connecting": case "starting": return "connecting";
     case "reconnecting": return "not answering — retrying";
-    case "auth": return "needs this phone signed in there";
+    case "auth": return "needs this device signed in there";
     // It carried this phone's token and the desktop refused it: revoked, or the password changed.
     case "signedOut": return "signed out there — pair again";
     // Sealed mode: the link's token lived in memory and the process died. The next unlock hands it back.
     case "locked": return "locked — open the app";
     // A pin refused what answered there. The service stops, and only a tap can say which key is right.
-    case "keyChanged": return "its key does not match this phone — pair again by code";
+    case "keyChanged": return "its key does not match this device — pair again by code";
     // `ShellRoute.WORD_LOCKED`: it holds a pin and this address is not protected, so the service will
     // not dial it. Worded apart from "locked": no token handed back opens this one.
     case "locked: open the app": return "waiting for the app — this address is not protected";

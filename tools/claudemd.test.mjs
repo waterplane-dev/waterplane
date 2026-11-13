@@ -109,8 +109,10 @@ const MAX_CHARS = 12_800;
  */
 const MAX_ENTRY_CHARS = 1_000;
 
-/** A router is a map, not a reference. ~2k tokens on every task in the area. */
-const MAX_ROUTER_CHARS = 9_000;
+/** A router is a map, not a reference. ~2k tokens on every task in the area.
+ *  9_020, not 9_000 (2026-11-11): the host router's persistence rule gained "unreadable" and
+ *  "no raw parse in a saving file" (storereads ratchet); trimming "mode before bytes" to fit was wrong. */
+const MAX_ROUTER_CHARS = 9_020;
 
 /** And a sub-skill is a slice, not the whole file again. */
 const MAX_SUBSKILL_CHARS = 28_000;

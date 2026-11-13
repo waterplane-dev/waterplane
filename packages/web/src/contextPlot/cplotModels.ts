@@ -6,7 +6,7 @@
  */
 
 import {
-  normalizeModel,
+  priceKeyLabel,
   sampleTotals,
   type ContextSample,
 } from "@waterplane/shared";
@@ -121,5 +121,5 @@ export const MODEL_SLOTS = 4;
  * one band on both screens rather than two that look like two models.
  */
 export function modelLabel(id: string): string {
-  return (normalizeModel(id) ?? id).replace(/^claude-/, "");
+  return priceKeyLabel(id).replace(/^claude-/, "");
 }

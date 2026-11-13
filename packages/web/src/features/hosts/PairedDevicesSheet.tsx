@@ -99,7 +99,7 @@ export function PairedDevicesSheet() {
           {rows.map((d) => (
             <Row key={d.id} kind="wrap">
               <Row kind="grow">
-                <RowTitle>{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this phone" : ""}{d.scope === "passive" ? " · passive" : ""}</RowTitle>
+                <RowTitle>{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this device" : ""}{d.scope === "passive" ? " · passive" : ""}</RowTitle>
                 <RowSub className="dim">
                   paired {new Date(d.createdAt).toLocaleDateString()} · last seen {seenAgo(Math.max(0, now - d.lastSeenAt))} · {deviceRouteText(d.lastKind)}
                 </RowSub>

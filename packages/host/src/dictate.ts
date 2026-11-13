@@ -79,12 +79,12 @@ const DEFAULT_BIN = "whisper-cli";
 /** Where a model lives when nobody said. XDG, because a 1.6 GB weights file is
  *  machine state and not repo state — nothing under `.waterplane/` is the right home
  *  for it, and a second copy per repo is 1.6 GB per repo. */
-function modelDir(): string {
+export function modelDir(): string {
   const xdg = (process.env.XDG_DATA_HOME || "").trim();
   return xdg ? join(resolve(xdg), BRAND.configDirName, "models") : join(homedir(), ".local", "share", BRAND.configDirName, "models");
 }
 
-function binary(): string {
+export function binary(): string {
   return (env("WHISPER_BIN") || "").trim() || DEFAULT_BIN;
 }
 
@@ -109,21 +109,36 @@ export function modelPath(): string | null {
   return join(modelDir(), pick);
 }
 
-let whichCache: { bin: string; found: boolean } | null = null;
-function onPath(bin: string): boolean {
-  if (whichCache && whichCache.bin === bin) return whichCache.found;
+/** Where Homebrew puts binaries: a launchd daemon's PATH usually lacks both. */
+const BREW_BIN_DIRS = ["/opt/homebrew/bin", "/usr/local/bin"];
+
+let whichCache: { bin: string; resolved: string | null } | null = null;
+/** The command to run for `bin`: itself when the OS finds it (or it is a path), else an
+ *  absolute path inside a brew dir, else null. Cached until `resetEngineCache`. */
+export function resolveBin(bin: string): string | null {
+  if (whichCache && whichCache.bin === bin) return whichCache.resolved;
   // The OS's own lookup rather than a PATH walk: it honours the shell's rules,
   // and this runs once per status read, not per dictation. `where` on Windows
   // — `which` is not a program there, so asking for it would report every
   // Windows desktop as having no transcriber whether or not it has one.
-  let found = false;
+  let resolved: string | null = null;
   try {
     execFileSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: ["ignore", "ignore", "ignore"] });
-    found = true;
-  } catch { found = false; }
-  whichCache = { bin, found };
-  return found;
+    resolved = bin;
+  } catch {
+    if (process.platform === "darwin" && !bin.includes("/")) {
+      const hit = BREW_BIN_DIRS.map((d) => join(d, bin)).find((p) => existsSync(p));
+      resolved = hit ?? null;
+    }
+  }
+  whichCache = { bin, resolved };
+  return resolved;
 }
+
+export function onPath(bin: string): boolean { return resolveBin(bin) !== null; }
+
+/** Forget the cached PATH lookup — after a setup installed the binary. */
+export function resetEngineCache(): void { whichCache = null; }
 
 /** What to say about a missing engine: brew on macOS, a generic line elsewhere. */
 export function whisperInstallHint(platform: string = process.platform): string {
@@ -367,7 +382,7 @@ export async function transcribe(wav: Buffer, opts: { lang?: string; terms?: str
     // `ENOENT … /var/folders/…/out.json`: a temp path nobody can act on, about
     // a file that was never the problem. What whisper SAID is the answer.
     const said = await new Promise<string>((ok, fail) => {
-      const child = execFile(binary(), [
+      const child = execFile(resolveBin(binary()) ?? binary(), [
         "-m", model,
         "-l", lang,
         "-t", String(threads()),

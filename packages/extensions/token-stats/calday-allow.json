@@ -1,0 +1,14 @@
+{
+  "packages/extensions/token-stats/web/usageCut.ts": [
+    [
+      "7 * DAY_MS",
+      "the weekly rate-limit window's length in elapsed ms"
+    ]
+  ],
+  "packages/extensions/token-stats/web/weekBands.ts": [
+    [
+      "WEEK_MS = 7 * 24 * HOUR_MS",
+      "the weekly rate-limit window: 168 elapsed hours"
+    ]
+  ]
+}

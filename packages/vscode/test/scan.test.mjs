@@ -30,7 +30,7 @@ test("summarizeLog totals equal updateContextLog(...).split field for field", as
   assert.equal(cur.usageTok, t[0] + t[1] + t[2] + t[3]);
 });
 
-test("store: version 6 is pinned, and the first request `b` survives a save/load round-trip", async () => {
+test("store: version 7 is pinned, and the first request `b` survives a save/load round-trip", async () => {
   const st = statSync(LOG);
   const sum = await data.summarizeLog(LOG, st.size, Math.round(st.mtimeMs));
   assert.equal(typeof sum.b, "number", "the fixture log has a first request");
@@ -38,12 +38,12 @@ test("store: version 6 is pinned, and the first request `b` survives a save/load
   const a = new data.TokenStore(file);
   a.files.p = { s: sum };
   await a.save();
-  assert.equal(JSON.parse(readFileSync(file, "utf8")).v, 6, "a format change must bump this on purpose (one full re-read)");
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).v, 7, "a format change must bump this on purpose (one full re-read)");
   const b = new data.TokenStore(file);
   await b.load();
   assert.equal(b.files.p.s.b, sum.b);
   const old = JSON.parse(readFileSync(file, "utf8"));
-  writeFileSync(file, JSON.stringify({ ...old, v: 5 }));
+  writeFileSync(file, JSON.stringify({ ...old, v: 6 }));
   const c = new data.TokenStore(file);
   await c.load();
   assert.deepEqual(c.files, {}, "another version is discarded and rebuilt");

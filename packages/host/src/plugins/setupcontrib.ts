@@ -14,6 +14,7 @@ import type { BackendDescriptor } from "../backends/index.js";
 import { onPath } from "../pathx.js";
 import { existsSync } from "node:fs";
 import { TAILSCALE_WATCHDOG_FIX, installTailscaleWatchdog, tailscaleWatchdogRow } from "../tailscaleguard.js";
+import { livePriceListRow } from "../pricefetch.js";
 
 export interface SetupSource {
   setupChecks(s: SetupSubject): ComplianceCheck[];
@@ -42,8 +43,8 @@ export function contributedChecks(worktree: string): ComplianceCheck[] {
  * subject is the root the repos are found under.
  */
 export function hostChecks(root: string): ComplianceCheck[] {
-  // Core's own desktop rows first (`tailscaleguard.ts`, the backends' version drift), then the contributed ones.
-  const core = [tailscaleWatchdogRow(), ...backendCliRows(), ...backendDriftRows()].filter((c): c is ComplianceCheck => c !== null);
+  // Core's own desktop rows first (`tailscaleguard.ts`, the price list, the backends' version drift), then the contributed ones.
+  const core = [tailscaleWatchdogRow(), livePriceListRow(), ...backendCliRows(), ...backendDriftRows()].filter((c): c is ComplianceCheck => c !== null);
   return [...core, ...(source ? source.setupChecks({ worktree: root }).filter((c) => c.scope === "host") : [])];
 }
 

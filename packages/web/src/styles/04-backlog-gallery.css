@@ -492,3 +492,22 @@ button.bl-chip { cursor: pointer; }
 .bl-group-title { flex: 1; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); display: inline-flex; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bl-group-meta { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
 .bl-group-empty { padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+/* The desktop Edit screen: which address is in use now (top), then one card per address, each tagged the same way (the in-use tag turns green only while it answers). */
+.route-now { border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: var(--r-8); padding: var(--sp-10) var(--sp-14); margin-bottom: var(--sp-12); }
+.route-now.ok { border-left-color: var(--ok); }
+.route-now.warn { border-left-color: var(--warn); }
+.route-now.dead { border-left-color: var(--dead); }
+.route-now-head { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); font-size: calc(var(--fs-16) * var(--ui-font, 1)); }
+.route-now-state { margin-top: var(--sp-4); overflow-wrap: anywhere; }
+.route-now.ok .route-now-state { color: var(--ok); }
+.route-now.warn .route-now-state { color: var(--warn); }
+.route-now.dead .route-now-state { color: var(--dead); }
+.route-now-dial { margin-top: var(--sp-4); opacity: 0.8; overflow-wrap: anywhere; }
+.route-now-why { margin-top: var(--sp-6); }
+.route-card { border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-10) var(--sp-12); margin-top: var(--sp-12); }
+.route-card-tag { border: 1px solid var(--line); }
+.route-card-tag.in-use:not(.ok) { color: var(--accent); border-color: var(--accent); }
+.route-card > summary { list-style: none; cursor: pointer; }
+.route-card > summary::-webkit-details-marker { display: none; }
+.route-card-head { display: flex; align-items: center; gap: var(--sp-6); flex-wrap: wrap; }
+.route-card-tag { margin-left: auto; }

@@ -38,3 +38,7 @@ The requirements view shows no duplicate requirements row; before the list is se
 - asked: 2026-10-16
 - shipped: 93c331db
 
+### R-requirements-009 · requested
+The requirements list reflects what the code actually does: an item is shipped only when the implementation has it, and where code and an item disagree the owner is asked which is right. Items are never deleted; each has one of four statuses (requested, shipped, superseded, dropped), and only the owner withdraws one by marking it dropped.
+- asked: 2026-11-06
+

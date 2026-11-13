@@ -12,12 +12,12 @@
  * flags live in `sidecar.ts` and the prompt in `knobs.ts`.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { hostStateDir } from "../branddirs.js";
 import { renderCapture } from "../render.js";
 import type { HistoryEntry, SessionSearchMatch, SessionSearchResult, SessionSearchScope, TranscriptDoc } from "@waterplane/shared";
-import { cleanTabTitle } from "@waterplane/shared";
+import { cleanTabTitle, priceListChangedAt } from "@waterplane/shared";
 import { derive, namesStoreReader } from "../backends/index.js";
 import { boxAnswersOf, cliHeldOf, cliHeldTable, lastTurnAt as readLastTurnAt, logMtime, mergeLocalTurns, parseTranscript, queuedTurns, screenCommandTurns, transcriptFromHistory, transcriptPath } from "../transcript.js";
 import { agentsMtime } from "../turnagents.js";
@@ -30,7 +30,7 @@ import {
   HISTORY_LIMIT, OUTPUT_CAP, SUMMARY_MODEL, TAB_TITLE_SYSTEM, TAB_TITLE_PROMPT, NAME_INPUT_CHARS,
   RENAME_PROMPT, RENAME_RECENT_PROMPTS, RENAME_RECENT_CHARS,
 } from "./knobs.js";
-import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { isPlainObject, readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { logRecords } from "../clifixtures.js";
 
 // ── History (prompt + captured output) ──────────────────────────────
@@ -197,9 +197,14 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
     // re-parsing it every few seconds to discover nothing changed is waste.
     // …and the subagents' logs: a background agent writes for minutes while
     // the parent log sleeps, and its turn's footer is counting what it spends.
-    if (mtime != null && since && Math.max(mtime, localAt, agentsMtime(path)) <= since) return "unchanged";
+    // A price list installed since the phone's copy re-prices the same turns
+    // (`costUsd`, `cumCostUsd`, `models[].costUsd`), so the stat alone cannot
+    // say "unchanged"; the document below carries the install time, which
+    // puts the NEXT poll back on the cheap comparison.
+    if (mtime != null && since && Math.max(mtime, localAt, agentsMtime(path)) <= since && priceListChangedAt() <= since) return "unchanged";
     const parsed = parseTranscript(path, cwd, detail);
     if (parsed) {
+      parsed.updatedAt = Math.max(parsed.updatedAt, priceListChangedAt());
       // Judged on the log's OWN turns, before anything of ours is spliced in.
       const logTurns = parsed.turns.length;
       // Commands the log never wrote down (`/btw`), from our own PTY capture,
@@ -579,17 +584,13 @@ export function summaryPath(core: SessionCore, id: string): string {
  * `text`/`len` (the retired per-turn summary), which are ignored.
  */
 export function loadSummary(core: SessionCore, id: string): { tab?: string } | null {
-  try {
-    const p = summaryPath(core, id);
-    if (existsSync(p)) {
-      const j = JSON.parse(readFileSync(p, "utf8"));
-      // `tab` is read through the same cleaner the model's answer goes
-      // through, never trusted because it is on disk: one hand-edited to a
-      // paragraph must not become a tab as wide as the strip.
-      if (j && typeof j === "object") return { tab: cleanTabTitle(j.tab) };
-    }
-  } catch { /* corrupt/missing — start fresh */ }
-  return null;
+  // Absent ⇒ null. Corrupt or wrong-shaped ⇒ kept aside as `.corrupt-<ts>` (saveSummary
+  // writes the re-derived name over this one next), then start fresh.
+  const j = readJsonGuarded<Record<string, unknown> | null>(summaryPath(core, id), null, isPlainObject);
+  // `tab` is read through the same cleaner the model's answer goes
+  // through, never trusted because it is on disk: one hand-edited to a
+  // paragraph must not become a tab as wide as the strip.
+  return j ? { tab: cleanTabTitle(j.tab) } : null;
 }
 
 function saveSummary(core: SessionCore, s: Session): void {

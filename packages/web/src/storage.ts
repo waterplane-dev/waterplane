@@ -147,7 +147,7 @@ export const KEY_SCOPE = {
   outbox: "host", compose: "host", composeDrafts: "host", composeOutbox: "host", composeSheets: "host",
   deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
   // the language spoken into THIS phone (the vocabulary, `dictateTerms`, is the person's and synced)
-  dictateLang: "device", dictateLangs: "device",
+  dictateLang: "device", dictateLangs: "device", snippetRecent: "device",
   fanoutText: "host", fanoutSel: "host", fanoutModel: "host", backlogRepo: "host", backlogShowArchived: "host", backlogSortRun: "host",
   // retired stores, read once by a migration: never moved, so the migration finds them
   giveups: "device", giveupsMigrated: "device", padRescue: "device", padRescueMigrated: "device",
@@ -163,7 +163,7 @@ export const KEY_SCOPE = {
   // how this phone is held and read
   toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
   typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", agentListH: "device", launcherChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
-  readerZoom: "device", scrollZoom: "device", gitZoom: "device", gitExplainFoci: "device", gitExplainNote: "device", gitExplainLast: "device", textDumpWrap: "device", closeCustomH: "device",
+  readerZoom: "device", scrollZoom: "device", gitZoom: "device", gitExplainFoci: "device", gitExplainNote: "device", gitExplainLast: "device", textDumpWrap: "device", readerTableWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device", notifInfoNote: "device", whatsNewSeen: "device",
   // dismissals and the app's own update machinery

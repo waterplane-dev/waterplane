@@ -16,7 +16,7 @@ import {
 } from "@waterplane/shared";
 import { env } from "./env.js";
 import { configDir } from "./branddirs.js";
-import { writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 // ── The person's own prices, for models Anthropic's list does not name ───────
 //
@@ -171,15 +171,16 @@ let catalogueCache: { file: string; ids: Record<string, string[]> } | null = nul
 
 function readCatalogueFile(file: string): Record<string, string[]> {
   if (catalogueCache?.file === file) return catalogueCache.ids;
-  let ids: Record<string, string[]> = {};
-  try {
-    const raw = JSON.parse(readFileSync(file, "utf8")) as { v?: number; ids?: unknown };
-    if (raw?.v === 1 && raw.ids && typeof raw.ids === "object") {
-      for (const [k, v] of Object.entries(raw.ids as Record<string, unknown>)) {
-        if (Array.isArray(v)) ids[k] = v.filter((x): x is string => typeof x === "string" && x !== "").slice(0, KNOWN_CAP);
-      }
+  const ids: Record<string, string[]> = {};
+  // Through the store layer: a file that is corrupt, of the wrong shape or unreadable is
+  // kept aside (`.corrupt-<ts>`) before the merged memory is written back to this name.
+  const raw = readJsonGuarded<{ v?: number; ids?: unknown } | null>(file, null,
+    (j) => (j as { v?: number } | null)?.v === 1 && !!(j as { ids?: unknown }).ids && typeof (j as { ids?: unknown }).ids === "object");
+  if (raw) {
+    for (const [k, v] of Object.entries(raw.ids as Record<string, unknown>)) {
+      if (Array.isArray(v)) ids[k] = v.filter((x): x is string => typeof x === "string" && x !== "").slice(0, KNOWN_CAP);
     }
-  } catch { ids = {}; /* absent or unreadable ⇒ nothing remembered, never a throw */ }
+  }
   catalogueCache = { file, ids };
   return ids;
 }

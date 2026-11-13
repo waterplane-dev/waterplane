@@ -81,11 +81,53 @@ export function privateExtensions(text) {
 // ----------------------------------------------------------------- redaction
 
 export const lineHash = (rule, text) => createHash("sha1").update(`${rule}\n${text.trim()}`).digest("hex").slice(0, 10);
-/** What an `--accept` file lists: `path:line:hash`. */
-export const hitToken = (path, line, rule, text) => `${path}:${line}:${lineHash(rule, text)}`;
+/**
+ * What an `--accept` file lists: `path:hash`. The hash is of the rule and the line's text, never of
+ * its number, so a line that moves above a reviewed fixture stays accepted; a changed line, or the
+ * same text in another file, is a new hit that needs a new review.
+ */
+export const hitToken = (path, rule, text) => `${path}:${lineHash(rule, text)}`;
 
+/**
+ * The text an accept entry hashes for a hit on lines [start, end] (0-based, inclusive). With no line
+ * number in the token, a multi-line secret must hash its WHOLE block: its first line (`-----BEGIN … KEY-----`)
+ * is the same for every key, so hashing that line alone would let one accepted fixture key accept every
+ * other key block in the same file. A one-line hit hashes its line, as before.
+ */
+export const hitText = (lines, start, end = start) => lines.slice(start, Math.max(start, end) + 1).map((l) => l.trim()).join("\n");
+/** Where a PEM-style block that opens on line `i` ends: the first `-----END` line at or after it, else `i`. */
+export const blockEnd = (lines, i) => {
+  for (let j = i; j < lines.length; j++) if (/-----END /.test(lines[j])) return j;
+  return i;
+};
+
+/**
+ * The accepted tokens of an `--accept` file. The older `path:line:hash` form is read as `path:hash`
+ * (parsed from the right, so a path with a ':' survives), which keeps one entry one token.
+ */
 export function parseAccept(text) {
-  return new Set(text.split(/\r?\n/).map((l) => l.replace(/\s+#.*$/, "").trim()).filter((l) => l && !l.startsWith("#")));
+  const out = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const l = raw.replace(/\s+#.*$/, "").trim();
+    if (!l || l.startsWith("#")) continue;
+    const m = /^(.+?)(?::\d+)?(:[0-9a-f]{10})$/.exec(l);
+    out.add(m ? m[1] + m[2] : l);
+  }
+  return out;
+}
+
+/**
+ * Splits scan hits by an accept set: `blocking` are the unaccepted hits, `accepted` the dropped
+ * ones, `stale` the accept tokens that matched no hit (reported, never an error).
+ */
+export function applyAccept(hits, accepted) {
+  const used = new Set();
+  const blocking = [];
+  const acceptedHits = [];
+  for (const h of hits) {
+    if (accepted.has(h.token)) { used.add(h.token); acceptedHits.push(h); } else blocking.push(h);
+  }
+  return { blocking, accepted: acceptedHits, stale: [...accepted].filter((t) => !used.has(t)) };
 }
 
 /** A secret is never printed whole, because the report lands in a phone gallery. */
@@ -176,7 +218,8 @@ export function scanText(path, text, ctx) {
   const config = CONFIG_FILE_RE.test(path);
   const lines = text.split(/\r?\n/);
   const push = (list, rule, category, i, line, at, shown) => {
-    list.push({ path, line: i + 1, rule, category, excerpt: shown ?? excerpt(line, at, 120), token: hitToken(path, i + 1, rule, line) });
+    const hashed = rule === "private-key-block" ? hitText(lines, i, blockEnd(lines, i)) : line;
+    list.push({ path, line: i + 1, rule, category, excerpt: shown ?? excerpt(line, at, 120), token: hitToken(path, rule, hashed) });
   };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -213,7 +256,7 @@ export function scanText(path, text, ctx) {
 /** Name-only checks (no content): a key store present at all is a hit. */
 export function scanPath(path) {
   if (!SECRET_FILE_RE.test(path)) return [];
-  return [{ path, line: 0, rule: "key-file", category: "secret", excerpt: "credential file present", token: hitToken(path, 0, "key-file", "") }];
+  return [{ path, line: 0, rule: "key-file", category: "secret", excerpt: "credential file present", token: hitToken(path, "key-file", "") }];
 }
 
 // ------------------------------------------------------------------ changelog

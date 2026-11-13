@@ -35,4 +35,4 @@ export function launchWords(l: LaunchOpts | undefined): string {
 /** The `, model …` clause the *To* row and the button append — nothing at all
  *  for a target on the defaults, so an untouched send reads as it always did. */
 export const launchClause = (l: LaunchOpts | undefined): string =>
-  l && (l.model || l.effort || l.backend) ? `, ${launchWords(l)}` : "";
+  (l && (l.model || l.effort || l.backend) ? `, ${launchWords(l)}` : "") + (l?.permissionMode ? `, ${l.permissionMode} mode` : "");

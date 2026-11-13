@@ -16,7 +16,7 @@ the `web-numbers` skill. This folder is WHICH session it is about and its two do
   falls through to the screen underneath) and `compactToast`.
 - `ContextEntrySheet.tsx` — the wiring. Sheet: `context`, persisted.
 - Two doors under the title (`ContextSheet`'s `.ctx-doors`): `openSetupFromContext(repoId)` → the
-  repo readings sheet's Setup region (`nav.openSetup(repoId, { region: "setup" })`), and
+  repo readings sheet's agents region, whose first card is the always-on list (`nav.openSetup(repoId, { region: "agents" })`), and
   `openTokensFromContext()` → the all-sessions token screen (`nav.open("tokens")`). Neither closes
   the context sheet; Back returns. A session whose repo the desktop does not list gets the Setup
   door as a sentence (`setupCant`), never a greyed button. Beside them the sheet draws

@@ -58,7 +58,7 @@ export function authLostNotice(lost: NonNullable<AuthManager["lost"]>): { title:
       (lost.tailscaleGated
         ? "It may have required the password from Tailscale too, so Tailscale devices are refused as well; set the password again on the desktop itself (loopback). "
         : "Set the password again from Settings if you use LAN access. ") +
-      (lost.movedTo ? `The damaged file is kept as ${lost.movedTo}.` : "The file could not be moved aside."),
+      (lost.movedTo ? `The damaged file is kept as ${lost.movedTo}.` : lost.unreadable ? "The file is left where it is: fix its permissions and restart to read it again." : "The file could not be moved aside."),
     tag: "auth-lost",
   };
 }
@@ -74,7 +74,7 @@ export class AuthManager {
    * (or could not be read at all) Tailscale is refused too until a person sets or
    * clears the password from the desktop (loopback is never gated). Fail closed.
    */
-  lost: { movedTo: string | null; error: string; tailscaleGated: boolean } | null = null;
+  lost: { movedTo: string | null; error: string; tailscaleGated: boolean; unreadable?: boolean } | null = null;
   /** Every issued token, hashed, one row per device. Survives restarts. */
   readonly devices: DeviceLedger;
   /** Passive devices' PIN and unlocks (`passive.ts`). */
@@ -89,13 +89,15 @@ export class AuthManager {
     // still deny-until-set for every LAN peer — the gate never opens on a loss.
     const isStored = (v: unknown): boolean =>
       !!v && typeof (v as Stored).salt === "string" && typeof (v as Stored).hash === "string";
-    const read = readJsonGuardedDetail<Stored | null>(this.file, null, isStored);
+    // keepUnreadable: an unreadable file stays put, so every boot stays latched (moved
+    // aside, boot 2 would find no file and open Tailscale tokenless with no notice).
+    const read = readJsonGuardedDetail<Stored | null>(this.file, null, isStored, { keepUnreadable: true });
     this.stored = read.value;
     if (read.corrupt) {
       let bytes: string | null = null;
       try { bytes = read.corrupt.movedTo ? readFileSync(read.corrupt.movedTo, "utf8") : null; } catch { bytes = null; }
       const tailscaleGated = bytes === null || /gateTailscale/.test(bytes);
-      this.lost = { movedTo: read.corrupt.movedTo, error: read.corrupt.error, tailscaleGated };
+      this.lost = { movedTo: read.corrupt.movedTo, error: read.corrupt.error, tailscaleGated, unreadable: read.corrupt.unreadable };
     }
   }
 

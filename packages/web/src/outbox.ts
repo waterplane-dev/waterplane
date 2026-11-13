@@ -34,7 +34,8 @@ import {
   PAD_BYTES, PAD_CAP, PAD_WRITE_REFUSED,
   type ClientMessage, type PadDoc, type PadNote, type SendView, type SessionBudget, type LaunchOpts,
 } from "@waterplane/shared";
-import { LS, lsGet, lsSetJson } from "./storage";
+import { LS, lsGet } from "./storage";
+import { readGuarded, writeChecked, type Reading } from "./storedGuard";
 import { announceSetting, onAdopt } from "./settings";
 
 const DRAFTS_KEY = LS.composeDrafts;
@@ -409,27 +410,73 @@ export function clearDeadUpload(relPath: string): void {
   write(DEAD_UPLOADS_KEY, all.filter((x) => x.p !== relPath));
 }
 
-function read<T>(key: string, fallback: T): T {
+const isArray = (v: unknown) => Array.isArray(v);
+const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
+/** Which shape a key must hold; an unregistered key accepts any parsed JSON. */
+function shapeOf(key: string): (v: unknown) => boolean {
+  if (key === OUTBOX_KEY || key === DEAD_UPLOADS_KEY) return isArray;
+  if (key === DRAFTS_KEY) return isRecord;
+  return () => true;
+}
+function readState<T>(key: string, fallback: T): Reading<T> {
   try {
-    const v = lsGet(key);
-    return v ? (JSON.parse(v) as T) : fallback;
+    return readGuarded(localStorage, key, fallback, shapeOf(key));
   } catch {
-    return fallback;
+    return { value: fallback, unreadable: true }; // no storage at all (node, blocked)
   }
 }
-function write(key: string, val: unknown): void {
-  lsSetJson(key, val); // quota/private-mode — best effort, swallowed there
+function read<T>(key: string, fallback: T): T {
+  return readState(key, fallback).value;
+}
+/**
+ * `false` = the store refused it, and the caller is the only one who now holds
+ * the words. Raw `setItem` (not `lsSetJson`, which swallows the throw) — the
+ * pad's contract, see `writePadDoc`.
+ */
+function write(key: string, val: unknown): boolean {
+  try { return writeChecked(localStorage, key, val, shapeOf(key)); } catch { return false; } // `localStorage` itself absent
 }
 
 // ── Drafts (unsent, per session) ─────────────────────────────────────
 export function loadDraft(sessionId: string): string {
   return read<Record<string, string>>(DRAFTS_KEY, {})[sessionId] ?? "";
 }
-export function saveDraft(sessionId: string, text: string): void {
+export function saveDraft(sessionId: string, text: string): boolean {
   const all = read<Record<string, string>>(DRAFTS_KEY, {});
   if (text) all[sessionId] = text;
   else delete all[sessionId];
-  write(DRAFTS_KEY, all);
+  return write(DRAFTS_KEY, all);
+}
+/**
+ * **Words typed on a `pending:<createAck>` screen that nothing can reach any more.**
+ *
+ * A draft is keyed by the screen it was written on, and a pending screen's id
+ * lives only as long as its queued create: the X drops it, a retry mints a new
+ * one, and an open acked while the person stood elsewhere is adopted without
+ * them (`adoptPendingSession` carries the draft only from the screen on top).
+ * In each case the words stayed under an id no screen will ever load again —
+ * reported 2026-11-12 as words written offline after `+ now` that were simply
+ * gone. So a draft under a pending id that `isLive` no longer names becomes a
+ * PAD NOTE, and is cleared only once the pad holds it; a refusal leaves it
+ * where it is to be tried again. `pending:later:` is excluded: that screen is
+ * per repo and finds its draft again by design.
+ */
+export function rescueStrandedPendingDrafts(
+  isLive: (screenId: string) => boolean,
+  cwdOf: (screenId: string) => string | undefined,
+): { moved: number; refused: number } {
+  const all = read<Record<string, string>>(DRAFTS_KEY, {});
+  let moved = 0, refused = 0;
+  for (const [id, text] of Object.entries(all)) {
+    if (!id.startsWith("pending:") || id.startsWith("pending:later:") || isLive(id)) continue;
+    const keep = draftToRescue(text, "");
+    if (!keep) { saveDraft(id, ""); continue; }
+    const cwd = cwdOf(id);
+    if (addPadNote({ id: padNoteId(), ts: Date.now(), ...keep, ...(cwd ? { cwd } : {}) })) { refused++; continue; }
+    saveDraft(id, "");
+    moved++;
+  }
+  return { moved, refused };
 }
 /** Every session id carrying an unsent draft right now — the close sheet's
  *  "words at stake" facet, read once rather than `loadDraft` re-parsing the
@@ -440,7 +487,16 @@ export function draftSessionIds(): Set<string> {
 
 // ── Outbox (sent, awaiting/failed ack) ───────────────────────────────
 export function loadOutbox(): OutboxEntry[] {
-  return read<OutboxEntry[]>(OUTBOX_KEY, []);
+  return readOutbox().list;
+}
+/**
+ * The queue AND whether the stored copy could be read. `unreadable` with an empty
+ * `list` is not an empty queue: the raw value is kept under `<key>.unreadable`
+ * (see `storedGuard.ts`) before anything saves over it.
+ */
+export function readOutbox(): { list: OutboxEntry[]; unreadable: boolean } {
+  const r = readState<OutboxEntry[]>(OUTBOX_KEY, []);
+  return { list: r.value, unreadable: r.unreadable };
 }
 /**
  * Persist the whole array — ALL of it.
@@ -454,8 +510,8 @@ export function loadOutbox(): OutboxEntry[] {
  * the give-ups ledger gone) the only remaining way this app could delete words
  * somebody typed. Bounding is `addOutbox`'s, where it can say so.
  */
-export function saveOutbox(list: OutboxEntry[]): void {
-  write(OUTBOX_KEY, list);
+export function saveOutbox(list: OutboxEntry[]): boolean {
+  return write(OUTBOX_KEY, list);
 }
 
 // ── Prompt pad (untargeted drafts) ───────────────────────────────────

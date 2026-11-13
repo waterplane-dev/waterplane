@@ -61,3 +61,8 @@ Numbered lists in read mode show the correct sequential numbers, with nested bul
 - asked: 2026-11-01
 - shipped: 16c5ab8f
 
+
+### R-read-mode-014 · shipped
+A table wider than the screen wraps its long-text columns instead of scrolling sideways, keeps short cells on one line, and offers a remembered toggle back to one line per row.
+- asked: 2026-11-12
+- shipped: 4e992e4c

@@ -592,3 +592,35 @@ The vault's token-file check is generic: it finds any `credentials.json` holding
 - asked: 2026-11-06
 - shipped: fb508e2c
 
+### R-ui-133 · requested
+An approval prompt can be minimized.
+- asked: 2026-11-07
+
+### R-ui-134 · requested
+The Reach pin appears only once.
+- asked: 2026-11-07
+
+### R-ui-135 · requested
+The Vault, the TipToy Android app and the TipToy web app have self-explaining user journeys: a new user can complete standard tasks without outside explanation.
+- asked: 2026-11-08
+
+### R-ui-136 · shipped
+The logo shows fully and legibly in the link preview when the waterplane URL is shared in WhatsApp.
+- asked: 2026-11-09
+- shipped: efc5da52
+
+### R-ui-137 · shipped
+The send buttons in the mark and send row are whole words in a grid of at most three across, without cramped or broken labels.
+- asked: 2026-11-09
+- shipped: 570df711, 50cfd799
+
+### R-ui-138 · shipped
+The VS Code extension shows a loading state and native progress while token stats and health metrics load, instead of reading as absent.
+- asked: 2026-11-09
+- shipped: 171ae188, 2801e318
+
+### R-ui-139 · shipped
+On the phone, a tapped chart tooltip stays visible after the finger lifts, as on desktop hover, and closes on a tap elsewhere.
+- asked: 2026-11-10
+- shipped: a3c4a7f9
+

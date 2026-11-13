@@ -6,7 +6,10 @@
  * the first time a signal is seen to WORK on a CLI version, this keeps that one
  * input — redacted — under the host's state dir, at most one per signal per
  * version: `<state>/clifixtures/<version>/<signal>.txt` (a screen) or `.json`
- * (a record's skeleton). `tools/harvestfixtures.mjs` lists them and, asked to,
+ * (a record's skeleton). A signal whose input comes in KINDS (`hook.pipe`: one
+ * payload shape per hook event) is kept once per kind per version,
+ * `<signal>.<Kind>.json`, so a rare kind (`StopFailure`) is captured the first
+ * time it happens, not lost behind the first hook of the session. `tools/harvestfixtures.mjs` lists them and, asked to,
  * copies them into the repo for a person to review. Nothing here commits, and
  * nothing here writes to a session.
  *
@@ -34,6 +37,14 @@ import { detectLimitText, parseResetTime } from "./limit.js";
 export type FixtureSource = () => string | null | undefined | Promise<string | null | undefined>;
 
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
+/** A capture's kind (a hook event name) — path-safe by construction. */
+const KIND_RE = /^[A-Za-z][A-Za-z0-9]{0,39}$/;
+/** The hook events the CLI is known to send. /api/hook takes any name from a local
+ *  process, so a kind outside this set is no capture: the state dir stays bounded. */
+export const HOOK_EVENTS: readonly string[] = ["SessionStart", "SessionEnd", "UserPromptSubmit", "Stop", "StopFailure", "Notification", "PreToolUse", "PostToolUse", "SubagentStop", "PreCompact"];
+/** At most this many distinct kinds per signal per version, whatever the set says. */
+export const MAX_KINDS = 16;
+export interface ShelfOptions { exists?: (file: string) => boolean; events?: readonly string[]; maxKinds?: number }
 const KNOWN = new Set<string>(CLI_SIGNALS.map((s) => s.id));
 
 /** The CLI's banner, kept so a fixture says which build drew it. */
@@ -119,27 +130,57 @@ export class FixtureShelf {
   /** Asked but not yet written — so two good observations a tick apart run one source. */
   private pending = new Set<string>();
 
-  constructor(private dir: string) {}
+  /** Files known to be kept (found on disk once, or written): a repeat offer on the
+   *  hot hook route does no disk call at all. */
+  private kept = new Set<string>();
+  /** Distinct kinds taken so far, per version and signal. */
+  private kinds = new Map<string, Set<string>>();
+  private exists: (file: string) => boolean;
+  private events: Set<string>;
+  private maxKinds: number;
+
+  constructor(private dir: string, opts: ShelfOptions = {}) {
+    this.exists = opts.exists ?? existsSync;
+    this.events = new Set(opts.events ?? HOOK_EVENTS);
+    this.maxKinds = opts.maxKinds ?? MAX_KINDS;
+  }
+
+  private have(file: string): boolean {
+    if (this.kept.has(file)) return true;
+    if (!this.exists(file)) return false;
+    this.kept.add(file);
+    return true;
+  }
+
+  private kindRoom(id: string, version: string, kind: string): boolean {
+    const set = this.kinds.get(`${version}/${id}`);
+    return !set || set.has(kind) || set.size < this.maxKinds;
+  }
 
   /** The file a capture of this signal on this version lives at; null when
    *  either is not something a path may be built from. */
-  fileFor(id: string, version: string | null | undefined): string | null {
+  fileFor(id: string, version: string | null | undefined, kind?: string): string | null {
     if (!version || !VERSION_RE.test(version) || !KNOWN.has(id)) return null;
-    return join(this.dir, version, `${id}.${fixtureExt(id)}`);
+    if (kind !== undefined && (!KIND_RE.test(kind) || !this.events.has(kind) || !this.kindRoom(id, version, kind))) return null;
+    return join(this.dir, version, `${id}${kind ? `.${kind}` : ""}.${fixtureExt(id)}`);
   }
 
   /** Would a capture of `id` on `version` be kept? For a call site whose input
    *  must be read NOW (the composer, before the Return clears it). */
-  wants(id: string, version: string | null | undefined): boolean {
-    const file = this.fileFor(id, version);
-    return !!file && !this.pending.has(file) && !existsSync(file);
+  wants(id: string, version: string | null | undefined, kind?: string): boolean {
+    const file = this.fileFor(id, version, kind);
+    return !!file && !this.pending.has(file) && !this.have(file);
   }
 
   /** Keep one capture of `id` on `version`, unless one is kept already. */
-  offer(id: string, version: string | null | undefined, source: FixtureSource): void {
-    const file = this.fileFor(id, version);
-    if (!file || this.pending.has(file) || existsSync(file)) return;
+  offer(id: string, version: string | null | undefined, source: FixtureSource, kind?: string): void {
+    const file = this.fileFor(id, version, kind);
+    if (!file || this.pending.has(file) || this.have(file)) return;
     this.pending.add(file);
+    if (kind !== undefined) {
+      const key = `${version}/${id}`;
+      this.kinds.set(key, (this.kinds.get(key) ?? new Set()).add(kind));
+    }
     Promise.resolve()
       .then(source)
       .then((raw) => {
@@ -148,6 +189,7 @@ export class FixtureShelf {
         if (!kept) return;
         mkdirSync(dirname(file), { recursive: true });
         writeTextAtomic(file, kept);
+        this.kept.add(file);
       })
       .catch(() => { /* best-effort: a capture is never the reason anything else fails */ })
       .finally(() => this.pending.delete(file));

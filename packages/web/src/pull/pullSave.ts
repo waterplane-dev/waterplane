@@ -35,7 +35,7 @@ export async function pullSave(this: PullManager, id: string): Promise<SaveResul
     // not open, so this cannot claim the bytes are gone — only that they could
     // not be read. The difference matters: one needs a re-fetch over the link,
     // the other needs another try.
-    const error = "could not read the downloaded bytes on this phone — try again, or fetch it once more";
+    const error = "could not read the downloaded bytes on this device — try again, or fetch it once more";
     this.patch(id, { saveError: error });
     return { ok: false, error };
   }

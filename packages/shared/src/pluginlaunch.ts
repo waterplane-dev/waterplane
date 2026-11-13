@@ -75,9 +75,9 @@ export type Provider =
   | { store: string };
 
 export type FactName = "turns" | "dialogs" | "questions" | "plan" | "delivery" | "transcript"
-  | "context" | "tokens" | "usage" | "agents" | "conversations" | "asking" | "limits" | "mode" | "commands";
+  | "context" | "tokens" | "usage" | "agents" | "conversations" | "asking" | "limits" | "mode" | "commands" | "skills";
 export const FACT_NAMES: readonly FactName[] = ["turns", "dialogs", "questions", "plan", "delivery", "transcript",
-  "context", "tokens", "usage", "agents", "conversations", "asking", "limits", "mode", "commands"];
+  "context", "tokens", "usage", "agents", "conversations", "asking", "limits", "mode", "commands", "skills"];
 /**
  * The providers per fact. A fact left out has none — ABSENT. Core names per fact (the host
  * refuses any other at registration, naming the ones it has):
@@ -85,7 +85,8 @@ export const FACT_NAMES: readonly FactName[] = ["turns", "dialogs", "questions",
  *  questions / asking: screen `question-ts` · plan: screen `planbox` · context: screen
  *  `context-meter` · limits: screen `limit-ts` · usage: screen `usage-probe` · transcript /
  *  context / conversations / tokens: store `claude-jsonl` (+ contributed store readers) ·
- *  agents: store `claude-agents`. `delivery`, `mode` and `commands` (2.2) take `{source:true}` only.
+ *  agents: store `claude-agents`. `skills`: store `claude-settings` (the skills and plugins switch).
+ *  `delivery`, `mode` and `commands` (2.2) take `{source:true}` only.
  */
 export type BackendFacts = Partial<Record<FactName, readonly Provider[]>>;
 

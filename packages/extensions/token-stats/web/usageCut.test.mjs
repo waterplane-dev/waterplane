@@ -461,13 +461,13 @@ test("a grid whose every counted box would be striped is ONE sentence, never a w
   assert.deepEqual(mid.cells, []);
   assert.ok(mid.refused.includes(undatedText(6)), mid.refused);
   assert.match(mid.refused, /^No past window has a figure\./);
-  assert.match(mid.refused, /older than this phone/);
+  assert.match(mid.refused, /older than this device/);
   // Dated, but the log was written inside the window running now: every box could hold the
   // records — still one sentence, and no claim about the host's age (it sent the dates).
   const fresh = heatGrid(windowGrids({ series: [g], scannedAt: anchor, undated: 2, undatedUntil: anchor - HOUR, undatedLogs: [[anchor - HOUR, 2]] }).get("session"));
   assert.equal(allStriped(fresh), false);
   assert.ok(fresh.refused.includes(undatedText(2)));
-  assert.doesNotMatch(fresh.refused, /older than this phone/);
+  assert.doesNotMatch(fresh.refused, /older than this device/);
   // A log written inside window back 1: every box from it back is refused — the OLDEST run, since a
   // later window can only hold fewer (review of 71280ff6, #1). That run is one sentence too, and the
   // boxes after it keep their figures; no drawn box is ever striped.
@@ -477,7 +477,7 @@ test("a grid whose every counted box would be striped is ONE sentence, never a w
   assert.equal(tokenTotal(some.cells[0].totals), 10);
   assert.match(some.refused, /^The 3 windows before these boxes have no figure\./);
   assert.ok(some.refused.includes(undatedText(2)));
-  assert.doesNotMatch(some.refused, /older than this phone/);
+  assert.doesNotMatch(some.refused, /older than this device/);
   for (const h of [mid, fresh, some]) assert.ok(h.cells.every((c) => !c.refused), "no drawn box is striped");
   // Today's host with a log whose mtime it could not read sends the same bare shape: the sentence
   // says what the desktop sent and only MAY blame its age (review #2).

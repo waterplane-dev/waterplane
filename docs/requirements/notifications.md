@@ -108,3 +108,8 @@ PR notices are keyed through the shared notification-key builder like every othe
 - asked: 2026-10-30
 - shipped: 06b49e7a
 
+### R-notifications-023 · shipped
+Web Push is done by the host itself on node:crypto, with the web-push library and its dependencies gone; stored keys and subscriptions keep working.
+- asked: 2026-11-07
+- shipped: a2ac6c16, 583eb05e
+

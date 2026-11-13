@@ -609,6 +609,7 @@ const SEND_SPLIT_FILES = {
   "sendIntent/sendFlag.ts": 30,
   "sendIntent/sendLabels.ts": 308, // +the flag-when-done clause on the To row; +3 `// closed:` notes (local/total-wire-words)
   "sendIntent/sendLaunch.ts": 50,
+  "sendIntent/sendSeedMode.ts": 30,
   "sendIntent/sendLead.ts": 80,
   "sendIntent/sendRetime.ts": 170,
   "sendIntent/sendRule.ts": 115,
@@ -1017,9 +1018,9 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
-  "webapi/webapiHost.ts": 156, // +on-device whole-picture OCR, +plugin README (About fold)
+  "webapi/webapiHost.ts": 176, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold)
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 112, // +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings
+  "webapi/webapiRepoOps.ts": 123, // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
@@ -1362,4 +1363,14 @@ test(`at most ${MAX_HAND_ROLLED_HOST_READS} hand-rolled 'let live = true' reads 
     `${hits.length} hand-rolled host reads, over the ${MAX_HAND_ROLLED_HOST_READS} ratchet. Use useRemoteResource, or an ` +
     `AbortController in the effect whose signal reaches the request (abort it in the cleanup).\n${hits.join("\n")}`);
   if (hits.length < MAX_HAND_ROLLED_HOST_READS) console.log(`# ${hits.length} hand-rolled host reads -- lower MAX_HAND_ROLLED_HOST_READS in tools/webshape.test.mjs to lock that in`);
+});
+
+test("outbox.ts reads and writes through storedGuard, never lsSetJson or a bare JSON.parse(lsGet())", () => {
+  const src = readFileSync(join(SRC, "outbox.ts"), "utf8");
+  assert.match(src, /import\s*\{[^}]*\breadGuarded\b[^}]*\bwriteChecked\b[^}]*\}\s*from\s*"\.\/storedGuard"/,
+    "outbox.ts must import readGuarded and writeChecked from ./storedGuard");
+  assert.doesNotMatch(src, /\blsSetJson\(|import\s*\{[^}]*\blsSetJson\b[^}]*\}/, "lsSetJson swallows a refused write — the queue and drafts need the boolean");
+  assert.doesNotMatch(src, /JSON\.parse\(\s*lsGet\(/, "a bare parse turns an unreadable store into an empty one");
+  assert.match(src, /writeChecked\(\s*localStorage,\s*key,\s*val,\s*shapeOf\(key\)\s*\)/,
+    "write() must pass shapeOf(key): it is what copies an unreadable value aside at write time");
 });

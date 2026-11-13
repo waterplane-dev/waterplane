@@ -75,6 +75,14 @@ test("a flavor's suffix joins the repo to the package the phone actually has", (
   assert.equal(r.checks.find((c) => c.id === "switch").state, "ok");
 });
 
+test("the dev shell beside a Play copy joins the repo to the dev shell, not the Play package", () => {
+  const f = facts({ pkg: "dev.waterplane.app", variants: ["dev.waterplane.app.dev"] });
+  const row = { pkg: "dev.waterplane.app", label: "waterplane", allowed: true, note: "" };
+  const [r] = readiness([f], [row], ph({ allow: ["dev.waterplane.app", "dev.waterplane.app.dev"],
+    sources: { self: "dev.waterplane.app.dev", byPkg: {} } }));
+  assert.equal(r.pkg, "dev.waterplane.app.dev");
+});
+
 test("a phone app no repo builds keeps its phone half; the desktop not answering is not 'no repo'", () => {
   const row = { pkg: "com.x", label: "X", allowed: true, note: "" };
   const [r1] = readiness([], [row], ph({ allow: ["com.x"] }));
@@ -92,6 +100,8 @@ test("the chips' count and cut are one function", () => {
 test("failure words: Play Protect and an abandoned session are explained, unknown text passes through", () => {
   assert.match(failureText("INSTALL_FAILED_VERIFICATION_FAILURE: Install not allowed"), /Play Protect/);
   assert.match(failureText("INSTALL_FAILED_ABORTED: Session was abandoned"), /retry starts a fresh one/i);
+  assert.match(failureText("the file is not a valid app — INSTALL_FAILED_VERSION_DOWNGRADE: Downgrade detected: Update version code 2 is older than current 8"),
+    /older than the copy already on this phone \(version code 2, the phone has 8\)/);
   assert.equal(failureText("something new"), "something new");
 });
 

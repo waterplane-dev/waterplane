@@ -52,6 +52,7 @@ import {
 } from "./composer.js";
 import { liveSourceFor } from "./livesources.js";
 import { cliHeldOf } from "./transcript.js";
+import { realClock, type Clock } from "./waitclock.js";
 import type { CliHeld } from "./transcript/transcriptturns.js";
 
 export type SettleVerdict = "landed" | "composer" | "absent" | "unknown";
@@ -381,6 +382,7 @@ async function sourceMatch(
   since: number,
   opts: SettleOpts,
   askMs = SOURCE_ASK_MS,
+  clock: Clock = realClock,
 ): Promise<LogMatch | null> {
   if (sessions.keepsClaudeLog(sessionId)) return null;
   const live = liveSourceFor(sessionId);
@@ -389,14 +391,14 @@ async function sourceMatch(
   if (!echoProbe(text) || isSlashText(text)) return { verdict: "unknown" };
   const floor = since - (opts.slackMs ?? MATCH_SLACK_MS);
   let turns: { id: string; text: string; at: number }[] | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancel: (() => void) | undefined;
   try {
     // Bounded: the restart reconciliation waits on this before the store
     // fires anything, and a delivery's last proof has a deadline of its own.
     // A plugin that never answers is a source that cannot say.
-    const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), askMs); timer.unref?.(); });
+    const late = new Promise<null>((r) => { cancel = clock.after(askMs, () => r(null)); });
     turns = await Promise.race([src.userTurns(live.session, floor), late]);
-  } catch { turns = null; } finally { if (timer) clearTimeout(timer); }
+  } catch { turns = null; } finally { cancel?.(); }
   if (!Array.isArray(turns)) return { verdict: "unknown" };
   return turnMatch(turns, [], text, floor, opts.claimer);
 }
@@ -415,8 +417,9 @@ export async function ranMatch(
   since: number,
   opts: SettleOpts = {},
   askMs?: number,
+  clock: Clock = realClock,
 ): Promise<LogMatch> {
-  return (await sourceMatch(sessions, sessionId, text, since, opts, askMs)) ?? logMatch(sessions, sessionId, text, since, opts);
+  return (await sourceMatch(sessions, sessionId, text, since, opts, askMs, clock)) ?? logMatch(sessions, sessionId, text, since, opts);
 }
 
 /**
@@ -478,17 +481,18 @@ export async function awaitLanded(
   ms: number,
   slackMs = HOST_SLACK_MS,
   claimer?: string,
+  clock: Clock = realClock,
 ): Promise<boolean> {
   if (isSlashText(text) || !echoProbe(text)) return false;
-  const deadline = Date.now() + ms;
+  const deadline = clock.now() + ms;
   for (;;) {
     // Claiming here matters as much as in the sweep: this is the path that
     // answers `ok`, and an `ok` is never revisited by anything. A turn spent on
     // this delivery cannot then prove a second delivery of the same words ran.
-    const left = Math.max(250, deadline - Date.now());
-    if ((await ranMatch(sessions, sessionId, text, since, { slackMs, claimer }, left)).verdict === "landed") return true;
-    if (Date.now() >= deadline) return false;
-    await new Promise((r) => setTimeout(r, 250));
+    const left = Math.max(250, deadline - clock.now());
+    if ((await ranMatch(sessions, sessionId, text, since, { slackMs, claimer }, left, clock)).verdict === "landed") return true;
+    if (clock.now() >= deadline) return false;
+    await clock.sleep(250);
   }
 }
 

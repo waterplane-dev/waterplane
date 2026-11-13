@@ -4,7 +4,7 @@
 import { BRAND, resolveEnv } from "@waterplane/shared";
 
 /** The unattended calls this daemon makes, one routing knob each. */
-export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit" | "explain";
+export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit" | "explain" | "skills";
 
 /** How a completion is obtained. */
 export type SidecarEngine = "claude-p" | "openai-compat";
@@ -17,6 +17,7 @@ export const SIDECAR_ENV: Readonly<Record<SidecarTask, string>> = {
   name: `${BRAND.envPrefix}SIDECAR_NAME`,
   commit: `${BRAND.envPrefix}SIDECAR_COMMIT`,
   explain: `${BRAND.envPrefix}SIDECAR_EXPLAIN`,
+  skills: `${BRAND.envPrefix}SIDECAR_SKILLS`,
 };
 
 /**
@@ -47,6 +48,10 @@ const NEEDS_TOOLS: Readonly<Record<SidecarTask, boolean>> = {
   // the diffs and the repo's layout are IN the prompt; it runs no git of its
   // own and writes nothing.
   explain: false,
+  // `skills` (the Recommend button, `skills/skillrecommend.ts`): the rows, their weights, use
+  // counts and the names of the repo files that mention them are IN the prompt; it reads no file
+  // and writes nothing - the answer is a list a person ticks.
+  skills: false,
 };
 
 export interface ClaudeRoute { readonly engine: "claude-p" }

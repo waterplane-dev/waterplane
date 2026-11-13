@@ -56,7 +56,12 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   `<slug> pair` there. The typed address stays the fallback. `HostQrSheet` also shows the link and
   the code as selectable text with Copy and (when `navigator.share` exists) Share
   (`../../PairCopyRows.tsx`, `../../pairShare.ts`); no secure context ⇒ a sentence, never a grey.
-- **A desktop's encrypted link** (`../../lanLink.ts`, `../../lanRoute.ts`): a row with a pin on a
+- **A desktop's encrypted link** (`../../lanLink.ts`, `../../lanRoute.ts`): the Wi-Fi address is typed
+  PLAIN (`192.168.0.64` or `http://192.168.0.64:8770`); with a pin the app dials `https://<ip>:8771`
+  itself. A typed `https://` bare IP is dialled as written and never matched to the pin, so the screen
+  offers "use <ip>" (`hostTestWords.ts` `lanHttpsFix`); an `https` name is left alone. Each row says
+  "Encrypted on port 8771", "Not encrypted yet" (the key is learned over Tailscale) or that an old APK
+  cannot. A row with a pin on a
   shell that enforces it carries *use plain HTTP* (the shield, `askPlainHttp`), reachable with no
   connection. It sets `tlsOff` and removes the pin, only on a person's tap and through `Confirm.tsx`;
   with a recorded refusal at that address the question leads with the changed key and offers *pair

@@ -12,7 +12,8 @@ import { ASK_RULE_BACKENDS, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesR
 import { discoverTargets, findTarget, listTargets, plainFolders } from "../repos.js";
 import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
-import { dictateStatusLive, transcribe } from "../dictate.js";
+import { transcribe } from "../dictate.js";
+import { dictateStatusWithSetup } from "../dictatesetup.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { cloneRepo, initFolder, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
 import { changedCountsWithin, gitRunningIn } from "../git.js";
@@ -379,7 +380,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
   // than no button, and the reason names what to install (`Unavailable.tsx`'s
   // rule — a dimmed control explains nothing on a phone).
   route("GET", "/api/host/dictate", async ({ res }) => {
-    json(res, await dictateStatusLive());
+    json(res, await dictateStatusWithSetup());
     return true;
   }),
   // POST for the same reason `/api/host/ocr` is: the bytes exist NOWHERE

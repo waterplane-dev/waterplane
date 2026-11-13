@@ -56,7 +56,7 @@ server half of "the second tap IS the consent" (`CONFIRM_GATED_FIXES`, `/api/onb
   `intents.start()` (a job resumes into a running store), never under `DOCTOR`.
   `deliveries.ts`' `startPrompt` re-queues only a provably-`retry` failure.
 - `acks.ts` — the ackId ledger: persisted, TTL 45 min, flushed on SIGTERM.
-- `jsonstore.ts` — stores persist with `writeJsonAtomic` (tmp + fsync + rename, mode before bytes) and reads with `readJsonGuarded` (a corrupt file is moved to `<name>.corrupt-<ts>`, never overwritten); never `writeFileSync` a store.
+- `jsonstore.ts` — save with `writeJsonAtomic` (tmp, fsync, rename, mode before bytes), load with `readJsonGuarded`: a corrupt or unreadable file moves to `<name>.corrupt-<ts>`, never overwritten; no raw parse in a saving file, no `writeFileSync`.
 - `cli/` — selfupdate runs by explicit command only, `statesnap.ts` is taken by `update` before it switches versions and restored by `--rollback` (a newer host may have converted the stores), `releasesig.ts` is pinned to `deploy/release-pubkey.pem` ⇒ [distribution.md](../../../docs/notes/distribution.md).
 - `api.ts` — the HTTP frame: CORS reflection, preflight, dispatch over `routes/apiroutes.ts`'s one
   table. A route is `route(method, pattern, handler)` in a domain table (`routes/apisystem.ts`,

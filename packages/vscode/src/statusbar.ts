@@ -8,7 +8,7 @@
  */
 import * as vscode from "vscode";
 import { buildText } from "./buildstamp.js";
-import { BRAND, contextPct, fmtCount, fmtUsd, PRICES_AS_OF } from "@waterplane/shared";
+import { BRAND, contextPct, fmtCount, fmtUsd, PRICES_AS_OF, priceSourceText } from "@waterplane/shared";
 import type { SessionDoc } from "./protocol.js";
 import { sessionTotal } from "./data/sessiontotal.js";
 import type { SessionTotal } from "./data/sessiontotal.js";
@@ -91,7 +91,7 @@ export class StatusBar implements vscode.Disposable {
       md.appendMarkdown(`${total.withheldWhy ?? "No dollar figure."}\n\n`);
     }
     if (total.unpricedTok > 0) md.appendMarkdown(`${fmtCount(total.unpricedTok)} tokens ran on a model with no published rate and are not priced.\n\n`);
-    md.appendMarkdown(`List price at ${PRICES_AS_OF}, not your bill. Click to open.`);
+    md.appendMarkdown(`List-price estimate (${priceSourceText({ pricesAsOf: PRICES_AS_OF })}), not your bill. Click to open.`);
     if (buildText) md.appendMarkdown(`\n\n${BRAND.name} ${buildText}`);
     return md;
   }
@@ -107,7 +107,7 @@ export class StatusBar implements vscode.Disposable {
     md.appendMarkdown(`**Last 7 days, as of ${fmtAge(age)}**`);
     if (this.repo) md.appendMarkdown(` · this repo ${fmtUsd(this.repo.usd)}`);
     md.appendMarkdown(` · all ${all}\n\n${weekSplit(s)}\n\n`);
-    md.appendMarkdown(s.week.cost ? `List price at ${PRICES_AS_OF}, not your bill. Click to open.` : "Nothing in these days was priced. Click to open.");
+    md.appendMarkdown(s.week.cost ? `List-price estimate (${priceSourceText({ pricesAsOf: PRICES_AS_OF })}), not your bill. Click to open.` : "Nothing in these days was priced. Click to open.");
     if (buildText) md.appendMarkdown(`\n\n${BRAND.name} ${buildText}`);
     this.item.tooltip = md;
     this.item.show();

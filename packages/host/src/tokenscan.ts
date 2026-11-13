@@ -13,7 +13,7 @@
 import { open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { hourKey, isColdRebuild } from "@waterplane/shared";
+import { hourKey, isColdRebuild, priceKeyOf } from "@waterplane/shared";
 import { firstSightIn, isAnchor, usageRecordOf } from "./ctxlog/usagerecord.js";
 
 /** Six numbers: the four kinds, the 1-hour SUBSET of the cache writes (which is
@@ -156,7 +156,10 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
     if (u.speed !== null && u.speed !== "standard") fast++;
     if (!cwd && typeof row.cwd === "string") cwd = row.cwd;
     const ts = typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
-    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", u.model ?? "unknown");
+    // Tallied under the key this REQUEST prices under: a Haiku 5.5 request past
+    // a 100K-token prompt pays the long card, and a bucket's sum cannot say
+    // which of its requests were long, so they get a bucket of their own.
+    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", priceKeyOf(u.model, u) ?? "unknown");
     bump(cross, key, t);
     // Same guards, same record, same bucket — so the rebuild tokens are
     // always a SUBSET of the cache writes in the tally beside them, and the

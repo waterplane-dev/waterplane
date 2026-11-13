@@ -11,7 +11,7 @@
  * registry imports every extension and every extension imports this SDK: built at module load that
  * is a cycle reading an undefined list.
  */
-import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, PeerJobLedgerRow, PeerWeekSpendRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc } from "@waterplane/shared";
+import type { AgentMarkersResponse, AgentPointsResponse, BackendTokensDoc, CostWindowDoc, LocalUsageDoc, PeerJobLedgerRow, PeerWeekSpendRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc } from "@waterplane/shared";
 import { api } from "../api";
 import { core } from "../core/api";
 import { getLedgerDocAt, getTokenStatsAt, putLedgerDoc, putTokenStats } from "../offlineCache";
@@ -49,8 +49,14 @@ export const ledgers: {
   peerJobs(): Promise<PeerJobLedgerRow[]>;
   /** Every paired desktop's own priced spend over `[from, to]` (`GET /api/peers/weekspend`) — a row per peer, an error row where it did not answer. */
   peersWeekSpend(from: number, to: number): Promise<PeerWeekSpendRow[]>;
+  /** Agent session points, one repo's (its id) or every repo's (null). */
+  agentPoints(repoId: string | null): Promise<AgentPointsResponse>;
+  /** The changes drawn beside one repo's agent readings. */
+  agentMarkers(repoId: string): Promise<AgentMarkersResponse>;
   refreshUsage(quiet?: boolean): void;
 } = {
+  agentPoints: (repoId) => api.agentPoints(repoId),
+  agentMarkers: (repoId) => api.agentMarkers(repoId),
   peerJobs: () => api.peerJobs(),
   peersWeekSpend: (from, to) => api.peersWeekSpend(from, to),
   tokenStats: { read: (fresh) => api.tokenStats(fresh), fromCache: getTokenStatsAt, toCache: putTokenStats },

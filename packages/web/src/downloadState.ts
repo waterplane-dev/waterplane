@@ -72,7 +72,7 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
       phase: "idle", pct: null, label: "download",
       detail: rec?.evicted
         ? "downloaded before — the bytes were cleared to save space; fetch it again"
-        : "fetch it to this phone — it resumes by itself if the link drops",
+        : "fetch it to this device — it resumes by itself if the link drops",
     };
   }
   const pct = percent(rec);
@@ -112,7 +112,7 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
     if (rec.saveVia === "browser") {
       return {
         phase: "saved", pct: 100, label: "save again",
-        detail: `on this phone · handed to ${rec.savedTo} — tap to hand it over again if it never arrived`,
+        detail: `on this device · handed to ${rec.savedTo} — tap to hand it over again if it never arrived`,
       };
     }
     // The folder was ASKED (`pull.ts`'s `verifySaved`), and answered.
@@ -125,14 +125,14 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
     if (rec.savedPresent === false) {
       return {
         phase: "saved", pct: 100, label: "save again",
-        detail: `it was saved to ${rec.savedTo}, and is not in Downloads any more · still on this phone — tap to put it back`,
+        detail: `it was saved to ${rec.savedTo}, and is not in Downloads any more · still on this device — tap to put it back`,
       };
     }
     // Nobody could ask: a browser, or an APK whose plugin predates `find`.
     // Say what was done, never where the file is now.
     return {
       phase: "saved", pct: 100, label: "save again",
-      detail: `on this phone · saved to ${rec.savedTo}`,
+      detail: `on this device · saved to ${rec.savedTo}`,
     };
   }
   // Handed over, and the phone has not answered yet. A separate sentence from
@@ -147,10 +147,10 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
     };
   }
   return {
-    phase: "have", pct: 100, label: "save to phone",
+    phase: "have", pct: 100, label: "save to device",
     detail: rec.saveError
-      ? `on this phone — saving it out failed: ${rec.saveError}`
-      : "on this phone — put it where a file manager can see it",
+      ? `on this device — saving it out failed: ${rec.saveError}`
+      : "on this device — put it where a file manager can see it",
   };
 }
 

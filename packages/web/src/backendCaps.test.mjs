@@ -26,6 +26,7 @@ import {
   launchAskStart, modelChoices, modelGroups, permModeChoices, launchModeChoices, sessionCants, shouldAskLaunch, showBackendPicker,
   showWhereFilter, windowNote,
   agentBackends, agentTabLabel, isShellBackend, shellBackend, shellQuietLine,
+  hasSkillSwitch, skillSwitchGate, skillSwitchReason,
 } from "./backendCaps.ts";
 
 const caps = (o = {}) => ({
@@ -690,4 +691,17 @@ test("startableInstead: the agents that can start when this one cannot — never
   assert.deepEqual(startableInstead(list, "codex").map((b) => b.id), ["copilot"]);
   assert.deepEqual(startableInstead(list, "copilot"), [], "a backend that can start is offered no alternative");
   assert.deepEqual(startableInstead(null, "claude"), []);
+});
+
+test("the skills switch is offered only where the host said so, and the sentence names the backend", () => {
+  const withSwitch = { ...CLAUDE, caps: caps({ skillSwitch: true }) };
+  assert.equal(hasSkillSwitch([withSwitch], "claude"), true);
+  assert.equal(skillSwitchGate([withSwitch], "claude"), null);
+  // absent is not offered, never read as false-by-default-on
+  assert.equal(hasSkillSwitch(BOTH, "claude"), false);
+  assert.equal(skillSwitchGate(BOTH, "othercli"), "othercli has no skills or plugins this app can switch — not available for this backend.");
+  assert.equal(skillSwitchReason("X"), "X has no skills or plugins this app can switch — not available for this backend.");
+  // a host that never sent the frame predates the routes
+  assert.equal(hasSkillSwitch(null, "claude"), false);
+  assert.match(skillSwitchGate(null, "claude"), /too old/);
 });

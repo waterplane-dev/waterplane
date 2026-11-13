@@ -379,7 +379,7 @@ export function localRtState(i: LocalRtInput): LocalRtReading {
       kind: "pending",
       text: i.online
         ? "Asking this desktop what its local runner is holding…"
-        : "No reading yet — this phone hasn’t heard from the desktop.",
+        : "No reading yet — this device hasn’t heard from the desktop.",
     };
   }
 

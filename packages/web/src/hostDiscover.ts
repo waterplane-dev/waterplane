@@ -44,7 +44,7 @@ export function passwordSentence(name: string): string {
 /** Why the list is empty, as a sentence; the host's own `note` wins. */
 export function emptyFoundText(note: string | undefined, allSaved: boolean): string {
   if (note) return note;
-  return allSaved ? "Every desktop found on the tailnet is already on this phone." : `No other ${BRAND.name} desktop answered on the tailnet.`;
+  return allSaved ? "Every desktop found on the tailnet is already on this device." : `No other ${BRAND.name} desktop answered on the tailnet.`;
 }
 
 /** The row's one-line description. */

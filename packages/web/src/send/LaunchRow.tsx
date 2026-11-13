@@ -3,8 +3,10 @@ import { Cpu } from "lucide-react";
 import { LaunchPicker, launchOf } from "../LaunchPicker";
 import type { LaunchOpts } from "@waterplane/shared";
 import { launchOfTarget, launchWords } from "../sendIntent";
+import { defaultsLaunch, keepSeededMode, pickedModel, seededMode } from "../sendIntent/sendSeedMode.ts";
+import { launchFor } from "../backendCaps";
 import type { SendSheetModel } from "./useSendSheet";
-import { SetNote } from "../SettingsKit";
+import { SetNote, SetWarn } from "../SettingsKit";
 
 /**
  * **The Start-with picker, offered on a chip and never forced.** The launch
@@ -25,6 +27,8 @@ export function LaunchRow({ m, setLaunch }: {
   const defaults = m.launchDefaults ?? {};
   const lau = launchOfTarget(target);
   const at = lau ?? defaults;
+  // A mode the seed set (the vault's plan-mode explainer) outlives every pick here; a backend that cannot start in it is SAID, never silent.
+  const seeded = seededMode(lau, defaults), modeLost = !!lau && !!seeded && launchFor(lau, backends).permissionMode !== seeded;
   return (
     <>
       <div className="sched-days" style={{ marginTop: 6 }}>
@@ -38,15 +42,16 @@ export function LaunchRow({ m, setLaunch }: {
           <LaunchPicker backends={backends} defaults={defaults}
             nowLead={target.kind === "repos" ? "Every repo starts on" : "Starts on"}
             value={{ backend: at.backend, model: at.model, effort: at.effort }}
-            onChange={(p) => setLaunch(launchOf(defaults, p))}>
+            onChange={(p) => setLaunch(keepSeededMode(launchOf(defaults, p), lau, defaults))}>
             <SetNote as="span">
               {/* Where a later run's "nothing picked" lands: the DESKTOP opens
                   it, on its own defaults — not this phone's. */}
-              {lau ? "Just this send — your new-session defaults don’t change." : when.kind === "now"
+              {pickedModel(lau) ? "Just this send — your new-session defaults don’t change." : when.kind === "now"
                 ? "Nothing picked: it starts on your new-session defaults."
                 : "Nothing picked: the desktop opens it on its own defaults."}{" "}
-              {lau && <button className="link-btn" onClick={() => setLaunch(null)}>use the defaults</button>}
+              {pickedModel(lau) && <button className="link-btn" onClick={() => setLaunch(defaultsLaunch(lau, defaults))}>use the defaults</button>}
             </SetNote>
+            {modeLost && <SetWarn>This backend cannot start in {seeded} mode: the session would run with its own permissions. Pick claude, or do not send this.</SetWarn>}
           </LaunchPicker>
         </div>
       )}

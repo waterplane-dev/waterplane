@@ -60,9 +60,10 @@ export class ExposurePush {
     const p = this.path();
     if (!existsSync(p)) return EMPTY();
     const r = readJsonGuardedDetail<{ v: 1 | 2; keys: string[]; repos?: string[] } | null>(p, null,
-      (v) => !!v && typeof v === "object" && ((v as { v?: unknown }).v === 1 || (v as { v?: unknown }).v === 2) && Array.isArray((v as { keys?: unknown }).keys));
+      (v) => !!v && typeof v === "object" && ((v as { v?: unknown }).v === 1 || (v as { v?: unknown }).v === 2) && Array.isArray((v as { keys?: unknown }).keys),
+      { keepUnreadable: true });
     if (r.corrupt) {
-      return r.corrupt.movedTo ? EMPTY() : { ok: false, why: r.corrupt.error };
+      return r.corrupt.unreadable || !r.corrupt.movedTo ? { ok: false, why: r.corrupt.error } : EMPTY();
     }
     if (!r.value) return { ok: false, why: "empty" };
     const strs = (a: unknown): string[] => (Array.isArray(a) ? a.filter((k): k is string => typeof k === "string") : []);

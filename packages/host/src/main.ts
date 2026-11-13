@@ -52,6 +52,7 @@ import { initThumbs } from "./thumbs.js";
 import { dispatch } from "./routes/index.js";
 import { installChecklistStores } from "./setupprefs.js"; import { installRepoNames } from "./reponames.js"; import { AskRulesStore, setAskRulesStore } from "./askrules.js";
 import { installSessionModels } from "./localrt.js";
+import { setSessionPanes } from "./sysstat.js";
 import { startLocalUsage } from "./localusage.js";
 import { createClients } from "./server/clients.js";
 import { createDeliveries } from "./server/deliveries.js";
@@ -103,6 +104,7 @@ ctx.scheduleSnapshot = scheduleSnapshot; ctx.launchSnapshot = launchSnapshot; ct
 ctx.assessSnapshot = assessSnapshot; ctx.backlogSnapshot = backlogSnapshot; ctx.padNotesFor = snap.padNotesFor;
 
 setAskRulesStore(new AskRulesStore(ROOT)); const sessions = new SessionManager(ROOT, PORT); // ask rules first: `create` reads them per launch
+setSessionPanes(() => sessions.ourPanes()); // CPU per session in the desktop sheet (`sysstat.ts`)
 ctx.sessions = sessions;
 // Live sessions per resident model (`localrt.ts`'s `installSessionModels`, a closure called
 // fresh on every sample), and the runner's own ledger (`localusage.ts`).

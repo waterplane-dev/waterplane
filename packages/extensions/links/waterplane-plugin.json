@@ -1,0 +1,18 @@
+{
+  "id": "links",
+  "name": "links",
+  "version": "0.1.0",
+  "apiVersion": "2.0",
+  "description": "One list of every project's links: dev servers running on this desktop (through their tailscale serve front door), Cloud Run services and Firebase Hosting sites. The host finds them; a person pins the ones worth keeping, with an up/down check per pin. Off until switched on: cloud discovery runs gcloud with this desktop's own sign-in.",
+  "summary": "Lists your projects' web addresses (dev servers, Cloud Run, Firebase) and checks whether each pinned one is up.",
+  "places": [
+    "Home menu: the list of pinned and found links, with up or down for each pin",
+    "Session menu: the same list, from inside a session",
+    "Repo row: how many links this repo has; a tap lists only those"
+  ],
+  "maturity": "preview",
+  "host": "host/index.mts",
+  "web": "web/index.ts",
+  "optional": true,
+  "experimental": true
+}

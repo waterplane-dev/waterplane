@@ -251,3 +251,21 @@ test("/proc/mounts keeps real block devices and unescapes spaces", () => {
     assert.equal(isWsl({}, "Linux version 6.1.0 (gcc)"), false);
   });
 }
+
+test("cpuBySession: a process counts toward the session whose pane it descends from, pane process included", async () => {
+  const { parsePsRows, cpuBySession } = await import("../dist/sysstat.js");
+  const rows = parsePsRows([
+    "  100     1  1000   2.0 /bin/zsh",            // pane A
+    "  101   100  9000  40.0 /usr/local/bin/claude",
+    "  102   101  5000 300.0 node",                 // a test run under A
+    "  103   102  5000 150.0 node",
+    "  200     1  1000   0.5 /bin/zsh",            // pane B
+    "  201   200  9000   0.4 claude",               // B idle: 0.9% < floor
+    "  300     1  2000  99.0 kernel_task",          // no session
+    "ps: warning",
+  ].join("\n"));
+  assert.equal(rows.length, 7);
+  const out = cpuBySession(rows, [{ sessionId: "A", panePid: 100 }, { sessionId: "B", panePid: 200 }]);
+  assert.deepEqual(out.map((r) => [r.sessionId, r.cpuPct, r.procs, r.top]), [["A", 492, 4, "node"]]);
+  assert.deepEqual(cpuBySession(rows, []), []);
+});

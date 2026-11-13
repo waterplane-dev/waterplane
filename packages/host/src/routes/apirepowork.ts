@@ -10,7 +10,7 @@ import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { repoOfWorktree } from "../tokenstats.js";
-import { agentReadingsFor, agentReadingsStore } from "../agentreadings.js";
+import { agentLedger, agentReadingsFor, agentReadingsStore } from "../agentreadings.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
@@ -266,7 +266,8 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   route<RepoReq>("GET", "agentreadings", async ({ res, wt }, ctx) => {
     let items = null;
     try { items = ctx.backlog.list(); } catch { /* the bug count says it could not be read */ }
-    json(res, await agentReadingsFor(agentReadingsStore(ctx.root), wt, items));
+    const ledger = await agentLedger(() => ctx.tokenStats.read(5 * 60_000));
+    json(res, await agentReadingsFor(agentReadingsStore(ctx.root), wt, items, undefined, undefined, ledger));
     return true;
   }),
   route<RepoReq>("POST", "repohealth/scopes", async ({ req, res, wt }) => {

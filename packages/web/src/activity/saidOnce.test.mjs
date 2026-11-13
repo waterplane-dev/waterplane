@@ -91,7 +91,7 @@ function pull(over = {}) {
 
 test("a finished download says its size in the verdict and draws no bar", () => {
   const [r] = activityRows(input({ pulls: [pull()] }));
-  assert.equal(r.verdict, "downloaded · 31 kB · on this phone");
+  assert.equal(r.verdict, "downloaded · 31 kB · on this device");
   assert.equal(r.progress, null);
 });
 

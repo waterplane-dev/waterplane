@@ -34,7 +34,7 @@ import {
 import { repoStateDir } from "./branddirs.js";
 import { deleteArtifact, OUTBOX_SUBDIRS } from "./files.js";
 import { targetId } from "./repos.js";
-import { writeJsonAtomic } from "./jsonstore.js";
+import { isPlainObject, readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 /** Where a collected artifact goes. The first of `files.ts`' outbox dirs is the
  *  canonical one — `.outbox` is only recognised for reading. */
@@ -55,11 +55,9 @@ function policyPath(repoDir: string): string { return join(repoStateDir(repoDir)
 /** This repo's policy (the defaults when there is no file — the feature is on
  *  by default, see `DEFAULT_ARTIFACT_POLICY`). */
 export function artifactPolicy(repoDir: string): ArtifactPolicy {
-  try {
-    return cleanArtifactPolicy(JSON.parse(readFileSync(policyPath(repoDir), "utf8")));
-  } catch {
-    return { ...DEFAULT_ARTIFACT_POLICY };
-  }
+  // Through the store layer: a corrupt or wrong-shaped file is kept aside as `.corrupt-<ts>`
+  // before the next save (saveArtifactPolicy) replaces the name with the defaults.
+  return cleanArtifactPolicy(readJsonGuarded(policyPath(repoDir), { ...DEFAULT_ARTIFACT_POLICY }, isPlainObject));
 }
 
 /** Persist a repo's policy; returns what was actually written. */

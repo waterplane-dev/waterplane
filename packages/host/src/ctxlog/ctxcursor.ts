@@ -1,7 +1,7 @@
 /** The context log's cursor: the types, the ranged line reader and the accumulators' blanks and projections. Moved from ctxlog.ts. */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import type { CarriedKind, CarriedPart, ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, SessionCarried, SkillLoad, TokenTotals } from "@waterplane/shared";
-import { CARRIED_KINDS, CARRIED_NAMES_CAP, costOf, zeroCost, zeroTotals } from "@waterplane/shared";
+import { CARRIED_KINDS, CARRIED_NAMES_CAP, costOf, priceGeneration, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 
 /** The most one read holds in memory. Every log is read forward in chunks of
@@ -99,6 +99,8 @@ export function num(v: unknown): number {
  */
 export interface SeriesCursor {
   path: string;
+  /** `priceGeneration()` when `cost` was priced; stale ⇒ re-read from 0. */
+  priceGen: number;
   /** Offset just past the last complete line consumed. */
   consumed: number;
   /** The file's size and mtime when we last looked — a shrink or a rewind
@@ -380,7 +382,7 @@ export function remember(cur: SeriesCursor, id: string): boolean {
 
 export function blank(path: string): SeriesCursor {
   return {
-    path, consumed: 0, size: 0, mtime: 0,
+    path, priceGen: priceGeneration(), consumed: 0, size: 0, mtime: 0,
     samples: [], events: [], turns: 0, usageTok: 0, split: zeroTotals(),
     cost: zeroCost(), unpriced: 0, models: [], modelTok: [], cum: zeroTotals(),
     compaction: blankCompaction(), shedAuto: 0, shedManual: 0, pendingRebuild: null,

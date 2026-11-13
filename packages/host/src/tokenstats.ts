@@ -51,12 +51,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { 
-  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
+  addCost, addTotals, costOf, dayToMs, isPriced, priceKeyLabel, priceListSource, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc,
   type CostWindowDoc, hourKey, hourKeyMs, windowStartHour } from "@waterplane/shared";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { env } from "./env.js";
+import { notePriceGap } from "./pricegap.js";
 import { CROSS, type FileSummary, summarizeLog, type Tally, walkLogs } from "./tokenscan.js";
 import { hostStateDir } from "./branddirs.js";
 import { foldCostWindow, repoOfWorktree, undatedFields, type CostMeta } from "./costwindow.js";
@@ -73,7 +74,7 @@ const FLUSH_MS = 5_000;
 const YIELD_EVERY = 64;
 /** Store format. A bump discards the file and rebuilds rather than migrating —
  *  it is a cache of something still on disk, so rebuilding is always available. */
-const VERSION = 6;
+const VERSION = 7; // 7: Haiku 5.5 long-prompt requests tallied under `<alias>@long`
 /** How far back the HOUR buckets travel on the wire. The store keeps every hour
  *  it ever saw (they cost ~3 entries per conversation); this bounds only what a
  *  phone is asked to download and cache. 14 days is two full weeks of the
@@ -464,7 +465,7 @@ export class TokenStatsStore {
             if (!cv.last || hour > cv.last) cv.last = hour;
           }
           const c = costOf(v, model, day || undefined);
-          if (!c) { addTotals(unpriced, v); continue; }
+          if (!c) { addTotals(unpriced, v); if (day) notePriceGap(model, dayToMs(day)); continue; }
           if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }
           addCost(cv.cost, c);
           if (sum.sub) addCost(cv.agentCost, c);
@@ -593,7 +594,7 @@ export class TokenStatsStore {
       // (`claude-haiku-4-5-20251001`) and context variants, which are the same
       // model at the same price. The raw id stays as the row's `key`, so the
       // tooltip can still show exactly what ran.
-      models: group(models, modelCost, (k) => normalizeModel(k) ?? k),
+      models: group(models, modelCost, priceKeyLabel),
       repos: group(repos, repoCost, (k) => basename(k) || k, repoModel, repoModelCost),
       conversations,
       subagents,
@@ -609,7 +610,7 @@ export class TokenStatsStore {
         ...(cold.premiumUsd > 0 ? { premiumUsd: cold.premiumUsd } : {}),
       },
       top,
-      pricesAsOf: PRICES_AS_OF,
+      ...priceListSource(),
       firstAt: ms(first),
       lastAt: ms(last),
       scannedAt: this.lastScan,

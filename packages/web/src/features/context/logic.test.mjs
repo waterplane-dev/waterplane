@@ -43,5 +43,6 @@ test("the carried section is drawn without samples, and the doors in the unmeasu
   const unmeasured = src.slice(src.indexOf("if (unmeasured) {"));
   assert.ok(unmeasured.slice(0, unmeasured.indexOf("</Hint>")).includes("{doorsRow}"));
   const setup = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
-  assert.match(setup, /focus: "context-weight"/);
+  // The door lands on the agents region, whose first card is the always-on list.
+  assert.match(setup, /region: "agents"/);
 });

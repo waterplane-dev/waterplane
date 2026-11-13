@@ -229,12 +229,27 @@
 }
 .snippet-pop-head span:first-child { flex: 1; }
 .snippet-pop-list { overflow-y: auto; padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-6); }
-.snippet-pop-item {
-  display: flex; flex-direction: column; gap: var(--sp-2); text-align: left;
-  background: var(--well); color: var(--fg); border: 1px solid var(--line);
-  border-radius: var(--r-10); padding: var(--sp-8) var(--sp-10); cursor: pointer;
+.snippet-pop-row {
+  display: flex; align-items: stretch;
+  background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-10);
 }
-.snippet-pop-item:active { opacity: .8; }
+.snippet-pop-row.on { border-color: var(--pick-edge); background: var(--pick-fill); }
+.snippet-pop-item {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); text-align: left;
+  background: none; color: inherit; border: 0; padding: var(--sp-8) var(--sp-10); cursor: pointer;
+}
+.snippet-pop-item:active, .snippet-pop-tick:active { opacity: .8; }
+.snippet-pop-tick {
+  flex: none; min-width: 44px; display: flex; align-items: center; justify-content: center;
+  background: none; color: var(--fg); border: 0; border-left: 1px solid var(--line); cursor: pointer;
+}
+.snippet-pop-n {
+  min-width: 24px; height: 24px; padding: 0 var(--sp-4); display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--pick-edge); border-radius: var(--r-round); color: var(--fg); font-weight: var(--fw-semibold);
+}
+.snippet-pop-act { padding: var(--sp-6) var(--sp-10) 0; display: flex; align-items: center; justify-content: flex-end; min-height: 44px; }
+.snippet-pop-act .snippet-pop-note { padding: 0; margin-right: auto; }
+.snippet-pop-note { padding: var(--sp-6) var(--sp-10) 0; margin: 0; }
 .snippet-pop-title { font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
 .snippet-pop-preview { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .snippet-title { text-align: left; background: none; border: none; color: var(--fg); cursor: pointer; font: inherit; }

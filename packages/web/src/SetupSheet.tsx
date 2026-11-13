@@ -55,7 +55,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Bot, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
+  Activity, AlertTriangle, Bot, Check, EyeOff, Lightbulb, ListChecks, Plug, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
 } from "lucide-react";
 import { AgentReadingsRegion } from "./AgentReadingsRegion";
 import { AGENT_REGION_WORDS } from "./agentReadingsWords";
@@ -165,6 +165,10 @@ interface Props {
   sessionDoorsFor?: (repoId: string) => SessionDoor[];
   /** The context-weight row's door to the all-sessions token screen. */
   onAllSessions?: () => void;
+  /** The context-weight row's door to the skills & plugins switch for this repo. */
+  onSkills?: (repoId: string) => void;
+  /** The sentence that stands in for that door when this backend has no skills switch. */
+  skillsCant?: string | null;
   /** The always-on list's file door, whose Back lands on the checklist (not the series, as
    *  `onOpenFile`'s does). Falls back to `onOpenFile`. */
   onOpenInstructionFile?: (repoId: string, relPath: string) => void;
@@ -173,7 +177,7 @@ interface Props {
 
 export function SetupSheet({
   repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onSeed, onCapture,
-  sessionDoorsFor, onAllSessions, onOpenInstructionFile, onClose,
+  sessionDoorsFor, onAllSessions, onSkills, skillsCant, onOpenInstructionFile, onClose,
 }: Props) {
   const primaryRepos = repos.filter((r) => r.isPrimary);
   // A worktree can be badged too, so the picker (primaries only) may not list
@@ -446,9 +450,9 @@ export function SetupSheet({
               onRemedy={onRemedy}
               claudeMdSeries={claudeMdSeries}
               descSeries={plot?.series.find((s) => s.key === DESC_KEY) ?? null}
-              onOpenFile={onOpenInstructionFile ?? onOpenFile}
-              sessionDoors={sessionDoorsFor?.(repoId)}
-              onAllSessions={onAllSessions}
+              onAgents={() => { setRegion("agents"); setScope(null); }}
+              onSkills={onSkills ? () => onSkills(repoId) : undefined}
+              skillsCant={skillsCant ?? undefined}
             />
             {/* Not a check — a choice about this repo, kept beside the checklist
                 because this is the screen a repo's own settings are on. */}
@@ -457,7 +461,10 @@ export function SetupSheet({
             <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
               onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
           ) : region === "agents" ? (
-            <AgentReadingsRegion repo={repo} />
+            <AgentReadingsRegion repo={repo} carried={report
+              ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenInstructionFile ?? onOpenFile}
+                  sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions} />
+              : null} />
           ) : (
             <SeriesRegion
               repo={repo}
@@ -482,7 +489,7 @@ export function SetupSheet({
 function SetupRegion({
   kind, elsewhere, onElsewhere, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
   bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onMark, onFixAll, onRemedy, claudeMdSeries, descSeries,
-  onOpenFile, sessionDoors, onAllSessions,
+  onAgents, onSkills, skillsCant,
 }: {
   /** Which cut of the checklist this is: the conventions, or the daily watch (`isWatchCheck`). */
   kind: "setup" | "watch";
@@ -520,10 +527,11 @@ function SetupRegion({
    *  there is one. Region 1 draws it on exactly one row and nowhere else. */
   claudeMdSeries: RepoHealthPlotSeries | null;
   descSeries: RepoHealthPlotSeries | null;
-  /** The always-on list under the context-weight row (`AlwaysOnRows`): its file door and session doors. */
-  onOpenFile?: (repoId: string, relPath: string) => void;
-  sessionDoors?: SessionDoor[];
-  onAllSessions?: () => void;
+  /** Switch to the agents region, where the always-on list is drawn. */
+  onAgents?: () => void;
+  /** The switch screen for this repo's skills and plugins; `skillsCant` is the sentence when there is none. */
+  onSkills?: () => void;
+  skillsCant?: string;
 }) {
   // The watch re-check's run and its one sentence, for the repo it ran on (a switch hides it).
   const [watchRunAt, setWatchRun] = useState<{ repoId: string; running: boolean; ok?: boolean; sentence?: string } | null>(null);
@@ -531,9 +539,18 @@ function SetupRegion({
   // What the context-weight row's figure is made of, file by file, plus this desktop's rows and
   // the doors to what a live session actually carried. Absent `instructions` (an older host) is
   // said by the component, never drawn as an empty list.
-  const aoRows = report
-    ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenFile}
-        sessionDoors={sessionDoors} onAllSessions={onAllSessions} />
+  // The list itself lives in the agents region (what every turn carries, beside what the agents
+  // spent); this row keeps the threshold it is measured against and a door to the list.
+  const aoRows = report && (onAgents || onSkills || skillsCant)
+    ? <div className="sheet-actions">
+        {onAgents && <Button onClick={onAgents} title="The always-on list, file by file, and what each live session carried">
+          <Bot size={12} /> what it is made of →
+        </Button>}
+        {onSkills && <Button onClick={onSkills} title="Turn skills and plugins off or down for this repo or every repo; new sessions only">
+          <Plug size={12} /> switch skills &amp; plugins →
+        </Button>}
+        {!onSkills && skillsCant && <Hint>{skillsCant}</Hint>}
+      </div>
     : null;
   function card(c: ComplianceCheck) {
     if (!report) return null;
@@ -709,7 +726,7 @@ function SetupRegion({
                 {report.contextLimits ? " These are the thresholds it will be measured against once it does." : ""}
               </div>
               {/* No CLAUDE.md is not no always-on context: a `.mcp.json` server, a subagent or
-                  this desktop's own files still ride every turn, so their list is drawn here too. */}
+                  this desktop's own files still ride every turn, so the door to their list stays. */}
               {hasAlwaysOn && aoRows}
               {report.contextLimits && <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
                 setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />}

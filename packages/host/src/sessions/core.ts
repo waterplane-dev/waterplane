@@ -506,7 +506,7 @@ export interface Session {
    *  and the agents' token total. `ctxCursor` and `agentUse` are shared with
    *  the graph's read (`getContextSeries`), which advances both without
    *  rebuilding the spark, so they cannot say whether the spark is current. */
-  sparkFrom?: { path: string; mtime: number; agentTok: number | null } | null;
+  sparkFrom?: { path: string; mtime: number; agentTok: number | null; priceGen?: number } | null;
   /** The budget's interrupt-once latch (`sessions/budgetwatch.ts`): set on the
    *  crossing into `over`, cleared only by a verdict of `ok` or a new cap — an
    *  `unknown` in between (a reading gone stale) is not a second crossing. The

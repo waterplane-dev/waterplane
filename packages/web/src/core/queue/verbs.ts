@@ -411,16 +411,23 @@ export function verbFns(c: QueueCtx): VerbFns {
       showToast("moved into the message box");
       return;
     }
-    removeQueued(ackId);
     const target = sessions.find((s) => s.id === e.sessionId);
     if (!target) {
+      removeQueued(ackId);
       setCompose((c) => (c ? `${c}\n${e.text}` : e.text));
       showToast("moved into the message box");
       return;
     }
     const existing = loadDraft(target.id);
     const merged = existing ? `${existing}\n${e.text}` : e.text;
-    saveDraft(target.id, merged);
+    // The queue row is the last copy until the draft holds the words: a refused
+    // draft write on a box that is not on screen leaves the row where it is.
+    const saved = saveDraft(target.id, merged);
+    if (!saved && activeId !== target.id) {
+      showToast(`couldn't save to ${target.title}'s message box — it stays in the queue`);
+      return;
+    }
+    removeQueued(ackId);
     if (activeId === target.id) setCompose(merged);
     showToast(`moved into ${target.title}'s message box`);
   }

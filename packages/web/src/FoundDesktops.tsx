@@ -60,7 +60,7 @@ function FoundList({ onPassword }: FoundProps) {
         status = r.status;
         try { body = await r.json(); } catch { /* not JSON */ }
       } catch {
-        setSay(`This phone could not reach ${row.peer.addr}, though the desktop in use can. Check that Tailscale is connected on this phone, then try again.`);
+        setSay(`This device could not reach ${row.peer.addr}, though the desktop in use can. Check that Tailscale is connected on this device, then try again.`);
         return;
       }
       const verdict = healthVerdict(status, body);
@@ -87,7 +87,7 @@ function FoundList({ onPassword }: FoundProps) {
       <div className="list" style={{ marginTop: 6 }}>
         {rows.map((r) => r.saved ? (
           <Row key={r.base}>
-            <RowTitle><Check size={12} /> {r.peer.name} · already on this phone</RowTitle>
+            <RowTitle><Check size={12} /> {r.peer.name} · already on this device</RowTitle>
             <RowSub className="dim">{foundSub(r)}</RowSub>
           </Row>
         ) : (

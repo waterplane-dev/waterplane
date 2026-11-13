@@ -90,7 +90,7 @@ export type StakesFacet = "draft" | "queued" | "none";
 export const STAKES_OPTIONS: readonly StakesFacet[] = ["draft", "queued", "none"];
 // closed: an in-memory filter pick from this build's option list
 export const STAKES_LABEL: Record<StakesFacet, string> = {
-  draft: "unsent draft on this phone", queued: "prompts queued for it", none: "nothing waiting",
+  draft: "unsent draft on this device", queued: "prompts queued for it", none: "nothing waiting",
 };
 
 /**

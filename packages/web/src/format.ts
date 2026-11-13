@@ -295,6 +295,9 @@ export function until(ts: number): string {
 export function usageTitle(u: UsageInfo | null): string {
   const win = (label: string, pct: number | null | undefined, reset: number | null | undefined) =>
     `${label} ${pct != null ? `${pct}%` : "?"}${reset ? ` · resets ${hhmm(reset)} (in ${until(reset)})` : ""}`;
+  if (u && !u.ok && !u.checkedAt) {
+    return "Claude usage — reading… the desktop takes its first /usage reading shortly after it starts";
+  }
   if (u?.sessionGoneSince != null) {
     return `Claude usage — ${win("week", u.weeklyPct, u.weeklyResetAt)}`
       + `${u.checkedAt ? ` · checked ${ago(u.checkedAt)}` : ""}\n${sessionWindowGoneText()}`;

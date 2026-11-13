@@ -116,7 +116,7 @@ export function WindowHeats({ grids, res, money, scope, onScope }: {
           inviting the exact reading this app refuses to let a zero make. The
           per-cell `title` does not answer it — this is a phone. */}
       {(res.state === "cached" || res.state === "offline") && (
-        <div className="empty ts-caveat">These grids are the last copy this phone had.</div>
+        <div className="empty ts-caveat">These grids are the last copy this device had.</div>
       )}
       {boxes && <><div className="empty ts-caveat">
         Oldest first; the last box is the window running now. An <b>empty</b> box ran

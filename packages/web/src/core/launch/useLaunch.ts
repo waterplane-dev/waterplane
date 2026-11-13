@@ -43,6 +43,7 @@ import { core, type DurableOp } from "../../sdk/index.ts";
 import type { QueueApi } from "../queue/useQueue.ts";
 import { launchSheets, type AskedBudget, type LaunchSheets } from "./LaunchSheets.tsx";
 import { pendingLaneId } from "../queue/logic.ts";
+import { inboxNeeds } from "../queue/pending.ts";
 import { prefRef } from "../prefs.ts";
 import { baseName } from "../../format.ts";
 import { pickShell, type ReturnTo } from "./shellTab.ts";
@@ -776,19 +777,3 @@ export function useLaunch(deps: LaunchDeps) {
 }
 
 export type Launch = ReturnType<typeof useLaunch>;
-
-/**
- * The inbox paths a prompt names — what a `session.create` must not run
- * without.
- *
- * Matched on the shape of the path rather than looked up in the queue on
- * purpose: the text may name a file this device is uploading, one another
- * device uploaded, or one an earlier attempt already landed, and the host is
- * the only end that can tell those apart. It stats them itself. All this has
- * to do is say which paths the sentence depends on.
- */
-function inboxNeeds(text: string): string[] {
-  const out = new Set<string>();
-  for (const m of text.matchAll(/\.claude\/inbox\/[A-Za-z0-9._-]+/g)) out.add(m[0]);
-  return [...out];
-}

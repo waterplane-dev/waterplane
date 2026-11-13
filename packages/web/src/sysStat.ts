@@ -130,6 +130,50 @@ export function cpuSplitText(cpu: CpuBusy | undefined): string | null {
   return `${Math.round(cpu.userPct + cpu.sysPct)}% busy over the last ${span} — ${cpu.userPct.toFixed(0)}% running programs, ${cpu.sysPct.toFixed(0)}% in the kernel, ${cpu.idlePct.toFixed(0)}% idle.${vm}`;
 }
 
+/** Busy at or above this, the CPU row names what is using it — inline, so the
+ *  person who sees "100%" does not have to scroll to the process table. */
+export const CPU_HOT_PCT = 80;
+/** How many programs the hot CPU row names. */
+export const CPU_CULPRITS = 3;
+
+/**
+ * The top programs by CPU, as one line under a hot CPU row — null below
+ * `CPU_HOT_PCT`, without a process table, or with an empty one. Folded by
+ * program like the table further down, and `top`'s per-core percentages, so a
+ * row past 100% is several cores. The table may be older than the busy figure
+ * (slower cadence); `ageSec` says so rather than presenting it as the same instant.
+ */
+export function cpuCulpritsText(sys: SysStat | undefined, ageSec: number | null = null, n = CPU_CULPRITS): string | null {
+  const cpu = sys?.cpu;
+  const rows = sys?.procs?.byCpu;
+  if (!cpu || !rows?.length) return null;
+  const busy = cpu.splitKnown === false ? cpu.userPct : cpu.userPct + cpu.sysPct;
+  if (busy < CPU_HOT_PCT) return null;
+  const top = rows.slice(0, n).map((p) => `${p.name} ${p.cpuPct.toFixed(0)}%${p.procs > 1 ? ` (${p.procs} processes)` : ""}`);
+  const age = ageSec != null && ageSec > 0 ? ` (process list read ${ageSec}s earlier)` : "";
+  return `Using it most: ${top.join(" · ")}${age}.`;
+}
+
+/**
+ * The sessions behind a hot CPU — busiest first, at most `n`, each with the
+ * tab label the phone already knows. Empty below `CPU_HOT_PCT` or with no
+ * per-session reading. A session the phone has no label for (closed since the
+ * reading) keeps its row, named as such, rather than vanishing from the sum.
+ */
+export function hotSessions(sys: SysStat | undefined, labelOf: (id: string) => string | undefined, n = CPU_CULPRITS):
+  { id: string; label: string; detail: string }[] {
+  const cpu = sys?.cpu;
+  const rows = sys?.procs?.bySession;
+  if (!cpu || !rows?.length) return [];
+  const busy = cpu.splitKnown === false ? cpu.userPct : cpu.userPct + cpu.sysPct;
+  if (busy < CPU_HOT_PCT) return [];
+  return rows.slice(0, n).map((r) => ({
+    id: r.sessionId,
+    label: labelOf(r.sessionId) ?? "a session no longer open",
+    detail: `${r.cpuPct.toFixed(0)}% · mostly ${r.top}${r.procs > 1 ? ` · ${r.procs} processes` : ""}`,
+  }));
+}
+
 /** How a load average relates to this machine — a count of cores, not a
  *  percentage, because that is what it is. */
 export function loadText(sys: SysStat | undefined): string | null {

@@ -11,6 +11,7 @@
 import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
+import { demoCompliance, demoSkills } from "./skills.ts";
 import { demoHealthIndex } from "./healthindex.ts";
 import { findSession, screenLines, sessions } from "./desk.ts";
 import { NOT_IN_DEMO } from "./verdict.ts";
@@ -185,6 +186,15 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     if (!doc) return json({ error: "no context series" }, 404);
     if (Number(q.since || 0) >= doc.updatedAt) return { status: 204, contentType: "text/plain", body: "" };
     return json(doc);
+  }
+
+  // Skills & plugins: a tiny fictional inventory and the one checklist row that opens it, only where the scenario opts in.
+  const sk = /^\/api\/repos\/([^/]+)\/(skills|compliance)$/.exec(path);
+  if (sk && method === "GET" && m.numbers?.skills) {
+    const id = decodeURIComponent(sk[1]);
+    const target = repoTargets(m).find((r) => r.id === id) as { repoName?: unknown } | undefined;
+    if (!target) return json({ error: "no such repo" }, 404);
+    return json(sk[2] === "skills" ? demoSkills(id, now) : demoCompliance(id, String(target.repoName ?? id)));
   }
 
   // Repo health: a fictional series for the demo repos, only where the scenario opts in.

@@ -23,6 +23,7 @@ import {
   targetWords, whenPatchToast, seedAfterRescue, whenRoute, whenWords, budgetOfTarget, withBudget, withoutLaunch,
   launchOfTarget, launchWords, withLaunch,
 } from "./sendIntent.ts";
+import { seededMode, keepSeededMode, launchOnReturn, defaultsLaunch, pickedModel } from "./sendIntent/sendSeedMode.ts";
 
 const NOW = Date.now();
 const names = { repoName: () => "app", sessionTitle: () => "a session", buildName: () => "build" };
@@ -858,6 +859,34 @@ test("the model row's words: the defaults until something is picked, the backend
   assert.equal(launchWords({ model: "opus", effort: "high", backend: "claude" }), "opus · high");
   assert.equal(launchWords({ backend: "localrun", model: "qwen3-coder:30b" }), "localrun · qwen3-coder:30b");
   assert.equal(launchWords({ effort: "low" }), "the default model · low");
+});
+
+test("a mode a seed set outlives the model row, and the To row says it", () => {
+  const D = { permissionMode: "auto", model: "opus" };
+  const seed = { permissionMode: "plan" };
+  assert.equal(seededMode(seed, D), "plan");
+  assert.equal(seededMode({ permissionMode: "auto", model: "x" }, D), undefined, "the defaults' own mode is theirs, not the seed's");
+  assert.deepEqual(keepSeededMode({ ...D, backend: "other", model: "m" }, seed, D).permissionMode, "plan", "a pick rebuilt from the defaults keeps plan");
+  assert.deepEqual(keepSeededMode({ model: "m" }, { model: "x" }, D), { model: "m" }, "an ordinary launch is untouched");
+  assert.deepEqual(defaultsLaunch({ ...seed, model: "sonnet" }, D), { permissionMode: "plan" }, "use the defaults keeps the seed's mode");
+  assert.equal(defaultsLaunch({ model: "sonnet" }, D), null);
+  assert.equal(pickedModel(seed), false);
+  assert.equal(pickedModel({ permissionMode: "plan", model: "sonnet" }), true);
+  assert.equal(pickedModel({}), true, "a pick of everything default is still a pick");
+  const t = withLaunch({ kind: "repo", cwd: "/a" }, seed);
+  assert.equal(targetWords(t, names), "app · a new session, plan mode");
+});
+
+test("the To row's kind toggle gives a seeded mode back when it returns to a new session", () => {
+  const seedTarget = withLaunch({ kind: "repo", cwd: "/a" }, { permissionMode: "plan" });
+  const live = { kind: "session", sessionId: "s", cwd: "/a" };
+  assert.deepEqual(launchOnReturn(live, seedTarget), { permissionMode: "plan" }, "this session, then a new session: still plan");
+  assert.deepEqual(launchOnReturn(withLaunch({ kind: "repo", cwd: "/a" }, { model: "m" }), seedTarget), { model: "m" }, "a launch the target has is kept");
+  assert.equal(launchOnReturn(live, { kind: "repo", cwd: "/a" }), undefined, "an unseeded send gets no launch");
+  assert.equal(launchOnReturn(live, undefined), undefined);
+  const stored = withLaunch({ kind: "repo", cwd: "/a" }, { model: "opus", effort: "high" });
+  assert.equal(launchOnReturn({ kind: "repos", dirs: ["/a"] }, stored), undefined, "a stored model removed on purpose stays removed");
+  assert.deepEqual(launchOnReturn(live, withLaunch({ kind: "repo", cwd: "/a" }, { permissionMode: "plan", model: "opus" })), { permissionMode: "plan" }, "only the seed's mode comes back");
 });
 
 test("a repo target carries its launch like its budget, and both restate it", () => {

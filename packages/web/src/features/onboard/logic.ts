@@ -265,7 +265,7 @@ export type HandOff =
 export function handOff(job: OnboardJob, sessionIds: ReadonlySet<string>, seeded: boolean): HandOff {
   if (job.consent.session !== true) return { kind: "none", why: "You chose not to run claude in the new repo; open a session from its row when you want one." };
   if (job.sessionId) {
-    if (!sessionIds.has(job.sessionId)) return { kind: "wait", why: "The session is open on the desktop but not on this phone's list yet; try again in a moment." };
+    if (!sessionIds.has(job.sessionId)) return { kind: "wait", why: "The session is open on the desktop but not on this device's list yet; try again in a moment." };
     const seed = !job.answers.description && !seeded && job.suggestedPrompt ? job.suggestedPrompt : null;
     return { kind: "attach", sessionId: job.sessionId, seed };
   }

@@ -42,7 +42,7 @@ export function ToastLog({ rows, onOpen }: { rows: ToastEntry[]; onOpen: (n: Not
     <>
       <div className="notif-sec">
         <span className="notif-sec-title">
-          <MessageSquare size={13} /> On this phone · {rows.length}
+          <MessageSquare size={13} /> On this device · {rows.length}
         </span>
         {/* Local and re-derivable from nothing, so the delete is real: it goes
             through the arming button rather than a native modal (`Confirm.tsx`). */}

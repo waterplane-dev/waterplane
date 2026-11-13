@@ -28,6 +28,10 @@
 # and never runs the plugin's code. `--without <id>` switches an optional
 # built-in extension off for this install.
 #
+# Optional, asked on the terminal (default no): `--dictation[=<model>]` / `--no-dictation`
+# set up local dictation — whisper.cpp (brew on macOS) and one speech model downloaded from
+# huggingface.co into the host's model dir, checked against a pinned sha256. Never bundled.
+#
 # Re-running it upgrades. `--uninstall` removes the program and the service and
 # leaves your repos, settings (~/.config/@@CONFIG_NAME@@) and state (~/.local/state/@@CONFIG_NAME@@) alone.
 #
@@ -93,6 +97,9 @@ usage: install.sh [options]
                        missing; the install continues without it either way
   --with <id>          also install this plugin (repeatable) from the catalogue below
   --without <id>       switch an optional built-in extension off for this install (repeatable)
+  --dictation[=<model>] set up local dictation (whisper.cpp + a speech model, from
+                       huggingface.co) without asking; model: turbo-q8 (default), turbo, small
+  --no-dictation       do not offer local dictation
   --uninstall          remove the program, the runtime, the service and the command
   -h, --help           this text
 
@@ -469,6 +476,130 @@ ensure_tmux() {
   die "Install it with: $CMD — then re-run this installer."
 }
 
+# ── local dictation (optional) ───────────────────────────────────────────
+# whisper.cpp's whisper-cli plus ONE ggml model, so the phone's microphone is transcribed on
+# this desktop instead of by the phone's own, worse, cloud recogniser. Asked on the terminal
+# (default no), or decided by --dictation[=<model>] / --no-dictation. The same setup the
+# phone's Settings → Local dictation runs (packages/host/src/dictatesetup.ts); this table is
+# a copy of DICTATE_MODELS in packages/shared/src/dictatemodels.ts and a test pins them equal.
+# The model is downloaded from upstream (huggingface.co/ggerganov/whisper.cpp, MIT licence) on
+# request and checked against the pinned sha256; it is never bundled or redistributed here.
+# Unprivileged, and it never fails the install: a problem is a warning, the install goes on.
+DICTATE_BASE_URL='https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'
+DICTATE_MARGIN_BYTES=2147483648
+
+# id|file|bytes|sha256
+dictate_models() {
+  cat <<'DICTATE_EOF'
+turbo-q8|ggml-large-v3-turbo-q8_0.bin|874188075|317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1
+turbo|ggml-large-v3-turbo.bin|1624555275|1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69
+small|ggml-small.bin|487601967|1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
+DICTATE_EOF
+}
+
+dictate_row() { dictate_models | awk -F'|' -v id="$1" '$1 == id {print; exit}'; }
+dictate_ids() { dictate_models | awk -F'|' '{printf "%s%s", sep, $1; sep = ", "}'; }
+
+# The host's model dir (packages/host/src/dictate.ts modelDir): $XDG_DATA_HOME/<name>/models,
+# else ~/.local/share/<name>/models.
+dictate_model_dir() { printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/$CONFIG_NAME/models"; }
+
+dictate_later() { echo "To set it up later: re-run this installer with --dictation, or on the phone Settings → Local dictation."; }
+
+# dictate_engine: succeeds when whisper-cli is here, installing it through brew where that is possible.
+dictate_engine() {
+  if has whisper-cli; then return 0; fi
+  if [ "$OS" = darwin ] && has brew && brew_writable; then
+    say "installing whisper.cpp with: brew install whisper-cpp"
+    if brew install whisper-cpp </dev/null && has whisper-cli; then return 0; fi
+    warn "brew install whisper-cpp failed (see above)."
+    return 1
+  fi
+  if [ "$OS" = darwin ]; then
+    warn "whisper-cli is not installed and brew is not usable by this account. Install it with: brew install whisper-cpp"
+  else
+    warn "whisper-cli (whisper.cpp) is not installed. Build it from https://github.com/ggml-org/whisper.cpp or use your distribution's package, so that whisper-cli is on PATH."
+  fi
+  return 1
+}
+
+# dictate_free_bytes <dir>: free bytes on the volume holding <dir>, or nothing.
+dictate_free_bytes() {
+  kb="$(df -Pk "$1" 2>/dev/null | awk 'NR == 2 {print $4}')"
+  case "$kb" in ''|*[!0-9]*) return 0 ;; esac
+  echo $((kb * 1024))
+}
+
+dictate_setup() {
+  row="$(dictate_row "$DICTATION_MODEL")"
+  if [ -z "$row" ]; then warn "--dictation=$DICTATION_MODEL: no such model. Choose one of: $(dictate_ids)."; return 1; fi
+  d_file="$(printf '%s' "$row" | cut -d'|' -f2)"
+  d_bytes="$(printf '%s' "$row" | cut -d'|' -f3)"
+  d_sha="$(printf '%s' "$row" | cut -d'|' -f4)"
+  d_dir="$(dictate_model_dir)"
+  d_dest="$d_dir/$d_file"
+
+  dictate_engine || { warn "Local dictation needs whisper-cli first; the model was not downloaded. $(dictate_later)"; return 1; }
+
+  if [ -f "$d_dest" ] && [ "$(wc -c <"$d_dest" | tr -d ' ')" = "$d_bytes" ]; then
+    if [ "$(sha256_of "$d_dest")" = "$d_sha" ]; then
+      say "dictation model $d_file is already in $d_dir"
+      return 0
+    fi
+    warn "the dictation model $d_file in $d_dir does not match its checksum; downloading it again."
+  fi
+  mkdir -p "$d_dir" || { warn "cannot create $d_dir"; return 1; }
+  free="$(dictate_free_bytes "$d_dir")"
+  need=$((d_bytes + DICTATE_MARGIN_BYTES))
+  if [ -n "$free" ] && [ "$free" -lt "$need" ]; then
+    warn "not enough disk space for the dictation model: $free bytes free in $d_dir, need $need (model $d_bytes + 2 GB margin kept free). Free some space, then re-run with --dictation."
+    return 1
+  fi
+  case "$DICTATE_BASE_URL" in
+    http://*|https://*)
+      if ! has curl && ! has wget; then
+        warn "neither curl nor wget is installed, so the dictation model cannot be downloaded. $(dictate_later)"; return 1
+      fi ;;
+  esac
+  say "downloading $d_file ($((d_bytes / 1048576)) MB) from huggingface.co into $d_dir"
+  d_part="$d_dest.part"
+  DICTATE_PART="$d_part"
+  rm -f "$d_part"
+  if ! fetch "$DICTATE_BASE_URL$d_file" "$d_part"; then
+    rm -f "$d_part"; warn "downloading the dictation model failed. $(dictate_later)"; return 1
+  fi
+  if [ "$(wc -c <"$d_part" | tr -d ' ')" != "$d_bytes" ]; then
+    rm -f "$d_part"; warn "the downloaded dictation model has the wrong size (expected $d_bytes bytes); removed it. $(dictate_later)"; return 1
+  fi
+  got="$(sha256_of "$d_part")"
+  if [ "$got" != "$d_sha" ]; then
+    rm -f "$d_part"; warn "checksum mismatch for the dictation model (expected $d_sha, got $got); removed it. $(dictate_later)"; return 1
+  fi
+  mv "$d_part" "$d_dest" || { rm -f "$d_part"; warn "could not move the model into place"; return 1; }
+  DICTATE_PART=''
+  say "local dictation is set up ($d_file)"
+}
+
+# dictation_step: decide (flag, question or skip), then dictate_setup. Never fails the install.
+dictation_step() {
+  case "$DICTATION" in
+    no) return 0 ;;
+    yes) ;;
+    *)
+      if ! can_ask; then
+        say "skipped local dictation (cannot ask without a terminal). $(dictate_later)"
+        return 0
+      fi
+      d_mb="$(dictate_row "$DICTATION_MODEL" | cut -d'|' -f3)"
+      printf '[%s] Set up local dictation? Installs whisper.cpp and downloads a speech model (~%s MB) so your phone'"'"'s microphone is transcribed on this desktop; without it the phone uses its own cloud recogniser. [y/N] ' "$SLUG" "$((${d_mb:-0} / 1048576))"
+      ANS=''
+      read -r ANS </dev/tty || ANS=''
+      case "$ANS" in y|Y|yes|YES) ;; *) say "skipped local dictation. $(dictate_later)"; return 0 ;; esac ;;
+  esac
+  dictate_setup || warn "local dictation was not set up; the install continues."
+  return 0
+}
+
 # ── node ─────────────────────────────────────────────────────────────────
 
 install_node() {
@@ -759,6 +890,7 @@ main() {
   WITH_IDS=''; WITHOUT_IDS=''
   VERSION="$DEFAULT_VERSION"; FROM=''; NO_SERVICE=0; NO_OPEN=0; SKIP_CLAUDE=0; UNINSTALL=0
   NODE_MIRROR="$NODE_MIRROR_DEFAULT"; BIN_DIR="$HOME/.local/bin"; VERSION_GIVEN=0
+  DICTATION=ask; DICTATION_MODEL=turbo-q8
   while [ $# -gt 0 ]; do
     case "$1" in
       --version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="${2#v}"; VERSION_GIVEN=1; shift 2 ;;
@@ -774,6 +906,12 @@ main() {
       --with=*) WITH_IDS="$WITH_IDS ${1#*=}"; shift ;;
       --without) [ $# -ge 2 ] || die "--without needs an extension id"; WITHOUT_IDS="$WITHOUT_IDS $2"; shift 2 ;;
       --without=*) WITHOUT_IDS="$WITHOUT_IDS ${1#*=}"; shift ;;
+      --dictation)
+        # A model id is taken from the next word only when it is a known one.
+        DICTATION=yes
+        if [ -n "${2:-}" ] && [ -n "$(dictate_row "$2")" ]; then DICTATION_MODEL="$2"; shift 2; else shift; fi ;;
+      --dictation=*) DICTATION=yes; DICTATION_MODEL="${1#*=}"; shift ;;
+      --no-dictation) DICTATION=no; shift ;;
       --uninstall) UNINSTALL=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage >&2; die "unknown option: $1" ;;
@@ -821,8 +959,9 @@ main() {
   check_wrapper_path
 
   TMP="$(mktemp -d 2>/dev/null || mktemp -d -t "$SLUG")"
-  trap 'rm -rf "$TMP"' EXIT
-  trap 'rm -rf "$TMP"; exit 130' INT TERM
+  DICTATE_PART=''
+  trap 'rm -rf "$TMP"; [ -z "$DICTATE_PART" ] || rm -f "$DICTATE_PART"' EXIT
+  trap 'rm -rf "$TMP"; [ -z "$DICTATE_PART" ] || rm -f "$DICTATE_PART"; exit 130' INT TERM
 
   install_node
   stage_plugins
@@ -830,6 +969,7 @@ main() {
   write_wrapper
   place_plugins
   apply_without
+  dictation_step
 
   if [ "$NO_SERVICE" = 1 ]; then
     say "skipped the login service (--no-service). Start the host with: $SLUG start"

@@ -57,7 +57,7 @@ export function PullShellSettings({ caps, installIntro, finished, onOpenApps, on
     track(`action:pull.getApk.${apkWhere}`);
     const url = shellApkUrl(apkWhere, caps.self ?? BRAND.appId, BRAND.githubOrg, BRAND.slug);
     if (!url) onShowFiles();
-    else if (!openExternal(url)) showToast("could not open that page on this phone.");
+    else if (!openExternal(url)) showToast("could not open that page on this device.");
   };
 
   return (

@@ -694,7 +694,7 @@ async function heldBuild(id: string): Promise<string | null> {
   if (!n || n.badBuild !== id) return null;
   // The launch check writes the reason and leaves the mark: that reason is not why THIS build failed.
   const reason = n.badReason === NATIVE_UNVERIFIED_REASON ? "" : n.badReason;
-  return `build ${id.slice(0, 8)} did not start on this phone${reason ? ` (${reason})` : ""}, so the app went back to the build inside it`;
+  return `build ${id.slice(0, 8)} did not start on this device${reason ? ` (${reason})` : ""}, so the app went back to the build inside it`;
 }
 
 export async function runningBuildId(): Promise<string | null> {

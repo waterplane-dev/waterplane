@@ -129,7 +129,7 @@ export function onAttachOpen(d: AttachOpenDetail): void {
   const back = core().nav.overlay;
   if (d.state === "host" && d.repoId) { openFileRef(d.repoId, d.relPath, back); return; }
   void localPreview(d.relPath, d.state, [...core().queue.entries]).then((url) => {
-    if (!url) { core().say.toast("no copy of this file on this phone"); return; }
+    if (!url) { core().say.toast("no copy of this file on this device"); return; }
     core().say.track("action:attach.openlocal");
     setSwipe({
       items: [{ name: d.relPath.split("/").pop() || d.relPath, relPath: d.relPath, url, repoId: d.repoId ?? undefined }],

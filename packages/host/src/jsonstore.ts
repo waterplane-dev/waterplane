@@ -101,9 +101,24 @@ export function keepLastLines(path: string, keep: number): void {
 export interface GuardedRead<T> {
   value: T;
   /** Set only when a file was PRESENT and unreadable: where its bytes went
-   *  (null when even the move failed), and why it was refused. */
-  corrupt?: { movedTo: string | null; error: string };
+   *  (null when even the move failed, or when it was deliberately left), and why
+   *  it was refused. `unreadable` is true when the file could not be READ at all
+   *  (EACCES, EIO) as against read but not parsed: a caller that refuses or fails
+   *  closed on a store it cannot read keys off this, never off `movedTo`. */
+  corrupt?: { movedTo: string | null; error: string; unreadable?: boolean };
 }
+
+export interface GuardedReadOpts {
+  /** Leave a file that cannot be READ where it is (movedTo null, `unreadable` true)
+   *  instead of moving it aside. For a store that refuses or fails closed on an
+   *  unreadable file, so fixing the permissions brings the real bytes back. */
+  keepUnreadable?: boolean;
+}
+
+/** Errors of the process, not of the file: the bytes are fine and the next read may
+ *  succeed. Moving the file aside for these would take a good store out of service
+ *  (a rename needs no fd, a write does). */
+const PROCESS_LEVEL = new Set(["EMFILE", "ENFILE", "ENOMEM", "EAGAIN", "EINTR"]);
 
 /** The path a corrupt file is moved to. Exported for tests and messages. */
 export function corruptPathFor(path: string, at = Date.now()): string {
@@ -112,19 +127,31 @@ export function corruptPathFor(path: string, at = Date.now()): string {
 
 /**
  * Read and parse `path`, or return `fallback`. Absent ⇒ fallback, silently.
- * Present but unparseable (or failing `accept`) ⇒ moved aside, logged once,
- * fallback. Never throws.
+ * Present but unparseable, failing `accept`, or unreadable ⇒ moved aside, logged
+ * once, fallback. Never throws.
  */
-export function readJsonGuardedDetail<T>(path: string, fallback: T, accept?: (v: unknown) => boolean): GuardedRead<T> {
+export function readJsonGuardedDetail<T>(path: string, fallback: T, accept?: (v: unknown) => boolean, opts: GuardedReadOpts = {}): GuardedRead<T> {
   let raw: string;
   try {
     if (!existsSync(path)) return { value: fallback };
     raw = readFileSync(path, "utf8");
   } catch (e) {
-    // Unreadable (permissions, EIO): leave it where it is — moving a file we
-    // cannot read is not ours to decide — but say so.
-    console.error(`[jsonstore] ${path} could not be read (${(e as Error).message}); starting from defaults`);
-    return { value: fallback, corrupt: { movedTo: null, error: String((e as Error).message) } };
+    // Unreadable (permissions, EIO): moved aside exactly like a corrupt file. A
+    // load-then-save store (nearly all of them) saves its fallback over this name
+    // next, and a rename needs no read permission on the file — so leaving the
+    // bytes here would let the save replace what nobody read. If even the rename
+    // fails the directory is not writable, and the atomic write's own rename
+    // fails with it: nothing is overwritten, so log, fall back, movedTo null.
+    // Not for a process-level error (EMFILE...): the bytes are fine, a write would
+    // fail too, and the next read gets the real data.
+    const msg = String((e as Error).message);
+    if (opts.keepUnreadable || PROCESS_LEVEL.has((e as NodeJS.ErrnoException).code ?? "")) {
+      console.error(`[jsonstore] ${path} could not be read (${msg}); left in place; starting from defaults`);
+      return { value: fallback, corrupt: { movedTo: null, error: msg, unreadable: true } };
+    }
+    const r = moveAside(path, fallback, `could not be read (${msg})`, msg);
+    r.corrupt!.unreadable = true;
+    return r;
   }
   let parsed: unknown;
   let error: string | null = null;
@@ -135,14 +162,24 @@ export function readJsonGuardedDetail<T>(path: string, fallback: T, accept?: (v:
     error = String((e as Error).message);
   }
   if (error === null) return { value: parsed as T };
+  return moveAside(path, fallback, `is corrupt (${error})`, error);
+}
+
+/** Keep `path`'s bytes under a `.corrupt-` name, say so once, and hand back the fallback. */
+function moveAside<T>(path: string, fallback: T, what: string, error: string): GuardedRead<T> {
   let movedTo: string | null = corruptPathFor(path);
   try { renameSync(path, movedTo); } catch { movedTo = null; }
   console.error(
-    `[jsonstore] ${path} is corrupt (${error}); ` +
+    `[jsonstore] ${path} ${what}; ` +
       (movedTo ? `kept as ${movedTo}` : "could not move it aside") +
       "; starting from defaults",
   );
   return { value: fallback, corrupt: { movedTo, error } };
+}
+
+/** An `accept` for a store whose file is one JSON object: an array, a number or null is the wrong shape. */
+export function isPlainObject(v: unknown): boolean {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** `readJsonGuardedDetail`, value only. */

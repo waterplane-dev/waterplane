@@ -1,5 +1,5 @@
 /* The cascade, in order. Each file is a slice of one stylesheet cut at rule boundaries: order is
-   behaviour, so a new rule goes next to what it overrides, and 15-wide-layout.css stays last. */
+   behaviour, so a new rule goes next to what it overrides, and 16-wide-layout.css stays last. */
 @import "./styles/00-tokens.css";
 @import "./styles/01-frame.css";
 @import "./styles/02-launcher-groups.css";
@@ -15,4 +15,5 @@
 @import "./styles/12-readings-assess.css";
 @import "./styles/13-insights-onboard.css";
 @import "./styles/14-review-annot.css";
-@import "./styles/15-wide-layout.css";
+@import "./styles/15-skills.css";
+@import "./styles/16-wide-layout.css";

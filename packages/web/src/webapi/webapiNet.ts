@@ -19,6 +19,10 @@ async function jpostPair(url: string, req: unknown, held: string | null = null):
 export const netApi = {
   // Speed test (bidirectional throughput + connection diagnostics).
   speedtest: {
+    /** One HTTP round trip (1-byte body) in ms, null on no answer. Silent: twenty must not blink the activity bar. */
+    ping: (ms = 3000): Promise<number | null> => { const t0 = performance.now();
+      return bgFetch(`/api/speedtest/download?bytes=1&_=${Date.now()}`, { cache: "no-store" }, ms)
+        .then(async (r) => (r.ok ? (await r.arrayBuffer(), performance.now() - t0) : null)).catch(() => null); },
     /** Download `bytes` from the host, streaming so we can report live progress. */
     download: async (bytes: number, onProgress?: (received: number) => void): Promise<SpeedResult> => {
       const t0 = performance.now();
@@ -93,11 +97,7 @@ export const netApi = {
    *  check runs unprompted at boot. */
   webBundle: {
     manifest: <T,>() => bgJson<T>("/api/webbundle", { cache: "no-store" }),
-    file: (path: string, buildId: string) =>
-      bgFetch(
-        `/api/webbundle/file?path=${encodeURIComponent(path)}&v=${encodeURIComponent(buildId)}`,
-        { cache: "no-store" },
-      ),
+    file: (path: string, buildId: string) => bgFetch(`/api/webbundle/file?path=${encodeURIComponent(path)}&v=${encodeURIComponent(buildId)}`, { cache: "no-store" }),
   },
 
   // LAN password gate.

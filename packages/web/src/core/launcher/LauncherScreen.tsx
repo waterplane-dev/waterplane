@@ -227,7 +227,7 @@ export function LauncherScreen(p: LauncherProps) {
             <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("gallery"); }}><Images size={ICON} />files</button>
             {/* The route to the downloads when nothing is downloading. The
                 PullBar strip is rendered only while a transfer is ACTIVE, so
-                the finished files ("on this phone · tap to save it") and the
+                the finished files ("on this device · tap to save it") and the
                 per-repo rules were reachable only through Settings → Data
                 usage — three taps and a section nobody looks in for a file.
                 Same argument as activity and archive two buttons along: an
@@ -238,7 +238,7 @@ export function LauncherScreen(p: LauncherProps) {
             <button className={`more-act${dl.active > 0 ? " has-bar" : ""}`}
               title={dl.active > 0
                 ? `downloads — ${dl.active} in flight, ${dl.pct}% of the bytes here${dl.stuck ? " (something is stopped)" : ""}`
-                : "downloads — files fetched to this phone, and what each repo fetches on its own"}
+                : "downloads — files fetched to this device, and what each repo fetches on its own"}
               onClick={() => { track("overlay:pull"); setNavMenu(false); setOverlay("pull"); }}>
               <Download size={ICON} />downloads
               {dl.active > 0 ? ` ${dl.active} · ${dl.pct}%` : dl.onPhone > 0 ? ` ${dl.onPhone}` : ""}
@@ -339,7 +339,7 @@ export function LauncherScreen(p: LauncherProps) {
                   conversations all come from the desktop.
                 </div>
                 <ul className="offline-card-hints">
-                  <li>Is Tailscale connected on this phone?</li>
+                  <li>Is Tailscale connected on this device?</li>
                   <li>Is the desktop awake, with the {BRAND.name} daemon running?</li>
                   {tailscaleIp && <li>Last known host address: <span className="mono">{tailscaleIp}</span></li>}
                 </ul>

@@ -183,3 +183,27 @@ test("a cost window over a ledger holding undated records is not drawn, and the 
   assert.equal(foldStateText({ state: "ready", data: { ...doc, undated: 3 } }, "week"), undatedText(3));
   assert.match(foldStateText({ state: "loading" }, "week"), /Folding/);
 });
+
+import { prevSpan } from "./weekBands.ts";
+
+test("prevSpan: the week before the live week, the window before a window, the days before a calendar span", () => {
+  const H = 3_600_000, W = 7 * 24 * H;
+  const opened = Date.UTC(2026, 10, 4, 9), wkFrom = windowStartHour(opened);
+  const w = prevSpan("week", { from: wkFrom, openedAt: opened }, null, 0);
+  assert.equal(w.to, wkFrom);
+  assert.equal(w.from, windowStartHour(opened - W));
+  assert.equal(w.words, "the week before");
+  const f = prevSpan({ from: 10 * H, toHour: 15 * H }, null, null, 0);
+  assert.deepEqual([f.from, f.to, f.words], [5 * H, 10 * H, "the window before"]);
+  const mid = new Date(2026, 10, 1).getTime();
+  const c = prevSpan({ from: mid, toHour: Infinity }, null, 30, 0);
+  assert.equal(c.from, new Date(2026, 9, 2).getTime());
+  assert.equal(c.words, "the 30 days before");
+});
+
+test("prevSpan: absent where it would reach past the record's first day, or with no span", () => {
+  const H = 3_600_000;
+  assert.equal(prevSpan({ from: 10 * H, toHour: 15 * H }, null, null, 6 * H), null);
+  assert.equal(prevSpan(null, null, null, 0), null);
+  assert.equal(prevSpan({ from: 10 * H, toHour: 15 * H }, null, null, null), null);
+});

@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rollingMean, dayKey } from "./statsPlot.ts";
-import { addLocalDays, dayToMs, localDaysBetween } from "@waterplane/shared";
+import { addLocalDays, dayToMs, localDaysBetween, nextLocalOccurrence } from "@waterplane/shared";
 
 function inBerlin(fn) {
   const prev = process.env.TZ;
@@ -75,4 +75,15 @@ test("a flat series keeps its 7-day mean on the day DST switches AT midnight (Sa
     assert.ok(mean.some((m) => m.day === "2026-09-06"));
     for (const m of mean) assert.ok(Math.abs(m.v - 70) < 1e-9, `${m.day}: ${m.v}`);
   } finally { if (prev === undefined) delete process.env.TZ; else process.env.TZ = prev; }
+});
+
+test("nextLocalOccurrence: the target while ahead, else the same local clock time on a later day, across both DST switches", () => {
+  inBerlin(() => {
+    const at = (y, m, d, h, mi = 0, s = 0) => new Date(y, m, d, h, mi, s).getTime();
+    assert.equal(nextLocalOccurrence(at(2026, 10, 6, 19), at(2026, 10, 5, 12)), at(2026, 10, 6, 19), "still ahead: itself");
+    assert.equal(nextLocalOccurrence(at(2026, 10, 5, 19), at(2026, 10, 5, 19)), at(2026, 10, 6, 19), "strictly after");
+    assert.equal(nextLocalOccurrence(at(2026, 9, 24, 19), at(2026, 9, 25, 19, 0, 10)), at(2026, 9, 26, 19), "fall-back");
+    assert.equal(nextLocalOccurrence(at(2026, 2, 28, 19), at(2026, 2, 29, 19, 0, 10)), at(2026, 2, 30, 19), "spring-forward");
+    assert.equal(nextLocalOccurrence(at(2026, 9, 20, 19), at(2026, 9, 28, 8)), at(2026, 9, 28, 19), "several days stale");
+  });
 });

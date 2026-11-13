@@ -17,6 +17,7 @@ import { limitAndBudget } from "./limit-and-budget.ts";
 import { numbers } from "./numbers.ts";
 import { queueAndSchedule } from "./queue-and-schedule.ts";
 import { repoHealth } from "./repo-health.ts";
+import { skillsSwitch } from "./skills-switch.ts";
 
 export const DEMO_SCENARIOS: Readonly<Record<string, DemoScenario>> = {
   "first-look": firstLook(Date.now()),
@@ -25,4 +26,5 @@ export const DEMO_SCENARIOS: Readonly<Record<string, DemoScenario>> = {
   numbers: numbers(Date.now()),
   "limit-and-budget": limitAndBudget(Date.now()),
   "repo-health": repoHealth(Date.now()),
+  "skills-switch": skillsSwitch(Date.now()),
 };

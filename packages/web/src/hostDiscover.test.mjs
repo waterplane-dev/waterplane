@@ -47,7 +47,7 @@ test("the password sentence names the desktop and the CLI command", () => {
 
 test("an empty list says why: the host's note, else which of the two empties", () => {
   assert.equal(emptyFoundText("Tailscale is not installed", false), "Tailscale is not installed");
-  assert.match(emptyFoundText(undefined, true), /already on this phone/);
+  assert.match(emptyFoundText(undefined, true), /already on this device/);
   assert.match(emptyFoundText(undefined, false), /No other .* desktop/);
 });
 

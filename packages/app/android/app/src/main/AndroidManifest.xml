@@ -230,6 +230,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The background link's retry: a dial woken by its alarm stays awake until the socket
+         answers, at most 20 s (ShellLinkService.DIAL_WAKE_MS). WorkManager merges this in too;
+         it is named here because this code relies on it. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--

@@ -439,7 +439,7 @@ export function heatGrid(series: GridSeries | null): { cells: WindowCell[]; refu
     cells: cells.slice(last + 1),
     refused: `${lead} ${run[0].refused}` + (noDates
       ? " The desktop sent no date for the logs holding them, so no window can be told from another."
-        + " A host older than this phone never sends one: if this desktop's is older, restarting it there lets each window answer on its own."
+        + " A host older than this device never sends one: if this desktop's is older, restarting it there lets each window answer on its own."
       : ""),
   };
 }

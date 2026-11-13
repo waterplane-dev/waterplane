@@ -81,7 +81,7 @@ export function WindowRule({ m }: { m: RuleModel }) {
               onClick={() => patchRule({ minPctLeft: p })}>{p}% left</button>
           ))}
           <button className={`row-chip${pctOpen ? " on" : ""}`}
-            title="type a percentage the chips don't cover — it is kept on this phone and offered beside them next time"
+            title="type a percentage the chips don't cover — it is kept on this device and offered beside them next time"
             onClick={() => setPctOpen((v) => !v)}>another…</button>
         </div>
         {pctOpen && (
@@ -106,7 +106,7 @@ export function WindowRule({ m }: { m: RuleModel }) {
                 above still answer the question, so an unusable
                 number owes the reader a sentence and nothing more. */}
             <Hint>
-              {pctWords(pctRaw) ?? `Kept on this phone — ${pctOk(pctRaw)}% left is offered as a chip on the next rule you write.`}
+              {pctWords(pctRaw) ?? `Kept on this device — ${pctOk(pctRaw)}% left is offered as a chip on the next rule you write.`}
             </Hint>
           </>
         )}

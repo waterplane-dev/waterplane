@@ -48,3 +48,7 @@ In the health index chart, a week with no moves lists its readings plainly inste
 - asked: 2026-10-23
 - shipped: a373265e
 
+### R-conversations-010 · requested
+Chat text, including long command lines, renders cleanly without awkward wrapping.
+- asked: 2026-11-07
+

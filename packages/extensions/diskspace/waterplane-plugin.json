@@ -1,0 +1,16 @@
+{
+  "id": "diskspace",
+  "name": "disk space",
+  "version": "0.1.0",
+  "apiVersion": "2.0",
+  "description": "What is filling this desktop's disk: regenerable caches and build output with a delete button each, AI models (Hugging Face, Ollama), sizes of what can only be shown, and an on-demand large-file find. Deletes name a candidate the host computed itself, never a path. Experimental; off until switched on. macOS, Linux, and Windows through WSL.",
+  "summary": "Shows what is filling this computer's disk and lets you delete the things that can be rebuilt.",
+  "maturity": "preview",
+  "host": "host/index.mts",
+  "web": "web/index.ts",
+  "optional": true,
+  "experimental": true,
+  "places": [
+    "Settings: free space from the last scan, and the full disk space screen"
+  ]
+}

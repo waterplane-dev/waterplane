@@ -2,7 +2,7 @@
  * The ask-rule list (docs/plans/agent-authority.md §2): `<STATE_DIR>/askrules.json`.
  *
  * Same shape as `notifyprefs.ts`: tmp+rename, corrupt or unreadable ⇒ an EMPTY list (no
- * rule active is the shipped default). Unlike a preference, that empty list is NOT silent:
+ * rule active is the shipped default; an unreadable file stays in place, so every boot says so). Unlike a preference, that empty list is NOT silent:
  * the person set these rules, every launch since boot runs without them, so `lost()` keeps
  * what `readJsonGuardedDetail` reported and the phone says it until a save lands.
  * Cleaned on the way in AND out by `shared/askrules.ts`, so a hand-edit cannot put an
@@ -15,12 +15,12 @@
  * Read per LAUNCH: a change reaches sessions started after it; a running session keeps
  * the rules it was launched with.
  */
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { askRulesFor, cleanAskRules, trimPathSlash, type AskRule, type AskRulesDoc } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
-import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
+import { corruptPathFor, readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
 
 export class AskRulesStore {
   private path: string;
@@ -33,7 +33,7 @@ export class AskRulesStore {
     this.path = join(dir, "askrules.json");
     try {
       if (existsSync(this.path)) {
-        const read = readJsonGuardedDetail<unknown>(this.path, null);
+        const read = readJsonGuardedDetail<unknown>(this.path, null, undefined, { keepUnreadable: true });
         if (read.corrupt) this.lostAtBoot = read.corrupt;
         this.doc = cleanAskRules(read.value);
       }
@@ -60,6 +60,11 @@ export class AskRulesStore {
   set(raw: unknown): AskRulesDoc {
     const cleaned = cleanAskRules(raw);
     const next: AskRulesDoc = { rules: cleaned.rules.map(dedupeOffIn) };
+    // An unreadable file was left in place (so every boot says the list is lost); the save
+    // replaces it, so keep its bytes under a .corrupt- name first — never write over unread bytes.
+    if (this.lostAtBoot?.movedTo === null && existsSync(this.path)) {
+      try { renameSync(this.path, corruptPathFor(this.path)); } catch { /* the write below reports a real failure */ }
+    }
     writeJsonAtomic(this.path, next, { space: 2 });
     this.doc = next;
     this.lostAtBoot = null;

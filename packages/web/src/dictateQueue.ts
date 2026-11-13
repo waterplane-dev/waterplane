@@ -140,7 +140,7 @@ export async function holdDictation(wav: Blob, o: { seconds: number; lang?: stri
   // swallows a quota refusal, and an index entry with no bytes behind it is a
   // promise this module cannot keep (`queueImageUpload`'s rule for a picture).
   if (!(await idbKeys(STORE)).includes(id)) {
-    return { error: "this phone would not store the recording, so it was not kept" };
+    return { error: "this device would not store the recording, so it was not kept" };
   }
   save([...load(), { id, ts: Date.now(), seconds: o.seconds, bytes: wav.size, lang: o.lang, tries: 0 }]);
   void pumpDictations();
@@ -197,7 +197,7 @@ async function attempt(clip: HeldClip): Promise<void> {
     // storage pressure (or a browser clearing site data) took the audio. There
     // is nothing to retry — a retry would upload nothing.
     drop(clip.id);
-    showToast("a recording waiting to be read is no longer on this phone");
+    showToast("a recording waiting to be read is no longer on this device");
     return;
   }
 

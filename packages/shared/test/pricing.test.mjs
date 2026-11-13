@@ -63,6 +63,10 @@ test("a Claude model with no published rate prices to NULL, never to zero", () =
 test("the table matches the published list prices", () => {
   // claude.com/pricing#api, read 2026-09-19. Every pair below is off that page.
   assert.deepEqual(rateFor("claude-fable-5-1"), { input: 10, output: 50, cacheRead: 0.25 });
+  // Fable 5.2 was logged for weeks before it was here, every turn unpriced.
+  assert.deepEqual(rateFor("claude-fable-5-2"), { input: 8, output: 40, cacheRead: 0.2 });
+  // The page now prices the Mythos twins, cache discount included.
+  assert.deepEqual(rateFor("claude-mythos-5-2"), { input: 8, output: 40, cacheRead: 0.2 });
   // Opus 5.5 publishes its own cache-read rate too: $0.20, half the 0.1× rule.
   assert.deepEqual(rateFor("claude-opus-5-5"), { input: 4, output: 20, cacheRead: 0.2 });
   assert.deepEqual(rateFor("claude-opus-5-5[1m]"), { input: 4, output: 20, cacheRead: 0.2 });
@@ -72,7 +76,9 @@ test("the table matches the published list prices", () => {
   assert.deepEqual(rateFor("claude-sonnet-5"), { input: 2, output: 10 });
   // Missing once: two background subagents on it were left out of every dollar
   // figure while the header still printed a total.
-  assert.deepEqual(rateFor("claude-sonnet-5-5"), { input: 2, output: 10 });
+  // Its cache read is published at $0.10, half the 0.1× rule — priced by the
+  // rule until 2026-11-12, which doubled the biggest line of every session.
+  assert.deepEqual(rateFor("claude-sonnet-5-5"), { input: 2, output: 10, cacheRead: 0.1 });
   assert.deepEqual(rateFor("claude-sonnet-4-6"), { input: 3, output: 15 });
   assert.deepEqual(rateFor("claude-haiku-4-5"), { input: 1, output: 5 });
   // Haiku 5.5's SHORT-prompt card (≤100K): the list's figure, cache at the multipliers.

@@ -166,7 +166,7 @@ export async function saveNow(id: string, opts: { silent?: boolean } = {}): Prom
     showToast(r.ok
       ? (r.already ? `already in ${r.where}`
         : via === "browser" ? `handed to ${r.where} — ${name}` : `saved to ${r.where}`)
-      : `could not save ${name} — ${r.error}. It is still on this phone; open Downloads to try again`);
+      : `could not save ${name} — ${r.error}. It is still on this device; open Downloads to try again`);
   } finally {
     saving.delete(id);
   }

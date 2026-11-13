@@ -24,7 +24,7 @@
  */
 import { closeSync, openSync, readSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { isConversationId } from "@waterplane/shared";
+import { isConversationId, priceListChangedAt } from "@waterplane/shared";
 import type { ArchivedConversation, ArchiveListing, Bookmark, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
 import { walk } from "./backends/derive.js";
 import type { BackendDescriptor } from "./backends/types.js";
@@ -204,9 +204,14 @@ export function archivedTranscript(
   if (!archivedExists(cwd, id)) return null;
   const path = transcriptPath(cwd, id);
   const mtime = logMtime(path);
-  if (since && mtime != null && mtime <= since) return "unchanged";
+  // A price list installed since the phone's copy re-prices the same turns, so the stat alone
+  // cannot say "unchanged"; the document carries the install time, which puts the next poll
+  // back on the cheap comparison.
+  if (since && mtime != null && mtime <= since && priceListChangedAt() <= since) return "unchanged";
   const parsed = parseTranscript(path, cwd, detail);
-  return parsed ? { sessionId: id, claudeSessionId: id, source: "jsonl", ...parsed } : null;
+  if (!parsed) return null;
+  parsed.updatedAt = Math.max(parsed.updatedAt, priceListChangedAt());
+  return { sessionId: id, claudeSessionId: id, source: "jsonl", ...parsed };
 }
 
 /** The tool inputs/results a `lite` archived document withheld, for one turn. */

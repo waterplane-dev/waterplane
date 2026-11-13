@@ -15,7 +15,7 @@
  */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -54,7 +54,21 @@ test("a present but unreadable latch file reads as halted", async () => {
   writeFileSync(latchFile(), "{ torn");
   const h = await fresh(5);
   assert.equal(h.isHalted(), true);
+  const next = await fresh(50);
+  assert.equal(next.isHalted(), true, "a torn file moved aside is written back as halted: the second boot is still halted");
   h.setHalted(false);
+});
+
+test("a latch file nobody can read stays in place and halts every boot", async (t) => {
+  if (process.getuid?.() === 0 || process.platform === "win32") return t.skip("root reads a mode-000 file; Windows has no chmod");
+  writeFileSync(latchFile(), JSON.stringify({ on: true, since: 1, receipt: null }));
+  chmodSync(latchFile(), 0o000);
+  try {
+    assert.equal((await fresh(51)).isHalted(), true);
+    assert.equal(existsSync(latchFile()), true, "not moved aside");
+    assert.equal((await fresh(52)).isHalted(), true, "and the next boot is halted too");
+  } finally { chmodSync(latchFile(), 0o600); }
+  (await fresh(53)).setHalted(false);
 });
 
 test("treeOf: descendants only, never pid 1 or this process", async () => {

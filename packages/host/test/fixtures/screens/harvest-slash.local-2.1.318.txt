@@ -1,0 +1,31 @@
+/effort
+xxx xxxxxxx xxx xxxxxxxx xxxxx. Xxx xxxxxxxx xxxxxxxxx'x xxxxx xxxx xx xx
+  xxxxx xxx.
+
+  Xxxx xxx xxx xx xx, xx xxx xx X xxx xxxx: xxxx xxxxxxx, xxxx xxxxx.xxxx xx xxx
+  xxxx. Xxxxx xxxx xx xxxx xxxxxxx xxx xx xxxx xxxxx'x Xxxxxxxx, xxx xx xxx xxx
+  xxxxxx. X xxxxxxxxx xxx xxxx xxxxxxx xxx xxxxx, xxx X xxxxx'x xxxx xxxxxxx
+  xxxx xxxx xxx xxxxxxxx xxxxxxx xxxx xx xxxxxxx xxxxx.
+
+  Xxx xx xxxxxxx xxxx x xxxxxx:
+  - Xxxxxx xxx xxxxxxxxxx xx0 xxx xxxxxxx xxxx xxxxxxxx xxxx, xx xxx "xxxxxxx"
+    xxxx xx xx xxxxxx xxxxxxxx xxxxxxx.
+  - Xxx xxxx xxxxxxx xxxxxxxxx xxx xxxxx xxx x xxxxxx xxxxxxx, xx xxx xxxx xxxx
+    xxxxxxxx xx xxxxxxxx, xxxxx xxx'x xxxxxxx xx xxxx xxxxxxx.
+
+  Xxx: 0.0.00 (xx0) xxx xxxxx xxxx xxx xxxxxx xxxxxx xxx xxx xxxx xx xxxx xxxx,
+  xxx xxxx xxx xx xxx xxxxx xxxxxx xxxxxx Xxxx xxxxxxxx xxxxx.
+
+✻ Xxxxxxx xxx 0 xxxxxxxxxx xxxxx xx xxxxxx
+
+❯ /xxxxxx xxxxxxxxx xx
+  ⎿  Xxxxxxxxx xx (xxxx xxxxxxx xxxx): xxxxxxx xxxxxxxxx xx xxxxx xxxx. Xxxxxx
+     xxxxx xxxxxx.
+                                                ◐ xxxxxx · xxxxxxxxx · /xxxxxx
+──────────────────────────────────────────────────────────────────── xxxxxxxxx ─
+❯
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ xxxx xxxx xx (xxxxx+xxx xx xxxxx) · ← 0 xxxxxx · ↓ xx xxxxxx
+
+  ⏺ xxxx
+  ◯ xxxxxxx-xxxxxxx  Xxxxxxxx xxxxxxxxx.xxx xxxxxxx … 0x 00x · ↓ 000.0x xxxxxx

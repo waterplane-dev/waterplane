@@ -2,7 +2,7 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRun, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
-import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOf, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
+import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOfRequest, normalizeModel, priceGeneration, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { agentLogId, agentLogs, readMeta } from "../agents.js";
 import { SEEN_CAP, SKILL_BODY, readRange, pushSkill, skillLoadOf } from "./ctxcursor.js";
@@ -72,6 +72,8 @@ export function withAgentRuns(models: string[], runs: AgentRunRaw[]): { models: 
 
 export interface AgentUsage {
   dir: string;
+  /** `priceGeneration()` when the per-file `cost` was priced; a change re-reads every file. */
+  priceGen: number;
   /** Every agent log's input + cache + output, summed. Each log is read WHOLE
    *  (forward, in `MAX_READ` chunks); still a FLOOR only in that a log that has
    *  been cleaned up is one nobody can add. */
@@ -263,7 +265,7 @@ function readAgentLines(lines: string[], f: AgentFile): void {
     // too, never the parent's. The agent log has no `timestamp` guarantee this
     // fold depends on, so an unstamped record is priced at TODAY's rate, which
     // only differs on a day a price moved.
-    const c = costOf(bag, rec.model,
+    const c = costOfRequest(bag, rec.model,
       typeof row.timestamp === "string" ? localDay(toMs(row.timestamp) ?? Date.now()) : undefined);
     if (c) addCost(f.cost, c);
     else f.unpriced += tokenTotal(bag);
@@ -285,14 +287,14 @@ function readAgentLines(lines: string[], f: AgentFile): void {
  * housekeeping in a directory nobody is looking at.
  */
 export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | null {
-  const cur: AgentUsage = prev && prev.dir === dir
+  const cur: AgentUsage = prev && prev.dir === dir && prev.priceGen === priceGeneration()
     ? prev
-    : { dir, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
+    : { dir, priceGen: priceGeneration(), tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
   let names: string[];
   try {
     names = agentLogs(dir);
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { dir, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { dir, priceGen: priceGeneration(), tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, logs: 0, runs: [], files: new Map() };
     return null;
   }
   for (const name of names) {

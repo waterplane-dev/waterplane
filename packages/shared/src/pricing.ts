@@ -68,14 +68,18 @@
  *   them fell back to a token total beside priced siblings; Haiku 5.5 added
  *   2026-10-09 from the same skill's table and its migration notes — $0.10/
  *   $0.50 at a prompt of 100K tokens or fewer, cache at the multipliers —
- *   after 1.1M of its tokens sat unpriced in one week).
+ *   after 1.1M of its tokens sat unpriced in one week; Fable 5.2 added and
+ *   Sonnet 5.5's cache read corrected 2026-11-12 from the same table —
+ *   Fable 5.2 $8/$40, cache read $0.20, after 3,241 of its log records sat
+ *   unpriced; Sonnet 5.5 reads the cache at $0.10, not the rule's $0.20, so
+ *   every Sonnet 5.5 session had been charged twice that line).
  *   `PRICES_AS_OF` is carried to the UI so the screen can say how old the
  *   table is rather than implying it is current.
  */
 
 /** When this table was taken. Shown, so a stale rate is visible rather than
  *  silently authoritative. */
-export const PRICES_AS_OF = "2026-10-09";
+export const PRICES_AS_OF = "2026-11-12";
 
 /** Multipliers on a model's INPUT rate. */
 export const CACHE_READ_MULT = 0.1;
@@ -90,7 +94,8 @@ export interface Rate {
    * The published cache-READ rate, USD per million, where the list states one
    * that is not `input × CACHE_READ_MULT`.
    *
-   * Absent means the multiplier — every model but Fable 5.1 and Opus 5.5. Carried
+   * Absent means the multiplier — every model but Fable/Mythos 5.1 and 5.2,
+   * Opus 5.5 and Sonnet 5.5. Carried
    * as an absolute rate rather than as a per-model multiplier because that is
    * how the price list states it, and a second derivation is a second place to
    * get it wrong.
@@ -111,16 +116,18 @@ interface PriceEntry extends Rate {
  * one of those would be priced wrongly here, which is why the screen calls this
  * a list-price estimate rather than a cost.
  *
- * The Mythos ids are the two the list does NOT price (they are not on the
- * public page at all). They are kept at their Fable twins' input/output rates,
- * which is what the model documentation states — but Fable 5.1's cache-read
- * discount is deliberately NOT extended to `claude-mythos-5-1`: that number is
- * unstated for it, and the 0.1× rule is the one that errs dear rather than
- * cheap.
+ * This is the BUILT-IN floor. A running host overlays the rates it reads off
+ * Anthropic's own price page (`pricelist.ts`, `installPriceList`), so a new
+ * model or a changed rate reaches an installation without a release; this
+ * table is what prices a desktop that has never read the page or is told not
+ * to (`WATERPLANE_PRICE_FETCH=0`). Every row here was checked against that
+ * page on 2026-11-12, Mythos and the retired models included.
  */
 export const PRICES: Record<string, PriceEntry> = {
+  "claude-fable-5-2": { input: 8, output: 40, cacheRead: 0.2 },
+  "claude-mythos-5-2": { input: 8, output: 40, cacheRead: 0.2 },
   "claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25 },
-  "claude-mythos-5-1": { input: 10, output: 50 },
+  "claude-mythos-5-1": { input: 10, output: 50, cacheRead: 0.25 },
   "claude-fable-5": { input: 10, output: 50 },
   "claude-mythos-5": { input: 10, output: 50 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
@@ -129,19 +136,66 @@ export const PRICES: Record<string, PriceEntry> = {
   "claude-opus-4-7": { input: 5, output: 25 },
   "claude-opus-4-6": { input: 5, output: 25 },
   "claude-opus-4-5": { input: 5, output: 25 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
+  // Retired on the Claude API, still in older logs.
+  "claude-opus-4-1": { input: 15, output: 75 },
+  "claude-opus-4": { input: 15, output: 75 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-sonnet-5": { input: 2, output: 10 },
   "claude-sonnet-4-6": { input: 3, output: 15 },
   "claude-sonnet-4-5": { input: 3, output: 15 },
-  // Two published cards, chosen by PROMPT length: $0.10/$0.50 up to a 100K-token
-  // prompt, $0.50/$2.50 above it. This table prices buckets, not requests, so
-  // it carries the short card and a longer prompt is UNDER-priced (5×) — the
-  // fast-mode stance, and measured 0 of 106 haiku-5-5 requests here past 100K
-  // (2026-10-09). Splitting the long card out needs the scan to tally those
-  // requests under their own key; until then this is the one known floor.
+  "claude-sonnet-4": { input: 3, output: 15 },
+  // Two published cards, chosen by PROMPT length: this is the card up to a
+  // 100K-token prompt; the dearer one is `LONG_PROMPT` below, charged to a
+  // request whose own prompt is past the line (`priceKeyOf`).
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
   "claude-haiku-4-5": { input: 1, output: 5 },
 };
+
+/**
+ * A model's dearer card for LONG prompts, keyed by the canonical alias. The
+ * page prices Haiku 5.5 by prompt length: a request whose prompt (input plus
+ * cache reads plus cache writes) is over `overTokens` pays this card for ALL of
+ * its tokens, cache hits included, and each request is judged on its own.
+ *
+ * Built-in floor, like `PRICES`; the host overlays the page's own long cards
+ * (`LivePrices.longPrompt`). Checked against the page on 2026-11-12.
+ */
+export const LONG_PROMPT: Record<string, Rate & { overTokens: number }> = {
+  "claude-haiku-5-5": { input: 0.5, output: 2.5, cacheRead: 0.05, overTokens: 100_000 },
+};
+
+/** The mark a price key carries when its requests were over the long-prompt line. */
+export const LONG_PROMPT_MARK = "@long";
+
+const longCardOf = (base: string): (Rate & { overTokens: number }) | null =>
+  LIVE?.longPrompt?.[base] ?? LONG_PROMPT[base] ?? null;
+
+/**
+ * The key ONE request prices under: its own model, or `<alias>@long` when the
+ * model has a long-prompt card and this request's prompt is past its line.
+ * Asked per request, never of a bucket — a bucket's sum says nothing about
+ * any one prompt's length. A model without a long card keeps its raw id.
+ */
+export function priceKeyOf(model: string | null | undefined, t: { input: number; cacheRead: number; cacheWrite: number }): string | null {
+  if (!model) return model ?? null;
+  const id = normalizeModel(model);
+  if (!id || id.endsWith(LONG_PROMPT_MARK)) return model;
+  const card = longCardOf(id);
+  return card && t.input + t.cacheRead + t.cacheWrite > card.overTokens ? id + LONG_PROMPT_MARK : model;
+}
+
+/** `claude-haiku-5-5@long` → ` (prompts over 100K)`; anything else → "". For labels. */
+export function longPromptNote(id: string): string {
+  if (!id.endsWith(LONG_PROMPT_MARK)) return "";
+  const card = longCardOf(id.slice(0, -LONG_PROMPT_MARK.length));
+  return card ? ` (prompts over ${Math.round(card.overTokens / 1000)}K)` : " (long prompts)";
+}
+
+/** A tallied model key as a row names it: the alias, plus the long-prompt note when it has the mark. */
+export function priceKeyLabel(key: string): string {
+  const id = normalizeModel(key) ?? key;
+  return id.endsWith(LONG_PROMPT_MARK) ? id.slice(0, -LONG_PROMPT_MARK.length) + longPromptNote(id) : id;
+}
 
 /**
  * The alias a logged model id prices under, or null when it is not one of ours.
@@ -156,9 +210,12 @@ export function normalizeModel(model: string | null | undefined): string | null 
   if (!model) return null;
   let id = model.trim().toLowerCase();
   if (!id || !id.startsWith("claude-")) return null;
+  // A price key for long-prompt requests (`priceKeyOf`) keeps its mark.
+  const long = id.endsWith(LONG_PROMPT_MARK);
+  if (long) id = id.slice(0, -LONG_PROMPT_MARK.length);
   id = id.replace(/(\[1m\]|-1m)$/, "");         // context variant, same price
   id = id.replace(/-\d{8}$/, "");                // dated snapshot → alias
-  return id;
+  return long ? id + LONG_PROMPT_MARK : id;
 }
 
 /** The rate for a model on a given day, or null when we have no list price.
@@ -166,11 +223,21 @@ export function normalizeModel(model: string | null | undefined): string | null 
 export function rateFor(model: string | null | undefined, day?: string): Rate | null {
   const id = normalizeModel(model);
   if (!id) return null;
+  if (id.endsWith(LONG_PROMPT_MARK)) {
+    // A long-prompt request: the long card, or — when no list states one any
+    // more — the model's own rate (the page dropping the card means one price).
+    const base = id.slice(0, -LONG_PROMPT_MARK.length);
+    const card = longCardOf(base);
+    return card ? { input: card.input, output: card.output, cacheRead: card.cacheRead ?? card.input * CACHE_READ_MULT } : rateFor(base, day);
+  }
   const p = PRICES[id];
-  if (!p) return null;
+  const live = LIVE?.rates[id];
   // Lexicographic compare is correct for `YYYY-MM-DD` and needs no parsing —
   // and no zone, which matters because the day buckets are already local.
-  const r = p.intro && day && day <= p.intro.until ? p.intro : p;
+  // A built-in introductory rate still wins on its own days: the page states
+  // TODAY's price, and an intro is a statement about earlier ones.
+  const r = p?.intro && day && day <= p.intro.until ? p.intro : live ?? p;
+  if (!r) return null;
   // Spread out by hand rather than returned whole: `intro` must not ride along
   // on a rate, and an absent `cacheRead` has to stay ABSENT (the multiplier),
   // never an explicit `undefined` a caller's `??` would read past and a
@@ -178,6 +245,70 @@ export function rateFor(model: string | null | undefined, day?: string): Rate | 
   return r.cacheRead != null
     ? { input: r.input, output: r.output, cacheRead: r.cacheRead }
     : { input: r.input, output: r.output };
+}
+
+// ── The price list read off Anthropic's page (`pricelist.ts`) ─────────────
+
+/** Rates read off Anthropic's own price page, overlaid on `PRICES`. */
+export interface LivePrices {
+  /** Keyed by the canonical alias, like `PRICES`. Every rate carries `cacheRead`. */
+  rates: Record<string, Rate>;
+  /** Long-prompt cards the page states (Haiku 5.5 past 100K), overlaid on `LONG_PROMPT`. */
+  longPrompt?: Record<string, Rate & { overTokens: number }>;
+  /** When the page was read, epoch ms. */
+  fetchedAt: number;
+}
+
+let LIVE: LivePrices | null = null;
+/** Bumped whenever the rates in force CHANGE (not on a re-read that found the
+ *  same rates), so a host cache holding money priced at the old rates can tell
+ *  it is stale and re-price from its tokens. */
+let GEN = 0;
+let GEN_AT = 0;
+const sorted = (o: Record<string, unknown> | undefined) => Object.entries(o ?? {}).sort(([a], [b]) => (a < b ? -1 : 1));
+const ratesKey = (p: LivePrices | null): string => (p ? JSON.stringify([sorted(p.rates), sorted(p.longPrompt)]) : "");
+
+/**
+ * Put a parsed price list in front of the built-in table — or take it away
+ * (`null`). The HOST calls this (from its cached copy at boot, and after every
+ * good read); nothing in shared fetches. A model the page lists is priced by
+ * the page; one it does not list falls back to `PRICES`, then to null.
+ */
+export function installPriceList(p: LivePrices | null): void {
+  const next = p && Object.keys(p.rates).length ? p : null;
+  if (ratesKey(next) !== ratesKey(LIVE)) { GEN++; GEN_AT = Date.now(); }
+  LIVE = next;
+}
+
+/** Changes whenever the rates in force change — a cache key for priced money. */
+export function priceGeneration(): number {
+  return GEN;
+}
+
+/** When the rates in force last changed, epoch ms; 0 when never this process. */
+export function priceListChangedAt(): number {
+  return GEN_AT;
+}
+
+/** The list installed now, or null — what the host hands the phone in `welcome`. */
+export function installedPriceList(): LivePrices | null {
+  return LIVE;
+}
+
+/** Where the rates in force came from — the two wire fields every cost document carries. */
+export function priceListSource(): { pricesAsOf: string; pricesFrom: "list" | "builtin" } {
+  if (!LIVE) return { pricesAsOf: PRICES_AS_OF, pricesFrom: "builtin" };
+  return { pricesAsOf: new Date(LIVE.fetchedAt).toISOString().slice(0, 10), pricesFrom: "list" };
+}
+
+/**
+ * Where a dollar figure's rates came from, as one phrase every screen shares. `pricesFrom`
+ * absent (an older host) reads as the built-in table.
+ */
+export function priceSourceText(doc: { pricesAsOf: string; pricesFrom?: "list" | "builtin" }): string {
+  return doc.pricesFrom === "list"
+    ? `Anthropic's price list, read ${doc.pricesAsOf}`
+    : `built-in price table from ${doc.pricesAsOf}`;
 }
 
 /** Whether a model has a published list price at all. */
@@ -251,6 +382,15 @@ export function costOf(t: Priceable, model: string | null | undefined, day?: str
   };
   cost.total = cost.input + cost.output + cost.cacheRead + cost.cacheWrite;
   return cost;
+}
+
+/**
+ * Price ONE request: `costOf` under `priceKeyOf`, so a Haiku 5.5 request with a
+ * prompt past 100K tokens pays the long card. Only for a single request's
+ * counts — a bucket goes through `costOf` with the key it was tallied under.
+ */
+export function costOfRequest(t: Priceable, model: string | null | undefined, day?: string): CostBreakdown | null {
+  return costOf(t, priceKeyOf(model, t), day);
 }
 
 /**

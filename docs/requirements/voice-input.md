@@ -26,3 +26,8 @@ The voice input button transcribes with the desktop's whisper and returns to it 
 - shipped: 33047b20
 - note: Item had the owner's complaint backwards: he disliked it feeling like on-device speech-to-text.
 
+
+### R-voice-input-006 · shipped
+The desktop sets up local dictation on a person's tap: whisper.cpp through brew on macOS, and a model chosen from a pinned list, downloaded from upstream and verified by sha256 — never bundled.
+- asked: 2026-11-12 (owner)
+- note: Host half (`dictatesetup.ts`, `shared/dictatemodels.ts`); refuses below model size + 2 GB free; nothing starts without the tap and a failure is never retried.

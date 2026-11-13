@@ -1,0 +1,29 @@
+│ XXXXXXX_XX_XXX = xxxXxxx("XXXXXXX_XX");',0)
+ │ x=x.xxxxxxx('\\`$XXXXXXXXXX_XXXXXXX_XX\\`','\\`$${XXXXXXX_XX_XXX}\\`')
+ │ xxxx(x,'x').xxxxx(x)
+ │ x='xxxxxxxx/xxxx.xx'; x=xxxx(x).xxxx()
+ │ x=x.xxxxxxx('''/** Xxx xxxxxxxx xxxxx xxxxxxx xxxx xxxxxxx xxx xxxxxxxxxx
+ │ xxxxxxx xx xx (`xxxxxXxxxxxx`). */
+ │ xxxxxx xxxxx XXXXXXX_XX_XXX = "XXXXXXXXXX_XXXXXXX_XX";
+ │
+ │ ''','')
+ │ x=x.xxxxxxx('xxxxxx { xxxXxx } xxxx "../xxxxxx.xx";','xxxxxx { xxxXxx } xxxx
+ │ "../xxxxxx.xx";\xxxxxxx { XXXXXXX_XX_XXX } xxxx "../xxxxxxxxxxxxx.xx";',0)
+ │ xxxx(x,'x').xxxxx(x)
+ │ XXX
+ │ xxxx -x "XXXXXXX_XX" xxxxxxxxxxxxx.xx xxxxxxxx/xxxx.xx; xx ../../..; xxx
+ │ xxxxxx xxxxxxxx/xxxx/xxx/xxxxxxxxxxxxx.xx xxxxxxxx/xxxx/xxx/xxxxxxxx/xxxx.xx
+ │ 0>&0 | xxxx -0; xxx xxx -x xxxxxxxx/xxxx --xxXxxx | xxxx -0; xxxx --xxxx
+ │ xxxxx/xxxxx.xxxx.xxx xxxxx/xxxxxxxxx.xxxx.xxx 0>&0 | xxxx -X "^x
+ │ (xxxx|xxxx)"
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ │ Xxxxxxxxx xx xxxxxxxxx xxx xxxxx xxx — xxx xxxxx xxx xxxx xxxx xxxxxxx
+ │ xxxxxxxxxxx xxxx xx xxx xxxxxx
+ ⚠ Xxxxxx Xxxx xxxx xxxxxxxxxxxxx xxxxx xxxx xxxxxxx xx 0:00, xx xxxxx xxxxxxx
+ xx xx xxxxxxxxxx xxxxxxx
+
+ Xx xxx xxxx xx xxxxxxx?
+ ❯ 1. Xxx
+   2. Xx
+
+ Esc to cancel · Tab to amend

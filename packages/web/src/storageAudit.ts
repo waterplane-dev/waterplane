@@ -146,10 +146,10 @@ const ROWS: readonly RowSpec[] = [
     cost: "The connection charts start again from now. Nobody else has a copy of what they showed.",
   },
   {
-    id: "devblobs", store: "devblobs", label: "extension copies on this phone", kind: "keep",
+    id: "devblobs", store: "devblobs", label: "extension copies on this device", kind: "keep",
     cost: "What an extension keeps only here, such as the vault's copy of chosen secrets. Gone means pulling it again from the desktop.",
     // The extension's own screen forgets it (it knows what it holds); a bare clear here would leave its memory saying it is there.
-    cant: "forget it from the extension's own screen: Vault › Backup & recovery › Copy on this phone.",
+    cant: "forget it from the extension's own screen: Vault › Backup & recovery › Copy on this device.",
   },
   {
     id: "screenlog", store: "screenlog", label: "terminal scrollback", kind: "keep",

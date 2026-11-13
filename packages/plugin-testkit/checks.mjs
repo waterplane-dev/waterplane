@@ -31,7 +31,7 @@ export const CORE_SCREEN = {
 };
 export const CORE_STORE = {
   transcript: ["claude-jsonl"], context: ["claude-jsonl"], conversations: ["claude-jsonl"], tokens: ["claude-jsonl"],
-  agents: ["claude-agents"],
+  agents: ["claude-agents"], skills: ["claude-settings"],
 };
 const CONTRIBUTED_SCREEN = new Set(["dialogs"]);
 const CONTRIBUTED_STORE = new Set(["transcript", "context", "conversations", "tokens"]);

@@ -189,6 +189,7 @@ export const CLAUDE_FACTS: BackendFacts = {
   usage: [{ screen: "usage-probe" }],
   agents: [{ store: "claude-agents" }],
   conversations: [{ store: "claude-jsonl" }],
+  skills: [{ store: "claude-settings" }],
 };
 
 /**

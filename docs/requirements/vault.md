@@ -688,13 +688,29 @@ Every card in the secrets list shows how far a leak of that secret reaches: a fo
 - shipped: 992e99c1
 
 ### R-vault-131 · shipped
-Use › Reach › Over time opens on a "by reach" view: per recorded day, how many secrets reach everything, are not rated, reach the whole account, one project or one function, stacked widest first, with the count that reaches the whole account or more drawn as a line over every recorded day, and the change from the first day to the latest said in numbers. The desktop keeps the split per day from this change on; earlier days show only the line and say the split was not kept yet.
+Use › Reach › Over time opens on a "by reach" view: per recorded day, how many secrets reach everything, are not rated, reach the whole account, one project or one function, as one bar per day stacked widest first, with the count that reaches the whole account or more drawn as a line over every recorded day, and the change from the first day to the latest said in numbers. The desktop keeps the split per day from this change on; earlier days are an outlined bar of their total and say the split was not kept yet.
 - asked: 2026-11-08 (owner request: "an aggregated view over time so I see my down scoping progress")
 - shipped: 992e99c1
 
 ### R-vault-145 · built
 The exposure screen's third reading says in plain words what it counts and why: one sentence first names how many secrets reach the whole account or more (or are not rated), how many of them something on this desktop references (a repo's env file, a grant, a program, a reboot copy) — the ones to downscope or rewire — and how many have no reference seen. The chart draws the referenced count as a solid line inside a dashed line of every wide secret, each with its latest number, and the lists are named "referenced" and "no reference seen". It never says a secret is used: a reference is not use.
 - asked: 2026-11-08 (owner: "the wired in tab is also confusing")
+
+### R-vault-146 · shipped
+Under Use › Reach › Over time, "Where it stands" says the current situation in numbers, never a verdict: how the wide count moved since the first day and since when it has not moved, the biggest wide band, how many ratings are measured, and how many wide secrets were not handed out in 30 days (and how many never). Under it, one button per repo where the most wide secrets were last handed out (at most three) opens the Send sheet on a prompt for a new session in that repo: find what the code calls with each secret and write the narrowest key that would do to a report in the repo's outbox. The prompt names ids and kinds only, and tells the session to read no value and create, change or remove no key, token or rating; nothing is sent until the person taps Send.
+- asked: 2026-11-10 (owner: "a time series bar chart visualization the exposure over time or something better and something giving insights to the current situation and meaningful ai prompt shooting buttons to improve it")
+- shipped: e453b98c
+
+### R-vault-147 · shipped
+A release card for a program carries "Ask an agent about this in <repo>" under its answers. The tap opens the Send sheet on a prompt for a new session in the repo of the session that asked (the desktop's own match), else the repo holding the asking folder; with neither, the card says in text that there is no repo to start in. The launch is plan mode on claude and nothing else (none of the owner's default backend, model or remote control); the sheet's model row keeps the mode, the To row names it, and a backend that cannot start in it is named in text. A printed value (`wp-secret get`) has no program to read and gets no link. The prompt quotes the secret ids and kinds, the redacted command line, the folder and the asker's reason as one-line JSON strings in a data block with the rules before and after it, and asks for readings with file:line and the quoted line: what is called with the secret, which identity and how far it reaches, whether each call is narrowed to one user or resource ("none found" otherwise), the narrowest key that would do, what could not be confirmed, any instructions found in the files, and a drafted --why and label, printed only. It forbids a verdict, running the program, running wp-secret, writing any file and touching any key, grant or rating; a draft `wp-secret consumer add` line is asked for only when no session or registered program was matched. The "what it does" `?` beside the button opens the words (owner 2026-11-11: "That text should be behind a questionmark icon"): the agent can be wrong because it reads files the asker wrote, that Release still goes to whatever is at that path when it runs, and that nothing is sent until the person taps Send, with To left on a new session (a live session runs in its own mode). Release, Deny and Not now stay the card's only answers.
+- asked: 2026-11-10 (owner: "a button here to ask in a coding session to explain this call and any potential risk as well as in the end offer to update the entry in the vault to be more accurate and descriptive"; then "Check the plan with fable for security aspects like poisoned Agent instructions and mitigations")
+- note: Fable's plan review is in `.claude/outbox/vault-ask-agent-security-review.md`. Not built yet, and held for host work: the vault refusing releases to a session opened by this link, a read-only tool set as a launch option, and a script digest compared at ask time and run time.
+- shipped: b8de8135, 57c40413, cc74f084
+
+### R-vault-148 · shipped
+The same "Ask an agent about this in <repo>" button is on the receipt an answered release leaves, on each history row that is a release (a copy out, a registration, a catalog edit or a refusal gets none) whose secret is in the list, and in the "this secret" section of a secret's own card. A receipt reuses the card's prompt, says how the ask ended and that the file may have changed since the program ran; an explainable receipt stays 60 s like one with a link, and tapping its button keeps the sheet open (the person has taken it over). A history row and a secret's card use a secret prompt with the same rules and a data block of the secret's id and kind (what `ls` shows an agent) and, from a history row, its outcome and day: no rated reach, hand-out ledger, label or row question, because the tap writes the whole prompt into the Send draft, which the view lock does not wipe. The history row carries no folder, so that prompt says the session's repo may not be the row's and that the answer must not be presented as the row's explanation. The prompts never open an env file whole: variables are searched by name with grep -l or grep -o, names only. That prompt asks where the repo uses the secret, what it calls, which identity, how far it reaches, whether each call is narrowed ("none found" otherwise), the narrowest key, what could not be confirmed, any instructions found, and a drafted --why per use, printed only. The session starts in plan mode in the repo of the newest hand-out inside a repo this desktop lists; with none, the button is absent.
+- asked: 2026-11-11 (owner: "The buttons should also be in the history e.g. here and also in the ordinary secrets list view on the vault")
+- shipped: 9469ad52, e1edd110
 
 ## Journey and wording (owner complaints)
 
@@ -731,14 +747,15 @@ In every vault list (secrets, logins, Move in, Use › Users, rate-many) each it
 - note: R-vault-051 (shared row grammar) and R-vault-102 hold the grammar and the copy button; the item-boundary complaint recurs after both, so look at it as still open. Owner also said "also these dialogues look really bad" (2026-11-06, session a68700c9); R-vault-113 holds only the width.
 
 ### R-vault-137 · requested
-A `?` help icon sits on the thing it explains and nowhere else; it is never placed between two cards or beside a card's title so that it could belong to either.
-- asked: 2026-11-06: "Vault: badly placed questionmark icon" [screenshot circled the `?` next to "one card" above a card row]
+A `?` help icon sits on the thing it explains and nowhere else; it is never placed between two cards or beside a card's title so that it could belong to either. On the release-ask screen every explanation comes with words of its own or sits inside a labelled control, so no bare explanation icon appears alone.
+- asked: 2026-11-06: "Vault: badly placed questionmark icon" [screenshot circled the `?` next to "one card" above a card row], 2026-11-11, 2026-11-11
 - note: R-vault-123 is about the `?` in the lock line only.
 
-### R-vault-138 · requested
-Each row of the ask list names its session the way the person knows it (the session's tab name or the first words of its last prompt), not only "Vault card fill from".
-- asked: 2026-11-07: "The ask list view does missnthe [miss the] descriptive session key words"
+### R-vault-138 · shipped
+Each row of the ask list names its session the way the person knows it (the session's tab name or the first words of its last prompt), not only "Vault card fill from". Questions cards already name the conversation beside the title.
+- asked: 2026-11-07: "The ask list view does missnthe [miss the] descriptive session key words", 2026-11-07
 - note: R-vault-083 puts the session on the approval card; the list row is what is missing.
+- shipped: 2ed30f25
 
 ### R-vault-139 · shipped
 On the not-rated list the two batch steps say what they do and when each can be pressed: step 1 (estimate, no fingerprint, rates nothing) and step 2 (rate, one fingerprint, the only way off the list). A step that cannot be pressed yet says why in text; no step is greyed out without a sentence.
@@ -768,11 +785,82 @@ The Use › Users group of unregistered programs says why a program is unregiste
 - asked: 2026-11-06: "ui need to explain the categories better and I now wander myself why there are any unregistered programs and why AI did not register them and what's the effective difference for me as user and for the security?"
 - note: R-vault-103 explains what each group may do; the "why unregistered" and "difference for me" parts are not stated there.
 
-### R-vault-143 · requested
+### R-vault-143 · shipped
 The vault's documents are written for a first-time reader: they say what is true now, never how it changed or what the previous conversation decided. The vault has one README that starts a new reader, fewer and more compact files, and the other reader-facing docs follow the same rule.
 - asked: 2026-11-07: "Thai and other MD files from the vault are written from wrong perspective. They should address first time readers and not people that read it all already one time. ... Especially for the vault also condensed the information so it is all in all more compact and less files and it also a has one readme.md to get started with"
 - note: R-vault-014 and R-vault-129 name the docs but not this audience rule.
+- shipped: d950da54
 
 ### R-vault-144 · requested
 Vault screens and the vault README use one word per concept: **secret** (a stored value), **login** (username + password; CLI `account`), **ask** (a program waiting for a secret; "N waiting"), **Release** / **Deny**, **allowed for 5 min** (ends by itself) and **allowed until you end it** (CLI `grant --standing`), **End** / **End all** (CLI `revoke`), **Lock list** as the only "lock", **move in** (CLI `migrate`), **original** (the leftover plain file; put back / delete original), **History** / **Users** / **Reach** for the three use views, **reach** for leak size (this app / the whole account / everything / not set), **repo** (never project, except a cloud provider's project id), **says … not verified** for a program's own claim, **Backup & recovery** for keys & backup. Words with no screen meaning (pid, pane, worktree, broker, proxied, sealed, treatment, consumer, rewire, …) are not shown. A command is always shown verbatim in a mono block; the README gives each screen-word ↔ CLI-verb pair once. Full list and banned words: `.claude/outbox/journey-vault/glossary-proposal.md` until it moves into the vault docs.
 - asked: 2026-11-08 (owner picked login, ask, allowed until you end it, reach; journey review `.claude/outbox/journey-vault/decide.md`)
+
+### R-vault-149 · shipped
+A stored proxied key that is not UTF-8 refuses the call in words instead of hanging the app or the broker.
+- asked: 2026-11-07
+- shipped: 4d53e4ed
+
+### R-vault-150 · shipped
+When the Refresh Play (fingerprint) action in the vault fails, the user sees an error instead of silence.
+- asked: 2026-11-09
+- shipped: 5c4a85bc
+
+### R-vault-151 · shipped
+Describe for vault secrets is one tap that does the whole list, not a choice of up to three steps.
+- asked: 2026-11-07
+- shipped: 516ca2e7
+
+### R-vault-152 · shipped
+One fingerprint covers the whole release train: a single grant card covers every secret the train asks for and ends when the train exits.
+- asked: 2026-11-08
+- shipped: 68a590ac
+
+### R-vault-153 · shipped
+Azure is available as a downscope provider: an Azure login's card offers a narrower key, stored as an azure-app secret.
+- asked: 2026-11-08
+- shipped: e3cf1a4b, b495cbbb
+
+### R-vault-154 · shipped
+Under the receipt of an approved release of a whole-account login, a link "a narrower key for <secret>" opens that secret's card with the downscope entry open.
+- asked: 2026-11-08
+- shipped: d685032d, 838bbb04
+
+### R-vault-155 · shipped
+Each strip on the vault's handed-out view prints each day's date, its hand-out count and its approvals, so the owner can tell what it means.
+- asked: 2026-11-08
+- shipped: 0b77c0b8
+
+### R-vault-156 · shipped
+A copy of the vault is kept on the phone without weakening the vault's security: the phone shows and copies secrets per fingerprint, works offline, and keeps its own local log.
+- asked: 2026-11-09
+- shipped: e675e6ce, 92f79390, 0ce9aa22, e977f62b
+
+### R-vault-157 · requested
+Changes sync in both directions between the phone's vault copy and the host.
+- asked: 2026-11-09
+
+### R-vault-158 · shipped
+The vault supports several paired devices, capped in number (the last cannot be removed), each with its own heartbeat and wrap; no encryption keys are ever synced between devices. A new device joins only through a pairing code bound to it, adding is refused at the cap, on a taken name or from a phone that already holds the vault key, and revoking a device also revokes its waterplane token.
+- asked: 2026-11-09, 2026-11-09
+- shipped: d0cfe8a1, b87c4ff3
+
+### R-vault-159 · shipped
+An access request goes to every paired device and the first verdict (approve or deny) settles it; other devices show it was already approved or denied on the named device, a late approval is dropped and its key zeroed, and decision-log rows name the device.
+- asked: 2026-11-09
+- shipped: d0cfe8a1
+
+### R-vault-160 · shipped
+Each secret can state which class of approver may release it, and the host enforces that rule.
+- asked: 2026-11-09
+- shipped: d0cfe8a1
+
+### R-vault-161 · shipped
+A desktop without biometric hardware can use the vault by unlocking its screen on the user's phone: the phone shows a card naming the screen and releases nothing, and unlocking is one fingerprint.
+- asked: 2026-11-09
+- shipped: 30eafef2, ab1d9a99, 10c92688
+
+### R-vault-162 · shipped
+A vault release ask always appears on top, wherever the person is in the app, over any other sheet, and also from the listing when the push was missed.
+- asked: 2026-11-10
+- shipped: d0fd0358
+

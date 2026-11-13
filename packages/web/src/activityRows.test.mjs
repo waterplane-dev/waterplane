@@ -955,7 +955,7 @@ test("counts cover every chip, and every chip has a filter that agrees with them
 test("the headline stays silent rather than inventing reassurance", () => {
   assert.equal(activityHeadlineCut([], true), null);
   const rows = activityRows(input({ online: false, outbox: [entry()] }));
-  assert.match(activityHeadlineCut(rows, false).text, /still on this phone/);
+  assert.match(activityHeadlineCut(rows, false).text, /still on this device/);
 });
 
 test("the headline's number is its cut: the chip it names holds exactly the rows it counted", () => {
