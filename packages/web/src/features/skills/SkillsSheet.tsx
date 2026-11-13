@@ -16,10 +16,11 @@ import { Button, Empty, Explain, FilterChip, Hint, SearchBox, Sheet, chipRows, t
 import { skillSwitchGate } from "../../backendCaps";
 import { skillsAim } from "../../skillsDoor";
 import { SuggestList } from "./SuggestList";
+import { RepoFileChoice } from "./RepoFileChoice";
 import { PluginCard, SkillRowView } from "./SkillRows";
-import { aimSkills, applySuggestions, closeSkills, recommend, discardDraft, saveChanges, setFilter, setQuery, setShared, setSort, setTarget } from "./actions";
+import { aimSkills, applySuggestions, closeSkills, openCarried, recommend, discardDraft, saveChanges, setFilter, setQuery, setSort, setTarget } from "./actions";
 import {
-  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, chipCount, chipKeys, chipLabel, draftChanges, layerOf, levelFor, matches, parkedWords, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords,
+  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, chipCount, chipKeys, chipLabel, draftChanges, globalDraftOf, layerOf, levelFor, matches, parkedWords, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords,
 } from "./logic";
 import { skillsState } from "./store";
 
@@ -40,7 +41,8 @@ export function SkillsSheet() {
   const [applying, setApplying] = useState(false);
 
   // Uses are counted in the background on the host; ask again while it counts.
-  const counting = doc?.usage.state === "counting" || !!doc?.usage.refreshing;
+  const allRepos = doc?.usage.allRepos;
+  const counting = doc?.usage.state === "counting" || !!doc?.usage.refreshing || allRepos?.state === "counting";
   useEffect(() => {
     if (!counting) return;
     const t = setTimeout(() => res.reload({ quiet: true }), POLL_MS);
@@ -65,10 +67,13 @@ export function SkillsSheet() {
 
   const level = levelFor(s.target, s.shared);
   const kept = parkedWords(s.parked, repoId, level);
+  // An unsaved All-repos choice already shows on This repo's rows that follow it.
+  const globalDraft = globalDraftOf(s.parked, repoId, level, s.draft);
   const layer = layerOf(doc, level);
   // A recommendation is built on THIS repo's counts, so it is applied in this repo's file, whatever the segment shows.
   const applyLevel = levelFor("repo", s.shared);
   const applyLayer = layerOf(doc, applyLevel);
+  const globalLayer = layerOf(doc, "global");
   const changes = draftChanges(s.draft, rows);
   const sav = savingsFor(rows, changes);
   const split = splitRows(rows);
@@ -110,6 +115,7 @@ export function SkillsSheet() {
 
   const footer = changes.length > 0 && layer?.readable ? (
     <div className="sk-foot">
+      {s.target === "repo" && <RepoFileChoice shared={s.shared} onChange={() => setSaveErr(null)} />}
       <Hint>{saveNote(layer.path, sav.tokens, sav.unmeasured)}</Hint>
       <div className="sk-foot-btns">
         <Button variant="primary" onClick={save}>{saving ? "Saving…" : saveWords(changes.length)}</Button>
@@ -130,17 +136,13 @@ export function SkillsSheet() {
               <button className={`seg${s.target === "repo" ? " on" : ""}`} aria-pressed={s.target === "repo"} onClick={() => { setTarget("repo"); setSaveErr(null); }}>This repo</button>
               <button className={`seg${s.target === "all" ? " on" : ""}`} aria-pressed={s.target === "all"} onClick={() => { setTarget("all"); setSaveErr(null); }}>All repos</button>
             </div>
+            <Hint>{s.target === "all"
+              ? "Every repo follows these unless it sets its own."
+              : "Rows follow All repos until you pick a different value here."}</Hint>
             {kept && <Hint>{kept}</Hint>}
             {layer && (layer.readable
               ? (showFileLine && <Hint>{skillFileLine(level, layer.path)}</Hint>)
               : <Hint tone="warn">{layer.why ?? `${layer.path} could not be read.`}</Hint>)}
-            {s.target === "repo" && (
-              <div className="sk-share">
-                <Button className="sk-link" onClick={() => { setShared(!s.shared); setSaveErr(null); }}>
-                  {s.shared ? "write the gitignored file instead (.claude/settings.local.json)" : "share with the repo instead (.claude/settings.json)"}
-                </Button>
-              </div>
-            )}
             <Empty res={res} empty={!doc} thing="skills and plugins" />
             {doc && (
               <>
@@ -155,6 +157,7 @@ export function SkillsSheet() {
                     </Explain>
                   </div>
                 )}
+                {repoId && <div className="sk-share"><Button className="sk-link" onClick={() => openCarried(repoId)} title="Repo readings: what every turn of this repo carries, skills and plugins included">what every turn carries →</Button></div>}
                 {doc.usage.state === "counting" && <Hint>{usageWords(doc.usage)}</Hint>}
                 <SearchBox className="sk-search" placeholder="search skills and plugins" value={s.query} onChange={(e) => setQuery(e.target.value)} />
                 {total > 0 && <div className="fchips">
@@ -168,15 +171,16 @@ export function SkillsSheet() {
                   ))}
                 </div>}
                 {total > 0 && <Button className="sk-suggest-btn" title={RECOMMEND_COST} onClick={() => repoId && recommend(repoId)}>{s.asking ? "Looking at what is used…" : "suggest what to switch off · one model call"}</Button>}
-                {s.suggest && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={applyLayer?.readable ? applyLayer.path : null} applying={applying} onApply={apply} />}
+                {total > 0 && allRepos?.state === "counting" && <Hint>Counting uses across all repos{allRepos.total ? `: ${allRepos.done ?? 0} of ${allRepos.total} logs` : ""}. Suggestions wait for it.</Hint>}
+                {s.suggest && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={applyLayer?.readable ? applyLayer.path : null} globalFile={globalLayer?.readable ? globalLayer.path : null} shared={s.shared} showChoice={!(s.target === "repo" && changes.length > 0 && !!layer?.readable)} applying={applying} onApply={apply} />}
                 {(s.filter || s.query.trim()) && <Hint>{shownN} of {total} shown{s.filter ? <> · <Button className="sk-link" onClick={() => { setFilter(null); setQuery(""); }}>clear</Button></> : null}</Hint>}
                 {saveErr && <Hint tone="warn">{saveErr.text}{saveErr.stale ? " The list was read again; your choices are kept." : " Your choices are kept."}</Hint>}
-                {plugins.map((r) => <PluginCard key={r.id} row={r} skills={r.skills.map((id) => split.pluginSkills.get(id)).filter((x): x is NonNullable<typeof x> => !!x)} draft={s.draft} level={level} />)}
-                {skills.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} />)}
+                {plugins.map((r) => <PluginCard key={r.id} row={r} skills={r.skills.map((id) => split.pluginSkills.get(id)).filter((x): x is NonNullable<typeof x> => !!x)} draft={s.draft} level={level} globalDraft={globalDraft} />)}
+                {skills.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} globalDraft={globalDraft} />)}
                 {bundled.length > 0 && (
                   <details className="sk-fold sk-bundled">
                     <summary>built in to Claude Code, {bundled.length}</summary>
-                    {bundled.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} />)}
+                    {bundled.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} globalDraft={globalDraft} />)}
                   </details>
                 )}
                 {shownN === 0 && bundled.length === 0 && <div className="empty empty-msg">{total === 0 ? "No skills or plugins found for this repo." : "Nothing matches."}</div>}

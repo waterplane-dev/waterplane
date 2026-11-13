@@ -7,12 +7,17 @@ import { Check, Square } from "lucide-react";
 import type { SkillInventoryDoc, SkillRecommendResponse } from "@waterplane/shared";
 import { Button, Hint, Row, RowSub, RowTitle } from "../../kit";
 import { dismissSuggest, toggleSuggest } from "./actions";
-import { SUGGEST_ONLY_LIST, applyNote, applyWords, emptyWords, suggestionName, spendWords, suggestKey, suggestionMove, suggestionUses, tickedChars, tilde, suggestionChanges } from "./logic";
+import { RepoFileChoice } from "./RepoFileChoice";
+import { SUGGEST_ONLY_LIST, applyFilesWords, applyNote, applyWords, changeCount, emptyWords, suggestionLevers, suggestionMeanings, suggestionName, tickedSuggestions, spendWords, suggestKey, suggestionUses, tickedChars, tilde, suggestionChanges } from "./logic";
 
 const ICON = 14;
 
-export function SuggestList({ res, unticked, doc, file, applying, onApply }: {
-  res: SkillRecommendResponse; unticked: string[]; doc: SkillInventoryDoc; file: string | null; applying: boolean; onApply: () => void;
+export function SuggestList({ res, unticked, doc, file, globalFile, shared, showChoice, applying, onApply }: {
+  res: SkillRecommendResponse; unticked: string[]; doc: SkillInventoryDoc;
+  /** This repo's file (the save bar's choice) and the all-repos file; null = cannot be read. */
+  file: string | null; globalFile: string | null; shared: boolean;
+  /** False while the save bar already shows the same choice (one control per choice on screen). */
+  showChoice: boolean; applying: boolean; onApply: () => void;
 }) {
   const list = res.suggestions;
   const spend = spendWords(res.spend, res.dropped);
@@ -25,16 +30,22 @@ export function SuggestList({ res, unticked, doc, file, applying, onApply }: {
       </div>
     );
   }
-  const n = suggestionChanges(list, unticked).length;
+  const ticked = tickedSuggestions(list, unticked);
+  const c = suggestionChanges(ticked, []);
+  const n = ticked.length;
+  const meanings = suggestionMeanings(list);
+  const blocked = (c.here.length > 0 && !file) || (c.all.length > 0 && !globalFile);
   const note = applyNote(tickedChars(list, unticked));
   return (
     <div className="sk-suggest">
       <Hint>{SUGGEST_ONLY_LIST}</Hint>
+      {meanings.map((m) => <Hint key={m}>{m}</Hint>)}
       {list.map((s) => {
         const k = suggestKey(s);
         const on = !unticked.includes(k);
         const name = suggestionName(s, doc.rows);
-        const meta = [s.savedChars !== undefined ? tilde(s.savedChars) : null, suggestionUses(s)].filter(Boolean).join(" · ");
+        const lv = suggestionLevers(s, doc.rows);
+        const meta = [s.savedChars !== undefined ? `${tilde(s.savedChars)} fewer here` : null, suggestionUses(s)].filter(Boolean).join(" · ");
         return (
           <div key={k} className="sk-card">
             <Row kind="grow">
@@ -42,18 +53,23 @@ export function SuggestList({ res, unticked, doc, file, applying, onApply }: {
                 <Button className={`sk-tick${on ? " on" : ""}`} aria-pressed={on} aria-label={`${on ? "Untick" : "Tick"} ${name}`} onClick={() => toggleSuggest(k)}>
                   {on ? <Check size={ICON} /> : <Square size={ICON} />}
                 </Button>{" "}
-                {name} <span className="sk-ver">{suggestionMove(s, doc.rows)}</span>
+                {name}
               </RowTitle>
-              <RowSub>{[meta, s.reason].filter(Boolean).join(" · ")}</RowSub>
+              <RowSub as="div" className="sk-why">{s.reason}</RowSub>
+              {lv.all && <RowSub>{lv.all}</RowSub>}
+              <RowSub>{lv.here}</RowSub>
+              {meta && <RowSub>{meta}</RowSub>}
             </Row>
           </div>
         );
       })}
       {spend && <Hint>{spend}</Hint>}
-      {!file ? <Hint tone="warn">That file cannot be read, so applying to it is not offered.</Hint>
-        : n === 0 ? <Hint>Nothing is ticked, so there is nothing to apply.</Hint>
+      {c.here.length > 0 && showChoice && <RepoFileChoice shared={shared} />}
+      {blocked ? <Hint tone="warn">{!globalFile && c.all.length ? "The all-repos settings file" : "This repo's settings file"} cannot be read, so applying to it is not offered.</Hint>
+        : n === 0 || changeCount(c) === 0 ? <Hint>Nothing is ticked, so there is nothing to apply.</Hint>
         : (
           <>
+            {applyFilesWords(c, globalFile, file) && <Hint>{applyFilesWords(c, globalFile, file)}</Hint>}
             {note && <Hint>{note}</Hint>}
             {/* not primary: the sheet's one primary verb is Save */}
             <Button onClick={onApply}>{applying ? "Applying…" : applyWords(n)}</Button>

@@ -124,6 +124,8 @@ interface Run { done: number; total: number; finished: boolean; failedWhy?: stri
   /** The finished, successful run this one replaces: `read()` serves its counts while this one scans. */ prev?: Run }
 /** A finished scan answers `read()` as it stands for this long; `kick()` starts no new one inside it. */
 export const FRESH_MS = 30_000;
+/** The run key of the all-repos scan; never a repo id (those are paths or slugs, never start with a NUL). */
+const ALL_KEY = "\u0000all";
 
 export class SkillUseStore {
   private store: Store;
@@ -201,6 +203,13 @@ export class SkillUseStore {
     }
     for (const id of idSet) uses[id] ??= { d30: 0, all: 0, typed30: 0, typedAll: 0 };
     return { state: "ready", uses, ...(refreshing ? { refreshing: true } : {}) };
+  }
+
+  /** Every repo on this desktop: `projects` is the CLI's projects folder, walked as one dir. */
+  readAll(projects: string, ids: string[]): SkillUseReading {
+    this.kick(ALL_KEY, [projects]);
+    const r = this.read(ALL_KEY, [projects], ids);
+    return r.state === "absent" && r.why?.startsWith("No Claude logs") ? { state: "absent", why: "No Claude logs on this desktop." } : r;
   }
 
   private hasDir(d: string): boolean {

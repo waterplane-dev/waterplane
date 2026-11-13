@@ -2,7 +2,7 @@
  * Skills and plugins switch, read side (docs/analysis/skills-switch/PLAN.md, P2 + P4). REST, no WebSocket
  * message. NOT in `passive.ts`'s allowlist: a passive token is refused (R-skills-014).
  */
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { SkillRow } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { claudeProjectDir } from "../claudeconfig.js";
@@ -36,6 +36,17 @@ async function repoDoc(root: string, wt: string, repoId: string): Promise<Invent
       if (row.kind !== "skill") continue;
       const c = r.uses[row.id];
       if (c) (row as SkillRow).uses = c;
+    }
+  }
+  // Every repo on this desktop: one walk of the CLI's whole projects folder, so the All-repos half of
+  // a suggestion stands on counts from all repos, not this one. Files are cached by mtime+size.
+  const all = uses.readAll(dirname(dirs[0]!), doc.rows.map((x) => x.id));
+  doc.usage.allRepos = { state: all.state, ...(all.done !== undefined ? { done: all.done, total: all.total } : {}), ...(all.why ? { why: all.why } : {}), ...(all.refreshing ? { refreshing: true } : {}) };
+  if (all.state === "ready" && all.uses) {
+    for (const row of doc.rows) {
+      if (row.kind !== "skill") continue;
+      const c = all.uses[row.id];
+      if (c) (row as SkillRow).usesEverywhere = c;
     }
   }
   return out;

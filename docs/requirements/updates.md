@@ -44,9 +44,13 @@ A Claude CLI update installed by any route (native installer, npm, brew) shows u
 
 
 ### R-updates-010 · shipped
-A waterplane installed with install.sh shows on the phone when a newer release exists (current → new, release notes on a tap) with an update button and a roll-back button; the update verifies the download, restarts the desktop and the phone confirms the new version. An npm or git-checkout install shows the exact command instead of a button, and says why.
-- asked: 2026-10-23
+A waterplane installed with install.sh shows on the phone when a newer release exists (current → new, release notes on a tap) with an update button and a roll-back button; the update verifies the download, restarts the desktop and the phone confirms the new version. An npm or git-checkout install also gets an update button (see R-updates-010a); an install the updater cannot recognise shows why there is none.
+- asked: 2026-10-23; changed 2026-11-13
 - shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+
+### R-updates-010a · shipped
+Waterplane's own updates have a door beside Plugins at the top of Settings. An npm install's update button installs the version shown with npm and restarts; a git checkout is due when its branch has new commits upstream, and its button fast-forwards, runs npm ci and the build, then restarts — refusing in words, with nothing changed, when the checkout has uncommitted changes, commits of its own, or no upstream. Both say what they skip (no signature check, no roll back) and show the command to run by hand.
+- asked: 2026-11-13
 
 ### R-updates-011 · shipped
 The desktop checks once a day (and on refresh) whether waterplane or an installed plugin has a newer version, never installs anything by itself, and the check can be switched off. Waterplane and plugin updates share one updates view whose count opens exactly those updates.

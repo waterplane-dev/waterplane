@@ -22,12 +22,12 @@ oracle that used to live in `features/oracle` is now such a plugin.
   (`enablePlugin`, the Settings path; a fixed one says why in words), status, missing env, the load error verbatim, "Where to find
   it" (derived from contributions, a manifest's `places` winning for the same place, an openable one a button) and a Settings button
   (`openPluginSettings`: its own overlay `pluginSettings` over the manager, the same `SettingsSheet` narrowed by `pluginScope`; Back lands on the manager, the filter bar's clear closes back to it, typing in the search box widens it in place; Settings underneath stays unfiltered). Filters All/On/Off/Beta (previews and experimental)/Private sit above the list, counted and cut by one function. The
-  door is a plain "Plugins" button at the top of Settings (no count); the head's button goes to Updates, where Add by URL lives.
+  door is a plain "Plugins" button at the top of Settings (no count), with an "Updates" door beside it (`UpdatesTopDoor`; its count is the same filter as Tools' door); the head's button goes to Updates, where Add by URL lives.
 - **Updates** (`UpdatesParts.tsx`, `UpdatesSheet.tsx`, `UpdatesSettings.tsx`, `updatesActions.ts`; the pure half is in
   `logic.ts`, stores `updatesStatus`/`applies` in `store.ts`): the host's `updates.status` drawn as installed
   plugins with a maturity tag + source + an update button only where shared `updatesDue` lists it, the
   catalogue's available plugins (install, or the problems in words), Add by URL, and waterplane's own row
-  (update / roll back when `canApply`, else the copyable command and why). Overlay `updates` opens on EXACTLY
+  (update / roll back for a tarball; npm and checkout: update with its caveat and the hand command beside it; unknown: why there is no button). Overlay `updates` opens on EXACTLY
   the due rows ("n of N", show all); its door `tool-updates` carries the same count, and `UpdatesBanner`
   (`core/Banners.tsx`) is shown for a due waterplane update and only opens the sheet. Every apply asks
   (`askConfirm`) and goes live once with `ackId = reqId`, never queued or retried; `updates.result` is shown

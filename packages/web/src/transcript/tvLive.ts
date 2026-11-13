@@ -1,4 +1,4 @@
-import { scrollPanelOpen, shellWords, shellsChipText, shellsSummary, workingLine } from "@waterplane/shared";
+import { runningWords, scrollPanelOpen, shellWords, shellsChipText, shellsSummary, workingLine } from "@waterplane/shared";
 import type { TranscriptStatus } from "./tvTypes";
 import { since } from "./tvRows";
 
@@ -45,7 +45,7 @@ export function liveReading(status: TranscriptStatus | undefined, busy: boolean)
   // "coding" chip. Null when nothing is running.
   const stillGoing = !status || !status.running ? null
     : status.busy ? "working"
-    : agentCount ? `${agentCount} agent${agentCount === 1 ? "" : "s"} still running`
+    : agentCount ? `${runningWords(agents)} still running`
     : (shellSum ? shellSum.working > 0 : !!status.shells) ? "a background shell still running"
     : null;
   // One line, in priority order: dead > blocked > waiting on you > working >
@@ -64,7 +64,7 @@ export function liveReading(status: TranscriptStatus | undefined, busy: boolean)
     // and under `busy` (the turn is the bigger fact), but ABOVE idle: a session
     // with two background agents in flight is not idle, and saying so was this
     // strip's longest-standing lie.
-    : agentCount ? { kind: "agents", text: `${agentCount} agent${agentCount === 1 ? "" : "s"} running${agentAge ? ` · ${agentAge}` : ""}${anyShells ? " · shells too" : ""}` }
+    : agentCount ? { kind: "agents", text: `${runningWords(agents)} running${agentAge ? ` · ${agentAge}` : ""}${anyShells ? " · shells too" : ""}` }
     : shellSum?.total ? { kind: "shells", text: shellsChipText(shellSum) }
     : status.shells ? { kind: "shells", text: "background shells running" }
     // Idle repeats the header's "done · 18m ago", and it stays anyway: this

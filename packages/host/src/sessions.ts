@@ -102,7 +102,7 @@ export class SessionManager extends EventEmitter {
       // tmux.ts
       spawnBackend: (id, cwd, cols, rows, args, backend, launchEnv, dropEnv) => spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv),
       reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); this.signIn.restored(m.id, m.signInSince); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
-      deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
+      deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), supersede: (from, to, by) => drive.supersede(this.core, from, to, by), carryFor: (id, rid) => record.carryOf(this.core, id, rid), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
       detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid) => adoptClaudeId(this.core, s, cid),
       watchClaudeId: (s) => watchClaudeId(this.core, s), stopClaudeIdWatch: (s) => stopClaudeIdWatch(s),
@@ -587,6 +587,7 @@ export class SessionManager extends EventEmitter {
   setItemLookup(fn: Parameters<RosterSlice["setItemLookup"]>[0]): void { this.roster.setItemLookup(fn); }
   reattachById(id: string): boolean { return drive.reattachById(this.core, id); }
   remove(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): boolean { return drive.remove(this.core, id, onShellsStopped, by); } repointCompanions(from: string, to: string): void { drive.repointCompanions(this.core, from, to); } // a replaced session's companion shells follow it
+  supersede(from: string, to: string, by?: ClosedBy): boolean { return drive.supersede(this.core, from, to, by); } // …and the replaced row leaves the list
   killShell(id: string, pid: number, startedAt: number): Promise<{ ok: boolean; reason?: string }> { return drive.killOneShell(this.core, id, pid, startedAt); }
   shellDetail(id: string, pid: number): SessionShellDetail | null { return drive.shellDetail(this.core, id, pid); }
   scrollback(id: string): string { return drive.scrollback(this.core, id); }

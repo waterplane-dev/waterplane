@@ -239,7 +239,7 @@ const PINS = [
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/signinwait.ts": 2, "sessions/turn.ts": 6, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 17 },
+    today: { "sessions.ts": 7, "sessions/endsession.ts": 2, "sessions/boxes.ts": 1, "sessions/boxread.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/apiretry.ts": 3, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/signinwait.ts": 2, "sessions/turn.ts": 6, "sessions/agentpoll.ts": 2, "sessions/askwatch.ts": 4, "sessions/wall.ts": 17 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
@@ -248,7 +248,7 @@ const PINS = [
   {
     name: "main's subscriptions (sessions.on)",
     re: /\bsessions\.on\(\s*"/g, scope: MAIN,
-    today: { "server/sessionEvents.ts": 24 }, // +1 (2026-11-02, blocked-sessions D1a): `signIn` → the sign-in pushes; +1 (2026-10-28): `netTurnSettled` → intents; +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
+    today: { "server/sessionEvents.ts": 25 }, // +1 (2026-11-13): `superseded` → re-broadcast session.list; +1 (2026-11-02, blocked-sessions D1a): `signIn` → the sign-in pushes; +1 (2026-10-28): `netTurnSettled` → intents; +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
     why: "a listener registered twice runs twice",
   },
   {
@@ -340,7 +340,7 @@ const ORDERED = [
     name: "sessions.on registration order (server/sessionEvents.ts)",
     file: "server/sessionEvents.ts", re: /\bsessions\.on\(\s*"(\w+)"/g,
     // `netTurnSettled` (2026-10-28) sits beside `turnEnded`: the late half of the same completion.
-    today: ["turnEnded", "netTurnSettled", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "signIn", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
+    today: ["turnEnded", "netTurnSettled", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "superseded", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "signIn", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
   },
   {
     name: "intents.on registration order (server/intentEvents.ts)",

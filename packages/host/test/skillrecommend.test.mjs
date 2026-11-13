@@ -105,3 +105,40 @@ test("an absent usage reading says why nothing can be recommended, not to try ag
   assert.doesNotMatch(r.error, /Try again|still running/);
   assert.equal(called, 0);
 });
+
+test("both levers: All repos lowered with this repo kept, since this repo uses it", async () => {
+  const d = doc();
+  d.rows[0] = sk("old", { uses: { d30: 3, all: 9, typed30: 0, typedAll: 0 }, usesEverywhere: { d30: 3, all: 9, typed30: 0, typedAll: 0 } });
+  const r = await go(reply({ suggestions: [{ kind: "skill", id: "old", allRepos: "off", thisRepo: "on", reason: "Only this repo uses it." }] }), d);
+  assert.deepEqual(r.suggestions.map((s) => [s.id, s.toAll, s.to]), [["old", "off", "on"]]);
+  assert.equal(r.suggestions[0].savedChars, undefined, "this repo keeps it, so it saves nothing here");
+  assert.equal(r.suggestions[0].everywhereAll, 9);
+});
+
+test("All repos is never raised, and never set without all-repos counts", async () => {
+  const d = doc();
+  d.rows[0] = sk("old", { set: { global: "off" }, effective: "off", from: "global", usesEverywhere: { d30: 0, all: 0, typed30: 0, typedAll: 0 } });
+  const up = await go(reply({ suggestions: [{ kind: "skill", id: "old", allRepos: "on", reason: "r" }] }), d);
+  assert.equal(up.suggestions.length, 0);
+  const blind = await go(reply({ suggestions: [{ kind: "skill", id: "docx", allRepos: "off", reason: "r" }, { kind: "skill", id: "old", allRepos: "off", reason: "r" }] }));
+  assert.equal(blind.suggestions.length, 0, "no usesEverywhere on the fixture rows");
+});
+
+test("a referenced item lowered for All repos is kept in this repo; an empty reason is dropped", async () => {
+  const d = doc();
+  for (const r of d.rows) if (r.kind === "skill") r.usesEverywhere = { d30: 0, all: 0, typed30: 0, typedAll: 0 };
+  const r = await go(reply({ suggestions: [
+    { kind: "skill", id: "docx", allRepos: "off", reason: "Unused elsewhere." },
+    { kind: "skill", id: "old", allRepos: "name-only", reason: "  " },
+  ] }), d);
+  assert.deepEqual(r.suggestions.map((s) => [s.id, s.toAll, s.to]), [["docx", "off", "on"]]);
+  assert.equal(r.dropped, 1);
+});
+
+test("a plugin takes on/off at both levels; All repos off leaves this repo following", async () => {
+  const d = doc();
+  d.rows[1].usesEverywhere = { d30: 0, all: 0, typed30: 0, typedAll: 0 };
+  d.rows[5].usesEverywhere = { d30: 0, all: 0, typed30: 0, typedAll: 0 };
+  const r = await go(reply({ suggestions: [{ kind: "plugin", id: "p@synced", allRepos: "off", reason: "Unused anywhere." }] }), d);
+  assert.deepEqual(r.suggestions.map((s) => [s.id, s.toAll, s.to, s.savedChars]), [["p@synced", "off", undefined, 900]]);
+});

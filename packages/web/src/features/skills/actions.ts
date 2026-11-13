@@ -7,7 +7,7 @@ import type { SkillChange, SkillInventoryDoc, SkillRecommendResponse, SwitchLeve
 import { api } from "../../api";
 import { core } from "../../sdk";
 import { initialSkills, skillsState } from "./store";
-import { levelFor, moveDraft, reconcileSuggestions, suggestionChanges, receiptWords, withChoice, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
+import { changeCount, globalDraftOf, levelFor, moveDraft, parkKeyOf, reconcileSuggestions, suggestionChanges, receiptWords, withChoice, withPin, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
 
 /** Bumped whenever the sheet is aimed at another repo, so a Recommend still out cannot land in it. */
 let askSeq = 0;
@@ -36,7 +36,19 @@ function moveLevel(target: Target, shared: boolean): void {
   skillsState.set({ ...s, target, shared, ...moved });
 }
 export const setTarget = (target: Target): void => moveLevel(target, skillsState.get().shared);
-export const setShared = (shared: boolean): void => moveLevel(skillsState.get().target, shared);
+/**
+ * Which repo file the save writes. The draft COMES ALONG (the choice sits on the save bar, beside the
+ * draft it is about); a draft set aside for the other file is merged under it, never dropped.
+ */
+export function setShared(shared: boolean): void {
+  const s = skillsState.get();
+  if (s.shared === shared || s.target !== "repo") return;
+  const there = levelFor("repo", shared);
+  const parked = { ...s.parked };
+  const waiting = parked[parkKeyOf(s.repoId, there)] ?? {};
+  delete parked[parkKeyOf(s.repoId, there)];
+  skillsState.set({ ...s, shared, parked, draft: { ...waiting, ...s.draft } });
+}
 export const setFilter = (filter: FilterKey | null): void => patch({ filter });
 export const setSort = (sort: SortKey): void => patch({ sort });
 export const setQuery = (query: string): void => patch({ query });
@@ -44,13 +56,27 @@ export const discardDraft = (): void => patch({ draft: {} });
 
 export function choose(row: Row, to: Want): void {
   const s = skillsState.get();
-  patch({ draft: withChoice(s.draft, row, levelFor(s.target, s.shared), to) });
+  const level = levelFor(s.target, s.shared);
+  patch({ draft: withChoice(s.draft, row, level, to, globalDraftOf(s.parked, s.repoId, level, s.draft)) });
+}
+
+/** Keep what a repo row follows as its own value, so a later All-repos change leaves this repo alone. */
+export function pin(row: Row): void {
+  const s = skillsState.get();
+  const level = levelFor(s.target, s.shared);
+  patch({ draft: withPin(s.draft, row, level, globalDraftOf(s.parked, s.repoId, level, s.draft)) });
+}
+
+/** The door back to the readings: what every turn of this repo carries, skills included. */
+export function openCarried(repoId: string): void {
+  core().say.track("action:skills.carried");
+  core().nav.openSetup(repoId, { region: "agents" });
 }
 
 export type SaveResult = { ok: true; doc: SkillInventoryDoc } | { ok: false; error: string; stale: boolean };
 
 /** The one write. A refusal keeps the draft and says why; a stale rev (409) says to choose again. */
-export async function saveChanges(repoId: string, doc: SkillInventoryDoc, level: SwitchLevel, changes: SkillChange[], clearDraft = true): Promise<SaveResult> {
+export async function saveChanges(repoId: string, doc: SkillInventoryDoc, level: SwitchLevel, changes: SkillChange[], clearDraft = true, toast = true): Promise<SaveResult & { receipt?: string }> {
   const layer = doc.layers.find((l) => l.level === level);
   if (!layer) return { ok: false, error: "This desktop did not say which file that is.", stale: false };
   let r;
@@ -65,8 +91,9 @@ export async function saveChanges(repoId: string, doc: SkillInventoryDoc, level:
     patch({ draft: withoutSent(skillsState.get().draft, changes) });
   }
   const note = r.ignoredNote ? ` ${r.ignoredNote}` : "";
-  core().say.toast(receiptWords(r.changed.length, r.file) + note);
-  return { ok: true, doc: r.doc };
+  const receipt = receiptWords(r.changed.length, r.file) + note;
+  if (toast) core().say.toast(receipt);
+  return { ok: true, doc: r.doc, receipt };
 }
 
 /** Ask the desktop for suggestions. One cheap call, on a tap; the answer is a list, never a change. */
@@ -92,14 +119,32 @@ export function toggleSuggest(key: string): void {
   patch({ unticked: u.includes(key) ? u.filter((k) => k !== key) : [...u, key] });
 }
 
-/** Apply = the same one write, carrying only the ticked suggestions; the typed draft is left alone. */
+/**
+ * Apply = the same one write, once per file a ticked lever touches: All repos first, then this
+ * repo's file (named by the save bar's choice), each with the rev the screen read. The typed draft
+ * is left alone. A refusal of the second write says the first one landed.
+ */
 export async function applySuggestions(repoId: string, doc: SkillInventoryDoc, level: SwitchLevel): Promise<SaveResult | null> {
   const s = skillsState.get();
   if (!s.suggest) return null;
   // Only what is still true of the rows as they are now (a Save since the answer may have moved them).
-  const changes = suggestionChanges(reconcileSuggestions(s.suggest.suggestions, doc.rows), s.unticked);
-  if (!changes.length) return null;
-  const r = await saveChanges(repoId, doc, level, changes, false);
-  if (r.ok) dismissSuggest();
-  return r;
+  const c = suggestionChanges(reconcileSuggestions(s.suggest.suggestions, doc.rows), s.unticked);
+  if (!changeCount(c)) return null;
+  let cur = doc;
+  const receipts: string[] = [];
+  if (c.all.length) {
+    const r = await saveChanges(repoId, cur, "global", c.all, false, false);
+    if (!r.ok) return r;
+    cur = r.doc;
+    if (r.receipt) receipts.push(r.receipt);
+  }
+  if (c.here.length) {
+    const r = await saveChanges(repoId, cur, level, c.here, false, false);
+    if (!r.ok) return receipts.length ? { ...r, error: `All repos was saved; this repo's file was not. ${r.error}` } : r;
+    cur = r.doc;
+    if (r.receipt) receipts.push(r.receipt);
+  }
+  core().say.toast(receipts.join(" "));
+  dismissSuggest();
+  return { ok: true, doc: cur };
 }

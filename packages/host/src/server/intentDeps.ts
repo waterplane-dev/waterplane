@@ -295,6 +295,8 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
           };
         }
         const info = await ctx.sessions.create(i.cwd, { cols: i.cols, rows: i.rows, title: i.title, launch: i.launch as LaunchOpts | undefined, resume: i.resume, origin: sessionOriginOfIntent(i), ...(i.budget ? { budget: i.budget } : {}) });
+        // A parked relaunch: the session it killed leaves the list, as a direct one's does.
+        if (typeof i.replaceSessionId === "string") ctx.sessions.supersede(i.replaceSessionId, info.id, "replaced");
         ctx.recomputeWatched();
         if (steps[0]) void ctx.startPrompt(info.id, steps[0]);
         // The rest of a chain is delivered one turn at a time — `deliverPrompt`

@@ -23,7 +23,7 @@ import { appendFileSync, mkdirSync, statSync } from "node:fs";
 import { keepLastLines } from "../jsonstore.js";
 import { basename, join } from "node:path";
 import type { DetectedPrompt, FollowUp, HistoryEntry, HostMessage, SessionInfo, TurnEndNet } from "@waterplane/shared";
-import { AGENT_WINDOW_WARN_KEY, followUpPushText } from "@waterplane/shared";
+import { AGENT_WINDOW_WARN_KEY, followUpPushText, runningWords } from "@waterplane/shared";
 import { createAgentWatch } from "../agentwatch.js";
 import { isMarkdownPath, readsInline } from "../files.js";
 import { stripFresh } from "./scan.js";
@@ -129,6 +129,9 @@ export function wireSessionEvents(ctx: ServerCtx) {
   });
 
   // Fires for every session, including ones the backlog creates internally.
+  // A relaunch / limit reopen dropped the session it replaced (`drive.supersede`):
+  // the phone only learns a row is GONE from the whole list.
+  ctx.sessions.on("superseded", () => ctx.broadcast({ t: "session.list", sessions: ctx.sessions.list() }));
   ctx.sessions.on("created", (info: SessionInfo) => {
     // A delegated job's worktree says why a session in it exists ("job from mac · …") —
     // set before the first broadcast, so the row is never drawn without it.
@@ -285,8 +288,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
       // used to tell (host `agents.ts`). Say what is still running instead — the
       // list is already on the session by this point (`checkAgents` runs inside
       // `markIdle`, before this event).
-      const n = info.agents?.length ?? 0;
-      const still = [n ? `${n} agent${n === 1 ? "" : "s"}` : "", info.shells ? "shells" : ""].filter(Boolean).join(" + ");
+      const still = runningWords(info.agents, !!info.shells);
       ctx.notify("idle", {
         title: still ? `Turn finished · ${still} still running` : "Turn finished",
         body: shownTitleForCwd(info.cwd, info.title), sessionId: id, tag: `idle-${id}`,

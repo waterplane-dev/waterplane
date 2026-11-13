@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.8 - 2026-11-13
+
+### New
+
+- **Running work names MCP tasks apart from agents.** The header pill, the reader's status strip, the turn foot and the turn-finished push say, for example, "1 agent + 2 MCP tasks". An MCP row wears a plug icon, and an MCP task is not counted as a parallel agent.
+- **One skill suggestion sets All repos and this repo together.** The reason comes first and the state words are explained once. Apply writes both files with one receipt. Skill uses are counted across every repo on the desktop, and a suggestion that would change nothing is dropped.
+- **Skills show where this repo differs.** A repo row follows All repos until a different value is picked there. All repos shows its own value and says where this repo overrides it. The choice between "just me, this desktop" and "everyone with the repo" sits in the save bar, with a one-line meaning.
+- **npm and git-checkout installs get an update button.** An npm install updates to the version the phone confirmed, then restarts. A checkout updates when its upstream has new commits. The button refuses in words on uncommitted changes, own commits, a detached HEAD or no upstream. Both say what they skip (no signature check, no roll back) and keep the hand command beside the button.
+- **Updates has its own door in Settings,** beside Plugins at the top.
+
+### Fixed
+
+- **A background MCP call no longer reads as done.** When the CLI moves a long MCP call to the background, the session stays running until its task-notification, and the turn-finished push names the MCP tasks.
+- **A restarted session replaces its old row** instead of sitting beside it as exited, after a relaunch or a limit resume.
+- **Token stats no longer show dollars priced at old rates.** A saved copy priced at other rates waits for the fresh read (a $248 week had read as $130).
+- **The "In this repo" heading** over what every turn carries now opens skills & plugins.
+
 ## 0.9.7 - 2026-11-13
 
 ### New

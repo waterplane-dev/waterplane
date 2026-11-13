@@ -25,7 +25,7 @@ import { scanHistory, scanPrompts, scanText, searchResult } from "../sessionSear
 import { runSummaryTask } from "../sidecar.js";
 import { promptText } from "../prompts.js";
 import { liveSourceFor } from "../livesources.js";
-import type { ClosedRow, Session, SessionCore } from "./core.js";
+import type { ClosedRow, Session, SessionCarry, SessionCore } from "./core.js";
 import {
   HISTORY_LIMIT, OUTPUT_CAP, SUMMARY_MODEL, TAB_TITLE_SYSTEM, TAB_TITLE_PROMPT, NAME_INPUT_CHARS,
   RENAME_PROMPT, RENAME_RECENT_PROMPTS, RENAME_RECENT_CHARS,
@@ -618,7 +618,7 @@ function isHistory(v: unknown): boolean {
  * by its kill — so a model switch that resumes the very same conversation came
  * back as a row with no words on it and a tab renamed off nothing.
  */
-export interface SessionCarry { history: HistoryEntry[]; tabTitle?: string }
+export type { SessionCarry } from "./core.js";
 
 /**
  * Snapshot taken BEFORE the kill that deletes the files it reads from — and

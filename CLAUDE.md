@@ -107,8 +107,8 @@ npm test             # lint, test:unit, test:host, then run-e2e.mjs — needs `n
   on the staged tree, pre-push in a clean worktree. A failure the edit hook says is not yours is
   another session's — leave it. Releases: `npm run release:*` and `scripts/verify-rev.sh <rev>`
   (clean-worktree check) ⇒ `docs/notes/distribution.md`.
-- **New or changed screen:** give it a row in `scripts/ui/journey-back-lands.mjs`, run `npm run test:ui back-lands`
-  (~50 s) before committing, then ask the `screen-review` agent to look at it.
+- **New or changed screen, extensions too:** add its row to `scripts/ui/journey-back-lands.mjs`, run
+  `npm run test:ui back-lands` (~50 s) and the `screen-review` agent before committing. Not a gate.
 - Tests: `npm run test:unit` (pure logic, no host) · `npm run test:host` (regex heuristics,
   no daemon) · `node scripts/run-e2e.mjs <filter>`. Details ⇒ skill `testing`.
 

@@ -14,13 +14,20 @@ skill-listing card of the request breakdown (`CarriedSection`'s `onSkills`).
   the draft and says why. A different repo starts with an empty draft.
 - `logic.ts` + `logic.test.mjs` — draft math, filters (one `bucket` feeds the chip number and the
   cut), sort, weight and savings sentences. Savings come from shared `savingsOf`.
+- `RepoFileChoice.tsx` — which repo file a save or an Apply writes: "just me, this desktop"
+  (gitignored `.claude/settings.local.json`) or "everyone with the repo" (`.claude/settings.json`),
+  on the save bar and beside Apply, with a line saying what the chosen file means. Switching it
+  carries the draft along.
+- `SuggestList.tsx` — the Recommend answer. Each row sets BOTH levers (All repos and this repo) and
+  reads: reason first, then the two lever lines, what the target words mean, then the counts (this
+  repo and all repos). Apply writes the all-repos file, then this repo's file.
 - `SkillsSheet.tsx`, `SkillRows.tsx` — the sheet, plugin cards (one switch per plugin; its skills
   read-only under a fold: the CLI ignores `skillOverrides` for plugin skills) and skill rows.
 
 **Reads from core**: `nav.open/close`, `world.backends`, `say.toast`, `say.track`. Reads from the
-host: `GET /api/repos/:id/skills` (polled every 3 s while uses are still being counted).
+host: `GET /api/repos/:id/skills` (polled every 3 s while uses, this repo's or all repos', are still being counted).
 
 **Rules that apply**: changes reach NEW sessions only (said once at the top); the screen names the
 file a save writes; a re-read never overwrites the draft; an unmeasured row says so, never `0`;
-a total ships with its split; no dimmed buttons, a locked row prints its sentence; nothing applies
+a total ships with its split; a repo row FOLLOWS All repos (`rowView`/`fallbackAt`, unsaved All-repos draft included) until a different value is picked there, and says so (`sourceWords`); All repos shows the all-repos value, never this repo's; no dimmed buttons, a locked row prints its sentence; nothing applies
 itself — the Recommend list (`SuggestList.tsx`) is only a list until its one Apply tap, which goes through the same `saveChanges` with just the ticked rows.

@@ -1013,6 +1013,14 @@ to it. `.claude/agents/screen-review.md` is a fresh Sonnet reader that renders t
 neighbour and reports. A builder agent was rejected: same skills and model, so the same misses, and it
 would lose the conversation that says what the screen is for.
 
+The review covers extension screens as well as core ones, the vault included, and it is a step in the
+commit habit, not a gate. Vault screens are why: about 45 vault UI commits after 2026-10-28 were repairs
+found after the screen had shipped, and 4 of 7 vault journeys needed two or more rounds. Extensions get
+no exemption (owner, 2026-11-13). One rule with no exceptions is easier to keep, and a review costs
+about $3 per screen. The agent also checks that one bucketing function feeds a count, its rows and its
+cut, because two copies of the edge agree until the day they don't. To see whether the habit pays,
+count the UI repair commits per new screen.
+
 Back is the opposite case. It is deterministic, so it is a journey, not an agent:
 `scripts/ui/journey-back-lands.mjs` taps each door and takes Back by the arrow and by `history.back()`.
 Two injected bugs, one per way of going back, were each caught when it was added (2026-11-04).

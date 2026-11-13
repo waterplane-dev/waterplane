@@ -36,6 +36,7 @@ import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } fr
 import { join } from "node:path";
 import { WORKFLOW_DIR_RE } from "./agentlogs.js";
 import type { SessionAgent, SourceAgent, SourceSession } from "@waterplane/shared";
+import { MCP_TASK_TYPE } from "@waterplane/shared";
 import type { BackendDescriptor } from "./backends/types.js";
 import { claudeConfigDir, claudeProjectDir } from "./claudeconfig.js";
 import { env } from "./env.js";
@@ -396,7 +397,7 @@ export function agentsChanged(a: SessionAgent[] | undefined, b: SessionAgent[]):
  * records the same id, and picking one is a guess. No match ⇒ null, never a
  * status borrowed from another process.
  */
-export interface CliSessionRecord { pid?: number; sessionId?: string; tmux?: string; status?: string; name?: string }
+export interface CliSessionRecord { pid?: number; sessionId?: string; tmux?: string; status?: string; name?: string; startedAt?: number }
 
 export function pickCliSession(
   recs: CliSessionRecord[], tmuxName: string | null, conversationId: string | undefined,
@@ -420,6 +421,75 @@ function readRecord(path: string): CliSessionRecord | null {
   } catch { return null; }
 }
 
+/**
+ * MCP calls the CLI moved to the BACKGROUND, still running. A long MCP call
+ * (a simulator capture, a build) is parked after 120 s: its tool_result says
+ * `MCP tool "srv/tool" is still running after 120s. It was moved to the
+ * background as task <id>`, the turn ends, the footer says "2 MCP tasks still
+ * running" — and the reader said "done" underneath it, the same lie background
+ * agents used to tell. The END is the parent's own `<task-id>` task-notification,
+ * as for an agent.
+ *
+ * Such a task "does not survive exiting" the CLI, so only a launch at or after
+ * `since` (the CLI process's own start, off its session record) counts — a
+ * `--continue` into the conversation must not inherit a dead task forever. No
+ * `since` ⇒ an EMPTY list, never a guess. Memoised on the parent log's
+ * (size, mtime): the poll asks every tick while a turn runs.
+ */
+export function readMcpTasks(cwd: string, conversationId: string | undefined, since: number | undefined): SessionAgent[] {
+  if (!conversationId || since === undefined) return [];
+  const path = join(claudeProjectDir(cwd), `${conversationId}.jsonl`);
+  let st;
+  try { st = statSync(path); } catch { return []; }
+  const key = `${st.size}:${st.mtimeMs}:${since}`;
+  const hit = mcpCache.get(path);
+  if (hit && hit.key === key) return hit.rows;
+  const rows = mcpTasksIn(readTail(path, PARENT_TAIL), since);
+  mcpCache.set(path, { key, rows });
+  if (mcpCache.size > 256) { const k = mcpCache.keys().next().value; if (k !== undefined) mcpCache.delete(k); }
+  return rows;
+}
+
+const mcpCache = new Map<string, { key: string; rows: SessionAgent[] }>();
+const MCP_BG_RE = /MCP tool "([^"]{1,200})" is still running[^\n]*?moved to the background as task ([A-Za-z0-9_-]+)/;
+
+/** The pure half of `readMcpTasks`, over a log tail. Exported for the test. */
+export function mcpTasksIn(parentTail: string | null, since: number): SessionAgent[] {
+  if (!parentTail || !parentTail.includes("moved to the background as task")) return [];
+  const notified = notifiedAt(parentTail);
+  const out: SessionAgent[] = [];
+  const seen = new Set<string>();
+  for (const line of parentTail.split("\n")) {
+    if (!line.includes("moved to the background as task")) continue;
+    let rec: { timestamp?: string; type?: string; message?: { content?: unknown } };
+    try { rec = JSON.parse(line); } catch { continue; } // a half-written head line
+    if (rec.type !== "user") continue;
+    const at = Date.parse(rec.timestamp || "");
+    if (!Number.isFinite(at) || at < since) continue;
+    for (const text of toolResultTexts(rec.message?.content)) {
+      const m = MCP_BG_RE.exec(text);
+      if (!m || seen.has(m[2])) continue;
+      seen.add(m[2]);
+      const ended = notified.get(m[2]);
+      if (ended !== undefined && ended >= at) continue;
+      out.push({ id: m[2], what: cap(`MCP ${m[1]}`, 120), type: MCP_TASK_TYPE, startedAt: at, lastWriteAt: at });
+    }
+  }
+  out.sort((x, y) => y.startedAt - x.startedAt);
+  return out.slice(0, MAX_AGENTS);
+}
+
+function toolResultTexts(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const out: string[] = [];
+  for (const c of content as { type?: string; content?: unknown }[]) {
+    if (c?.type !== "tool_result") continue;
+    if (typeof c.content === "string") out.push(c.content);
+    else if (Array.isArray(c.content)) for (const p of c.content as { text?: unknown }[]) if (typeof p?.text === "string") out.push(p.text);
+  }
+  return out;
+}
+
 /** waterplane session id → the CLI record file last matched, so a poll reads one file
  *  and not the whole directory. Re-validated on every read. */
 const cliFileCache = new Map<string, string>();
@@ -427,7 +497,7 @@ const cliFileCache = new Map<string, string>();
 /** `readCliStatus`'s status, plus the pid it was read off — `shells.ts` needs
  *  the pid to find the wrapper shells UNDER this CLI process, which the
  *  status string alone cannot name. */
-export interface CliRecord { status: string; pid: number; name?: string }
+export interface CliRecord { status: string; pid: number; name?: string; /** The CLI process's own start, epoch ms — absent when the record omits it. */ startedAt?: number }
 
 export function readCliRecord(sessionId: string, tmuxName: string | null, conversationId: string | undefined): CliRecord | null {
   const dir = join(claudeConfigDir(), "sessions");
@@ -470,7 +540,8 @@ function asCliRecord(r: CliSessionRecord): CliRecord | null {
   // The name other sessions address this one by — only a plain one; anything
   // odd stays absent rather than a reference nobody can send to.
   const name = typeof r.name === "string" && /^[\w.-]{1,80}$/.test(r.name) ? r.name : undefined;
-  return { status: r.status, pid: r.pid, ...(name ? { name } : {}) };
+  const startedAt = typeof r.startedAt === "number" && Number.isFinite(r.startedAt) ? r.startedAt : undefined;
+  return { status: r.status, pid: r.pid, ...(name ? { name } : {}), ...(startedAt !== undefined ? { startedAt } : {}) };
 }
 
 /** Wrapper kept for its existing callers/tests: the status alone, with none of

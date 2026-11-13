@@ -606,6 +606,9 @@ export interface SessionChannel {
  * A slice's non-hub method is not here, and is therefore unreachable from any
  * other slice. That is the narrowness; never a second `xHooks()` beside this.
  */
+/** What a session hands the one that replaces it on the same conversation (`record.carryOf`). */
+export interface SessionCarry { history: HistoryEntry[]; tabTitle?: string }
+
 export interface SessionCore {
   // ── the facade: shared state and the class's own verbs ──
   readonly root: string;
@@ -616,7 +619,7 @@ export interface SessionCore {
   emit(event: string | symbol, ...args: any[]): boolean;
   create(
     cwd: string,
-    opts?: { cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; origin?: SessionOrigin; budget?: SessionBudget },
+    opts?: { cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; origin?: SessionOrigin; budget?: SessionBudget; carry?: SessionCarry | null },
   ): Promise<SessionInfo>;
   /** PRIVATE on the facade and stays there — the one PTY wiring. A hub member
    *  because `tmux.ts`'s `reattach` wires a PTY it did not spawn. */
@@ -636,6 +639,10 @@ export interface SessionCore {
   deleteLive(id: string): void;
   /** drive.ts: a parent's companion shells follow it to a new id. */
   repointCompanions(from: string, to: string): void;
+  /** drive.ts: `to` replaced `from` — companions follow, `from` leaves the list. */
+  supersede(from: string, to: string, by?: ClosedBy): boolean;
+  /** record.ts `carryOf`: what a session hands its replacement (prompts, tab name). */
+  carryFor(id: string, resumeSessionId: string | undefined): SessionCarry | null;
   hasLiveTmux(id: string): boolean;
   armOrphanSweep(): void;
 

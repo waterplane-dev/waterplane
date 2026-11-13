@@ -463,7 +463,8 @@ export function SetupSheet({
           ) : region === "agents" ? (
             <AgentReadingsRegion repo={repo} carried={report
               ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenInstructionFile ?? onOpenFile}
-                  sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions} />
+                  sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions}
+                  onSkills={onSkills ? () => onSkills(repoId) : undefined} skillsCant={skillsCant ?? undefined} />
               : null} />
           ) : (
             <SeriesRegion

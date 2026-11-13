@@ -34,7 +34,7 @@ interface Cache {
   attemptedAt?: number;
   error?: string;
   raw: RawCatalogEntry[];
-  self?: { latest: string; notes?: string };
+  self?: { latest: string; notes?: string; behind?: number; upstream?: string };
   /** Newest at each URL-installed repo outside the org catalogue (or why it could not be read). */
   remote?: Record<string, { latest: CatalogLatest | null; problem?: string }>;
   lastResult?: { ok: boolean; message: string; at: number };
@@ -89,7 +89,7 @@ export class UpdatesChecker {
     const off = checkForcedOff();
     const next = off ? null : this.nextManualCheckAt();
     return {
-      self: { ...selfBase(this.self), ...(c.self ? { latest: c.self.latest, ...(c.self.notes ? { notes: c.self.notes } : {}) } : {}), ...(c.lastResult ? { lastResult: c.lastResult } : {}) },
+      self: this.selfInfo(),
       catalog: this.catalogRows(),
       ...(c.checkedAt ? { checkedAt: c.checkedAt } : {}),
       ...(off ? { error: OFF_SENTENCE } : c.error ? { error: c.error } : {}),
@@ -145,6 +145,22 @@ export class UpdatesChecker {
 
   /** Broadcast `status()` again (an apply changed what is installed; no network, no floor). */
   refresh(): void { this.deps.onChange(this.status()); }
+
+  /** A checkout's button moved it to its upstream: the cached "n behind" is no longer true. */
+  selfCaughtUp(): void {
+    if (this.cache.self?.behind) { this.cache.self = { ...this.cache.self, behind: 0 }; this.persist(); }
+  }
+
+  private selfInfo(): UpdatesStatus["self"] {
+    const c = this.cache, base = selfBase(this.self), cs = c.self;
+    return {
+      ...base,
+      ...(cs ? { latest: cs.latest, ...(cs.notes ? { notes: cs.notes } : {}) } : {}),
+      // `behind` belongs to a checkout only: a cache written by another install mode never carries over.
+      ...(base.mode === "checkout" && cs && typeof cs.behind === "number" ? { behind: cs.behind, ...(cs.upstream ? { upstream: cs.upstream } : {}) } : {}),
+      ...(c.lastResult ? { lastResult: c.lastResult } : {}),
+    };
+  }
 
   /** Record the receipt of an apply/rollback (P3), kept across a restart. */
   setLastResult(r: { ok: boolean; message: string }): void {

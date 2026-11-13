@@ -6,7 +6,7 @@
  * moved on) and never retried. Its `ackId` is its own `reqId`, so a host that does see a repeat
  * re-acks instead of running it twice.
  */
-import type { HostMessage, UpdatesTarget } from "@waterplane/shared";
+import type { HostMessage, SelfUpdateInfo, UpdatesTarget } from "@waterplane/shared";
 import { core } from "../../sdk";
 import { askConfirm } from "../../Confirm";
 import { seqId } from "../../format";
@@ -93,8 +93,8 @@ export function updatePlugin(id: string, name: string, from: string | undefined,
   void applyTarget({ kind: "plugin-update", id }, updatePluginConfirm({ name, from, to, desktop: desktopLabel(), ...origin }), "update");
 }
 
-export function updateSelf(current: string, to: string): void {
-  void applyTarget({ kind: "self" }, selfConfirm({ desktop: desktopLabel(), current, to }), "update");
+export function updateSelf(current: string, to: string, mode?: SelfUpdateInfo["mode"]): void {
+  void applyTarget({ kind: "self" }, selfConfirm({ desktop: desktopLabel(), current, to, mode }), "update");
 }
 
 export function rollbackSelf(current: string, to: string): void {

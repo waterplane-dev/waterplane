@@ -82,6 +82,18 @@ test("self view: buttons only when canApply, otherwise the command and why", () 
   assert.equal(selfView(cur.self, cur).showRollback, true);
 });
 
+test("self view: npm gets the button with its caveat and the hand command; a checkout is due by commits, not by release", () => {
+  const npm = status({ self: self({ mode: "npm", rollbackTo: undefined, command: "npm i -g waterplane@latest", caveat: "no signature check" }) });
+  const n = selfView(npm.self, npm);
+  assert.deepEqual([n.headline, n.showUpdate, n.showRollback, n.to, n.command, n.why, n.caveat],
+    ["0.1.4 → 0.1.5", true, false, "0.1.5", "npm i -g waterplane@latest", null, "no signature check"]);
+  const co = status({ self: self({ mode: "checkout", latest: "0.1.9", rollbackTo: undefined, command: "git pull --ff-only", caveat: "c", behind: 3, upstream: "origin/main" }) });
+  const c = selfView(co.self, co);
+  assert.deepEqual([c.headline, c.showUpdate, c.to], ["0.1.4 · 3 new commits on origin/main", true, "3 new commits on origin/main"]);
+  const caught = status({ self: self({ mode: "checkout", latest: "0.1.9", rollbackTo: undefined, behind: 0, upstream: "origin/main" }) });
+  assert.deepEqual([selfView(caught.self, caught).showUpdate, selfView(caught.self, caught).headline], [false, "0.1.4 · up to date"], "a newer release alone never makes a checkout due");
+});
+
 test("confirm texts", () => {
   assert.equal(installConfirm({ name: "Gemini", ref: "v1.2.0", desktop: "studio", fromOrg: true }),
     "Install Gemini v1.2.0 from waterplane-dev on studio? It runs with full access to this desktop.");
@@ -89,6 +101,10 @@ test("confirm texts", () => {
     "Install the plugin at https://github.com/a/b on studio? Not from waterplane-dev. It runs with full access to this desktop.");
   assert.equal(selfConfirm({ desktop: "studio", current: "0.1.4", to: "0.1.5" }),
     "Update studio from 0.1.4 to 0.1.5? The desktop restarts; sessions keep running.");
+  assert.equal(selfConfirm({ desktop: "studio", current: "0.1.4", to: "0.1.5", mode: "npm" }),
+    "Update studio from 0.1.4 to 0.1.5 with npm? The desktop restarts; sessions keep running.");
+  assert.match(selfConfirm({ desktop: "studio", current: "0.1.4", to: "2 new commits on origin/main", mode: "checkout" }),
+    /^Pull 2 new commits on origin\/main into studio's checkout\? It runs npm ci and a build/);
   assert.match(rollbackConfirm({ desktop: "studio", current: "0.1.5", to: "0.1.4" }), /^Roll studio back from 0.1.5 to 0.1.4\?/);
   assert.match(updatePluginConfirm({ name: "g", from: "v1", to: "v2", desktop: "d", fromOrg: true }), /^Update g from v1 to v2 from waterplane-dev on d\?/);
 });

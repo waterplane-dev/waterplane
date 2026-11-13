@@ -128,7 +128,7 @@ export function AddByUrl() {
   );
 }
 
-/** waterplane itself: current → latest, notes behind a tap, update / roll back, or the command and why. */
+/** waterplane itself: current → latest, notes behind a tap, update / roll back (npm and checkout: update with what it skips, the command beside it), or the command and why. */
 export function SelfRow({ status }: { status: UpdatesStatus }) {
   const [notes, setNotes] = useState(false);
   const s = status.self;
@@ -140,14 +140,15 @@ export function SelfRow({ status }: { status: UpdatesStatus }) {
         {v.notes && <Button title="what changed" onClick={() => setNotes((x) => !x)}>{notes ? "hide notes" : "notes"}</Button>}
         {/* Notes are the NEXT version's text; What's new is THIS version's new things, with their state here. */}
         <Button title="this version's new things and a way to each" onClick={() => core().nav.open("whatsnew")}>what's new</Button>
-        {v.showUpdate && s.latest && <Button variant="primary" onClick={() => updateSelf(s.current, s.latest!)}><Download size={14} /> update</Button>}
+        {v.showUpdate && v.to && <Button variant="primary" onClick={() => updateSelf(s.current, v.to!, s.mode)}><Download size={14} /> update</Button>}
         {v.showRollback && s.rollbackTo && <Button title={`go back to ${s.rollbackTo}`} onClick={() => rollbackSelf(s.current, s.rollbackTo!)}><RotateCcw size={14} /> roll back</Button>}
       </div>
       {notes && v.notes && <pre className="update-log">{v.notes}</pre>}
       {v.why && <SetNote>{v.why}</SetNote>}
+      {v.caveat && <SetNote>{v.caveat}</SetNote>}
       {v.command && (
         <SetNote>
-          <code>{v.command}</code>{" "}
+          {v.showUpdate ? "Or by hand: " : ""}<code>{v.command}</code>{" "}
           <Button title="copy the command" onClick={() => void copyText(v.command!)}>copy</Button>
         </SetNote>
       )}

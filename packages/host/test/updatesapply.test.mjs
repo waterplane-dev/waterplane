@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PLUGIN_API_VERSION } from "@waterplane/shared";
+import { PLUGIN_API_VERSION, updatesDue } from "@waterplane/shared";
 
 const { PluginRegistry } = await import("../dist/plugins/pluginregistry.js");
 const { UpdatesChecker } = await import("../dist/updates/checker.js");
@@ -57,7 +57,7 @@ const testGit = (map) => async (args, cwd) => {
   catch (e) { throw new Error(String(e.stderr || e.message).trim().split("\n").pop()); }
 };
 
-function world({ map = {}, catalog = [], restarts = [], supervised = true, selfApply, selfMode, remoteLatest } = {}) {
+function world({ map = {}, catalog = [], restarts = [], supervised = true, selfApply, selfMode, remoteLatest, other, latest = "1.0.0" } = {}) {
   const cfg = tmp("wp-cfg-");
   const root = tmp("wp-root-");
   const pluginsDir = join(cfg, "plugins");
@@ -72,10 +72,11 @@ function world({ map = {}, catalog = [], restarts = [], supervised = true, selfA
     fetchCatalog: async () => catalog,
     self: {
       mode: () => selfMode ?? { kind: "tarball", dataDir: "/x", version: "1.0.0" },
-      current: () => "1.0.0", latest: async () => "1.0.0", notes: async () => undefined, installed: () => ["0.9.0", "1.0.0"],
+      current: () => "1.0.0", latest: async () => latest, notes: async () => undefined, installed: () => ["0.9.0", "1.0.0"],
+      behind: async () => ({ behind: 2, upstream: "origin/main" }),
     },
   });
-  const a = new UpdateApplier({ pluginsDir, plugins: reg, checker, git: testGit(map), restart: (r) => { restarts.push(r); return "auto"; }, supervised: () => supervised, selfApply });
+  const a = new UpdateApplier({ pluginsDir, plugins: reg, checker, git: testGit(map), restart: (r) => { restarts.push(r); return "auto"; }, supervised: () => supervised, selfApply, other });
   return { a, reg, checker, pluginsDir, broadcasts, restarts };
 }
 
@@ -231,12 +232,12 @@ test("one apply at a time: a second while one runs is refused in words", async (
   assert.equal(w.a.busy, false);
 });
 
-test("self update: refused with the command for npm/checkout installs; a tarball one switches, writes the receipt, then restarts", async () => {
+test("self update: an unknown install is refused in words; a tarball one switches, writes the receipt, then restarts", async () => {
   const calls = [];
-  const npm = world({ selfMode: { kind: "npm" }, selfApply: async () => { calls.push("ran"); return { code: 0, version: "9.9.9" }; } });
-  const refused = await npm.a.apply({ kind: "self" });
+  const unk = world({ selfMode: { kind: "unknown", root: "/r" }, selfApply: async () => { calls.push("ran"); return { code: 0, version: "9.9.9" }; } });
+  const refused = await unk.a.apply({ kind: "self" });
   assert.equal(refused.ok, false);
-  assert.match(refused.message, /npm updates it.*Run: npm i -g waterplane@latest/);
+  assert.match(refused.message, /not one the updater recognises/);
   assert.deepEqual(calls, [], "nothing ran");
 
   const restarts = [];
@@ -416,4 +417,41 @@ test("a rollback whose state was NOT restored is a failure and restarts nothing"
   assert.equal(res.ok, false); assert.equal(res.restart, "none");
   assert.deepEqual(w.restarts, []);
   assert.equal(w.checker.status().self.lastResult.ok, false);
+});
+
+test("npm install: the button installs the CHECKED version at this install's root, then restarts; a failure restarts nothing", async () => {
+  const restarts = [], seen = [];
+  const npm = world({ restarts, latest: "1.2.0", selfMode: { kind: "npm", root: "/p/lib/node_modules/waterplane" },
+    selfApply: async () => { throw new Error("the signed updater must not run"); },
+    other: { root: () => "/p/lib/node_modules/waterplane", npm: async (root, v) => { seen.push([root, v]); return { ok: true, changed: true, message: `installed ${v} with npm` }; } } });
+  await npm.checker.check({ timer: false });
+  assert.deepEqual(await npm.a.apply({ kind: "self" }), { ok: true, message: "installed 1.2.0 with npm", restart: "restarting" });
+  assert.deepEqual(seen, [["/p/lib/node_modules/waterplane", "1.2.0"]]);
+  assert.equal(restarts.length, 1);
+  assert.match((await npm.a.apply({ kind: "self-rollback" })).message, /no roll back/);
+
+  const bad = world({ restarts: [], latest: "1.2.0", selfMode: { kind: "npm", root: "/r" },
+    other: { root: () => "/r", npm: async () => ({ ok: false, changed: false, message: "npm could not install waterplane 1.2.0: EACCES. The desktop keeps running the version it has." }) } });
+  await bad.checker.check({ timer: false });
+  const f = await bad.a.apply({ kind: "self" });
+  assert.equal(f.ok, false); assert.match(f.message, /EACCES/); assert.equal(bad.restarts.length, 0);
+  assert.equal(bad.checker.status().self.lastResult.ok, false);
+});
+
+test("checkout: due while behind its upstream; the button pulls, clears 'behind' and restarts only when code changed", async () => {
+  const restarts = [];
+  const co = world({ restarts, selfMode: { kind: "checkout", root: "/c" },
+    other: { root: () => "/c", checkout: async () => ({ ok: true, changed: true, message: "pulled 2 commits from origin/main (a → b) and rebuilt" }) } });
+  await co.checker.check({ timer: false });
+  const st = co.checker.status();
+  assert.equal(st.self.behind, 2); assert.equal(st.self.upstream, "origin/main"); assert.equal(st.self.canApply, true);
+  assert.deepEqual(updatesDue(st).map((d) => d.latest), ["2 new commits on origin/main"]);
+  assert.equal((await co.a.apply({ kind: "self" })).restart, "restarting");
+  assert.equal(co.checker.status().self.behind, 0, "caught up");
+  assert.deepEqual(updatesDue(co.checker.status()), []);
+
+  const same = world({ restarts: [], selfMode: { kind: "checkout", root: "/c" },
+    other: { root: () => "/c", checkout: async () => ({ ok: true, changed: false, message: "already at the newest commit on origin/main" }) } });
+  assert.deepEqual(await same.a.apply({ kind: "self" }), { ok: true, message: "already at the newest commit on origin/main", restart: "none" });
+  assert.equal(same.restarts.length, 0);
 });

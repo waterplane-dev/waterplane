@@ -28,7 +28,7 @@
  */
 import { useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { BarChart3, Coins, FileText } from "lucide-react";
+import { BarChart3, Coins, FileText, Plug } from "lucide-react";
 import { alwaysOnRowFigures, alwaysOnRows, alwaysOnTotalsWords, desktopPathWords, fmtCount } from "@waterplane/shared";
 import type { AlwaysOnRow, InstructionFile, RepoInstructionsDoc } from "@waterplane/shared";
 import { AO_BAND_NAME, AO_SLOT, aoBandFigure, aoHeadWords, aoLeftOutWords, aoMarkerFold, aoPick, aoPlot, aoSegWords } from "./alwaysOnPlot";
@@ -217,7 +217,7 @@ export function AoFileList({ rows, plot, configDir, onOpen, pick = null, onPick 
   );
 }
 
-export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessions }: {
+export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessions, onSkills, skillsCant }: {
   /** `ComplianceReport.instructions`; absent from an older host. */
   doc: RepoInstructionsDoc | undefined;
   repoId: string;
@@ -228,6 +228,9 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
   sessionDoors?: SessionDoor[];
   /** The all-sessions token screen. */
   onAllSessions?: () => void;
+  /** The skills & plugins switch for this repo, on the "In this repo" heading; `skillsCant` is the sentence when there is none. */
+  onSkills?: () => void;
+  skillsCant?: string;
 }) {
   const [cut, setCut] = useState<Scope | null>(null);
   const [pick, setPick] = useState<string | null>(null);
@@ -306,7 +309,13 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
         if (!list.length) return null;
         return (
           <div key={s} className="ao-group">
-            <div className="ao-group-head">{GROUP_HEAD[s]}</div>
+            <div className="ao-group-headrow">
+              <div className="ao-group-head">{GROUP_HEAD[s]}</div>
+              {s === "repo" && onSkills && <Button className="ao-skills" onClick={onSkills} title="Turn skills and plugins on or off for this repo or every repo; new sessions only">
+                <Plug size={12} /> skills &amp; plugins →
+              </Button>}
+            </div>
+            {s === "repo" && !onSkills && skillsCant && <Hint>{skillsCant}</Hint>}
             {s === "desktop" && (
               <Hint>These live outside the repo, so they do not open from here. They are what this desktop's files show; plugin packs synced from claude.ai are not on disk — a session's own sheet (below) lists the skills it actually carried.</Hint>
             )}

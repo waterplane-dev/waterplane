@@ -22,10 +22,10 @@ export const SORT_WORDS: Record<SortKey, string> = { heaviest: "heaviest", used:
 /** The words on the four-way selector; the CLI's own names are in the title. */
 export const STATE_WORDS: Record<SkillState, string> = { on: "on", "name-only": "names only", "user-invocable-only": "slash only", off: "off" };
 export const STATE_TITLES: Record<SkillState, string> = {
-  on: "listed with its description, the model can use it",
-  "name-only": "listed by name only, without its description",
-  "user-invocable-only": "hidden from the model; /name still works",
-  off: "hidden entirely",
+  on: "Claude sees its name and description every turn and may use it by itself",
+  "name-only": "Claude sees only its name, so each turn carries less; it can still use it, and /name still works",
+  "user-invocable-only": "Claude does not see it; it runs only when you type /name",
+  off: "gone: Claude does not see it and /name does not work",
 };
 /** How a non-default state reads in a tag. */
 const STATE_TAG: Record<SkillState, string> = { on: "on", "name-only": "names only", "user-invocable-only": "slash only", off: "off" };
@@ -56,18 +56,103 @@ export function shownEnabled(r: PluginRow, draft: Draft): boolean | "inherit" {
  * no key at this level, what the row already resolves to) drops the draft entry instead of
  * writing a redundant key.
  */
-export function withChoice(draft: Draft, r: Row, level: SwitchLevel, to: Want): Draft {
+export function withChoice(draft: Draft, r: Row, level: SwitchLevel, to: Want, globalDraft: Draft = {}): Draft {
   const k = keyOf(r);
+  // Tapping what is already chosen is no change, a "keep for this repo" included (only "follow" undoes it).
+  if (draft[k] === to) return draft;
   const next = { ...draft };
   const held = setAt(r, level);
-  const resolved: Want = r.kind === "skill" ? r.effective : r.enabled;
-  // No key at this level: the tap is redundant only when nothing resolves it from ANOTHER level. A value
-  // shadowed from another file still needs its key here (the tap must write), so it is compared with
-  // what this level holds, not with what the row resolves to.
-  const shadowed = r.from !== "default" && r.from !== "locked";
-  const same = to === "inherit" ? held === undefined : held !== undefined ? held === to : !shadowed && resolved === to;
+  // No key at this level: the tap is redundant when it picks what the level already follows (the next
+  // file down, then the default). A repo row that follows All repos stays FOLLOWING until a person
+  // picks a different value here; only then does this level get a key of its own.
+  const same = to === "inherit" ? held === undefined : held !== undefined ? held === to : fallbackAt(r, level, globalDraft).value === to;
   if (same) delete next[k]; else next[k] = to;
   return next;
+}
+
+/** Keep the value a row follows as this level's own key, so a later All-repos change does not move it. */
+export function withPin(draft: Draft, r: Row, level: SwitchLevel, globalDraft: Draft = {}): Draft {
+  if (setAt(r, level) !== undefined) return draft;
+  return { ...draft, [keyOf(r)]: fallbackAt(r, level, globalDraft).value };
+}
+
+// ── levels: what a file holds, what it follows ──────────────────────────────
+
+/** The files below a level, nearest first: what the CLI reads when this level holds no key. */
+const BELOW: Record<SwitchLevel, SwitchLevel[]> = { "repo-local": ["repo-shared", "global"], "repo-shared": ["global"], global: [] };
+export type Value = SkillState | boolean;
+export interface Fallback { value: Value; from: SwitchLevel | "default"; unsaved: boolean }
+
+/**
+ * What a level follows while it holds no key of its own. An unsaved All-repos choice counts as if
+ * saved (`globalDraft`), so a repo row shows what it WILL follow, and says it is unsaved.
+ */
+export function fallbackAt(r: Row, level: SwitchLevel, globalDraft: Draft = {}): Fallback {
+  const k = keyOf(r);
+  for (const lv of BELOW[level]) {
+    const d = lv === "global" ? globalDraft[k] : undefined;
+    if (d === "inherit") continue;
+    if (d !== undefined) return { value: d, from: lv, unsaved: true };
+    const v = setAt(r, lv);
+    if (v !== undefined && v !== "inherit") return { value: v, from: lv, unsaved: false };
+  }
+  // A plugin no file names is what the CLI resolved; one some file names is on by default once installed.
+  const value: Value = r.kind === "skill" ? "on" : r.from === "default" ? r.enabled : true;
+  return { value, from: "default", unsaved: false };
+}
+
+export interface RowView {
+  /** What the selector shows at this level. */
+  value: Value;
+  /** This level holds (or, after saving, will hold) its own key. */
+  own: boolean;
+  /** What it follows without a key here. */
+  follows: Fallback;
+  /** At All repos only: a repo file of THIS repo sets its own value, so the All-repos value does not reach it. */
+  overriddenHere?: { value: Value; level: SwitchLevel };
+}
+
+export function rowView(r: Row, level: SwitchLevel, draft: Draft, globalDraft: Draft = {}): RowView {
+  const d = draft[keyOf(r)];
+  const held = setAt(r, level);
+  const follows = fallbackAt(r, level, globalDraft);
+  const own = d !== undefined ? d !== "inherit" : held !== undefined && held !== "inherit";
+  const value = d !== undefined && d !== "inherit" ? d : d === "inherit" ? follows.value : (held !== undefined && held !== "inherit" ? held : follows.value);
+  const out: RowView = { value, own, follows };
+  if (level === "global") {
+    for (const lv of ["repo-local", "repo-shared"] as const) {
+      const v = setAt(r, lv);
+      if (v !== undefined && v !== "inherit") { out.overriddenHere = { value: v, level: lv }; break; }
+    }
+  }
+  return out;
+}
+
+const valueWord = (v: Value): string => (typeof v === "boolean" ? (v ? "on" : "off") : STATE_TAG[v] ?? v);
+const WHERE: Record<SwitchLevel | "default", string> = { global: "All repos", "repo-shared": "the shared repo file", "repo-local": "this repo", default: "the default" };
+
+/**
+ * The one line under a repo row: where its value comes from. Null when it follows a level that holds
+ * nothing either (the plain default): the row then says nothing, so only rows with a story speak.
+ */
+export function sourceWords(v: RowView): string | null {
+  const f = v.follows;
+  const at = f.from === "default" ? "All repos" : wordOf(WHERE, f.from, "another settings file");
+  const said = `${at}${f.unsaved ? " (unsaved)" : ""}: ${valueWord(f.value)}${f.from === "default" ? " (not set there)" : ""}`;
+  if (!v.own) return f.from === "default" ? null : `follows ${said}`;
+  return v.value === f.value ? `kept for this repo · ${said}` : `set for this repo · overrides ${said}`;
+}
+
+/** The line under an All-repos row whose value this repo does not take. */
+export function overriddenWords(v: RowView): string | null {
+  const o = v.overriddenHere;
+  if (!o) return null;
+  return `This repo sets its own: ${valueWord(o.value)}${o.level === "repo-shared" ? " (shared repo file)" : ""}. All repos does not reach it here.`;
+}
+
+/** The unsaved All-repos draft a repo level follows: the live draft on All repos, else the one set aside. */
+export function globalDraftOf(parked: Parked, repoId: string | null, level: SwitchLevel, draft: Draft): Draft {
+  return level === "global" ? draft : parked[parkKey(repoId, "global")] ?? {};
 }
 
 /** What is left of the draft after a save landed: only the entries that were sent AND are still what was chosen; taps made during the round trip stay. */
@@ -95,6 +180,7 @@ export function reconcileDraft(draft: Draft, rows: readonly Row[]): Draft {
 /** Drafts set aside while another level or repo is on screen: `repoId\nlevel` -> draft. */
 export type Parked = Readonly<Record<string, Draft>>;
 const parkKey = (repoId: string | null, level: SwitchLevel): string => `${repoId ?? ""}\n${level}`;
+export const parkKeyOf = parkKey;
 
 /**
  * Switching file (level) or repo must not delete typed choices: set the current draft aside under
@@ -247,9 +333,9 @@ export function receiptWords(n: number, file: string): string {
   return `${n} change${n === 1 ? "" : "s"} written to ${file}; new sessions only.`;
 }
 
-/** What an inherit button removes: only offered when this level holds a key for the row. */
+/** What a "follow" button removes: only offered when this level holds (or will hold) a key for the row. */
 export const canInherit = (r: Row, level: SwitchLevel, draft: Draft): boolean =>
-  setAt(r, level) !== undefined && draft[keyOf(r)] !== "inherit";
+  draft[keyOf(r)] !== undefined ? draft[keyOf(r)] !== "inherit" : setAt(r, level) !== undefined;
 
 export const isState = (v: unknown): v is SkillState => (SKILL_STATES as readonly unknown[]).includes(v);
 
@@ -258,40 +344,84 @@ export const isState = (v: unknown): v is SkillState => (SKILL_STATES as readonl
 
 export const suggestKey = (s: { kind: string; id: string }): string => keyOf(s);
 
-/** The write a suggestion stands for: a plugin only ever goes off (`false`), a skill to the named state. */
-export const suggestionWant = (s: SkillSuggestion): Want => (s.kind === "plugin" ? false : s.to);
-
-/** The ticked suggestions as write changes, in the list's order. Unticked ones are never sent. */
-export function suggestionChanges(list: readonly SkillSuggestion[], unticked: readonly string[]): SkillChange[] {
-  const off = new Set(unticked);
-  return list.filter((s) => !off.has(suggestKey(s))).map((s) => ({ kind: s.kind, id: s.id, to: suggestionWant(s) }));
+const LEVER_RANK: Record<SkillState, number> = { on: 0, "name-only": 1, "user-invocable-only": 2, off: 3 };
+const asState = (v: Value): SkillState => (typeof v === "boolean" ? (v ? "on" : "off") : v);
+/** The All-repos value a row holds now (the global key, else what a repo follows without one). */
+export const allNow = (r: Row): SkillState => asState(setAt(r, "global") as Value | undefined ?? fallbackAt(r, "global").value);
+/** This repo's own value (local file wins), ABSENT when it follows All repos. */
+export function ownNow(r: Row): SkillState | undefined {
+  const v = (setAt(r, "repo-local") ?? setAt(r, "repo-shared")) as Value | "inherit" | undefined;
+  return v === undefined || v === "inherit" ? undefined : asState(v);
 }
+export const hereNow = (r: Row): SkillState => (r.kind === "skill" ? r.effective : r.enabled ? "on" : "off");
+const wantOf = (kind: Row["kind"], v: SkillState): Want => (kind === "plugin" ? v !== "off" : v);
+
+/** The ticked suggestions as the two writes they stand for: All repos first, then this repo's file. */
+export function suggestionChanges(list: readonly SkillSuggestion[], unticked: readonly string[]): { all: SkillChange[]; here: SkillChange[] } {
+  const ticked = tickedSuggestions(list, unticked);
+  return {
+    all: ticked.filter((s) => s.toAll).map((s) => ({ kind: s.kind, id: s.id, to: wantOf(s.kind, s.toAll!) })),
+    here: ticked.filter((s) => s.to).map((s) => ({ kind: s.kind, id: s.id, to: wantOf(s.kind, s.to!) })),
+  };
+}
+export const changeCount = (c: { all: SkillChange[]; here: SkillChange[] }): number => c.all.length + c.here.length;
 
 /**
- * The suggestions that are still true of these rows. The host drops a suggestion at or below the
- * state a row already holds when it answers; a Save or a re-read can make that so afterwards, and
- * Apply must never raise a skill someone has since switched further down (off -> names).
+ * The suggestions that are still true of these rows, each lever on its own. A Save or re-read can
+ * make one untrue after the answer: All repos is never raised back (off -> names), a repo value
+ * already held is no change. A suggestion with no lever left is not offered.
  */
 export function reconcileSuggestions(list: readonly SkillSuggestion[], rows: readonly Row[]): SkillSuggestion[] {
   const by = new Map(rows.map((r) => [keyOf(r), r]));
-  return list.filter((s) => {
+  const out: SkillSuggestion[] = [];
+  for (const s of list) {
     const r = by.get(suggestKey(s));
-    if (!r) return false;
-    if (r.kind === "plugin") return r.enabled;
-    return SKILL_STATES.indexOf(r.effective) < SKILL_STATES.indexOf(s.to);
-  });
+    if (!r) continue;
+    const toAll = s.toAll && LEVER_RANK[allNow(r)] < LEVER_RANK[s.toAll] ? s.toAll : undefined;
+    const own = ownNow(r);
+    // A lowering of this repo only while it is still above the target; a keep only while All repos is lowered.
+    const to = !s.to ? undefined
+      : toAll && s.to === hereNow(r) && own === undefined ? s.to
+      : own !== s.to && LEVER_RANK[hereNow(r)] < LEVER_RANK[s.to] ? s.to : undefined;
+    if (!toAll && !to) continue;
+    const { to: _t, toAll: _a, ...rest } = s;
+    out.push({ ...rest, ...(toAll ? { toAll } : {}), ...(to ? { to } : {}) });
+  }
+  return out;
 }
 
-const TO_WORDS: Record<SkillSuggestion["to"], string> = { "name-only": "names only", "user-invocable-only": "slash only", off: "off" };
-/** "on → names": the from-state is what the row shows now. */
-export function suggestionMove(s: SkillSuggestion, rows: readonly Row[]): string {
+const word = (v: SkillState): string => STATE_TAG[v] ?? v;
+/**
+ * The two lever lines of a suggestion: what All repos goes from and to, and what this repo ends up
+ * with (its own change, a keep against the All-repos change, or following it).
+ */
+export function suggestionLevers(s: SkillSuggestion, rows: readonly Row[]): { all: string | null; here: string } {
   const r = rows.find((x) => x.kind === s.kind && x.id === s.id);
-  const from = !r ? "on" : r.kind === "skill" ? wordOf(STATE_WORDS, r.effective, r.effective) : r.enabled ? "on" : "off";
-  return `${from} → ${wordOf(TO_WORDS, s.to, s.to)}`;
+  const now = r ? hereNow(r) : "on";
+  const own = r ? ownNow(r) : undefined;
+  const all = s.toAll ? `All repos: ${word(r ? allNow(r) : "on")} → ${word(s.toAll)}` : null;
+  let here: string;
+  if (s.to) here = s.to === now ? `This repo: stays ${word(now)} (kept for this repo)` : `This repo: ${word(now)} → ${word(s.to)}`;
+  else if (own !== undefined) here = `This repo: keeps its own value, ${word(own)}`;
+  else here = s.toAll === now ? `This repo: ${word(now)}, follows All repos` : `This repo: follows All repos, ${word(now)} → ${word(s.toAll!)}`;
+  return { all, here };
 }
 
+/** What the target words of a list mean, once per state anything moves to ("on" needs no gloss), in rank order. */
+export function suggestionMeanings(list: readonly SkillSuggestion[]): string[] {
+  const used = new Set(list.flatMap((s) => [s.toAll, s.to]).filter((v): v is SkillState => !!v && v !== "on"));
+  return SKILL_STATES.filter((v) => used.has(v)).map((v) => `${word(v)}: ${wordOf(STATE_TITLES, v, "a state this screen does not know")}.`);
+}
+
+/** The ticked suggestions: the one cut both the Apply count and its writes come from. */
+export const tickedSuggestions = (list: readonly SkillSuggestion[], unticked: readonly string[]): SkillSuggestion[] =>
+  list.filter((s) => !unticked.includes(suggestKey(s)));
+
+/** The counts the suggestion rests on: this repo, then every repo on this desktop. */
 export function suggestionUses(s: SkillSuggestion): string | null {
-  return s.uses30 === undefined || s.usesAll === undefined ? null : `used ${s.uses30} in 30 days · ${s.usesAll} ever`;
+  const here = s.uses30 === undefined || s.usesAll === undefined ? null : `this repo ${s.uses30} in 30 days, ${s.usesAll} ever`;
+  const all = s.everywhere30 === undefined || s.everywhereAll === undefined ? null : `all repos ${s.everywhere30} in 30 days, ${s.everywhereAll} ever`;
+  return [here, all].filter(Boolean).join(" · ") || null;
 }
 
 /** The chars the ticked suggestions free, from the host's own figures; unmeasured ones add nothing. */
@@ -303,6 +433,14 @@ export function tickedChars(list: readonly SkillSuggestion[], unticked: readonly
 /** The Apply button; the file is named once, by the file line above, and the saving by `applyNote`. */
 export function applyWords(n: number): string {
   return `Apply ${n} ${n === 1 ? "suggestion" : "suggestions"}`;
+}
+
+/** Which files an Apply writes: only those a ticked lever touches. */
+export function applyFilesWords(c: { all: SkillChange[]; here: SkillChange[] }, globalPath: string | null, repoPath: string | null): string | null {
+  const parts: string[] = [];
+  if (c.all.length && globalPath) parts.push(`${globalPath} for all repos (${c.all.length})`);
+  if (c.here.length && repoPath) parts.push(`${repoPath} for this repo (${c.here.length})`);
+  return parts.length ? `Writes ${parts.join(" and ")}.` : null;
 }
 
 export function applyNote(savedChars: number): string | null {
@@ -330,5 +468,13 @@ export function emptyWords(r: SkillRecommendResponse): string {
   return "Nothing worth switching off was found.";
 }
 
-export const RECOMMEND_COST = "Asks a model on this desktop to look at your skills and plugins: this spends one model call.";
-export const SUGGEST_ONLY_LIST = "Nothing was changed by this list. Untick what you want to keep, then apply.";
+/** The two-way choice for which repo file a save writes, and what each one means. */
+export const REPO_FILE_WORDS = { local: "just me, this desktop", shared: "everyone with the repo" } as const;
+export function repoFileHelp(shared: boolean): string {
+  return shared
+    ? ".claude/settings.json: committed, so every clone gets it once pushed."
+    : ".claude/settings.local.json: gitignored, stays on this desktop.";
+}
+
+export const RECOMMEND_COST = "Asks a model on this desktop to look at your skills and plugins, for this repo and for all repos at once: this spends one model call.";
+export const SUGGEST_ONLY_LIST = "Nothing was changed by this list. Each row sets All repos and this repo together, from uses here and in every repo on this desktop; untick what you want to keep as it is, then apply.";

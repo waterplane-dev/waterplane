@@ -151,6 +151,8 @@ export interface CostWindowDoc {
    *  `builtin`: the table shipped with this version, dated `pricesAsOf`.
    *  Absent on an older host — which always meant the built-in table. */
   pricesFrom?: "list" | "builtin";
+  /** Fingerprint of the rates that priced this document (`pricesKey()`); absent on an older host. */
+  pricesKey?: string;
   scannedAt: number;
   /** Records in `totals` that are in NO hour (no readable timestamp) and that COULD fall in this
    *  window — only logs last written at or after `fromHour` count (a record is never later than

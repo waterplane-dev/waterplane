@@ -295,10 +295,42 @@ export function installedPriceList(): LivePrices | null {
   return LIVE;
 }
 
-/** Where the rates in force came from — the two wire fields every cost document carries. */
-export function priceListSource(): { pricesAsOf: string; pricesFrom: "list" | "builtin" } {
-  if (!LIVE) return { pricesAsOf: PRICES_AS_OF, pricesFrom: "builtin" };
-  return { pricesAsOf: new Date(LIVE.fetchedAt).toISOString().slice(0, 10), pricesFrom: "list" };
+/** FNV-1a, 32-bit, hex: a short stable fingerprint — not security, only "same rates or not". */
+function fnv(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * Which rates priced a document — the same string on both ends for the same rates.
+ * The phone keeps a copy of the last token statistics it saw; a copy priced at
+ * rates the phone now knows were replaced is not shown (`offlineCache.ts`), so a
+ * price fix reaches the screen the moment the new list does, not a read later.
+ */
+export function pricesKey(): string {
+  return LIVE
+    ? `list-${fnv(ratesKey(LIVE))}`
+    : `builtin-${fnv(PRICES_AS_OF + JSON.stringify([sorted(PRICES), sorted(LONG_PROMPT)]))}`;
+}
+
+/**
+ * Whether a document's money was priced at the rates in force now — for a copy
+ * kept on the phone. Once the phone holds the desktop's price list
+ * (`welcome.prices`), a copy priced at any other rates fails: its dollars are
+ * wrong, and showing them for the seconds a fresh read takes is how a $248 week
+ * read as $130 (2026-11-13). Costs are per model, so the fresh read is the only
+ * correct repricing — the screen shows its loading state, never a wrong figure.
+ * A phone with no list (offline since boot) knows nothing newer and keeps it.
+ */
+export function pricedAsNow(doc: { pricesKey?: string }): boolean {
+  return !LIVE || doc.pricesKey === pricesKey();
+}
+
+/** Where the rates in force came from — the wire fields every cost document carries. */
+export function priceListSource(): { pricesAsOf: string; pricesFrom: "list" | "builtin"; pricesKey: string } {
+  if (!LIVE) return { pricesAsOf: PRICES_AS_OF, pricesFrom: "builtin", pricesKey: pricesKey() };
+  return { pricesAsOf: new Date(LIVE.fetchedAt).toISOString().slice(0, 10), pricesFrom: "list", pricesKey: pricesKey() };
 }
 
 /**

@@ -280,11 +280,16 @@ Source: `--from <dir-or-url>` > `<ENV_PREFIX>RELEASE_URL` > `github.com/<org>/<s
 
 ### From the phone
 
-Settings → Tools → updates (`updates/`, plan [plugin-manager-and-self-update.md](../plans/plugin-manager-and-self-update.md)).
+Settings → the Updates door beside Plugins, or Tools → updates (`updates/`, plan [plugin-manager-and-self-update.md](../plans/plugin-manager-and-self-update.md)).
 
-- **The button is tarball-only** (`updates/self.ts`: `canApply` only for the install the updater above
-  understands). An npm or checkout install shows the command instead (`npm i -g <slug>@latest`;
-  `git pull` + `npm run restart`), the same ones this section gives.
+- **The SIGNED button is tarball-only.** Since 2026-11-13 (R-updates-010a) npm and checkout installs
+  get a button too (`updates/selfother.ts`), with a `caveat` saying what it skips: npm runs
+  `npm i -g --prefix <its own prefix> <slug>@<the version shown>` (pinned, never `@latest` at run time);
+  a checkout is due by `behind` (the daily check runs `git fetch` + `rev-list HEAD..@{u}`, never by
+  release version) and its button refuses unless on a branch with an upstream, no tracked changes and
+  no own commits, then `merge --ff-only`, `npm ci`, `npm run build`, restart. A failure after the
+  merge restarts nothing and names both commits. No roll back for either. The hand command stays
+  beside the button.
 - A tap runs `applyInProcess` (`cli/selfupdate.ts`, the CLI's own code, same signature and checksum
   checks, same snapshot) with `noRestart`; then `updates/apply.ts` writes the receipt and
   restarts through `updates/restart.ts`: SIGTERM after the reply, and ONLY when a supervisor

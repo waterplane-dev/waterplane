@@ -601,6 +601,8 @@ export interface TokenStatsDoc {
    *  `builtin`: the table shipped with this version, dated `pricesAsOf`.
    *  Absent on an older host — which always meant the built-in table. */
   pricesFrom?: "list" | "builtin";
+  /** Fingerprint of the rates that priced this document (`pricesKey()`); absent on an older host. */
+  pricesKey?: string;
   /** First and last counted turn, epoch ms. Null when there is nothing. */
   firstAt: number | null;
   lastAt: number | null;

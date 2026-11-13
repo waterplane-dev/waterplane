@@ -17,7 +17,7 @@ import { randomBytes } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { BRAND, newerVersion } from "@waterplane/shared";
 import type { UpdatesRestart, UpdatesTarget } from "@waterplane/shared";
-import { applyInProcess } from "../cli/selfupdate.js";
+import { applyInProcess, currentMode } from "../cli/selfupdate.js";
 import { contained } from "../paths.js";
 import type { PluginRegistry } from "../plugins/pluginregistry.js";
 import { readPluginDir } from "../plugins/pluginloader.js";
@@ -27,6 +27,7 @@ import type { Git, Resolved } from "./gitops.js";
 import { INSTALL_RECORD, readInstallRecord, writeInstallRecord } from "./installrecord.js";
 import { repoLabel } from "./remote.js";
 import { canRestartSelf, restartSelf } from "./restart.js";
+import { checkoutUpdate, npmUpdate } from "./selfother.js";
 import type { Restarter } from "./restart.js";
 
 export interface ApplyResult { ok: boolean; message: string; restart: UpdatesRestart }
@@ -37,13 +38,15 @@ export interface ApplyDeps {
   /** `<config dir>/plugins`. */
   pluginsDir: string;
   plugins: Pick<PluginRegistry, "entries" | "byId" | "loadOne">;
-  checker: Pick<UpdatesChecker, "status" | "setLastResult" | "setLastApply" | "refresh">;
+  checker: Pick<UpdatesChecker, "status" | "setLastResult" | "setLastApply" | "refresh"> & Partial<Pick<UpdatesChecker, "selfCaughtUp">>;
   git?: Git;
   restart?: Restarter;
   /** Whether `restart` would really restart (default: a supervisor runs this daemon). */
   supervised?: () => boolean;
   /** `cli/selfupdate.ts`'s update/rollback in this process (injected in tests). */
   selfApply?: typeof applyInProcess;
+  /** The npm and checkout buttons (`selfother.ts`), and where this install lives; injected in tests. */
+  other?: { root?: () => string; npm?: typeof npmUpdate; checkout?: (root: string) => ReturnType<typeof checkoutUpdate> };
 }
 
 const fail = (message: string, restart: UpdatesRestart = "none"): ApplyResult => ({ ok: false, message, restart });
@@ -123,6 +126,10 @@ export class UpdateApplier {
     if (!info.canApply) {
       return fail(`${info.why ?? "This install cannot update itself."}${info.command ? ` Run: ${info.command}` : ""}`);
     }
+    if (info.mode === "npm" || info.mode === "checkout") {
+      if (what === "rollback") return fail(`A ${info.mode === "npm" ? "npm" : "git checkout"} install has no roll back here.${info.caveat ? ` ${info.caveat}` : ""}`);
+      return this.selfOther(info.mode, info.latest);
+    }
     const logs: string[] = [], errors: string[] = [];
     const run = this.d.selfApply ?? applyInProcess;
     const auto = this.supervised();
@@ -148,6 +155,29 @@ export class UpdateApplier {
       : (what === "update" ? `installed ${v}, restart the desktop to switch` : `${logs.find((l) => l.startsWith("Rolled back")) ?? `rolled back to ${v}`} Restart the desktop to switch.`)) + warn;
     this.d.checker.setLastResult({ ok: true, message });
     if (auto) this.restart(what === "update" ? `updating ${BRAND.slug} to ${v}` : `rolling ${BRAND.slug} back to ${v}`);
+    return { ok: true, message, restart: auto ? "restarting" : "manual" };
+  }
+
+  /** The npm / checkout button: run it, write the receipt, restart only when something changed and it all built. */
+  private async selfOther(mode: "npm" | "checkout", latest: string | undefined): Promise<ApplyResult> {
+    const root = (this.d.other?.root ?? (() => currentMode().root))();
+    let r;
+    if (mode === "npm") {
+      if (!latest) return fail("No newer version is known yet. Check for updates first.");
+      r = await (this.d.other?.npm ?? npmUpdate)(root, latest);
+    } else {
+      r = await (this.d.other?.checkout ?? ((dir: string) => checkoutUpdate(dir)))(root);
+    }
+    if (mode === "checkout" && (r.changed || r.ok)) this.d.checker.selfCaughtUp?.();
+    if (!r.ok || !r.changed) {
+      this.d.checker.setLastResult({ ok: r.ok, message: r.message });
+      if (r.ok) this.d.checker.refresh();
+      return { ok: r.ok, message: r.message, restart: "none" };
+    }
+    const auto = this.supervised();
+    const message = auto ? r.message : `${r.message}; restart the desktop to switch`;
+    this.d.checker.setLastResult({ ok: true, message });
+    if (auto) this.restart(`updating ${BRAND.slug} (${mode})`);
     return { ok: true, message, restart: auto ? "restarting" : "manual" };
   }
 

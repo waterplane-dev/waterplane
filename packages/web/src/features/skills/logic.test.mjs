@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   bucket, canInherit, chipCount, chipKeys, draftChanges, levelFor, matches, pluginTag, reconcileDraft, receiptWords, saveWords, saveNote, applyNote, suggestionName, sortRows, splitRows,
-  stateTag, summaryWords, suggestionChanges, suggestionMove, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, parkedWords, reconcileSuggestions,
+  stateTag, summaryWords, rowView, sourceWords, overriddenWords, withPin, fallbackAt, globalDraftOf, suggestionChanges, suggestionLevers, suggestionMeanings, suggestionUses, applyFilesWords, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, parkedWords, reconcileSuggestions,
 } from "./logic.ts";
 
 const skill = (id, o = {}) => ({ kind: "skill", id, source: "personal", set: {}, effective: "on", from: "default", switchable: true, listingChars: 400, ...o });
@@ -111,15 +111,31 @@ test("the save words name the file, the count and the saving", () => {
 
 const sug = (id, o = {}) => ({ kind: "skill", id, to: "off", reason: "r", ...o });
 
-test("only ticked suggestions are written; a plugin goes off as false", () => {
-  const list = [sug("a"), sug("p@s", { kind: "plugin" }), sug("b", { to: "name-only" })];
-  assert.deepEqual(suggestionChanges(list, ["skill:b"]), [{ kind: "skill", id: "a", to: "off" }, { kind: "plugin", id: "p@s", to: false }]);
-  assert.deepEqual(suggestionChanges(list, ["skill:a", "plugin:p@s", "skill:b"]), []);
+test("only ticked suggestions are written, split by file; a plugin's on/off is a boolean", () => {
+  const list = [sug("a"), sug("p@s", { kind: "plugin" }), sug("b", { to: "name-only" }), sug("c", { to: "on", toAll: "off" }), sug("q@s", { kind: "plugin", to: undefined, toAll: "off" })];
+  assert.deepEqual(suggestionChanges(list, ["skill:b"]), {
+    all: [{ kind: "skill", id: "c", to: "off" }, { kind: "plugin", id: "q@s", to: false }],
+    here: [{ kind: "skill", id: "a", to: "off" }, { kind: "plugin", id: "p@s", to: false }, { kind: "skill", id: "c", to: "on" }],
+  });
+  assert.deepEqual(suggestionChanges(list, list.map((s) => `${s.kind}:${s.id}`)), { all: [], here: [] });
+  const c = suggestionChanges(list, []);
+  assert.equal(applyFilesWords(c, "~/.claude/settings.json", ".claude/settings.local.json"), "Writes ~/.claude/settings.json for all repos (2) and .claude/settings.local.json for this repo (4).");
+});
+
+test("a suggestion names both levers, what its words mean, and the counts it rests on", () => {
+  assert.deepEqual(suggestionLevers(sug("a", { to: "name-only" }), [skill("a")]), { all: null, here: "This repo: on → names only" });
+  assert.deepEqual(suggestionLevers(sug("a", { to: "on", toAll: "off" }), [skill("a")]), { all: "All repos: on → off", here: "This repo: stays on (kept for this repo)" });
+  assert.deepEqual(suggestionLevers(sug("a", { to: undefined, toAll: "name-only" }), [skill("a")]), { all: "All repos: on → names only", here: "This repo: follows All repos, on → names only" });
+  assert.equal(suggestionLevers(sug("a", { to: undefined, toAll: "off" }), [skill("a", { set: { "repo-local": "on" } })]).here, "This repo: keeps its own value, on");
+  assert.deepEqual(suggestionLevers(sug("p@s", { kind: "plugin" }), [plugin("p@s")]), { all: null, here: "This repo: on → off" });
+  const m = suggestionMeanings([sug("a", { to: "off" }), sug("b", { to: "name-only", toAll: "off" }), sug("c", { to: "on", toAll: "off" })]);
+  assert.equal(m.length, 2, "each word once, on not glossed");
+  assert.match(m[0], /^names only: Claude sees only its name/);
+  assert.match(m[1], /^off: /);
+  assert.equal(suggestionUses(sug("a", { uses30: 0, usesAll: 2, everywhere30: 1, everywhereAll: 9 })), "this repo 0 in 30 days, 2 ever · all repos 1 in 30 days, 9 ever");
 });
 
 test("a suggestion says from to, and the saving counts only ticked host figures", () => {
-  assert.equal(suggestionMove(sug("a", { to: "name-only" }), [skill("a")]), "on → names only");
-  assert.equal(suggestionMove(sug("p@s", { kind: "plugin" }), [plugin("p@s")]), "on → off");
   const list = [sug("a", { savedChars: 400 }), sug("b", { savedChars: 800 }), sug("c")];
   assert.equal(tickedChars(list, ["skill:b"]), 400);
   assert.equal(applyWords(2), "Apply 2 suggestions");
@@ -156,6 +172,11 @@ test("suggestions that a save or re-read made untrue are dropped (never off -> n
   const rows = [skill("a", { effective: "off" }), skill("b", { effective: "on" }), skill("c", { effective: "name-only" }), plugin("p@x", { enabled: false }), plugin("q@x")];
   const out = reconcileSuggestions([sug("a", "name-only"), sug("b", "name-only"), sug("c", "off"), sug("gone", "off"), sug("p@x", "off", "plugin"), sug("q@x", "off", "plugin")], rows);
   assert.deepEqual(out.map((s) => s.id), ["b", "c", "q@x"]);
+  // Each lever on its own: All repos never raised back; a keep only while All repos is still lowered.
+  const both = reconcileSuggestions([
+    { kind: "skill", id: "k", to: "on", toAll: "off", reason: "r" }, { kind: "skill", id: "m", to: "on", toAll: "off", reason: "r" }, { kind: "skill", id: "n", toAll: "name-only", reason: "r" },
+  ], [skill("k"), skill("m", { set: { global: "off" } }), skill("n", { set: { global: "off" } })]);
+  assert.deepEqual(both.map((s) => [s.id, s.toAll, s.to]), [["k", "off", "on"]]);
 });
 
 test("a tap at a level that holds no key writes, even when another level already gives that value", () => {
@@ -171,4 +192,55 @@ test("a save clears only the entries it sent; taps made during the round trip st
   const draft = { "skill:a": "off", "skill:b": "name-only", "skill:c": "off" };
   const sent = [{ kind: "skill", id: "a", to: "off" }, { kind: "skill", id: "b", to: "off" }];
   assert.deepEqual(withoutSent(draft, sent), { "skill:b": "name-only", "skill:c": "off" }, "b was changed after it was sent, c was never sent");
+});
+
+test("a repo row follows All repos until it is changed here", () => {
+  const p = plugin("sales@synced", { set: { global: false }, enabled: false, from: "global" });
+  const v = rowView(p, "repo-local", {});
+  assert.equal(v.value, false);
+  assert.equal(v.own, false);
+  assert.equal(sourceWords(v), "follows All repos: off");
+  assert.equal(sourceWords(rowView(plugin("plain@y"), "repo-local", {})), null, "nothing set anywhere: the row says nothing");
+  // tapping the value it already follows is no change: it keeps following
+  assert.deepEqual(withChoice({}, p, "repo-local", false), {});
+  // a different value is this repo's own
+  const d = withChoice({}, p, "repo-local", true);
+  assert.deepEqual(d, { "plugin:sales@synced": true });
+  assert.equal(sourceWords(rowView(p, "repo-local", d)), "set for this repo · overrides All repos: off");
+});
+
+test("an unsaved All-repos choice shows on the repo rows that follow it", () => {
+  const p = plugin("sales@synced");
+  const g = { "plugin:sales@synced": false };
+  const v = rowView(p, "repo-local", {}, g);
+  assert.equal(v.value, false);
+  assert.equal(sourceWords(v), "follows All repos (unsaved): off");
+  assert.deepEqual(globalDraftOf({ "r1\nglobal": g }, "r1", "repo-local", {}), g);
+  assert.deepEqual(globalDraftOf({}, "r1", "global", g), g);
+  // a repo that set its own value is not moved by it
+  const own = plugin("data@synced", { set: { "repo-local": true }, from: "repo-local" });
+  assert.equal(rowView(own, "repo-local", {}, { "plugin:data@synced": false }).value, true);
+});
+
+test("All repos shows the all-repos value, not this repo's, and says when this repo overrides it", () => {
+  const p = plugin("sales@synced", { set: { global: false, "repo-local": true }, enabled: true, from: "repo-local" });
+  const v = rowView(p, "global", {});
+  assert.equal(v.value, false);
+  assert.match(overriddenWords(v), /This repo sets its own: on/);
+  assert.equal(overriddenWords(rowView(plugin("x@y"), "global", {})), null);
+  const s = skill("a", { set: { "repo-local": "off" }, effective: "off", from: "repo-local" });
+  assert.equal(rowView(s, "global", {}).value, "on");
+});
+
+test("keep for this repo pins the followed value; follow removes it", () => {
+  const s = skill("a", { set: { global: "name-only" }, effective: "name-only", from: "global" });
+  const pinned = withPin({}, s, "repo-local");
+  assert.deepEqual(pinned, { "skill:a": "name-only" });
+  assert.equal(withChoice(pinned, s, "repo-local", "name-only"), pinned, "tapping the kept value keeps it");
+  assert.equal(sourceWords(rowView(s, "repo-local", pinned)), "kept for this repo · All repos: names only");
+  assert.equal(fallbackAt(s, "repo-local").from, "global");
+  const held = skill("b", { set: { "repo-local": "off", global: "on" }, effective: "off", from: "repo-local" });
+  assert.deepEqual(withPin({}, held, "repo-local"), {}, "already its own");
+  assert.equal(rowView(held, "repo-local", { "skill:b": "inherit" }).value, "on");
+  assert.equal(canInherit(skill("c"), "repo-local", { "skill:c": "off" }), true, "an unsaved own value can be undone");
 });

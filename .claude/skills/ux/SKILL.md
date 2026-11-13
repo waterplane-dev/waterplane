@@ -13,7 +13,9 @@ The always-on rules in `CLAUDE.md` still apply and are not repeated here: no gre
 buttons, a count is a filter, no emoji icons, no `window.confirm`, never overwrite
 typed words.
 
-After building or reworking a screen, ask the `screen-review` agent to look at it. [Why an agent.](../../../docs/notes/testing-and-ops.md#screen-review-is-an-agent-because-a-script-cannot-judge-fit)
+After building or reworking a screen (core, vault or any other extension's web half), ask the
+`screen-review` agent to look at it before committing. It also checks that one bucketing function feeds
+a count, its rows and its cut. It is a habit, not a gate: its verdict is for the person to act on. [Why an agent.](../../../docs/notes/testing-and-ops.md#screen-review-is-an-agent-because-a-script-cannot-judge-fit)
 
 ## 1. A control changes itself only out loud
 

@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lastActivity, notifiedAt, readCliRecord, readRunningAgents } from "../dist/agents.js";
+import { lastActivity, mcpTasksIn, notifiedAt, readCliRecord, readRunningAgents } from "../dist/agents.js";
 
 const CWD = "/Users/x/dev/demo";
 const CONV = "362d560e-1690-489a-b533-5f30c9412081";
@@ -320,4 +320,20 @@ test("readCliRecord: a tmux-target match IS cached, and stays exact", () => {
   // path is re-read (never a stale in-memory copy of the record itself).
   writeFileSync(file, JSON.stringify({ pid: process.pid, sessionId: "conv-cache", tmux: "myapp_s5:@1.%1", status: "shell" }));
   assert.deepEqual(readCliRecord("s5", "myapp_s5", "conv-cache"), { status: "shell", pid: process.pid });
+});
+
+// An MCP call the CLI parked in the background keeps the session "running" until
+// its task-notification lands — and only when launched by THIS CLI process.
+test("mcpTasksIn: a backgrounded MCP call runs until its notification, and only since the CLI's start", () => {
+  const parked = (id, tool, ts) => JSON.stringify({ type: "user", timestamp: ts, message: { role: "user", content: [{ tool_use_id: "toolu_x", type: "tool_result", content: [{ type: "text", text: `MCP tool "${tool}" is still running after 120s. It was moved to the background as task ${id} and keeps running; you'll receive a notification with the result when it completes.` }] }] } });
+  const done = (id, ts) => JSON.stringify({ type: "user", timestamp: ts, message: { role: "user", content: `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n</task-notification>` } });
+  const t = (m) => `2026-11-13T15:${m}:00.000Z`;
+  const tail = [parked("kold1", "ciqsim/ciqsim_shot", t("00")), parked("ka6lbnnxo", "ciqsim/ciqsim_ba3", t("10")), parked("k6uolb0fa", "ciqsim/ciqsim_status", t("12")), parked("kdone", "ciqsim/ciqsim_nav", t("13")), done("kdone", t("14")), "{half a line"].join("\n");
+  const since = Date.parse(t("05"));
+  const rows = mcpTasksIn(tail, since);
+  assert.deepEqual(rows.map((r) => r.id), ["k6uolb0fa", "ka6lbnnxo"]);
+  assert.equal(rows[0].what, "MCP ciqsim/ciqsim_status");
+  assert.equal(rows[0].startedAt, Date.parse(t("12")));
+  assert.deepEqual(mcpTasksIn("", since), []);
+  assert.deepEqual(mcpTasksIn(null, since), []);
 });

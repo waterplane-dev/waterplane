@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { LONG_PROMPT, PRICES, costOf, costOfRequest, installPriceList, priceKeyLabel, priceKeyOf, priceListSource, rateFor, PRICES_AS_OF } from "../dist/pricing.js";
+import { LONG_PROMPT, PRICES, costOf, costOfRequest, installPriceList, priceKeyLabel, priceKeyOf, priceListSource, pricedAsNow, pricesKey, rateFor, PRICES_AS_OF } from "../dist/pricing.js";
 import { parsePriceList, priceListDiff } from "../dist/pricelist.js";
 
 const PAGE = readFileSync(new URL("./fixtures/pricing-2026-11-12.md", import.meta.url), "utf8");
@@ -53,13 +53,25 @@ test("a row we cannot name is skipped, not fatal", () => {
 
 test("an installed list overlays the built-in table and says where its rates came from", () => {
   try {
-    assert.deepEqual(priceListSource(), { pricesAsOf: PRICES_AS_OF, pricesFrom: "builtin" });
+    const builtinKey = pricesKey();
+    assert.deepEqual(priceListSource(), { pricesAsOf: PRICES_AS_OF, pricesFrom: "builtin", pricesKey: builtinKey });
+    assert.match(builtinKey, /^builtin-[0-9a-f]{8}$/);
+    assert.equal(pricedAsNow({}), true, "no list on this end: nothing newer is known");
     assert.equal(rateFor("claude-fable-9"), null);
     installPriceList({ rates: { "claude-fable-9": { input: 6, output: 30, cacheRead: 0.15 }, "claude-opus-5": { input: 3, output: 15, cacheRead: 0.3 } }, fetchedAt: Date.UTC(2026, 11, 1, 12) });
     assert.deepEqual(rateFor("claude-fable-9[1m]"), { input: 6, output: 30, cacheRead: 0.15 }, "a model new to the page is priced");
     assert.equal(costOf({ input: 0, output: M, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 }, "claude-opus-5").output, 15, "the page wins over the table");
     assert.deepEqual(rateFor("claude-haiku-4-5"), { input: 1, output: 5 }, "a model the page omits falls back to the table");
-    assert.deepEqual(priceListSource(), { pricesAsOf: "2026-12-01", pricesFrom: "list" });
+    const listKey = pricesKey();
+    assert.deepEqual(priceListSource(), { pricesAsOf: "2026-12-01", pricesFrom: "list", pricesKey: listKey });
+    assert.match(listKey, /^list-[0-9a-f]{8}$/);
+    installPriceList({ rates: { "claude-fable-9": { input: 6, output: 30, cacheRead: 0.15 }, "claude-opus-5": { input: 3, output: 15, cacheRead: 0.3 } }, fetchedAt: Date.UTC(2026, 11, 2, 12) });
+    assert.equal(pricesKey(), listKey, "a re-read that found the same rates keeps the key");
+    installPriceList({ rates: { "claude-fable-9": { input: 6, output: 30, cacheRead: 0.6 }, "claude-opus-5": { input: 3, output: 15, cacheRead: 0.3 } }, fetchedAt: Date.UTC(2026, 11, 2, 12) });
+    assert.notEqual(pricesKey(), listKey, "a changed rate changes the key");
+    assert.equal(pricedAsNow({ pricesKey: listKey }), false, "a copy priced at replaced rates is not shown");
+    assert.equal(pricedAsNow({}), false, "a copy from before the key existed is not shown once a list is in");
+    assert.equal(pricedAsNow({ pricesKey: pricesKey() }), true);
   } finally {
     installPriceList(null);
   }

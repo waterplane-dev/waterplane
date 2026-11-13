@@ -481,12 +481,16 @@ export class ResumeSlice {
     // Someone already reopened this id (manual resume) → nothing to do.
     if (this.core.sessions.get(id)?.info.running) { this.releaseResume(id, "gone"); return; }
     const attempts = (old.info.limit?.attempts ?? 0) + 1;
+    const resumeSessionId = old.info.claudeSessionId ?? old.info.backendSessionId;
+    // The old session leaves the list once this one exists (`supersede` below),
+    // so its prompt history rides along instead of going with it.
+    const carry = this.core.carryFor(id, resumeSessionId);
     const created = await this.core.create(old.info.cwd, {
       cols: old.cols, rows: old.rows, title: old.info.title,
       // A plugin's conversation is its own id (`sourceWallExit` refused one without it); each
       // plugin turns continue + id into its argv (Copilot `--session-id=`, Codex `resume <id>`,
       // Gemini `--resume <id>`). claude carries no `backendSessionId`, so its launch is unchanged.
-      resumeMode: "continue", resumeSessionId: old.info.claudeSessionId ?? old.info.backendSessionId, launch: old.launch,
+      resumeMode: "continue", resumeSessionId, launch: old.launch, carry,
       // The item it was working for (if any) is still what it is working for.
       origin: { ...(old.origin?.itemId ? { itemId: old.origin.itemId } : {}), ...(old.origin?.itemLabel ? { itemLabel: old.origin.itemLabel } : {}), kind: "resurrect", fromSession: id },
     });
@@ -497,7 +501,6 @@ export class ResumeSlice {
     // this is the only place a session is reopened on a limit exit, so it is the
     // only place that can answer "which one replaced it" without guessing.
     this.noteRevived(id, created.id);
-    this.core.repointCompanions(id, created.id); // its companion shells follow it
     const ns = this.core.sessions.get(created.id);
     if (ns) {
       // Carried on the SESSION as well as written into its limit state: the
@@ -518,6 +521,9 @@ export class ResumeSlice {
       if (this.resumeFirst.delete(id)) this.resumeFirst.set(created.id, Date.now() - 1);
       this.gate.handOver(id, created.id);
     }
+    // Last, after the hand-over: its companions follow it and the exited row
+    // leaves the list — kept, it sat beside its own reopen as `exited`.
+    this.core.supersede(id, created.id);
   }
 
   /**

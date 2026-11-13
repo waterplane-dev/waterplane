@@ -22,7 +22,7 @@
  *    here: thumbnails are cached by the service worker under their versioned
  *    URLs (public/sw.js), and a downloaded original is in the `pulls` store.
  */
-import { galleryCacheKey, pickCoveringListing, type GalleryCoverage, type GalleryRow } from "@waterplane/shared";
+import { galleryCacheKey, pickCoveringListing, pricedAsNow, type GalleryCoverage, type GalleryRow } from "@waterplane/shared";
 import type { ContextSeriesDoc, HistoryEntry, TokenStatsDoc, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
 import { api, type SlashCommand } from "./api";
 import { dataSaver } from "./media";
@@ -286,7 +286,7 @@ export async function putTokenStats(doc: TokenStatsDoc): Promise<void> {
  *  facts and only the first can carry a staleness sentence. */
 export async function getTokenStatsAt(): Promise<{ value: TokenStatsDoc; savedAt: number } | null> {
   const c = await idbGet<CachedTokenStats>(TOKENS_STORE, TOKENS_KEY);
-  if (!c || c.v !== TOKENS_SHAPE || !usableTokenStats(c.doc)) return null;
+  if (!c || c.v !== TOKENS_SHAPE || !usableTokenStats(c.doc) || !pricedAsNow(c.doc)) return null; // a copy priced at replaced rates: see `pricedAsNow`
   return { value: c.doc, savedAt: c.savedAt };
 }
 

@@ -15,10 +15,10 @@
  * `statusTags`/`contextTag` are the wrappers; `SessionFacts` is the plain one.
  */
 import type { ReactNode } from "react";
-import { Bot, Brain, CircleDot, Clock, Hourglass, Link2, Loader, LogIn, Terminal, TrendingUp, WifiOff } from "lucide-react";
+import { Bot, Brain, CircleDot, Plug, Clock, Hourglass, Link2, Loader, LogIn, Terminal, TrendingUp, WifiOff } from "lucide-react";
 import type { RepoTarget, SessionCostReading, SessionInfo } from "@waterplane/shared";
 import { PromptPair } from "./PromptPair";
-import { netRetryLine, repoLabel, peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf } from "@waterplane/shared";
+import { netRetryLine, repoLabel, runningCounts, runningWords, peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf } from "@waterplane/shared";
 import { ago, dur, hhmm } from "./format";
 import { isShellBackend, type BackendList } from "./backendCaps";
 import { isFlagged } from "./core/sessions/followUpFacts.ts";
@@ -218,7 +218,8 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
     return {
       cls: "coding",
       title: s.agents!.map((a) => a.what).join(" · ") + " — open the session to see what they are doing",
-      body: <><Bot size={12} /> {agents} agent{agents === 1 ? "" : "s"}</>,
+      // Background agents and backgrounded MCP calls are different work, named apart (`runningWords`).
+      body: <>{runningCounts(s.agents).agents ? <Bot size={12} /> : <Plug size={12} />} {runningWords(s.agents)}</>,
     };
   }
   // A session with only background shells working (no agents) is

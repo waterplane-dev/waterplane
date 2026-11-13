@@ -356,23 +356,32 @@ export function nextCheckWords(nextCheckAt: number | undefined, now: number): st
 export interface SelfView {
   headline: string;
   notes: string | null;
-  /** Update button: the verifying updater can run AND a newer version exists. */
+  /** Update button: the button can run (`canApply`) AND an update is due. */
   showUpdate: boolean;
   showRollback: boolean;
-  /** When there is no button: the command to copy and why. */
+  /** What the update brings, as the due row words it ("0.1.5", "3 new commits on origin/main"); null when none is due. */
+  to: string | null;
+  /** The command: to copy instead of a button, or beside an npm/checkout button to run by hand. */
   command: string | null;
+  /** Why there is no button. */
   why: string | null;
+  /** What the npm/checkout button skips that the install.sh updater does. */
+  caveat: string | null;
 }
 
 export function selfView(self: SelfUpdateInfo, status: UpdatesStatus | null): SelfView {
-  const due = updatesDue(status).some((d) => d.kind === "self");
+  const d = updatesDue(status).find((x) => x.kind === "self");
+  const due = !!d;
+  const to = d && d.kind === "self" ? d.latest : null;
   return {
-    headline: self.latest && due ? `${self.current} → ${self.latest}` : `${self.current} · up to date`,
+    headline: to ? (self.mode === "checkout" ? `${self.current} · ${to}` : `${self.current} → ${to}`) : `${self.current} · up to date`,
     notes: self.notes ? self.notes : null,
     showUpdate: self.canApply && due,
     showRollback: self.canApply && !!self.rollbackTo,
-    command: !self.canApply && due ? self.command ?? null : null,
+    to,
+    command: due ? self.command ?? null : null,
     why: !self.canApply && due ? self.why ?? null : null,
+    caveat: self.canApply && due ? self.caveat ?? null : null,
   };
 }
 
@@ -399,8 +408,10 @@ export function urlConfirm(o: { url: string; desktop: string }): string {
   return `Install the plugin at ${o.url} on ${o.desktop}? Not from ${ORG}. ${FULL_ACCESS}`;
 }
 
-export function selfConfirm(o: { desktop: string; current: string; to: string }): string {
-  return `Update ${o.desktop} from ${o.current} to ${o.to}? The desktop restarts; sessions keep running.`;
+export function selfConfirm(o: { desktop: string; current: string; to: string; mode?: SelfUpdateInfo["mode"] }): string {
+  if (o.mode === "checkout") return `Pull ${o.to} into ${o.desktop}'s checkout? It runs npm ci and a build (a few minutes), then the desktop restarts; sessions keep running.`;
+  const via = o.mode === "npm" ? " with npm" : "";
+  return `Update ${o.desktop} from ${o.current} to ${o.to}${via}? The desktop restarts; sessions keep running.`;
 }
 
 export function rollbackConfirm(o: { desktop: string; current: string; to: string }): string {

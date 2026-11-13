@@ -498,6 +498,24 @@ export function remove(core: SessionCore, id: string, onShellsStopped?: (counts:
   return true;
 }
 
+/**
+ * The conversation moved to `to` (a relaunch's `replaceSessionId`, a limit
+ * resurrect): its companions follow it and the OLD session leaves the list.
+ * `kill()` alone left it listed as `exited` right beside its replacement — the
+ * same conversation twice in the open tabs (2026-11-13). Its closed row (the
+ * exit path's, `replaced` / `limit` + `resumedAs`) is untouched: that is the
+ * archive's record of it, not a live tab. Call it AFTER the replacement exists
+ * and after anything carried off the old session was read. False (and nothing
+ * done) when either id is unknown or they are the same.
+ */
+export function supersede(core: SessionCore, from: string, to: string, by?: ClosedBy): boolean {
+  if (from === to || !core.sessions.has(from) || !core.sessions.has(to)) return false;
+  repointCompanions(core, from, to);
+  remove(core, from, undefined, by);
+  core.emit("superseded", from, to);
+  return true;
+}
+
 /** The live companion shells opened for session `id` (`SessionOrigin.companionOf`). */
 export function companionsOf(core: SessionCore, id: string): string[] {
   const out: string[] = [];

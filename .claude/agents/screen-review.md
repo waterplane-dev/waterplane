@@ -55,7 +55,15 @@ checking the screen's own sizes. Both themes read well, and colours come from th
 - ALL-CAPS warnings repeated per row
 
 **House rules** — a list's filters and list-level buttons sit above it. Per-item actions sit on that
-item. A count on a control opens exactly those items and says what it hides. An unavailable control
+item. A count on a control opens exactly those items and says what it hides.
+
+**One bucketing function** — for every count on the screen, find the function that decides which items
+it counts, and check that the same function picks the rows the count's tap shows and the cut the filtered
+view says it hides ("n of N"). Name it with `file:line`. A second copy of the edge (a `filter` written
+again beside the count, a threshold compared in two places) is a finding even when today's numbers
+agree.
+
+An unavailable control
 says why in text, never by greying out or a `title`. Icons are `lucide-react`, never emoji. An empty list
 says why it is empty. Words read as the `ux` skill wants them.
 

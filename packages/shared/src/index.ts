@@ -253,6 +253,7 @@ export * from "./yamlfront.js";
 /** What this desktop adds to every session, whatever the repo; and the always-on rows and sentences both ends word alike. */
 export * from "./desktopfiles.js";
 export * from "./alwaysonwords.js";
+export * from "./runningwords.js";
 
 /** Which `autoCompactWindow` a spawned session would see, and from where —
  *  env > repo local > repo > user. Behind the checklist's auto-compact row. */

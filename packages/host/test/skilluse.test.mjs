@@ -119,3 +119,18 @@ test("a refresh after the fresh window keeps serving the stored counts instead o
   assert.equal(fresh.refreshing, undefined);
   assert.equal(fresh.uses.alpha.all, 4, "the finished refresh serves the new counts");
 });
+
+test("all repos: one walk of the projects folder sums every repo's logs", async () => {
+  const { home, dir } = fixture();
+  const other = join(home, "other");
+  mkdirSync(other, { recursive: true });
+  writeFileSync(join(other, "b.jsonl"), use("o1", "alpha", 2) + "\n");
+  const store = new SkillUseStore({ file: join(home, "uses.json"), now: () => NOW });
+  let r;
+  for (let i = 0; i < 200; i++) { r = store.readAll(home, ["alpha"]); if (r.state !== "counting") break; await new Promise((x) => setTimeout(x, 10)); }
+  assert.equal(r.state, "ready");
+  assert.equal(r.uses.alpha.d30, 3, "proj's two (deduped, plus the subagent's) and other's one");
+  store.kick("repo", [dir]);
+  const here = await until(store, "repo", [dir], ["alpha"]);
+  assert.equal(here.uses.alpha.d30 + 1, r.uses.alpha.d30);
+});

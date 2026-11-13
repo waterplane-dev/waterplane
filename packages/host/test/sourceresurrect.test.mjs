@@ -30,6 +30,7 @@ function harness(backend, { limit, backendSessionId = UUID, auto = true, retry }
   const events = [];
   const created = [];
   const gaveUp = [];
+  const superseded = [];
   const sessions = new Map();
   const base = {
     root, sessions,
@@ -41,16 +42,18 @@ function harness(backend, { limit, backendSessionId = UUID, auto = true, retry }
     limitLog: () => { throw new Error("a source-walled session must never be asked claude's log"); },
     create: async (cwd, opts) => { created.push({ cwd, opts }); const info = { id: "s2", cwd, running: true }; sessions.set("s2", { info, backend }); return info; },
     closedRow: () => null,
+    supersede: (from, to) => { superseded.push([from, to]); return true; },
+    carryFor: (id) => ({ history: sessions.get(id)?.history ?? [] }),
   };
   const core = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => undefined) });
   const resume = new ResumeSlice(core);
   const s = {
     info: { id: "s1", cwd: root, running: false, title: "demo", ...(backendSessionId ? { backendSessionId } : {}), ...(limit ? { limit } : {}) },
-    backend, scrollback: "", limitTimer: null, resurrectTimer: null, spawnedAt: Date.now(), launch: { model: "m" },
+    backend, history: [], scrollback: "", limitTimer: null, resurrectTimer: null, spawnedAt: Date.now(), launch: { model: "m" },
   };
   sessions.set("s1", s);
   after(() => resume.clearResurrectTimer(s));
-  return { resume, s, events, created, gaveUp };
+  return { resume, s, events, created, gaveUp, superseded };
 }
 
 const blocked = (extra = {}) => ({ blocked: true, attempts: 0, blockedSince: Date.now() - 1000, resetAt: null, weekly: false, nextAttemptAt: null, ...extra });
@@ -123,4 +126,6 @@ test("at the reset the conversation is reopened by its exact plugin id, continue
   assert.deepEqual(opts.launch, { model: "m" });
   assert.equal(opts.origin.kind, "resurrect");
   assert.equal(h.resume.revivedSessionFor("s1"), "s2");
+  assert.deepEqual(opts.carry, { history: [] }, "the old session's prompts ride along");
+  assert.deepEqual(h.superseded, [["s1", "s2"]], "the exited row leaves the list once the reopen exists");
 });

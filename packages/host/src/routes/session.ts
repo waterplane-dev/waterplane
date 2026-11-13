@@ -241,7 +241,9 @@ const onSessionCreate: RouteSpec<"session.create"> = {
         resumeMode: serverFork ? "fork" : a.msg.forkAtTurn ? "continue" : a.msg.resumeMode,
         resumeSessionId, ...(serverFork ? { forkAtTurn: a.msg.forkAtTurn } : {}), launch: a.msg.launch, budget });
       if (a.msg.replaceSessionId) {
-        a.c.sessions.repointCompanions(a.msg.replaceSessionId, info.id);
+        // Companions follow, and the killed session LEAVES the list — kept, it
+        // sat there as `exited` beside its own replacement (`drive.supersede`).
+        a.c.sessions.supersede(a.msg.replaceSessionId, info.id, "replaced");
         replacedBy.set(a.msg.replaceSessionId, info.id);
       }
       // A person's own start past the local-model cap is TOLD, never refused

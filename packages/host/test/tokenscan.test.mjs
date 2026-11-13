@@ -37,7 +37,7 @@ test("the async chunked scan reproduces the one-buffer reader's document exactly
   try {
     const store = new TokenStatsStore(join(home, "root"));
     const doc = await store.read(0);
-    for (const k of ["scannedAt", "pricesAsOf", "pricesFrom", "hours", "hoursFrom"]) delete doc[k];
+    for (const k of ["scannedAt", "pricesAsOf", "pricesFrom", "pricesKey", "hours", "hoursFrom"]) delete doc[k];
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), expected);
     store.flush?.();
   } finally {

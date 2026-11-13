@@ -20,6 +20,7 @@ Every switch is made at one of two levels: for all repos on this desktop, or for
 ### R-skills-004 · shipped
 The per-repo switch writes the repo's gitignored local settings file by default, and writes the shared project settings file only when the person chooses that on the save bar.
 - asked: 2026-11-12 (owner)
+- note: 2026-11-13 owner found the old top-of-screen link confusing: the choice is a two-way "just me, this desktop / everyone with the repo" on the save bar (and beside Apply), with a line saying what the chosen file means.
 - shipped: 1191f778
 
 ### R-skills-005 · shipped
@@ -43,7 +44,7 @@ Each skill and plugin shows its weight on every turn (characters and about how m
 - note: A weight the desktop cannot measure (a bundled skill, an unreadable plugin) is said to be unmeasured, never shown as 0.
 - shipped: 3c37ae7e
 
-### R-skills-009 · requested
+### R-skills-009 · shipped
 A "suggest" button makes one cheap unattended call that weighs size, use in this repo (overall and recently) and what CLAUDE.md and the repo's skills mention, and returns suggestions the person ticks and approves; nothing is applied by the suggestion itself.
 - asked: 2026-11-12 (owner)
 
@@ -71,3 +72,23 @@ The screen works from whatever skills and plugins the desktop's owner has instal
 A passive (kids') device cannot read or change the skill switches.
 - asked: 2026-11-12 (plan decision; no owner ask)
 - shipped: 1191f778
+
+### R-skills-015 · shipped
+The All repos view shows the value set for all repos, not the value this repo ends up with; a row this repo overrides says so and opens This repo.
+- asked: 2026-11-13 (owner)
+
+### R-skills-016 · shipped
+In This repo, a row follows the All repos setting (an unsaved All-repos choice included) until the person picks a different value there; each row says whether it follows All repos or is set for this repo, with one tap to follow again or to keep the value for this repo.
+- asked: 2026-11-13 (owner)
+
+### R-skills-017 · shipped
+The skills screen and Repo readings open each other: the readings' agents region opens the skills screen, and the skills screen opens what every turn of the repo carries.
+- asked: 2026-11-13 (owner)
+
+### R-skills-018 · shipped
+Every suggestion shows its reason as its own first line, and says in plain words what each state it moves something to means (names only, slash only, off), so the words need no lookup.
+- asked: 2026-11-13 (owner)
+
+### R-skills-019 · shipped
+One suggestion run sets both levers at once: each item says what All repos becomes and what this repo ends up with (its own value, kept against the All-repos change, or following it), weighed on uses in this repo and across every repo on this desktop; one Apply writes both files. All repos is never raised by a suggestion, and an item this repo's files name is kept here.
+- asked: 2026-11-13 (owner)

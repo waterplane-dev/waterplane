@@ -1,4 +1,5 @@
-import { Bot, ChevronsDown } from "lucide-react";
+import { Bot, ChevronsDown, Plug } from "lucide-react";
+import { isMcpTask } from "@waterplane/shared";
 import { LS } from "../storage";
 import { useDragCap } from "../core/session/useDragCap";
 import { since } from "./tvRows";
@@ -22,7 +23,7 @@ export function TvAgents({ agents, now }: { agents: TvModel["agents"]; now: numb
         style={capped ? { maxHeight: `${cap}px` } : undefined}>
         {agents.map((a) => (
           <div className="tr-status tr-agent" key={a.id} title={a.type ? `${a.type}${a.model ? ` · ${a.model}` : ""}` : undefined}>
-            <Bot size={13} />
+            {isMcpTask(a) ? <Plug size={13} /> : <Bot size={13} />}
             <span className="tr-live-what">{a.what}</span>
             {a.doing && <span className="tr-live-line">{a.doing}</span>}
             <span className="tr-live-ago">{since(a.startedAt, now)}</span>

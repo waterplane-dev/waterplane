@@ -31,3 +31,11 @@ details[open] > summary > .sk-chev { transform: rotate(90deg); }
 .sk-suggest { margin: var(--sp-6) 0; }
 .sk-tick { min-width: 44px; min-height: 44px; padding: 0; vertical-align: middle; }
 .sk-tick.on { background: var(--pick-fill); border-color: var(--pick-edge); color: var(--fg); }
+.sk-source { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--sp-6); }
+.sk-source > :first-child { flex: 0 1 auto; }
+/* Which repo file a save writes: a two-way choice with its meaning under it (RepoFileChoice.tsx). */
+.sk-file { display: flex; flex-direction: column; gap: var(--sp-4); margin: var(--sp-4) 0; }
+.sk-file .segmented { gap: var(--sp-4); padding: 0; background: none; border-bottom: 0; }
+.sk-file .seg { min-width: 0; min-height: 44px; }
+/* A suggestion's reason is the first thing read, in body colour; its lever lines and counts follow muted. */
+.sk-card .sk-why { color: var(--fg); }

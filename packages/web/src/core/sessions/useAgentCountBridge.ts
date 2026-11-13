@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { SessionInfo } from "@waterplane/shared";
+import { isMcpTask } from "@waterplane/shared";
 import { agentLevel, agentWarnText, countAgents, levelRose, noteAgentCount, type AgentLevel } from "../../agentCount";
 import { sessionStatus } from "../../sessionFacts";
 import { shownRepo, tabLabel } from "../../sessionTabs";
@@ -31,7 +32,8 @@ export function useAgentCountBridge(ctx: UseAgentCountBridgeCtx) {
       return {
         id: s.id, label: tabLabel(s, repo, shownRepo(repo)), repo,
         working: !s.idle && sessionStatus(s, backends) === "coding",
-        agents: s.running ? (s.agents ?? []).map((a) => ({ what: a.what, model: a.model, startedAt: a.startedAt })) : [],
+        // A backgrounded MCP call is one tool call, not a model running: not in the parallel-agent count.
+        agents: s.running ? (s.agents ?? []).filter((a) => !isMcpTask(a)).map((a) => ({ what: a.what, model: a.model, startedAt: a.startedAt })) : [],
       };
     });
     const c = countAgents(rows.map((r) => ({ working: r.working, agents: r.agents.length })));

@@ -19,6 +19,17 @@ export function UpdatesDoor() {
   );
 }
 
+/** The top-of-Settings door beside Plugins: same sheet, same filter as `UpdatesDoor` (the number
+ *  opens exactly those rows), plain button like its neighbour. */
+export function UpdatesTopDoor() {
+  const n = dueCount(useStore(updatesStatus));
+  return (
+    <button className="set-door" title={n > 0 ? `${n} with an update — a tap opens exactly those` : `Is there a newer ${BRAND.displayName}, or a newer plugin? A check only looks.`} onClick={openUpdates}>
+      <Download size={14} /> {n > 0 ? `Updates · ${n}` : "Updates"}
+    </button>
+  );
+}
+
 export function UpdatesAutoRow() {
   const on = usePref("updatesAutoCheck");
   return (

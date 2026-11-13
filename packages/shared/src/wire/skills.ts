@@ -45,6 +45,8 @@ export interface SkillRow {
   why?: string;
   /** ABSENT while counting / no log. */
   uses?: { d30: number; all: number; typed30: number; typedAll: number };
+  /** The same counts over every repo on this desktop; ABSENT while counting / no logs. */
+  usesEverywhere?: { d30: number; all: number; typed30: number; typedAll: number };
 }
 
 export interface PluginRow {
@@ -75,7 +77,9 @@ export interface SkillInventoryDoc {
   /** A total always ships with its split. */
   totals: { skillChars?: number; pluginChars?: number; unmeasured: number };
   usage: { state: "ready" | "counting" | "absent"; done?: number; total?: number; why?: string; since30: number;
-    /** `ready` on the previous scan's counts while a newer scan runs: the screen asks again. */ refreshing?: boolean };
+    /** `ready` on the previous scan's counts while a newer scan runs: the screen asks again. */ refreshing?: boolean;
+    /** The count over every repo on this desktop (`usesEverywhere`); ABSENT from an older host. */
+    allRepos?: { state: "ready" | "counting" | "absent"; done?: number; total?: number; why?: string; refreshing?: boolean } };
   hostNote?: string;
 }
 
@@ -87,14 +91,26 @@ export type SkillWriteResponse =
   | { ok: true; file: string; changed: { id: string; from: string; to: string }[]; ignoredNote?: string; gitignored?: boolean; doc: SkillInventoryDoc }
   | { ok: false; error: string; status: 400 | 409 | 422 };
 
+/**
+ * One item, both levers. `toAll` is the new All-repos value, `to` this repo's own value; ABSENT =
+ * leave that file alone (a repo with no key of its own then follows the new All-repos value). A
+ * plugin's values are "on"/"off". At least one of the two is present.
+ */
 export interface SkillSuggestion {
   kind: "skill" | "plugin";
   id: string;
-  to: "name-only" | "user-invocable-only" | "off";
+  to?: SkillState;
+  toAll?: SkillState;
+  /** One plain sentence: why, for both levers. Never empty. */
   reason: string;
+  /** Per-turn chars this repo stops carrying (host figure). */
   savedChars?: number;
+  /** Uses in THIS repo. */
   uses30?: number;
   usesAll?: number;
+  /** Uses over every repo on this desktop. */
+  everywhere30?: number;
+  everywhereAll?: number;
 }
 export interface SkillRecommendResponse {
   ok: boolean;

@@ -51,7 +51,7 @@ test("a good read installs the rates, persists them, and a restart installs the 
   pf.stop();
   assert.equal(fetchText.calls.length, 1, "no cache ⇒ one read at boot");
   assert.deepEqual(rateFor("claude-fable-9"), { input: 1, output: 5, cacheRead: 0.1 });
-  assert.deepEqual(priceListSource(), { pricesAsOf: "2026-11-12", pricesFrom: "list" });
+  assert.deepEqual({ ...priceListSource(), pricesKey: undefined }, { pricesAsOf: "2026-11-12", pricesFrom: "list", pricesKey: undefined });
   assert.ok(priceGeneration() > gen, "a rate change bumps the generation the ledgers' caches key on");
   const saved = JSON.parse(readFileSync(join(stateDir, PRICE_FETCH_FILE), "utf8"));
   assert.equal(saved.good.fetchedAt, now);

@@ -605,3 +605,6 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 }
 .readings-sheet .ao-rows .carried-list { margin: var(--sp-4) 0 0; }
 .readings-sheet .ao-doors { flex-wrap: wrap; margin-top: var(--sp-8); }
+.readings-sheet .ao-group-headrow { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); flex-wrap: wrap; }
+.readings-sheet .ao-group-headrow .ao-group-head { margin-top: 0; }
+.readings-sheet .ao-group-headrow { margin-top: var(--sp-8); }

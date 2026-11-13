@@ -143,14 +143,14 @@ test("installed join: manager record vs a local dir, and a clash with another re
   assert.match(byName(clash, "good").problems.join(" "), /already installed from someone\/else/);
 });
 
-test("self info per install mode: tarball gets the button, npm and checkout a command and a why", () => {
+test("self info per install mode: every known install gets the button; npm and checkout also the command and a caveat; unknown a why", () => {
   const mk = (mode) => selfBase({ mode: () => mode, current: () => "0.1.4", latest: async () => "0.1.5", notes: async () => undefined, installed: () => ["0.1.3", "0.1.4"] });
   const t = mk({ kind: "tarball", dataDir: "/d", version: "0.1.4", root: "/d/versions/0.1.4" });
   assert.equal(t.canApply, true); assert.equal(t.rollbackTo, "0.1.3"); assert.equal(t.command, undefined);
   const n = mk({ kind: "npm", root: "/r" });
-  assert.equal(n.canApply, false); assert.match(n.command, /^npm i -g .+@latest$/); assert.match(n.why, /npm/);
+  assert.equal(n.canApply, true); assert.match(n.command, /^npm i -g .+@latest$/); assert.match(n.caveat, /signature/); assert.equal(n.why, undefined);
   const c = mk({ kind: "checkout", root: "/r" });
-  assert.equal(c.canApply, false); assert.match(c.command, /git pull/); assert.ok(c.why);
+  assert.equal(c.canApply, true); assert.match(c.command, /git pull --ff-only/); assert.match(c.caveat, /refuses when the checkout has changes/);
   const u = mk({ kind: "unknown", root: "/r" });
   assert.equal(u.canApply, false); assert.equal(u.command, undefined); assert.ok(u.why);
 });

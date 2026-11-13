@@ -25,6 +25,7 @@ export { openPluginSettings } from "../../settingsFocus";
  *  bound into the SDK's `isExtensionEnabled` by core. */
 export { pluginsLive, pluginsOn } from "./store";
 export { openUpdates } from "./updatesActions";
+export { UpdatesTopDoor } from "./UpdatesSettings";
 export { useUpdatesStatus } from "./store";
 export { bannerView } from "./logic";
 

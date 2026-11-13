@@ -35,6 +35,7 @@ import { pluginScope, settingsOnly, useSettingsOnly } from "../../settingsFocus.
 import { core } from "../api.ts";
 import { SHEET } from "../../sheetNames.ts";
 import { openSchedules } from "../../features/schedule";
+import { UpdatesTopDoor } from "../../features/plugins";
 import { featureSettingsRows } from "../settingsRows.ts";
 import { RISKY_PERM_MODES, RISKY_PERM_WARNING } from "./permModes.ts";
 import { setPref, usePref } from "../prefs.ts";
@@ -122,6 +123,7 @@ export function SettingsSheet(props: SettingsSheetProps & { pluginView?: boolean
         <button className="set-door" title="Every plugin: on or off, what it does, where it shows up" onClick={() => c.nav.open("pluginManager")}>
           <Puzzle size={14} /> Plugins
         </button>
+        <UpdatesTopDoor />
       </div>
       <SetSearch value={settingsQ} onChange={(q) => { settingsOnly.set(null); pluginScope.set(null); query.set(q); }} />
       <SettingsScope value={tally}>

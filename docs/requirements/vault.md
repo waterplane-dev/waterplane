@@ -864,3 +864,6 @@ A vault release ask always appears on top, wherever the person is in the app, ov
 - asked: 2026-11-10
 - shipped: d0fd0358
 
+### R-vault-163 · built
+Each paired phone has one switch under Copy on this phone, "Everything, and anything added later": while it is on, the desktop copies every login and env secret it can mirror to that phone, including ones stored after the switch was turned on, with no step per secret; turning it off removes from the phone what only the switch had put there. Turning it on or off is one fingerprint card that says what it means, and a removed device loses its switch. Copy on this phone is also a row on the Vault home.
+- asked: 2026-11-13 (owner: "a real full sync")

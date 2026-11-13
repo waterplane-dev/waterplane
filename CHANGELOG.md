@@ -5,6 +5,22 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.27
+
+### New
+
+- **Skills & plugins suggestions now set "All repos" and "this repo" together.** The recommend call counts skill uses across every repo on this desktop. It gives a value for each level, never raises "All repos", keeps skills a repo references, and drops changes that do nothing. Apply writes the all-repos file and then this repo's file, with one receipt.
+- **The skills & plugins screen explains itself.** A one-line meaning sits beside "just me, this desktop" and "everyone with the repo", and switching between them keeps your draft. The reason comes first, and each state word is explained once. The choice of repo file moved to the save bar.
+- **A repo row follows "All repos" until you pick a different value there.** "All repos" shows its own value and says where this repo overrides it. Skills opens the repo readings, and the "In this repo" heading there opens skills & plugins.
+- **npm and git-checkout installs get an update button.** An npm install gets the version the phone confirmed and restarts. A checkout is due when its upstream has new commits. The button refuses in words on uncommitted changes, your own commits, a detached HEAD or no upstream. Otherwise it fast-forwards, installs, builds and restarts. Both say what they skip (no signature check, no roll back) and keep the hand command beside the button.
+- **Settings has an Updates door beside Plugins.** It opens the same sheet as the updates door in Tools.
+- **Background MCP calls are named apart from agents.** The header pill, the reader's status strip, the turn foot and the turn-finished push say "1 agent + 2 MCP tasks", and an MCP row wears a plug icon. A call the CLI moved to the background keeps the session running until it finishes.
+
+### Fixed
+
+- **A restarted session replaces its old row instead of sitting beside it as exited.** Before, a relaunch or a limit resume left the same conversation in the tabs twice.
+- **Token stats no longer show a saved copy priced at old rates.** Once the phone holds the desktop's price list, the screen waits a few seconds for the fresh read. Before, a week could read $130 instead of $248.
+
 ## 0.1.26
 
 ### New

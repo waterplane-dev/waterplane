@@ -1,11 +1,12 @@
 /**
- * What the updates view says about waterplane ITSELF: the install mode, the newest release and,
- * for installs the signed updater cannot drive, the exact command and why there is no button.
+ * What the updates view says about waterplane ITSELF: the install mode, the newest release and
+ * whether the update button can run, with the command it runs (or why there is none).
  *
- * Only a tarball (install.sh) install gets `canApply`: that is the updater which verifies the
- * publisher's signature and can roll back. npm and checkout installs are told their command.
- * `latestRelease` reads `release.json` under that same signature check; a failure throws, so the
- * caller keeps its previous reading. Nothing here changes the machine.
+ * A tarball (install.sh) install gets the signed updater, which verifies the publisher's signature
+ * and can roll back. An npm install's button runs `npm i -g` of the shown version; a checkout's
+ * fast-forwards to its upstream and rebuilds (`selfother.ts`) — both say what they skip (`caveat`).
+ * `latestRelease` reads `release.json` under the signature check; a failure throws, so the caller
+ * keeps its previous reading. Nothing here changes the machine; a checkout's check runs `git fetch`.
  */
 import { BRAND } from "@waterplane/shared";
 import type { SelfUpdateInfo } from "@waterplane/shared";
@@ -13,6 +14,7 @@ import { compareVersions, currentMode, installedVersions, latestRelease, release
 import type { InstallMode } from "../cli/selfupdate.js";
 import { identity } from "../cli/index.js";
 import { ghJson } from "./github.js";
+import { checkoutBehind } from "./selfother.js";
 
 export interface SelfDeps {
   mode: () => InstallMode;
@@ -22,6 +24,8 @@ export interface SelfDeps {
   /** Release notes for `version`, display-only; absent when there are none. Never throws. */
   notes: (version: string) => Promise<string | undefined>;
   installed: (dataDir: string) => string[];
+  /** A checkout's commits behind its upstream (after a fetch); throws git's words. */
+  behind?: (root: string) => Promise<{ behind: number; upstream: string }>;
 }
 
 async function githubNotes(version: string): Promise<string | undefined> {
@@ -39,6 +43,7 @@ export const realSelfDeps: SelfDeps = {
   latest: async () => (await latestRelease(releaseSource(null))).version,
   notes: githubNotes,
   installed: installedVersions,
+  behind: checkoutBehind,
 };
 
 /** The install-shaped half: mode, current, button or command. Synchronous, offline. */
@@ -49,17 +54,26 @@ export function selfBase(deps: SelfDeps = realSelfDeps): SelfUpdateInfo {
     case "tarball":
       return { mode: "tarball", current, canApply: true, rollbackTo: rollbackTarget(deps.installed(mode.dataDir), mode.version) ?? undefined };
     case "npm":
-      return { mode: "npm", current, canApply: false, command: `npm i -g ${BRAND.slug}@latest`, why: "This install came from npm, so npm updates it; the updater that checks the publisher's signature and can roll back only runs for the release tarball install." };
+      return { mode: "npm", current, canApply: true, command: `npm i -g ${BRAND.slug}@latest`, caveat: "npm checks the package's integrity, not the publisher's signature as the install.sh updater does, and there is no roll back: going back means installing the older version the same way." };
     case "checkout":
-      return { mode: "checkout", current, canApply: false, command: "git pull && npm ci && npm run restart", why: "This is a git checkout, so git updates it; the updater that checks the publisher's signature and can roll back only runs for the release tarball install." };
+      return { mode: "checkout", current, canApply: true, command: "git pull --ff-only && npm ci && npm run restart", caveat: "This updates the git checkout to its branch's newest commits: no signature check and no roll back. It refuses when the checkout has changes or commits of its own." };
     default:
       return { mode: "unknown", current, canApply: false, why: "This install is not one the updater recognises, so it cannot update it. Reinstall from the release to get updates." };
   }
 }
 
-/** The newest release (and notes) when it is newer than what runs; `latest` is set only then. Throws on failure. */
-export async function selfLatest(deps: SelfDeps = realSelfDeps): Promise<{ latest: string; notes?: string }> {
+/**
+ * The newest release (and notes) when it is newer than what runs; `latest` is set only then. A
+ * checkout also reads how far it is behind its upstream (a `git fetch`); that part failing leaves it
+ * absent rather than failing the release read. Throws when the release cannot be read.
+ */
+export async function selfLatest(deps: SelfDeps = realSelfDeps): Promise<{ latest: string; notes?: string; behind?: number; upstream?: string }> {
   const latest = await deps.latest();
   const cmp = compareVersions(deps.current(), latest);
-  return { latest, notes: cmp === -1 ? await deps.notes(latest) : undefined };
+  const out: { latest: string; notes?: string; behind?: number; upstream?: string } = { latest, notes: cmp === -1 ? await deps.notes(latest) : undefined };
+  const mode = deps.mode();
+  if (mode.kind === "checkout" && deps.behind) {
+    try { Object.assign(out, await deps.behind(mode.root)); } catch { /* absent: the row says nothing about commits */ }
+  }
+  return out;
 }

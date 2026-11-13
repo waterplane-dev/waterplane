@@ -7,30 +7,48 @@ import { ChevronRight, Plug, Sparkles } from "lucide-react";
 import type { PluginRow, SkillRow, SkillState, SwitchLevel } from "@waterplane/shared";
 import { SKILL_STATES, skillPluginSkillLine, skillPluginNotSwitchable, SKILL_UNMEASURED } from "@waterplane/shared";
 import { Button, Hint, Row, RowSub, RowTitle, Tag } from "../../kit";
-import { choose } from "./actions";
-import { STATE_TITLES, STATE_WORDS, canInherit, pluginTag, shownEnabled, shownState, stateTag, tilde, usesWords, type Draft } from "./logic";
+import { choose, pin, setTarget } from "./actions";
+import { STATE_TITLES, STATE_WORDS, canInherit, overriddenWords, rowView, sourceWords, tilde, usesWords, type Draft, type Row as AnyRow } from "./logic";
 
 const ICON = 14;
 
 /** "~120 tokens", or the sentence for a row nobody could measure — never a 0. */
 const weightWords = (chars: number | undefined): string => (chars === undefined ? SKILL_UNMEASURED : tilde(chars));
 
-function InheritButton({ row, level, draft }: { row: SkillRow | PluginRow; level: SwitchLevel; draft: Draft }) {
-  if (!canInherit(row, level, draft)) return null;
-  const where = level === "global" ? "the default" : "the all-repos setting";
+/**
+ * Where the row's value comes from, said once under the selector. On This repo: "follows All repos"
+ * (with a way to keep it here) or "set for this repo; overrides All repos" (with a way back). On All
+ * repos: only when this repo sets its own value, with the door to change it there.
+ */
+function Source({ row, level, draft, globalDraft }: { row: AnyRow; level: SwitchLevel; draft: Draft; globalDraft: Draft }) {
+  const v = rowView(row, level, draft, globalDraft);
+  if (level === "global") {
+    const o = overriddenWords(v);
+    if (!o) return null;
+    return (
+      <div className="sk-source">
+        <Hint>{o}</Hint>
+        <Button className="sk-link" onClick={() => setTarget("repo")}>change it in This repo</Button>
+      </div>
+    );
+  }
+  const words = sourceWords(v);
+  if (!words) return null;
+  const followsAll = v.follows.from === "repo-shared" ? "the shared repo file" : "All repos";
   return (
-    <div className="sk-inherit">
-      <Button className="sk-link" onClick={() => choose(row, "inherit")} title={`remove this row's setting from the file, so ${where} applies`}>
-        use {where}
-      </Button>
+    <div className="sk-source">
+      <Hint>{words}</Hint>
+      {v.own && canInherit(row, level, draft)
+        ? <Button className="sk-link" onClick={() => choose(row, "inherit")} title="remove this repo's own value, so the setting below it applies">follow {followsAll}</Button>
+        : !v.own && <Button className="sk-link" onClick={() => pin(row)} title="write the value this row follows into this repo's file, so a later All-repos change does not move it">keep for this repo</Button>}
     </div>
   );
 }
 
-export function SkillRowView({ row, draft, level }: { row: SkillRow; draft: Draft; level: SwitchLevel }) {
-  const shown = shownState(row, draft);
-  // A locked row says so once, in its hint; the tag is for a state somebody chose.
-  const tag = row.locked ? null : stateTag(row);
+export function SkillRowView({ row, draft, level, globalDraft }: { row: SkillRow; draft: Draft; level: SwitchLevel; globalDraft: Draft }) {
+  const shown = rowView(row, level, draft, globalDraft).value;
+  // A locked row says so once, in its hint; where an unlocked value comes from is the Source line.
+  const tag = row.locked ? (row.lockedBy === "author" ? "locked by the skill itself" : "locked by policy") : null;
   const uses = usesWords(row);
   const changed = `skill:${row.id}` in draft;
   return (
@@ -49,15 +67,13 @@ export function SkillRowView({ row, draft, level }: { row: SkillRow; draft: Draf
             ))}
           </div>
         )}
-      {shown === "inherit" && <Hint>Will use the {level === "global" ? "default" : "all-repos setting"} after saving.</Hint>}
-      {row.switchable && !row.locked && <InheritButton row={row} level={level} draft={draft} />}
+      {row.switchable && !row.locked && <Source row={row} level={level} draft={draft} globalDraft={globalDraft} />}
     </Row></div>
   );
 }
 
-export function PluginCard({ row, skills, draft, level }: { row: PluginRow; skills: SkillRow[]; draft: Draft; level: SwitchLevel }) {
-  const shown = shownEnabled(row, draft);
-  const tag = row.from === "locked" ? null : pluginTag(row);
+export function PluginCard({ row, skills, draft, level, globalDraft }: { row: PluginRow; skills: SkillRow[]; draft: Draft; level: SwitchLevel; globalDraft: Draft }) {
+  const shown = rowView(row, level, draft, globalDraft).value;
   const changed = `plugin:${row.id}` in draft;
   const locked = row.from === "locked";
   return (
@@ -65,7 +81,6 @@ export function PluginCard({ row, skills, draft, level }: { row: PluginRow; skil
       <RowTitle><Plug size={ICON} /> {row.name}{row.version ? <span className="sk-ver"> {row.version}</span> : null}</RowTitle>
       <RowSub>
         {[weightWords(row.listingChars), `${row.skills.length} skill${row.skills.length === 1 ? "" : "s"}`].join(" · ")}
-        {tag ? <> <Tag>{tag}</Tag></> : null}
       </RowSub>
       {row.why && <Hint>{row.why}</Hint>}
       {locked ? <Hint>Locked by policy; this screen cannot change it.</Hint> : (
@@ -74,9 +89,8 @@ export function PluginCard({ row, skills, draft, level }: { row: PluginRow; skil
           <button className={`seg${shown === false ? " on" : ""}`} aria-pressed={shown === false} onClick={() => choose(row, false)}>off</button>
         </div>
       )}
-      {shown === "inherit" && <Hint>Will use the {level === "global" ? "default" : "all-repos setting"} after saving.</Hint>}
+      {!locked && <Source row={row} level={level} draft={draft} globalDraft={globalDraft} />}
       {row.mcpServers ? <Hint>Off also removes its connector tools ({row.mcpServers} server{row.mcpServers === 1 ? "" : "s"}).</Hint> : null}
-      {!locked && <InheritButton row={row} level={level} draft={draft} />}
       {skills.length > 0 && (
         <details className="sk-fold">
           <summary><ChevronRight size={ICON} className="sk-chev" aria-hidden /> details · {skills.length} skill{skills.length === 1 ? "" : "s"}</summary>

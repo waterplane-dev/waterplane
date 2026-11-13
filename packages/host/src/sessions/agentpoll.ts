@@ -6,7 +6,7 @@
 import { realpathSync } from "node:fs";
 import type { SessionAgent, SessionShell, SourceSession } from "@waterplane/shared";
 import { shellBucket } from "@waterplane/shared";
-import { agentsChanged, readAgents, readCliRecord, readRunningAgents } from "../agents.js";
+import { agentsChanged, readAgents, readCliRecord, readMcpTasks, readRunningAgents } from "../agents.js";
 import { derive } from "../backends/derive.js";
 import { liveSourceFor } from "../livesources.js";
 import { readPsTableAsync, readShellList, shellsEnabled } from "../shells.js";
@@ -80,8 +80,14 @@ export function checkAgents(core: SessionCore, s: Session): void {
   // Background SHELLS are the same fact by another route (a `run_in_background`
   // Bash or a Monitor outlives its turn too), and no log records them — the
   // CLI's own session record does (`agents.ts`'s `readCliRecord`).
-  let record: { status: string; pid: number; name?: string } | null = null;
+  let record: { status: string; pid: number; name?: string; startedAt?: number } | null = null;
   try { record = readCliRecord(s.info.id, tmuxName(s.info.id), s.info.claudeSessionId); } catch { record = null; }
+  // MCP calls the CLI parked in the background outlive the turn the same way
+  // (`agents.ts`'s `readMcpTasks`) — the footer's "2 MCP tasks still running".
+  // Counted only since THIS CLI process started: such a task dies with it.
+  if (derive(s.backend).keepsClaudeLog) {
+    try { rows = [...rows, ...readMcpTasks(s.info.cwd, s.info.claudeSessionId, record?.startedAt)]; } catch { /* none read */ }
+  }
   // The peer name rides the same read. Only a matched record moves it: no
   // match keeps the last name seen (a running process keeps its name until
   // a /rename); a stopped session drops it with the agents above.
