@@ -572,10 +572,10 @@ export interface TokenStatsDoc {
    */
   unpriced: TokenTotals;
   /**
-   * Turns billed at a non-standard speed (fast mode), which costs roughly
-   * double and is NOT modelled. Zero on every corpus seen so far; carried so a
-   * future one that uses it produces a visible caveat instead of a silently
-   * low number.
+   * Turns billed at a non-standard speed (fast mode). They are priced at the
+   * fast card under their own `<alias>@fast` model key (`pricing.ts` `FAST`),
+   * so the per-model rows show them apart; this count is what the caption
+   * names.
    */
   fastTurns: number;
   /** When the price table was taken (`YYYY-MM-DD`), so the screen can say how

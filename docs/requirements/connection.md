@@ -216,3 +216,13 @@ The summary report shows which hours of the day had no connection.
 Local LAN connections can use HTTPS, and setting it up takes a single screen without a cumbersome manual certificate step.
 - asked: 2026-11-10
 
+### R-connection-039 · shipped
+Two linked screens let the user run a speed test and a connection test, showing how good the connection is and its throughput.
+- asked: 2026-11-11
+- shipped: 1d211dfec
+
+### R-connection-040 · shipped
+The connection screen shows either a loading state or a connecting state, never both at once.
+- asked: 2026-11-12
+- shipped: 09f1b2817
+

@@ -557,6 +557,7 @@ function readOwn(v: unknown): RepoHealthPlotOwn | null {
     if (problems.length) out.problems = problems;
   }
   if (isCount(o.unread)) out.unread = o.unread; // a junk count is dropped (absent = older engine), never 0
+  if (isCount(o.retryable)) out.retryable = o.retryable;
   return out;
 }
 
@@ -619,7 +620,7 @@ export function parseOwnBackfill(stdout: string): RepoHealthOwnBackfillSummary |
     if (!b || typeof b !== "object") continue;
     const r = b as Record<string, unknown>;
     const out: RepoHealthOwnBackfillSummary = {};
-    for (const k of ["asked", "read", "values", "absent", "left"] as const) {
+    for (const k of ["asked", "read", "values", "absent", "left", "retried"] as const) {
       const v = r[k];
       if (typeof v === "number" && Number.isInteger(v) && v >= 0) out[k] = v;
     }

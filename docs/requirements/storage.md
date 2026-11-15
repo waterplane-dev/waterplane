@@ -34,3 +34,13 @@ The disk space plugin UI looks polished and well designed.
 - asked: 2026-10-21
 - shipped: aba149fa
 
+### R-storage-008 · shipped
+The disk space view shows what fills the disk on Windows (through WSL) and Linux as well, and the extension is public and off by default; removal only deletes items from the latest scan, rechecked just before deletion, inside fixed folders.
+- asked: 2026-11-12
+- shipped: c71f7f3f2, 17120d936
+
+### R-storage-009 · shipped
+Each lost store write is recorded with the file, time and where its bytes went, and all records are listed on one phone surface in Settings; the queue bar says when the phone could not save the queue.
+- asked: 2026-11-14
+- shipped: 8f20bba6d, 351d51de6
+

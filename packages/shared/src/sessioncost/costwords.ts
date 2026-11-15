@@ -270,6 +270,8 @@ export function costText(
   costUsd: number,
   agentCostUsd: number | null,
   unpricedTok?: number | null,
+  /** The fast-mode share of `costUsd`, already inside it. */
+  fastUsd?: number | null,
 ): string {
   const agents = agentCostUsd != null && agentCostUsd > 0
     ? ` — ${fmtUsd(agentCostUsd)} of it in subagents`
@@ -277,5 +279,8 @@ export function costText(
   const missing = unpricedTok != null && unpricedTok > 0
     ? ` ${fmtTok(unpricedTok)} tokens ran on a model with no published rate and are not in it.`
     : "";
-  return `At list prices that is ${fmtUsd(costUsd)} so far${agents} — an estimate of what the API would have charged, not what a subscription costs.${missing}`;
+  const fast = fastUsd != null && fastUsd > 0
+    ? ` ${fmtUsd(fastUsd)} of it ran in fast mode, which bills at twice the standard rate.`
+    : "";
+  return `At list prices that is ${fmtUsd(costUsd)} so far${agents} — an estimate of what the API would have charged, not what a subscription costs.${fast}${missing}`;
 }

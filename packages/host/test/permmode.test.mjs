@@ -140,3 +140,14 @@ test("the words for a mode are the CLI's own", () => {
   assert.equal(permModeWords("default"), "manual");
   assert.equal(permModeWords("bypassPermissions"), "bypass permissions");
 });
+
+// ── fast mode: `/fast on|off`'s confirmation, newest row above the composer ──
+test("fast mode reads the newest confirmation and refuses prose", async () => {
+  const { readFastMode } = await import("../dist/permmode.js");
+  assert.equal(readFastMode(["❯ /fast on", "  ⎿  Fast mode ON · Fast mode lasts this session only"].join("\n")), true);
+  assert.equal(readFastMode(["  ⎿  Fast mode ON", "❯ /fast off", "  ⎿  Fast mode OFF"].join("\n")), false);
+  assert.equal(readFastMode("  ⎿  Kept Fast mode ON"), true);
+  assert.equal(readFastMode("  ⎿  claude-sonnet-5-5 doesn't have fast mode"), false);
+  assert.equal(readFastMode("Fast mode bills at a premium; see /fast"), null, "prose is not a confirmation");
+  assert.equal(readFastMode("nothing here"), null);
+});

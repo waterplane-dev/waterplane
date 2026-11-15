@@ -138,3 +138,9 @@ The phone-side passive mode for kids' devices only calls API routes that the hos
 - asked: 2026-11-10
 - shipped: 7cdcc498
 
+
+### R-security-029 · shipped
+The Scorecard sheet shows the score over time: one point per Scorecard run on a fixed 0–10 axis, past public runs read back from the Scorecard API, and a drag naming a run's date, score, commit and which checks moved since the run before.
+- asked: 2026-11-15
+- shipped: 2c9c1f402
+

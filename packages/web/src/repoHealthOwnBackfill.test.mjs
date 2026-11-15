@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   OWN_BACKFILL_COMMITS, ownBackfillDone, ownBackfillExhausted, ownBackfillLabel, ownBackfillOffered, ownBackfillResultWords, ownBackfillRunningWords,
+  ownRetryCount, ownRetryDone, ownRetryLabel, ownRetryOffered,
 } from "./repoHealthOwnBackfill.ts";
 
 const series = (...vs) => ({ points: vs.map((v, i) => ({ day: `2026-01-0${i + 1}`, sha7: "a", v })) });
@@ -49,4 +50,32 @@ test("exhausted only on an ok answer that says nothing is left", () => {
 test("progress quotes the desktop's line where it sent one", () => {
   assert.equal(ownBackfillRunningWords("reading back own readings: 3/20 commits", 12.4), "reading back own readings: 3/20 commits · 12s");
   assert.equal(ownBackfillRunningWords(null, 2), "reading back on the desktop… 2s");
+});
+
+test("the re-read button: only once every older day has an entry and one holds a failed reading", () => {
+  const thin = [series(null, 3)];
+  assert.equal(ownRetryOffered({ unread: 0, retryable: 3 }), true);
+  assert.equal(ownRetryOffered({ unread: 2, retryable: 3 }), false, "unread days first");
+  assert.equal(ownRetryOffered({ unread: 0, retryable: 0 }), false);
+  assert.equal(ownRetryOffered({ unread: 0 }), false, "older engine: no count");
+  assert.equal(ownRetryOffered({ unread: 0, retryable: 3 }, true), false, "a re-read here said it is pointless");
+  assert.equal(ownRetryCount({ retryable: 3 }), 3);
+  assert.equal(ownRetryLabel(1), "re-read 1 failed day");
+  assert.equal(ownRetryLabel(4), "re-read 4 failed days");
+  assert.equal(ownBackfillDone({ series: thin, unread: 0, retryable: 2 }), false, "the sentence waits while a re-read is possible");
+  assert.equal(ownBackfillDone({ series: thin, unread: 0, retryable: 0 }), true);
+});
+
+test("a re-read answer is its own sentence and decides whether to ask again", () => {
+  const ok = (summary) => ({ ok: true, summary });
+  assert.equal(ownBackfillResultWords(ok({ read: 3, retried: 3, values: 5, absent: 2, left: 0 })), "Re-read 3 days: 5 readings, 2 still absent.");
+  assert.equal(ownBackfillResultWords(ok({ read: 1, retried: 1, values: 0, absent: 2, left: 0 })),
+    "Nothing new: the same readings failed again on 1 day — the tile says why.");
+  assert.equal(ownBackfillResultWords(ok({ retried: 0, left: 0 })), "No failed day was left to re-read.");
+  assert.equal(ownRetryDone(ok({ retried: 3, values: 5, left: 0 })), true);
+  assert.equal(ownRetryDone(ok({ retried: 3, values: 0, left: 4 })), false, "nothing new in the newest days: the never-retried older ones stay on offer");
+  assert.equal(ownRetryDone(ok({ retried: 3, values: 0, left: 0 })), true, "nothing new and nothing never-retried: stop offering");
+  assert.equal(ownRetryDone(ok({ retried: 3, values: 2, left: 4 })), false, "more never-retried days: tap again");
+  assert.equal(ownRetryDone(ok({ read: 3, left: 0 })), false, "not a re-read");
+  assert.equal(ownBackfillExhausted(ok({ retried: 3, left: 0 })), false, "a re-read never marks the read-back exhausted");
 });

@@ -129,7 +129,7 @@ export function ContextSparkline({ spark, width = 76, height = 20, value = false
     spark.usageTok != null && spark.usageTok > 0
       ? usageText(spark.usageTok, spark.agentTok ?? null) : null,
     spark.costUsd != null
-      ? costText(spark.costUsd, spark.agentCostUsd ?? null, spark.unpricedTok ?? null) : null,
+      ? costText(spark.costUsd, spark.agentCostUsd ?? null, spark.unpricedTok ?? null, spark.fastUsd ?? null) : null,
     // The agents' own windows, which the parent's curve never shows — the
     // faint area behind it. Tokens, not a percentage: an agent may run a model
     // whose window is not this axis's.

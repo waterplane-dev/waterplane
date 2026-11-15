@@ -176,6 +176,11 @@ export interface ContextSpark {
    *  cost figure. Carried so the reading can say what it left out rather than
    *  quietly charging zero for it; absent means there were none. */
   unpricedTok?: number;
+  /** Tokens that ran in fast mode (`usage.speed: "fast"`), subagents included,
+   *  and what they cost at the fast card — both ALREADY inside the totals.
+   *  Absent means none ran fast (or a host from before this was counted). */
+  fastTok?: number;
+  fastUsd?: number;
   /** As on `ContextSeriesDoc` — the window every graph is scaled against, and
    *  where an auto-compaction was observed to fire. */
   windowTok: number | null;
@@ -349,6 +354,12 @@ export interface ContextSeriesDoc {
   /** Tokens on a model with no published rate, in neither figure above. Said
    *  on screen rather than charged at zero; absent means there were none. */
   unpricedTok?: number;
+  /** Tokens that ran in fast mode (`usage.speed: "fast"`) and what they cost
+   *  at the fast card — the parent's, plus the agents' wherever `agentCost`
+   *  rides (the `unpricedTok` rule). ALREADY inside the cost figures; absent
+   *  means none ran fast. */
+  fastTok?: number;
+  fastUsd?: number;
   /**
    * The models that ran in this conversation, **descending by tokens** — the
    * table `ContextSample.model` and `AgentRun.model` index into.

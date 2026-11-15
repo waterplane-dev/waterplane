@@ -45,14 +45,14 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  BY_MODEL_DEFAULT_DAYS, SETUP_COST_DAYS, agentSourceText, compareByModelAll, fmtCount, fmtUsdShort, isAgentAbsent, priceListSource, priceSourceText, setupCostOf, setupPatternOf, setupPatternText, tokenTotal,
-  type AgentMarkersResponse, type AgentPointsResponse, type ProbeResultsView, type ProbeView, type AgentReadingAbsent, type AgentReadingsResponse, type AgentReadingsWeek, type RepoTarget, type SeriesLoads, type SeriesMedian,
+  BY_MODEL_DEFAULT_DAYS, SETUP_COST_DAYS, agentSourceText, compareByModelAll, fmtCount, fmtShare, fmtUsdShort, isAgentAbsent, priceListSource, priceSourceText, setupCostOf, setupPatternOf, setupPatternText, tokenTotal,
+  type AgentMarkersResponse, type AgentPointsResponse, type ProbeResultsView, type ProbeView, type AgentReadingAbsent, type AgentReadingsResponse, type AgentReadingsWeek, type RepoTarget, type SetupCost, type SeriesLoads, type SeriesMedian,
 } from "@waterplane/shared";
 import { api } from "./api";
 import { useRemoteResource, type RemoteResource } from "./useRemoteResource";
 import { Empty } from "./Empty";
 import { Explain } from "./Explain";
-import { KindBar } from "./kit/chart/TokenComposition";
+import { KindBar, SLOT } from "./kit/chart/TokenComposition";
 import { RefreshKey } from "./RepoHealthCards";
 import { AgentWeekBars } from "./AgentWeekBars";
 import { SetupShareCard } from "./SetupShareCard";
@@ -63,7 +63,7 @@ import { Hint } from "./kit";
 import { CalendarRange, FlaskConical, Gauge, Plug } from "lucide-react";
 import { probeLastLine, probeResultsUnreadLine, probeShareOf } from "./probeWords";
 import {
-  AGENT_REGION_WORDS, AGENT_VIEW_HELP, AGENT_VIEW_LABEL, byModelRow, CARRIED_TITLE, HEADLINE_TITLE, PROBE_NONE, headlineHelp, setupCostBeside, setupCostFigure, setupCostLine, setupSplitLine, PICK_HINT, START_PARTS_CAP, TABLE_NOTE, compactBeside, compactLine, escapedLines, exploreBeside, exploreLine,
+  AGENT_REGION_WORDS, AGENT_VIEW_HELP, AGENT_VIEW_LABEL, byModelRow, CARRIED_TITLE, HEADLINE_TITLE, PROBE_NONE, headlineHelp, setupCostBeside, setupCostFigure, setupCostLine, setupSplitBasis, setupSplitLine, PICK_HINT, START_PARTS_CAP, TABLE_NOTE, compactBeside, compactLine, escapedLines, exploreBeside, exploreLine,
   escapedFigure, figures, fmtMedian, looksLine, readout, requestsLine, skillsLine, reworkBeside, reworkLine, reworkWhole, spendBeside, startLine, startPartGroups, startSubLine, fmtMean,
   weekCells, weekHeading,
 } from "./agentReadingsWords";
@@ -100,6 +100,31 @@ function Reading({ title, rule, bars, pick, children, chartTitle }: {
  * pattern sentence around the newest change. Then, ONCE for the whole region, where every reading
  * here comes from (R-metrics-069) — each card says it again only in its `?`.
  */
+/** The figure's split by whose it is, as a bar and its legend; the sentence when nothing was measured. Never the total alone. */
+function SetupSplit({ cost }: { cost: SetupCost }) {
+  if (!cost.split.length) return <div className="rh-cap">{setupSplitLine(cost)}</div>;
+  const basis = setupSplitBasis(cost);
+  // "not split" is the one group with no owner: the grey, so the three owned shares keep the hues.
+  const hue = (g: SetupCost["split"][number], i: number) => (g.group === "mixed" ? "var(--muted)" : SLOT[i % SLOT.length]);
+  let x = 0;
+  return (
+    <div className="ar-split">
+      <div className="ts-bar" role="img" aria-label={setupSplitLine(cost)}>
+        {cost.split.map((g, i) => {
+          const left = x; x += g.share * 100;
+          return <span key={g.group} className="ts-seg" style={{ left: `${left}%`, width: `${g.share * 100}%`, background: hue(g, i) }} />;
+        })}
+      </div>
+      <div className="ts-legend">
+        {cost.split.map((g, i) => (
+          <span key={g.group} className="ts-leg"><i style={{ background: hue(g, i) }} /><b>{g.label}</b> {fmtShare(g.share)}</span>
+        ))}
+      </div>
+      {basis ? <div className="rh-cap">{basis}</div> : null}
+    </div>
+  );
+}
+
 function Headline({ pts, mk, probes }: { pts: RemoteResource<AgentPointsResponse>; mk: RemoteResource<AgentMarkersResponse>; probes: RemoteResource<ProbeResultsView> }) {
   const points = pts.data?.ok ? pts.data.points : null;
   const markers = mk.data?.ok ? mk.data.markers : null;
@@ -124,23 +149,25 @@ function Headline({ pts, mk, probes }: { pts: RemoteResource<AgentPointsResponse
               : !pts.data && pts.state === "error" ? `Sessions could not be read${pts.error ? `: ${pts.error}` : "."}`
                 : "Reading this repo's sessions…"}</div>
         ) : isAgentAbsent(cost) ? <div className="rh-cap">{cost.absent}</div> : (<>
-          <div className="ar-headline">{setupCostFigure(cost)}</div>
-          <div>{setupCostLine(cost)}</div>
-          <div>{setupSplitLine(cost)}</div>
+          <div className="ar-figure">
+            <span className="ar-headline">{setupCostFigure(cost)}</span>
+            <span className="ar-figure-per">{setupCostLine(cost)}</span>
+          </div>
+          <SetupSplit cost={cost} />
           <div className="rh-cap">{setupCostBeside(cost, SETUP_COST_DAYS, priceSourceText(priceListSource()))}</div>
         </>)}
-        {lastProbe ? <div>{probeLastLine(lastProbe.result, lastProbe.analysis, lastBase)}</div>
+        {lastProbe ? <div className="ar-sect">{probeLastLine(lastProbe.result, lastProbe.analysis, lastBase)}</div>
           : cost === null ? null
-            : probes.data?.ok ? <div className="rh-cap">{PROBE_NONE}</div>
-              : <div className="rh-cap">Last probe: {probeResultsUnreadLine(probes.state === "loading" && !probes.data, probes.error)}</div>}
-        {pattern ? <div>{isAgentAbsent(pattern) ? pattern.absent : setupPatternText(pattern)}</div>
-          : mk.data && !mk.data.ok ? <div className="rh-cap">Changes could not be read: {mk.data.error}</div> : null}
-        {byModel ? (<>
+            : probes.data?.ok ? <div className="ar-sect rh-cap">{PROBE_NONE}</div>
+              : <div className="ar-sect rh-cap">Last probe: {probeResultsUnreadLine(probes.state === "loading" && !probes.data, probes.error)}</div>}
+        {pattern ? <div className="ar-sect">{isAgentAbsent(pattern) ? pattern.absent : setupPatternText(pattern)}</div>
+          : mk.data && !mk.data.ok ? <div className="ar-sect rh-cap">Changes could not be read: {mk.data.error}</div> : null}
+        {byModel ? (<div className="ar-sect">
           <div>{byModel.line}</div>
           {byModel.notes.map((n) => <div key={n} className="rh-cap">{n}</div>)}
-        </>) : null}
+        </div>) : null}
         {/* Once for the whole region, the same words everywhere (R-metrics-069). */}
-        <div className="rh-cap">{source}</div>
+        <div className="ar-sect rh-cap">{source}</div>
       </div>
     </div>
   );

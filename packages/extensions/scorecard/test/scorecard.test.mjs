@@ -253,7 +253,7 @@ test("accept: reason rules, not-failing refused, built-in refused, stored, lapse
 test("an accepts file that does not parse is not overwritten; reads still work", async () => {
   const r = rig();
   await r.engine.refresh(r.scope);
-  mkdirSync(join(r.stateDir, "scorecard"));
+  mkdirSync(join(r.stateDir, "scorecard"), { recursive: true });
   const f = join(r.stateDir, "scorecard", "accepted.json");
   writeFileSync(f, "{ not json");
   assert.equal(r.engine.read(r.scope).score, 6);
@@ -267,7 +267,7 @@ test("handlers via serve(): scope errors, read/accept/remedy, remedy key and ref
   const handlers = {};
   const api = { handle: (m, fn) => { handlers[m] = fn; return () => {}; }, repo: async (id) => (id === "r1" ? r.scope : null) };
   serve(api, r.engine);
-  assert.deepEqual(Object.keys(handlers).sort(), ["accept", "read", "refresh", "remedy", "scoredAs", "unaccept"]);
+  assert.deepEqual(Object.keys(handlers).sort(), ["accept", "history", "read", "refresh", "remedy", "scoredAs", "unaccept"]);
   await assert.rejects(handlers.read({}), /which repo/);
   await assert.rejects(handlers.read({ repo: "zz" }), /no repo "zz"/);
   assert.equal((await handlers.refresh({ repo: "r1" })).score, 6);
@@ -337,7 +337,7 @@ test("a transient failure keeps the good reading and the row; it retries after 1
 test("an unparseable accepts file is named on the view and the row", async () => {
   const r = rig();
   await r.engine.refresh(r.scope);
-  mkdirSync(join(r.stateDir, "scorecard"));
+  mkdirSync(join(r.stateDir, "scorecard"), { recursive: true });
   writeFileSync(join(r.stateDir, "scorecard", "accepted.json"), "{ nope");
   const v = r.engine.read(r.scope);
   assert.match(v.problem, /accepted\.json.*not valid JSON/);
@@ -383,4 +383,52 @@ test("reply caps, dot slugs, and a renamed repo", async () => {
   const v = await r.engine.refresh(r.scope);
   assert.match(v.absent, /moved on GitHub to o\/renamed.*scored as/);
   assert.equal(r.fetch.calls.length, 1);
+});
+
+test("history: past runs are read back by commit, new readings are added, a known commit is not asked again", async () => {
+  const sha = (c) => c.repeat(40);
+  const at = (c, checks, score, date) => ({ ...REPLY(checks, score), date, repo: { name: "github.com/o/n", commit: sha(c) } });
+  const byCommit = { [sha("a")]: at("a", [chk("SAST", 0)], 5, "2026-10-20T00:00:00Z"), [sha("b")]: at("b", [chk("SAST", 5)], 6, "2026-10-22T00:00:00Z") };
+  const f = async (url) => {
+    const u = String(url); f.calls.push(u);
+    const j = (status, body) => ({ status, json: async () => body });
+    if (u === "https://api.github.com/repos/o/n") return j(200, { private: false, full_name: "o/n" });
+    if (u.includes("/actions/workflows?")) return j(200, { workflows: [{ id: 7, path: ".github/workflows/scorecard.yml" }, { id: 8, path: ".github/workflows/ci.yml" }] });
+    if (u.includes("/actions/workflows/7/runs")) return j(200, { workflow_runs: [{ head_sha: sha("b") }, { head_sha: sha("a") }, { head_sha: sha("c") }] });
+    const m = /\?commit=([0-9a-f]{40})$/.exec(u);
+    if (m) return byCommit[m[1]] ? j(200, byCommit[m[1]]) : j(404, {});
+    return j(200, GOOD);
+  };
+  f.calls = [];
+  const r = rig({ fetch: f });
+  assert.deepEqual(r.engine.history(r.scope).points, []); // not read yet: kicks the read
+  await settle();
+  const h1 = r.engine.history(r.scope);
+  assert.equal(h1.pending, true);
+  await r.engine.settled("o/n");
+  const h = r.engine.history(r.scope);
+  assert.deepEqual(h.points.map((p) => [p.date.slice(0, 10), p.score]), [["2026-10-20", 5], ["2026-10-22", 6], ["2026-10-26", 6]]);
+  assert.equal(h.points[0].checks.SAST, 0);
+  assert.equal(h.note, undefined);
+  assert.ok(!f.calls.some((u) => u.includes("/workflows/8/")), "only the scorecard workflow's runs are listed");
+  // Next day: the runs are listed again, but a/b (kept) and c (no result) are not asked again.
+  f.calls = []; r.clock.t += 25 * 60 * 60_000;
+  r.engine.history(r.scope); await r.engine.settled("o/n");
+  assert.deepEqual(f.calls.filter((u) => u.includes("?commit=")), []);
+});
+
+test("history: no scorecard workflow says so; an unparseable history file is never written over", async () => {
+  const f = fakeFetch();
+  const r = rig({ fetch: f });
+  f.gh = { status: 200, body: { private: false, workflows: [] } };
+  r.engine.history(r.scope); await settle();
+  r.engine.history(r.scope); await r.engine.settled("o/n");
+  const h = r.engine.history(r.scope);
+  assert.match(h.note, /no scorecard workflow/);
+  assert.equal(h.points.length, 1); // the live reading is kept
+  const file = join(r.stateDir, "scorecard", "history", "o__n.json");
+  writeFileSync(file, "{nope");
+  await r.engine.refresh(r.scope);
+  assert.equal(readFileSync(file, "utf8"), "{nope");
+  assert.match(r.engine.history(r.scope).note, /not valid JSON/);
 });

@@ -160,14 +160,19 @@ export const REPO_HEALTH_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // the series file. Refused in words unless the repo's commands are already
   // approved — this route never approves anything (that is the refresh's
   // consent tap). Single-flight with the refresh, in `repohealth.ts`. The
-  // only body field is a commit COUNT, clamped to an integer there. Always
+  // body fields are a commit COUNT, clamped to an integer there, and `retry` (a boolean). Always
   // 200 with `ok`, like the refresh: a refusal is an answer, not a failure.
   route<RepoReq>("POST", "repohealth/own-backfill", async ({ req, res, wt }, ctx) => {
-    const body = await readJson(req, { optional: true }) as { commits?: unknown } | null;
+    const body = await readJson(req, { optional: true }) as { commits?: unknown; retry?: unknown } | null;
+    // `retry` re-reads days whose readings FAILED; a boolean only, anything else is refused, never coerced.
+    if (body?.retry !== undefined && typeof body.retry !== "boolean") {
+      json(res, { ok: false, refused: "retry must be true or false" }, 200);
+      return true;
+    }
     res.setTimeout(REPOHEALTH_TIMEOUT_MS + 30_000);
     let answer;
     try {
-      answer = await backfillOwnReadings(wt, typeof body?.commits === "number" ? body.commits : undefined);
+      answer = await backfillOwnReadings(wt, typeof body?.commits === "number" ? body.commits : undefined, undefined, body?.retry === true);
     } catch (err) {
       json(res, { ok: false, error: err instanceof Error ? err.message : String(err) }, 200);
       return true;

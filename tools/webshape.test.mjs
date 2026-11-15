@@ -911,7 +911,7 @@ const CHART_SPLIT_FILES = {
   "contextPlot/cplotPaths.ts": 195,
   "contextPlot/cplotSkills.ts": 135,
   "contextPlot/cplotSpark.ts": 185,
-  "contextPlot/cplotSpend.ts": 295,
+  "contextPlot/cplotSpend.ts": 305,
   "contextPlot/cplotWords.ts": 150,
   "kit/chart/chartFmt.ts": 50,
   "kit/chart/chartPath.ts": 40,

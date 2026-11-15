@@ -89,3 +89,7 @@ The VS Code extension and the web app show the same repo-health data for a repo 
 - asked: 2026-11-02
 - shipped: 5065458f
 
+### R-diagnostics-019 · requested
+Every CLI signal and screen reader the host depends on has proof on the installed claude version: a repo fixture, a host capture, or a live good from that version, and every kept capture is either a fixture or has a stated reason it was refused.
+- asked: 2026-11-11
+

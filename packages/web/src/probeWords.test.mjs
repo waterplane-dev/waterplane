@@ -60,7 +60,7 @@ test("R-metrics-074: unread results are said as unread, never as none", () => {
   assert.match(card, /resRead \? PROBE_AGAINST_NONE/);
   assert.match(card, /!resRead \? <div className="rh-cap">\{resUnread\}/);
   const region = readFileSync(new URL("./AgentReadingsRegion.tsx", import.meta.url), "utf8");
-  assert.match(region, /probes\.data\?\.ok \? <div className="rh-cap">\{PROBE_NONE\}/);
+  assert.match(region, /probes\.data\?\.ok \? <div className="(?:[\w-]+ )*rh-cap">\{PROBE_NONE\}/);
 });
 
 test("R-metrics-074: no word on the card ranks a setup", () => {
@@ -109,7 +109,8 @@ test("R-metrics-074: the card starts only through a ConfirmButton with the estim
   assert.match(src, /<ConfirmButton[^>]*confirm=\{probeConfirmText\(est\)\}[^>]*onConfirm=\{start\}/);
   assert.match(src, /accepted: \{ tokens: est\.tokens, usd: est\.usd \}/);
   assert.match(src, /probeEstimate\(plan\.models, plan\.questions, plan\.repeats\)/);
-  assert.match(src, /setInterval\(\(\) => view\.reload\(\{ quiet: true \}\), POLL_MS\)/);
+  assert.match(src, /const reloadView = view\.reload;/);
+  assert.match(src, /setInterval\(\(\) => reloadView\(\{ quiet: true \}\), POLL_MS\)/);
   assert.equal((src.match(/\{probeSourceText\(\)\}/g) ?? []).length, 1, "the source is said once on the card (the ? says it through probeHelp)");
   const region = readFileSync(new URL("./AgentReadingsRegion.tsx", import.meta.url), "utf8");
   assert.match(region, /<ProbeCard repoId=\{repoId\} view=\{probeView\} results=\{probes\} pts=\{pts\} \/>/);

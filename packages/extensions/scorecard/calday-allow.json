@@ -3,6 +3,10 @@
     [
       "VISIBILITY_FRESH_MS = 24 * 60 * 60_000",
       "a freshness threshold, elapsed"
+    ],
+    [
+      "HISTORY_FRESH_MS = 24 * 60 * 60_000",
+      "a freshness threshold, elapsed"
     ]
   ]
 }

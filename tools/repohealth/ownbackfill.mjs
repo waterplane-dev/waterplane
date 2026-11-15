@@ -19,6 +19,26 @@
  * that failed there stays failed, with its reason: asking again would run the
  * same command on the same tree.
  *
+ * `--retry` (`retry: true`) picks the OTHER rows: older day rows that already
+ * have an `own` but with at least one reading that FAILED to run (`exited …`,
+ * `did not finish`, `could not start`, `printed more than` — never "not
+ * declared", "HEAD-only" or "not run — …", which were left out on purpose).
+ * Each is re-measured and MERGED: a key that now has a number takes it, a key
+ * that had one and fails now keeps the old number, the rest take the new
+ * entry; `own.retried` marks the day so later taps reach untried days first.
+ *
+ * ── What the scratch copy gets ─────────────────────────────────────────────
+ *
+ * A fresh checkout has no `node_modules` and no build, so a command that needs
+ * either fails there for a reason that is the scratch's, not the commit's. The
+ * declaration's `scratch` (`own.mjs`) says what to add: `linkNodeModules`
+ * (a real directory of symlinks to the checkout's; a workspace package is
+ * linked to the SCRATCH's own copy, never today's) and a `prepare` argv, run
+ * once per commit before its readings. Both come from the approved working-
+ * tree file (the approval covers them), only here, never at HEAD. A prepare
+ * that fails is `own.prepare`, one sentence; the readings run anyway and keep
+ * their own reasons. Removal unlinks the links first and never follows them.
+ *
  * ── What runs, and where ───────────────────────────────────────────────────
  *
  * Each commit is checked out into ONE scratch detached worktree under the OS
@@ -48,10 +68,12 @@
  * as it was, re-serialised by `stringifyRow` exactly as `replaceRow` does.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, sep } from "node:path";
-import { OWN_FILE, OWN_TIMEOUT_MS, measureOwn, parseDeclaration } from "./own.mjs";
+import { basename, join, relative, sep } from "node:path";
+import { OWN_FILE, OWN_TIMEOUT_MS, execArgv, measureOwn, parseDeclaration, readingEnv } from "./own.mjs";
 import { stringifyRow } from "./series.mjs";
 import { BRAND } from "@waterplane/shared";
 
@@ -97,6 +119,52 @@ export function backfillTargets(dayRows, headSha, n) {
   return { picked: all.slice(0, n), left: all.length };
 }
 
+/** A reading's reason that is a RUN failure — the command ran (or tried to) and did not give a number. Not "not declared", "HEAD-only" or "not run — …". */
+const RUN_FAILURE = /^(exited |did not finish|could not start|printed more than)/;
+
+/** Did this stored reading fail to run (as opposed to being left out on purpose)? */
+export const failedOwnReading = (r) =>
+  !!r && typeof r === "object" && typeof r.value !== "number" && typeof r.reason === "string" && RUN_FAILURE.test(r.reason);
+
+/** A day row whose stored own readings include at least one failed run — what `--retry` re-reads. */
+export const retryableDay = (row) =>
+  !!row?.own && typeof row.own === "object" && !row.own.notRun && Array.isArray(row.own.readings) && row.own.readings.some(failedOwnReading);
+
+/**
+ * Rows to RE-read: day rows (oldest first, as `perDay` gives them) with a
+ * failed reading, HEAD's excluded. Newest first, but a day already retried
+ * (`own.retried`) goes after the ones never retried, so a day that keeps
+ * failing cannot hold the cap against older days. `left` = never-retried days.
+ */
+export function retryTargets(dayRows, headSha, n) {
+  const all = dayRows.filter((r) => r && typeof r.sha === "string" && r.sha !== headSha && retryableDay(r)).reverse();
+  const ordered = [...all.filter((r) => !r.own.retried), ...all.filter((r) => r.own.retried)];
+  return { picked: ordered.slice(0, n), left: all.filter((r) => !r.own.retried).length };
+}
+
+/**
+ * The stored own of a retried day: a key that now has a number takes it; a key
+ * that had a number and fails now keeps the old one; a key that failed before and
+ * is only cut by the budget keeps the old failure; the rest take the new entry (a standing
+ * "not run": not approved, HEAD-only … replaces the old failure, or the day never left the retry set). Keys only the old entry had are kept. Pure.
+ */
+export function mergeRetried(old, fresh) {
+  const oldBy = new Map((old?.readings ?? []).map((r) => [r.key, r]));
+  const seen = new Set();
+  const readings = (fresh.readings ?? []).map((r) => {
+    seen.add(r.key);
+    const o = oldBy.get(r.key);
+    if (typeof r.value === "number" || !o) return r;
+    // No new number: the old number stays, and so does an old FAILED run when the fresh entry is
+    // only the budget cut — nothing ran, and the next retry should still try it. Any other "not run"
+    // (not approved, HEAD-only, …) is the standing state: it replaces the failure, so the day
+    // leaves the retry set instead of costing a checkout and a prepare on every tap.
+    return typeof o.value === "number" || (failedOwnReading(o) && r.reason === BUDGET_CUT) ? o : r;
+  });
+  for (const o of old?.readings ?? []) if (!seen.has(o.key)) readings.push(o);
+  return { ...fresh, readings, backfilled: true, retried: true };
+}
+
 /**
  * The series text with `own` replaced on the LAST line for each sha in
  * `ownBySha` (a Map). Every other line, and every other field of those lines,
@@ -132,6 +200,13 @@ export function approvedRuns(text) {
   const out = new Map();
   for (const r of d.readings) if (Array.isArray(r.run)) out.set(r.key, JSON.stringify(r.run));
   return out;
+}
+
+/** The scratch needs (`linkNodeModules`, `prepare`) of the WORKING TREE's declaration — the one the host approved; an older commit's file never supplies them. Null: none. */
+export function approvedScratch(text) {
+  if (typeof text !== "string") return null;
+  const d = parseDeclaration(text);
+  return d.refused || d.none || !d.scratch ? null : d.scratch;
 }
 
 /** Keys a declaration marks `"backfill": false` — read off the raw file, a field `parseDeclaration` ignores. */
@@ -217,6 +292,76 @@ export function sweepScratch(root) {
 }
 
 /**
+ * Give the scratch copy a `node_modules`: a REAL directory whose entries are
+ * symlinks to the checkout's own (one level into `@scope/` directories too),
+ * so a removal of the scratch can only ever unlink them. An entry that is
+ * itself inside the repo (a workspace package: `node_modules/@x/shared` →
+ * `packages/shared`) is linked to the same path inside the scratch, so the
+ * commit's own code runs, never today's. Returns null, or a sentence.
+ */
+export function linkNodeModules(root, dir) {
+  const src = join(root, "node_modules");
+  let rootReal;
+  try { rootReal = realpathSync(root); } catch { return "could not link node_modules: the checkout is not readable"; }
+  if (!existsSync(src)) return "could not link node_modules: the checkout has none";
+  const dst = join(dir, "node_modules");
+  try {
+    unlinkNodeModules(dir);
+    mkdirSync(dst, { recursive: true });
+    const target = (from) => {
+      let real;
+      try { real = realpathSync(from); } catch { return from; }
+      const rel = relative(rootReal, real);
+      const inside = rel !== "" && !rel.startsWith("..") && !rel.startsWith(sep) && !isAbs(rel)
+        && rel !== "node_modules" && !rel.startsWith(`node_modules${sep}`);
+      return inside ? join(dir, rel) : from;
+    };
+    for (const name of readdirSync(src)) {
+      const from = join(src, name);
+      let st;
+      try { st = lstatSync(from); } catch { continue; }
+      if (name.startsWith("@") && st.isDirectory()) {
+        mkdirSync(join(dst, name), { recursive: true });
+        for (const sub of readdirSync(from)) symlinkSync(target(join(from, sub)), join(dst, name, sub));
+      } else {
+        symlinkSync(target(from), join(dst, name));
+      }
+    }
+  } catch (err) {
+    return `could not link node_modules: ${err.message}`;
+  }
+  return null;
+}
+const isAbs = (p) => /^([A-Za-z]:)?[\\/]/.test(p);
+
+/**
+ * Take `<dir>/node_modules` down by UNLINKING what `linkNodeModules` made —
+ * never a recursive removal through it. Anything that is not a symlink or one
+ * of our two levels of plain directories is left for the caller's `rm`, which
+ * does not follow symlinks either; this is the belt beside that.
+ */
+export function unlinkNodeModules(dir) {
+  const nm = join(dir, "node_modules");
+  let st;
+  try { st = lstatSync(nm); } catch { return; }
+  if (st.isSymbolicLink()) { try { unlinkSync(nm); } catch { /* the rm */ } return; }
+  if (!st.isDirectory()) return;
+  for (const name of safeList(nm)) {
+    const p = join(nm, name);
+    let s;
+    try { s = lstatSync(p); } catch { continue; }
+    if (s.isSymbolicLink()) { try { unlinkSync(p); } catch { /* the rm */ } continue; }
+    if (!s.isDirectory()) continue;
+    for (const sub of safeList(p)) {
+      try { if (lstatSync(join(p, sub)).isSymbolicLink()) unlinkSync(join(p, sub)); } catch { /* the rm */ }
+    }
+    try { rmdirSync(p); } catch { /* not empty: the rm decides */ }
+  }
+  try { rmdirSync(nm); } catch { /* not empty: the rm decides */ }
+}
+const safeList = (d) => { try { return readdirSync(d); } catch { return []; } };
+
+/**
  * Run `fn(dir)` with a scratch detached worktree of `root`, removed afterwards
  * on a return or a throw. A signal is NOT caught: the run is synchronous, so a
  * JS handler would only run after the reading finished — it would turn the
@@ -227,6 +372,7 @@ export function sweepScratch(root) {
 export function withScratch(root, firstSha, fn) {
   const dir = mkdtempSync(join(realTmp(), `${SCRATCH_PREFIX}${process.pid}-`));
   const remove = () => {
+    unlinkNodeModules(dir);
     try { gitRun(root, ["worktree", "remove", "-f", "-f", dir]); } catch { /* the rm below */ }
     try { rmSync(dir, { recursive: true, force: true }); } catch { /* gone */ }
   };
@@ -236,6 +382,29 @@ export function withScratch(root, firstSha, fn) {
   } finally {
     remove();
   }
+}
+
+/** The most a commit's `prepare` may take, within what the run has left. */
+export const PREPARE_TIMEOUT_MS = 120_000;
+const PREPARE_MAX_OUTPUT = 4 * 1024 * 1024;
+
+/**
+ * Make the scratch copy ready for the commit's readings, from the APPROVED
+ * working-tree `scratch` declaration: link `node_modules`, then run `prepare`
+ * (argv, no shell, the minimal env, cwd the scratch, its group killed on a
+ * timeout). Null when it all worked; else ONE sentence — never a throw. The
+ * readings run regardless and keep their own reasons.
+ */
+export function prepareScratch(dir, root, scratch, timeoutMs, opts = {}) {
+  if (scratch.linkNodeModules) {
+    const why = linkNodeModules(root, dir);
+    if (why) return why;
+  }
+  if (!scratch.prepare) return null;
+  const got = execArgv(dir, scratch.prepare, {
+    timeoutMs: Math.max(1, timeoutMs), env: opts.env ?? readingEnv(), spawn: opts.spawn, maxBuffer: PREPARE_MAX_OUTPUT,
+  });
+  return got.reason ? `prepare (${scratch.prepare.join(" ")}) ${got.reason}` : null;
 }
 
 /**
@@ -251,7 +420,7 @@ export function withScratch(root, firstSha, fn) {
  */
 export function runOwnBackfill({
   root, seriesPath, dayRows, headSha, git, commits = OWN_BACKFILL_DEFAULT, budgetMs = OWN_BACKFILL_BUDGET_MS,
-  now = Date.now, onProgress = () => {}, readingOpts = {},
+  now = Date.now, onProgress = () => {}, readingOpts = {}, retry = false,
 }) {
   const started = now();
   const headText = git.readFileAt(root, headSha, OWN_FILE);
@@ -268,12 +437,13 @@ export function runOwnBackfill({
     return { refused: `${OWN_FILE} in the working tree declares no readings this desktop could have approved — nothing is read back.` };
   }
   const headOnly = headOnlyKeys(wtText);
+  const scratch = approvedScratch(wtText);
 
   const swept = sweepScratch(root);
   // Days from before the declaration existed cost no checkout and do not count
   // against the commit cap, so the cap is applied below, not here.
-  const { picked: all, left } = backfillTargets(dayRows, headSha, Infinity);
-  const summary = { asked: commits, eligible: left, read: 0, values: 0, absent: 0, stopped: null, swept, left };
+  const { picked: all, left } = (retry ? retryTargets : backfillTargets)(dayRows, headSha, Infinity);
+  const summary = { asked: commits, eligible: left, read: 0, values: 0, absent: 0, stopped: null, swept, left, ...(retry ? { retried: 0 } : {}) };
   if (!all.length) return summary;
   const total = Math.min(all.length, commits);
 
@@ -290,9 +460,16 @@ export function runOwnBackfill({
   const store = (row, own) => {
     writeOwn(seriesPath, new Map([[row.sha, own]]));
     summary.read++;
-    summary.left--;
+    if (retry) summary.retried++;
+    if (!retry || !row.own?.retried) summary.left--;
+    // A retry counts what THIS run changed: a number the old entry did not hold, and a reading
+    // that is still a failed run — never the numbers carried over, never the left-out ones.
+    const oldBy = new Map(retry ? (row.own?.readings ?? []).map((r) => [r.key, r]) : []);
     for (const r of own.readings ?? []) {
-      if (typeof r.value === "number") summary.values++;
+      if (retry) {
+        if (typeof r.value === "number") { if (typeof oldBy.get(r.key)?.value !== "number") summary.values++; }
+        else if (failedOwnReading(r)) summary.absent++;
+      } else if (typeof r.value === "number") summary.values++;
       else summary.absent++;
     }
   };
@@ -302,13 +479,18 @@ export function runOwnBackfill({
     let checked = 0;
     for (const row of all) {
       if (remaining() < 1_000) { summary.stopped = "budget"; break; }
-      if (git.readFileAt(root, row.sha, OWN_FILE) === null) { store(row, undeclared()); continue; }
+      if (git.readFileAt(root, row.sha, OWN_FILE) === null) {
+        if (!retry) store(row, undeclared()); // a retried day keeps what it has
+        continue;
+      }
       if (checked >= commits) break;
       onProgress(checked, total, row);
       checked++;
       gitRun(dir, ["checkout", "--detach", "--force", "--quiet", row.sha]);
+      unlinkNodeModules(dir);
       gitRun(dir, ["clean", "-ffdxq"]);
       cut = false;
+      const prepareFailed = scratch ? prepareScratch(dir, root, scratch, Math.min(PREPARE_TIMEOUT_MS, remaining()), readingOpts) : null;
       const measured = measureOwn(dir, row.sha, git, opts);
       const timedOutByBudget = remaining() <= 0
         && (measured?.readings ?? []).some((r) => typeof r.reason === "string" && /^did not finish/.test(r.reason));
@@ -319,13 +501,17 @@ export function runOwnBackfill({
       if ((cut || timedOutByBudget) && !forced) { summary.stopped = "budget"; break; }
       let own;
       if (measured === undefined) {
+        if (retry) continue;
         own = undeclared();
       } else if (measured.refused) {
+        if (retry) continue;
         own = { ...measured, backfilled: true };
       } else {
         const have = new Set(measured.readings.map((r) => r.key));
         own = { ...measured, readings: [...measured.readings, ...notDeclared(head.readings, have)], backfilled: true };
+        if (prepareFailed) own.prepare = prepareFailed;
       }
+      if (retry) own = mergeRetried(row.own, own);
       store(row, own);
       if (forced) { summary.stopped = "budget"; break; }
     }

@@ -142,7 +142,7 @@ test("where the readings come from is said ONCE in the region, and on every card
   // The Headline's caption and its `?` share one call; every Reading's `?` quotes it; no card prints it visibly.
   assert.equal((src.match(/agentSourceText\(\)/g) ?? []).length, 2, "one in the Headline, one in the Reading's Explain");
   assert.match(src, /<Explain of=\{title\}>\{rule\} \{agentSourceText\(\)\}<\/Explain>/);
-  assert.match(src, /<div className="rh-cap">\{source\}<\/div>/);
+  assert.match(src, /<div className="(?:ar-sect )?rh-cap">\{source\}<\/div>/);
 });
 
 test("compare by model: no row unless two models have enough sessions; one pair, ratio and band word, model + CLI said (R-metrics-072)", async () => {

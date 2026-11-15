@@ -74,7 +74,7 @@ const FLUSH_MS = 5_000;
 const YIELD_EVERY = 64;
 /** Store format. A bump discards the file and rebuilds rather than migrating —
  *  it is a cache of something still on disk, so rebuilding is always available. */
-const VERSION = 7; // 7: Haiku 5.5 long-prompt requests tallied under `<alias>@long`
+const VERSION = 8; // 7: Haiku 5.5 long-prompt requests tallied under `<alias>@long`; 8: fast-mode requests under `<alias>@fast`
 /** How far back the HOUR buckets travel on the wire. The store keeps every hour
  *  it ever saw (they cost ~3 entries per conversation); this bounds only what a
  *  phone is asked to download and cache. 14 days is two full weeks of the

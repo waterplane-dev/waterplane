@@ -41,7 +41,7 @@ import { sameKeyHints, sourceModeProblem, type ModeSource, type PermissionMode, 
 import { liveSourceFor } from "../livesources.js";
 import { sourceKeysProblem } from "../sourceanswer.js";
 import { readKeyHints } from "../keyhints.js";
-import { permModeWords, readPermMode, readUltracode, ultracodeVerdict } from "../permmode.js";
+import { permModeWords, readFastMode, readPermMode, readUltracode, ultracodeVerdict } from "../permmode.js";
 import type { Session, SessionCore } from "./core.js";
 import { MODE_MAX_PRESSES, MODE_POLL_MS, MODE_PRESS_WAIT_MS } from "./knobs.js";
 import { derive } from "../backends/derive.js";
@@ -109,6 +109,8 @@ function applyGrid(s: Session, grid: string): boolean {
     if (r.border === "label") s.ultracodeLabelSeen = true;
     const on = ultracodeVerdict(r, !!s.ultracodeLabelSeen);
     if (on !== null && on !== s.info.ultracode) { s.info.ultracode = on; changed = true; }
+    const fast = readFastMode(grid);
+    if (fast !== null && fast !== s.info.fastMode) { s.info.fastMode = fast; changed = true; }
   }
   return changed;
 }

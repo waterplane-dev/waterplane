@@ -3,7 +3,7 @@
  * GitHub remote → slug, the API reply → checks, failing / accepted, the words of the setup row and
  * the remedy prompt. No node imports.
  */
-import { BUILT_IN_ACCEPTS, SLUG_RE, type CheckView, type ScoreAccept, type ScoreCheck } from "./wire.mjs";
+import { BUILT_IN_ACCEPTS, HISTORY_MAX, SLUG_RE, type CheckView, type ScoreAccept, type ScoreCheck, type ScorePoint } from "./wire.mjs";
 
 const DETAIL_LINES = 20;
 const DETAIL_CHARS = 300;
@@ -162,4 +162,19 @@ export function remedyPrompt(slug: string, c: ScoreCheck): string {
   if (hint) lines.push("", `What usually fixes it: ${hint}`);
   lines.push("", `Raise this one check in this repo. Change only what "${c.name}" needs, commit, and say plainly what you could not fix (and why, for example that it needs a repo admin or a person's account).`);
   return lines.join("\n");
+}
+
+/** A parsed reading as one history point, or null when the reply names no date (it cannot be placed in time). */
+export function pointOf(p: Parsed): ScorePoint | null {
+  if (!p.date || !Number.isFinite(Date.parse(p.date))) return null;
+  const checks: Record<string, number> = Object.create(null);
+  for (const c of p.checks) checks[c.name] = c.score;
+  return { date: p.date, commit: p.commit ?? null, score: p.score, checks };
+}
+
+/** Points merged, oldest first: one per run date (a later copy of the same date replaces), newest HISTORY_MAX kept. */
+export function mergePoints(have: readonly ScorePoint[], add: readonly ScorePoint[]): ScorePoint[] {
+  const by = new Map<string, ScorePoint>();
+  for (const p of [...have, ...add]) by.set(p.date, p);
+  return [...by.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date)).slice(-HISTORY_MAX);
 }

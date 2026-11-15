@@ -17,12 +17,12 @@
  * Rules and words: `modePick.ts`.
  */
 import type { ReactNode } from "react";
-import { Check, Code, Hand, Loader2, Lock, ScrollText, ShieldOff, Sparkles, Zap } from "lucide-react";
+import { Check, Code, Hand, Loader2, Lock, Rabbit, ScrollText, ShieldOff, Sparkles, Zap } from "lucide-react";
 import type { BackendInfo, ClientMessage, PermissionMode, SessionInfo } from "@waterplane/shared";
 import { effortChoices, isShellBackend, liveModesHere, modesReason, permModeChoices, runsClaudeTui, backendInfo } from "../../backendCaps";
 import { askConfirm } from "../../Confirm";
 import {
-  MODE_DEFS, modeNow, modeNowText, modeRows, modeTap, modeTitle, ultraCommand, ultraState, ultraText,
+  MODE_DEFS, fastCommand, fastText, fastWarning, modeNow, modeNowText, modeRows, modeTap, modeTitle, ultraCommand, ultraState, ultraText,
   type ModeIcon,
 } from "../../modePick";
 import { showToast } from "../../toast";
@@ -55,13 +55,15 @@ function parts(backends: BackendInfo[] | null, cur: SessionInfo, canSlash: boole
     rows: modeRows(modes, cur, runsClaudeTui(backends, cur.backend)),
     // Ultracode is `/effort ultracode` in claude's TUI, whatever else can switch modes.
     ultraOk: modes.length > 0 && runsClaudeTui(backends, cur.backend) && canSlash && effortChoices(backends, cur.backend).length > 0,
+    // Fast mode is `/fast on|off` in claude's TUI.
+    fastOk: runsClaudeTui(backends, cur.backend) && canSlash,
   };
 }
 
 /** Whether the popover has a mode half at all (the head's title names it). */
 export function hasModeSection(backends: BackendInfo[] | null, cur: SessionInfo, canSlash: boolean): boolean {
   const p = parts(backends, cur, canSlash);
-  return p.rows.length > 0 || p.ultraOk;
+  return p.rows.length > 0 || p.ultraOk || p.fastOk;
 }
 
 export interface ModeSectionProps {
@@ -76,9 +78,9 @@ export interface ModeSectionProps {
 
 export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onClose }: ModeSectionProps): ReactNode {
   const switching = useModeSwitch(cur.id);
-  const { rows, ultraOk } = parts(backends, cur, canSlash);
+  const { rows, ultraOk, fastOk } = parts(backends, cur, canSlash);
   const now = modeNow(cur);
-  if (rows.length === 0 && !ultraOk) {
+  if (rows.length === 0 && !ultraOk && !fastOk) {
     // Not a vanished section: where the picker would be, the sentence says why it is not
     // (a shell has no agent to switch, so it says nothing).
     const why = isShellBackend(backends, cur.backend) ? null : modesReason(backends, cur.backend);
@@ -111,6 +113,23 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
     if (submitInput(cur.id, cur.cwd, cmd, "command")) showToast(cmd);
   };
   const ust = ultraState(cur.ultracode);
+  // Turning fast mode ON is a cost decision, so it asks first with the price on
+  // this session's model; turning it off never asks.
+  const fast = async (on: boolean) => {
+    if (on) {
+      onClose();
+      const ok = await askConfirm({
+        title: "Turn on fast mode for this session?",
+        lines: fastWarning(cur.turnModel ?? cur.model),
+        confirmLabel: "Turn on fast mode",
+      });
+      if (!ok) return;
+    }
+    const cmd = fastCommand(on);
+    track(`action:fast.${on ? "on" : "off"}`);
+    if (submitInput(cur.id, cur.cwd, cmd, "command")) showToast(cmd);
+  };
+  const fst = ultraState(cur.fastMode);
 
   return (
     <div className="mode-sec">
@@ -151,6 +170,20 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
                 knows which side it is on. */}
             {ust !== "on" && <Button onClick={() => ultra(true)}>turn on</Button>}
             {ust !== "off" && <Button onClick={() => ultra(false)}>turn off</Button>}
+          </span>
+        </div>
+      )}
+      {fastOk && (
+        <div className="mode-ultra">
+          <span className="mode-ico"><Rabbit size={16} aria-hidden /></span>
+          <span className="mode-txt">
+            <span className="mode-title">Fast mode</span>
+            <span className="mode-desc muted">{fastText(cur.fastMode)}</span>
+          </span>
+          <span className="mode-acts">
+            {/* Unknown gets both verbs, as ultracode's do. */}
+            {fst !== "on" && <Button onClick={() => void fast(true)}>turn on</Button>}
+            {fst !== "off" && <Button onClick={() => void fast(false)}>turn off</Button>}
           </span>
         </div>
       )}

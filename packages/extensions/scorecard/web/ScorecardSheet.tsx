@@ -11,6 +11,7 @@ import { useConnStatus, useStore } from "@waterplane/sdk";
 import { Button, FilterBar, Hint, RowSub, StaleHead, Tag, ago, askConfirm, useNow } from "@waterplane/kit";
 import { REASON_MAX, type CheckView, type ScoreView } from "../shared/wire.mts";
 import { cutChecks, openChecks, refreshWords, reasonKey, reasonProblem, sections, SLUG_RULE, slugKey, slugProblem } from "./logic.ts";
+import { ScoreHistoryChart } from "./ScoreHistoryChart.tsx";
 import { accept, clearCut, closeScorecard, dropDraft, drafts, openLink, refresh, remedy, scoredAs, setDraft, sheet, unaccept, views } from "./state.ts";
 import "./scorecard.css";
 
@@ -144,6 +145,7 @@ export function ScorecardSheet() {
             </div>
           </div>
         ) : <div className="empty">{v.absent ?? "No score yet."}</div>}
+        {!cut && <ScoreHistoryChart repo={repo.id} />}
         <div className="section section-head">Which repo is scored</div>
         <ScoredAs key={repo.id} repo={repo.id} v={v} />
         {v.score != null && !cut && <Hint style={{ padding: "0 14px" }}>{openChecks(v).length} failing, {sec.accepted.length} accepted, {sec.passing.length} passing{v.readAt ? ` · asked ${ago(v.readAt)}` : ""}.</Hint>}

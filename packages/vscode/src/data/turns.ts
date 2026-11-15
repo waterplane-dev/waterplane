@@ -159,7 +159,7 @@ export function advanceTurns(path: string, prev?: TurnCursor | null): TurnCursor
       turn.requests++;
       addTotals(turn.kinds, bag);
       const raw = typeof msg.model === "string" ? msg.model : null;
-      const c = costOfRequest(bag, raw, localDay(t));
+      const c = costOfRequest(bag, raw, localDay(t), typeof usage.speed === "string" ? usage.speed : null);
       if (c) turn.pricedUsd += c.total;
       else { turn.unpriced = true; turn.unpricedTok += tokenTotal(bag); }
       if (tok > 0) turn.ctxTok = tok;

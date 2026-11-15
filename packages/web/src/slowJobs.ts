@@ -238,7 +238,7 @@ export function useSlowJob<R>(kind: SlowJobKind, repoId: string | null, opts: { 
     if (!repoId || !enabled) return;
     setRefusal(null);
     void ensureSlowJob(kind, repoId, { auto, verb });
-  }, [kind, repoId, enabled, online]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, repoId, enabled, online, auto, verb]);
 
   const start = useCallback(() => {
     if (!repoId) return;

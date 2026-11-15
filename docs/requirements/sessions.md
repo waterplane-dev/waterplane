@@ -312,3 +312,8 @@ Every session's pane carries its own session ID in an environment variable, so a
 - asked: 2026-11-10
 - shipped: 6a148c8e
 
+
+### R-sessions-066 · shipped
+A claude session's fast mode can be turned on and off from the model, effort and mode sheet, showing it as the CLI last confirmed it (unknown is said, never drawn as off). Turning it on asks first, with the cost: the fast and standard price per million tokens on that session's model, and that auto mode is off while fast mode is on.
+- asked: 2026-11-15
+- shipped: `ModeSection.tsx` fast row, `modePick.ts` `fastWarning`, `permmode.ts` `readFastMode`

@@ -48,3 +48,13 @@ A file at the line cap is split by subject, never by deleting its explanatory co
 - asked: 2026-10-21, 2026-10-21
 - shipped: d01ebdd4, 169d15ab
 
+### R-contributing-010 · shipped
+Every react-hooks/exhaustive-deps disable states a reason after the rule name, so a deliberate omission can be told apart from a stale-closure bug.
+- asked: 2026-11-11
+- shipped: 8e0a66e42, b07bca754
+
+### R-contributing-011 · shipped
+No code outside shared/ imports shared/format or shared/wire.
+- asked: 2026-11-11, 2026-11-12
+- shipped: 8e5d016de, bcfa1a017, 6dfd37df0
+

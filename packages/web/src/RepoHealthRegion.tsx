@@ -43,7 +43,7 @@ import { LongestFiles } from "./RepoHealthLongest";
 import { Magnitudes } from "./RepoHealthMags";
 import { ReadingsTable } from "./RepoHealthTable";
 import { OwnReadings } from "./RepoHealthOwn";
-import { OWN_BACKFILL_COMMITS, ownBackfillExhausted, ownBackfillResultWords } from "./repoHealthOwnBackfill";
+import { OWN_BACKFILL_COMMITS, ownBackfillExhausted, ownBackfillResultWords, ownRetryDone } from "./repoHealthOwnBackfill";
 import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
   SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
@@ -127,23 +127,23 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   /** Reading the repo's OWN readings back (R-metrics-065): the request is
    *  here, the card draws it (`RepoHealthOwn.tsx`). Keyed by repo so a switch
    *  never shows another repo's answer. */
-  const [backfill, setBackfill] = useState<{ repoId: string; busy: boolean; startedAt: number; result: string | null; exhausted: boolean } | null>(null);
+  const [backfill, setBackfill] = useState<{ repoId: string; busy: boolean; startedAt: number; result: string | null; exhausted: boolean; retryDone: boolean } | null>(null);
   const backfillHere = backfill && repo && backfill.repoId === repo.id ? backfill : null;
-  async function runBackfill() {
+  async function runBackfill(retry = false) {
     if (!repo || backfillHere?.busy) return;
     const repoId = repo.id;
-    track("action:repohealth.ownbackfill");
-    setBackfill({ repoId, busy: true, startedAt: Date.now(), result: null, exhausted: false });
+    track(retry ? "action:repohealth.ownretry" : "action:repohealth.ownbackfill");
+    setBackfill({ repoId, busy: true, startedAt: Date.now(), result: null, exhausted: false, retryDone: false });
     // The read polls while busy (below), so the desktop's progress line shows.
     reload({ quiet: true });
     try {
-      const a = await api.repoHealthOwnBackfill(repoId, OWN_BACKFILL_COMMITS);
+      const a = await api.repoHealthOwnBackfill(repoId, OWN_BACKFILL_COMMITS, retry);
       if (a.view) res.set(a.view);
       else await reload({ quiet: true });
-      setBackfill({ repoId, busy: false, startedAt: 0, result: ownBackfillResultWords(a), exhausted: ownBackfillExhausted(a) });
+      setBackfill({ repoId, busy: false, startedAt: 0, result: ownBackfillResultWords(a), exhausted: ownBackfillExhausted(a), retryDone: ownRetryDone(a) });
     } catch (e) {
       // Only a transport failure reaches here. A refusal is a body.
-      setBackfill({ repoId, busy: false, startedAt: 0, result: String((e as Error)?.message || e), exhausted: false });
+      setBackfill({ repoId, busy: false, startedAt: 0, result: String((e as Error)?.message || e), exhausted: false, retryDone: false });
     }
   }
   // `!!view.run` rather than the object: a fresh object arrives with every poll
@@ -588,7 +588,9 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
                 note: view?.run?.note ?? null,
                 result: backfillHere?.result ?? null,
                 exhausted: !!backfillHere?.exhausted,
+                retryDone: !!backfillHere?.retryDone,
                 onRun: () => { void runBackfill(); },
+                onRetry: () => { void runBackfill(true); },
               }}
               actionsFor={onRemedy ? (s) => (
                 <Button className="rh-verb" type="button" onClick={() => askAbout({ ...s, detail: s.means })}>

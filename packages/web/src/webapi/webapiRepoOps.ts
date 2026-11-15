@@ -133,6 +133,6 @@ export const repoOpsApi = {
       `/api/repos/${repoId}/repohealth/refresh`, { ...(scope ? { scope } : {}), ...(approveEngine ? { approveEngine: true, ...(approveToken ? { approveToken } : {}) } : {}), ...(recut ? { recut: true } : {}) }, 200_000,
     ),
   /** The repo's OWN readings read back over older commits (R-metrics-065); 200 always, a refusal is `refused`. 200 s: the host holds the cap. */
-  repoHealthOwnBackfill: (repoId: string, commits: number) =>
-    jpost<RepoHealthOwnBackfillAnswer>(`/api/repos/${repoId}/repohealth/own-backfill`, { commits }, 200_000),
+  repoHealthOwnBackfill: (repoId: string, commits: number, retry?: boolean) =>
+    jpost<RepoHealthOwnBackfillAnswer>(`/api/repos/${repoId}/repohealth/own-backfill`, { commits, ...(retry ? { retry: true } : {}) }, 200_000),
 };

@@ -1133,3 +1133,53 @@ test("own-backfill's sweep removes only our prefix under tmpdir, and git's recor
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+// ── R-metrics-065: the scratch declaration is part of what a person approves, and retry is a boolean ──
+test("own-backfill scratch: the approval text lists prepare, and changing prepare or the link asks again", () => {
+  const { ownApprovalText, ownScratchDeclared, engineApproved: approved, approveEngine: approve } = awaitImport;
+  const readings = [{ key: "x", name: "x", means: "x", better: "higher", unit: "n", run: ["node", "x.mjs"] }];
+  const wt = bundledWorktree(JSON.stringify({ readings, scratch: { linkNodeModules: true, prepare: ["npm", "run", "build:shared"] } }));
+  assert.deepEqual(ownScratchDeclared(wt), { prepare: ["npm", "run", "build:shared"], linkNodeModules: true });
+  const text = ownApprovalText(wt);
+  assert.match(text, /npm run build:shared/);
+  assert.match(text, /node_modules/);
+  assert.equal(ownApprovalText(), ownApprovalText(bundledWorktree(OWN_RUN)), "no scratch: the plain sentence");
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  approve(wt, root);
+  assert.equal(approved(wt, root, "bundled"), true);
+  const file = join(wt, ".waterplane-shared", "health.json");
+  writeFileSync(file, JSON.stringify({ readings, scratch: { linkNodeModules: true, prepare: ["npm", "run", "build"] } }));
+  assert.equal(approved(wt, root, "bundled"), false, "a changed prepare asks again");
+  approve(wt, root);
+  writeFileSync(file, JSON.stringify({ readings, scratch: { prepare: ["npm", "run", "build"] } }));
+  assert.equal(approved(wt, root, "bundled"), false, "dropping the link asks again");
+  writeFileSync(file, JSON.stringify({ readings, scratch: { prepare: "npm run build" } }));
+  assert.equal(ownScratchDeclared(wt), null, "an unusable scratch is not listed (and the engine runs neither)");
+});
+
+test("own-backfill scratch: a prepare argv alone counts as a declared command (asks, and is in the key)", () => {
+  const { ownCommandsDeclared, engineApproved: approved, approveEngine: approve } = awaitImport;
+  const readings = [{ key: "x", name: "x", means: "x", better: "higher", unit: "n" }];
+  const wt = bundledWorktree(JSON.stringify({ readings, scratch: { prepare: ["sh", "-c", "true"] } }));
+  assert.equal(ownCommandsDeclared(wt), true);
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  assert.equal(approved(wt, root, "bundled"), false);
+  approve(wt, root);
+  assert.equal(approved(wt, root, "bundled"), true);
+  writeFileSync(join(wt, ".waterplane-shared", "health.json"), JSON.stringify({ readings, scratch: { prepare: ["sh", "-c", "false"] } }));
+  assert.equal(approved(wt, root, "bundled"), false, "a changed prepare asks again");
+  assert.equal(ownCommandsDeclared(bundledWorktree(JSON.stringify({ readings, scratch: { linkNodeModules: true } }))), false, "a link alone is no command");
+});
+
+test("own-backfill retry: --retry rides the argv only for the boolean true", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  const f = fake({ "own-backfill": ok(JSON.stringify({ ownBackfill: { asked: 20, read: 1, retried: 1, values: 1, absent: 0, left: 0, stopped: null } }) + "\n") });
+  const deps = { ...f.deps };
+  const a = await backfillMod.backfillOwnReadings(wt, 20, deps, true);
+  assert.equal(a.summary?.retried, 1);
+  assert.ok(f.argvs.find((x) => x[1] === "own-backfill").includes("--retry"));
+  f.argvs.length = 0;
+  await backfillMod.backfillOwnReadings(wt, 20, deps, "yes");
+  assert.ok(!f.argvs.find((x) => x[1] === "own-backfill").includes("--retry"));
+  assert.ok(!backfillMod.ownBackfillArgv({ path: "/b", kind: "bundled" }, wt, 5, 1000, "true").includes("--retry"));
+});

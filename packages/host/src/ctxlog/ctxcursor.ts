@@ -1,6 +1,6 @@
 /** The context log's cursor: the types, the ranged line reader and the accumulators' blanks and projections. Moved from ctxlog.ts. */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
-import type { CarriedKind, CarriedPart, ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, SessionCarried, SkillLoad, TokenTotals } from "@waterplane/shared";
+import type { CarriedKind, CarriedPart, ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, ContextSeriesDoc, CostBreakdown, SessionCarried, SkillLoad, TokenTotals } from "@waterplane/shared";
 import { CARRIED_KINDS, CARRIED_NAMES_CAP, costOf, priceGeneration, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 
@@ -8,7 +8,7 @@ import { localDay } from "../convlog.js";
  *  this, to the end — never from its tail. */
 export const MAX_READ = 24 * 1024 * 1024;
 
-export interface ContextLog {
+export interface ContextLog extends Pick<ContextSeriesDoc, "fastTok" | "fastUsd"> {
   samples: ContextSample[];
   events: ContextEvent[];
   /** What this conversation has USED: every request's input, cache reads and
@@ -206,7 +206,7 @@ export interface SeriesCursor {
    * name. This is what lets the reading say what it left out instead of
    * quietly coming in low.
    */
-  unpriced: number;
+  unpriced: number; fastTok: number; fastUsd: number; // the fast-mode share (`usage.speed`), inside split and cost
   /**
    * The compaction ledger, accumulated in this same pass — see
    * `CompactionLedger`.
@@ -384,7 +384,7 @@ export function blank(path: string): SeriesCursor {
   return {
     path, priceGen: priceGeneration(), consumed: 0, size: 0, mtime: 0,
     samples: [], events: [], turns: 0, usageTok: 0, split: zeroTotals(),
-    cost: zeroCost(), unpriced: 0, models: [], modelTok: [], cum: zeroTotals(),
+    cost: zeroCost(), unpriced: 0, fastTok: 0, fastUsd: 0, models: [], modelTok: [], cum: zeroTotals(),
     compaction: blankCompaction(), shedAuto: 0, shedManual: 0, pendingRebuild: null,
     prevTok: 0, prevAt: 0, cold: blankCold(),
     autoCompactTok: null, model: null, effort: null, skills: [], carried: blankCarried(), truncated: false,

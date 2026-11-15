@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { instructionMarkers, readSwitchLog, switchMarkers } from "../dist/agentmarkers.js";
+import { commitLabel, instructionMarkers, readSwitchLog, switchMarkers } from "../dist/agentmarkers.js";
 
 const root = mkdtempSync(join(tmpdir(), "agentmarkers-"));
 after(() => rmSync(root, { recursive: true, force: true }));
@@ -139,4 +139,13 @@ test("switch markers read the save log: this repo plus host-wide, torn lines and
   assert.equal(all.label, "Skills switch (all repos): 1 skill off");
   assert.ok(!/estimated/.test(all.detail));
   assert.deepEqual(await readSwitchLog(join(root, "nope.jsonl")), []);
+});
+
+test("a commit's work-package tag is not part of its marker name", () => {
+  assert.equal(commitLabel("agent readings P5a: host-ledgers skill names the switch log reader"), "host-ledgers skill names the switch log reader");
+  assert.equal(commitLabel("WP3: demo line"), "demo line");
+  assert.equal(commitLabel("scorecard: the score over time"), "scorecard: the score over time");
+  assert.equal(commitLabel("bump P5 rule: keep"), "bump P5 rule: keep");
+  assert.equal(commitLabel("agent readings P4:"), "agent readings P4:");
+  assert.equal(commitLabel("fix the Pixel 9: layout"), "fix the Pixel 9: layout");
 });

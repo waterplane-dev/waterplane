@@ -768,7 +768,7 @@ export async function readRepoHealth(
     series,
     behind,
     measure,
-    readError: readError ?? (ownWaits ? ownApprovalText() : null),
+    readError: readError ?? (ownWaits ? ownApprovalText(wt) : null),
     plot,
     plotError,
     // Root only, both of them. `narrate` and `html` write one file for the
@@ -921,8 +921,11 @@ export function ownBackfillCommits(raw: unknown): number {
 }
 
 /** The whole argv of a backfill: `repoHealthArgv`'s, plus two integers this module made. */
-export function ownBackfillArgv(engine: RepoHealthEngine, wt: string, commits: number, budgetMs: number): string[] {
-  return [...repoHealthArgv(engine, wt, "own-backfill"), `--commits=${ownBackfillCommits(commits)}`, `--budget-ms=${Math.floor(budgetMs)}`];
+export function ownBackfillArgv(engine: RepoHealthEngine, wt: string, commits: number, budgetMs: number, retry = false): string[] {
+  return [
+    ...repoHealthArgv(engine, wt, "own-backfill"), `--commits=${ownBackfillCommits(commits)}`, `--budget-ms=${Math.floor(budgetMs)}`,
+    ...(retry === true ? ["--retry"] : []),
+  ];
 }
 
 /** Why a backfill may not run here, as the sentence the phone shows — or null: it may. */
@@ -934,7 +937,7 @@ export function ownBackfillRefusal(wt: string, deps: RepoHealthDeps = {}): strin
     return `this repo's ${HEALTH_JSON} declares no commands of its own — there is nothing to read back.`;
   }
   if (engine.kind === "bundled" && ownGated(engine, wt, deps)) {
-    return `${ownApprovalText()} — approve them first; reading back runs those same commands at older commits.`;
+    return `${ownApprovalText(wt)} — approve them first; reading back runs those same commands at older commits.`;
   }
   return null;
 }
@@ -986,6 +989,7 @@ export function backfillOwnReadings(
   wt: string,
   commits: number = OWN_BACKFILL_DEFAULT,
   deps: RepoHealthDeps & { sweep?: (wt: string) => Promise<number> } = {},
+  retry = false,
 ): Promise<RepoHealthOwnBackfillAnswer> {
   const refusal = ownBackfillRefusal(wt, deps);
   if (refusal) return Promise.resolve({ ok: false, refused: refusal });
@@ -996,7 +1000,7 @@ export function backfillOwnReadings(
   backfilling.add(key);
   const answer = (async () => {
     try {
-      return await runOwnBackfill(wt, ownBackfillCommits(commits), deps);
+      return await runOwnBackfill(wt, ownBackfillCommits(commits), deps, retry === true);
     } finally {
       inflight.delete(key);
       backfilling.delete(key);
@@ -1013,12 +1017,13 @@ async function runOwnBackfill(
   wt: string,
   commits: number,
   deps: RepoHealthDeps & { sweep?: (wt: string) => Promise<number> },
+  retry = false,
 ): Promise<RepoHealthOwnBackfillAnswer> {
   const engine = engineOf(deps)(wt);
   if (!engine) return { ok: false, refused: noEngineText() };
   const key = keyOf(wt, null);
   const now = deps.now ?? Date.now;
-  const run: RepoHealthRun = { state: "running", startedAt: now(), note: "reading back own readings" };
+  const run: RepoHealthRun = { state: "running", startedAt: now(), note: retry ? "re-reading failed own readings" : "reading back own readings" };
   running.set(key, run);
   let proc: RepoHealthProc;
   try {
@@ -1027,7 +1032,7 @@ async function runOwnBackfill(
         const note = parseRepoHealthProgress(line);
         if (note) run.note = `reading back own readings: ${note}`;
       }
-    }, ownBackfillArgv(engine, wt, commits, ownBackfillBudgetMs()));
+    }, ownBackfillArgv(engine, wt, commits, ownBackfillBudgetMs(), retry));
   } finally {
     running.delete(key);
   }

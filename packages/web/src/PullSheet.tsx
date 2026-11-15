@@ -415,17 +415,6 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </div>
 
           <div className="section">Match <span className="section-hint">· empty = every file in the scope</span></div>
-          <div className="list">
-            {cfg.match.map((p) => (
-              <Row key={p} kind="wrap">
-                <span className="row grow"><RowTitle className="mono">{p}</RowTitle></span>
-                <Button variant="danger" title="remove pattern" onClick={() => patch({ match: cfg.match.filter((x) => x !== p) })}>
-                  <Trash2 size={16} />
-                </Button>
-              </Row>
-            ))}
-            {cfg.match.length === 0 && <Empty>No patterns — everything in the scope matches.</Empty>}
-          </div>
           <div className="form">
             <input className="search mono" placeholder="Pattern, e.g. *.apk or report-*.md" value={pattern}
               onChange={(e) => setPattern(e.target.value)}
@@ -438,6 +427,17 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
                 </Button>
               ))}
             </SetLine>
+          </div>
+          <div className="list">
+            {cfg.match.map((p) => (
+              <Row key={p} kind="wrap">
+                <span className="row grow"><RowTitle className="mono">{p}</RowTitle></span>
+                <Button variant="danger" title="remove pattern" onClick={() => patch({ match: cfg.match.filter((x) => x !== p) })}>
+                  <Trash2 size={16} />
+                </Button>
+              </Row>
+            ))}
+            {cfg.match.length === 0 && <Empty>No patterns — everything in the scope matches.</Empty>}
           </div>
         </>
       )}

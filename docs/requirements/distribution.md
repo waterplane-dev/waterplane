@@ -266,3 +266,8 @@ The installer ends by printing this desktop's URL and port and opens it in the b
 - asked: 2026-11-09
 - shipped: adaa96c7
 
+### R-distribution-056 · shipped
+The install.sh script offers local dictation setup as an optional step.
+- asked: 2026-11-12
+- shipped: e03a2e4df
+

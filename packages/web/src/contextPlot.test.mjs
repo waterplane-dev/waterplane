@@ -658,6 +658,15 @@ test("the headline leads with the money the row prints, and keeps the tokens", (
   assert.match(spendSummary(f, true), /at least/);
 });
 
+test("a fast-mode share is named beside the figure it is inside, and absent when none ran fast", () => {
+  const f = spendFacts(spendSeries, 400_000, 258_500, { ...MONEY, fastTok: 120_000, fastUsd: 1.5 });
+  assert.match(spendSummary(f, false), /\$1\.50 \/ 120k of it in fast mode/);
+  assert.match(spendNote(f, false).more, /twice the standard rate/);
+  const none = spendFacts(spendSeries, 400_000, 258_500, MONEY);
+  assert.equal(none.fastTok, undefined);
+  assert.doesNotMatch(spendSummary(none, false), /fast mode/);
+});
+
 test("a cost of zero is no cost at all — the screen says tokens, as it always did", () => {
   // `$0` beside a conversation that visibly ran reads as "this was free". The
   // honest shape is the reading this screen had before any of it existed.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.10 - 2026-11-15
+
+### New
+
+- **Fast mode is priced at its own rate.** A fast turn is now charged at the fast price, never the standard one. A model with no fast price shows the turn as unpriced. The per-session cost line shows the fast-mode share next to the subagents', and the all-sessions model rows list it as its own row. Token counts are rescanned once after the update.
+- **A Fast mode switch on the model sheet.** It turns fast mode on or off for the session and shows its current state. Turning it on first shows the fast and standard price for the session's model, and notes that auto mode is off while fast mode is on.
+- **Re-read days whose readings failed.** Your own readings can be read again for days that failed, without losing a number already read. The phone offers "re-read N failed days" once every older day has an entry, and says so when the same readings failed again. A repo can declare a scratch setup so a bare checkout can run its commands. The setup is approved together with the readings, and never runs at the latest commit.
+
+### Fixed
+
+- **"A new session" is used once.** Words sent after choosing it open one new session, and the next plain Send goes into the session on screen again. Before, the choice stayed for the repo, and every later Send became another new session that waited for the repo to be free. "When it's free" is still remembered.
+- **Agent readings start at their title.** Cards no longer have a gutter inside them, and the checklist under "what every turn carries" is no longer indented. Setup cost shows as a figure with its "per" beside it, the split as a bar with a legend, and further readings sit under hairlines.
+- **Buttons no longer sit after the last row of a long list.** The add, send, forget and wipe buttons that did now sit above their rows.
+
 ## 0.9.9 - 2026-11-15
 
 ### New

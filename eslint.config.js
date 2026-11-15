@@ -30,7 +30,8 @@ const STORAGE_OWNERS = [
 ];
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "packages/app/**", "packages/vscode/**", "docs/**"] },
+  // .claude/outbox and inbox are gitignored transport (agents drop scratch scripts there), never source.
+  { ignores: ["**/dist/**", "**/node_modules/**", "packages/app/**", "packages/vscode/**", "docs/**", ".claude/outbox/**", ".claude/inbox/**"] },
 
   // ---- everything TypeScript ----
   {

@@ -30,7 +30,7 @@ export const OWN_BACKFILL_DONE =
   "Every older day has been read back already. A tile still without a curve had no value on those days — " +
   "a reading of this desktop is never read back, and a command that needs a build or installed packages fails in the bare scratch copy.";
 
-type OwnLike = { series?: readonly Pick<RepoHealthPlotOwn["series"][number], "points">[]; unread?: number } | null | undefined;
+type OwnLike = { series?: readonly Pick<RepoHealthPlotOwn["series"][number], "points">[]; unread?: number; retryable?: number } | null | undefined;
 
 const thin = (own: OwnLike): boolean =>
   !!own?.series?.some((s) => s.points.filter((p) => p.v !== null).length < CURVE_MIN);
@@ -47,7 +47,24 @@ export function ownBackfillOffered(own: OwnLike, exhausted = false): boolean {
 
 /** A tile is thin but no older day is left to read: say so instead of offering the button. */
 export const ownBackfillDone = (own: OwnLike, exhausted = false): boolean =>
-  thin(own) && (own?.unread === 0 || (own?.unread === undefined && exhausted));
+  thin(own) && (own?.unread === 0 || (own?.unread === undefined && exhausted)) && !(own?.retryable && own.retryable > 0);
+
+/** Failed days a re-read could try — the ONE number the button's label and its offer both read. */
+export const ownRetryCount = (own: OwnLike): number => (typeof own?.retryable === "number" ? own.retryable : 0);
+
+/**
+ * Is the re-read button offered? Every older day has an entry (`unread === 0`,
+ * the first button is gone) and some stored day holds a failed reading. Not
+ * after a re-read here that said nothing more can come of it (`retryDone`).
+ */
+export const ownRetryOffered = (own: OwnLike, retryDone = false): boolean =>
+  !retryDone && own?.unread === 0 && ownRetryCount(own) > 0;
+
+export const ownRetryLabel = (n: number): string => `re-read ${n} failed ${n === 1 ? "day" : "days"}`;
+
+export const OWN_RETRY_HINT =
+  "Re-runs the readings that failed at those commits, in the scratch copy on the desktop, with the repo's declared scratch setup " +
+  "(linked packages, a prepare command) if its health file names one. A day that read a number keeps it.";
 
 /** While the desktop is reading back: its own progress line where it said one. */
 export function ownBackfillRunningWords(note: string | null | undefined, secs: number): string {
@@ -67,6 +84,16 @@ export function ownBackfillResultWords(a: RepoHealthOwnBackfillAnswer | null | u
   if (a.error) return a.error;
   const s = a.summary;
   if (!s) return a.ok ? "Read back — the desktop did not say how much." : "The desktop could not read back.";
+  if (typeof s.retried === "number") {
+    if (s.retried === 0) return "No failed day was left to re-read.";
+    if (s.values === 0) return `Nothing new: the same readings failed again on ${plural(s.retried, "day")} — the tile says why.`;
+    const got: string[] = [];
+    if (typeof s.values === "number") got.push(plural(s.values, "reading"));
+    if (typeof s.absent === "number" && s.absent > 0) got.push(`${s.absent} still absent`);
+    const head = `Re-read ${plural(s.retried, "day")}${got.length ? `: ${got.join(", ")}` : ""}`;
+    const tail = s.stopped === "budget" ? " · stopped at the desktop's time budget" : "";
+    return `${head}${tail}.`;
+  }
   const parts: string[] = [];
   if (typeof s.read === "number") {
     if (s.read === 0 && s.left === 0) return null;
@@ -83,4 +110,8 @@ export function ownBackfillResultWords(a: RepoHealthOwnBackfillAnswer | null | u
 
 /** Did the answer say there is nothing older left? (Then the button goes, the sentence stays.) */
 export const ownBackfillExhausted = (a: RepoHealthOwnBackfillAnswer | null | undefined): boolean =>
-  !!a?.ok && a.summary?.left === 0;
+  !!a?.ok && typeof a.summary?.retried !== "number" && a.summary?.left === 0;
+
+/** A re-read answer after which asking again is pointless: no never-retried day left. (A run that read nothing new still leaves the days it did not reach on offer.) */
+export const ownRetryDone = (a: RepoHealthOwnBackfillAnswer | null | undefined): boolean =>
+  !!a?.ok && typeof a.summary?.retried === "number" && a.summary.left === 0;

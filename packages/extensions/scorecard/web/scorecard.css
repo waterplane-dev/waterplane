@@ -12,3 +12,12 @@
 .sc-row .sc-form { padding: 4px 0; }
 .sc-form label { display: flex; flex-direction: column; gap: 3px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); }
 .sc-form input, .sc-form textarea { font: inherit; color: var(--fg); background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+/* Score over time (ScoreHistoryChart.tsx): ink line on a fixed 0–10 axis, the answer as text under it. */
+.sc-hist { padding: 0 14px 8px; }
+.sc-hist .section-head { padding-left: 0; padding-right: 0; }
+.sc-hist-svg { display: block; touch-action: pan-y; color: var(--fg); }
+.sc-tick { fill: var(--muted); font-size: calc(10px * var(--ui-font, 1)); }
+.sc-read-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sc-read { font-size: calc(13px * var(--ui-font, 1)); color: var(--fg); display: flex; flex-direction: column; gap: 2px; margin-top: 2px; overflow-wrap: anywhere; }
+.sc-cap { color: var(--muted); font-size: calc(12px * var(--ui-font, 1)); overflow-wrap: anywhere; }
+.sc-hist .section-head > .explain-body { flex-basis: 100%; padding: 0; text-transform: none; letter-spacing: 0; color: var(--fg); }

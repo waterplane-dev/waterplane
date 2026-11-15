@@ -184,7 +184,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
 - `pricing.ts` — **list prices, per model, asked for a DAY** — an unknown model prices to `null`
   never to a guess, `PRICES_AS_OF` rides to the UI. Cache read is 0.1× of input EXCEPT where the
   list publishes its own (`Rate.cacheRead`); the 1-hour write tier is READ. **A cached table rots**:
-  an `intro` rate "until <date>" must expire. Fast mode is knowingly absent.
+  an `intro` rate "until <date>" must expire. Fast mode prices under `<alias>@fast` (`FAST`, every line 2×; a model with no fast card is unpriced, never standard).
 - `ptysize.ts` — **a grid too small for a composer is not a viewport**: the client withholds a fit
   measured on a collapsed container, the host CLAMPS one.
 - `working.ts` — the CLI's own working line off raw PTY bytes — **one matcher for both ends**: the

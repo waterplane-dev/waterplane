@@ -355,3 +355,27 @@ test("Anthropic's models wherever served; another vendor's model in Claude Code'
     assert.equal(isAnthropicModel(id), false, String(id));
   }
 });
+
+// ── Fast mode: `usage.speed: "fast"` prices under `<alias>@fast` ──────────────
+test("a fast request pays the fast card on every line, the standard one does not", async () => {
+  const { priceKeyOf: key, costOfRequest: cost, rateFor: rate, priceKeyLabel: label, FAST } = await import("../dist/pricing.js");
+  const t = { input: 1_000_000, output: 1_000_000, cacheRead: 1_000_000, cacheWrite: 1_000_000, cacheWrite1h: 500_000 };
+  assert.equal(key("claude-opus-5-5", t, "fast"), "claude-opus-5-5@fast");
+  assert.equal(key("claude-opus-5-5", t, "standard"), "claude-opus-5-5");
+  assert.equal(key("claude-opus-5-5", t, null), "claude-opus-5-5");
+  assert.equal(key("claude-opus-5-5[1m]", t, "fast"), "claude-opus-5-5@fast", "context variant folds to the alias");
+  const std = cost(t, "claude-opus-5-5", undefined, "standard");
+  const fast = cost(t, "claude-opus-5-5", undefined, "fast");
+  for (const k of ["input", "output", "cacheRead", "cacheWrite", "total"]) {
+    assert.ok(Math.abs(fast[k] - 2 * std[k]) < 1e-9, `${k} is twice the standard line`);
+  }
+  assert.deepEqual(rate("claude-fable-5-2@fast"), FAST["claude-fable-5-2"]);
+  assert.equal(label("claude-opus-5-5@fast"), "claude-opus-5-5 (fast mode)");
+});
+
+test("a fast request on a model with no fast card is unpriced, never the standard rate", async () => {
+  const { priceKeyOf: key, costOfRequest: cost } = await import("../dist/pricing.js");
+  const t = { input: 10, output: 10, cacheRead: 10, cacheWrite: 0, cacheWrite1h: 0 };
+  assert.equal(key("claude-sonnet-5-5", t, "fast"), "claude-sonnet-5-5@fast");
+  assert.equal(cost(t, "claude-sonnet-5-5", undefined, "fast"), null);
+});

@@ -128,3 +128,8 @@ The separate screenshot button (menu "shot" and Settings door) is removed; the l
 - asked: 2026-11-08
 - shipped: 7832bdbe
 
+### R-desktop-021 · shipped
+On a desktop browser the device label reads as this device, not 'on this phone'.
+- asked: 2026-11-12
+- shipped: 9d10580f5, 54ebaf81b
+

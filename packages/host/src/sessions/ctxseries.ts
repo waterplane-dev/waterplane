@@ -690,6 +690,10 @@ export class CtxSlice {
           ...(use.unpriced > 0
             ? { unpricedTok: (parsed.unpricedTok || 0) + use.unpriced }
             : {}),
+          // The fast-mode share, the whole session's — `unpricedTok`'s rule.
+          ...((use.fastTok ?? 0) > 0
+            ? { fastTok: (parsed.fastTok ?? 0) + (use.fastTok ?? 0), fastUsd: (parsed.fastUsd ?? 0) + (use.fastUsd ?? 0) }
+            : {}),
         };
       })(),
       // The window the y axis calls 100%. From the MODEL, so two sessions'

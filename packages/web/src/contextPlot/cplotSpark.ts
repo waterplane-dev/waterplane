@@ -178,7 +178,7 @@ export function spendSparkTitle(spark: ContextSpark, g: SpendSparkGeom): string 
     agents != null ? `${fmtTokens(agents)} more in its subagents — ${g.agentBand ? "the grey band stacked on top" : "the dashed line"}` : null,
     // The chip is MONEY, so the tokens live here, with `costText` (the one wording).
     spark.costUsd != null
-      ? costText(spark.costUsd, spark.agentCostUsd ?? null, spark.unpricedTok ?? null)
+      ? costText(spark.costUsd, spark.agentCostUsd ?? null, spark.unpricedTok ?? null, spark.fastUsd ?? null)
       : null,
     `this curve tops out at ${fmtTokens(g.top)} and is scaled to this session, not to the others`,
   ].filter(Boolean).join(" · ");

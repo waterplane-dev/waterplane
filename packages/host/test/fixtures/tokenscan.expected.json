@@ -95,14 +95,32 @@
    },
    "byModel": [
     {
+     "model": "claude-test-b@fast",
+     "totals": {
+      "input": 3,
+      "output": 400,
+      "cacheRead": 1000,
+      "cacheWrite": 15000,
+      "cacheWrite1h": 15000,
+      "turns": 1
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
      "model": "claude-test-b",
      "totals": {
-      "input": 10,
-      "output": 480,
-      "cacheRead": 17000,
-      "cacheWrite": 15100,
-      "cacheWrite1h": 15100,
-      "turns": 2
+      "input": 7,
+      "output": 80,
+      "cacheRead": 16000,
+      "cacheWrite": 100,
+      "cacheWrite1h": 100,
+      "turns": 1
      },
      "cost": {
       "input": 0,
@@ -750,12 +768,30 @@
   {
    "key": "claude-test-b",
    "label": "claude-test-b",
-   "input": 61,
-   "output": 542,
-   "cacheRead": 24000,
-   "cacheWrite": 18100,
-   "cacheWrite1h": 15100,
-   "turns": 4,
+   "input": 58,
+   "output": 142,
+   "cacheRead": 23000,
+   "cacheWrite": 3100,
+   "cacheWrite1h": 100,
+   "turns": 3,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false
+  },
+  {
+   "key": "claude-test-b@fast",
+   "label": "claude-test-b (fast mode)",
+   "input": 3,
+   "output": 400,
+   "cacheRead": 1000,
+   "cacheWrite": 15000,
+   "cacheWrite1h": 15000,
+   "turns": 1,
    "cost": {
     "input": 0,
     "output": 0,
@@ -824,12 +860,30 @@
     {
      "model": "claude-test-b",
      "totals": {
-      "input": 61,
-      "output": 542,
-      "cacheRead": 24000,
-      "cacheWrite": 18100,
-      "cacheWrite1h": 15100,
-      "turns": 4
+      "input": 58,
+      "output": 142,
+      "cacheRead": 23000,
+      "cacheWrite": 3100,
+      "cacheWrite1h": 100,
+      "turns": 3
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "claude-test-b@fast",
+     "totals": {
+      "input": 3,
+      "output": 400,
+      "cacheRead": 1000,
+      "cacheWrite": 15000,
+      "cacheWrite1h": 15000,
+      "turns": 1
      },
      "cost": {
       "input": 0,
@@ -955,6 +1009,7 @@
     "total": 0
    },
    "agents": 1,
+   "firstTok": 31200,
    "agentByModel": [
     {
      "model": "claude-test-b",
@@ -974,8 +1029,7 @@
       "total": 0
      }
     }
-   ],
-   "firstTok": 31200
+   ]
   },
   {
    "id": "conv-b",

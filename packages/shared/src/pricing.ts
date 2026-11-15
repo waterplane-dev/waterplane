@@ -56,11 +56,13 @@
  *   settled at $2/$10, and every Sonnet session since was charged half again
  *   too much. `intro` stays because that is the shape a change takes; the day
  *   is the local bucket the counts are already in.
- * - **Fast mode is NOT in this table.** Opus 5 at `speed: "fast"` bills
- *   $10/$50 rather than $5/$25, and the conversation log does not record which
- *   speed a turn ran at. Priced here at the standard rate, which is the
- *   conservative direction and is what every surface's "list-price estimate"
- *   wording already covers.
+ * - **Fast mode has its own card** (`FAST`, under the `@fast` price key,
+ *   `priceKeyOf`). The log records `usage.speed` on every request, so a fast
+ *   turn is known, not assumed: it pays the fast card on EVERY line (input,
+ *   output, cache read and both write tiers are twice the standard ones — the
+ *   cache multipliers stack on the fast input rate). A fast turn on a model the
+ *   card does not list is UNPRICED, never charged the standard rate: that would
+ *   be a figure half the truth that looks whole.
  * - **Prices are cached, not live** (source: claude.com/pricing#api, read
  *   2026-09-19, cross-checked against the `claude-api` skill's model table;
  *   Opus 5.5 added 2026-09-24 from that skill's table — $4/$20, cache read
@@ -171,18 +173,52 @@ const longCardOf = (base: string): (Rate & { overTokens: number }) | null =>
   LIVE?.longPrompt?.[base] ?? LONG_PROMPT[base] ?? null;
 
 /**
- * The key ONE request prices under: its own model, or `<alias>@long` when the
- * model has a long-prompt card and this request's prompt is past its line.
+ * The key ONE request prices under: its own model, `<alias>@fast` when it ran
+ * in fast mode, or `<alias>@long` when the model has a long-prompt card and
+ * this request's prompt is past its line.
  * Asked per request, never of a bucket — a bucket's sum says nothing about
  * any one prompt's length. A model without a long card keeps its raw id.
  */
-export function priceKeyOf(model: string | null | undefined, t: { input: number; cacheRead: number; cacheWrite: number }): string | null {
+export function priceKeyOf(
+  model: string | null | undefined,
+  t: { input: number; cacheRead: number; cacheWrite: number },
+  /** `usage.speed` as logged; `"fast"` prices under `<alias>@fast`. */
+  speed?: string | null,
+): string | null {
   if (!model) return model ?? null;
   const id = normalizeModel(model);
-  if (!id || id.endsWith(LONG_PROMPT_MARK)) return model;
+  if (!id || id.endsWith(LONG_PROMPT_MARK) || id.endsWith(FAST_MARK)) return model;
+  // A fast turn keeps the mark even on a model with no fast card: it then
+  // prices to null (counted as unpriced), never at the standard rate.
+  if (isFastSpeed(speed)) return id + FAST_MARK;
   const card = longCardOf(id);
   return card && t.input + t.cacheRead + t.cacheWrite > card.overTokens ? id + LONG_PROMPT_MARK : model;
 }
+
+/** The mark a price key carries when its request ran at `speed: "fast"`. */
+export const FAST_MARK = "@fast";
+
+/**
+ * Fast-mode cards, keyed by the canonical alias (source: the `claude-api`
+ * skill's Fast Mode section, 2026-11-15: Opus 5.5 $8/$40, Fable/Mythos 5.2
+ * $16/$80, Opus 5 and Opus 4.8 $10/$50 — each exactly twice its standard
+ * card). Cache reads are the standard published read doubled, the same
+ * stacking the writes get through the multipliers on the fast input rate.
+ * Not overlaid by the live price page: it states no fast card.
+ */
+export const FAST: Record<string, Rate> = {
+  "claude-opus-5-5": { input: 8, output: 40, cacheRead: 0.4 },
+  "claude-fable-5-2": { input: 16, output: 80, cacheRead: 0.4 },
+  "claude-mythos-5-2": { input: 16, output: 80, cacheRead: 0.4 },
+  "claude-opus-5": { input: 10, output: 50 },
+  "claude-opus-4-8": { input: 10, output: 50 },
+};
+
+/** Whether a logged `usage.speed` is the fast tier. Absent and `"standard"` are not. */
+export const isFastSpeed = (speed: string | null | undefined): boolean => speed === "fast";
+
+/** Whether a price key is a fast-mode key. */
+export const isFastKey = (key: string | null | undefined): boolean => !!key && key.endsWith(FAST_MARK);
 
 /** `claude-haiku-5-5@long` → ` (prompts over 100K)`; anything else → "". For labels. */
 export function longPromptNote(id: string): string {
@@ -194,6 +230,7 @@ export function longPromptNote(id: string): string {
 /** A tallied model key as a row names it: the alias, plus the long-prompt note when it has the mark. */
 export function priceKeyLabel(key: string): string {
   const id = normalizeModel(key) ?? key;
+  if (id.endsWith(FAST_MARK)) return id.slice(0, -FAST_MARK.length) + " (fast mode)";
   return id.endsWith(LONG_PROMPT_MARK) ? id.slice(0, -LONG_PROMPT_MARK.length) + longPromptNote(id) : id;
 }
 
@@ -210,12 +247,12 @@ export function normalizeModel(model: string | null | undefined): string | null 
   if (!model) return null;
   let id = model.trim().toLowerCase();
   if (!id || !id.startsWith("claude-")) return null;
-  // A price key for long-prompt requests (`priceKeyOf`) keeps its mark.
-  const long = id.endsWith(LONG_PROMPT_MARK);
-  if (long) id = id.slice(0, -LONG_PROMPT_MARK.length);
+  // A price key (`priceKeyOf`) keeps its mark: long-prompt or fast mode.
+  const mark = id.endsWith(LONG_PROMPT_MARK) ? LONG_PROMPT_MARK : id.endsWith(FAST_MARK) ? FAST_MARK : "";
+  if (mark) id = id.slice(0, -mark.length);
   id = id.replace(/(\[1m\]|-1m)$/, "");         // context variant, same price
   id = id.replace(/-\d{8}$/, "");                // dated snapshot → alias
-  return long ? id + LONG_PROMPT_MARK : id;
+  return id + mark;
 }
 
 /** The rate for a model on a given day, or null when we have no list price.
@@ -223,6 +260,8 @@ export function normalizeModel(model: string | null | undefined): string | null 
 export function rateFor(model: string | null | undefined, day?: string): Rate | null {
   const id = normalizeModel(model);
   if (!id) return null;
+  // A fast-mode request: its own card, or null — never the standard rate.
+  if (id.endsWith(FAST_MARK)) return FAST[id.slice(0, -FAST_MARK.length)] ?? null;
   if (id.endsWith(LONG_PROMPT_MARK)) {
     // A long-prompt request: the long card, or — when no list states one any
     // more — the model's own rate (the page dropping the card means one price).
@@ -421,8 +460,8 @@ export function costOf(t: Priceable, model: string | null | undefined, day?: str
  * prompt past 100K tokens pays the long card. Only for a single request's
  * counts — a bucket goes through `costOf` with the key it was tallied under.
  */
-export function costOfRequest(t: Priceable, model: string | null | undefined, day?: string): CostBreakdown | null {
-  return costOf(t, priceKeyOf(model, t), day);
+export function costOfRequest(t: Priceable, model: string | null | undefined, day?: string, speed?: string | null): CostBreakdown | null {
+  return costOf(t, priceKeyOf(model, t, speed), day);
 }
 
 /**

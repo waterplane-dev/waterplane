@@ -317,8 +317,9 @@ In Repo readings, the repo's own readings card sits right after the score, befor
 - shipped: web RepoHealthRegion.tsx, RepoHealthCards.tsx (shownSections order), healthIndexWords.ts (NAV_LABELS)
 
 ### R-metrics-065 · shipped
-A repo's own readings can be backfilled on request: the phone offers a button that runs the repo's declared commands at older commits in a scratch worktree, so a curve shows without waiting for new commits; a reading that did not exist at an older commit is absent there, never 0.
+A repo's own readings can be backfilled on request: the phone offers a button that runs the repo's declared commands at older commits in a scratch worktree, so a curve shows without waiting for new commits; a reading that did not exist at an older commit is absent there, never 0. Days whose readings FAILED can be re-read (`own-backfill --retry`: a number wins, an old number is never lost to a new failure), and a repo may declare what its scratch copy needs for the commands to run there (`"scratch": { "linkNodeModules", "prepare" }` in health.json: a node_modules link that keeps the commit's own workspace packages, and a prepare argv run once per commit) — approved with the readings, so changing either asks again, and run only in the read-back scratch, never at HEAD.
 - asked: 2026-11-14 (owner)
+- note: retry + scratch added 2026-11-15; a failed prepare is `own.prepare` on the day, a re-read day is `own.retried`
 - shipped: engine tools/repohealth/ownbackfill.mjs (`own-backfill` in tools/repohealth.mjs; own.mjs `skip` hook, `"backfill": false`); host repohealth.ts (backfillOwnReadings, sweepOwnScratch), routes/apirepohealth.ts (POST repohealth/own-backfill); shared repohealth.ts + repohealthread.ts (RepoHealthOwnBackfillAnswer, parseOwnBackfill); web repoHealthOwnBackfill.ts, RepoHealthOwn.tsx, RepoHealthRegion.tsx, webapi/webapiRepoOps.ts; tests tools/repohealth-ownbackfill.test.mjs, packages/host/test/repohealth.test.mjs, packages/web/src/repoHealthOwnBackfill.test.mjs
 
 ### R-metrics-066 · shipped
@@ -381,3 +382,13 @@ The Agent readings region carries a "Search test" card (named "Lookup probe" unt
 Every reading tile on the repo-readings sheet — waterplane's own readings and a repo's declared ones — says under its value which way is better: "lower is better" or "higher is better" with an arrow, or "neither way is simply better" when both directions can be good news, and an opened tile adds the reason in one sentence. The line belongs to the METRIC, never the reading: it is the same whatever the value or slope, carries no colour, and the reader holds the slope against it. A repo's own reading takes the repo's declared `better`; one that declares none says so. A reading the engine adds later fails a test until it has a line.
 - asked: 2026-11-14 (owner: "every metric needs a clear hint of larger or smaller is better or if it's not as easy as that")
 - shipped: web repoHealthWords/repoHealthWordsAim.ts (`SERIES_AIM`, `seriesAim`, `aimWords`), RepoHealthTiles.tsx (`Aim`, `SeriesTile`'s `better`, `TileGrid`'s `betterFor`), RepoHealthOwn.tsx; test packages/web/src/repoHealthWords.test.mjs
+### R-metrics-076 · shipped
+The repo reports a repairRate reading: the share of non-repair source commits followed within 7 days by a repair commit touching the same files, one number between 0 and 1, with a list view naming each repaired commit.
+- asked: 2026-11-11
+- shipped: 59ff26ed5
+
+### R-metrics-077 · shipped
+The repo reports the share of vault host source lines that no vault test or e2e run executes, measured with V8 coverage across the processes the tests start, and lists files and functions with zero coverage.
+- asked: 2026-11-11
+- shipped: a46a7f450, 41b50e65d
+

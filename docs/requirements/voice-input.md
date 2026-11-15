@@ -36,3 +36,8 @@ The desktop sets up local dictation on a person's tap: whisper.cpp through brew 
 Send tapped while a dictation is not back yet (microphone open, or a recording waiting to be read) asks whether to send the transcript unread the moment it returns or to read it first; when the words come from the phone's own recogniser the ask also warns that its transcription is far less accurate.
 - asked: 2026-11-14 (owner)
 - note: `dictationSendAsk` (`composeSend.ts`); `useVoice`'s `pending`/`finish()`; the armed send is phone-held and in memory only, called off by tapping Send again.
+### R-voice-input-008 · shipped
+When voice input falls back to the phone's recogniser, a pill says it is weaker and opens the local dictation setup row.
+- asked: 2026-11-12
+- shipped: 880d030aa
+

@@ -92,3 +92,13 @@ test("ultracode: absent is unknown, never off", () => {
   assert.equal(ultraCommand(true), "/effort ultracode on");
   assert.equal(ultraCommand(false), "/effort ultracode off");
 });
+
+test("fast mode: the cost warning quotes this model's fast card, and says so when there is none", async () => {
+  const { fastWarning, fastCommand, fastText } = await import("./modePick.ts");
+  const opus = fastWarning("claude-opus-5-5");
+  assert.match(opus.join("\n"), /on opus-5-5:\nfast \$8 in \/ \$40 out per million tokens\nstandard \$4 in \/ \$20 out/);
+  assert.match(opus.join(" "), /auto mode off while fast mode is on/);
+  assert.match(fastWarning("claude-sonnet-5-5")[0], /No fast price is known here for sonnet-5-5/);
+  assert.equal(fastCommand(true), "/fast on");
+  assert.match(fastText(undefined), /not known/);
+});

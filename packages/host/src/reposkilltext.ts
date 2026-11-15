@@ -194,7 +194,12 @@ person's one approval on the phone before it ever runs):
 measures a new commit, 30 s limit, at most 12 readings. It must print ONE JSON
 number or \`{"value": n}\` on stdout; when it cannot count, print nothing and
 exit non-zero with the reason on stderr — never print 0 for "unknown". These
-are drawn apart from ${N}'s and never enter the health index.
+are drawn apart from ${N}'s and never enter the health index. A reading that
+needs \`node_modules\` or a build fails when the person reads older days back in
+a bare scratch checkout; add \`"scratch": { "linkNodeModules": true, "prepare":
+["npm", "run", "build"] }\` (both optional, \`prepare\` an argv) to link this
+checkout's \`node_modules\` into it and run \`prepare\` once per commit there,
+approved with the readings and never run at HEAD.
 
 The same file may change ONE of ${N}'s five index readings (\`size\`,
 \`retouch\`, \`hatches\`, \`context\`, \`untested\`) instead of replacing the

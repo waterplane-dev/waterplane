@@ -258,7 +258,7 @@ export function parseTranscript(
       k.output += req.bag.output;
       k.cacheRead += req.bag.cacheRead;
       k.cacheWrite += req.bag.cacheWrite;
-      const c = costOfRequest(req.bag, req.model, localDay(at ?? Date.now()));
+      const c = costOfRequest(req.bag, req.model, localDay(at ?? Date.now()), req.speed);
       if (req.model) {
         const id = normalizeModel(req.model) ?? req.model;
         let m = (t.models ??= []).find((x) => x.id === id);
@@ -304,13 +304,15 @@ export function parseTranscript(
 function requestOf(rec: any, seen: Set<string>): {
   bag: { input: number; output: number; cacheRead: number; cacheWrite: number; cacheWrite1h: number };
   model: string | null;
+  /** `usage.speed` as logged — a fast turn prices at the fast card. */
+  speed: string | null;
   ctx: number;
 } | null {
   const u = usageRecordOf(rec, firstSightIn(seen));
   if (!u) return null;
   const bag = { input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite, cacheWrite1h: u.cacheWrite1h };
   if (u.carried <= 0 && bag.output <= 0) return null;
-  return { bag, model: u.model, ctx: u.carried };
+  return { bag, model: u.model, speed: u.speed, ctx: u.carried };
 }
 
 /**

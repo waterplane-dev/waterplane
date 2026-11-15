@@ -290,6 +290,8 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
       total: doc.cost.total + (doc.agentCost?.total ?? 0),
       agents: doc.agentCost?.total ?? null,
       unpricedTok: doc.unpricedTok ?? null,
+      fastTok: doc.fastTok ?? null,
+      fastUsd: doc.fastUsd ?? null,
     }
     : null);
   // What those tokens WERE. A separate fact from the curve and from the total,

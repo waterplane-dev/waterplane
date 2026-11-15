@@ -313,6 +313,38 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                   {f.dirs.length < run.targets.length ? <span className="section-hint"> · {f.dirs.length} of {run.targets.length}</span> : null}
                 </Hint>
               ))}
+              {live.length > 0 && !picking && (
+                <div className="form">
+                  <Button data-hint="fanout.followup" onClick={() => openFollowUp(run)}>
+                    <CornerDownRight size={14} /> follow up in {live.length} session{live.length === 1 ? "" : "s"}
+                  </Button>
+                </div>
+              )}
+              {picking && (
+                <div className="form">
+                  {/* The same composer, inline: a follow-up is a prompt like
+                      any other, and it sits above the run's rows (ux §5: never after a list). */}
+                  <PromptComposer
+                    inline rows={2} autoFocus
+                    prompts={[fuText]}
+                    onChange={(next) => setFuText(next[0] ?? "")}
+                    placeholder="Next instruction for the selected sessions…"
+                  />
+                  <div className="annot-tools">
+                    <Button onClick={() => setFuSel(new Set(live.map((t) => t.dir)))}>all</Button>
+                    <Button onClick={() => setFuSel(new Set())}>none</Button>
+                    <Button onClick={() => { setFuRun(null); setFuText(""); }}>cancel</Button>
+                    <span className="spacer" />
+                    {!fuText.trim() ? <CantInline>write the instruction first</CantInline>
+                      : !live.some((t) => fuSel.has(t.dir)) ? <CantInline>pick a session to send to</CantInline>
+                      : (
+                        <button className="send" onClick={() => sendFollowUp(run)}>
+                          <Send size={14} /> send to {live.filter((t) => fuSel.has(t.dir)).length}
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
               <div className="list">
                 {run.targets.map((t) => (
                   <Row key={t.dir} kind="wrap">
@@ -337,38 +369,6 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                   </Row>
                 ))}
               </div>
-              {live.length > 0 && !picking && (
-                <div className="form">
-                  <Button data-hint="fanout.followup" onClick={() => openFollowUp(run)}>
-                    <CornerDownRight size={14} /> follow up in {live.length} session{live.length === 1 ? "" : "s"}
-                  </Button>
-                </div>
-              )}
-              {picking && (
-                <div className="form">
-                  {/* The same composer, inline: a follow-up is a prompt like
-                      any other, and it sits inside a run's own list. */}
-                  <PromptComposer
-                    inline rows={2} autoFocus
-                    prompts={[fuText]}
-                    onChange={(next) => setFuText(next[0] ?? "")}
-                    placeholder="Next instruction for the selected sessions…"
-                  />
-                  <div className="annot-tools">
-                    <Button onClick={() => setFuSel(new Set(live.map((t) => t.dir)))}>all</Button>
-                    <Button onClick={() => setFuSel(new Set())}>none</Button>
-                    <Button onClick={() => { setFuRun(null); setFuText(""); }}>cancel</Button>
-                    <span className="spacer" />
-                    {!fuText.trim() ? <CantInline>write the instruction first</CantInline>
-                      : !live.some((t) => fuSel.has(t.dir)) ? <CantInline>pick a session to send to</CantInline>
-                      : (
-                        <button className="send" onClick={() => sendFollowUp(run)}>
-                          <Send size={14} /> send to {live.filter((t) => fuSel.has(t.dir)).length}
-                        </button>
-                      )}
-                  </div>
-                </div>
-              )}
             </div>
             );
           })}

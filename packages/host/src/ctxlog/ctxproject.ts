@@ -51,6 +51,7 @@ export function projectContextLog(cur: SeriesCursor): ContextLog {
     // unpriced tokens travel either way, so the screen can say which it is.
     cost: cur.cost.total > 0 ? cur.cost : null,
     unpricedTok: cur.unpriced,
+    ...(cur.fastTok > 0 ? { fastTok: cur.fastTok, fastUsd: cur.fastUsd } : {}),
     compaction: projectCompaction(cur.compaction),
     coldStarts: projectCold(cur.cold),
     autoCompactTok: cur.autoCompactTok,
@@ -116,7 +117,10 @@ function costFields(cur: SeriesCursor, agents: AgentUsage): Partial<ContextSpark
   if (!agents.cost) return {};
   const total = cur.cost.total + agents.cost.total;
   const unpriced = cur.unpriced + (agents.unpriced || 0);
+  const fastTok = cur.fastTok + (agents.fastTok ?? 0);
+  const fastUsd = cur.fastUsd + (agents.fastUsd ?? 0);
   return {
+    ...(fastTok > 0 ? { fastTok, fastUsd } : {}),
     ...(total > 0 ? { costUsd: total } : {}),
     ...(total > 0 && agents.cost.total > 0 ? { agentCostUsd: agents.cost.total } : {}),
     ...(unpriced > 0 ? { unpricedTok: unpriced } : {}),

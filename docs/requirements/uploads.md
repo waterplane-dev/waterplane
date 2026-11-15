@@ -13,3 +13,8 @@ Each attached image or file in the prompt has an x button that removes it before
 - asked: 2026-10-06
 - shipped: d89bfe7f
 
+### R-uploads-004 · shipped
+Send and run waits until the annotated image has been sent before the command runs, so a prompt never overtakes the picture it names.
+- asked: 2026-11-11
+- shipped: 79b2d0cf
+

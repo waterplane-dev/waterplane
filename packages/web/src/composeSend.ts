@@ -251,7 +251,7 @@ export function sendWhereLabel(w: SendWhere): string {
 }
 
 /**
- * **The line above the composer that stops a remembered aim being invisible.**
+ * **The line above the composer that stops an armed aim being invisible.**
  *
  * Null for `this`, because the screen already says it: the session you are
  * looking at is the session it goes to. For the other two it is a whole

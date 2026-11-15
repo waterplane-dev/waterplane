@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +13,8 @@ import { OWN_FILE } from "./repohealth/own.mjs";
 import { readFileAt } from "./repohealth/git.mjs";
 import {
   HEAD_ONLY, NOT_APPROVED, NOT_DECLARED, OWN_BACKFILL_DEFAULT, OWN_BACKFILL_MAX, SCRATCH_PREFIX, scratchOwnerAlive,
-  backfillTargets, clampCommits, lacksOwn, runOwnBackfill, spliceOwn, sweepScratch, withScratch,
+  approvedScratch, backfillTargets, clampCommits, failedOwnReading, lacksOwn, linkNodeModules, mergeRetried, retryableDay, retryTargets,
+  runOwnBackfill, spliceOwn, sweepScratch, unlinkNodeModules, withScratch,
 } from "./repohealth/ownbackfill.mjs";
 
 const ENGINE = fileURLToPath(new URL("./repohealth.mjs", import.meta.url));
@@ -310,4 +311,200 @@ test("a sweep leaves the live scratch of another process alone, and takes a dead
   assert.equal(sweepScratch(root), 1);
   assert.equal(existsSync(live), true, "the live run's scratch stays");
   assert.equal(existsSync(dead), false);
+});
+
+// ── R-metrics-065: the scratch copy's node_modules link + prepare, and the retry mode ──────────────
+
+const SCRATCH = { linkNodeModules: true, prepare: ["node", "prep.mjs"] };
+/**
+ * Three days whose reading needs what a bare checkout lacks: `node_modules/dep` (a third-party package, 100),
+ * `node_modules/@ws/pk` (a WORKSPACE package -> packages/pk, whose v.txt is the commit's own: 1, 2, 3) and
+ * `built.txt` (written by `prep.mjs`, 1000). `scratch` is in the working tree's declaration only.
+ */
+function scratchFixture(t, { scratch = SCRATCH, prep = "import {writeFileSync} from 'node:fs'; writeFileSync('built.txt','1000');\n" } = {}) {
+  const root = tmp(t);
+  git(root, ["init", "-q", "-b", "main"]);
+  mkdirSync(join(root, ".waterplane-shared"));
+  mkdirSync(join(root, "packages", "pk"), { recursive: true });
+  writeFileSync(join(root, ".gitignore"), "node_modules\nbuilt.txt\n");
+  writeFileSync(join(root, "prep.mjs"), prep);
+  writeFileSync(join(root, "r.mjs"),
+    "import {readFileSync} from 'node:fs';\nconst n=(f)=>Number(readFileSync(f,'utf8'));\n" +
+    "console.log(n('node_modules/dep/v.txt')+n('node_modules/@ws/pk/v.txt')+n('built.txt'));\n");
+  const reading = { key: "r", name: "R", means: "m", better: "lower", run: ["node", "r.mjs"] };
+  const shas = [];
+  for (let i = 1; i <= 3; i++) {
+    writeFileSync(join(root, "packages", "pk", "v.txt"), String(i));
+    writeFileSync(join(root, OWN_FILE), JSON.stringify({ readings: [reading], ...(i === 3 && scratch ? { scratch } : {}) }));
+    git(root, ["add", "."]);
+    git(root, ["commit", "-qm", `c${i}`], `2026-01-0${i}T12:00:00Z`);
+    shas.push(git(root, ["rev-parse", "HEAD"]).trim());
+  }
+  mkdirSync(join(root, "node_modules", "dep"), { recursive: true });
+  writeFileSync(join(root, "node_modules", "dep", "v.txt"), "100");
+  mkdirSync(join(root, "node_modules", "@ws"), { recursive: true });
+  symlinkSync("../../packages/pk", join(root, "node_modules", "@ws", "pk"));
+  mkdirSync(join(root, "node_modules", ".bin"));
+  writeFileSync(join(root, "node_modules", ".bin", "tool"), "x");
+  const seriesPath = join(root, "series.jsonl");
+  writeFileSync(seriesPath, shas.map((sha, i) => JSON.stringify({ sha, day: `2026-01-0${i + 1}` })).join("\n") + "\n");
+  const rows = () => readFileSync(seriesPath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  return { root, shas, seriesPath, rows, dayRows: () => rows(), headSha: shas.at(-1) };
+}
+const runBf = (f, extra = {}) => runOwnBackfill({ root: f.root, seriesPath: f.seriesPath, dayRows: f.dayRows(), headSha: f.headSha, git: { readFileAt }, commits: 20, budgetMs: 120_000, ...extra });
+
+test("R-metrics-065: scratch is read from the approved working-tree declaration only", () => {
+  assert.deepEqual(approvedScratch(JSON.stringify({ readings: [{ key: "a", name: "A", means: "m", better: "lower", run: ["x"] }], scratch: SCRATCH })), SCRATCH);
+  assert.equal(approvedScratch(JSON.stringify({ readings: [{ key: "a", name: "A", means: "m", better: "lower", run: ["x"] }] })), null);
+  assert.equal(approvedScratch("{ nope"), null);
+});
+
+test("R-metrics-065: the link dir is real, third-party entries point at the checkout, workspace packages at the scratch's own copy", (t) => {
+  const f = scratchFixture(t);
+  const dir = tmp(t);
+  mkdirSync(join(dir, "packages", "pk"), { recursive: true });
+  assert.equal(linkNodeModules(f.root, dir), null);
+  const nm = join(dir, "node_modules");
+  assert.equal(lstatSync(nm).isDirectory() && !lstatSync(nm).isSymbolicLink(), true, "a real directory");
+  assert.equal(lstatSync(join(nm, "dep")).isSymbolicLink(), true);
+  assert.equal(readlinkSync(join(nm, "dep")), join(f.root, "node_modules", "dep"));
+  assert.equal(lstatSync(join(nm, "@ws")).isDirectory() && !lstatSync(join(nm, "@ws")).isSymbolicLink(), true, "a scope dir is real too");
+  assert.equal(readlinkSync(join(nm, "@ws", "pk")), join(dir, "packages", "pk"), "the workspace package is the scratch's, never today's");
+  assert.equal(lstatSync(join(nm, ".bin")).isSymbolicLink(), true);
+  assert.match(linkNodeModules(join(dir, "nowhere"), dir), /could not link node_modules/);
+});
+
+test("R-metrics-065: removing the scratch never follows a link into the checkout's node_modules", (t) => {
+  const f = scratchFixture(t);
+  const main = join(f.root, "node_modules");
+  const survives = () => {
+    assert.equal(readFileSync(join(main, "dep", "v.txt"), "utf8"), "100");
+    assert.equal(readFileSync(join(main, ".bin", "tool"), "utf8"), "x");
+    assert.equal(readFileSync(join(main, "@ws", "pk", "v.txt"), "utf8"), "3");
+    assert.equal(readFileSync(join(f.root, "packages", "pk", "v.txt"), "utf8"), "3");
+  };
+  // 1. the belt and the plain recursive rm both
+  const a = tmp(t);
+  linkNodeModules(f.root, a);
+  unlinkNodeModules(a);
+  assert.equal(existsSync(join(a, "node_modules")), false);
+  survives();
+  const b = tmp(t);
+  linkNodeModules(f.root, b);
+  rmSync(b, { recursive: true, force: true });
+  survives();
+  // 2. through a whole run: checkout, clean, link, readings, worktree removal, between every commit
+  const res = runBf(f);
+  assert.equal(res.read, 2);
+  survives();
+  assert.deepEqual(scratchLeft(f.root), []);
+  assert.equal(realpathSync(main) !== "", true);
+});
+
+test("R-metrics-065: prepare runs before the readings, in the scratch, once per commit; the commit's own workspace code is used", (t) => {
+  const f = scratchFixture(t);
+  const res = runBf(f);
+  assert.equal(res.read, 2);
+  const rows = f.rows();
+  // 100 (third party, main) + the commit's OWN packages/pk (1 / 2) + 1000 (prepare's built.txt)
+  assert.equal(rows[0].own.readings[0].value, 1101);
+  assert.equal(rows[1].own.readings[0].value, 1102);
+  assert.equal(rows[0].own.prepare, undefined, "a prepare that worked leaves no mark");
+  assert.equal(existsSync(join(f.root, "built.txt")), false, "prepare ran in the scratch, never in the live checkout");
+});
+
+test("R-metrics-065: a failing prepare is recorded on the day, and the readings keep their own reasons", (t) => {
+  const f = scratchFixture(t, { prep: "process.exit(7);\n" });
+  const res = runBf(f);
+  assert.equal(res.read, 2);
+  const own = f.rows()[0].own;
+  assert.match(own.prepare, /^prepare \(node prep\.mjs\) exited 7/);
+  assert.equal(own.readings[0].value, null);
+  assert.match(own.readings[0].reason, /^exited 1/, "the reading's own reason, not the prepare's");
+});
+
+test("R-metrics-065: scratch not in the approved working tree means no link and no prepare", (t) => {
+  const f = scratchFixture(t, { scratch: null });
+  const res = runBf(f);
+  assert.equal(res.read, 2);
+  const own = f.rows()[0].own;
+  assert.equal(own.prepare, undefined);
+  assert.match(own.readings[0].reason, /^exited 1/, "no node_modules, no built.txt");
+  assert.equal(res.values, 0);
+});
+
+test("R-metrics-065 retry: failedOwnReading and retryableDay name run failures only", () => {
+  const f = (reason, value = null) => ({ key: "k", value, ...(reason ? { reason } : {}) });
+  for (const r of ["exited 1: x", "did not finish within 30 s and was stopped", "could not start node: no such program on PATH", "printed more than 64 KB"]) {
+    assert.equal(failedOwnReading(f(r)), true, r);
+  }
+  for (const r of [NOT_DECLARED, HEAD_ONLY, NOT_APPROVED, "not run — past the first 12 readings a repo may declare", "printed nothing"]) {
+    assert.equal(failedOwnReading(f(r)), false, r);
+  }
+  assert.equal(failedOwnReading(f("exited 1", 3)), false, "a number is never a failure");
+  assert.equal(retryableDay({ own: { readings: [f(NOT_DECLARED), f("exited 1")] } }), true);
+  assert.equal(retryableDay({ own: { readings: [f(NOT_DECLARED)] } }), false);
+  assert.equal(retryableDay({ own: { notRun: "x", readings: [f("exited 1")] } }), false);
+  assert.equal(retryableDay({ own: { refused: "x" } }), false);
+  assert.equal(retryableDay({ sha: "a" }), false);
+});
+
+test("R-metrics-065 retry: the merge keeps an old number a failure would lose, takes a new one, and a retried day goes last", () => {
+  const old = { readings: [{ key: "a", value: 5 }, { key: "b", value: null, reason: "exited 1" }, { key: "c", value: 7 }], backfilled: true };
+  const fresh = { file: "f", readings: [{ key: "a", value: null, reason: "exited 1" }, { key: "b", value: 9 }, { key: "d", value: null, reason: NOT_DECLARED }] };
+  const m = mergeRetried(old, fresh);
+  assert.deepEqual(m.readings.map((r) => [r.key, r.value]), [["a", 5], ["b", 9], ["d", null], ["c", 7]]);
+  assert.equal(m.retried, true);
+  // A budget cut never replaces an old failed run: the failure stays retryable.
+  const cut = mergeRetried({ readings: [{ key: "k", value: null, reason: "exited 1: x" }] }, { readings: [{ key: "k", value: null, reason: "budget" }] });
+  assert.equal(cut.readings[0].reason, "exited 1: x");
+  assert.equal(retryableDay({ own: cut }), true);
+  // A standing "not run" replaces it: the day leaves the retry set (no endless re-read button).
+  for (const reason of [NOT_DECLARED, NOT_APPROVED, HEAD_ONLY]) {
+    const m2 = mergeRetried({ readings: [{ key: "k", value: null, reason: "exited 1: x" }] }, { readings: [{ key: "k", value: null, reason }] });
+    assert.equal(m2.readings[0].reason, reason);
+    assert.equal(retryableDay({ own: m2 }), false, reason);
+  }
+  assert.equal(mergeRetried({ readings: [{ key: "k", value: null, reason: "exited 1: x" }] }, { readings: [{ key: "k", value: null, reason: "did not finish within 30 s" }] }).readings[0].reason, "did not finish within 30 s", "a new run failure replaces the old one");
+  const days = [
+    { sha: "a", own: { readings: [{ key: "k", value: null, reason: "exited 1" }], retried: true } },
+    { sha: "b", own: { readings: [{ key: "k", value: 1 }] } },
+    { sha: "c", own: { readings: [{ key: "k", value: null, reason: "exited 1" }] } },
+    { sha: "h", own: { readings: [{ key: "k", value: null, reason: "exited 1" }] } },
+  ];
+  const { picked, left } = retryTargets(days, "h", 5);
+  assert.deepEqual(picked.map((r) => r.sha), ["c", "a"]);
+  assert.equal(left, 1);
+});
+
+test("R-metrics-065 retry: re-reads only the days with a failed reading, merges, and counts retried", (t) => {
+  const f = scratchFixture(t, { scratch: null });
+  // First pass without scratch: both older days fail (no built.txt).
+  assert.equal(runBf(f).read, 2);
+  assert.equal(f.rows()[0].own.readings[0].value, null);
+  // Day 2 had a number once (an earlier, successful read) — plant it, and a failure it must keep.
+  const planted = f.rows();
+  const { reason: _gone, ...held } = planted[1].own.readings[0];
+  planted[1].own.readings[0] = { ...held, value: 55 };
+  writeFileSync(f.seriesPath, planted.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  // Now the working tree declares scratch (what an approval of the new file covers).
+  const decl = JSON.parse(readFileSync(join(f.root, OWN_FILE), "utf8"));
+  writeFileSync(join(f.root, OWN_FILE), JSON.stringify({ ...decl, scratch: SCRATCH }));
+  const res = runBf(f, { retry: true });
+  assert.equal(res.retried, 1, "only the day that failed is re-read; the day holding a number is not");
+  assert.equal(res.read, 1);
+  assert.equal(res.values, 1);
+  const rows = f.rows();
+  assert.equal(rows[0].own.readings[0].value, 1101, "a key that failed and now has a number takes it");
+  assert.equal(rows[0].own.retried, true);
+  assert.equal(rows[1].own.readings[0].value, 55, "a day without a failed reading is left as it was");
+  assert.equal(rows[1].own.retried, undefined);
+  assert.equal(runBf(f, { retry: true }).retried, 0, "nothing left that failed");
+  // A retry counts what it changed: numbers carried over from the old entry are not new.
+  const again = f.rows();
+  again[0].own = { ...again[0].own, retried: undefined, readings: [{ key: again[0].own.readings[0].key, value: null, reason: "exited 1: x" }, { key: "kept", value: 3 }] };
+  writeFileSync(f.seriesPath, again.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const third = runBf(f, { retry: true });
+  assert.equal(third.retried, 1);
+  assert.equal(third.values, 1, "the key that now reads counts; the old number (3) it carried over does not");
 });

@@ -26,6 +26,7 @@ export function serve(api: Api, engine: Engine): () => void {
   const arg = (a: unknown, k: string): unknown => (a as Record<string, unknown> | null)?.[k];
   return handleAll<ScorecardMethods>(api, {
     read: async (a) => engine.read(await scope(a)),
+    history: async (a) => engine.history(await scope(a)),
     refresh: async (a) => engine.refresh(await scope(a)),
     accept: async (a) => engine.accept(await scope(a), arg(a, "check"), arg(a, "reason")),
     unaccept: async (a) => engine.unaccept(await scope(a), arg(a, "check")),

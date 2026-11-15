@@ -129,7 +129,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
               are withheld under a window rather than restated about a
               span they were not measured over. */}
           {!active && !dcut && tokenTotal(doc.unpriced) > 0 && <> {fmtCount(tokenTotal(doc.unpriced))} tokens ran on a model with no published rate and are <b>not</b> in this figure.</>}
-          {!active && !dcut && doc.fastTurns > 0 && <> {fmtExact(doc.fastTurns)} turns ran in fast mode, which bills at roughly double and is priced here at the standard rate — the real figure is higher.</>}
+          {!active && !dcut && doc.fastTurns > 0 && <> {fmtExact(doc.fastTurns)} turns ran in fast mode, priced at the fast rate (twice the standard); the model rows show them as “(fast mode)”.</>}
           {/* A MEASUREMENT of this desktop, not method: it says which
               way the dearest line on the bill is moving, and it is the
               one number the rate rules below cannot be worked out

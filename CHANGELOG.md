@@ -5,6 +5,23 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.29
+
+### New
+
+- **Fast mode is priced at its own rate.** The CLI records which requests ran in fast mode, so they are charged at the fast price, never the standard one. A fast request on a model with no fast price stays unpriced. The session cost line shows the fast-mode share, and the all-sessions model list gives it its own row.
+- **The model sheet has a Fast mode switch.** It shows the current state. Turning it on first shows the fast and standard price for the session's model, and warns that auto mode is off while fast mode is on.
+- **A repo's own readings can be re-read after a failure.** Once every older day has an entry, a "re-read N failed days" button runs the failed days again. A number already read is never lost to a new failure, and the answer says when the same readings failed again.
+- **A repo can declare a scratch setup for its readings.** A bare checkout can then run its commands. It is approved together with the readings, never at the latest commit.
+- **The Scorecard shows the score over time.** A fixed 0–10 line covers every run, with past public runs read back by commit. Dragging along it names the run's date, score, commit and which checks moved.
+
+### Fixed
+
+- **Plain Send after "a new session" goes into the session on screen.** Before, a remembered "new session" aim turned every later Send in that repo into another new item that waited for the repo to be free. Now "a new session" applies once, and "when it's free" stays remembered.
+- **Agent readings cards start at their title.** The gutter inside a card and the checklist indent are gone. Setup cost reads as a figure with its "per" beside it, and the split shows as a bar with a legend.
+- **A day whose readings were not run no longer stays in the re-read list.** Days not approved or read only at the latest commit leave it. Only a budget cut keeps a day there.
+- **Buttons no longer sit after the last row of a long list.** "Add" and send buttons, the phone copy's forget, the export wipe and the pull pattern input now sit above their rows.
+
 ## 0.1.28
 
 ### New

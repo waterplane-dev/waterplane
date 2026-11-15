@@ -149,17 +149,15 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
     // is the conservative direction for an estimate.
     const t: Tally = [u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, 1];
     if (!(t[0] || t[1] || t[2] || t[3])) return;
-    // Fast mode bills at a premium ($10/$50 on Opus 5 rather than $5/$25) and
-    // is NOT modelled — nothing in this corpus used it. Counting the turns is
-    // what lets the screen say so instead of being quietly 2x low if it ever
-    // starts being used.
+    // Fast mode bills at twice the standard card; it is priced under its own
+    // `@fast` key below, and the turns are counted so the screen can say so.
     if (u.speed !== null && u.speed !== "standard") fast++;
     if (!cwd && typeof row.cwd === "string") cwd = row.cwd;
     const ts = typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
     // Tallied under the key this REQUEST prices under: a Haiku 5.5 request past
     // a 100K-token prompt pays the long card, and a bucket's sum cannot say
     // which of its requests were long, so they get a bucket of their own.
-    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", priceKeyOf(u.model, u) ?? "unknown");
+    const key = crossKey(Number.isFinite(ts) ? hourKey(ts) : "", priceKeyOf(u.model, u, u.speed) ?? "unknown");
     bump(cross, key, t);
     // Same guards, same record, same bucket — so the rebuild tokens are
     // always a SUBSET of the cache writes in the tally beside them, and the

@@ -624,3 +624,8 @@ On the phone, a tapped chart tooltip stays visible after the finger lifts, as on
 - asked: 2026-11-10
 - shipped: a3c4a7f9
 
+### R-ui-140 · shipped
+When Ultracode is on, an icon on the model wheel button shows it is active.
+- asked: 2026-11-12
+- shipped: 0ede8e2f5
+

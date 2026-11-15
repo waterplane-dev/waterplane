@@ -122,7 +122,8 @@ export function ComposeBar(p: ComposeBarProps) {
     <>
       {/* **The armed aim, said out loud for as long as it is not this session.**
 
-          This is the half that makes the aim safe to REMEMBER. The per-repo
+          The aim is no longer remembered per repo (`reusableWhere`: `a new
+          session` is a one-shot), but while it is armed it must be seen. The per-repo
           the old `sendMode` key that was deleted from this app armed the primary
           button with an answer nobody could see, and the only way to find out
           was to tap it; the mode that replaced it is safe because

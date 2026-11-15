@@ -8,7 +8,7 @@
  * the comparison are shared `agentseries/`. It judges nothing, and a reading with too few sessions
  * says so rather than drawing a zero.
  */
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Loader2, Plug } from "lucide-react";
 import {
   agentSourceText, BY_MODEL_DEFAULT_DAYS, compareAround, derivedMarkers, MODEL_CLI_TEXT, normalizeModel, repoLabel, seriesOf, SKILLS_RULE_TEXT, START_PARTS,
@@ -99,8 +99,8 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
     () => (at ? compareAround(points, at.t, { reading, ...(model ? { model } : {}) }) : null),
     [at, points, reading, model]);
 
-  const pick = (b: SeriesBucket) => (reading === "start" ? b.start : reading === "look" ? b.look : reading === "req" ? b.req : reading === "skills" ? b.skills : b.subStart);
-  const values = useMemo(() => valuesOnAxis(axis, series, pick), [axis, series, reading]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pick = useCallback((b: SeriesBucket) => (reading === "start" ? b.start : reading === "look" ? b.look : reading === "req" ? b.req : reading === "skills" ? b.skills : b.subStart), [reading]);
+  const values = useMemo(() => valuesOnAxis(axis, series, pick), [axis, series, pick]);
   const why = absentSummary(series, pick);
   const y = yScale(values, CHART_H - 16, 8);
   const parts = useMemo(() => (reading === "start" ? partBands(axis, series, groupedPartOrder(START_PARTS)) : []), [axis, series, reading]);

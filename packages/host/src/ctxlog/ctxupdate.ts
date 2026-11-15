@@ -1,7 +1,7 @@
 /** Advance a cursor over what the CLI appended: updateContextLog. Moved from ctxlog.ts. */
 import { statSync } from "node:fs";
 import type { TokenTotals } from "@waterplane/shared";
-import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, priceGeneration, priceKeyOf, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
+import { addCost, addTotals, costOf, isColdRebuild, isFastSpeed, normalizeModel, priceGeneration, priceKeyOf, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { opensTurn } from "../transcript/transcriptlog.js";
 import { isAnchor, usageRecordOf } from "./usagerecord.js";
@@ -40,7 +40,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
   else if (from === 0) {
     cur.consumed = 0; cur.samples = []; cur.events = []; cur.turns = 0; cur.usageTok = 0;
     cur.split = zeroTotals();
-    cur.cost = zeroCost(); cur.unpriced = 0;
+    cur.cost = zeroCost(); cur.unpriced = 0; cur.fastTok = 0; cur.fastUsd = 0;
     cur.models = []; cur.modelTok = []; cur.cum = zeroTotals();
     cur.compaction = blankCompaction(); cur.shedAuto = 0; cur.shedManual = 0;
     cur.pendingRebuild = null;
@@ -183,7 +183,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     const raw = rec.model;
     // The key this one request prices under: a Haiku 5.5 request past a
     // 100K-token prompt pays the long card for all of it (`priceKeyOf`).
-    const pk = priceKeyOf(raw, bag);
+    const pk = priceKeyOf(raw, bag, rec.speed);
     const mid = raw ? normalizeModel(raw) ?? raw : null;
     let mi = mid ? cur.models.indexOf(mid) : -1;
     if (mid && mi < 0) { mi = cur.models.length; cur.models.push(mid); cur.modelTok.push(0); }
@@ -200,6 +200,8 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
       const c = costOf(bag, pk, localDay(t));
       if (c) addCost(cur.cost, c);
       else cur.unpriced += tokenTotal(bag);
+      // The fast-mode share, kept beside the total so the screen can say it.
+      if (isFastSpeed(rec.speed)) { cur.fastTok += tokenTotal(bag); if (c) cur.fastUsd += c.total; }
     }
     if (tok <= 0) continue;
     // ── Did this request come back to an expired cache? ──────────────────

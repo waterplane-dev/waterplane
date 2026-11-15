@@ -6,7 +6,7 @@
  */
 import type { RepoTarget } from "@waterplane/shared";
 import { core, createStore, featureSheetId, openExternal, pluginClient, type LeaveReason, type PluginCallResult } from "@waterplane/sdk";
-import type { ScoreView, ScorecardMethods } from "../shared/wire.mts";
+import type { ScoreHistory, ScoreView, ScorecardMethods } from "../shared/wire.mts";
 import { latest, leaveResets, remedyOutcome } from "./latest.ts";
 import { remedyWords, type ScoreCut } from "./logic.ts";
 
@@ -15,6 +15,12 @@ const client = pluginClient<ScorecardMethods>("scorecard");
 
 export interface Read { at: number; view: ScoreView }
 export const views = createStore<ReadonlyMap<string, Read>>(new Map());
+
+/** The score over time per repo id; read when the sheet opens and again on `changed`. */
+export const histories = createStore<ReadonlyMap<string, ScoreHistory>>(new Map());
+export function readHistory(repo: string): void {
+  void client.read("history", { repo }).then((res) => { if (res.ok) histories.set((m) => new Map(m).set(repo, res.result)); });
+}
 
 export interface SheetState { repo: RepoTarget | null; cut: ScoreCut | null; err: string | null; busy: boolean }
 const EMPTY: SheetState = { repo: null, cut: null, err: null, busy: false };
@@ -75,6 +81,7 @@ export function openScorecard(repo: RepoTarget, cut: ScoreCut | null = null): vo
   sheet.set({ repo, cut, err: null, busy: false });
   core().nav.open(SCORE_SHEET);
   void client.read("read", { repo: repo.id }).then((res) => { if (res.ok) keep(repo.id, res.result); else fail(res); });
+  readHistory(repo.id);
 }
 
 export const clearCut = () => sheet.set((s) => ({ ...s, cut: null }));
@@ -108,6 +115,6 @@ export const dropDraft = (key: string) => drafts.set((m) => { const n = new Map(
 export function onChanged(data?: unknown): void {
   const slug = typeof (data as { slug?: unknown } | null)?.slug === "string" ? (data as { slug: string }).slug : null;
   const r = sheet.get().repo;
-  if (r) void client.read("read", { repo: r.id }).then((res) => { if (res.ok) keep(r.id, res.result); });
+  if (r) { void client.read("read", { repo: r.id }).then((res) => { if (res.ok) keep(r.id, res.result); }); readHistory(r.id); }
   views.set((m) => new Map([...m].map(([k, v]) => [k, slug === null || v.view.slug === slug ? { ...v, at: 0 } : v])));
 }

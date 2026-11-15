@@ -35,6 +35,17 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout;
 }
 
+/**
+ * A commit subject as a marker's name: a leading work-package tag (`agent readings P5a: `,
+ * `WP3: `) is plan bookkeeping, meaningless on the card, so it goes. Only a prefix whose last
+ * word is such a tag; `scorecard: …` stays. Nothing left ⇒ the subject as it was.
+ */
+export function commitLabel(subject: string): string {
+  const s = subject.trim();
+  const cut = s.replace(/^(?:[\w-]+ ){0,4}W?P\d+[a-z]?\s*:\s*/i, "");
+  return cut || s;
+}
+
 /** Commits since `sinceMs` touching `paths`, one marker each (kind `instructions`). */
 async function commitMarkers(top: string, paths: string[], sinceMs: number, extra: { repo?: string; scope?: string }): Promise<AgentMarker[]> {
   const out = await git(top, ["log", `--since=${new Date(sinceMs).toISOString()}`, "--format=%x1e%H%x1f%at%x1f%s", "--name-only", "--", ...paths]);
@@ -48,7 +59,7 @@ async function commitMarkers(top: string, paths: string[], sinceMs: number, extr
     const shown = files.slice(0, FILES_IN_DETAIL).join(", ") + (files.length > FILES_IN_DETAIL ? `, and ${files.length - FILES_IN_DETAIL} more` : "");
     markers.push({
       t, kind: "instructions",
-      label: (subject ?? "").trim().slice(0, LABEL_MAX) || sha.slice(0, 7),
+      label: commitLabel(subject ?? "").slice(0, LABEL_MAX) || sha.slice(0, 7),
       detail: [extra.scope, shown].filter(Boolean).join(": "),
       ...(extra.repo !== undefined ? { repo: extra.repo } : {}),
     });

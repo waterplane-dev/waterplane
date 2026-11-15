@@ -215,6 +215,8 @@ export interface RepoHealthOwnBackfillSummary {
   left?: number;
   /** `budget`: the run's wall clock ran out; the rest is left for the next tap. */
   stopped?: "budget" | null;
+  /** Retry mode only (`{ retry: true }`): day rows re-read because a reading had failed. `read` counts the same days. */
+  retried?: number;
 }
 
 /** The answer of `POST /api/repos/:id/repohealth/own-backfill` — always 200. */
@@ -632,6 +634,8 @@ export interface RepoHealthPlotOwn {
   problems?: string[];
   /** Older days (HEAD's excluded) with no own entry: what a read-back could still read. Absent from an older engine. */
   unread?: number;
+  /** Older days (HEAD's excluded) whose stored readings include a failed run: what a re-read could try. Absent from an older engine. */
+  retryable?: number;
 }
 
 export interface RepoHealthPlot {

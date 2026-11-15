@@ -257,6 +257,11 @@ export function setupSplitLine(c: SetupCost): string {
   return `Whose it is${basis}: ${c.split.map((g) => `${g.label} ${fmtShare(g.share)}`).join(" · ")}.`;
 }
 
+/** The split's basis when it rests on fewer sessions than the figure (the bar and legend carry the shares), else null. */
+export function setupSplitBasis(c: SetupCost): string | null {
+  return c.split.length && c.nSplit < c.n ? `Whose it is: the ${c.nSplit} of ${c.n} sessions that recorded parts, pooled over characters.` : null;
+}
+
 /** The headline's probe slot when no probe has run here (`probeLastLine` once one has). */
 export const PROBE_NONE = "Last search test: none run yet.";
 

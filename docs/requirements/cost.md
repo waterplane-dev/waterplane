@@ -121,3 +121,13 @@ Every figure that counts subagents counts a dynamic workflow's agents too: the s
 A conversation's window and spend are drawn as they move: held between requests and stepping at each one, a compaction dropping at its own instant to the size it measured, and the last reading standing for as long as agents run past it. No chart shows a slide that never happened.
 - asked: 2026-11-04 (owner, of a phone screenshot: the window sloping down for an hour around a compaction, and stopping an hour before the axis did)
 - shipped: `heldSamples` in `contextPlot/cplotHold.ts`, pinned by `contextPlot.test.mjs`
+
+### R-cost-025 · shipped
+A request that ran in fast mode is priced at the fast-mode rate (twice the standard card), read from the CLI's own `usage.speed`, never at the standard rate; a fast request on a model with no known fast rate is counted as unpriced. The session's cost line names the fast-mode share beside the subagents', and the all-sessions model rows list fast mode as its own row.
+- asked: 2026-11-15
+- shipped: `pricing.ts` `FAST` + `@fast` price key, pinned by `shared/test/pricing.test.mjs`
+### R-cost-026 · shipped
+Token cost prices every current Anthropic model at its published rates, including Haiku's higher long-prompt rate over 100,000 tokens; running installs refresh prices from Anthropic's price page (WATERPLANE_PRICE_FETCH=0 turns it off) and recorded conversations are re-priced when rates change.
+- asked: 2026-11-12, 2026-11-13
+- shipped: 359bc9f19, ab85def96, 96746389f, 05d936b05, 257e14b55
+

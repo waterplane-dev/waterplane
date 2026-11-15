@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
-  List, Maximize2, Minimize2, Play, Radar, RotateCw, ScrollText, Sparkles, Terminal as TerminalIcon, X,
+  List, Maximize2, Minimize2, Play, Rabbit, Radar, RotateCw, ScrollText, Sparkles, Terminal as TerminalIcon, X,
 } from "lucide-react";
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
@@ -252,9 +252,10 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
       {!pending && !isShellBackend(wheel.backends, active.backend) && (() => {
         const badge = badgeMode(active);
         const ultra = ultraState(active.ultracode) === "on";
-        const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}${ultra ? " — ultracode on" : ""}`;
+        const fast = active.fastMode === true;
+        const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}${ultra ? " — ultracode on" : ""}${fast ? " — fast mode on" : ""}`;
         return (
-          <Button ref={wheelBtn} className={[wheelOpen && "active", (badge || ultra) && "mw-badged"].filter(Boolean).join(" ")} data-hint="term.modelwheel"
+          <Button ref={wheelBtn} className={[wheelOpen && "active", (badge || ultra || fast) && "mw-badged"].filter(Boolean).join(" ")} data-hint="term.modelwheel"
             onPointerDown={keepFocus}
             aria-label={label} aria-expanded={wheelOpen}
             title={label}
@@ -262,6 +263,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
             <Radar size={ICON} />
             {badge && <span className="mw-badge"><ModeGlyph mode={badge} size={12} /></span>}
             {ultra && <span className="mw-badge"><Sparkles size={12} aria-hidden /></span>}
+            {fast && <span className="mw-badge"><Rabbit size={12} aria-hidden /></span>}
           </Button>
         );
       })()}

@@ -4,7 +4,7 @@ Shows the public OpenSSF Scorecard of a repo's GitHub remote: a score out of 10 
 
 ## Where to find it
 - **Repo row** — a "failing" chip with the number of failing checks on a repo's title line. Tap it to open the sheet cut to those checks. No chip when the repo is unscored or nothing is failing.
-- **Sheet** — the score, when it was read, the failing checks (with ask Claude and accept), the accepted ones and the passing ones.
+- **Sheet** — the score, its history as a line over time, when it was read, the failing checks (with ask Claude and accept), the accepted ones and the passing ones.
 - **Repo readings** — the "OpenSSF Scorecard" row, whose button opens the failing checks.
 
 ## Settings
@@ -43,6 +43,19 @@ Optional extension: a dev checkout starts it on; for a release, `deploy/ship.jso
 The score is only as fresh as the project's own `ossf/scorecard-action` workflow: that run is what
 publishes results to the API. No workflow, no score.
 
+## Score over time
+
+Under the score, a line of every Scorecard run kept for the repo: a fixed 0–10 axis, one point per
+run in order (not spaced by date), dates at the start, middle and end. Drag across it to read a
+run's date, score and commit, and which checks moved since the run before; untouched it reads the
+latest. One run is a sentence, not a line.
+
+Past public runs are read back once a day, at most 40 per pass: GitHub lists the repo's
+`scorecard` workflow runs (two unauthenticated requests), and the Scorecard API returns the result
+for each run's commit. After that, every reading the host makes is added. A private repo's history
+is its local readings, from the first one kept. Stored in
+`<state dir>/scorecard/history/<owner>__<name>.json`; a file that does not parse is never written over.
+
 ## Accepts
 
 A person's accepts live in `<state dir>/scorecard/accepted.json` (reason, time, the score at the
@@ -57,5 +70,5 @@ The sheet marks them *built in* and says why.
 | path | what |
 |---|---|
 | `shared/wire.mts` | the contract both halves import |
-| `host/` | the API read, visibility check, accepts file, remedy prompt |
+| `host/` | the API read, visibility check, accepts file, history file and backfill, remedy prompt |
 | `web/` | sheet, chip, setup row words; `logic.ts` holds the cut and chip count, tested in `logic.test.mjs` |

@@ -98,15 +98,17 @@ export function ProbeCard({ repoId, view, results, pts }: {
 
   // Re-read the status while a run is live; once it ends, re-read the results once.
   const wasRunning = useRef(false);
+  const reloadView = view.reload;
+  const reloadResults = results.reload;
   useEffect(() => {
     if (running) {
       wasRunning.current = true;
-      const t = setInterval(() => view.reload({ quiet: true }), POLL_MS);
+      const t = setInterval(() => reloadView({ quiet: true }), POLL_MS);
       return () => clearInterval(t);
     }
-    if (wasRunning.current) { wasRunning.current = false; results.reload({ quiet: true }); }
+    if (wasRunning.current) { wasRunning.current = false; reloadResults({ quiet: true }); }
     return undefined;
-  }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [running, reloadView, reloadResults]);
 
   const plan = useMemo((): { models: string[]; questions: number; repeats: number; base?: ProbeResult } | { missing: string } | null => {
     if (!v || "absent" in v.pool) return null;

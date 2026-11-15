@@ -313,6 +313,7 @@ test("plot says when a repo declares nothing — and a scope carries no own read
   execFileSync(node, [ENGINE, "update", `--root=${root}`], { encoding: "utf8" });
   const plot = JSON.parse(execFileSync(node, [ENGINE, "plot", `--root=${root}`], { encoding: "utf8" }));
   assert.deepEqual(plot.own, { file: OWN_FILE, declared: false, series: [] });
+  assert.equal("retryable" in plot.own, false, "declared only, like unread");
   execFileSync(node, [ENGINE, "update", `--root=${root}`, "--scope=sub"], { encoding: "utf8" });
   const scoped = JSON.parse(execFileSync(node, [ENGINE, "plot", `--root=${root}`, "--scope=sub"], { encoding: "utf8" }));
   assert.equal("own" in scoped, false);
@@ -365,4 +366,31 @@ test("reach counts each commit's OWN files: a week from before a language arrive
   const filesOf = (row, name) => row.reach.value.packs.find((p) => p.name === name)?.files;
   assert.equal(filesOf(lines[1], "python"), 3);
   assert.equal(filesOf(lines[0], "python"), 0, "no Python in the first commit's tree, though HEAD has three");
+});
+
+test("R-metrics-065 scratch: a valid object is carried, an invalid one is a problem line and turns the scratch features OFF, never the readings", () => {
+  const rd = { key: "a", name: "A", means: "m", better: "lower", run: ["node", "x"] };
+  const ok = parseDeclaration(JSON.stringify({ readings: [rd], scratch: { linkNodeModules: true, prepare: ["npm", "run", "build:shared"] } }));
+  assert.deepEqual(ok.scratch, { linkNodeModules: true, prepare: ["npm", "run", "build:shared"] });
+  assert.deepEqual(ok.problems, []);
+  for (const bad of [{ prepare: [] }, { prepare: "npm run x" }, { prepare: ["npm", ""] }, { linkNodeModules: "yes" }, { shell: true }, [], 3]) {
+    const d = parseDeclaration(JSON.stringify({ readings: [rd], scratch: bad }));
+    assert.equal(d.scratch, undefined, JSON.stringify(bad));
+    assert.equal(d.readings.length, 1, "the readings are still read");
+    assert.equal(d.readings[0].invalid, undefined);
+    assert.match(d.problems.join(" "), /"scratch"/);
+  }
+  assert.equal(parseDeclaration(JSON.stringify({ readings: [rd] })).scratch, undefined);
+});
+
+test("plot own.retryable counts older days holding a failed run, HEAD's excluded", async () => {
+  const { buildPlot } = await import("./repohealth/plot.mjs");
+  const day = (n, own) => ({ day: `2026-01-0${n}`, sha: `s${n}`, ...(own ? { own } : {}) });
+  const failed = { readings: [{ key: "k", value: null, reason: "exited 1" }] };
+  const ok = { readings: [{ key: "k", value: 3 }] };
+  const rows = [day(1, failed), day(2, ok), day(3), day(4, failed)];
+  const own = buildPlot({ rows, prereg: {}, preregVersion: 1, ownDeclared: true }).own;
+  assert.equal(own.retryable, 1, "day 1 only: day 4 is HEAD");
+  assert.equal(own.unread, 1);
+  assert.equal(buildPlot({ rows, prereg: {}, preregVersion: 1, ownDeclared: false }).own.retryable, undefined);
 });

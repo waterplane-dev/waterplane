@@ -29,10 +29,13 @@
  *  - **A chain is never recalled.** `{kind:"after"}` names ONE predecessor row
  *    by id; reusing it would silently park every later prompt behind a row that
  *    settled long ago — the one shape here whose reuse is not what was meant.
- *  - **The AIM is recalled, and only the two answers that can be said.** `this`
- *    and `new` are two standing ways of driving a repo and the strip's aim line
- *    keeps whichever is armed on screen (`composeAimNote`); `other` names one
- *    per-boot session id and is dropped for the chain's reason exactly.
+ *  - **The AIM is not recalled: every screen opens on `this`.** `new` was once
+ *    remembered per repo, and the plain `Send` then opened ANOTHER session
+ *    "when this repo is free" on every later tap in that repo — the words
+ *    waited hours and the session on screen never got them (2026-11-14). The
+ *    owner's rule (2026-11-15): a deliberately set *when it's free* is kept;
+ *    *a new session* is a one-shot. `other` names one per-boot session id and
+ *    is dropped for the chain's reason exactly.
  *
  * Pure and node-tested; `sendMemory.test.mjs` pins the five rules above, which
  * are the ones that turn a convenience back into the bug it replaced.
@@ -95,16 +98,17 @@ export function reusableMode(m: SendMode | undefined | null): SendMode | null {
 }
 
 /**
- * The aim worth offering again, or null.
+ * The aim worth offering again, or null — only `this`.
  *
  * `other` is dropped on the way IN as well as on the way out: it names a
  * session id that dies with the desktop's process, so a remembered one is
- * either gone (a refusal on a send nobody meant to aim anywhere odd) or, worse,
- * reused by a session nobody picked. The two answers left are about how a
- * person drives a REPO, which is what this map is keyed on.
+ * either gone or, worse, reused by a session nobody picked. `new` is dropped
+ * too, and a `new` stored by an older build reads back as `this`: recalled,
+ * it made the plain Send post every later prompt in that repo as another
+ * fresh session's work item (see the header).
  */
 export function reusableWhere(w: SendWhere | undefined | null): SendWhere | null {
-  return w === "this" || w === "new" ? w : null;
+  return w === "this" ? w : null;
 }
 
 /**
@@ -174,7 +178,8 @@ export function recallWhere(mem: SendMemory, cwd: string | null | undefined): Se
  *   hours for a free repo. Words written on that screen belong in it: `this`,
  *   which `queueSessionPrompt` folds into the create itself.
  *
- * Neither screen's answer is written back to the repo's memory.
+ * Neither screen's answer is written back to the repo's memory, and a live
+ * session opens on `this` (`recallWhere` recalls nothing else).
  */
 export function recallScreenAim(
   screen: { later: boolean; pending: boolean }, mem: SendMemory, cwd: string | null | undefined,

@@ -80,3 +80,8 @@ A lock mark appears on a session's tab while that session is waiting for vault a
 ### R-tabs-017 · shipped
 Each session row in the open-tabs list shows its star and follow-up flag beside the name, and the prompt count and cost so far that the launcher row shows, so a person can find a session by more than its name. A figure nobody measured is absent, never zero.
 - asked: 2026-11-06
+### R-tabs-018 · shipped
+The open tabs list has a waiting chip as a filter showing only tabs waiting for an answer, saying 'n of N waiting' with a clear.
+- asked: 2026-11-14
+- shipped: ab8d962c2
+

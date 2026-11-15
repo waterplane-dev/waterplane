@@ -59,6 +59,7 @@ import { tapeLines, tapePaths } from "./metrics/classics.mjs";
 import { SERIES, reading } from "./readings.mjs";
 import { readRank } from "./series.mjs";
 import { OWN_FILE } from "./own.mjs";
+import { retryableDay } from "./ownbackfill.mjs";
 import { UNITS } from "./central.mjs";
 
 /**
@@ -518,7 +519,10 @@ function buildOwn(rows, prereg, declared) {
   // Days it already read keep their entry (a value or a reason), so 0 here is
   // "every older day was read", whatever the tiles show.
   const unread = rows.slice(0, -1).filter((r) => !r?.own || typeof r.own !== "object" || r.own.notRun).length;
-  const out = { file: OWN_FILE, declared: !!declared, series: [], ...(declared ? { unread } : {}) };
+  // Older days whose stored readings include a failed run: what a re-read could
+  // still try (`retryableDay`, the engine's own test). Same slice as `unread`.
+  const retryable = rows.slice(0, -1).filter(retryableDay).length;
+  const out = { file: OWN_FILE, declared: !!declared, series: [], ...(declared ? { unread, retryable } : {}) };
   if (latest && typeof latest.refused === "string") {
     out.absent = latest.refused;
     return out;

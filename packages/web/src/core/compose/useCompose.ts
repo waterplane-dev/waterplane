@@ -251,8 +251,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    */
   const [sendMode, setSendMode] = useState<SendMode>("now");
   /**
-   * **WHERE the next message runs.** Recalled per repo like the mode
-   * (`recallWhere`), and never invisible: for as long as it is not `this`, the
+   * **WHERE the next message runs.** Opens on `this` (`recallScreenAim`; never
+   * remembered per repo), and never invisible: for as long as it is not `this`, the
    * aim line above the composer says where the words are going and carries the
    * one tap that puts them back.
    */
@@ -345,7 +345,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     // it belonged to the repo you were in, and carrying it across would aim
     // this repo's next prompt at a conversation in another one.
     // A `+ new` screen IS the new session: its words go into it, never into
-    // yet another one the repo's remembered aim would post (`recallScreenAim`).
+    // yet another one an aim from another screen would post (`recallScreenAim`).
     setSendWhere(recallScreenAim({ later, pending }, sendMemRef.current, active?.cwd));
     setSendWhereSid(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sendMemRef is a ref; the repo is the key
@@ -809,9 +809,13 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       // from, the row now on the repo's chips. Nothing remembered — that aim
       // is the screen's, not the repo's.
       if (later) { afterSend(); deps.leave(); return; }
-      // The aim is remembered per repo exactly as the mode is — `other` is
-      // dropped on the way in (`reusableWhere`).
-      noteSendAim(active.cwd, { mode: armed, where: sendWhere });
+      // The MODE is remembered per repo; the aim is not. `a new session` is a
+      // one-shot: the plain Send after it goes into the session on screen
+      // again (owner, 2026-11-15 — a remembered `new` turned every later Send
+      // in that repo into another fresh session's work item). `other` stays
+      // armed on this screen and is dropped on the way in (`reusableWhere`).
+      noteSendAim(active.cwd, { mode: armed, where: "this" });
+      if (sendWhere === "new") setSendWhere("this");
       setSendMode(armed);
       afterSend();
       return;

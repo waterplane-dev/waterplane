@@ -8,9 +8,10 @@ import { createHash } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND, type ComplianceCheck } from "@waterplane/shared";
-import { builtInAccept, checkViews, isFailing, isUsableSlug, openCount, own, parseReply, remedyPrompt, scoredDetail, viewerUrl, type Parsed } from "../shared/logic.mjs";
-import { CHECK_ID, REASON_MAX, SCORE_FRESH_MS, VISIBILITY_FRESH_MS, type ScoreAccept, type ScoreView } from "../shared/wire.mjs";
+import { builtInAccept, checkViews, isFailing, isUsableSlug, mergePoints, openCount, own, parseReply, pointOf, remedyPrompt, scoredDetail, viewerUrl, type Parsed } from "../shared/logic.mjs";
+import { BACKFILL_MAX, CHECK_ID, HISTORY_FRESH_MS, REASON_MAX, SCORE_FRESH_MS, VISIBILITY_FRESH_MS, type ScoreAccept, type ScoreHistory, type ScorePoint, type ScoreView } from "../shared/wire.mjs";
 import { commonGitDir, slugOfWorktree } from "./gitslug.mjs";
+import { historyFile, loadHistory, saveHistory } from "./history.mjs";
 import { loadStore, saveStore, storeFile } from "./store.mjs";
 
 export interface Roots {
@@ -64,6 +65,20 @@ export function createEngine(roots: Roots, deps: Deps) {
   const vis = new Map<string, Vis>();
   const inflight = new Map<string, Promise<void>>();
   const slugCache = new Map<string, { at: number; slug: string | null; from: "remote" | "set" | null }>();
+  const backfilling = new Map<string, Promise<void>>();
+  /** The last backfill's sentence per slug (a failure, or what was not read back); cleared by the next clean one. */
+  const notes = new Map<string, string>();
+
+  /** Add points to a slug's history file. A file that does not parse stays as it is (no throw: a reading never fails on its history). */
+  const record = (slug: string, add: ScorePoint[], patch: { runsAt?: number; missing?: string[] } = {}): void => {
+    const f = historyFile(roots.stateDir, slug);
+    const h = loadHistory(f);
+    if (h.problem) return;
+    const points = mergePoints(h.points, add);
+    const same = points.length === h.points.length && points.every((p, i) => p.date === h.points[i]!.date && p.score === h.points[i]!.score);
+    if (same && patch.runsAt === undefined && patch.missing === undefined) return;
+    try { saveHistory(f, { points, runsAt: patch.runsAt ?? h.runsAt, missing: patch.missing ?? h.missing }); } catch { /* unwritable: the next reading tries again */ }
+  };
 
   const slugOf = (worktree: string): { slug: string | null; from: "remote" | "set" | null } => {
     const hit = slugCache.get(worktree);
@@ -136,9 +151,68 @@ export function createEngine(roots: Roots, deps: Deps) {
       .then((e) => {
         // A blip (5xx, network, timeout, a bad body) never replaces a good reading: keep it, retry later.
         const prev = entries.get(k);
-        entries.set(k, e.transient && prev?.parsed ? { ...prev, tryAt: e.tryAt, transient: true } : e); inflight.delete(k); deps.push({ at: roots.now(), slug }); });
+        entries.set(k, e.transient && prev?.parsed ? { ...prev, tryAt: e.tryAt, transient: true } : e);
+        if (!e.transient && e.parsed) { const pt = pointOf(e.parsed); if (pt) record(slug, [pt]); }
+        inflight.delete(k); deps.push({ at: roots.now(), slug }); });
     inflight.set(k, p);
     return p;
+  }
+
+  /** GitHub JSON, or a sentence. */
+  async function gh(url: string): Promise<{ ok: true; body: unknown } | { ok: false; why: string }> {
+    try {
+      const r = await roots.fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(timeout) });
+      if (r.status !== 200) return { ok: false, why: r.status === 403 || r.status === 429 ? `GitHub refused (${r.status}) — its unauthenticated limit is 60 requests an hour; past runs are asked again later` : `GitHub answered ${r.status}` };
+      return { ok: true, body: await r.json() };
+    } catch (e) { return { ok: false, why: (e as Error).message || "no answer" }; }
+  }
+
+  /**
+   * Read past public runs back: the repo's scorecard workflow runs name the commits, and the Scorecard
+   * API keeps one result per commit. Commits already in the history or known to have no result are
+   * not asked again; at most BACKFILL_MAX per pass. Writes the history file, then pushes `changed`.
+   */
+  async function backfill(slug: string): Promise<void> {
+    const base = `https://api.github.com/repos/${slug}/actions`;
+    const wf = await gh(`${base}/workflows?per_page=100`);
+    if (!wf.ok) { notes.set(key(slug), `past runs could not be listed: ${wf.why}`); return; }
+    const flows = ((wf.body as { workflows?: unknown } | null)?.workflows ?? []) as Array<{ id?: unknown; path?: unknown }>;
+    const ids = (Array.isArray(flows) ? flows : []).filter((w) => typeof w?.id === "number" && typeof w.path === "string" && /scorecard/i.test(w.path)).map((w) => w.id as number);
+    if (!ids.length) { record(slug, [], { runsAt: roots.now() }); notes.set(key(slug), `github.com/${slug} has no scorecard workflow to name its past runs — the history starts with the readings kept from now on`); return; }
+    const shas: string[] = [];
+    for (const id of ids) {
+      const runs = await gh(`${base}/workflows/${id}/runs?per_page=100&status=success`);
+      if (!runs.ok) { notes.set(key(slug), `past runs could not be listed: ${runs.why}`); return; }
+      const list = (runs.body as { workflow_runs?: unknown } | null)?.workflow_runs;
+      for (const r of Array.isArray(list) ? list : []) { const h = (r as { head_sha?: unknown })?.head_sha; if (typeof h === "string" && /^[0-9a-f]{40}$/.test(h) && !shas.includes(h)) shas.push(h); }
+    }
+    const h = loadHistory(historyFile(roots.stateDir, slug));
+    if (h.problem) { notes.set(key(slug), h.problem); return; }
+    const known = new Set([...h.points.map((p) => p.commit), ...h.missing]);
+    const todo = shas.filter((x) => !known.has(x));
+    const ask = todo.slice(0, BACKFILL_MAX);
+    const got: ScorePoint[] = [], missing: string[] = [];
+    let failed: string | null = null;
+    for (let i = 0; i < ask.length; i += 4) {
+      await Promise.all(ask.slice(i, i + 4).map(async (sha) => {
+        try {
+          const r = await roots.fetch(`https://api.securityscorecards.dev/projects/github.com/${slug}?commit=${sha}`, { headers: { accept: "application/json", "user-agent": HEADERS["user-agent"] }, signal: AbortSignal.timeout(timeout) });
+          if (r.status === 404) { missing.push(sha); return; }
+          if (r.status !== 200) { failed ??= `the Scorecard API answered ${r.status}`; return; }
+          const p = parseReply(await r.json());
+          const pt = p.ok ? pointOf(p.value) : null;
+          if (pt) got.push(pt);
+          // A result filed under another commit is kept, and this sha is marked asked so it is not asked daily.
+          if (!pt || pt.commit !== sha) missing.push(sha);
+        } catch (e) { failed ??= (e as Error).message || "no answer"; }
+      }));
+    }
+    const left = todo.length - ask.length;
+    // runsAt only moves on a clean pass, so a failure or a long backlog is picked up on the next read.
+    record(slug, got, { ...(failed || left ? {} : { runsAt: roots.now() }), missing: [...h.missing, ...missing].slice(-500) });
+    if (failed) notes.set(key(slug), `some past runs could not be read back (${failed}); they are asked again on the next read`);
+    else if (left) notes.set(key(slug), `${left} more past runs are read back on the next read`);
+    else notes.delete(key(slug));
   }
 
   function view(scope: Scope): ScoreView {
@@ -175,6 +249,28 @@ export function createEngine(roots: Roots, deps: Deps) {
       if (slug) { const e = entries.get(key(slug)); if (!e || !fresh(e)) void kick(slug); }
       return view(scope);
     },
+    /** The score over time. Starts reading past runs back (in the background, `changed` follows) when a public repo's were not listed for a day. */
+    history(scope: Scope): ScoreHistory {
+      const { slug } = slugOf(scope.worktree);
+      const base: ScoreHistory = { repo: scope.id, slug, points: [] };
+      if (!slug) return { ...base, note: "no GitHub remote — set which public repo this one is scored as" };
+      const k = key(slug);
+      const e = entries.get(k);
+      if (!e || !fresh(e)) void kick(slug);
+      const h = loadHistory(historyFile(roots.stateDir, slug));
+      const out: ScoreHistory = { ...base, points: h.points, ...(e?.local ? { local: true as const } : {}) };
+      if (h.problem) return { ...out, note: h.problem };
+      const busy = backfilling.has(k);
+      if (!busy && e?.pub === true && (h.runsAt === null || roots.now() - h.runsAt >= HISTORY_FRESH_MS)) {
+        const p = backfill(slug).catch((err) => { notes.set(k, `past runs could not be read back: ${(err as Error).message}`); })
+          .finally(() => { backfilling.delete(k); deps.push({ at: roots.now(), slug }); });
+        backfilling.set(k, p);
+      }
+      const note = notes.get(k);
+      return { ...out, ...(backfilling.has(k) ? { pending: true as const } : {}), ...(note ? { note } : {}) };
+    },
+    /** Test seam: wait for a slug's backfill. */
+    settled: (slug: string): Promise<void> => backfilling.get(key(slug)) ?? Promise.resolve(),
     async refresh(scope: Scope): Promise<ScoreView> {
       const { slug } = slugOf(scope.worktree);
       if (slug) await kick(slug, true);

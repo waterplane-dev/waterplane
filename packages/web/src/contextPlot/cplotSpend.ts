@@ -69,6 +69,8 @@ export interface SpendFacts {
   agentCostUsd: number | null;
   /** Tokens no rate covered, in neither figure. */
   unpricedTok: number | null;
+  /** Fast-mode tokens and their cost at the fast card, inside `costUsd`; absent when none ran fast. */
+  fastTok?: number; fastUsd?: number;
 }
 
 /** Whether the series carries a running total at all — an older host, or a
@@ -85,7 +87,7 @@ export function spendFacts(
    *  conversation's and its agents' added up, never re-derived here from a
    *  total and one rate (`shared/pricing.ts` states why). Absent on an older
    *  host, and then this reading is exactly what it always was. */
-  cost?: { total: number | null; agents: number | null; unpricedTok: number | null } | null,
+  cost?: { total: number | null; agents: number | null; unpricedTok: number | null; fastTok?: number | null; fastUsd?: number | null } | null,
 ): SpendFacts | null {
   if (!hasSpend(samples)) return null;
   const end = samples.reduce((m, s) => (s.used != null && s.used > m ? s.used : m), 0);
@@ -104,6 +106,7 @@ export function spendFacts(
     costUsd,
     agentCostUsd: costUsd != null && cost?.agents != null && cost.agents > 0 ? cost.agents : null,
     unpricedTok: cost?.unpricedTok != null && cost.unpricedTok > 0 ? cost.unpricedTok : null,
+    ...(cost?.fastTok && cost.fastTok > 0 ? { fastTok: cost.fastTok, ...(cost.fastUsd && cost.fastUsd > 0 ? { fastUsd: cost.fastUsd } : {}) } : {}),
   };
 }
 
@@ -125,6 +128,8 @@ export function spendSummary(f: SpendFacts, truncated: boolean): string {
       ? `${fmtUsd(f.agentCostUsd)} / ${fmtTokens(f.agents)} of it in subagents`
       : `${fmtTokens(f.agents)} of it in subagents`);
   }
+  // Fast mode bills at twice the standard card: its share is named beside the figure it is inside.
+  if (f.fastTok) parts.push(`${f.fastUsd && f.costUsd != null ? `${fmtUsd(f.fastUsd)} / ` : ""}${fmtTokens(f.fastTok)} of it in fast mode`);
   return parts.join(" · ");
 }
 
@@ -149,6 +154,9 @@ export function spendNote(f: SpendFacts, truncated: boolean, agentsDrawn = false
   // this app drives a CLI that is usually on a subscription, a flat fee.
   if (f.costUsd != null) {
     more.push(`The ${fmtUsd(f.costUsd)} is what the API would have charged for those tokens at published rates, priced per request on the model that ran it — not what anybody paid, and nothing to do with what a subscription costs.`);
+  }
+  if (f.fastTok) {
+    more.push(`Fast mode bills at twice the standard rate on every line; its ${fmtTokens(f.fastTok)} are priced at that rate, or left unpriced on a model whose fast rate this app does not know.`);
   }
   if (f.agents != null) {
     more.push(agentsDrawn

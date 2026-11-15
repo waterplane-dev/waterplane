@@ -39,3 +39,8 @@ An outage report charts network outages per day and shows which hours of the day
 - asked: 2026-11-05, 2026-11-06
 - note: no commit, neither is in this repo. The report is `.claude/outbox/net-outage-report-2026-11-05.html`, the probe `~/.local/share/dns-probe.sh`.
 
+### R-monitoring-009 · shipped
+The desktop sheet always lists the top CPU programs inline and links each to the coding sessions behind it, with a note on how the list is compiled. A program that drops out of the top three stays for about 30 seconds, saying when it left.
+- asked: 2026-11-12, 2026-11-14
+- shipped: df1c9eb86, fcb698e91, 07b813e69
+

@@ -2,7 +2,7 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRun, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
-import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOfRequest, normalizeModel, priceGeneration, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
+import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOfRequest, isFastSpeed, normalizeModel, priceGeneration, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { agentLogId, agentLogs, readMeta } from "../agents.js";
 import { SEEN_CAP, SKILL_BODY, readRange, pushSkill, skillLoadOf } from "./ctxcursor.js";
@@ -91,6 +91,9 @@ export interface AgentUsage {
   cost: CostBreakdown;
   /** Agent tokens on a model with no published rate. */
   unpriced: number;
+  /** The agents' fast-mode share, inside `split` and `cost` (absent on a tally from before it). */
+  fastTok?: number;
+  fastUsd?: number;
   /** Agent logs it was read from. */
   logs: number;
   /**
@@ -113,6 +116,8 @@ export interface AgentFile {
   split: TokenTotals;
   cost: CostBreakdown;
   unpriced: number;
+  fastTok?: number;
+  fastUsd?: number;
   /** The newest model this log named. One agent runs one model in every log
    *  seen here; newest-wins is the same rule the parent series uses. */
   model?: string;
@@ -266,9 +271,10 @@ function readAgentLines(lines: string[], f: AgentFile): void {
     // fold depends on, so an unstamped record is priced at TODAY's rate, which
     // only differs on a day a price moved.
     const c = costOfRequest(bag, rec.model,
-      typeof row.timestamp === "string" ? localDay(toMs(row.timestamp) ?? Date.now()) : undefined);
+      typeof row.timestamp === "string" ? localDay(toMs(row.timestamp) ?? Date.now()) : undefined, rec.speed);
     if (c) addCost(f.cost, c);
     else f.unpriced += tokenTotal(bag);
+    if (isFastSpeed(rec.speed)) { f.fastTok = (f.fastTok ?? 0) + tokenTotal(bag); if (c) f.fastUsd = (f.fastUsd ?? 0) + c.total; }
   }
 }
 
@@ -319,12 +325,16 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
   cur.split = zeroTotals();
   cur.cost = zeroCost();
   cur.unpriced = 0;
+  cur.fastTok = 0;
+  cur.fastUsd = 0;
   const runs: AgentRunRaw[] = [];
   for (const [name, f] of cur.files) {
     cur.tok += f.tok;
     addTotals(cur.split, f.split);
     addCost(cur.cost, f.cost);
     cur.unpriced += f.unpriced;
+    cur.fastTok += f.fastTok ?? 0;
+    cur.fastUsd += f.fastUsd ?? 0;
     // An agent whose log carried no usable timestamp is left OUT of the roster
     // and stays IN the total. It was real spend; it is not a dated event, and
     // the chart it would join has a time axis. Absent beats placed wrongly.

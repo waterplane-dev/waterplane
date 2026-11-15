@@ -67,3 +67,8 @@ Sessions stuck on errors (sign-in required, network send error, token limit) are
 - asked: 2026-11-02
 - shipped: 0b84920e, a16bedbf, 59fead43
 
+### R-reliability-016 · shipped
+Host ready-waits, prompt asks and prompt delivery share one injected wait clock, so timed waits behave the same everywhere and run in virtual time under test.
+- asked: 2026-11-13
+- shipped: 4e73af3bd, 341fdb1ce
+

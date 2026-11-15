@@ -867,3 +867,22 @@ A vault release ask always appears on top, wherever the person is in the app, ov
 ### R-vault-163 · shipped
 Each paired phone has one switch under Copy on this phone, "Everything, and anything added later": while it is on, the desktop copies every login and env secret it can mirror to that phone, including ones stored after the switch was turned on, with no step per secret; turning it off removes from the phone what only the switch had put there. Turning it on or off is one fingerprint card that says what it means, and a removed device loses its switch. Copy on this phone is also a row on the Vault home.
 - asked: 2026-11-13 (owner: "a real full sync")
+### R-vault-164 · shipped
+Tapping Show on a vault secret brings its fingerprint card over the screen and then draws the value on screen, not only a toast.
+- asked: 2026-11-12
+- shipped: 3e7a45b3a, 9262cfc92
+
+### R-vault-165 · shipped
+Denying a vault request asks first, a cancelled fingerprint leaves the ask waiting, and History offers Release anyway on a denied release the desktop still takes for 5 minutes.
+- asked: 2026-11-14
+- shipped: 3ec671919, 982d558ed
+
+### R-vault-166 · shipped
+A rating's basis is labelled: the person's own choice, AI's best guess accepted, an agent's proposal accepted, or AI's best guess not checked by the person.
+- asked: 2026-11-14
+- shipped: b47a73a97
+
+### R-vault-167 · requested
+Scheduled Garmin jobs run without a daily phone approval: the broad Garmin credential stays in GCP Secret Manager behind a cloud function, and only a narrow service account that can invoke it is a standing vault grant; whole-account secrets are never standing grants.
+- asked: 2026-11-14
+

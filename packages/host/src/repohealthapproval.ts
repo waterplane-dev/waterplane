@@ -32,12 +32,15 @@ const FILE_MAX_BYTES = 4 * 1024 * 1024;
 /** The most bytes the entry or health.json may hold to be read whole on the event loop. */
 const TEXT_MAX_BYTES = 1024 * 1024;
 
-/** Does a parsed health.json carry a `run` argv anywhere (a reading or a central override)? */
+/** Does a parsed health.json carry a `run` argv anywhere (a reading or a central override), or a `scratch.prepare` argv? */
 function declaresRun(v: unknown, depth = 0): boolean {
   if (depth > 6 || !v || typeof v !== "object") return false;
   if (Array.isArray(v)) return v.some((x) => declaresRun(x, depth + 1));
   const o = v as Record<string, unknown>;
   if (Array.isArray(o.run)) return true;
+  // A `scratch.prepare` argv is a command the engine runs too — it is inside the key like a `run`.
+  const sc = o.scratch;
+  if (sc && typeof sc === "object" && !Array.isArray(sc) && Array.isArray((sc as { prepare?: unknown }).prepare)) return true;
   return Object.values(o).some((x) => declaresRun(x, depth + 1));
 }
 
@@ -436,8 +439,41 @@ export const needsApprovalText = (why: string | null = null): string =>
     ? `this repo ships its own ${REPOHEALTH_TOOL}, and it loads code an approval cannot pin (${why}) — it does not run on this desktop`
     : `this repo ships its own ${REPOHEALTH_TOOL} — it runs on this desktop only after you approve it once`;
 
-export const ownApprovalText = (): string =>
-  `this repo's ${HEALTH_JSON} declares commands of its own — they run on this desktop only after you approve them once`;
+/**
+ * The scratch needs a repo's health.json declares for the read-back's scratch copy
+ * (`scratch.prepare`, `scratch.linkNodeModules`) — the same rules `own.mjs` applies; null where
+ * none is declared or it is not usable (then the engine runs neither). The bytes are already
+ * inside the approval's key (the whole file is hashed), so changing either asks again.
+ */
+export function ownScratchDeclared(wt: string): { prepare: string[] | null; linkNodeModules: boolean } | null {
+  const body = ownCommandsBody(wt);
+  if (!body) return null;
+  let doc: unknown;
+  try { doc = JSON.parse(body.toString("utf8")); } catch { return null; }
+  const sc = (doc as { scratch?: unknown } | null)?.scratch;
+  if (!sc || typeof sc !== "object" || Array.isArray(sc)) return null;
+  const o = sc as Record<string, unknown>;
+  if (Object.keys(o).some((k) => k !== "linkNodeModules" && k !== "prepare")) return null;
+  if (o.linkNodeModules !== undefined && typeof o.linkNodeModules !== "boolean") return null;
+  const p = o.prepare;
+  const prepareOk = Array.isArray(p) && p.length >= 1 && p.length <= 32
+    && p.every((a) => typeof a === "string" && a.length > 0 && a.length <= 512 && !a.includes("\0"));
+  if (p !== undefined && !prepareOk) return null;
+  const out = { prepare: prepareOk ? (p as string[]) : null, linkNodeModules: o.linkNodeModules === true };
+  return out.prepare || out.linkNodeModules ? out : null;
+}
+
+/** With `wt`, the sentence also names what the read-back's scratch copy gets: the prepare command, the node_modules link. */
+export const ownApprovalText = (wt?: string): string => {
+  const base = `this repo's ${HEALTH_JSON} declares commands of its own — they run on this desktop only after you approve them once`;
+  const sc = wt ? ownScratchDeclared(wt) : null;
+  if (!sc) return base;
+  const parts = [
+    ...(sc.prepare ? [`runs \`${sc.prepare.join(" ")}\` once per commit`] : []),
+    ...(sc.linkNodeModules ? ["links this checkout's node_modules"] : []),
+  ];
+  return `${base}. Reading older commits back also ${parts.join(" and ")} in a scratch copy`;
+};
 
 /** Is there anything for a person to approve here, right now? (The route's check.) */
 export function approvalPending(wt: string, root: string = ROOT): boolean {

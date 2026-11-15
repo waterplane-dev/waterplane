@@ -13,7 +13,7 @@
  * not be read — the popover then shows the launch value AND SAYS it is one,
  * never presents it as the current mode.
  */
-import type { PermissionMode } from "@waterplane/shared";
+import { FAST, normalizeModel, rateFor, type PermissionMode } from "@waterplane/shared";
 
 export type ModeIcon = "hand" | "code" | "scroll" | "zap" | "shieldOff" | "lock";
 
@@ -146,4 +146,40 @@ export function ultraText(u: boolean | undefined): string {
 
 export function ultraCommand(on: boolean): string {
   return `/effort ultracode ${on ? "on" : "off"}`;
+}
+
+// ── fast mode ─────────────────────────────────────────────────────────────
+
+/** Fast mode as words. Absent is NOT off: the CLI never confirmed either way. */
+export function fastText(f: boolean | undefined): string {
+  const st = ultraState(f);
+  if (st === "on") return "on for this session — the CLI confirmed it";
+  if (st === "off") return "off — the CLI confirmed it";
+  return "not known — the CLI hasn’t confirmed it yet";
+}
+
+export function fastCommand(on: boolean): string {
+  return `/fast ${on ? "on" : "off"}`;
+}
+
+const perM = (n: number): string => `$${n % 1 ? n.toFixed(2) : n}`;
+
+/**
+ * The cost warning shown before fast mode is turned on: what it costs on THIS
+ * session's model, from the same price cards the cost screens use
+ * (`shared/pricing.ts` `FAST`), and what else it changes. A model with no fast
+ * card says so rather than quoting a rate it does not have.
+ */
+export function fastWarning(model: string | null | undefined): string[] {
+  const id = normalizeModel(model);
+  const std = id ? rateFor(id) : null;
+  const fast = id ? FAST[id] : undefined;
+  const short = id ? id.replace(/^claude-/, "") : null;
+  const price = fast && std
+    ? [`Fast mode costs twice the standard rate on ${short}:`,
+      `fast ${perM(fast.input)} in / ${perM(fast.output)} out per million tokens`,
+      `standard ${perM(std.input)} in / ${perM(std.output)} out`]
+    : [`Fast mode costs twice the standard rate.${short ? ` No fast price is known here for ${short} — the CLI says if it has none.` : ""}`];
+  // The CLI's own words: "auto mode is off while fast mode is on".
+  return [...price, "The CLI turns auto mode off while fast mode is on."];
 }

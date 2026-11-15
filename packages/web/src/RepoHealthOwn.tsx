@@ -26,7 +26,7 @@ import type { ReactNode } from "react";
 import { History } from "lucide-react";
 import { BRAND, ownThisDesktopText, type RepoHealthOwnSeries, type RepoHealthPlot } from "@waterplane/shared";
 import { Button } from "./kit/Button";
-import { OWN_BACKFILL_DONE, OWN_BACKFILL_HINT, ownBackfillDone, ownBackfillLabel, ownBackfillOffered, ownBackfillRunningWords } from "./repoHealthOwnBackfill";
+import { OWN_BACKFILL_DONE, OWN_BACKFILL_HINT, OWN_RETRY_HINT, ownBackfillDone, ownBackfillLabel, ownBackfillOffered, ownBackfillRunningWords, ownRetryCount, ownRetryLabel, ownRetryOffered } from "./repoHealthOwnBackfill";
 import { TileGrid } from "./RepoHealthTiles";
 import { OWN_MORE_SUMMARY } from "./repoHealthTileWords";
 import type { HealthAxisMode } from "./healthIndexWords";
@@ -43,7 +43,10 @@ export interface OwnBackfillState {
   result: string | null;
   /** A run here said no older day is left: the button goes, the sentence stays. */
   exhausted: boolean;
+  /** A re-read here said asking again is pointless: its button goes for this view. */
+  retryDone: boolean;
   onRun: () => void;
+  onRetry: () => void;
 }
 
 export function OwnReadings({ plot, repoName, actionsFor, series, axis, backfill }: {
@@ -82,7 +85,14 @@ export function OwnReadings({ plot, repoName, actionsFor, series, axis, backfill
               </>
             )}
         </div>
-      ) : backfill && ownBackfillDone({ series: drawn, unread: own.unread }, backfill.exhausted) ? (
+      ) : backfill && ownRetryOffered({ unread: own.unread, retryable: own.retryable }, backfill.retryDone) ? (
+        <div className="rh-cap">
+          <Button className="rh-verb" type="button" onClick={backfill.onRetry}>
+            <History size={12} aria-hidden /> {ownRetryLabel(ownRetryCount(own))}
+          </Button>{" "}
+          {OWN_RETRY_HINT}
+        </div>
+      ) : backfill && ownBackfillDone({ series: drawn, unread: own.unread, retryable: backfill.retryDone ? 0 : own.retryable }, backfill.exhausted) ? (
         <div className="rh-cap">{OWN_BACKFILL_DONE}</div>
       ) : null}
       {backfill?.result && !backfill.busy ? <div className="rh-cap">{backfill.result}</div> : null}

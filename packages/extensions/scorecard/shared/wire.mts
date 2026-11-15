@@ -77,6 +77,30 @@ export interface ScoreView {
   problem?: string;
 }
 
+/** One past Scorecard run: when it ran, on which commit, the aggregate and every check's score (-1 = inconclusive). */
+export interface ScorePoint {
+  /** The run's date (ISO), as the reply states it. */
+  date: string;
+  commit: string | null;
+  score: number;
+  checks: Record<string, number>;
+}
+
+/** The score over time, oldest first. Past public runs are read back by commit from the Scorecard API
+ *  (the repo's own scorecard workflow runs name the commits); every reading the host makes after that
+ *  is added as it arrives. A private repo's history is only its local readings, from the first one kept. */
+export interface ScoreHistory {
+  repo: string;
+  slug: string | null;
+  points: ScorePoint[];
+  /** True when the points are local readings (a private repo), not the public score. */
+  local?: true;
+  /** Why the past runs could not be read back (in full or in part), in a sentence; absent when they were. */
+  note?: string;
+  /** Past runs are being read back now; a `changed` push follows when done. */
+  pending?: true;
+}
+
 /** Built-in accepts: checks a solo maintainer cannot pass. Keyed by the API's check name. */
 export const BUILT_IN_ACCEPTS: Readonly<Record<string, string>> = {
   "Code-Review": "Solo maintainer: needs a second person approving changes; self-merged pull requests do not count.",
@@ -88,6 +112,12 @@ export const BUILT_IN_ACCEPTS: Readonly<Record<string, string>> = {
 export const SCORE_FRESH_MS = 6 * 60 * 60_000;
 /** Whether a slug is public (unauthenticated GitHub API) is reused this long — 60 requests/hour per IP. */
 export const VISIBILITY_FRESH_MS = 24 * 60 * 60_000;
+/** The workflow runs are asked again this long after a backfill (their list only grows with new runs). */
+export const HISTORY_FRESH_MS = 24 * 60 * 60_000;
+/** Most past runs read back in one go (per-commit API calls); the rest follow on the next read. */
+export const BACKFILL_MAX = 40;
+/** Most points kept per repo, newest kept. */
+export const HISTORY_MAX = 500;
 export const PUSH_CHANGED = "changed";
 /** The setup row's check id. */
 export const CHECK_ID = "scorecard";
@@ -100,6 +130,8 @@ export const REASON_MAX = 500;
 export type ScorecardMethods = {
   /** The cached view; starts a read in the background when stale (a `changed` push follows). */
   read: { args: { repo: string }; result: ScoreView };
+  /** The score over time; reads past runs back first when that has not been done for a day. */
+  history: { args: { repo: string }; result: ScoreHistory };
   /** Read the API now, past the cache. */
   refresh: { args: { repo: string }; result: ScoreView };
   /** Accept a failing check with a reason (non-empty, ≤ REASON_MAX). */

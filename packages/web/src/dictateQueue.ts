@@ -250,7 +250,7 @@ async function landWords(clip: HeldClip, text: string): Promise<void> {
   const said = text.trim();
   if (!said || saidNothing(said)) { drop(clip.id); showToast("nothing was said"); return; }
   const take = landers.get(clip.id);
-  if (take && take(said)) { drop(clip.id); return; }
+  if (typeof take === "function" && take(said)) { drop(clip.id); return; }
   const refusal = addPadNote({ id: `p_${clip.id}`, text: said, ts: Date.now() });
   if (refusal) {
     // The pad refuses rather than sheds when it is full, and so does this: the

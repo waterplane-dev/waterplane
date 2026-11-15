@@ -14,7 +14,7 @@
  *    the repo's half says it is identical by construction, or that it is NOT; each imported block
  *    names whose desktop it came from (`shareSourceText`, R-metrics-069).
  */
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   SETUP_SHARE_MAX_CHARS, START_GROUPS, isAgentAbsent, parseSetupShare, setupShareCompare, setupShareOf, setupShareText, shareNameProblem, shareSourceText, cleanShareName,
   type AgentPointsResponse, type SetupShareBlock, type SetupShareProbe,
@@ -100,12 +100,12 @@ export function SetupShareCard({ repoId, pts, probe }: {
   const pick = useRef<HTMLInputElement>(null);
   const gate = useOfflineGate();
 
-  const build = (who: string) => (doc
+  const build = useCallback((who: string) => (doc
     ? setupShareOf(doc.points, { now: Date.now(), from: who, backend: "claude", repo: doc.share ?? null, probe: probe ?? null })
-    : null);
-  const block = useMemo(() => (name ? build(name) : null), [doc, name, probe]); // eslint-disable-line react-hooks/exhaustive-deps
+    : null), [doc, probe]);
+  const block = useMemo(() => (name ? build(name) : null), [build, name]);
   // Yours for the side by side: the same builder; the name is not shown there, so "you" stands in until one is set.
-  const mine = useMemo(() => build(name ?? "you"), [doc, name, probe]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mine = useMemo(() => build(name ?? "you"), [build, name]);
   const mineBlock = mine && !isAgentAbsent(mine) ? mine : null;
   const text = block && !isAgentAbsent(block) ? setupShareText(block) : null;
   // A file written for earlier words is not offered beside a preview of new ones.

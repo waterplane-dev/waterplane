@@ -57,7 +57,8 @@ export function SkillsSheet() {
     // Not again after a failed count: its sentence stays on screen instead of a retry loop.
     if (!isCountingDoc(doc) || uses.running || uses.job?.state === "failed" || (uses.resultAt ?? 0) > (inv.resultAt ?? 0)) return;
     uses.start();
-  }, [doc?.at, uses.running, inv.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- edge-triggered: a new doc, a run ending, a re-read; the other guards are read fresh, and re-firing on each would risk a second start before `running` lands
+  }, [doc?.at, uses.running, inv.state]);
   // A finished suggestion run is shown (once per run, and again after a return); never applied.
   useEffect(() => { if (rec.data) showSuggest(rec.job?.id ?? `at:${rec.resultAt}`, rec.data); }, [rec.data, rec.resultAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const asking = rec.running;
@@ -76,7 +77,8 @@ export function SkillsSheet() {
         skillsState.set({ ...skillsState.get(), suggest: { ...sg, suggestions: live, ...(live.length ? {} : { ok: true, note: "Everything suggested has since been switched." }) } });
       }
     }
-  }, [doc?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new read can make a draft or suggestion untrue; a draft edit picks from rows already on screen
+  }, [doc?.at]);
 
   const level = levelFor(s.target, s.shared);
   const kept = parkedWords(s.parked, repoId, level);

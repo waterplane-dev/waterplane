@@ -8214,8 +8214,10 @@ list publishes its own (`Rate.cacheRead`: Fable 5.1 at $0.25 against $10 input, 
 cache reads are 96% of the tokens, so the rule alone is 4× on the dominant line); writes are
 1.25×/2× by TTL and the 1-hour tier is READ. **A cached table rots**: Sonnet 5 sat at an
 `intro` $2/$10 "until 2026-08-31" over a $3/$15 base that the list does not have, so every
-sonnet reading after 1 September was half again too dear. Fast mode is knowingly absent — the
-log does not record the speed) ·
+sonnet reading after 1 September was half again too dear. Fast mode was once knowingly absent
+on the belief that the log does not record the speed; it does (`usage.speed`, on every record), so
+since 2026-11-15 a fast request prices under `<alias>@fast` at the `FAST` card, and a model with no
+fast card is unpriced rather than charged the standard rate) ·
 
 ### `ptysize.ts` — the grid that was not a viewport
 

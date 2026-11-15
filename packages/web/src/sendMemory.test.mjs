@@ -111,7 +111,9 @@ test("the recalled sheet SAYS it was recalled, and names the repo", () => {
 
 test("the aim is only ever recalled to an answer the strip can SAY", () => {
   assert.equal(reusableWhere("this"), "this");
-  assert.equal(reusableWhere("new"), "new");
+  // `new` is a one-shot (2026-11-15): recalled, the plain Send kept opening
+  // another session "when this repo is free" instead of this one.
+  assert.equal(reusableWhere("new"), null);
   // `other` names ONE session by a per-boot id. Recalled a day later it is
   // either gone — a refusal on a send nobody meant to aim anywhere odd — or,
   // worse, a session somebody else's tap opened into that slot. Same rule as
@@ -128,23 +130,23 @@ test("with nothing remembered the strip opens on the session you are looking at"
   assert.equal(recallWhere({ "/r": { where: "other", at: NOW } }, "/r"), "this");
 });
 
-test("the aim is remembered per repo, and one repo's aim is not another's (R-queue-005)", () => {
-  let mem = rememberSend({}, "/a", { where: "new" }, NOW);
-  mem = rememberSend(mem, "/b", { where: "this" }, NOW);
-  assert.equal(recallWhere(mem, "/a"), "new");
-  assert.equal(recallWhere(mem, "/b"), "this");
-  assert.equal(recallWhere(mem, "/c"), "this");
+test("a remembered `new` aim — written by an older build — reads back as this session", () => {
+  const mem = { "/a": { where: "new", mode: "idle", at: NOW } };
+  assert.equal(recallWhere(mem, "/a"), "this");
+  // The mode beside it is still the person's: `when it's free` stays armed.
+  assert.equal(recallMode(mem, "/a"), "idle");
+  assert.equal(rememberSend({}, "/a", { where: "new" }, NOW)["/a"].where, undefined, "dropped on the way IN");
 });
 
 test("a + new screen aims at itself whatever the repo remembers; + later always at a new session", () => {
   // 2026-11-14: a remembered `new` aim on a `pending:` screen posted the words
   // as another session's backlog item, and the session that opened stayed empty.
-  const mem = rememberSend({}, "/a", { where: "new" }, NOW);
+  const mem = { "/a": { where: "new", at: NOW } };
   assert.equal(recallScreenAim({ later: false, pending: true }, mem, "/a"), "this");
   assert.equal(recallScreenAim({ later: true, pending: true }, mem, "/a"), "new");
   assert.equal(recallScreenAim({ later: true, pending: false }, {}, "/a"), "new");
-  // A live session keeps the repo's remembered aim.
-  assert.equal(recallScreenAim({ later: false, pending: false }, mem, "/a"), "new");
+  // A live session opens on itself too: the aim is never recalled.
+  assert.equal(recallScreenAim({ later: false, pending: false }, mem, "/a"), "this");
 });
 
 test("the composer writes the aim without erasing the sheet's WHEN", () => {
@@ -152,10 +154,10 @@ test("the composer writes the aim without erasing the sheet's WHEN", () => {
   // composer decides `mode` and `where`, the sheet decides `when`, and none of
   // them may blank what another last said.
   let mem = rememberSend({}, "/r", { when: { kind: "idle" } }, NOW);
-  mem = rememberSend(mem, "/r", { mode: "idle", where: "new" }, NOW + HOUR);
+  mem = rememberSend(mem, "/r", { mode: "idle", where: "this" }, NOW + HOUR);
   assert.deepEqual(recallWhen(mem, "/r", NOW + HOUR), { kind: "idle" });
   assert.equal(recallMode(mem, "/r"), "idle");
-  assert.equal(recallWhere(mem, "/r"), "new");
+  assert.equal(recallWhere(mem, "/r"), "this");
 });
 
 test("aiming back at this session is a real decision and sticks", () => {

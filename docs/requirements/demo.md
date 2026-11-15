@@ -276,3 +276,7 @@ Its shape is one real session's (`scripts/media/fanout-fixture.mjs` over an `/ap
 under fictional names; the gif loops the subagent beat in place of the short session's re-read one.
 - asked: 2026-10-30 (owner, of a phone screenshot of a ten-hour fan-out session's context sheet: "a nice visualization of aspects that we miss in our readme material so far … take that data from that session into our demo"; "go ahead, subagent beat in the loop")
 - shipped: `packages/web/src/demo/scenarios/numbers-fanout.ts` + generated `fanout-data.ts`, `scripts/ui/journey-numbers.mjs` step "a fan-out session", README `site:cost`
+### R-demo-039 · requested
+The Garmin monorepo's production apps, ba3 first, get gif or video media for their readmes, using the same techniques as waterplane.dev.
+- asked: 2026-11-11
+

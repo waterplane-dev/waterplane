@@ -73,6 +73,13 @@ export interface SessionInfo {
    * "not set from here" rather than claiming it.
    */
   ultracode?: boolean;
+  /**
+   * Fast mode (`/fast on|off`) as the CLI last CONFIRMED it on screen ("Fast
+   * mode ON" / "Fast mode OFF", "Kept Fast mode …", or its refusal "… doesn't
+   * have fast mode"). Absent = never seen one, which the phone says as "not
+   * known", never as off. Fast mode bills at twice the standard rate.
+   */
+  fastMode?: boolean;
   /** True if launched with --remote-control (mirrored to claude.ai). */
   remoteControlled?: boolean;
   /** claude.ai/code session URL, parsed from the Remote Control banner. */

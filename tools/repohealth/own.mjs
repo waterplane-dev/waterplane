@@ -138,6 +138,7 @@ export function parseDeclaration(text) {
   }
   const readings = [];
   const problems = [];
+  const scratch = scratchOf(doc.scratch, problems);
   // Entries dropped for want of a key that had asked for a gate: the index counts each as an UNKNOWN gate (`unreadGates`).
   let unreadGates = 0;
   // …and those that had asked for a target: each one UNKNOWN in the score's coverage (`unreadTargets`).
@@ -172,8 +173,7 @@ export function parseDeclaration(text) {
       target = undefined;
     }
     if (target && typeof target === "object") why.push(target.invalid);
-    const runOk = Array.isArray(e.run) && e.run.length >= 1 && e.run.length <= 32
-      && e.run.every((a) => typeof a === "string" && a.length > 0 && a.length <= 512 && !a.includes("\0"));
+    const runOk = validArgv(e.run);
     if (!runOk) why.push(`"run" must be an argv list of 1–32 non-empty strings`);
     readings.push({
       key: e.key,
@@ -188,7 +188,34 @@ export function parseDeclaration(text) {
       ...(why.length ? { invalid: `not run — ${why.join("; ")}` } : {}),
     });
   });
-  return { readings, problems, unreadGates, ...(unreadTargets ? { unreadTargets } : {}) };
+  return { readings, problems, unreadGates, ...(unreadTargets ? { unreadTargets } : {}), ...(scratch ? { scratch } : {}) };
+}
+
+/** A usable argv: 1–32 non-empty strings, each short and free of NUL. One rule for a reading's `run` and a scratch `prepare`. */
+export const validArgv = (a) => Array.isArray(a) && a.length >= 1 && a.length <= 32
+  && a.every((x) => typeof x === "string" && x.length > 0 && x.length <= 512 && !x.includes("\0"));
+
+/**
+ * The declaration's `scratch` object — what the read-back's scratch copy needs
+ * for the commands to run there (`ownbackfill.mjs`): `linkNodeModules` and a
+ * `prepare` argv. Undefined where none is declared or it is unusable; an
+ * unusable one is a sentence in `problems` and turns the scratch features OFF,
+ * never the readings. Never used at HEAD in the live checkout.
+ */
+export function scratchOf(raw, problems) {
+  if (raw === undefined) return undefined;
+  const off = (why) => { problems.push(`"scratch" ${why}: the read-back's scratch copy gets neither a node_modules link nor a prepare step`); return undefined; };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return off(`must be { "linkNodeModules": true, "prepare": [argv] }`);
+  const known = new Set(["linkNodeModules", "prepare"]);
+  const extra = Object.keys(raw).find((k) => !known.has(k));
+  if (extra) return off(`has an unknown field "${extra}"`);
+  if (raw.linkNodeModules !== undefined && typeof raw.linkNodeModules !== "boolean") return off(`"linkNodeModules" must be true or false`);
+  if (raw.prepare !== undefined && !validArgv(raw.prepare)) return off(`"prepare" must be an argv list of 1–32 non-empty strings`);
+  const out = {
+    ...(raw.linkNodeModules === true ? { linkNodeModules: true } : {}),
+    ...(raw.prepare !== undefined ? { prepare: raw.prepare.slice() } : {}),
+  };
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -255,9 +282,20 @@ function lastLine(s) {
  * Run ONE declared reading in `root`. Always returns `{ value }` or
  * `{ value: null, reason }`; never throws.
  */
-export function runReading(root, decl, { timeoutMs = OWN_TIMEOUT_MS, env = readingEnv(), spawn = spawnSync } = {}) {
+export function runReading(root, decl, opts = {}) {
   if (decl.invalid) return { value: null, reason: decl.invalid };
-  const [cmd, ...args] = decl.run;
+  const got = execArgv(root, decl.run, opts);
+  return got.reason ? { value: null, reason: got.reason } : parseReadingOutput(got.stdout);
+}
+
+/**
+ * Spawn one argv in `root` — no shell, the minimal env, a timeout, its own
+ * process group killed with it. `{ stdout }` on exit 0, else `{ reason }`: the
+ * sentence a failing command leaves. Never throws. A reading's output goes to
+ * `parseReadingOutput`; a scratch `prepare` only needs the verdict.
+ */
+export function execArgv(root, run, { timeoutMs = OWN_TIMEOUT_MS, env = readingEnv(), spawn = spawnSync, maxBuffer = OWN_MAX_OUTPUT } = {}) {
+  const [cmd, ...args] = run;
   let res;
   try {
     res = spawn(cmd, args, {
@@ -269,11 +307,11 @@ export function runReading(root, decl, { timeoutMs = OWN_TIMEOUT_MS, env = readi
       killSignal: "SIGKILL",
       // Its own process group, so a timeout can take a wrapper's worker with it.
       detached: process.platform !== "win32",
-      maxBuffer: OWN_MAX_OUTPUT,
+      maxBuffer,
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err) {
-    return { value: null, reason: `could not start ${cmd}: ${err.message}` };
+    return { reason: `could not start ${cmd}: ${err.message}` };
   }
   const code = res.error?.code;
   const timedOut = code === "ETIMEDOUT" || (res.signal === "SIGKILL" && res.status === null && !code);
@@ -281,17 +319,15 @@ export function runReading(root, decl, { timeoutMs = OWN_TIMEOUT_MS, env = readi
   if (timedOut && process.platform !== "win32" && Number.isInteger(res.pid) && res.pid > 1) {
     try { process.kill(-res.pid, "SIGKILL"); } catch { /* already gone */ }
   }
-  if (code === "ETIMEDOUT" || (res.signal === "SIGKILL" && res.status === null && !code)) {
-    return { value: null, reason: `did not finish within ${Math.round(timeoutMs / 1000)} s and was stopped` };
-  }
-  if (code === "ENOBUFS") return { value: null, reason: `printed more than ${OWN_MAX_OUTPUT / 1024} KB` };
-  if (code === "ENOENT") return { value: null, reason: `could not start ${cmd}: no such program on PATH` };
-  if (res.error) return { value: null, reason: `could not start ${cmd}: ${res.error.message}` };
+  if (timedOut) return { reason: `did not finish within ${Math.round(timeoutMs / 1000)} s and was stopped` };
+  if (code === "ENOBUFS") return { reason: `printed more than ${Math.round(maxBuffer / 1024)} KB` };
+  if (code === "ENOENT") return { reason: `could not start ${cmd}: no such program on PATH` };
+  if (res.error) return { reason: `could not start ${cmd}: ${res.error.message}` };
   if (res.status !== 0) {
     const said = lastLine(res.stderr);
-    return { value: null, reason: `exited ${res.status ?? res.signal}${said ? `: ${said}` : ""}` };
+    return { reason: `exited ${res.status ?? res.signal}${said ? `: ${said}` : ""}` };
   }
-  return parseReadingOutput(res.stdout);
+  return { stdout: res.stdout };
 }
 
 /**

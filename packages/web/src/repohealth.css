@@ -21,6 +21,13 @@
 .rh-region { display: flex; flex-direction: column; }
 /* A caption that is not inside a card keeps the sheet's 14px gutter. */
 .rh-region .rh-gutter { padding-left: 14px; padding-right: 14px; }
+/* Inside a card the card's own 14px is the gutter; a second one indented every card's body past its title. */
+.rh-region .rh-card .rh-gutter { padding-left: 0; padding-right: 0; }
+/* The always-on rows (`AlwaysOnRows.tsx`) sit under a checklist row elsewhere and indent to its text;
+   as the body of "What every turn carries" they have no row to indent under, so they start at the title. */
+.rh-region .rh-card .ao-rows { margin-left: 0; }
+.rh-region .rh-card .ao-rows .check-detail { padding-left: 0; }
+.rh-region .rh-card .ao-rows .ts-filter { padding-left: 0; padding-right: 0; }
 
 /* ── The head: the status line and its `?`; the refresh verb moved into the jump bar. ── */
 .rh-region .rh-head > .rh-status { max-width: none; }
@@ -220,7 +227,15 @@
 .rh-region .ar-bars svg { display: block; margin: 4px 0 2px; }
 .rh-region .ar-chart-title { margin-top: 10px; font-weight: 600; color: var(--fg); }
 /* The setup-cost headline's figure (R-metrics-070): the one large line in the region. */
-.rh-region .ar-headline { font-size: calc(16px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); }
+.rh-region .ar-headline { font-size: calc(28px * var(--ui-font, 1)); font-weight: 650; line-height: 1.1; color: var(--fg); font-variant-numeric: tabular-nums; }
+/* The figure and what it is per share a line; the words wrap under each other, never under the figure. */
+.rh-region .ar-figure { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 8px; }
+.rh-region .ar-figure-per { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); line-height: 1.35; }
+.rh-region .ar-split .ts-bar { height: 10px; }
+.rh-region .ar-split .ts-legend { padding-top: 8px; }
+/* Each further reading (the search test, the pattern, by model, the source) is its own block under a hairline. */
+.rh-region .ar-sect { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: calc(14px * var(--ui-font, 1)); line-height: 1.45; }
+.rh-region .ar-sect.rh-cap { padding-bottom: 0; }
 /* Compare setups (R-metrics-073): the preview is the exact text that leaves, so it wraps and scrolls, never clips. */
 .rh-region .ar-share-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .rh-region .ar-share-pre { white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; margin: 6px 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: calc(12px * var(--ui-font, 1)); }

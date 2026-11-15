@@ -214,3 +214,8 @@ Plugin status shows as coloured badges: Stable green, Beta orange, Experimental 
 The Mac sensors plugin reports the correct API version.
 - asked: 2026-11-09
 
+### R-plugins-045 · shipped
+The links extension is public in the open-source release and off by default; the GitHub Copilot plugin installs with install.sh --with copilot at a pinned, freshly tested version.
+- asked: 2026-11-12
+- shipped: 4d36bd2c5, d3e125073, bc0d411c5
+

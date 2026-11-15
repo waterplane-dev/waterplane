@@ -35,7 +35,7 @@ export function MdTable({ outer, header, body, aligns, cell }: {
   // The reader re-renders on every streamed frame with fresh arrays; key the
   // work on the CONTENT, so a table that did not change is not re-measured.
   const sig = JSON.stringify([header, body]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sig IS header+body by content, and cols derives from both
   const fits = useMemo(() => columnFits(body, cols), [sig]);
   const scroller = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);

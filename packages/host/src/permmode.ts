@@ -200,6 +200,30 @@ export function readUltracode(screen: string): UltracodeReading {
   return { border, line };
 }
 
+// ── fast mode ────────────────────────────────────────────────────────────────
+
+/** `/fast on|off` prints `Fast mode ON` / `Fast mode OFF` (or `Kept Fast mode
+ *  ON|OFF`, sometimes after `Set model to … ·`), upper case — the picker's own
+ *  rows and the docs say `Fast mode` in prose, never followed by ON/OFF. A
+ *  model without it answers `<model> doesn't have fast mode`; the mode menu
+ *  says `auto mode is off while fast mode is on`. */
+const FAST_ON_RE = /\bFast mode ON\b|\bauto mode is off while fast mode is on\b/;
+const FAST_OFF_RE = /\bFast mode OFF\b|\bdoesn['’]t have fast mode\b/;
+
+/**
+ * Fast mode as the NEWEST line above the composer says it, or null when no
+ * row on screen says either. Sticky by the caller, like ultracode's line.
+ */
+export function readFastMode(screen: string): boolean | null {
+  const rows = screen.split("\n");
+  const frame = composerFrame(rows);
+  for (let i = (frame ? frame.top : rows.length) - 1; i >= 0; i--) {
+    if (FAST_OFF_RE.test(rows[i])) return false;
+    if (FAST_ON_RE.test(rows[i])) return true;
+  }
+  return null;
+}
+
 /**
  * Ultracode as the CLI last showed it, or null for "this screen says nothing".
  *

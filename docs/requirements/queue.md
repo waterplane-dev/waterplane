@@ -20,6 +20,7 @@ Items can be added to a session's queue via an auto-fire button.
 The prompt queue/send target remembers the user's last choice per repository.
 - asked: 2026-09-21
 - shipped: 869f232
+- note: Since 2026-11-15 only HOW (now / when it's free) is remembered; WHERE is not — "a new session" is a one-shot and the next plain Send goes into the session on screen (R-queue-024).
 
 ### R-queue-006 · shipped
 A queued prompt clearly shows it is tied to a specific session, and what that means for closing it.
@@ -110,3 +111,13 @@ In the browser app, queued prompts the page would send by itself go out from the
 - asked: 2026-11-14 (owner)
 - shipped: 337cfe90d, 9e918b2bc
 - note: not yet run in a real browser; how long iOS lets the push's work run is unmeasured.
+
+### R-queue-024 · shipped
+A deliberately set "when it's free" stays remembered per repo, but "a new session" is a one-shot: after it, and on every screen opened later, the plain Send goes into the session on screen.
+- asked: 2026-11-15
+- shipped: e78486f6d
+### R-queue-025 · shipped
+Prompts written offline are never lost: send-now while offline, including on a '+ new' screen, fires once the connection is back (in the session that screen opens, or a new one) and never ends up in the pad.
+- asked: 2026-11-12, 2026-11-14, 2026-11-15
+- shipped: 0a0c641f3, a2e0fbf07
+
