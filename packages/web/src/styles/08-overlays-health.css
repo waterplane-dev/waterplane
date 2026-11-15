@@ -383,7 +383,7 @@
 .queue-more { padding: 0 var(--sp-12) var(--sp-10); justify-content: flex-start; }
 /* A `.set-row` is only padded by the `.set-group` around it; inside a bare
    `.form` (the auto-download pattern box) it was flush to the screen edge. */
-.form > .set-row { padding: 0 var(--sp-10); }
+.form > .set-row { padding: 0 var(--gutter); }
 /* `.form .search` carries its own 10px gutter for the case where it IS the
    form's own child. Inside a `.set-row` that gutter is the row's already, and
    the two stack into a field indented twice as far as the select beside it
@@ -471,7 +471,7 @@
 /* Schedules: rows of one-tap chips (weekdays, lead times, how late is still
    worth running). They wrap rather than scroll — a day you can't see is a day
    you think you didn't pick. */
-.sched-days { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-4) var(--sp-10); }
+.sched-days { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-4) var(--gutter); }
 .sched-days .row-chip { padding: var(--sp-4) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); min-height: 32px; }
 .sched-days .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 /* The editor's own rows: on a phone the anchor time and its zone do not fit on

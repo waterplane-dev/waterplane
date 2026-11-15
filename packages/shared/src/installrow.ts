@@ -211,8 +211,11 @@ export function failureText(error: string | undefined): string {
   // An older versionCode than the copy installed. The platform's status is INVALID ("not a valid app"
   // on the native side), which reads as a broken file; it is a stale build — often the Play flavor's
   // APK against the Play Store's copy, which only Play updates (owner, 2026-11-10).
-  const down = /VERSION_DOWNGRADE.*?version code (\d+) is older than current (\d+)/i.exec(error);
-  if (down || /VERSION_DOWNGRADE/.test(error)) {
+  // Find the code once, then match the codes only in what follows it: `/VERSION_DOWNGRADE.*?version code …/`
+  // unanchored is quadratic on a string of repeated codes (CodeQL js/polynomial-redos).
+  const at = error.search(/VERSION_DOWNGRADE/i);
+  const down = at < 0 ? null : /version code (\d+) is older than current (\d+)/i.exec(error.slice(at));
+  if (at >= 0) {
     const codes = down ? ` (version code ${down[1]}, the phone has ${down[2]})` : "";
     return `this build is older than the copy already on this phone${codes}, and Android never installs an older ` +
       "version over a newer one — a retry fails the same way. Build a newer one; a copy from the Play Store updates " +

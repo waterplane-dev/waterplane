@@ -9,6 +9,9 @@ import {
 test("the cap is one line, only when the score is capped", () => {
   assert.equal(heldDownWords({ value: 46, mean: 66, cappedBy: "size" }), "held down by file length, at 16 of 100");
   assert.equal(heldDownWords({ value: 70, mean: 70, cappedBy: "size" }), null, "not under the mean: not capped");
+  assert.equal(heldDownWords({ value: 55, mean: 80, cappedBy: "own:slow", capKind: "worst",
+    coverage: { measured: 6, applicable: 6, items: [{ key: "own:slow", kind: "own", label: `the repo's own "Slow screens"`, state: "measured" }] } }),
+  `held down by the repo's own "Slow screens", at 25 of 100`, "the repo's own reading is named by its own name");
   assert.equal(heldDownWords({ value: 40, mean: 66, cappedBy: null }), null);
 });
 

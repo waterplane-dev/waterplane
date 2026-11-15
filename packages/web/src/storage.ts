@@ -178,6 +178,8 @@ export const KEY_SCOPE = {
   demo: "device",
   demoReturn: "device",
   demoTour: "device",
+  // a colleague's setup block and the name on this person's: about this phone, never parked or synced
+  setupShareName: "device", setupShareImports: "device",
 } as const satisfies Record<keyof typeof LS, KeyScope>;
 
 /** The keys a host switch never moves. */

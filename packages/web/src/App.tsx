@@ -11,9 +11,9 @@ import { startLinkReporting } from "./link";
 import { AuthGate, useAuthGate } from "./features/authGate";
 import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
-import { backendIdOf, hasCap } from "./backendCaps";
+import { CLAUDE, backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-import { openCaptureFor } from "./features/capture"; import { openRepoHealth, openSetup } from "./features/setup"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
+import { openCaptureFor } from "./features/capture"; import { openRepoHealth, openSetup } from "./features/setup"; import { openSkillsFor } from "./skillsDoor"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
@@ -326,7 +326,7 @@ export function App() {
     },
     nav: {
       overlay, open: setOverlay, close: closeSheet, attach, openRepo, openSend, startSessionWithPrompt, openBacklogCut,
-      openScheduleCut, closeSession, openPlugin: (id) => openPluginFromNotification(id), openRepoHealth, openSetup, openContext: openContextById,
+      openScheduleCut, closeSession, openPlugin: (id) => openPluginFromNotification(id), openRepoHealth, openSetup, openSkills: (id, target) => openSkillsFor(id, CLAUDE, target), openContext: openContextById,
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,

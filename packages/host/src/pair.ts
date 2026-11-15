@@ -446,7 +446,9 @@ async function redeemHash(
   } else {
     out.note = NO_PASSWORD_NOTE;
   }
-  if (trustedPath) {
+  // Never to a passive device: the secret lets its holder answer as this desktop to every other phone
+  // on a LAN route with no pin, and `passive.ts` refuses a passive token `/api/lan/identity` for that.
+  if (trustedPath && !spent.passive) {
     const id = lanIdentity(deps.root);
     out.lanIdentity = { hostId: id.hostId, secret: id.secret };
   }

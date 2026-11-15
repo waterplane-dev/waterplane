@@ -348,12 +348,14 @@ const onDecisionsArchiveAll: Route<"decisions.archiveAll"> = (a) => {
 
     // ── Sent-command audit log ──
 const onSentGet: Route<"sent.get"> = (a) => {
-    a.c.send(a.ws, { t: "sent.log", entries: a.c.sentLogStore.list(a.msg.sessionId), sessionId: a.msg.sessionId });
+    const loss = a.c.sentLogStore.loss();
+    a.c.send(a.ws, { t: "sent.log", entries: a.c.sentLogStore.list(a.msg.sessionId), sessionId: a.msg.sessionId, ...(loss ? { loss } : {}) });
 };
 
 const onSentClear: Route<"sent.clear"> = (a) => {
     a.c.sentLogStore.clear();
-    a.c.broadcast({ t: "sent.log", entries: [] });
+    const loss = a.c.sentLogStore.loss();
+    a.c.broadcast({ t: "sent.log", entries: [], ...(loss ? { loss } : {}) });
 };
 
     // ── Synced settings ──
@@ -422,7 +424,8 @@ const onBudgetGet: Route<"budget.get"> = (a) => {
 /** The `budget.state` frame: the periods ride only when there are any (a subscription with none configured is unchanged). */
 const budgetState = (c: HostCtx): HostMessage => {
     const periods = c.budget.periods();
-    return { t: "budget.state", budget: c.budget.get(), verdict: c.budget.verdict(), ...(periods.length ? { periods } : {}) };
+    const loss = c.budget.loss();
+    return { t: "budget.state", budget: c.budget.get(), verdict: c.budget.verdict(), ...(periods.length ? { periods } : {}), ...(loss ? { loss } : {}) };
 };
 
 /** Answer with the billing profile. The first ask of a host that has not probed yet starts the probe; its answer arrives as a broadcast. */

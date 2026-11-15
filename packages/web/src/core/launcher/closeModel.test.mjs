@@ -184,7 +184,7 @@ test("the toast names shells STOPPING (not stopped — nothing has been killed y
 
 // A session a timed prompt is aimed at starts KEPT — the prompt was written
 // into it on purpose — and a tap on its shield is the override, not the keep.
-test("a session with a timed prompt is kept out of the close until a tap puts it back", () => {
+test("a session with a timed prompt is kept out of the close until a tap puts it back (R-queue-006)", () => {
   const a = { id: "a" }, b = { id: "b" };
   const timed = new Set(["a"]);
   assert.deepEqual(closeSendList([a, b], new Set(), timed).map((s) => s.id), ["b"]);

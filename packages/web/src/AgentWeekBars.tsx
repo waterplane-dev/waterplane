@@ -18,7 +18,7 @@ const PAD_TOP = 6;
 const AXIS_H = 16;
 const GUTTER = 40;
 
-export function AgentWeekBars({ weeks, values, picked, onPick, fmtTick, parts, label }: {
+export function AgentWeekBars({ weeks, values, picked, onPick, fmtTick, parts, label, share }: {
   weeks: readonly string[];
   /** Per week, the stack's parts in slot order, or null where the reading was not taken. */
   values: readonly (readonly number[] | null)[];
@@ -28,11 +28,13 @@ export function AgentWeekBars({ weeks, values, picked, onPick, fmtTick, parts, l
   /** Legend names for a stack of more than one part, in slot order. */
   parts?: readonly string[];
   label: string;
+  /** Draw each week as a 100% stack (axis fixed 0–100%, `fmtTick` ignored). */
+  share?: boolean;
 }) {
   const [width, box] = useBoxWidth();
   const svg = useRef<SVGSVGElement | null>(null);
   const plotW = Math.max(1, width - GUTTER - 4);
-  const g = weekBars(values, plotW, H, GUTTER, PAD_TOP);
+  const g = weekBars(values, plotW, H, GUTTER, PAD_TOP, 3, share);
   const n = weeks.length;
   const labels = labelCols(n, picked, (i) => g.cols[i]!.cx, 38);
 
@@ -60,8 +62,8 @@ export function AgentWeekBars({ weeks, values, picked, onPick, fmtTick, parts, l
           role="img" aria-label={`${label}, one bar per week`} style={{ touchAction: "pan-y" }}>
           {pc ? <rect x={pc.cx - slotW / 2} y={PAD_TOP} width={slotW} height={H} fill="var(--accent)" fillOpacity={0.2} rx={3} /> : null}
           <line x1={GUTTER} x2={width - 4} y1={g.base} y2={g.base} stroke="var(--line)" />
-          <text className="rh-tick" x={GUTTER - 5} y={PAD_TOP + 7} textAnchor="end">{fmtTick(g.top)}</text>
-          <text className="rh-tick" x={GUTTER - 5} y={g.base + 3.5} textAnchor="end">0</text>
+          <text className="rh-tick" x={GUTTER - 5} y={PAD_TOP + 7} textAnchor="end">{share ? "100%" : fmtTick(g.top)}</text>
+          <text className="rh-tick" x={GUTTER - 5} y={g.base + 3.5} textAnchor="end">{share ? "0%" : "0"}</text>
           {g.cols.map((c, i) => c.parts ? (
             <g key={i}>
               {/* A real zero is a floor tick, so the dashed box means only "not taken". */}

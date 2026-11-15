@@ -41,13 +41,13 @@ beforeEach(() => {
 
 // ── migratePadRescue ────────────────────────────────────────────────────────
 
-test("a rescued note keeps its original id and ts", () => {
+test("a rescued note keeps its original id and ts (R-queue-020)", () => {
   rescue([{ id: "r1", text: "the words", ts: 123 }]);
   assert.equal(migratePadRescue(), 1);
   assert.deepEqual(note("r1"), { id: "r1", text: "the words", ts: 123 });
 });
 
-test("a note older than 7 days is still rescued: the old reader's TTL is not applied", () => {
+test("a note older than 7 days is still rescued: the old reader's TTL is not applied (R-queue-020)", () => {
   const ts = Date.now() - 30 * DAY;
   rescue([{ id: "old", text: "a month old", ts, lostAt: ts, how: "draft" }]);
   assert.equal(migratePadRescue(), 1);
@@ -55,7 +55,7 @@ test("a note older than 7 days is still rescued: the old reader's TTL is not app
   assert.equal(note("old").ts, ts);
 });
 
-test("a note already on the pad is skipped, and the live copy stands", () => {
+test("a note already on the pad is skipped, and the live copy stands (R-queue-020)", () => {
   writePadDoc({ notes: [{ id: "r1", text: "typed since", ts: 500 }], tombs: [] });
   rescue([{ id: "r1", text: "the fossil", ts: 999 }]);
   assert.equal(migratePadRescue(), 0);
@@ -86,7 +86,7 @@ test("the rescue source is never deleted, whatever became of its rows", () => {
   assert.equal(store.get(LS.padRescue), raw, "byte for byte: a migration that got it wrong keeps its input");
 });
 
-test("the rescue runs once: a note deleted after it does not come back on the next boot", () => {
+test("the rescue runs once: a note deleted after it does not come back on the next boot (R-queue-020)", () => {
   rescue([{ id: "r1", text: "x", ts: 1 }]);
   assert.equal(migratePadRescue(), 1);
   writePadDoc({ notes: [], tombs: [] });

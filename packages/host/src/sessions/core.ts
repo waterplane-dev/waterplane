@@ -209,6 +209,9 @@ export interface Session {
    *  is dropped instead of flashing a prompt back on after it disappeared. */
   promptGen: number;
   idleTimer: NodeJS.Timeout | null;
+  /** The CLI-proposal re-read under constant output (`boxread.ts`'s `scheduleChecks`):
+   *  armed once, never restarted, so a screen that never falls quiet still gets one. */
+  suggestTimer?: NodeJS.Timeout | null;
   /** Poll while agents are running under this session (see `checkAgents`).
    *  Null whenever there are none — an idle session arms nothing. */
   agentTimer: NodeJS.Timeout | null;

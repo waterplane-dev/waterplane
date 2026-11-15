@@ -9048,3 +9048,92 @@ steps read off the points) and folds same-kind markers of one day. `switchMarker
 the skills-switch save log; it is not wired until that log exists. There is no all-repos route:
 instruction history is read one repo at a time, and the all-repos view draws only the derived kinds
 and says so.
+
+## Slow jobs — `slowjobs.ts`, `routes/apijobs.ts` (2026-11-13)
+
+A phone screen that asks for minutes of work (skills inventory and use counts, a skill recommendation, the setup
+checklist) used to hold an HTTP request for it; leaving the screen aborted the request and lost the answer, and two
+taps on recommend bought two model calls. `slowjobs.ts` keeps such work by kind + repo: a start while one runs JOINS
+it, a finished job is kept 30 minutes (at most 64, in memory — a restart forgets them, the phone then asks again), and
+each kind has a give-up limit after which a late answer is dropped. `routes/apijobs.ts`: `POST|GET
+/api/repos/:id/jobs/:kind`, `GET /api/jobs`, `GET /api/jobs/:id`; none is on the passive allowlist. `slowjob.state`
+goes out on the existing socket on start, progress (≤ 1 per 500 ms) and settle, and never carries the result — the
+setup report holds confirm tokens, so the phone fetches it. The older direct routes are wrappers that join the job.
+
+## The lookup probe — `probe.ts`, `sidecar/sidecarprobe.ts` (2026-11-14, R-metrics-071)
+
+The setup panel's one paid instrument: does this desktop's setup (repo CLAUDE.md, skills, memory,
+model, CLI) still FIND things, and at what token cost. A seeded draw of 20 questions from the
+repo's committed `.waterplane-shared/probe.json` (question, the patterns an answer must match, an
+owner who keeps them true) is asked, read-only, of each arm, 3 repeats by default.
+
+**What the pilot set (2026-11-14, usmc, 47-question hard pool, sonnet 5.5 A/A/A + opus 5.5).**
+Correctness sat at the ceiling (60/60), so it is a pass/fail GATE (`PROBE_GATE_MIN` 90% per arm,
+arms within 10%), never the headline. The headline is tokens and requests at equal correctness,
+paired per question on the log scale: pooled per-question repeat log SD ≈ 0.22, so 20 paired
+questions resolve about ±15% at 1 repeat and ±8% at 3. Calls are noisier (CV 16% across repeats);
+dollars are useless (the cold first run cost 10× the warm ones — the prompt cache decides them),
+so the reported spend is kept for the budget only. The arms are interleaved and rotated per
+question and repeat (`probeSchedule`) so neither always meets the cold cache. The noise band is the
+result's own pooled repeat SD, or the pilot's 0.22 (said) when it has no repeats.
+
+**The seam split.** `probe.ts` names no `claude` flag. The argv, the stream-json reader (requests
+counted once per message id, tool inputs kept, tool results never kept), the per-question token
+cap and the reason for every dropped `runSummaryTask` flag are `sidecarprobe.ts`'s. A cap hit is an
+`AbortSignal` on `HeadlessRequest` — the streamed runner kills the process GROUP and answers at once,
+as its timeout does. Another backend is another `runProbeAsk` returning the same `ProbeAsk`; every
+result records `backend`, and two backends' results are never compared.
+
+**The scratch worktree.** A detached worktree at the pinned commit under the tmpdir, prefix
+`waterplane-probe-`, the pool file deleted from it, removed after; a killed daemon's leftovers are
+swept by prefix and path, never by a repo-wide `git worktree prune` (that bug was caught in
+`ownbackfill.mjs`). Two facts measured in the pilot make the place right: the CLI maps a worktree to
+its repo's MEMORY (so memory is part of the probed setup), and it keys transcripts by cwd, so the
+probe's logs land in a project folder named after the scratch path — never the repo's slug or a
+`<slug>-…` worktree slug, which is all the agent readings read. `scratchStaysOut` asserts that before
+anything is asked. Trust: a tmp folder is not trusted, so `runToolTask` takes `trustOf: repo` — the
+scratch checkout's hooks are that repo's own committed files; only this caller passes it.
+
+**Spender rules.** Tap-started only (`POST /api/repos/:id/probe/start`), never scheduled, never fired
+by a model marker — and enforced on the host, not only by the button: the start needs a browser
+`Origin` and the one-shot `confirm` token `GET probe` minted for the worktree (`confirmgate.ts`,
+`PROBE_SCOPE`), consumed only when the run began; a view of a live run mints none. The body carries the estimate the person saw (`accepted`); the start refuses in
+words unless it still covers `probeEstimate` now (pilot tokens per question, erring high, priced at
+list). The halt gate is asked before each question and the seam's `trackRun` kills one mid-flight;
+the run stops at `PROBE_BUDGET_FACTOR` (2) × the estimated tokens. Single-flight per repo.
+
+**Void.** A tool input that reaches outside the scratch worktree (the CLI's own memory directories
+excepted — that is the setup working) or names the pool file voids the whole result: it stops, is
+stored with `void`, and no figure of it is read. Grep's `pattern` is a regex and is never read as a
+place; Glob's literal head is.
+
+**Comparisons.** `models` (two models on one setup, the first use); `baseline` (one arm, kept);
+`against` (the baseline's draw, seed, model and repeats now — the fingerprint diff names what moved:
+model, CLI, start-context tokens, commit). Person-to-person goes through the export block (P5),
+aggregates only. Every result carries the desktop's name and says it is from that desktop
+(`probeSourceText`, built on `agentSourceText`, R-metrics-069).
+
+### `server/bgrelay.ts` + `routes/apirelay.ts` — `POST /api/relay`, the background relay's way in
+
+A phone whose page is frozen (the APK's `ShellLinkService` past Chromium's 300 s freeze; later the
+PWA's service worker) still holds queued prompts the page would have sent unasked. It hands the host
+ONE frame the queue built (`entryFrame`) per request: `{frame, waitMs?}` → 200 `{ack}` (the receipt
+frame verbatim) | 200 `{pending: true}` (still running after `waitMs`, default 20 s, clamped to
+`RELAY_WAIT_MAX_MS`) | 422 `{refused}` (nothing ran). POST only (405 otherwise); the origin/Host and
+token gates of every `/api/` route apply, and `passive.ts` does not list it, so a passive token is
+403 before the route runs. An older host answers 404, which the client reads as "unsupported".
+
+It is not a send path. `relayRefusal` (shared) is the one accept rule, then the frame goes through
+`handleClientMessage` on a STAND-IN socket: registered in `attached`/`wsKind`/`wsToken`/`wsDevice`
+with the request's identity and `wsRole` `"relay"` (sent `input.ack`/`backlog.ack`/`op.ack` only), and
+never in `clients` — so nothing is broadcast to it and an attach a handler makes on it never counts as
+watching (the watched union is built over `clients`). The ledger, `inputsInFlight` and `durableOp`
+therefore apply unchanged: a page re-send of a relayed ackId is re-acked or joins, and a relayed
+repeat of a page-sent ackId joins its in-flight delivery.
+
+The ackId is marked with `acks.keepLong` BEFORE the dispatch: the verdict, whenever `remember` lands
+it, carries `keepUntil` = 24 h (`RELAY_KEEP_MS`) and is persisted at once — the page may re-send the
+same ackId hours later, long past the ordinary 45 min, and the queue no longer expires rows. Such a
+record is protected from cap eviction like an op verdict; a file without `keepUntil` reads as before.
+A LOST ledger's window (`lost.until`) is the longest keep for the same reason. Tests:
+`packages/host/test/relay.test.mjs`, `scripts/e2e-relay.mjs`.

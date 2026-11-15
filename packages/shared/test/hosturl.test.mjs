@@ -66,7 +66,7 @@ test("wsUrlFor upgrades the scheme, and refuses a base it cannot", () => {
   assert.equal(wsUrlFor("ftp://x"), null);
 });
 
-test("a route is plain unless this device or the tailnet carries it: https alone proves nothing", () => {
+test("a route is plain unless this device or the tailnet carries it: https alone proves nothing (R-security-021)", () => {
   for (const b of ["http://192.168.1.20:8770", "http://10.0.0.2:8770", "http://desktop.local:8770", "http://100.63.0.1:8770",
     "http://100.128.0.1:8770", "http://example.com", "http://[fe80::1]:8770", "not a url",
     "https://192.168.1.20", "https://203.0.113.5", "https://r.example", "https://100.64.0.1", "http://127.evil.example", "http://127.0.0.1.evil.example",
@@ -78,7 +78,7 @@ test("a route is plain unless this device or the tailnet carries it: https alone
 
 // `ShellRouteTest.java`'s TABLE, read off the file so the page and the shell cannot drift: each row
 // is {url, protected with no pin, protected with a pin}, and a pin is what `trusted` says here.
-test("the route rule agrees with ShellRoute.java, row by row", () => {
+test("the route rule agrees with ShellRoute.java, row by row (R-security-021)", () => {
   const java = readFileSync(new URL("../../app/android/app/src/test/java/dev/waterplane/app/ShellRouteTest.java", import.meta.url), "utf8");
   const rows = [...java.matchAll(/\{"([^"]*)", (true|false), (true|false)\}/g)];
   assert.ok(rows.length > 30, "the table was found");

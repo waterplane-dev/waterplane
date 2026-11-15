@@ -297,7 +297,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 /* Backlog: head fixed, everything below scrolls as one — landscape-safe. */
 .sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .sheet-scroll .list { overflow-y: visible; flex: 1 0 auto; }
-.section { padding: var(--sp-14) var(--sp-14) var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.section { padding: var(--sp-14) var(--gutter) var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .section-hint { text-transform: none; letter-spacing: 0; opacity: .7; }
 /* `gap` (not just space-between): the label span is allowed to shrink, so
    without it a long hint runs straight into the action buttons. */
@@ -380,7 +380,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .head-act > svg { flex: none; }
 .head-act:active { background: var(--raise); }
 .head-act.danger { color: var(--dead); border-color: var(--dead-edge); }
-.empty { padding: var(--sp-12) var(--sp-14); color: var(--muted); }
+.empty { padding: var(--sp-12) var(--gutter); color: var(--muted); }
 /* `Empty.tsx`'s sentence: what a list says with no rows, in all four states.
    ONE centred, muted sentence in the space the rows would take. Top-left at
    body size, under the 20px glyph some callers stack over it, every empty
@@ -405,7 +405,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
   /* A row is the app's main tap target on a phone held one-handed: the text is
      sized to be read without leaning in, and the vertical padding is what keeps
      two adjacent rows from being one 6mm fingertip apart. */
-  padding: var(--sp-16) var(--sp-14); font-size: calc(var(--fs-16) * var(--ui-font, 1)); cursor: pointer;
+  padding: var(--sp-16) var(--gutter); font-size: calc(var(--fs-16) * var(--ui-font, 1)); cursor: pointer;
 }
 .row:active { background: var(--raise); }
 /* The session you last opened — makes it easy to find when you come back. */

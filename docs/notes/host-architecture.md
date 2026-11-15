@@ -1328,7 +1328,8 @@ and `git.ts` already own the plain names; each ≤ 500 lines, `hostshape`):
 | `apistats.ts` | tokenstats (+ per backend), localusage, tokenwindows, usagelog |
 | `apihost.ts` | repos listing, storage, search, `/api/host/*`, scaffolding, secrets |
 | `apirepofiles.ts` | the repo scope and its file routes: archive, inbox, envfiles, artifacts, sweep, artifact, tree |
-| `apirepowork.ts` | capture/run, compliance, repohealth, the repo's git routes |
+| `apirepowork.ts` | capture/run, compliance, the repo's git routes |
+| `apirepohealth.ts` | repohealth (read, scopes, refresh, own-backfill), healthindex, agentreadings |
 
 **The import rule changes by one edge.** A flat module may not import `routes/**` ("a flat
 module is called BY a route"), and `api.ts` is flat. It is also, now, a router: it gets

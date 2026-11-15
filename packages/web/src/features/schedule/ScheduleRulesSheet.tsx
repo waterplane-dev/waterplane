@@ -53,7 +53,7 @@ export function ScheduleRulesSheet() {
   useEffect(() => { if (footRepo && askRule && !hasRule) askRule(footRepo); }, [footRepo, askRule, hasRule]);
   // Same key as the week-end burn sheet's read, so the two share one cache. Only
   // a FRESH answer draws a line: a cached copy may describe last week's pick.
-  const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
+  const burn = useRemoteResource<WeekBurnStatus>("weekburn:status", () => api.getWeekBurn(), { cache: { shape: 1 } });
   const repoName = (dir: string) => { const r = core.world.repoForCwd(dir); return r ? repoShown(r) : (dir.split(/[/\\]/).filter(Boolean).pop() || dir); };
   const lines = showFoot ? automationLines({
     repoDir: footRepo, items: core.world.backlog, auto: core.world.backlogAuto, sessions, now: Date.now(), repoName,

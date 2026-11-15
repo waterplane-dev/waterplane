@@ -191,7 +191,7 @@ person's one approval on the phone before it ever runs):
 \`\`\`
 
 \`run\` is an argv list (no shell), run in the repo root once per refresh that
-measures a new commit, 30 s limit, at most 8 readings. It must print ONE JSON
+measures a new commit, 30 s limit, at most 12 readings. It must print ONE JSON
 number or \`{"value": n}\` on stdout; when it cannot count, print nothing and
 exit non-zero with the reason on stderr — never print 0 for "unknown". These
 are drawn apart from ${N}'s and never enter the health index.

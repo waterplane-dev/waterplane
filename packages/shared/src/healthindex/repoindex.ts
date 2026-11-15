@@ -1,5 +1,5 @@
 // healthindex/repoindex: What `RepoTarget.healthIndex` carries, and the route's response DTO. Barrel: ../healthindex.ts (read the header there).
-import { type HealthEntry, type HealthIndexSeries } from "./types.js";
+import { type HealthScoredId, type HealthIndexSeries } from "./types.js";
 import { type HealthCoverage, type HealthCapKind } from "./coverage.js";
 import { type HealthCommitSeries } from "./commits.js";
 import { type HealthMove } from "./move.js";
@@ -18,8 +18,8 @@ export interface RepoHealthIndex {
   // did not say — never "not capped" or "no alert".
   /** The mean before the cap, so `healthCapWords` can be said from this summary alone. */
   mean?: number;
-  /** The entry holding the score down when the cap set it, else null. */
-  cappedBy?: HealthEntry | null;
+  /** The entry (or the repo's own reading, `own:<key>`) holding the score down when the cap set it, else null. */
+  cappedBy?: HealthScoredId | null;
   /** The worst alert level on the latest week; null when nothing is under the warn line. */
   alert?: "warn" | "severe" | null;
   /** That worst alert's sentence; null with it. */

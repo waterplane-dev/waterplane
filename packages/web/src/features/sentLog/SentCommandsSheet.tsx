@@ -4,13 +4,15 @@
  */
 import { SentLogSheet } from "../../SentLogSheet";
 import { useCore, useStore } from "../../sdk";
-import { entries, scope } from "./store";
+import { entries, scope, sentLoss } from "./store";
 
 export function SentCommandsSheet() {
   const c = useCore();
   const log = useStore(entries);
   const sessionId = useStore(scope);
-  return <SentLogSheet entries={log}
+  const loss = useStore(sentLoss);
+  return <SentLogSheet entries={log} loss={loss}
+    onOpenStorage={() => c.nav.open("storage")}
     filterSessionId={sessionId}
     sessionTitle={sessionId ? c.world.sessions.find((s) => s.id === sessionId)?.title : undefined}
     onClose={() => c.nav.close("sentlog")}

@@ -89,7 +89,7 @@ const item = (id, order) => ({
 const queueHere = (store, id, sessionId, order) =>
   store.update(id, { target: { kind: "session", sessionId }, pinned: true, order });
 
-test("a pinned item runs with the global auto-fire switch OFF; its sibling waits", async () => {
+test("a pinned item runs with the global auto-fire switch OFF; its sibling waits (R-queue-004)", async () => {
   const { store, state, root } = makeStore();
   state.sessions.push({ id: "s-here", cwd: REPO, running: true });
   await store.reconcile();

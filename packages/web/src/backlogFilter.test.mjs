@@ -612,7 +612,7 @@ test("the receipt is about the QUEUE, never about a state the host has not reach
   assert.doesNotMatch(runAgainToast(7), /one at a time/);
 });
 
-test("the cut is the failures with no clock, nothing set aside, and no dead target", () => {
+test("the cut is the failures with no clock, nothing set aside, and no dead target (R-queue-003)", () => {
   const rows = [
     item({ id: "a", status: "failed" }),
     item({ id: "b", status: "failed", at: { rule: { kind: "once", at: NOW }, graceMin: 30, nextAt: null } }),
@@ -1338,7 +1338,7 @@ test("newest first draws by createdAt descending; the run seat stays the run ord
 // corrected draft and called the first off, and the phone showed a red *failed*
 // with *re-fire* beside the run that actually happened; rows called off from
 // the phone or dismissed by an assessment read the same way.
-test("a call-off is settled, never failed — no count, no refused verb, no clock seat", () => {
+test("a call-off is settled, never failed — no count, no refused verb, no clock seat (R-queue-017)", () => {
   const at = { rule: { kind: "window", window: "weekly", edge: "before", offsetMin: -600, oneShot: true }, nextAt: null };
   const gone = item({ id: "w", status: "failed", calledOff: "agent", error: "called off by the agent that posted it", at, finishedAt: NOW });
   const off = item({ id: "o", status: "failed", calledOff: "other", error: "called off from the phone", finishedAt: NOW });

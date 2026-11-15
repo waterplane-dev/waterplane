@@ -1,6 +1,6 @@
 // healthindex/words: One wording of a move for the phone and VS Code. Barrel: ../healthindex.ts (read the header there).
-import { HEALTH_ENTRIES, type HealthEntry, HEALTH_INDEX_MONTH_WEEKS, HEALTH_ALERT_WARN, type HealthIndexPoint } from "./types.js";
-import { type HealthCapKind } from "./coverage.js";
+import { HEALTH_ENTRIES, type HealthEntry, type HealthScoredId, HEALTH_INDEX_MONTH_WEEKS, HEALTH_ALERT_WARN, type HealthIndexPoint } from "./types.js";
+import { type HealthCapKind, healthScoredLabel } from "./coverage.js";
 import { type HealthMove } from "./move.js";
 import { HEALTH_ENTRY_LABEL } from "./score.js";
 
@@ -66,9 +66,12 @@ export function healthMoveWords(points: readonly HealthIndexPoint[], move: Healt
   // them sum to Δmean; what is left of Δindex is the cap tightening or easing.
   const sums: Partial<Record<HealthEntry, number>> = {};
   let capSum = 0;
-  let capEntry: HealthEntry | null = null;
-  let capFrom: HealthEntry | null = null;
-  let capTo: HealthEntry | null = null;
+  // The repo's own targeted readings move the mean too: summed by id, named by the repo's own name.
+  const ownSums = new Map<string, { pts: number; name: string }>();
+  let capEntry: HealthScoredId | null = null;
+  let capFrom: HealthScoredId | null = null;
+  let capTo: HealthScoredId | null = null;
+  let capCoverage = last.coverage ?? null;
   let capBiggest = 0;
   // The cap that moved the most, when it was a gate or coverage cap (P1 named only the worst entry).
   let capOther: string | null = null;
@@ -82,6 +85,11 @@ export function healthMoveWords(points: readonly HealthIndexPoint[], move: Healt
       const c = p.contributions[e];
       if (c !== undefined) sums[e] = (sums[e] ?? 0) + c * k;
     }
+    for (const o of p.own ?? []) {
+      if (typeof o.contribution !== "number") continue;
+      const was = ownSums.get(o.id);
+      ownSums.set(o.id, { pts: (was?.pts ?? 0) + o.contribution * k, name: o.name });
+    }
     const cap = (p.index - prev.index) - (p.mean - prev.mean);
     capSum += cap;
     // An easing cap is the one the previous week had; a tightening one is this week's.
@@ -93,6 +101,7 @@ export function healthMoveWords(points: readonly HealthIndexPoint[], move: Healt
         capEntry = by;
         capFrom = prev.cappedBy;
         capTo = p.cappedBy;
+        capCoverage = (cap > 0 ? prev : p).coverage ?? capCoverage;
         capOther = null;
       }
     } else if (kind && Math.abs(cap) > capBiggest) {
@@ -105,8 +114,11 @@ export function healthMoveWords(points: readonly HealthIndexPoint[], move: Healt
   const parts: { pts: number; words: string }[] = HEALTH_ENTRIES
     .filter((e) => (sums[e] ?? 0) * sign > 0)
     .map((e) => ({ pts: sums[e] ?? 0, words: ENTRY_WORDS[e][move.kind === "drop" ? 0 : 1] }));
+  for (const [, o] of ownSums) {
+    if (o.pts * sign > 0) parts.push({ pts: o.pts, words: `the repo's own "${o.name}" ${move.kind === "drop" ? "moved away from" : "moved toward"} its target` });
+  }
   if (capEntry && capSum * sign > 0) {
-    const label = HEALTH_ENTRY_LABEL[capEntry];
+    const label = capEntry.startsWith("own:") ? healthScoredLabel(capEntry, capCoverage) : HEALTH_ENTRY_LABEL[capEntry as HealthEntry];
     const words = sign > 0
       ? capTo === capEntry ? `${label} holds the score down less` : `${label} no longer holds the score down`
       : capFrom === capEntry ? `${label} holds the score down more` : `${label} now holds the score down`;

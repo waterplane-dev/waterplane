@@ -20,7 +20,7 @@ import { logMtime, transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
 import type { Session, SessionCore } from "./core.js";
 import { healthTail, pause, safe } from "../boxkit.js";
-import { PROMPT_CHECK_MS, PROMPT_MAX_STALE_MS, PROMPT_MISS_MAX, PROMPT_SETTLE_MS, RESIZE_REPAINT_MS, PROMPT_GATE_BYTES, PROMPT_CELL_ROWS, IDLE_PING_MS, HEALTH_SAMPLE_ROWS } from "./knobs.js";
+import { PROMPT_CHECK_MS, PROMPT_MAX_STALE_MS, PROMPT_MISS_MAX, PROMPT_SETTLE_MS, RESIZE_REPAINT_MS, PROMPT_GATE_BYTES, PROMPT_CELL_ROWS, IDLE_PING_MS, CLI_SUGGEST_RECHECK_MS, HEALTH_SAMPLE_ROWS } from "./knobs.js";
 
 /** How long the `askbox.enrich` fixture waits for the log to write the call: 2 min. */
 const ASK_RECORD_POLLS = 60;
@@ -29,6 +29,16 @@ const ASK_RECORD_POLL_MS = 2_000;
 export function scheduleChecks(core: SessionCore, s: Session): void {
   if (s.idleTimer) clearTimeout(s.idleTimer);
   s.idleTimer = setTimeout(() => core.checkIdle(s), IDLE_PING_MS);
+  // The CLI's proposal is otherwise re-read only on that quiet tick, and a session
+  // whose background agents run repaints their panel every second — never quiet, so
+  // the phone kept offering the PREVIOUS proposal while the desk showed a new one
+  // (live 2026-11-13). Armed once and never pushed back: at most one read per
+  // `CLI_SUGGEST_RECHECK_MS` of constant output. A pane panned into history is not
+  // the live composer.
+  if (!s.suggestTimer) s.suggestTimer = setTimeout(() => {
+    s.suggestTimer = null;
+    if (s.info.running && !s.copyMode) core.checkCliSuggestion(s);
+  }, CLI_SUGGEST_RECHECK_MS);
   // Output on a hooked session with no turn in flight: the hooks say nothing
   // is running, and the CLI may be working anyway (`/compact` announces
   // nothing, and a `Stop` a hook blocked leaves the turn going). One armed

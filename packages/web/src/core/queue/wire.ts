@@ -4,11 +4,11 @@
  * in App — webshape forbids a case only for a frame a feature declares.
  * Lifted verbatim from App's switch.
  */
-import { bindPendingSession } from "@waterplane/shared";
+import { bindPendingSession, type RelayClaim } from "@waterplane/shared";
 import { isCreateOp, type OutboxEntry } from "../../outbox";
 import { noteSendConfirmed } from "../../link";
 import { dismissToastIf, showToast } from "../../toast";
-import { answerSendingToast, requeue } from "./logic.ts";
+import { answerSendingToast, claimWritten, pendingLaneId, requeue } from "./logic.ts";
 import { noteFireAck } from "./fireFate.ts";
 import type { Msg, QueueCtx } from "./types.ts";
 
@@ -21,6 +21,9 @@ export interface WireFns {
   onLaunchList(msg: Msg<"launch.list">): void;
   onLaunchOpened(msg: Msg<"launch.opened">): void;
   onBudget(msg: Msg<"budget.state">): void;
+  /** The background relay handed the queue back (`relayOwner.ts`): what it did, applied. Returns how
+   *  many of this queue's rows it had sent. */
+  applyRelayClaim(claim: RelayClaim): number;
 }
 
 export function wireFns(c: QueueCtx): WireFns {
@@ -233,11 +236,28 @@ export function wireFns(c: QueueCtx): WireFns {
     // it with it — they were waiting for a session that is not coming. The
     // text stays and stays restorable; what changes is that the row now
     // says why, in the host's words, instead of sitting silent forever.
+    let bound = false;
     for (const l of msg.launches) {
       if (l.state === "failed" || l.state === "canceled") {
         failPendingCreates(`create:${l.cwd}`, l.reason || "the session never opened", l.id);
       }
+      // A launch that OPENED while this phone was away: `launch.opened` is a
+      // one-shot broadcast, so a phone off the link at that moment never hears
+      // it and the prompts chained behind the parked create waited for ever.
+      // The list arrives on every hello, so it is the reconciliation pass —
+      // the same binding `onLaunchOpened` does, keyed on the create's ackId.
+      // Someone still standing on that create's screen is moved onto it too.
+      else if (l.state === "done" && l.sessionId && (hasChainFor(l.id) || c.activeIdRef.current === pendingLaneId(l.id))) {
+        writeOutbox(bindPendingSession(outboxRef.current, `create:${l.cwd}`, l.sessionId, Date.now(), l.id));
+        adoptPendingSession(l.id, l.sessionId);
+        bound = true;
+      }
     }
+    if (bound) flushOutbox();
+  }
+  /** Prompts still parked behind this create (`pendingCreate`, its ackId). */
+  function hasChainFor(createAck: string): boolean {
+    return outboxRef.current.some((e) => e.pendingCreate && e.createAck === createAck);
   }
   function onLaunchOpened(msg: Msg<"launch.opened">): void {
     // The session the host was holding exists now. This is the binding the
@@ -250,7 +270,7 @@ export function wireFns(c: QueueCtx): WireFns {
     flushOutbox();
   }
   function onBudget(msg: Msg<"budget.state">): void {
-    const next = { budget: msg.budget, verdict: msg.verdict, ...(msg.periods ? { periods: msg.periods } : {}) };
+    const next = { budget: msg.budget, verdict: msg.verdict, ...(msg.periods ? { periods: msg.periods } : {}), ...(msg.loss ? { loss: msg.loss } : {}) };
     deps.setBudget(next);
     deps.budgetRef.current = next; // the flusher below reads the ref
     // The gate may have just LIFTED — a window reset, or the ceiling was
@@ -259,5 +279,43 @@ export function wireFns(c: QueueCtx): WireFns {
     if (!msg.verdict.blocked) flushOutbox();
   }
 
-  return { onBacklogAck, onOpAck, onInputAck, onDeliveryList, onDeliverySettled, onLaunchList, onLaunchOpened, onBudget };
+  /**
+   * A claim, applied — WRITTEN FIRST, then the receipts. Written rows become the same send
+   * continuing (`claimWritten`), with their ack timer armed when they are `pending`; the receipts
+   * then go through the very handlers above, which find those rows `pending` — so a `retryable`
+   * receipt requeues exactly as it would have on the page's own socket. Only receipts for rows
+   * still in this queue are replayed: a receipt for a row already settled says nothing new.
+   */
+  function applyRelayClaim(claim: RelayClaim): number {
+    const known = new Set(outboxRef.current.map((e) => e.ackId));
+    const touched = new Set([...claim.written.map((w) => w.ackId), ...claim.receipts.map((r) => r?.ackId)]
+      .filter((id): id is string => typeof id === "string" && known.has(id)));
+    if (!touched.size) return 0;
+    // What the person is told as "sent": the host took it (`ok`, or `rescued`) or holds it (written,
+    // no receipt yet) — the Android and service-worker notices count the same. A refusal or a
+    // verdict that never came is applied below like any other receipt, never counted.
+    const answered = new Set(claim.receipts.map((r) => r?.ackId));
+    const sent = new Set<string>();
+    for (const w of claim.written) if (known.has(w.ackId) && !answered.has(w.ackId)) sent.add(w.ackId);
+    for (const a of claim.receipts) {
+      if (!a || typeof a !== "object" || !known.has(a.ackId)) continue;
+      const ok = (a as { ok?: unknown }).ok === true || (a as { state?: unknown }).state === "rescued";
+      if (ok) sent.add(a.ackId);
+    }
+    const r = claimWritten(outboxRef.current, claim.written, c.connRef.current.status === "open", Date.now());
+    writeOutbox(r.list);
+    for (const id of r.pending) {
+      const e = outboxRef.current.find((x) => x.ackId === id);
+      if (e && !ackTimers.current.has(id)) c.armAckTimeout(id, c.ackWindowFor(e));
+    }
+    for (const a of claim.receipts) {
+      if (!a || typeof a !== "object" || !known.has(a.ackId)) continue;
+      if (a.t === "input.ack") onInputAck(a);
+      else if (a.t === "backlog.ack") onBacklogAck(a);
+      else if (a.t === "op.ack") onOpAck(a);
+    }
+    return sent.size;
+  }
+
+  return { onBacklogAck, onOpAck, onInputAck, onDeliveryList, onDeliverySettled, onLaunchList, onLaunchOpened, onBudget, applyRelayClaim };
 }

@@ -14,6 +14,7 @@ import {
   type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
+import { AttentionChip } from "./core/launcher/AttentionChip";
 import { ExtBoundary } from "./core/ExtBoundary";
 import { tabMarks } from "./core/extensionPoints";
 import type { TabMarkDef } from "./sdk/types";
@@ -266,7 +267,16 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
 }) {
   const keyboard = useHasKeyboard();
   const [query, setQuery] = useState("");
-  const rows = useMemo(() => filterStrip(s.all, query, (st) => STATUS_LABEL[st]), [s.all, query]);
+  // The launcher's "N waiting" chip, here as this list's filter: the count is
+  // the tabs whose session waits on a box, and a tap shows exactly those. Off
+  // by itself once none waits, so it never leaves an empty list behind.
+  const waitN = s.all.filter((x) => x.kind === "session" && x.tab.status === "wait").length;
+  const [waitPick, setWaitOnly] = useState(false);
+  const waitOnly = waitPick && waitN > 0;
+  const rows = useMemo(() => {
+    const hit = filterStrip(s.all, query, (st) => STATUS_LABEL[st]);
+    return waitOnly ? hit.filter((x) => x.kind === "session" && x.tab.status === "wait") : hit;
+  }, [s.all, query, waitOnly]);
   const isOn = (x: StripTab) => x.kind === "file" ? fileTabKey(x.file) === s.fileActive : !fileOn && x.tab.id === s.activeId;
   // The highlight starts on the tab you are on, so the first ↓ is "the next one".
   const rowKey = (x: StripTab) => x.kind === "file" ? fileTabKey(x.file) : x.tab.id;
@@ -281,7 +291,7 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const step = (d: number) => setHl(stepHighlight(keys, hl, lastAt.current, d));
-  useEffect(() => { if (query) { lastAt.current = 0; setHl(null); } }, [query]);
+  useEffect(() => { if (query || waitOnly) { lastAt.current = 0; setHl(null); } }, [query, waitOnly]);
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${at}"]`)?.scrollIntoView({ block: "nearest" });
   }, [at]);
@@ -316,13 +326,21 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
             aria-activedescendant={rows[at] ? `stab-row-${at}` : undefined}
             enterKeyHint="go" spellCheck={false} autoCapitalize="off" autoComplete="off"
             onChange={(e) => setQuery(e.target.value)} onKeyDown={onKey} />
+          {waitN > 0 && (
+            <div className="stab-list-chips">
+              <AttentionChip kind="wait" n={waitN} scope={waitN === 1 ? "open tab" : "open tabs"} on={waitOnly}
+                onClick={() => setWaitOnly(!waitOnly)} />
+            </div>
+          )}
           {(viaKey || keyboard) && <span className="stab-list-keys">↑ ↓ to choose · Return opens · Esc closes</span>}
         </div>
         {hidden > 0 && (
-          <FilterBar onClear={() => setQuery("")}>{rows.length} of {s.all.length} match “{query.trim()}”</FilterBar>
+          <FilterBar onClear={() => { setQuery(""); setWaitOnly(false); }}>
+            {rows.length} of {s.all.length}{waitOnly ? " waiting for your answer" : ""}{query.trim() ? `${waitOnly ? " and" : ""} match “${query.trim()}”` : ""}
+          </FilterBar>
         )}
         <ul className="stab-list" id="stab-list" role="listbox" ref={listRef}>
-          {rows.length === 0 && <li className="stab-list-none">No open tab matches “{query.trim()}”.</li>}
+          {rows.length === 0 && <li className="stab-list-none">No open tab{waitOnly ? " waiting for your answer" : ""} matches “{query.trim()}”.</li>}
           {rows.map((x, i) => {
             const sel = i === at ? " sel" : "";
             const on = isOn(x) ? " on" : "";

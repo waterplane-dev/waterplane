@@ -16,12 +16,12 @@ import { fanoutRuns, HOUR_MS, pickSimilarRun } from "@waterplane/shared";
 import type { CostWindowDoc, FanoutRun } from "@waterplane/shared";
 import { fanoutCostWords } from "./logic";
 import { ledgers, useCore } from "../../sdk";
-import { useRemoteResource, type ResourceState } from "../../useRemoteResource";
+import { agoText, useRemoteResource, type ResourceState } from "../../useRemoteResource";
 
 /** A sweep's sessions open a moment after `startedAt`; five minutes of lead is slack, not scope. */
 const LEAD_MS = 5 * 60_000;
 
-function useFanoutCostHint(runs: FanoutRun[], text: string, online: boolean): { text: string | null; state: ResourceState } {
+function useFanoutCostHint(runs: FanoutRun[], text: string, online: boolean): { text: string | null; state: ResourceState; age: number | null } {
   const run = useMemo(() => pickSimilarRun(runs, text), [runs, text]);
   const res = useRemoteResource<CostWindowDoc | null>(
     `fanoutcost:${run?.id ?? "none"}`,
@@ -29,13 +29,13 @@ function useFanoutCostHint(runs: FanoutRun[], text: string, online: boolean): { 
       if (!run) return null;
       return ledgers.costWindow(run.startedAt - LEAD_MS, (run.finishedAt ?? Date.now()) + HOUR_MS);
     },
-    { enabled: !!run, offline: !online },
+    { enabled: !!run, offline: !online, cache: { shape: 1 } },
   );
   const words = useMemo(
     () => (run && res.data ? fanoutCostWords(res.data, run, text) : null),
     [run, res.data, text],
   );
-  return { text: words, state: res.state };
+  return { text: words, state: res.state, age: res.age };
 }
 
 export function FanoutCostHint({ text }: { text: string }) {
@@ -45,7 +45,7 @@ export function FanoutCostHint({ text }: { text: string }) {
   if (!h.text) return null;
   return (
     <div className="empty ts-caveat" title="Read off the desktop's logs for that run. A reading, not a limit: Run still runs.">
-      <History size={13} /> {h.text}
+      <History size={13} /> {h.text}{h.state === "cached" && h.age != null ? ` (cached ${agoText(h.age)})` : ""}
     </div>
   );
 }

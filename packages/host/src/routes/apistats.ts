@@ -9,10 +9,11 @@ import { priceListSource, zeroCost, zeroTotals, type BackendTokensDoc, type Cost
 import { BACKEND_LEDGER_MAX_AGE_MS, besideSpend } from "../besidespend.js";
 import { costMeta } from "../costwindow.js";
 import { hostStoreDir } from "../hoststore.js";
+import { dismissStoreLoss } from "../jsonstore.js";
 import { BACKENDS, DEFAULT_BACKEND, backendInfos, derive, storeReaderFor } from "../backends/index.js";
 import { localUsageDoc } from "../localusage.js";
 import { localSliceLedger, modelOwner, readUserPrices, rememberCatalogues } from "../localledger.js";
-import { json } from "./apiio.js";
+import { json, readJson } from "./apiio.js";
 import { route, type ApiEntry } from "./apitable.js";
 
 /** The widest span `/api/costwindow` folds: a weekly window plus slack. */
@@ -211,6 +212,22 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
     let beside: CostWindowDoc["beside"];
     try { beside = await besideSpend(doc.from, doc.to); } catch { beside = undefined; }
     json(res, beside ? { ...doc, beside } : doc);
+    return true;
+  }),
+
+  // Hide one loss record (`jsonstore.ts`) from the phone — beside the storage
+  // reading (`apihost.ts`, `GET /api/storage/host`) that lists them. POST: it changes what
+  // the next reading says. Takes the record's ID only — never a path — and
+  // touches no bytes: the `.corrupt-` copy stays where the record said it was.
+  // 200 with `ok:false` and a sentence when there is no such record.
+  route("POST", "/api/storage/host/loss/dismiss", async ({ req, res }) => {
+    const body = await readJson(req);
+    const id = typeof body?.id === "string" ? body.id : "";
+    if (!id) {
+      json(res, { error: "id (a loss record's id from GET /api/storage/host) is required" }, 400);
+      return true;
+    }
+    json(res, dismissStoreLoss(id));
     return true;
   }),
 ];

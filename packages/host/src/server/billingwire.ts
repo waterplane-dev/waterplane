@@ -53,7 +53,8 @@ export function createBillingWire(ctx: ServerCtx) {
       const v = ctx.budget.verdict();
       if (!ctx.budget.changed(v) && !force) return;
       const periods = ctx.budget.periods();
-      ctx.broadcast({ t: "budget.state", budget: ctx.budget.get(), verdict: v, ...(periods.length ? { periods } : {}) });
+      const loss = ctx.budget.loss();
+      ctx.broadcast({ t: "budget.state", budget: ctx.budget.get(), verdict: v, ...(periods.length ? { periods } : {}), ...(loss ? { loss } : {}) });
     },
     /** Whether `session`/`weekly` mean anything here; `unknown` counts as yes (today's behaviour). */
     scraped,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DICTATE_MAX_SECONDS, DICTATE_MIN_SECONDS, DICTATE_RATE, appendDictation, applyDictateTerms, floatToPcm16, pcm16ToWav, type DictateStatus } from "@waterplane/shared";
 import { api } from "./api";
 import { dictateLang, dictateTerms, speechLang } from "./dictateLang";
-import { claimDictation, dictationState, holdDictation, subscribeDictations } from "./dictateQueue";
+import { claimDictation, dictationState, heldDictationIds, holdDictation, subscribeDictations } from "./dictateQueue";
 import { linkSnapshot, subscribeLink } from "./link";
 import { showToast } from "./toast";
 import { mergeSpeechResults } from "./speechMerge";
@@ -252,6 +252,15 @@ export interface Voice {
    *  whisper, as a sentence (`dictateFallback.ts`); null when whisper is the
    *  engine or the desktop has not answered yet. */
   fallback: string | null;
+  /** THIS box's words are not all in it yet: the microphone is open, a stop
+   *  is still parking its audio, or a recording made here has not been read.
+   *  What Send asks about (`dictationSendAsk`). */
+  pending: boolean;
+  /** Stop the microphone if it is open, and resolve once every recording made
+   *  for this box has come back: true when all of them landed IN it, false when
+   *  one went to the pad (the box changed) or was dropped. Words already in the
+   *  box are never taken back — false only says the transcript is not whole. */
+  finish(): Promise<boolean>;
   /** Start or stop. */
   toggle(): void;
 }
@@ -281,6 +290,34 @@ export function useVoice(box: VoiceBox): Voice {
   /** Claims on recordings this hook made, released together on unmount so the
    *  words go to the pad rather than into a component that has gone. */
   const claims = useRef<(() => void)[]>([]);
+  /** Recordings made here and not yet read, by the box key they were made in. */
+  const mine = useRef(new Map<string, string>());
+  /** A host stop between the tap and its clip being parked and claimed. */
+  const stopping = useRef(0);
+  const listeningRef = useRef(false);
+  listeningRef.current = listening;
+  /** `finish()` callers, each for the box key it was asked in. `ok` turns false
+   *  when a recording for that key comes back anywhere but this box. */
+  const waiters = useRef<{ key: string; ok: boolean; done: (ok: boolean) => void }[]>([]);
+  const pendingFor = (key: string) =>
+    listeningRef.current || stopping.current > 0 || [...mine.current.values()].includes(key);
+  function settle() {
+    // Dropped without landing — `nothing was said`, a permanent refusal, a clip
+    // gone from the device: the hold no longer has it and no lander ran.
+    const held = heldDictationIds();
+    for (const [id, key] of mine.current) {
+      if (held.has(id)) continue;
+      mine.current.delete(id);
+      for (const w of waiters.current) if (w.key === key) w.ok = false;
+    }
+    const still: typeof waiters.current = [];
+    for (const w of waiters.current) (pendingFor(w.key) ? still.push(w) : w.done(w.ok));
+    waiters.current = still;
+  }
+  useEffect(() => { settle(); });
+  /** For the mount effect's subscription, which outlives this render. */
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
 
   useEffect(() => {
     let live = true;
@@ -299,7 +336,7 @@ export function useVoice(box: VoiceBox): Voice {
     // asked again when the link comes back — otherwise the phone's recogniser
     // stays the engine until a reload, which is how it was found.
     const offLink = subscribeLink(askOnLinkBack(linkSnapshot().status === "open", ask));
-    const off = subscribeDictations(() => setHold(dictationState()));
+    const off = subscribeDictations(() => { setHold(dictationState()); settleRef.current(); });
     return () => {
       live = false;
       offLink();
@@ -312,6 +349,10 @@ export function useVoice(box: VoiceBox): Voice {
       releaseWake();
       for (const release of claims.current) release();
       claims.current = [];
+      // Gone with the component: its words go to the pad, so nobody waiting
+      // on them may send.
+      for (const w of waiters.current) w.done(false);
+      waiters.current = [];
     };
   }, []);
 
@@ -376,6 +417,10 @@ export function useVoice(box: VoiceBox): Voice {
    * than a minute of speech.
    */
   async function stopHost(opts: { rollOver?: boolean } = {}) {
+    stopping.current++;
+    try { await parkHost(opts); } finally { stopping.current--; settle(); }
+  }
+  async function parkHost(opts: { rollOver?: boolean }) {
     const cap = capRef.current;
     capRef.current = null;
     if (stopAtRef.current) { window.clearInterval(stopAtRef.current); stopAtRef.current = null; }
@@ -401,10 +446,15 @@ export function useVoice(box: VoiceBox): Voice {
     // WHICH box these words belong to, decided now and checked again when they
     // arrive. A different session, or a different turn of a chain, is not this
     // box — the pad takes them instead (`dictateQueue.ts`).
-    const mine = boxRef.current.key?.();
+    const madeIn = boxRef.current.key?.() ?? "";
+    mine.current.set(held.id, madeIn);
     claims.current.push(claimDictation(held.id, (text) => {
       const b = boxRef.current;
-      if (b.key?.() !== mine) return false;
+      mine.current.delete(held.id);
+      if (b.key?.() !== madeIn) {
+        for (const w of waiters.current) if (w.key === madeIn) w.ok = false;
+        return false;
+      }
       b.write(appendDictation(b.read(), text));
       return true;
     }));
@@ -509,6 +559,15 @@ export function useVoice(box: VoiceBox): Voice {
     else startBrowser();
   }
 
+  function finish(): Promise<boolean> {
+    if (listeningRef.current) toggle();
+    const key = boxRef.current.key?.() ?? "";
+    return new Promise((done) => {
+      waiters.current.push({ key, ok: true, done });
+      settle();
+    });
+  }
+
   return {
     supported: engine !== null,
     listening,
@@ -517,6 +576,8 @@ export function useVoice(box: VoiceBox): Voice {
     held: hold.held,
     engine,
     fallback: engine === "browser" ? fallback : null,
+    pending: pendingFor(box.key?.() ?? ""),
+    finish,
     toggle,
   };
 }

@@ -77,6 +77,8 @@ public class ShellLinkPlugin extends Plugin {
     public void caps(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("memoryTokens", true);
+        // `setQueue`, `releaseOwnership`, `claimQueue`: the background relay (ShellRelay).
+        ret.put("relay", true);
         call.resolve(ret);
     }
 
@@ -179,6 +181,50 @@ public class ShellLinkPlugin extends Plugin {
     public void setQueueDepth(PluginCall call) {
         ShellLinkService.setQueueDepth(getContext(), call.getInt("depth", 0));
         call.resolve();
+    }
+
+    /**
+     * The queue's relay plan (`shared/queue/queuerelay.ts` `relayPlan`), replacing the last one.
+     * The page sends it only when it changed. A missing or unreadable plan is NO plan: the relay
+     * then sends nothing, which is the safe answer.
+     */
+    @PluginMethod
+    public void setQueue(PluginCall call) {
+        JSObject plan = call.getObject("plan");
+        ShellLinkService.setRelayPlan(getContext(), plan == null ? null : plan.toString());
+        call.resolve();
+    }
+
+    /** The page is freezing (`freeze`): the relay may own the queue while the app is hidden. */
+    @PluginMethod
+    public void releaseOwnership(PluginCall call) {
+        ShellLinkService.releaseRelay(getContext());
+        call.resolve();
+    }
+
+    /**
+     * Ownership back to the page — taken BEFORE this answers, so no new relay send starts after
+     * it — and everything since the last claim: `{receipts, written[, lost]}`. Receipts are
+     * cleared only here.
+     */
+    @PluginMethod
+    public void claimQueue(PluginCall call) {
+        ShellRelay relay = ShellLinkService.relay(getContext());
+        JSObject out;
+        // Read the answer into the bridge's own shape FIRST and clear only then, under one lock:
+        // a receipt is never cleared that the page was not handed.
+        synchronized (relay) {
+            try {
+                out = new JSObject(relay.snapshot());
+            } catch (JSONException e) {
+                Log.w(TAG, "claim: " + e);
+                relay.takeBack();
+                call.reject("the relay's answer did not read");
+                return;
+            }
+            ShellLinkService.claimRelay(getContext());
+        }
+        call.resolve(out);
     }
 
     /**

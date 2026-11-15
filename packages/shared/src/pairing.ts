@@ -313,7 +313,9 @@ export type PakeSealedReply = Extract<PairRedeemResponse, { ok: true }> & {
   tls?: { port: number; spki: string };
   /** Base64 SPKI DER (8a). */
   updateKey?: string;
-  lanIdentity: { hostId: string; secret: string };
+  /** Absent for a passive pairing (`scope: "passive"`): a passive device never holds the LAN identity
+   *  secret (SECURITY.md, `passive.ts`), and an older host that still sends it is not believed for one. */
+  lanIdentity?: { hostId: string; secret: string };
 };
 
 export function pakeErrorText(error: PakeError): string {

@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HeartPulse, OctagonAlert, Send, TriangleAlert } from "lucide-react";
 import {
-  BRAND, HEALTH_INDEX_VS_WEEKS, healthCommitsAvailability, healthHeadlineWords, healthIndexVs, isoWeekOf, type HealthIndexPoint, type HealthIndexResponse,
+  BRAND, HEALTH_INDEX_VS_WEEKS, healthCommitsAvailability, healthHeadlineWords, healthIndexVs, healthOwnCount, isoWeekOf, type HealthIndexPoint, type HealthIndexResponse,
 } from "@waterplane/shared";
 import { Explain } from "./Explain";
 import { CantInline } from "./Unavailable";
@@ -31,7 +31,7 @@ import type { IndexNow, IndexTrendWeek, IndexVsSubject, IndexWeekSubject } from 
 import {
   HEALTH_ENTRY_NAME, HEALTH_ENTRY_ORDER, INDEX_QUALITY_RUN_LABEL, INDEX_TREND_ASK_LABEL, areaD, barsCaptionWords, barsWeeksOnlyWords, carriedWords, commitsAbsentWords,
   contributionBars, gapWords, indexAskLabel, indexCommitGeom, indexExplainWords, indexLineGeom, indexReadoutWords, indexVsWords, linkSpanWords,
-  olderHostSeries, olderHostWords, signedTenths, thinnedWords, treeGrowthWords, trendWords, type HealthAxisMode, type IndexLineGeom,
+  olderHostSeries, olderHostWords, ownComparableWords, ownEntryName, signedTenths, thinnedWords, treeGrowthWords, trendWords, type HealthAxisMode, type IndexLineGeom,
 } from "./healthIndexWords";
 import {
   SPEND_METHOD_WORDS, SPEND_STEP_WORDS, spendCoverageWords, spendLeadWords, spendLineGeom, spendReadoutWords, spendStepGeom, spendTick,
@@ -139,7 +139,15 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
   const vsLast = last ? healthIndexVs(points) : null;
   // The bars and the ask follow the week the line is on: a bar chart captioned
   // with one week under a crosshair on another is two answers to one question.
-  const bars = at ? contributionBars(at.contributions ?? {}, 100) : null;
+  const bars = at ? contributionBars(at.contributions ?? {}, 100, at.own ?? []) : null;
+  // The breakdown's rows: waterplane's entries, then the repo's own targeted readings, each named as the repo's.
+  const scoreRows = at && at.scores
+    ? [
+      ...HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined).map((k) => ({ key: k as string, name: HEALTH_ENTRY_NAME[k], score: at.scores[k] as number })),
+      ...(at.own ?? []).map((o) => ({ key: o.id as string, name: ownEntryName(o.name), score: o.score })),
+    ]
+    : [];
+  const ownLine = last ? ownComparableWords(healthOwnCount(last.coverage)) : null;
   const ask = onAsk && at && atPrev && at.lnLink !== null && bars?.bars.length
     ? () => onAsk({
       week: at.week,
@@ -155,6 +163,7 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
   const askTrend = onAskTrend && series && points.some((p) => p.lnLink !== null)
     ? () => onAskTrend(points.map((p) => ({
       week: p.week, index: p.index, gap: p.gap, lnLink: p.lnLink, contributions: p.contributions,
+      ...(p.own?.length ? { own: p.own.map((o) => ({ id: o.id as string, name: o.name, contribution: o.contribution })) } : {}),
       ...(p.gapReason ? { gapReason: p.gapReason } : {}),
     })), series.baselineWeek, vsOf(points.length - 1), { alerts: (last!.alerts ?? []).map((a) => a.text), cap: capNow })
     : null;
@@ -252,6 +261,7 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
           {/* What the score could read: never folded, an absence is said in the open. */}
           {headNow?.coverage ? <div className="rh-cap hix-coverage">{headNow.coverage}</div> : null}
           {headNow?.notes ? <div className="rh-cap hix-coverage">{headNow.notes}</div> : null}
+          {ownLine ? <div className="rh-cap hix-coverage">{ownLine}</div> : null}
           {view?.words ? <div className="rh-tile-mean">{view.words.body}</div> : null}
 
           {axis === "commits" && commitsAvail === "absent" ? <div className="rh-cap">{commitsAbsentWords(BRAND.displayName)}</div> : null}
@@ -325,19 +335,19 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
                   runs off the edge. Bar geometry is in percent of the track. */}
               {/* No moves (first scored week, gap week): no track at all — an empty track
                   between name and score reads as a chart that failed to draw. */}
-              <div className={`hix-bar-rows${bars?.bars.length ? "" : " still"}`} role="img" aria-label={HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined)
-                .map((k) => `${HEALTH_ENTRY_NAME[k]} ${Math.round(at.scores[k] as number)}`).join(", ")}>
-                {HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined).map((k) => {
-                  const b = bars?.bars.find((x) => x.key === k) ?? null;
+              <div className={`hix-bar-rows${bars?.bars.length ? "" : " still"}`} role="img" aria-label={scoreRows
+                .map((r) => `${r.name} ${Math.round(r.score)}`).join(", ")}>
+                {scoreRows.map((r) => {
+                  const b = bars?.bars.find((x) => x.key === r.key) ?? null;
                   return (
-                    <div key={k} className="hix-bar-row" aria-hidden>
-                      <span className="hix-barname">{HEALTH_ENTRY_NAME[k]}</span>
+                    <div key={r.key} className="hix-bar-row" aria-hidden>
+                      <span className="hix-barname">{r.name}</span>
                       {bars?.bars.length ? (
                         <span className="hix-track">
                           {b && b.side !== "none" ? <span className={`hix-bar ${b.side}`} style={{ left: `${b.x}%`, width: `${b.w}%` }} /> : null}
                         </span>
                       ) : null}
-                      <span className="hix-barscore">{Math.round(at.scores[k] as number)}</span>
+                      <span className="hix-barscore">{Math.round(r.score)}</span>
                       {bars?.bars.length ? <span className="hix-barval">{b ? signedTenths(b.value) : ""}</span> : null}
                     </div>
                   );
@@ -383,7 +393,7 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, onQualityRun,
           {sg ? <div className="rh-cap">{spendLeadWords(last.values?.context).lead}</div> : null}
           <details className="hint-more rh-more">
             <summary>{HOW_SCORED_SUMMARY}</summary>
-            <p>{indexExplainWords(series.baselineWeek, BRAND.displayName, { disabled: last.disabled, overridden: last.overridden })}</p>
+            <p>{indexExplainWords(series.baselineWeek, BRAND.displayName, { disabled: last.disabled, overridden: last.overridden, ownCount: healthOwnCount(last.coverage) })}</p>
             {/* A coverage or gate cap is already said in the open (the coverage line, the gate list). */}
             {capNow && last.capKind !== "coverage" && last.capKind !== "gate" ? <p>{capNow}</p> : null}
             {last.coverage ? <p>{COVERAGE_METHOD_WORDS}</p> : null}

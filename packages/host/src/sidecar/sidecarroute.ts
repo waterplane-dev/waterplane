@@ -4,7 +4,7 @@
 import { BRAND, resolveEnv } from "@waterplane/shared";
 
 /** The unattended calls this daemon makes, one routing knob each. */
-export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit" | "explain" | "skills";
+export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit" | "explain" | "skills" | "probe";
 
 /** How a completion is obtained. */
 export type SidecarEngine = "claude-p" | "openai-compat";
@@ -18,6 +18,7 @@ export const SIDECAR_ENV: Readonly<Record<SidecarTask, string>> = {
   commit: `${BRAND.envPrefix}SIDECAR_COMMIT`,
   explain: `${BRAND.envPrefix}SIDECAR_EXPLAIN`,
   skills: `${BRAND.envPrefix}SIDECAR_SKILLS`,
+  probe: `${BRAND.envPrefix}SIDECAR_PROBE`,
 };
 
 /**
@@ -52,6 +53,9 @@ const NEEDS_TOOLS: Readonly<Record<SidecarTask, boolean>> = {
   // counts and the names of the repo files that mention them are IN the prompt; it reads no file
   // and writes nothing - the answer is a list a person ticks.
   skills: false,
+  // `probe` (the lookup probe, `host/probe.ts`): the whole point is that the session FINDS the
+  // answer in the repo with read-only tools, so it can never take the toolless engine.
+  probe: true,
 };
 
 export interface ClaudeRoute { readonly engine: "claude-p" }

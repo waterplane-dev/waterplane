@@ -162,6 +162,28 @@ export function recallWhere(mem: SendMemory, cwd: string | null | undefined): Se
   return reusableWhere(mem[cwd]?.where) ?? "this";
 }
 
+/**
+ * **The aim a SCREEN opens on** — `recallWhere`, except where the screen
+ * itself already answers *where*.
+ *
+ * - `+ later` exists to queue a NEW session: `new`, always.
+ * - `+ new` (a `pending:` screen) IS the new session. Reported 2026-11-14:
+ *   offline, `+ new`, Send — and the repo's remembered `new` aim posted the
+ *   words as a separate "new session when this repo is free" item, so the
+ *   session that opened at reconnect stayed EMPTY and the prompt waited two
+ *   hours for a free repo. Words written on that screen belong in it: `this`,
+ *   which `queueSessionPrompt` folds into the create itself.
+ *
+ * Neither screen's answer is written back to the repo's memory.
+ */
+export function recallScreenAim(
+  screen: { later: boolean; pending: boolean }, mem: SendMemory, cwd: string | null | undefined,
+): SendWhere {
+  if (screen.later) return "new";
+  if (screen.pending) return "this";
+  return recallWhere(mem, cwd);
+}
+
 /** The WHEN the sheet should open on for this repo, or null to leave the
  *  caller's own answer alone. Re-checked for staleness at READ time, because a
  *  one-off remembered this morning is not still ahead this evening. */

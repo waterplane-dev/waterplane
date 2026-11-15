@@ -203,7 +203,7 @@ test("every reading is absent with a sentence where it cannot be taken — never
 
 test("start, before-the-first-edit and requests: the agent series' weekly buckets, one population each, absent below the minimum", async () => {
   const { seriesOf, START_PARTS } = await import("@waterplane/shared");
-  const fresh = (i, o = {}) => ({ id: `c${i}`, t0: mon + i, repo: "/r/app", fresh: true, headless: false, req: 10 + i, commit: i < 5, start: 1000 * (i + 1), parts: { skills: 100 * (i + 1), claudeMd: 50 }, look: i, ...o });
+  const fresh = (i, o = {}) => ({ id: `c${i}`, t0: mon + i, repo: "/r/app", fresh: true, headless: false, req: 10 + i, commit: i < 5, start: 1000 * (i + 1), parts: { skills: 100 * (i + 1), projectMd: 50, futurePart: 7 }, look: i, skills: i % 2, ...o });
   const points = [
     ...[0, 1, 2, 3, 4, 5].map((i) => fresh(i)),
     fresh(6, { headless: true, fresh: false, start: 1, look: undefined }),
@@ -214,13 +214,17 @@ test("start, before-the-first-edit and requests: the agent series' weekly bucket
   const [w, empty] = foldAgentWeeks(convs, [W1, W2], NO_ESC, series);
   assert.equal(w.start.fresh, 6);
   assert.deepEqual(w.start.tok, { median: 3500, n: 6 });
-  assert.deepEqual(w.start.parts.map((p) => p.id), START_PARTS.map((p) => p.id).filter((id) => id === "claudeMd" || id === "skills"));
+  // Named parts in list order, then a part this version cannot name (open keys): kept, never dropped.
+  assert.deepEqual(w.start.parts.map((p) => p.id), [...START_PARTS.map((p) => p.id).filter((id) => id === "projectMd" || id === "skills"), "futurePart"]);
   assert.deepEqual(w.start.parts.find((p) => p.id === "skills").chars, { median: 350, n: 6 });
   assert.deepEqual(w.start.sub, { median: 502, n: 5 });
   // Tokens and looks over the SAME six fresh sessions that edited.
   assert.equal(w.explore.sessions, 6);
   assert.deepEqual(w.explore.looks, { median: 2.5, n: 6 });
   assert.deepEqual(w.requests, { median: 12, n: 5 });
+  // Skill loads: mean per session and the share with one, on its own field (an older phone read `skills` as a median).
+  assert.deepEqual(w.skillLoads, { mean: 0.5, share: 0.5, n: 6 });
+  assert.equal("skills" in w, false);
   assert.match(empty.start.absent, /No session or subagent started/);
   assert.match(empty.requests.absent, /^0 fresh sessions that committed here; a median needs at least 5\.$/);
   // Under the minimum, the merged reading is absent as a whole — never a token median beside no look median.
@@ -389,10 +393,38 @@ test("start readings: model, cli, first-request tokens, parts from the attachmen
   assert.equal(s.sr.md, "claude-opus-5-5");
   assert.equal(s.sr.cli, "2.1.322");
   assert.equal(s.sr.st, 1210);
-  assert.deepEqual(s.sr.pt, { system: 40, tools: JSON.stringify({ a: 1 }).length, claudeMd: 300, memory: 50, skills: 30, deferredTools: 10, agents: 7, hooks: 25, session: 9 + 10 });
+  // Instruction files by whose they are: Project is the repo's, User yours; a listing with no
+  // `builtInTypes` cannot be split and stays whole as `agents`.
+  assert.deepEqual(s.sr.pt, { system: 40, tools: JSON.stringify({ a: 1 }).length, projectMd: 200, userMd: 100, memory: 50, skills: 30, cliDeferred: 10, agents: 7, hooks: 25, session: 9 + 10 });
   // Read, grep behind a `cd … &&`; `npm test` is not a look; the Bash `git log` and the Read after the Edit are not counted (a look in the same row as the edit comes first: git log).
   assert.equal(s.sr.lk, 3);
   assert.equal(s.sr.rq, 2);
+});
+
+test("start parts by whose they are, where the record says: file type, mcp__ names, builtInTypes; the split adds up to the whole", async () => {
+  const { startPartsOf } = await import("../dist/agentclass.js");
+  const { carriedPartsOf } = await import("../dist/ctxlog/ctxcursor.js");
+  const row = (a) => ({ type: "attachment", attachment: a });
+  const files = row({ type: "instructions", files: [
+    { path: "/r/app/CLAUDE.md", type: "Project", content: "p".repeat(20) },
+    { path: "/r/app/CLAUDE.local.md", type: "Local", content: "l".repeat(5) },
+    { path: "/h/.claude/CLAUDE.md", type: "User", content: "u".repeat(7) },
+    { path: "/x", type: "SomethingNew", content: "n".repeat(3) },
+  ] });
+  // A file type this version does not know is `other` (not split), never assumed to be the repo's or yours.
+  assert.deepEqual(startPartsOf(files), [["projectMd", 20], ["userMd", 5], ["userMd", 7], ["other", 3]]);
+  const deferred = row({ type: "deferred_tools_delta", addedNames: ["Cron", "mcp__s__t"], addedLines: ["Cron", "mcp__s__t"],
+    surfacedDefinitions: [{ name: "mcp__s__u", definition: { name: "mcp__s__u", input_schema: {} } }] });
+  const d = startPartsOf(deferred);
+  assert.deepEqual(d.map(([k]) => k), ["cliDeferred", "connectorTools"]);
+  assert.equal(d[0][1], 4);
+  assert.equal(d[0][1] + d[1][1], carriedPartsOf(deferred)[0].chars);
+  const agents = row({ type: "agent_listing_delta", addedTypes: ["Explore", "reviewer"], addedLines: ["- Explore: x", "- reviewer: yy"], builtInTypes: ["Explore"] });
+  assert.deepEqual(startPartsOf(agents), [["cliAgents", 12], ["otherAgents", 14]]);
+  // Only built-in agents: the other part is absent, never a zero.
+  assert.deepEqual(startPartsOf(row({ type: "agent_listing_delta", addedTypes: ["Explore"], addedLines: ["- Explore: x"], builtInTypes: ["Explore"] })), [["cliAgents", 12]]);
+  // Lines and types that do not pair up: the log does not say, so the listing stays whole.
+  assert.deepEqual(startPartsOf(row({ type: "agent_listing_delta", addedTypes: ["a"], addedLines: ["x", "y"], builtInTypes: [] })), [["agents", 2]]);
 });
 
 test("a log without attachments still has its start; parts are absent, never zero", async () => {
@@ -511,4 +543,35 @@ test("the capped list leaves headless and forked conversations off, so they spen
   assert.equal(capped.cut, 0);
   assert.equal(store.points(["/r/app"], Date.parse(T(10)), false).points.length, AGENT_POINTS_CAP + 2);
   delete process.env.CLAUDE_CONFIG_DIR;
+});
+
+test("skill loads: Skill tool calls counted once by call id, in the skills screen's parser; absent on a fork and a subagent", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-"));
+  const sk = (id, skill) => ({ type: "tool_use", id, name: "Skill", input: { skill } });
+  const text = [
+    user(T(2), "go"),
+    asst("m1", T(2), usage(10, 1000, 200), [sk("s1", "host"), sk("s2", "/testing")]),
+    asst("m1", T(2), usage(10, 1000, 200), [sk("s1", "host")]), // a streamed row repeating a block
+    asst("m2", T(3), usage(5, 2000, 100), [{ type: "tool_use", id: "r", name: "Read", input: {} }]),
+  ].join("\n") + "\n";
+  const s = await summarizeConv(writeLog(dir, "S1.jsonl", text), "S1", Buffer.byteLength(text), 1, 64);
+  assert.equal(s.sr.sk, 2);
+  // a session that loaded none is a measured zero; the field is there
+  const none = [user(T(2), "go", {}, "S2"), asst("m1", T(2), usage(1, 10, 5), [{ type: "tool_use", id: "a", name: "Grep", input: {} }], "S2")].join("\n") + "\n";
+  assert.equal((await summarizeConv(writeLog(dir, "S2.jsonl", none), "S2", Buffer.byteLength(none), 1)).sr.sk, 0);
+  // a subagent log is not read for it
+  const a = await summarizeAgentLog(writeLog(dir, "agent-a.jsonl", text), "S1/subagents/agent-a", Buffer.byteLength(text), 1, 64);
+  assert.equal(a.sr.sk, undefined);
+  const { skillCallsOf } = await import("../dist/skills/skilluse.js");
+  assert.deepEqual(skillCallsOf(JSON.parse(asst("m1", T(2), usage(1, 1, 1), [sk("x", "/host")]))), [{ id: "x", name: "host" }]);
+});
+
+test("a session that switched model carries no model, never filed wholly under the first", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-agentscan-sw-"));
+  const text = convLog().replace(/("id":"m3","model":")claude-opus-5-5/, "$1claude-sonnet-5-5");
+  assert.notEqual(text, convLog(), "the fixture switched a request's model");
+  const p = writeLog(dir, "S1.jsonl", text);
+  const s = await summarizeConv(p, "S1", Buffer.byteLength(text), 1);
+  assert.equal(s.sr.md, undefined);
+  assert.ok(s.sr.st > 0, "the start reading itself still stands");
 });

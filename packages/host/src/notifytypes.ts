@@ -31,6 +31,8 @@ export interface NotifyParams {
   outcome?: NotifyOutcome;
   /** The cause key (see above). Kept on the wire item. */
   key?: string;
+  /** HOST-ONLY: `link.back` — rides the push payload as `hostLabel` / `offlineMs` (never the feed item). */
+  linkBack?: { hostLabel: string; offlineMs: number };
   /** HOST-ONLY: the full failure text. Kept beside an attention item for the
    *  repo listing; never on the wire item, never in a push. */
   detail?: string;

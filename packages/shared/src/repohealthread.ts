@@ -65,6 +65,7 @@ import {
   type RepoHealthLongest,
   type RepoHealthMeasure,
   type RepoHealthOutcome,
+  type RepoHealthOwnBackfillSummary,
   type RepoHealthPack,
   type RepoHealthPlot,
   type RepoHealthPlotClassics,
@@ -541,6 +542,11 @@ function readOwn(v: unknown): RepoHealthPlotOwn | null {
       if ((g.fails === "below" || g.fails === "above") && typeof g.at === "number" && Number.isFinite(g.at)) one.gate = { fails: g.fails, at: g.at };
       else if (isStr(g.invalid)) one.gate = { invalid: g.invalid };
     }
+    // The target, named the same way: a usable number above 0, or the engine's refusal sentence.
+    const tg = s.target as unknown;
+    if (typeof tg === "number" && Number.isFinite(tg) && tg > 0) one.target = tg;
+    else if (tg && typeof tg === "object" && isStr((tg as { invalid?: unknown }).invalid)) one.target = { invalid: (tg as { invalid: string }).invalid };
+    if (s.backfill === false) one.backfill = false;
     if (isStr(s.absent)) one.absent = s.absent;
     series.push(one);
   }
@@ -550,6 +556,7 @@ function readOwn(v: unknown): RepoHealthPlotOwn | null {
     const problems = o.problems.filter(isStr);
     if (problems.length) out.problems = problems;
   }
+  if (isCount(o.unread)) out.unread = o.unread; // a junk count is dropped (absent = older engine), never 0
   return out;
 }
 
@@ -593,6 +600,33 @@ export function parseUpdateSummary(stdout: string): { added: number | null } {
     if (/^repohealth:\s*nothing new\b/.test(t)) return { added: 0 };
   }
   return { added: null };
+}
+
+/**
+ * The engine's `own-backfill` summary off its stdout (`{"ownBackfill": {…}}`,
+ * one line). Rebuilt from the fields it names; a count that is not a
+ * non-negative integer is DROPPED, never defaulted to 0. Null where no such
+ * line was printed (an engine without the subcommand, a crash).
+ */
+export function parseOwnBackfill(stdout: string): RepoHealthOwnBackfillSummary | null {
+  if (typeof stdout !== "string") return null;
+  for (const line of stdout.split("\n").reverse()) {
+    const t = line.trim();
+    if (!t.startsWith("{")) continue;
+    let o: unknown;
+    try { o = JSON.parse(t); } catch { continue; }
+    const b = (o as { ownBackfill?: unknown } | null)?.ownBackfill;
+    if (!b || typeof b !== "object") continue;
+    const r = b as Record<string, unknown>;
+    const out: RepoHealthOwnBackfillSummary = {};
+    for (const k of ["asked", "read", "values", "absent", "left"] as const) {
+      const v = r[k];
+      if (typeof v === "number" && Number.isInteger(v) && v >= 0) out[k] = v;
+    }
+    if (r.stopped === "budget" || r.stopped === null) out.stopped = r.stopped;
+    return out;
+  }
+  return null;
 }
 
 /** The line that says what went wrong. Usually the first one — but node's own

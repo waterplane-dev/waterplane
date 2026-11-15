@@ -18,7 +18,7 @@ test("open checks are failing and not accepted", () => {
   assert.deepEqual(openChecks(view()).map((x) => x.name), ["A", "E"]);
 });
 
-test("chip number and cut are the same list", () => {
+test("chip number and cut are the same list (R-security-010)", () => {
   const v = view();
   assert.equal(scoreChip(v).n, cutChecks(v, { repo: "r" }).length);
   assert.equal(cutChecks(v, null), null);

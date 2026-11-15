@@ -21,6 +21,7 @@ import { toolbarItems } from "../../toolbar";
 import { UsageSheet } from "../../UsageSheet";
 import { archiveBackendHint, archiveBackends, archiveStartRepo, knownFeatureIds, liveConversationIds, liveSessionFor } from "./logic";
 import { localRtFocus, netFocus } from "./store";
+import { archiveOpen } from "../../archiveOpen";
 
 export function SpeedTestToolSheet() {
   const core = useCore();
@@ -40,7 +41,7 @@ export function RepoColorToolSheet() {
 export function FeaturesToolSheet() {
   const core = useCore();
   const known = useMemo(() => knownFeatureIds(toolbarItems().map((t) => t.id)), []);
-  return <UsageSheet knownIds={known} onClose={() => core.nav.close("features")} onToast={core.say.toast} />;
+  return <UsageSheet knownIds={known} onClose={() => core.nav.close("features")} onOpenStorage={() => core.nav.open("storage")} onToast={core.say.toast} />;
 }
 
 export function StorageToolSheet() {
@@ -84,9 +85,11 @@ export function ArchiveToolSheet() {
   const core = useCore();
   const { sessions, activeRepo, visibleRepos, backends, launch } = core.world;
   const liveIds = useMemo(() => liveConversationIds(sessions), [sessions]);
+  // Opened from a search hit: that conversation's repo, straight in the reader.
+  const jump = useStore(archiveOpen);
   // Repo-scoped, because a conversation log lives under its directory. Opens
   // on the repo in context; the picker inside covers the rest.
-  const start = archiveStartRepo(activeRepo?.id ?? null, visibleRepos.map((r) => r.id));
+  const start = jump?.repoId ?? archiveStartRepo(activeRepo?.id ?? null, visibleRepos.map((r) => r.id));
   const close = () => core.nav.close("archive");
   if (!start) return (
     <div className="sheet">
@@ -112,7 +115,7 @@ export function ArchiveToolSheet() {
       ? { note: `Every conversation here is one ${t.label} wrote, so resuming or forking one starts ${t.label} — not whichever backend new sessions currently default to.` }
       : {}) }
     : { ...t, note: archiveBackendHint(t.label) });
-  return <ArchiveSheet repos={visibleRepos} initialRepoId={start}
+  return <ArchiveSheet key={jump?.row.id ?? ""} repos={visibleRepos} initialRepoId={start} initialReading={jump?.row}
     liveIds={liveIds}
     archiveBackends={tabs}
     onResume={(cwd, title, cid, bid) => { close(); core.launch.openCwd(cwd, title, true, "continue", launchFor(bid), cid); }}

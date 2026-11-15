@@ -21,7 +21,7 @@ test("key: an advisory id makes A1 and B1 one key; otherwise measure:subject@ver
   assert.equal(findingKey({ measure: "A2", subject: "node-pty" }), "A2:node-pty");
 });
 
-test("mergeAdvisories: A1 + B1 for one GHSA collapse; sources unioned, max severity, direct OR'd, alert wins", () => {
+test("mergeAdvisories: A1 + B1 for one GHSA collapse; sources unioned, max severity, direct OR'd, alert wins (R-security-004)", () => {
   const a = f({ measure: "A1", advisory: "GHSA-1", severity: "moderate", level: "digest", sources: ["npm audit"], direct: false });
   const b = f({ measure: "B1", advisory: "GHSA-1", severity: "high", level: "alert", sources: ["dependabot"], direct: true });
   const out = mergeAdvisories([a, b, f({ subject: "other" })]);
@@ -68,7 +68,7 @@ test("settingChanges: C1.distTags is judged elsewhere and not diffed; C1.maintai
   assert.deepEqual(out.map((x) => x.subject), ["C1.maintainers"]);
 });
 
-test("applyAccepts: no until, version, date and change; expired is open; a newer version reopens", () => {
+test("applyAccepts: no until, version, date and change; expired is open; a newer version reopens (R-security-007)", () => {
   const acc = { reason: "ok", at: "2026-10-01" };
   const a = f({ subject: "a", version: "1.0.0", text: "same" });
   const b = f({ subject: "b", version: "1.1.0" });
@@ -157,7 +157,7 @@ test("semverCmp: pre-release is lower than its release; numeric, not lexical", (
   assert.equal(semverCmp("v2.0.0", "2.0.0"), 0);
 });
 
-test("firstRunOff and renderText name what is off, absent and open", () => {
+test("firstRunOff and renderText name what is off, absent and open (R-security-004)", () => {
   const r = row({
     findings: [f({ measure: "A3", subject: "x" }), { ...f({ measure: "A5", subject: "web-push", level: "alert" }), accepted: { reason: "MPL", at: "a" } }, f({ measure: "A6", subject: "d", level: "digest" })],
     absent: [{ measure: "A7", why: "no engines", unreachable: false }],

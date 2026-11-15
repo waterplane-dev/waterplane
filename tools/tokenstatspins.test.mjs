@@ -102,10 +102,11 @@ const HOOKS = {
   TokenStatsSheet: [
     // 2026-10-04: the second ledger's read moved into `GuestRead` (one per contributed view); its
     // answers lift into `reads`, and `onRead` is the stable setter handed to each.
-    "useState", "useRemoteResource", "useState", "useState",
+    "useState", "useRemoteResource", "useRescan", "useState", "useState",
   ],
   GuestRead: [
-    "useRemoteResource", "useEffect",
+    // 2026-11-13: a rescan re-reads through `useRescan` (reload), not through the cache key.
+    "useRemoteResource", "useRescan", "useEffect",
   ],
   LimitWindows: [
     // 2026-10-09: the usagelog read moved up into TokenStatsBody.
@@ -119,19 +120,21 @@ const HOOKS = {
     // WP6: the fourth useState is the generic backend-ledger tab (`extraId`); the
     // useRemoteResource after it is the local runner's ledger (`/api/localusage`).
     // 2026-10-15: the fifth is `on`, the tapped source the `all` button clears (a prop would not move).
-    "useState", "useState", "useState", "useState", "useRemoteResource", "useState", "useCallback", "useState", "useState", "useState", "useState",
+    // 2026-11-13: `useOfflineGate` (the rescan's refusal) sits after the second useState; every read
+    // is followed by its `useRescan` (the rescan counter left the cache keys).
+    "useState", "useOfflineGate", "useState", "useState", "useState", "useRemoteResource", "useRescan", "useState", "useCallback", "useState", "useState", "useState", "useState",
     // 2026-10-15: ONE `span` state replaced `range`, `scope` and the calendar week's `weekAt` (and
     // its seeding effect); the day and hour derivations moved below `active`, which they now read.
     "useState", "useBoxWidth",
     // the two live cuts, the specs, then the tokenwindows, usagelog and week cost-window reads, the
     // dollar period's memo and its read, the grids and `picked`
-    "useMemo", "useMemo", "useRemoteResource", "useRemoteResource", "useRemoteResource", "useMemo", "useRemoteResource", "useMemo", "useMemo",
+    "useMemo", "useMemo", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useMemo", "useRemoteResource", "useRescan", "useMemo", "useMemo",
     // range, days, daily, running, trend, mixRows, bands, agentDays, hourRows, hourly, the three fills
     "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
     // the span's own cost window and its repos; the calibration, the calendar cut, the clock, insights
-    "useRemoteResource", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
+    "useRemoteResource", "useRescan", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
     // 2026-11-11 (R-usage-031): the insights' span switch, the span before's read, the span's insights
-    "useState", "useRemoteResource", "useMemo",
+    "useState", "useRemoteResource", "useRescan", "useMemo",
   ],
 };
 
@@ -146,9 +149,10 @@ test("P3: LimitWindows' re-scrape effect stays mount-once", () => {
 // ── P4: resource keys ────────────────────────────────────────────────────────
 test("P4: each resource key is written once across the viewer", () => {
   for (const key of [
-    "`tokenstats:${fresh}`",
-    "`ledgerview:${def.id}:${fresh}`",
-    "`usagelog:${usage?.checkedAt ?? 0}`",
+    // 2026-11-13: no refresh counter in any key (a moving key misses the cache and piles rows).
+    '"tokenstats:ledger"',
+    "`ledgerview:${def.id}`",
+    '"usagelog:history"',
     "`tokenwindows:${",
     "`weekcost:${",
     "`costwindow:${",

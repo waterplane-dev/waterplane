@@ -11,9 +11,10 @@
  * waterplane, how many of the CLI screen readers have no proof on the
  * installed `claude`. Those are declared by the repo, in a COMMITTED
  * file, and they ride in the series row under `own`, a key no metric and no
- * reading in `readings.mjs` ever reads. The index reads ONE thing from it: a
- * reading the repo marked as a gate (below). They change no definition, so
- * `PREREG_VERSION` and the pack hash do not move.
+ * reading in `readings.mjs` ever reads. The index reads TWO things from it: a
+ * reading the repo marked as a gate, and a reading that declares a target
+ * (both below). They change no definition, so `PREREG_VERSION` and the pack
+ * hash do not move; a score that counts one marks the week a coverage gap.
  *
  * ── The declaration ────────────────────────────────────────────────────────
  *
@@ -39,6 +40,21 @@
  * (`shared/healthindex/coverage.ts`): a failing gate caps the headline, a gate
  * whose reading is absent is unknown.
  *
+ * A reading may also declare a TARGET — the repo's own good line:
+ *
+ *   "target": 5
+ *
+ * A number above 0 (the score is a ratio to it), read in the reading's own
+ * `better` direction. With one, the reading joins the health score like one
+ * of waterplane's entries (`shared/healthindex/own.ts`: scored against the
+ * target, in the mean, the worst-entry cap and coverage); without one it stays
+ * out of the score. A bad target is refused like any other bad field — the
+ * reading is not run and the index counts it UNKNOWN, never scored.
+ *
+ * A reading that reads THIS DESKTOP rather than the commit (machine state)
+ * says `"backfill": false`: `own-backfill` then leaves it absent at older
+ * commits instead of running it there (`ownbackfill.mjs`).
+ *
  * The same file's `central` object re-tunes waterplane's OWN readings — one
  * disabled, or measured by the repo's command instead — and is `central.mjs`'s
  * business: it changes what the index reads, which nothing here ever does.
@@ -52,9 +68,12 @@
  * that reading ABSENT with the reason, never 0: a zero is a reading, and a
  * reading nobody took must not look like one.
  *
- * Only at HEAD: `update` calls this for the newest first-parent commit only, so
- * a backfill runs nothing per old commit and checks nothing out. History starts
- * the day a reading is first declared. The command runs in the CHECKOUT as it
+ * Only at HEAD on `update`: it calls this for the newest first-parent commit
+ * only, so a series backfill runs nothing per old commit and checks nothing
+ * out. History starts the day a reading is first declared — unless a person
+ * asks for more: `own-backfill` (`ownbackfill.mjs`) reads older commits back in
+ * a scratch worktree, on request only, each with the declaration THAT commit
+ * held. The command runs in the CHECKOUT as it
  * stands — that is what HEAD's row means for a reading of this kind, and the
  * one caveat a repo's author should know: an uncommitted edit is in it.
  *
@@ -73,7 +92,7 @@ import { BRAND } from "@waterplane/shared";
 /** Where a repo declares its own readings, repo-relative. Committed. */
 export const OWN_FILE = `${BRAND.sharedDirName}/health.json`;
 /** At most this many readings are RUN; the rest are listed absent with the reason. */
-export const OWN_MAX = 8;
+export const OWN_MAX = 12;
 /** One reading's wall-clock budget. The daemon kills the whole engine at its own cap. */
 export const OWN_TIMEOUT_MS = 30_000;
 /** Bytes of stdout a reading may print before it is cut and refused. */
@@ -121,12 +140,15 @@ export function parseDeclaration(text) {
   const problems = [];
   // Entries dropped for want of a key that had asked for a gate: the index counts each as an UNKNOWN gate (`unreadGates`).
   let unreadGates = 0;
+  // …and those that had asked for a target: each one UNKNOWN in the score's coverage (`unreadTargets`).
+  let unreadTargets = 0;
   const seen = new Set();
   doc.readings.forEach((raw, i) => {
     const e = raw && typeof raw === "object" ? raw : {};
     if (typeof e.key !== "string" || !KEY_RE.test(e.key)) {
       problems.push(`entry ${i + 1} has no usable "key" (a letter, then up to 39 letters, digits, - or _)`);
       if (e.gate !== undefined) unreadGates++;
+      if (e.target !== undefined) unreadTargets++;
       return;
     }
     if (seen.has(e.key)) {
@@ -141,6 +163,15 @@ export function parseDeclaration(text) {
     if (e.unit !== undefined && (typeof e.unit !== "string" || e.unit.length > 16)) why.push(`"unit" must be a short word`);
     const gate = gateOf(e.gate, e.better);
     if (gate && gate.invalid) why.push(gate.invalid);
+    // A reading of THIS DESKTOP (`"backfill": false`) cannot count in a score that reads the same on every
+    // desktop (R-metrics-069): its target is refused with a sentence, the reading still runs untargeted.
+    const thisDesktop = e.backfill === false;
+    let target = targetOf(e.target, e.better);
+    if (thisDesktop && e.target !== undefined && !(target && typeof target === "object")) {
+      problems.push(`"${e.key}" has a target and "backfill": false: its target is refused, because a reading of this desktop cannot count in a score that reads the same on every desktop; the reading runs without it`);
+      target = undefined;
+    }
+    if (target && typeof target === "object") why.push(target.invalid);
     const runOk = Array.isArray(e.run) && e.run.length >= 1 && e.run.length <= 32
       && e.run.every((a) => typeof a === "string" && a.length > 0 && a.length <= 512 && !a.includes("\0"));
     if (!runOk) why.push(`"run" must be an argv list of 1–32 non-empty strings`);
@@ -152,10 +183,12 @@ export function parseDeclaration(text) {
       unit: typeof e.unit === "string" ? e.unit.slice(0, 16) : "",
       run: runOk ? e.run.slice() : null,
       ...(gate ? { gate } : {}),
+      ...(target !== undefined ? { target } : {}),
+      ...(thisDesktop ? { backfill: false } : {}),
       ...(why.length ? { invalid: `not run — ${why.join("; ")}` } : {}),
     });
   });
-  return { readings, problems, unreadGates };
+  return { readings, problems, unreadGates, ...(unreadTargets ? { unreadTargets } : {}) };
 }
 
 /**
@@ -173,6 +206,23 @@ export function gateOf(g, better) {
   const worse = better === "higher" ? "below" : better === "lower" ? "above" : null;
   if (worse && g.fails !== worse) return bad(`fails "${g.fails}" but "better" is "${better}": a gate fails on the worse side`);
   return { fails: g.fails, at: g.at };
+}
+
+/**
+ * A reading's `target`, checked: undefined where none is declared, the number
+ * where it is usable, `{ invalid }` where it is not. An invalid target is still
+ * CARRIED (as `{ invalid }`), so the index counts a reading the repo meant to
+ * score as unknown with the reason rather than dropping it from the score.
+ * Above 0, because the score is a ratio to it (`100 · min(1, target / value)`
+ * for lower, `100 · min(1, value / target)` for higher); a reading whose
+ * `better` is itself bad is refused on that field already.
+ */
+export function targetOf(t, better) {
+  if (t === undefined) return undefined;
+  if (typeof t !== "number" || !Number.isFinite(t)) return { invalid: `"target" must be a number` };
+  if (!(t > 0)) return { invalid: `"target" must be above 0: the score is a ratio to it` };
+  if (better !== "lower" && better !== "higher") return { invalid: `"target" needs "better" to say which side of it is good` };
+  return t;
 }
 
 /**
@@ -217,6 +267,8 @@ export function runReading(root, decl, { timeoutMs = OWN_TIMEOUT_MS, env = readi
       encoding: "utf8",
       timeout: timeoutMs,
       killSignal: "SIGKILL",
+      // Its own process group, so a timeout can take a wrapper's worker with it.
+      detached: process.platform !== "win32",
       maxBuffer: OWN_MAX_OUTPUT,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -224,6 +276,11 @@ export function runReading(root, decl, { timeoutMs = OWN_TIMEOUT_MS, env = readi
     return { value: null, reason: `could not start ${cmd}: ${err.message}` };
   }
   const code = res.error?.code;
+  const timedOut = code === "ETIMEDOUT" || (res.signal === "SIGKILL" && res.status === null && !code);
+  // The timeout SIGKILLs only the direct child; the group is the wrapper's workers too.
+  if (timedOut && process.platform !== "win32" && Number.isInteger(res.pid) && res.pid > 1) {
+    try { process.kill(-res.pid, "SIGKILL"); } catch { /* already gone */ }
+  }
   if (code === "ETIMEDOUT" || (res.signal === "SIGKILL" && res.status === null && !code)) {
     return { value: null, reason: `did not finish within ${Math.round(timeoutMs / 1000)} s and was stopped` };
   }
@@ -251,10 +308,16 @@ export function measureOwn(root, sha, git, opts = {}) {
   const decl = parseDeclaration(text);
   if (decl.none) return undefined;
   if (decl.refused) return { file: OWN_FILE, refused: decl.refused };
+  // `opts.skip(d)` → a sentence: that reading is not run here, ABSENT with it
+  // (`ownbackfill.mjs`: a command this desktop did not approve, or one the repo
+  // marks HEAD-only). Absent hook = run every reading.
   const readings = decl.readings.map((d, i) => {
-    const got = i < OWN_MAX
-      ? runReading(root, d, opts)
-      : { value: null, reason: `not run — past the first ${OWN_MAX} readings a repo may declare` };
+    const skipped = i < OWN_MAX && typeof opts.skip === "function" ? opts.skip(d) : null;
+    const got = skipped
+      ? { value: null, reason: skipped }
+      : i < OWN_MAX
+        ? runReading(root, d, opts)
+        : { value: null, reason: `not run — past the first ${OWN_MAX} readings a repo may declare` };
     return {
       key: d.key,
       name: d.name,
@@ -262,6 +325,8 @@ export function measureOwn(root, sha, git, opts = {}) {
       better: d.better,
       unit: d.unit,
       ...(d.gate ? { gate: d.gate } : {}),
+      ...(d.target !== undefined ? { target: d.target } : {}),
+      ...(d.backfill === false ? { backfill: false } : {}),
       value: got.value,
       ...(got.reason ? { reason: got.reason } : {}),
     };
@@ -270,13 +335,16 @@ export function measureOwn(root, sha, git, opts = {}) {
     file: OWN_FILE, readings,
     ...(decl.problems.length ? { problems: decl.problems } : {}),
     ...(decl.unreadGates ? { unreadGates: decl.unreadGates } : {}),
+    ...(decl.unreadTargets ? { unreadTargets: decl.unreadTargets } : {}),
   };
 }
 
 /**
  * The row's `own` where the repo's commands are NOT approved (`--no-own`):
  * nothing is run, but the committed declaration is still read, so the index
- * learns that gates exist and counts each UNKNOWN (never a silent pass).
+ * learns that gates and targets exist and counts each UNKNOWN (never a silent
+ * pass, never a score). `gates` lists every reading the index counts — one
+ * with a gate, a target or both.
  * `notRun` marks the row so approval re-measures it (`update`). Undefined where
  * the commit declares nothing.
  */
@@ -287,10 +355,17 @@ export function notRunOwn(root, sha, git) {
   if (decl.none) return undefined;
   if (decl.refused) return { file: OWN_FILE, refused: decl.refused };
   const notRun = "not run — this desktop has not approved the repo's committed commands";
-  const gates = decl.readings.filter((d) => d.gate).map((d) => ({
-    key: d.key, name: d.name, unit: d.unit, gate: d.gate, value: null, reason: notRun,
+  const gates = decl.readings.filter((d) => d.gate || d.target !== undefined).map((d) => ({
+    key: d.key, name: d.name, unit: d.unit, better: d.better,
+    ...(d.gate ? { gate: d.gate } : {}),
+    ...(d.target !== undefined ? { target: d.target } : {}),
+    value: null, reason: notRun,
   }));
-  return { file: OWN_FILE, notRun, gates, ...(decl.unreadGates ? { unreadGates: decl.unreadGates } : {}) };
+  return {
+    file: OWN_FILE, notRun, gates,
+    ...(decl.unreadGates ? { unreadGates: decl.unreadGates } : {}),
+    ...(decl.unreadTargets ? { unreadTargets: decl.unreadTargets } : {}),
+  };
 }
 
 /** Whether the commit at `sha` declares own readings — for `plot`, which runs nothing. */

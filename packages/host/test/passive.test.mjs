@@ -42,6 +42,8 @@ test("passiveAllows: default deny — every other route is refused", () => {
     // Skills and plugins switch (R-skills-014): default deny, the writes and the spend included.
     ["GET", "/api/host/skills"], ["POST", "/api/host/skills/write"], ["GET", "/api/repos/r1/skills"],
     ["POST", "/api/repos/r1/skills/write"], ["POST", "/api/repos/r1/skills/recommend"],
+    // Slow jobs (`routes/apijobs.ts`): the same reads and the same spend, so the same default deny.
+    ["GET", "/api/jobs"], ["GET", "/api/jobs/abc"], ["POST", "/api/repos/r1/jobs/skills.recommend"], ["GET", "/api/repos/r1/jobs/setup.check"],
   ]) assert.equal(passiveAllows(m, p, q(), () => true), false, `${m} ${p}`);
 });
 

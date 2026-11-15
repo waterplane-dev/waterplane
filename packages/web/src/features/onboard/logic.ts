@@ -13,6 +13,7 @@ import type {
   OnboardAnswers, OnboardConsent, OnboardConsentId, OnboardConsentLine, OnboardJob, OnboardPath, OnboardPlan,
   OnboardStep, OnboardStepId, OnboardStepStatus,
 } from "@waterplane/shared";
+import { randUnit } from "../../randId.ts";
 
 // ── The first-run card ───────────────────────────────────────────────
 
@@ -75,8 +76,8 @@ export const NAME_WORDS: readonly string[] = [
   "willow", "quartz", "breeze", "cedar", "puffin", "sparrow", "river", "aurora", "clover", "nova",
 ];
 
-/** `hello-<word>`; `rand` is `Math.random` in the sheet and a fixed number in a test. */
-export function suggestName(rand: () => number = Math.random): string {
+/** `hello-<word>`; `rand` is `randUnit` in the sheet and a fixed number in a test. */
+export function suggestName(rand: () => number = randUnit): string {
   const i = Math.min(NAME_WORDS.length - 1, Math.max(0, Math.floor(rand() * NAME_WORDS.length)));
   return `hello-${NAME_WORDS[i]}`;
 }

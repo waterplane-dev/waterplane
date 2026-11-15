@@ -18,7 +18,7 @@ import {
 import { ledgers, type LedgerViewParts } from "@waterplane/sdk";
 import {
   type DayPoint, Empty, fillMix, fillSeries, HOUR_MS, hourPoints, modelBands, type ResourceState,
-  rollingMean, SheetHead, useBoxWidth, useRemoteResource,
+  rollingMean, SheetHead, useBoxWidth, useOfflineGate, useRemoteResource,
   Button,
 } from "@waterplane/kit";
 import { FETCH_HOURS, type SourceId, TREND_DAYS } from "./constants.ts";
@@ -31,6 +31,7 @@ import { PeriodCard } from "./PeriodCard.tsx";
 import { convoInWeek, docFor, foldStateText, prevSpan, scopeSpan, weekSpan } from "./weekBands.ts";
 import { type WindowScope } from "./WindowHeats.tsx";
 import { LimitWindows } from "./LimitWindows.tsx";
+import { useRescan } from "./useRescan.ts";
 import { BackendLedgerView } from "./BackendLedgerView.tsx";
 import { DayChart } from "./charts/DayChart.tsx";
 import { claudeOnlyText, type GuestLedger, shownGuests } from "./guests.ts";
@@ -189,6 +190,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   const localTab = sharerTabs.length ? sharerTabs.join(" or ") : null;
 
   const [table, setTable] = useState(false);
+  const gate = useOfflineGate();
   /**
    * Which ledger is on screen.
    *
@@ -246,7 +248,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   /** The local runner's ledger (`/api/localusage`): its tab and card exist only
    *  where the host has it AND it has seen the runner — an older host (404) or a
    *  desktop with no local models gets neither, never an empty or dimmed one. */
-  const runnerRes = useRemoteResource<LocalUsageDoc>(`localusage:${fresh}`, () => ledgers.localUsage(), { offline: !online });
+  const runnerRes = useRemoteResource<LocalUsageDoc>("localusage:runner", () => ledgers.localUsage(), { offline: !online, cache: { shape: 1 } });
+  useRescan(fresh, runnerRes.reload);
   const showRunner = showRunnerTab(runnerRes.data);
   const runner = extraId === RUNNER_TAB && showRunner;
   const showPicker = showSource || ledgerTabs.length > 0 || showRunner || chips.length > 0;
@@ -354,26 +357,29 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    */
   const specs = useMemo(() => windowSpecs(usage ?? null), [usage]);
   const hist = useRemoteResource<TokenWindowsDoc>(
-    `tokenwindows:${specs.map((sp) => `${sp.id}@${sp.anchor}`).join(",")}:${doc?.scannedAt ?? 0}`,
+    `tokenwindows:${specs.map((sp) => `${sp.id}@${sp.anchor}`).join(",")}`,
     () => ledgers.tokenWindows(specs),
-    { enabled: specs.length > 0, offline: !online },
+    { enabled: specs.length > 0, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(doc?.scannedAt ?? 0, hist.reload); // a new scan re-reads; it no longer moves the cache key
   // The kept `/usage` readings: one read for the limit charts AND the week card's calibration
   // (two reads of one log are two instants drawn as one). Re-read when a new scrape lands.
   const usageRead = useRemoteResource<UsageHistoryDoc>(
-    `usagelog:${usage?.checkedAt ?? 0}`,
+    "usagelog:history",
     () => ledgers.usageLog(FETCH_HOURS),
-    { enabled: !usageHistory, offline: !online },
+    { enabled: !usageHistory, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(usage?.checkedAt ?? 0, usageRead.reload); // a new scrape re-reads; the key stays one row
   const history = usageHistory ?? usageRead.data;
   // The week since its reset, folded by the host (`/api/costwindow`) — the week card, the
   // calibration and, under the live week, the Totals box's repo split all read this one document.
   const wk = weekSpan(usage, Date.now());
   const weekRead = useRemoteResource<CostWindowDoc>(
-    `weekcost:${wk?.key ?? "none"}:${fresh}`,
+    `weekcost:${wk?.key ?? "none"}`,
     () => ledgers.costWindow(wk!.from, Date.now(), fresh > 0),
-    { enabled: !!wk, offline: !online },
+    { enabled: !!wk, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, weekRead.reload);
   const weekDoc = docFor(weekRead.data, wk?.from ?? null);
   // An account with no weekly window (API key, Bedrock, Vertex) has no week to explain and no limit
   // bars to draw; its screen leads with the dollar period instead. Any host with a dollar period
@@ -391,10 +397,11 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   const periodSpan = periodState ? periodReadSpan(periodState, periodNow) : null;
   const periodFrom = periodSpan && "from" in periodSpan ? windowStartHour(periodSpan.from) : null;
   const periodRead = useRemoteResource<CostWindowDoc>(
-    `periodcost:${periodState?.period.id ?? "none"}:${periodFrom ?? "none"}:${fresh}`,
+    `periodcost:${periodState?.period.id ?? "none"}:${periodFrom ?? "none"}`,
     () => ledgers.costWindow(periodFrom!, Date.now(), fresh > 0),
-    { enabled: periodFrom != null, offline: !online },
+    { enabled: periodFrom != null, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, periodRead.reload);
   const periodDoc = docFor(periodRead.data, periodFrom);
   /** One grid per window kind, by id — absent for a host too old to know the
    *  route, which leaves the screen exactly as it was before this existed. */
@@ -558,10 +565,11 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   const ss = liveSS ?? calSS;
   const ssOwn = ss && ss !== "week" ? ss : null;
   const scopeRead = useRemoteResource<CostWindowDoc>(
-    `costwindow:${ssOwn?.key ?? "none"}:${fresh}`,
+    `costwindow:${ssOwn?.key ?? "none"}`,
     () => ledgers.costWindow(ssOwn!.from, Math.min(ssOwn!.toHour, Date.now()), fresh > 0),
-    { enabled: !!ssOwn, offline: !online },
+    { enabled: !!ssOwn, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, scopeRead.reload);
   const scopeDoc = ss === "week" ? weekDoc : docFor(scopeRead.data, ssOwn?.from ?? null);
   const scopeRes = ss === "week" ? weekRead : scopeRead;
   const scopeRepos = useMemo(() => (scopeDoc ? rankRepos(scopeDoc.convos, scopeDoc.rest).map(repoRowAsGroup) : null), [scopeDoc]);
@@ -648,10 +656,11 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   const recordFrom = doc?.days.length ? dayToMs(doc.days[0].day) : null;
   const prev = ss ? prevSpan(ss, wk, calDays, recordFrom) : null;
   const prevRead = useRemoteResource<CostWindowDoc>(
-    `costwindow-prev:${prev?.key ?? "none"}:${fresh}`,
+    `costwindow-prev:${prev?.key ?? "none"}`,
     () => ledgers.costWindow(prev!.from, prev!.to, fresh > 0),
-    { enabled: !!prev && insightsCut, offline: !online },
+    { enabled: !!prev && insightsCut, offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, prevRead.reload);
   const prevDoc = docFor(prevRead.data, prev?.from ?? null);
   const spanItems = useMemo(() => {
     if (!scopeDoc) return null;
@@ -721,7 +730,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
             KEY rather than calling `reload`, and a key change never passes
             through `loading` — so that flag is false from the first paint
             onward and a glyph keyed on it would never once have appeared. */}
-        <Button onClick={() => { if (res.inflight) return; onRescan(); }}
+        <Button onClick={() => { if (res.inflight) return; gate.guard("re-scan the conversation logs", onRescan)(); }}
           title={guest
             ? guest.def.rescanTitle
             : "re-scan the conversation logs — a point-in-time answer, not a live feed"}>
@@ -734,6 +743,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
           a switch nobody connects to the number it changed. The "now" block above it scrolls
           away — both percentages carry their own reset instant in text. */}
       <div className="sheet-scroll">
+        {gate.note}
         {doors}
         {/* The source picker: one chip per ledger, only when there is a second to pick. NOT a
             filter — no count rides on it: these chips swap the whole document rather than

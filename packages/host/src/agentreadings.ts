@@ -38,7 +38,7 @@ import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 import { walkLogs } from "./tokenscan.js";
 
 /** Bump when a summary's shape or a classification rule changes: the store then rebuilds from the logs. */
-const VERSION = 3;
+const VERSION = 6; // 6: a session that switched model carries no `md`
 const MAX_FILE = 256 * 1024 * 1024;
 const FLUSH_MS = 5_000;
 const YIELD_EVERY = 32;
@@ -221,6 +221,7 @@ function pointOf(id: string, repo: string, t0: number, sr: ConvSummary["sr"], f:
     ...(sr?.st !== undefined ? { start: sr.st } : {}),
     ...(sr?.pt ? { parts: sr.pt } : {}),
     ...(sr?.lk !== undefined ? { look: sr.lk } : {}),
+    ...(sr?.sk !== undefined ? { skills: sr.sk } : {}),
     req: sr?.rq ?? 0,
     ...(f.commit !== undefined ? { commit: f.commit } : {}),
   };

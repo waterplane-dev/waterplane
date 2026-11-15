@@ -6,11 +6,11 @@
  * `weekBurnItemPrompt` over the draft, so what is shown is what is sent.
  */
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CheckSquare, ChevronDown, ChevronRight, ListTodo, Square } from "lucide-react";
+import { CalendarClock, CheckSquare, ChevronDown, ChevronRight, ListTodo, Loader2, Square } from "lucide-react";
 import { weekBurnItemPrompt, weekBurnRowsLabel, WEEKBURN_DEFAULT_TASK, type WeekBurnStatus } from "@waterplane/shared";
 import { useCore } from "../../sdk";
 import { api } from "../../api";
-import { Sheet, Empty, Unavailable, Button, Hint, Row, RowTitle, RowSub, Explain, RadioRows, PromptComposer } from "../../kit";
+import { Sheet, Empty, Unavailable, useOfflineGate, Button, Hint, Row, RowTitle, RowSub, Explain, RadioRows, PromptComposer } from "../../kit";
 import { SHEET } from "../../sheetNames";
 import { useRemoteResource } from "../../useRemoteResource";
 import { saveWeekBurn } from "./actions";
@@ -27,7 +27,7 @@ const draftOf = (s: WeekBurnStatus): Draft => ({
 
 export function WeekBurnSheet() {
   const c = useCore();
-  const res = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
+  const res = useRemoteResource<WeekBurnStatus>("weekburn:status", () => api.getWeekBurn(), { cache: { shape: 1 } });
   const st = res.data;
   const repos = c.world.visibleRepos;
   const known = repos.map((r) => r.worktreePath);
@@ -37,11 +37,24 @@ export function WeekBurnSheet() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [shown, setShown] = useState<string | null>(null); // the repo whose full prompt is open
   const seeded = useRef(false);
+  // What the draft was seeded from when that was only the CACHED copy: if the person has not touched
+  // it by the time the live answer lands, it is re-seeded (a stale pick must not stand as this week's).
+  const seededFromCache = useRef<string | null>(null);
+  const gate = useOfflineGate();
   useEffect(() => {
-    if (!st || seeded.current) return;
-    seeded.current = true;
-    setDraft(draftOf(st));
-  }, [st]);
+    if (!st) return;
+    if (!seeded.current) {
+      seeded.current = true;
+      if (res.state === "cached") seededFromCache.current = JSON.stringify(draftOf(st));
+      setDraft(draftOf(st));
+      return;
+    }
+    if (res.state === "fresh" && seededFromCache.current !== null) {
+      const was = seededFromCache.current;
+      seededFromCache.current = null;
+      setDraft((cur) => (cur && JSON.stringify(cur) === was ? draftOf(st) : cur));
+    }
+  }, [st, res.state]);
   const d = draft;
 
   const apply = (next: WeekBurnStatus | null) => {
@@ -52,6 +65,7 @@ export function WeekBurnSheet() {
 
   const body = () => {
     if (!st || !d) return <Empty res={res} empty={!st} thing="the week-end burn" />;
+    const stale = <><Empty res={res} empty={false} thing="the week-end burn" noun="plan" />{res.inflight && <Loader2 size={13} className="spin" aria-label="refreshing" />}{gate.note}</>;
     if (!st.available) {
       return <Unavailable cants={[{ label: "the week-end burn", reason: st.unavailableText ?? "Not available on this desktop." }]} />;
     }
@@ -64,6 +78,7 @@ export function WeekBurnSheet() {
     const steps = howItWorks({ start: st.plan ? startLine(st.plan.startAt, Date.now()) : null, maxPerRepo: st.maxPerRepo ?? null, stopPct: d.stopPct });
     return (
       <>
+        {stale}
         {st.plan && (
           <div>
             <RowTitle as="div"><CalendarClock size={16} /> {startLine(st.plan.startAt, Date.now())}</RowTitle>
@@ -112,15 +127,15 @@ export function WeekBurnSheet() {
         {verb.kind === "none"
           ? <Hint>{verb.why}</Hint>
           : (
-            <Button variant={verb.kind === "save" ? "primary" : undefined} onClick={async () => apply(await saveWeekBurn(
-              { repos: d.repos, recurring: d.recurring, stopPct: d.stopPct, task, notes: d.notes }, d.repos.length))}>
+            <Button variant={verb.kind === "save" ? "primary" : undefined} onClick={gate.guard("save the week-end burn", async () => apply(await saveWeekBurn(
+              { repos: d.repos, recurring: d.recurring, stopPct: d.stopPct, task, notes: d.notes }, d.repos.length)))}>
               {verb.label}
             </Button>
           )}
 
         {sameAsLastOffered(st, known) && (
           <div>
-            <Button onClick={async () => apply(await saveWeekBurn({ sameAsLast: true, task, notes: d.notes }, last.length))}>Same as last week</Button>
+            <Button onClick={gate.guard("reuse last week's pick", async () => apply(await saveWeekBurn({ sameAsLast: true, task, notes: d.notes }, last.length)))}>Same as last week</Button>
             <RowSub as="div">{last.map(baseName).join(", ")}</RowSub>
           </div>
         )}

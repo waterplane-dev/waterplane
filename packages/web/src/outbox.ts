@@ -37,6 +37,7 @@ import {
 import { LS, lsGet } from "./storage";
 import { readGuarded, writeChecked, type Reading } from "./storedGuard";
 import { announceSetting, onAdopt } from "./settings";
+import { randId } from "./randId";
 
 const DRAFTS_KEY = LS.composeDrafts;
 const OUTBOX_KEY = LS.composeOutbox;
@@ -114,6 +115,12 @@ export interface OutboxEntry {
    * fast a bad radio manages to spend eight receipt windows.
    */
   firstTryAt?: number;
+  /**
+   * When the background relay first wrote this row (its `firstSentAt`, handed back by a claim —
+   * `core/queue/relayOwner.ts`). Set ⇒ the words may already be running on the desktop under
+   * this ackId, so the row is never re-aimed (a re-aim mints a new id: a second run).
+   */
+  relayedAt?: number;
   /**
    * How many times the whole attempts ladder has been spent without the host
    * ever answering. Each round parks the entry on `roundDelay(round)` and tries
@@ -684,13 +691,7 @@ export function isSerializable(e: OutboxEntry): boolean {
 /** Random id that works in a NON-secure context (plain http over Tailscale) —
  *  crypto.randomUUID is unavailable there, but getRandomValues is not. */
 export function newAckId(): string {
-  try {
-    const a = new Uint8Array(8);
-    crypto.getRandomValues(a);
-    return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
-  } catch {
-    return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
-  }
+  return randId(16);
 }
 
 /** The repo-relative dir every phone upload lands in (mirrors host files.ts). */

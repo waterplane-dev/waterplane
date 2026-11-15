@@ -26,14 +26,20 @@ import { LS, lsGet, lsSet } from "../../storage.ts";
 export type BgFresh = "live" | "off" | number;
 
 /** The slider's stops, freshest first. Hidden-page timers are throttled to
- *  once a minute by the WebView, so a minute is the shortest real interval. */
-export const BG_FRESH_STEPS: readonly BgFresh[] = ["live", 60_000, 300_000, 900_000, "off"];
-export const BG_FRESH_DEFAULT: BgFresh = 300_000;
+ *  once a minute by the WebView, so a minute is the shortest real interval.
+ *  Chromium freezes the Android WebView document 300 s after the app is hidden
+ *  (ShellLinkService), so a catch-up scheduled at 5 min or later never runs:
+ *  those stops were removed rather than left to promise what cannot happen. */
+export const BG_FRESH_STEPS: readonly BgFresh[] = ["live", 60_000, "off"];
+export const BG_FRESH_DEFAULT: BgFresh = 60_000;
 
+/** A stored value that is no longer a stop (the old 5 and 15 min) maps to the
+ *  nearest kept step, which is every 1 min; garbage reads as the default. */
 export function parseBgFresh(raw: string | null | undefined): BgFresh {
   if (raw === "live" || raw === "off") return raw;
   const n = Number(raw);
-  return raw && Number.isFinite(n) && BG_FRESH_STEPS.includes(n) ? n : BG_FRESH_DEFAULT;
+  if (!raw || !Number.isFinite(n) || n <= 0) return BG_FRESH_DEFAULT;
+  return 60_000;
 }
 
 export function bgFreshLabel(v: BgFresh): string {
@@ -46,7 +52,7 @@ export function bgFreshLabel(v: BgFresh): string {
 export function bgFreshNote(v: BgFresh): string {
   if (v === "live") return "Hidden, the open session keeps streaming. Freshest offline screen, most battery.";
   if (v === "off") return "Hidden, the open session stops. Offline you read the screen as you left it.";
-  return `Hidden, the open session stops and catches up ${bgFreshLabel(v)}. Offline you read a screen at most that old.`;
+  return `Hidden, the open session stops and catches up ${bgFreshLabel(v)}. Catch-ups stop about five minutes after the app is hidden; after that the background link keeps alerts only, and offline you read the screen from the last catch-up.`;
 }
 
 /** True when a hidden app should let go of the terminal stream. */

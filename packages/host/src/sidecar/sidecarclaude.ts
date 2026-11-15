@@ -50,6 +50,12 @@ export interface HeadlessRequest {
   /** With `onOut`, how much stdout the returned `stdout` keeps — the END of it,
    *  which is where a `-p` envelope and a usage-limit notice are. */
   readonly keepBytes?: number;
+  /**
+   * With `onOut`: aborting kills the process GROUP and answers at once, `failed`, with the
+   * signal's reason as the error — the probe's per-question token cap (`sidecarprobe.ts`) is a
+   * watcher that has seen enough. A run without `onOut` ignores it.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /** How much of a streamed run's stdout is kept when the caller did not say. */
@@ -168,8 +174,19 @@ function streamClaude(req: HeadlessRequest, onOut: (chunk: string) => void): Pro
       settled = true;
       untrack();
       clearTimeout(timer);
+      req.signal?.removeEventListener("abort", onAbort);
       resolve({ stdout: out, stderr: err, failed, err: error });
     };
+    // An abort is a timeout the caller called: same kill, same immediate answer.
+    const onAbort = (): void => {
+      timedOut = true;
+      killGroup("SIGTERM");
+      setTimeout(() => killGroup("SIGKILL"), 2000).unref?.();
+      const why = req.signal?.reason;
+      done(true, why instanceof Error ? why : new Error(String(why ?? "aborted")));
+    };
+    if (req.signal?.aborted) onAbort();
+    else req.signal?.addEventListener("abort", onAbort, { once: true });
     proc.stdout?.setEncoding("utf8");
     proc.stdout?.on("data", (d: string) => {
       // Past the answer, this chunk belongs to a run that has already been
@@ -290,13 +307,17 @@ export type ToolTaskRun = HeadlessRun & { readonly refused?: string };
  * because a person who misrouted a knob, or opened a repo nobody trusted, needs
  * to read that, not "the assessment wrote no file".
  */
-export async function runToolTask(task: SidecarTask, req: HeadlessRequest): Promise<ToolTaskRun> {
+export async function runToolTask(task: SidecarTask, req: HeadlessRequest, opts: { trustOf?: string } = {}): Promise<ToolTaskRun> {
   const plan = sidecarPlan(task);
   if (plan.engine === "refused") {
     sayOnce(plan.reason);
     return { stdout: "", stderr: "", failed: true, err: null, refused: plan.reason };
   }
-  const untrusted = trustRefusal(req.cwd, await workspaceTrust(req.cwd));
+  // `trustOf`: ONLY for a scratch checkout the caller made itself from that folder's own repo
+  // (the probe's detached worktree under the tmpdir, `probe.ts`) — its hooks are that repo's own
+  // committed files, so the repo's trust is the question. Every other caller asks about its cwd.
+  const trustDir = opts.trustOf ?? req.cwd;
+  const untrusted = trustRefusal(trustDir, await workspaceTrust(trustDir));
   if (untrusted) {
     sayOnce(untrusted);
     return { stdout: "", stderr: "", failed: true, err: null, refused: untrusted };

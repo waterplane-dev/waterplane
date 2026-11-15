@@ -89,6 +89,7 @@ import { measureHabits } from "./repohealth/metrics/habits.mjs";
 import { measureWorkspaceAt, workspaceElsewhere } from "./repohealth/metrics/workspace.mjs";
 import { measureNative, nativeElsewhere } from "./repohealth/metrics/native.mjs";
 import { OWN_FILE, declaresOwn, measureOwn, notRunOwn } from "./repohealth/own.mjs";
+import { clampBudget, clampCommits, runOwnBackfill } from "./repohealth/ownbackfill.mjs";
 import { measureReach } from "./repohealth/reach.mjs";
 import { declarationsByIndex, measureCentral } from "./repohealth/central.mjs";
 
@@ -790,6 +791,32 @@ async function plot({ fixture }) {
 }
 
 /**
+ * `own-backfill [--commits=N] [--budget-ms=M]` — the repo's OWN readings read
+ * back over older day rows, on a person's request (`ownbackfill.mjs` argues
+ * it). Whole tree only, and never under `--no-own`: it runs the repo's
+ * committed commands, which only an approval lets run. Exit 3 is a refusal
+ * with its sentence on stderr; stdout is one JSON line, `{ ownBackfill }`.
+ */
+function ownBackfill({ commits, budgetMs }) {
+  const refuse = (text) => { process.stderr.write(`repohealth: ${text}\n`); process.exitCode = 3; };
+  if (SCOPE) return refuse("own-backfill reads the whole tree only — a scope carries no own readings.");
+  if (NO_OWN) return refuse("own-backfill runs the repo's committed commands, and --no-own says they are not approved.");
+  const onDisk = load(SERIES);
+  if (!onDisk.length) return refuse("there is no series yet to read back into — refresh first.");
+  const commitsList = git.listCommits(ROOT);
+  const { rows } = staleRows(onDisk, commitsList);
+  const head = commitsList.at(-1);
+  if (!rows.length || !head) return refuse("every row in the series is for a commit that left first-parent.");
+  const res = runOwnBackfill({
+    root: ROOT, seriesPath: SERIES, dayRows: perDay(rows), headSha: head.sha, git, commits, budgetMs,
+    // Read by the daemon's progress parser: `… 3/20 commits`.
+    onProgress: (i, n) => process.stderr.write(`… ${i}/${n} commits\n`),
+  });
+  if (res.refused) return refuse(res.refused);
+  process.stdout.write(JSON.stringify({ ownBackfill: res }) + "\n");
+}
+
+/**
  * The one paid command. Everything above this line is git, regex and
  * arithmetic; see the header for why the import is inside the branch.
  *
@@ -817,12 +844,15 @@ try {
   else if (cmd === "narrate") await narrate();
   else if (cmd === "html") await html();
   else if (cmd === "plot") await plot({ fixture: flags.has("--fixture") });
-  else if (cmd === "judge") await judge(words[1], { yes: flags.has("--yes") });
+  else if (cmd === "own-backfill") {
+    const val = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+    ownBackfill({ commits: clampCommits(val("commits")), budgetMs: clampBudget(val("budget-ms")) });
+  } else if (cmd === "judge") await judge(words[1], { yes: flags.has("--yes") });
   else {
     process.stderr.write(
       `unknown command ${JSON.stringify(cmd)}\n` +
         "usage: repohealth.mjs [update [--fixture] [--recut] | status | narrate | html | plot [--fixture] | " +
-        "judge <event-id> [--yes]] [--root=<path>] [--scope=<subdir>]\n",
+        "own-backfill [--commits=N] [--budget-ms=M] | judge <event-id> [--yes]] [--root=<path>] [--scope=<subdir>]\n",
     );
     process.exit(2);
   }

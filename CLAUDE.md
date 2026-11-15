@@ -108,7 +108,7 @@ npm test             # lint, test:unit, test:host, then run-e2e.mjs — needs `n
   another session's — leave it. Releases: `npm run release:*` and `scripts/verify-rev.sh <rev>`
   (clean-worktree check) ⇒ `docs/notes/distribution.md`.
 - **New or changed screen, extensions too:** add its row to `scripts/ui/journey-back-lands.mjs`, run
-  `npm run test:ui back-lands` (~50 s) and the `screen-review` agent before committing. Not a gate.
+  `npm run test:ui back-lands` (50 s), `test:gutters` and the `screen-review` agent before a commit.
 - Tests: `npm run test:unit` (pure logic, no host) · `npm run test:host` (regex heuristics,
   no daemon) · `node scripts/run-e2e.mjs <filter>`. Details ⇒ skill `testing`.
 

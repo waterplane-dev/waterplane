@@ -293,6 +293,12 @@ export interface SessionSearchResult {
   repoLabel: string;
   cwd: string;
   running: boolean;
+  /**
+   * An ARCHIVED conversation, not a live session: `id` is then the conversation
+   * id (its log's file name), opened read-only in the archive reader, and the
+   * matches are its prompts alone. Absent = a live session.
+   */
+  archived?: true;
   matches: SessionSearchMatch[];
   /** Total hits found before per-session truncation (matches.length may be smaller). */
   total: number;

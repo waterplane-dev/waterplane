@@ -1,5 +1,5 @@
 // healthindex/commits: The same formula per ROW (thinned), for the phone's commits axis. Barrel: ../healthindex.ts (read the header there).
-import { type HealthEntry, type HealthSeriesRow } from "./types.js";
+import { type HealthScoredId, type HealthSeriesRow } from "./types.js";
 import { isoWeekOf, centralOf } from "./readings.js";
 import { healthRowScore } from "./score.js";
 
@@ -10,7 +10,7 @@ export interface HealthCommitPoint {
   week: string;
   index: number;
   mean: number;
-  cappedBy: HealthEntry | null;
+  cappedBy: HealthScoredId | null;
   /** Prereg, central or coverage (what was measured, which gates) differs from the previous scored row: do not join the line. */
   gap: boolean;
 }

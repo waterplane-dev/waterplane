@@ -21,8 +21,8 @@ export const PROTOCOL_VERSION = 2;
 /** The intent DTOs travel with the messages that carry them, so no import site
  *  has to know they live one file over. */
 export type { IntentDraft, IntentPatch } from "./intent.js";
-
 export type { PeerKind, AuthState } from "./messages/hostcore.js";
+export { RELAY_WAIT_MAX_MS, type RelayAckFrame, type RelayRequest, type RelayResponse } from "./messages/relay.js";
 
 // ── Client → Host ────────────────────────────────────────────────────
 //

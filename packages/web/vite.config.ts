@@ -63,6 +63,8 @@ function devHost(): string {
 const BRAND_STAMPS: [string, string][] = [
   ["__BRAND_NAME__", BRAND.displayName],
   ["__BRAND_SLUG__", BRAND.slug],
+  // The browser's IndexedDB name (`dbNameFor(null)`): the worker's background relay reads its store.
+  ["__BRAND_CACHE__", BRAND.cacheName],
   ["__BRAND_LEGACY_SLUGS__", LEGACY.map((l) => l.slug).join(",")],
   ["__BRAND_LS_PREFIXES__", JSON.stringify([BRAND.storagePrefix, ...LEGACY.map((l) => l.storagePrefix)])],
   ["__BRAND_LS_MARK__", JSON.stringify(BRAND_MIGRATED_KEY)],

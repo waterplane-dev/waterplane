@@ -20,6 +20,7 @@ export { Unavailable } from "../Unavailable";
 export { Explain } from "../Explain";
 export { ConfirmButton, askConfirm } from "../Confirm";
 export { useRemoteResource, type RemoteResource, type ResourceState } from "../useRemoteResource";
+export { useOfflineGate, offlineSentence, type OfflineGate } from "./offlineGate";
 export { ago, hhmm, until, when } from "../format";
 export { useNow } from "../useNow";
 /** A Settings row of the extension's own: declares its `id` (catalogued in its manifest's

@@ -84,9 +84,14 @@
  * it (`POST /api/agent/backlog` with `proposedBy`) — one push per NEW proposal, keyed
  * `proposal:<row id>`, attention, and resolved by the host once the row is fired, scheduled or
  * deleted (`isPendingProposal`). A tap opens that row. Default ON. Nothing starts by itself.
+ *
+ * `link.back` sits after it (2026-11-14): the desktop's own Tailscale link came back after at least
+ * two minutes down (`host/linkback.ts`) — one push per outage, so the phone's service worker can
+ * run what it queued meanwhile. Information level but ALWAYS pushed (that is its whole job); the
+ * push carries `hostLabel` and `offlineMs`. Default ON, switchable.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "signin", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure", "proposal",
+  "prompt", "approval", "limit", "signin", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure", "proposal", "link.back",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */

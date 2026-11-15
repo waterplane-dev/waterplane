@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { twinWheres, type RepoTarget } from "@waterplane/shared";
+import { basename, join } from "node:path";
+import { BRAND, twinWheres, type RepoTarget } from "@waterplane/shared";
 import { RUNNING_IN_WSL, wslMountPath } from "./branddirs.js";
 import { env } from "./env.js";
 import { execFileP as pexec } from "./proc.js";
@@ -134,6 +134,8 @@ export async function cachedTargets(root: string): Promise<RepoTarget[]> {
   return last ? last.map((t) => ({ ...t })) : discoverTargets(root);
 }
 
+const SCRATCH_WORKTREE_RE = new RegExp(`^${BRAND.slug}-(probe|own-backfill)-`);
+
 async function scanTargets(root: string): Promise<RepoTarget[]> {
   const maxDepth = Number(env("MAX_DEPTH") ?? DEFAULT_MAX_DEPTH);
   const roots = root.split(",").map((s) => s.trim()).filter(Boolean);
@@ -157,6 +159,8 @@ async function scanTargets(root: string): Promise<RepoTarget[]> {
         const wt = worktrees[i];
         if (seen.has(wt.path)) continue;
         seen.add(wt.path);
+        // The probe's and the own-readings backfill's scratch checkouts are linked worktrees for a while; they are not a place to work.
+        if (i > 0 && SCRATCH_WORKTREE_RE.test(basename(wt.path))) continue;
         const t: RepoTarget = {
           id: targetId(wt.path),
           repoName: name,

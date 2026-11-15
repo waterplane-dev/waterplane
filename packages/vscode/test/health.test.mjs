@@ -291,6 +291,15 @@ test("healthSlug is stable and filesystem-safe for spaces and unicode", () => {
   assert.notEqual(s, data.healthSlug(join(base, "other")));
 });
 
+test("the webview bundles no IndexedDB, link store or phone api layer (useRemoteResource's imports are swapped)", () => {
+  const w = readFileSync(join(DIST, "webview.js"), "utf8");
+  assert.ok(!w.includes("indexedDB"), "no IndexedDB: the last-copy cache is a no-op shim here");
+  assert.ok(!w.includes("// ../web/src/link.ts") && !w.includes("// ../web/src/offlineCache.ts") && !w.includes("// ../web/src/idb.ts") && !w.includes("// ../web/src/hosts.ts"),
+    "the phone's link store, cache, idb and hosts are not inputs");
+  // The offline gate reads the swapped link (always online): a webview never shows 'no connection'.
+  assert.ok(w.includes("// webview/shims/link.ts") && w.includes("// webview/shims/rescache.ts"));
+});
+
 test("only dist/healthworker.mjs can start a process, and the only program it names is git", () => {
   for (const f of ["extension.js", "scanworker.js", "webview.js"]) {
     assert.ok(!readFileSync(join(DIST, f), "utf8").includes("child_process"), `${f} has no child_process`);

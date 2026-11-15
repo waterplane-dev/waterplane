@@ -1,6 +1,7 @@
 // FIRST, before every other import: it computes ROOT and loads the .env files,
 // so a WATERPLANE_* knob a module reads at import sees them (env.ts says why).
 import { ROOT, ROOT_DEFAULTED, ROOT_PICKED, env } from "./env.js";
+import { planBinds } from "./bindguard.js";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -34,7 +35,7 @@ import { NotifyPrefsStore } from "./notifyprefs.js";
 import { AttentionStore } from "./attentionstore.js";
 import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git.js"; import { reportExplainOutcome, reportGitOutcome, startPushFailureWatch } from "./gitnotify.js"; import { setExplainSink } from "./explainjob.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
-import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
+import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js"; import { createLinkBack } from "./linkback.js";
 import { NetStats } from "./netstats.js";
 import { DecisionLog } from "./decisionlog.js";
 import { createPlugins } from "./server/plugins.js";
@@ -579,22 +580,18 @@ async function main(): Promise<void> {
   // the phone) plus loopback (for this machine's browser — a secure context, so
   // notifications/clipboard work) plus, under the opt-in, the LAN interfaces.
   const hostEnv = env("HOST");
-  let binds = hostEnv
-    ? [hostEnv]
-    : [...new Set([ip, "127.0.0.1", ...boundLan].filter(Boolean) as string[])];
+  const plan = planBinds({ hostEnv, ip, allowPublic, lanIps: boundLan });
+  let binds = plan.binds;
+  const refused = plan.refused;
   if (!ip) console.warn(`${logTag} No Tailscale IP found — binding 127.0.0.1 (local only).`);
 
-  const isSafeBind = (a: string) =>
-    allowPublic || a === "127.0.0.1" || a === "::1" || a === "localhost" || (!!ip && a === ip);
-  const refused = binds.filter((a) => !isSafeBind(a));
   if (refused.length) {
     console.warn(
       `${logTag} REFUSING to bind ${refused.join(", ")} — no app auth and the daemon runs code.\n` +
       `${logTag} Use Tailscale, or set ${envName("ALLOW_PUBLIC")}=1 to override (DANGEROUS: exposes code execution to that network).`,
     );
-    binds = binds.filter(isSafeBind);
   }
-  if (binds.length === 0) binds = ["127.0.0.1"]; setPeerSelfAddr(ip && binds.includes(ip) ? `${ip}:${PORT}` : null); // a peer dials the tailnet IP, only when bound
+  setPeerSelfAddr(ip && binds.includes(ip) ? `${ip}:${PORT}` : null); // a peer dials the tailnet IP, only when bound
   if (allowPublic) console.warn(`${logTag} ${envName("ALLOW_PUBLIC")}=1 — binding without the safe-address guard. Make sure the network is trusted.`);
   const lanTls = prepareLanTls({ root: ROOT, allowPublic, plainPort: PORT, boundLan, binds }); // null without the opt-in: only ever `boundLan` ∩ `binds`
 
@@ -633,6 +630,7 @@ async function main(): Promise<void> {
   updates.start(); if (!DOCTOR) ctx.pluginUpdates.start(); // a few minutes after boot, never in the preflight
   setupWatch.start(); if (!DOCTOR) void ctx.healthWatch.start(); // setup checklist swept; health index cached, engine re-run weekly
   if (!DOCTOR) createExposurePush(ROOT, notify, (k, n) => ctx.resolveAttention(k, n)).start(); // one push per new exposure alert on a watched repo; boot sweep after 30 s, then every 10 min
+  if (!DOCTOR) createLinkBack({ notify }).start(); // desktop Tailscale link back after >=2 min: one `link.back` push per outage (linkback.ts)
   if (!DOCTOR) startDiskWatch({ notify, recovered: () => { ctx.resolveAttention("disk", "disk space back"); } }); // low disk: one push per level (macOS ends Tailscale to free space)
 
   const attachWs = (server: ReturnType<typeof createServer> | LanTlsServer) => {

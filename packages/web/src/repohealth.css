@@ -50,8 +50,8 @@
 .rh-region .rh-card { scroll-margin-top: 56px; }
 
 /* ── The x-axis row and the one drag instruction under it ── */
-.rh-region .ts-filter.rh-axis { padding: 0 11px; gap: 0; }
-.rh-region .rh-axis > .ctx-stackpick-lab { padding: 0 3px; }
+.rh-region .ts-filter.rh-axis { padding: 0 calc(var(--gutter) - 3px); gap: 0; }
+.rh-region .rh-axis > .ctx-stackpick-lab { padding: 0 3px 0 0; }
 .rh-region .rh-scrubhint { padding-top: 0; padding-bottom: 8px; }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
@@ -60,7 +60,7 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 14px;
-  margin: 0 10px 10px;
+  margin: 0 var(--gutter) 10px;
   min-width: 0;
 }
 .rh-region .rh-h {
@@ -218,3 +218,11 @@
 .rh-region .hint-more.rh-notes { padding: 0 14px 10px; }
 .rh-region .rh-notes > .rh-doc { padding: 0 0 6px; }
 .rh-region .ar-bars svg { display: block; margin: 4px 0 2px; }
+.rh-region .ar-chart-title { margin-top: 10px; font-weight: 600; color: var(--fg); }
+/* The setup-cost headline's figure (R-metrics-070): the one large line in the region. */
+.rh-region .ar-headline { font-size: calc(16px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); }
+/* Compare setups (R-metrics-073): the preview is the exact text that leaves, so it wraps and scrolls, never clips. */
+.rh-region .ar-share-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.rh-region .ar-share-pre { white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; margin: 6px 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: calc(12px * var(--ui-font, 1)); }
+.rh-region .ar-share-paste { width: 100%; box-sizing: border-box; font-size: calc(12px * var(--ui-font, 1)); }
+.rh-region .ar-share-name { flex: 1 1 10em; min-width: 0; }

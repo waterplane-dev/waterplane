@@ -7,6 +7,11 @@
  * in value space; its top edge is the week's total. The y axis is zero-based
  * (these are magnitudes) and its top is `yScale`'s last tick, printed.
  *
+ * `share` draws each week as a 100% stack: every part over its own week's
+ * total, the axis fixed at 0–100, so the bars compare the SPLIT week to week
+ * and the readout line under the chart carries the size. A week whose total
+ * is zero stays an empty (present) column.
+ *
  * A week whose reading was not taken is `null` and draws NO bar — the painter
  * marks the slot as an outline, never a zero-height bar: "nobody measured this"
  * and "it was zero" must not look alike.
@@ -21,14 +26,14 @@ export interface WeekBarsGeom { cols: WeekCol[]; top: number; ticks: number[]; b
  * `values[i]` is week i's parts (each ≥ 0) or null. `plotW`/`plotH` the inner
  * box; `left`/`top` its offset in the svg.
  */
-export function weekBars(values: readonly (readonly number[] | null)[], plotW: number, plotH: number, left: number, topPad: number, want = 3): WeekBarsGeom {
+export function weekBars(values: readonly (readonly number[] | null)[], plotW: number, plotH: number, left: number, topPad: number, want = 3, share = false): WeekBarsGeom {
   const totals = values.map((v) => (v ? v.reduce((a, b) => a + Math.max(0, b), 0) : null));
   const peak = Math.max(0, ...totals.map((t) => t ?? 0));
   // Ratios (compactions per session) are not counts: yScale floors its step
   // at 1, so a small peak is scaled up and back down.
   const k = peak > 0 && peak < 5 ? 100 : 1;
-  const sc = yScale(peak * k, want);
-  const top = sc.top / k, ticks = sc.ticks.map((t) => t / k);
+  const sc = share ? { top: 100, ticks: [0, 50, 100] } : yScale(peak * k, want);
+  const top = share ? 100 : sc.top / k, ticks = share ? sc.ticks : sc.ticks.map((t) => t / k);
   const n = Math.max(1, values.length);
   const slotW = plotW / n;
   const w = Math.max(2, Math.min(28, slotW * 0.62));
@@ -37,8 +42,9 @@ export function weekBars(values: readonly (readonly number[] | null)[], plotW: n
     const cx = left + slotW * (i + 0.5);
     if (!v) return { x: cx - w / 2, w, cx, parts: null, total: null };
     let acc = 0;
+    const t = totals[i] ?? 0;
     const parts = v.map((p, slot) => {
-      const a = Math.max(0, p);
+      const a = share ? (t > 0 ? (Math.max(0, p) / t) * 100 : 0) : Math.max(0, p);
       const y0 = base - (acc / top) * plotH;
       acc += a;
       const y1 = base - (acc / top) * plotH;

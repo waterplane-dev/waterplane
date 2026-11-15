@@ -7,7 +7,7 @@ import {
   deviceId, enableBuilds, pluginClient, pullRules, setInstallAllow, shellInstall, useConnStatus, useCore, useInstallAllow,
   useInstallCaps, useInstallSources, usePullRecords, useStore,
 } from "@waterplane/sdk";
-import { ago, Button, Empty, Hint, hhmm, Row, RowSub, SetLine, SetNote, SheetHead, useRemoteResource } from "@waterplane/kit";
+import { ago, Button, Empty, Hint, hhmm, Row, RowSub, SetLine, SetNote, SheetHead, useOfflineGate, useRemoteResource } from "@waterplane/kit";
 import type { AndroidAppsMethods } from "../shared/wire.mts";
 import {
   appInstallVerb, appRows, installVerbText, appsSummary, appStateText, buildsOf, cleanupLabel, cleanupText, isPlayBuild, NO_INSTALL,
@@ -88,7 +88,10 @@ export function AppsSheet() {
     const r = await client.read("readiness", undefined);
     if (!r.ok) throw new Error(r.error);
     return r.result;
-  });
+  }, { cache: { shape: 1 } });
+  // Turning on a repo's downloads, and a re-read, go through the desktop: offline they are refused with
+  // a sentence (the phone-local switches below keep working).
+  const gate = useOfflineGate();
   const facts = res.data?.apps ?? null;
   const known = caps ?? NO_INSTALL;
   const rows = appRows(buildsOf(records), allow, known, log.doc.entries);
@@ -116,6 +119,10 @@ export function AppsSheet() {
     const pkg = card.pkg;
     const next = toggleAllow(allow, pkg);
     const on = next.includes(pkg);
+    if (on && switchAlsoEnablesPull(card) && card.facts && !gate.online) {
+      gate.guard("switch that on, since it also turns this repo's downloads on at the desktop", () => undefined)();
+      return;
+    }
     setInstallAllow(next);
     say.track("action:apps.allow");
     // One switch for the whole automatic path: on, it also turns the repo's
@@ -137,7 +144,7 @@ export function AppsSheet() {
       case "open-build": if (f) onOpenBuild(f.repoId); return;
       case "open-setup": if (f) onOpenSetup(f.repoId); return;
       case "enable-pull":
-        if (f) { onEnablePull(f.repoDir, `${f.repoName}: new builds now download to this phone by themselves`); setTimeout(() => res.reload({ quiet: true }), 1500); }
+        if (f) gate.guard("turn this repo's downloads on", () => { onEnablePull(f.repoDir, `${f.repoName}: new builds now download to this phone by themselves`); setTimeout(() => res.reload({ quiet: true }), 1500); })();
         return;
       case "allow-access":
         void shellInstall.openSettings().catch(() => say.toast("this phone has no screen for that switch"));
@@ -175,10 +182,13 @@ export function AppsSheet() {
           Your repos' Android apps (APKs) on this phone, each in three steps: the desktop <b>builds</b> it,
           this phone <b>downloads</b> it, then <b>installs</b> it. A card says which steps happen by themselves, and has the fix for the first one that does not.{" "}
           <Button title="read the repos again"
-            onClick={() => { res.reload({ quiet: true }); say.track("action:apps.reload"); say.toast("reading the repos again"); }}>
-            <RotateCw size={14} /> re-read
+            onClick={gate.guard("read the repos again", () => { res.reload({ quiet: true }); say.track("action:apps.reload"); say.toast("reading the repos again"); })}>
+            <RotateCw size={14} className={res.inflight ? "spin" : undefined} /> re-read
           </Button>
         </Hint>
+        {/* The repos' facts are the desktop's: say how old this copy is while it is cached, and that a read is out. */}
+        {facts !== null && <Empty res={res} empty={false} noun="repo list" />}
+        {gate.note}
 
         {/* What this phone will allow at all — said once, above every card, with its Settings button. */}
         {caps !== null && (!caps.supported || !caps.canInstall || play) && (

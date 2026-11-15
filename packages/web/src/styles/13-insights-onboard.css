@@ -97,7 +97,7 @@
 .ts-week-live { padding: 0 var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--accent); border: 1px solid var(--accent); }
 /* One row on a 360px phone: pinned chrome that wraps is a third of the
    screen spent on two switches. */
-.ts-global .ts-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: var(--sp-4) var(--sp-10) 0; gap: var(--sp-4); }
+.ts-global .ts-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: var(--sp-4) var(--gutter) 0; gap: var(--sp-4); }
 .ts-global .ts-filter::-webkit-scrollbar { display: none; }
 .ts-global .key { flex: 0 0 auto; padding: var(--sp-4) var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); min-height: 30px; }
 .ts-global .ctx-stackpick-lab { flex: 0 0 auto; }
@@ -316,7 +316,7 @@ button.ts-perreq-row { cursor: pointer; }
    `.set-group` on the budget sheet; inside `.send-exp` / the launch ask's form
    elsewhere, where the gutter is the container's. */
 .budget-field { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; }
-.form > .budget-field { padding: 0 var(--sp-12); }
+.form > .budget-field { padding: 0 var(--gutter); }
 .budget-spent {
   padding: var(--sp-8) var(--sp-10); border-radius: var(--r-8); border: 1px solid var(--line); background: var(--well);
   font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); font-variant-numeric: tabular-nums;
@@ -518,7 +518,7 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 /* The schedule sheet's week bar (`ScheduleWeekBar.tsx`). Positions are
    percentages of the bar, so it is exactly as wide as the phone at any font
    scale; pins are 18px and stay inside the bar by a half-pin inset. */
-.swb { margin: var(--sp-8) var(--sp-10) var(--sp-4); padding: var(--sp-10) var(--sp-12) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-12); background: var(--panel); }
+.swb { margin: var(--sp-8) var(--gutter) var(--sp-4); padding: var(--sp-10) var(--sp-12) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-12); background: var(--panel); }
 .swb-title { display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp-8); }
 .swb-lane { margin: 0 var(--sp-8) var(--sp-6); }
 .swb-lane-lab { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin: 0 -9px var(--sp-4); }

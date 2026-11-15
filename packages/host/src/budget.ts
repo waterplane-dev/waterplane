@@ -25,13 +25,13 @@
  * its own queue rows against the same verdict, and the host refuses anything
  * that gets past that anyway.
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   BUILTIN_PERIODS, DEFAULT_USAGE_BUDGET, budgetCeilings, budgetLimits, budgetVerdict, cleanBudget, leftoverCeiling, periodStates, withLimit,
-  type BudgetCeiling, type BudgetSpend, type BudgetSpendWhy, type BudgetVerdict, type KnownReset, type PeriodId, type PeriodState, type UsageBudget, type UsageInfo } from "@waterplane/shared";
+  type BudgetCeiling, type BudgetSpend, type BudgetSpendWhy, type BudgetVerdict, type KnownReset, type PeriodId, type PeriodState, type StoreLoss, type UsageBudget, type UsageInfo } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, recordWriteLoss, storeLossFor, writeJsonAtomic } from "./jsonstore.js";
 
 export class BudgetStore {
   private path: string;
@@ -57,6 +57,22 @@ export class BudgetStore {
 
   get(): UsageBudget {
     return { ...this.cfg };
+  }
+
+  /** The undismissed loss of `budget.json`, if any — rides `budget.state` so the
+   *  sheet can say a cap was lost rather than show none set. */
+  loss(): StoreLoss | undefined {
+    const l = storeLossFor(this.path);
+    // A cap is a setting, not a tally: once the person saves one after a
+    // corrupt or unreadable file was moved aside, budget.json holds their own
+    // choice again and the sheet must show it, not "not known" (a tap on the
+    // switch would otherwise change the cap with nothing saying so). The
+    // record stays on the storage card until dismissed. mtime, not a flag in
+    // memory, so the answer is the same after a restart.
+    if (l && l.kind !== "write-failed") {
+      try { if (statSync(this.path).mtimeMs > (l.lastAt ?? l.at)) return undefined; } catch { /* not written since the loss */ }
+    }
+    return l;
   }
 
   set(next: UsageBudget): UsageBudget {
@@ -148,6 +164,6 @@ export class BudgetStore {
   private save(): void {
     try {
       writeJsonAtomic(this.path, this.cfg, { space: 2 });
-    } catch { /* a lost preference is not worth taking the daemon down for */ }
+    } catch (e) { recordWriteLoss(this.path, e); /* a lost preference is not worth taking the daemon down for */ }
   }
 }

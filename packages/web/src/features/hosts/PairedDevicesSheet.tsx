@@ -34,7 +34,7 @@ async function readDevices(): Promise<DeviceRow[]> {
 
 export function PairedDevicesSheet() {
   const c = useCore();
-  const res = useRemoteResource<DeviceRow[]>("devices", readDevices);
+  const res = useRemoteResource<DeviceRow[]>("devices", readDevices, { cache: false });
   const [revoking, setRevoking] = useState<string | null>(null);
   const passwordSet = c.conn.info.auth.enabled;
   const rows = res.data ?? [];

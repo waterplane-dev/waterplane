@@ -37,7 +37,7 @@
      one separates the toggle from the action strip and is load-bearing. */
   display: flex; align-items: center; justify-content: space-between;
   column-gap: var(--sp-8); row-gap: 0; flex-wrap: wrap;
-  text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); padding: var(--sp-12) var(--sp-10) var(--sp-8) var(--sp-12);
+  text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); padding: var(--sp-12) var(--sp-10) var(--sp-8) calc(var(--gutter) - 3px);
   font-size: calc(var(--fs-15) * var(--ui-font, 1));
   color: var(--repo-accent, var(--fg));
   border-left: 3px solid var(--repo-accent, transparent);
@@ -241,7 +241,7 @@
    the chips wrap, which on a 390px phone they do. */
 .sess-status {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-6) var(--sp-8);
-  padding: var(--sp-6) var(--sp-10); background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: var(--sp-6) var(--gutter); background: var(--panel); border-bottom: 1px solid var(--line);
 }
 .sess-status:empty { display: none; }
 .sess-status .row-sub { display: inline-flex; align-items: center; gap: var(--sp-4); }

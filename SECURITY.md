@@ -226,8 +226,10 @@ redeemed code is a permanent full token) or a device token, revoke a device, pai
 PIN. Three places enforce it: `passiveNeverAllows` in `passive.ts` (checked in `server/http.ts` right
 after the allowlist), the `/api/auth/token` and `/api/auth/pin` handlers' own scope checks, and the
 WebSocket `auth.set`, `auth.clear` and `auth.gateTailscale` ops (`routes/system.ts`, by the socket's
-device row). A passive caller who knows the PASSWORD can still log in like any browser; the PIN model
-does not cover that.
+device row). Pairing never hands a passive device the LAN identity either (`redeemPair` in `pair.ts`,
+the sealed reply in `pairpake.ts`), and the phone keeps none from a passive pairing (`storeSealed`). A
+passive caller who knows the PASSWORD can still log in like any browser; the PIN model does not cover
+that.
 
 ### Browser origins
 
@@ -291,6 +293,13 @@ the app is opened.
 - A token the desktop revoked stays in the blob until the next rewrap.
 - A stray bare token that belongs to no saved desktop can stay plaintext (the row says so).
 - Passive (kids') tokens are not sealed.
+- The LAN identity (`lanIdentity`: the secret the phone checks a Wi-Fi answer against) stays in
+  plain storage. It is accepted by no desktop endpoint, so it signs nobody in; but with it, someone who
+  also imitates a saved Wi-Fi name can answer as the desktop on a row that has no TLS pin, and so
+  receive the sign-in the next time the app is open there. A pinned desktop is not affected. It is not
+  sealed because it adds nothing wherever a pin is in force, every paired phone holds the same value,
+  and the stored copy is what lets the Wi-Fi link work with Tailscale off. A passive pairing is never
+  given it.
 - On a build without PIN support the start prompt is fingerprint only, and on a plain-HTTP route it
   refuses the key, so its card stays until the route is the tailnet or HTTPS. The row refuses to lock
   in that state, and the host setup form refuses to save a plain address while that app has both locks

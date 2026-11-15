@@ -161,11 +161,13 @@
  * `repohealth.test.mjs` that the one paid subcommand appears in no argv this
  * module can build — including the argv `--root=` now rides in.
  */
-import { spawn } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { execFile, spawn } from "node:child_process";
+import { readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { basename, join, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { readScopes } from "./repohealthscopes.js";
 import {
+  BRAND,
   REPOHEALTH_HTML,
   REPOHEALTH_MD,
   REPOHEALTH_TOOL,
@@ -174,8 +176,9 @@ import {
   parseRepoHealthPlot,
   parseRepoHealthProgress,
   parseRepoHealthStatus,
+  parseOwnBackfill,
   parseUpdateSummary, secondsToMs, envName } from "@waterplane/shared";
-import type { RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthRun, RepoHealthSeries, RepoHealthView } from "@waterplane/shared";
+import type { RepoHealthMeasure, RepoHealthOutcome, RepoHealthOwnBackfillAnswer, RepoHealthPlot, RepoHealthRun, RepoHealthSeries, RepoHealthView } from "@waterplane/shared";
 import { ROOT, env } from "./env.js";
 import { HEALTH_JSON, bundledEngine, engineApproved, engineUnapprovable, needsApprovalText, ownApprovalText, ownCommandsDeclared, resolveRepoHealthEngine, type RepoHealthEngine } from "./repohealthapproval.js";
 export { resolveRepoHealthEngine, type RepoHealthEngine } from "./repohealthapproval.js";
@@ -201,14 +204,15 @@ export { resolveRepoHealthEngine, type RepoHealthEngine } from "./repohealthappr
 export const REPOHEALTH_TIMEOUT_MS = Math.max(1_000, Number(env("REPOHEALTH_TIMEOUT_MS")) || 180_000);
 
 /**
- * The only subcommands this daemon may ask for.
+ * The only subcommands this daemon may ask for. `own-backfill` is a person's
+ * tap only (`backfillOwnReadings`), never part of a refresh or the weekly sweep.
  *
  * A closed union rather than a string, so the paid branch of the CLI is not
  * merely un-called here but unrepresentable. `repohealth.test.mjs` checks the
  * same thing as text, because a type disappears at build time and the guard
  * must not.
  */
-export type RepoHealthStep = "status" | "plot" | "update" | "narrate" | "html";
+export type RepoHealthStep = "status" | "plot" | "update" | "narrate" | "html" | "own-backfill";
 
 /** The three steps a refresh runs, in order. `status` and `plot` are READS and
  *  neither is one of them: a write path's argv is these three and nothing
@@ -281,6 +285,8 @@ export const ownGated = (engine: RepoHealthEngine, wt: string, deps: RepoHealthD
  * died with the process and the tool's own idempotence covers the rest.
  */
 const inflight = new Map<string, Promise<RepoHealthView>>();
+/** Keys whose in-flight entry is an own-readings backfill, not an `update`. */
+const backfilling = new Set<string>();
 
 /** The run in flight per worktree, mutated live so a poll of the read route sees
  *  the progress line the tool is printing right now. Deleted when it ends —
@@ -797,7 +803,14 @@ export function refreshRepoHealth(
   // A tap while a run is in flight JOINS it, recut or not: two `update`s on
   // one file is the thing single-flight exists to prevent.
   const joined = inflight.get(key);
-  if (joined) return joined;
+  if (joined) {
+    // A backfill's closing view carries the PREVIOUS refresh's `last`, so a
+    // refresh that merely joined it would be reported as a success that never
+    // ran. Wait for it, then run the refresh itself.
+    if (!backfilling.has(key)) return joined;
+    const again = () => refreshRepoHealth(wt, deps, scope, opts);
+    return joined.then(again, again);
+  }
   const started = (async () => {
     try {
       return await runRefresh(wt, deps, scope, opts.recut === true);
@@ -876,4 +889,172 @@ async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null
     warnings,
   });
   return readRepoHealth(wt, deps, scope);
+}
+
+// ── Reading a repo's OWN readings back (R-metrics-065) ─────────────────────
+//
+// A person's tap, never the weekly sweep and never part of a refresh: the
+// engine checks older commits out into a scratch worktree and runs the repo's
+// committed commands there (`tools/repohealth/ownbackfill.mjs`). So it runs
+// only where those commands already run on `update` — the bundled engine with
+// them APPROVED (the inverse of `ownGated`), or the repo's own approved engine
+// — and it is refused in words otherwise, before anything spawns.
+//
+// It shares the refresh's single-flight slot: it rewrites the same series
+// file, so a backfill beside an `update` could lose the append. A tap while
+// either is in flight is REFUSED with a sentence (not joined — the caller asked
+// for a different thing); a refresh tapped during a backfill joins it.
+
+/** Commits read back when the phone names no number, and the most it may ask for (the engine clamps again). */
+export const OWN_BACKFILL_DEFAULT = 20;
+export const OWN_BACKFILL_MAX = 60;
+/** The engine's own wall clock: under the step cap, so it stops between commits before the kill. */
+export const ownBackfillBudgetMs = (): number => Math.max(1_000, REPOHEALTH_TIMEOUT_MS - 30_000);
+/** Matches `SCRATCH_PREFIX` in the engine — the only worktrees the sweep removes. */
+export const OWN_SCRATCH_PREFIX = `${BRAND.slug}-own-backfill-`;
+
+/** The commit count a body asked for, clamped — the one client value that reaches the argv, as an integer only. */
+export function ownBackfillCommits(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number.NaN;
+  if (!Number.isFinite(n) || n < 1) return OWN_BACKFILL_DEFAULT;
+  return Math.min(OWN_BACKFILL_MAX, Math.floor(n));
+}
+
+/** The whole argv of a backfill: `repoHealthArgv`'s, plus two integers this module made. */
+export function ownBackfillArgv(engine: RepoHealthEngine, wt: string, commits: number, budgetMs: number): string[] {
+  return [...repoHealthArgv(engine, wt, "own-backfill"), `--commits=${ownBackfillCommits(commits)}`, `--budget-ms=${Math.floor(budgetMs)}`];
+}
+
+/** Why a backfill may not run here, as the sentence the phone shows — or null: it may. */
+export function ownBackfillRefusal(wt: string, deps: RepoHealthDeps = {}): string | null {
+  const engine = engineOf(deps)(wt);
+  if (!engine) return noEngineText();
+  if (gated(engine, wt, deps)) return `${needsApprovalText(engineUnapprovable(wt))} — nothing is read back until then.`;
+  if (engine.kind === "bundled" && !ownCommandsDeclared(wt)) {
+    return `this repo's ${HEALTH_JSON} declares no commands of its own — there is nothing to read back.`;
+  }
+  if (engine.kind === "bundled" && ownGated(engine, wt, deps)) {
+    return `${ownApprovalText()} — approve them first; reading back runs those same commands at older commits.`;
+  }
+  return null;
+}
+
+const gitEnv = (): NodeJS.ProcessEnv => {
+  const e: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of Object.keys(e)) if (k.startsWith("GIT_")) delete e[k];
+  return e;
+};
+const gitAsync = (cwd: string, args: string[]): Promise<string> =>
+  new Promise((res, rej) => {
+    execFile("git", args, { cwd, env: gitEnv(), timeout: 20_000, maxBuffer: 1024 * 1024 }, (err, out) => (err ? rej(err) : res(String(out))));
+  });
+
+function ownerAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; }
+}
+
+/**
+ * Remove the scratch worktrees a KILLED backfill left (a kill skips the
+ * engine's `finally`): only paths git lists for this repo, under this
+ * machine's tmpdir, whose name carries the engine's prefix. Never throws;
+ * answers how many it removed.
+ */
+export async function sweepOwnScratch(wt: string): Promise<number> {
+  let listed = "";
+  try { listed = await gitAsync(wt, ["worktree", "list", "--porcelain"]); } catch { return 0; }
+  const bases = new Set([tmpdir()]);
+  try { bases.add(realpathSync(tmpdir())); } catch { /* the plain one */ }
+  let n = 0;
+  for (const line of listed.split("\n")) {
+    if (!line.startsWith("worktree ")) continue;
+    const p = line.slice("worktree ".length).trim();
+    if (!basename(p).startsWith(OWN_SCRATCH_PREFIX)) continue;
+    if (![...bases].some((b) => p.startsWith(b + sep))) continue;
+    // The name carries the run's pid: a live run for another checkout of this
+    // repo keeps its scratch (the listing is repo-wide, single-flight is not).
+    const owner = Number(/^\d+(?=-)/.exec(basename(p).slice(OWN_SCRATCH_PREFIX.length))?.[0]);
+    if (Number.isInteger(owner) && owner > 1 && ownerAlive(owner)) continue;
+    // The folder goes too: a worktree left locked-initializing may refuse the
+    // remove, and its directory would then sit in tmp for good.
+    try { await gitAsync(wt, ["worktree", "remove", "-f", "-f", p]); n++; } catch { /* the rm below */ }
+    try { rmSync(p, { recursive: true, force: true }); } catch { /* left for the next sweep */ }
+  }
+  return n;
+}
+
+export function backfillOwnReadings(
+  wt: string,
+  commits: number = OWN_BACKFILL_DEFAULT,
+  deps: RepoHealthDeps & { sweep?: (wt: string) => Promise<number> } = {},
+): Promise<RepoHealthOwnBackfillAnswer> {
+  const refusal = ownBackfillRefusal(wt, deps);
+  if (refusal) return Promise.resolve({ ok: false, refused: refusal });
+  const key = keyOf(wt, null);
+  if (inflight.has(key)) {
+    return Promise.resolve({ ok: false, refused: "a repo-health run is already in progress for this repo — read back after it finishes." });
+  }
+  backfilling.add(key);
+  const answer = (async () => {
+    try {
+      return await runOwnBackfill(wt, ownBackfillCommits(commits), deps);
+    } finally {
+      inflight.delete(key);
+      backfilling.delete(key);
+    }
+  })();
+  // A refresh tapped meanwhile joins this run and reads the view it ends on.
+  const joined = answer.then((a) => a.view ?? readRepoHealth(wt, deps), () => readRepoHealth(wt, deps));
+  joined.catch(() => { /* handled by whoever joined; nobody may have */ });
+  inflight.set(key, joined);
+  return answer;
+}
+
+async function runOwnBackfill(
+  wt: string,
+  commits: number,
+  deps: RepoHealthDeps & { sweep?: (wt: string) => Promise<number> },
+): Promise<RepoHealthOwnBackfillAnswer> {
+  const engine = engineOf(deps)(wt);
+  if (!engine) return { ok: false, refused: noEngineText() };
+  const key = keyOf(wt, null);
+  const now = deps.now ?? Date.now;
+  const run: RepoHealthRun = { state: "running", startedAt: now(), note: "reading back own readings" };
+  running.set(key, run);
+  let proc: RepoHealthProc;
+  try {
+    proc = await spawnOf(deps)(wt, "own-backfill", (chunk) => {
+      for (const line of chunk.split("\n")) {
+        const note = parseRepoHealthProgress(line);
+        if (note) run.note = `reading back own readings: ${note}`;
+      }
+    }, ownBackfillArgv(engine, wt, commits, ownBackfillBudgetMs()));
+  } finally {
+    running.delete(key);
+  }
+  const after = async (a: Omit<RepoHealthOwnBackfillAnswer, "view">): Promise<RepoHealthOwnBackfillAnswer> =>
+    ({ ...a, view: await readRepoHealth(wt, deps) });
+  if (proc.timedOut) {
+    await (deps.sweep ?? sweepOwnScratch)(wt);
+    return after({
+      ok: false,
+      error: `reading back ran past ${Math.round(REPOHEALTH_TIMEOUT_MS / 1000)}s and its process group was killed — the commits it had finished are kept, and its scratch worktree was removed.`,
+      summary: null,
+    });
+  }
+  if (proc.code === 3) return after({ ok: false, refused: firstWords(proc.stderr) });
+  if (proc.code === 2) {
+    return after({ ok: false, refused: `this repo's own ${REPOHEALTH_TOOL} has no own-backfill — it predates reading back; the bundled engine has it.` });
+  }
+  if (proc.code !== 0) {
+    // A crash may have skipped the engine's finally, as a kill does.
+    await (deps.sweep ?? sweepOwnScratch)(wt);
+    return after({ ok: false, error: classifyExit(proc.code, proc.stderr).error ?? "reading back failed", summary: null });
+  }
+  return after({ ok: true, summary: parseOwnBackfill(proc.stdout) });
+}
+
+/** The engine's refusal sentence, without its `repohealth: ` prefix, one paragraph. */
+function firstWords(stderr: string): string {
+  const t = String(stderr ?? "").split("\n").map((l) => l.trim()).filter((l) => l && !/^(?:…|\.\.\.)\s*\d+\s*\/\s*\d+\s+commits$/.test(l)).join(" ");
+  return t.replace(/^repohealth:\s*/, "") || "the engine declined without saying why";
 }

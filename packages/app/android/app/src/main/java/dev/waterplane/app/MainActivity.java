@@ -235,6 +235,12 @@ public class MainActivity extends BridgeActivity {
      * `shellNudge` must be no worse off than before — hence the guard
      * inside the expression rather than an assumption about what is loaded.
      */
+    /** Is there a page in this process? None (swiped away, a sticky restart) means nobody else
+     *  can send the queue: the background relay may own it ({@link ShellRelay#mayOwn}). */
+    static boolean hasLiveActivity() {
+        return live != null;
+    }
+
     static void nudgeWebView(String reason) {
         callWindow("shellNudge", JSONObject.quote(reason));
     }

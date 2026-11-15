@@ -44,12 +44,12 @@ export function shownSections({ index, drawn, plot, own }: {
   const longestReadings = drawn?.longest ? drawn.longest.points.reduce((n, p) => (p.v == null ? n : n + 1), 0) : 0;
   return {
     score: index,
+    own: own && !!plot && ownShow(plot).kind !== "none",
     longest: !!drawn && (longestReadings >= MIN_READINGS || !!drawn.classics.tape?.length),
     tiles: !!drawn?.series.length,
     weight: !!drawn,
     size: !!drawn,
     table: !!plot && (plot.classics.files.length > 0 || !!plot.series.find((s) => s.key === "size.p95")?.points.length),
-    own: own && !!plot && ownShow(plot).kind !== "none",
   };
 }
 

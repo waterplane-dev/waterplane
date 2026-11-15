@@ -11,9 +11,11 @@
  *  - A reading with too few sessions is absent with its sentence, never a zero (`seriesTooFewText`).
  */
 import {
-  addLocalDays, AGENT_POINTS_CAP, localDaysBetween, AGENT_SUB_POINTS_CAP, fmtCount, seriesBucketKey, seriesReadingOf,
-  type AgentMarker, type AgentMarkerKind, type AgentPoint, type CompareResult, type SeriesAbsent,
-  type SeriesBucket, type SeriesReading, type SeriesValue,
+  addLocalDays, AGENT_POINTS_CAP, localDaysBetween, AGENT_SUB_POINTS_CAP, fmtCount, fmtShare, seriesBucketKey, seriesReadingOf,
+  START_GROUPS, startGroupOf,
+  byModelCliText, COMPARE_MIN_DAYS, COMPARE_MIN_N, normalizeModel,
+  type AgentMarker, type AgentMarkerKind, type AgentPoint, type ByModelAbsent, type ByModelResult, type CompareResult, type SeriesAbsent,
+  type SeriesBucket, type SeriesLoadsValue, type SeriesReading, type SeriesValue,
 } from "@waterplane/shared";
 
 export type Grain = "day" | "week";
@@ -24,7 +26,7 @@ export interface ReadingDef {
   id: SeriesReading;
   label: string;
   /** The unit after a number: "tokens" are formatted `fmtCount`, calls and requests plain. */
-  unit: "tokens" | "calls" | "requests";
+  unit: "tokens" | "calls" | "requests" | "loads";
   /** The sessions it is over, in words, under the chart. */
   over: string;
 }
@@ -34,6 +36,7 @@ export const READINGS: readonly ReadingDef[] = [
   { id: "start", label: "Start context", unit: "tokens", over: "fresh interactive sessions, measured on the first request" },
   { id: "look", label: "Looks before first edit", unit: "calls", over: "fresh sessions that reached a file edit" },
   { id: "req", label: "Requests per committing session", unit: "requests", over: "fresh sessions that committed" },
+  { id: "skills", label: "Skill loads per session", unit: "loads", over: "fresh sessions whose log counts skill calls" },
   { id: "subStart", label: "Subagent start", unit: "tokens", over: "subagent logs, measured on their first request" },
 ];
 
@@ -41,6 +44,8 @@ export const readingDef = (id: SeriesReading): ReadingDef => READINGS.find((r) =
 
 export function fmtReading(def: ReadingDef, v: number): string {
   if (def.unit === "tokens") return `${fmtCount(v)} tokens`;
+  // A mean of loads is mostly under one: 0.04 is not "0".
+  if (def.unit === "loads" && v < 1) return `${v.toFixed(2)} ${def.unit}`;
   const s = v >= 10 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toString();
   return `${s} ${def.unit}`;
 }
@@ -162,16 +167,27 @@ export function runsOf(values: readonly (number | null)[]): { i: number; v: numb
 }
 
 /** A bucket's value on the axis: its median, or null when absent. */
-export const medianOrNull = (v: SeriesValue | undefined): number | null => (v && "median" in v ? v.median : null);
+/** What a bucket holds for one reading: a median, or for skill loads the mean and share (`SeriesLoads`). */
+export type PlotValue = SeriesValue | SeriesLoadsValue;
+/** The figure a bucket draws: its median, or the skill-loads mean; null when absent. */
+export const figureOrNull = (v: PlotValue | undefined): number | null =>
+  (v && "median" in v ? v.median : v && "mean" in v ? v.mean : null);
 /** The reason a bucket has no value, or null when it has one. */
-export const absentWhy = (v: SeriesValue | undefined): string | null => (v && "absent" in v ? v.absent : null);
+export const absentWhy = (v: PlotValue | undefined): string | null => (v && "absent" in v ? v.absent : null);
+
+/** The scrub line's figure for one bucket: "median …, n sessions", or for skill loads the mean, the share that loaded one and n. */
+export function bucketFigureWords(def: ReadingDef, v: PlotValue | undefined): string | null {
+  if (v && "mean" in v) return `mean ${fmtReading(def, v.mean)} per session, ${fmtShare(v.share)} loaded at least one, ${v.n} sessions`;
+  if (v && "median" in v) return `median ${fmtReading(def, v.median)}, ${v.n} sessions`;
+  return null;
+}
 
 /** The buckets laid on the axis, one value (or null) per slot. */
-export function valuesOnAxis(axis: Axis, buckets: readonly SeriesBucket[], pick: (b: SeriesBucket) => SeriesValue | undefined): (number | null)[] {
+export function valuesOnAxis(axis: Axis, buckets: readonly SeriesBucket[], pick: (b: SeriesBucket) => PlotValue | undefined): (number | null)[] {
   const out: (number | null)[] = axis.keys.map(() => null);
   for (const b of buckets) {
     const i = axis.index.get(b.key);
-    if (i !== undefined) out[i] = medianOrNull(pick(b));
+    if (i !== undefined) out[i] = figureOrNull(pick(b));
   }
   return out;
 }
@@ -180,7 +196,7 @@ export function valuesOnAxis(axis: Axis, buckets: readonly SeriesBucket[], pick:
 export const allAbsent = (v: readonly (number | null)[]): boolean => v.every((x) => x === null);
 
 /** Why a whole reading has nothing to draw: the first reason found, plus how many buckets share a kind of reason. */
-export function absentSummary(buckets: readonly SeriesBucket[], pick: (b: SeriesBucket) => SeriesValue | undefined): string | null {
+export function absentSummary(buckets: readonly SeriesBucket[], pick: (b: SeriesBucket) => PlotValue | undefined): string | null {
   if (buckets.length === 0) return "No sessions in this selection.";
   let first: string | null = null;
   for (const b of buckets) {
@@ -227,14 +243,24 @@ export function fmtKChars(v: number): string {
   return `${parseFloat((v / 1000).toFixed(2))}k`;
 }
 
-/** The text twin of the parts chart: every part's median characters in one bucket, each on its own. */
+/** The text twin of the parts chart: every part's median characters in one bucket, each on its own, grouped by whose it is (shared `START_GROUPS`). */
 export function partTwinWords(bucket: SeriesBucket | undefined, order: readonly { id: string; label: string }[]): string | null {
   if (!bucket) return null;
-  const xs = order.flatMap((o) => {
-    const v = bucket.parts[o.id];
-    return v && "median" in v ? [`${o.label} ${fmtKChars(v.median)}`] : [];
+  const groups = START_GROUPS.flatMap((g) => {
+    const xs = order.filter((o) => startGroupOf(o.id) === g.id).flatMap((o) => {
+      const v = bucket.parts[o.id];
+      return v && "median" in v ? [`${o.label} ${fmtKChars(v.median)}`] : [];
+    });
+    return xs.length ? [`${g.label}: ${xs.join(" · ")}`] : [];
   });
-  return xs.length ? `${bucket.key}${bucket.key.length ? ": " : ""}${xs.join(" · ")} characters (median per part)` : null;
+  return groups.length ? `${bucket.key}${bucket.key.length ? ": " : ""}${groups.join("; ")} characters (median per part)` : null;
+}
+
+/** The parts in display order for the stacked chart, each label led by its group, so the legend says whose a band is. */
+export function groupedPartOrder(order: readonly { id: string; label: string }[]): { id: string; label: string }[] {
+  const word = new Map(START_GROUPS.map((g) => [g.id, g.label]));
+  return START_GROUPS.flatMap((g) => order.filter((o) => startGroupOf(o.id) === g.id))
+    .map((o) => ({ id: o.id, label: `${word.get(startGroupOf(o.id))}: ${o.label}` }));
 }
 
 /** The slot under a pointer at `x`, clamped to the plot: a drag past either end stays on the end slot. -1 when there are no slots. */
@@ -270,7 +296,7 @@ export function stackTops(bands: readonly PartBand[], n: number): { lo: number; 
 
 // ── Markers: a shape and a word, one row per kind ───────────────────────────
 
-export type MarkerShape = "diamond" | "square" | "triangle" | "circle" | "plus" | "hexagon" | "flag";
+export type MarkerShape = "diamond" | "square" | "triangle" | "circle" | "plus" | "hexagon" | "flag" | "cross";
 
 export const MARKER_KINDS: readonly { kind: AgentMarkerKind; word: string; shape: MarkerShape }[] = [
   { kind: "instructions", word: "Instructions", shape: "triangle" },
@@ -280,6 +306,7 @@ export const MARKER_KINDS: readonly { kind: AgentMarkerKind; word: string; shape
   { kind: "tag", word: "Tag", shape: "flag" },
   { kind: "model", word: "Model", shape: "diamond" },
   { kind: "cli", word: "CLI version", shape: "square" },
+  { kind: "modelCli", word: "Model + CLI", shape: "cross" },
 ];
 
 export const markerKind = (k: AgentMarkerKind): { kind: AgentMarkerKind; word: string; shape: MarkerShape } =>
@@ -295,6 +322,7 @@ export function shapePath(shape: MarkerShape, cx: number, cy: number, r: number)
     case "circle": return `M${f(cx - r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0Z`;
     case "plus": { const a = r * 0.4; return `M${f(cx - a)} ${f(cy - r)}H${f(cx + a)}V${f(cy - a)}H${f(cx + r)}V${f(cy + a)}H${f(cx + a)}V${f(cy + r)}H${f(cx - a)}V${f(cy + a)}H${f(cx - r)}V${f(cy - a)}H${f(cx - a)}Z`; }
     case "hexagon": { const h = r * 0.87; return `M${f(cx - r)} ${f(cy)}L${f(cx - r / 2)} ${f(cy - h)}L${f(cx + r / 2)} ${f(cy - h)}L${f(cx + r)} ${f(cy)}L${f(cx + r / 2)} ${f(cy + h)}L${f(cx - r / 2)} ${f(cy + h)}Z`; }
+    case "cross": { const a = r * 0.3; return `M${f(cx - r)} ${f(cy - r + a)}L${f(cx - r + a)} ${f(cy - r)}L${f(cx)} ${f(cy - a)}L${f(cx + r - a)} ${f(cy - r)}L${f(cx + r)} ${f(cy - r + a)}L${f(cx + a)} ${f(cy)}L${f(cx + r)} ${f(cy + r - a)}L${f(cx + r - a)} ${f(cy + r)}L${f(cx)} ${f(cy + a)}L${f(cx - r + a)} ${f(cy + r)}L${f(cx - r)} ${f(cy + r - a)}L${f(cx - a)} ${f(cy)}Z`; }
     case "flag": return `M${f(cx - r)} ${f(cy - r)}H${f(cx + r)}L${f(cx + r * 0.3)} ${f(cy)}L${f(cx + r)} ${f(cy + r)}H${f(cx - r)}Z`;
   }
 }
@@ -379,7 +407,8 @@ export function compareWords(def: ReadingDef, r: CompareResult | SeriesAbsent, d
   if ("absent" in r) return r.absent;
   const verdict = r.inside ? "within normal variation" : "outside normal week-to-week variation";
   const model = r.model ? ` on ${r.model}` : "";
-  return `${def.label}${model}, ${days} days before: ${fmtReading(def, r.before)} (${r.nBefore} sessions on ${r.daysBefore} days). `
+  const stat = r.mean ? " (means: most sessions load no skill, so a median would be 0)" : "";
+  return `${def.label}${model}${stat}, ${days} days before: ${fmtReading(def, r.before)} (${r.nBefore} sessions on ${r.daysBefore} days). `
     + `${days} days after: ${fmtReading(def, r.after)} (${r.nAfter} sessions on ${r.daysAfter} days). `
     + `Ratio ${ratioText(r.ratio)}; shuffling whole days between the two sides gives ${ratioText(r.band[0])} to ${ratioText(r.band[1])}, so this is ${verdict}.`;
 }
@@ -395,4 +424,41 @@ export function ratioScale(ratio: number, band: readonly [number, number], width
   const x = (r: number): number => ((r - lo) / (hi - lo)) * width;
   const ticks = [lo, 1, hi].map((r) => ({ r: Math.round(r * 100) / 100, x: x(r) }));
   return { x, band: [x(band[0]), x(band[1])], ratio: x(ratio), one: x(1), ticks };
+}
+
+// ── By model (R-metrics-072): one model's days against another's, same band ────────────────
+
+/** A model id as the chips name it. */
+export const modelName = (id: string): string => normalizeModel(id) ?? id;
+
+/** One side's figure: the median (the mean and the share for skill loads), over how many sessions on how many days. */
+export function byModelSideWords(def: ReadingDef, r: ByModelResult, side: "a" | "b"): string {
+  const s = r[side];
+  const fig = r.mean && s.share !== undefined ? `${fmtReading(def, s.value)} mean, ${fmtShare(s.share)} loaded one` : fmtReading(def, s.value);
+  return `${modelName(s.model)}: ${fig} (${s.n.toLocaleString("en-US")} sessions on ${s.days} days)`;
+}
+
+/** The comparison as one sentence naming no side as better: the ratio, the band, and which it is. */
+export function byModelWords(r: ByModelResult | ByModelAbsent): string {
+  if ("absent" in r) return r.absent;
+  const verdict = r.inside ? "within normal day-to-day variation" : "outside normal day-to-day variation";
+  return `${modelName(r.b.model)} against ${modelName(r.a.model)}: ratio ${ratioText(r.ratio)}; shuffling whole days between the two models gives ${ratioText(r.band[0])} to ${ratioText(r.band[1])}, so this is ${verdict}.`;
+}
+
+/** The extra lines a comparison carries: model + CLI together, models left out, sessions with no model. */
+export function byModelNotes(r: ByModelResult): string[] {
+  const out: string[] = [];
+  if (r.cliTogether) out.push(byModelCliText(r));
+  if (r.others.length) out.push(`Also in these days, not compared: ${r.others.map((m) => `${modelName(m.model)} (${m.n} sessions)`).join(", ")}.`);
+  if (r.unnamed) out.push(`${r.unnamed.toLocaleString("en-US")} sessions do not record their model and are left out.`);
+  return out;
+}
+
+/** The `?` behind the by-model view: what it compares, how, and how to get a comparison at all. */
+export function byModelHelp(alternate: string): string {
+  return "Each reading over the chosen days, split by the model the session ran on: the two models with the most sessions, side by side. "
+    + "The band is the same as the before and after: whole days are shuffled between the two models, and the measured ratio is read against what that shuffle alone produces. "
+    + `Each model needs at least ${COMPARE_MIN_N} sessions on ${COMPARE_MIN_DAYS} days, or the comparison is left out with the reason. `
+    + `Main sessions usually run one model at a time, so most windows hold only one. ${alternate} `
+    + "It compares what happened on those days, not a cause: the work on one model's days can differ from the other's.";
 }

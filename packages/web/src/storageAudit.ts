@@ -134,6 +134,10 @@ const ROWS: readonly RowSpec[] = [
     cost: "One re-read, which is expensive for the DESKTOP to rebuild — the screen shows nothing until it answers.",
   },
   {
+    id: "rescache", store: "rescache", label: "last copies of screens", kind: "cache",
+    cost: "Sheets open on a spinner instead of the last list they read, and show nothing at all with the tunnel down, until the desktop answers.",
+  },
+  {
     id: "extassets", store: "extassets", label: "extension downloads", kind: "cache",
     cost: "An extension's engine fetched from the desktop — the text-in-marks reader is about 8 MB. Re-downloaded when it is switched on again.",
     // A sentence, not a button here: deleting under a switched-ON extension would leave it saying
@@ -286,7 +290,7 @@ export async function clearRow(row: StoreUse): Promise<{ ok: boolean; note?: str
       // second caller cannot route around the sentence.
       return { ok: false, note: row.cant };
     case "transcripts": case "tooldetail": case "gallery":
-    case "artifacttext": case "tree": case "ctxseries": case "tokenstats":
+    case "artifacttext": case "tree": case "ctxseries": case "tokenstats": case "rescache":
       return { ok: await forgetCacheStore(row.id) };
     case "pty": return { ok: await idbClear("pty") };
     case "linkseries": return { ok: await idbClear("linkseries") };

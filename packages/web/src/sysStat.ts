@@ -29,7 +29,7 @@
  *    counted once per process holding them) rather than leaving somebody to add
  *    it up and conclude their desktop is overcommitted.
  */
-import type { CpuBusy, DiskVolume, MemBreakdown, ProcRow, SysStat } from "@waterplane/shared";
+import type { CpuBusy, DiskVolume, MemBreakdown, ProcRow, SessionCpuRow, SysStat } from "@waterplane/shared";
 
 /** One segment of the memory bar. `tone` names a CSS class, never a colour. */
 export interface MemSlice {
@@ -130,49 +130,89 @@ export function cpuSplitText(cpu: CpuBusy | undefined): string | null {
   return `${Math.round(cpu.userPct + cpu.sysPct)}% busy over the last ${span} — ${cpu.userPct.toFixed(0)}% running programs, ${cpu.sysPct.toFixed(0)}% in the kernel, ${cpu.idlePct.toFixed(0)}% idle.${vm}`;
 }
 
-/** Busy at or above this, the CPU row names what is using it — inline, so the
- *  person who sees "100%" does not have to scroll to the process table. */
-export const CPU_HOT_PCT = 80;
-/** How many programs the hot CPU row names. */
+/** How many programs, and how many sessions, the CPU row names. */
 export const CPU_CULPRITS = 3;
+/** How long a program or session that dropped out of the top stays listed. A
+ *  list rebuilt from scratch every reading reorders and empties under the
+ *  reader's eye; held, a name that was busy a moment ago is still there to tap. */
+export const TOP_HOLD_MS = 30_000;
+
+/** One entry of a held top list. `seenAt` is the reading that last had it in
+ *  the top `n`; `inTop` is whether the CURRENT reading does; `current` whether
+ *  the current reading has a row for it at all (a held row past the cap, or a
+ *  session under 1%, has none — its `row` is then the last one seen). */
+export interface HeldRow<T> { key: string; row: T; seenAt: number; inTop: boolean; current: boolean }
 
 /**
- * The top programs by CPU, as one line under a hot CPU row — null below
- * `CPU_HOT_PCT`, without a process table, or with an empty one. Folded by
- * program like the table further down, and `top`'s per-core percentages, so a
- * row past 100% is several cores. The table may be older than the busy figure
+ * The top `n` of `rows` (already busiest first), plus whatever was in the top
+ * within `holdMs` and is not now — listed after, never interleaved, so the
+ * leaders do not shuffle. Idempotent for one `at`: the caller may run it on
+ * every render. `at` is the READING's clock (`procs.at`), not the phone's.
+ */
+export function holdTop<T>(prev: readonly HeldRow<T>[], rows: readonly T[], keyOf: (r: T) => string, at: number,
+  n = CPU_CULPRITS, holdMs = TOP_HOLD_MS): HeldRow<T>[] {
+  const top = rows.slice(0, n).map((row) => ({ key: keyOf(row), row, seenAt: at, inTop: true, current: true }));
+  const inTop = new Set(top.map((h) => h.key));
+  const now = new Map(rows.map((r) => [keyOf(r), r] as const));
+  const held = prev
+    .filter((h) => !inTop.has(h.key) && at - h.seenAt < holdMs)
+    .map((h) => {
+      const row = now.get(h.key);
+      return { key: h.key, row: row ?? h.row, seenAt: h.seenAt, inTop: false, current: row != null };
+    });
+  return [...top, ...held];
+}
+
+/** "8s ago" for a held entry, from the reading's own clock. */
+function leftAgo(h: HeldRow<unknown>, at: number): string {
+  return `left the top ${CPU_CULPRITS} ${Math.max(0, Math.round((at - h.seenAt) / 1000))}s ago`;
+}
+
+/**
+ * The top programs by CPU, as one line under the CPU row — always, not only
+ * when the machine is hot (a list that appears at 80% and vanishes at 79% read
+ * as broken). Folded by program like the table further down, and `top`'s
+ * per-core percentages, so a row past 100% is several cores. A held entry says
+ * it left the top and when. The table may be older than the busy figure
  * (slower cadence); `ageSec` says so rather than presenting it as the same instant.
  */
-export function cpuCulpritsText(sys: SysStat | undefined, ageSec: number | null = null, n = CPU_CULPRITS): string | null {
-  const cpu = sys?.cpu;
-  const rows = sys?.procs?.byCpu;
-  if (!cpu || !rows?.length) return null;
-  const busy = cpu.splitKnown === false ? cpu.userPct : cpu.userPct + cpu.sysPct;
-  if (busy < CPU_HOT_PCT) return null;
-  const top = rows.slice(0, n).map((p) => `${p.name} ${p.cpuPct.toFixed(0)}%${p.procs > 1 ? ` (${p.procs} processes)` : ""}`);
+export function cpuCulpritsText(held: readonly HeldRow<ProcRow>[], at: number, ageSec: number | null = null): string | null {
+  if (!held.length) return null;
+  const items = held.map((h) => {
+    const p = h.row;
+    if (h.inTop) return `${p.name} ${p.cpuPct.toFixed(0)}%${p.procs > 1 ? ` (${p.procs} processes)` : ""}`;
+    return h.current ? `${p.name} ${p.cpuPct.toFixed(0)}%, ${leftAgo(h, at)}` : `${p.name}, ${leftAgo(h, at)} (was ${p.cpuPct.toFixed(0)}%)`;
+  });
   const age = ageSec != null && ageSec > 0 ? ` (process list read ${ageSec}s earlier)` : "";
-  return `Using it most: ${top.join(" · ")}${age}.`;
+  return `Using it most: ${items.join(" · ")}${age}.`;
 }
 
 /**
- * The sessions behind a hot CPU — busiest first, at most `n`, each with the
- * tab label the phone already knows. Empty below `CPU_HOT_PCT` or with no
- * per-session reading. A session the phone has no label for (closed since the
- * reading) keeps its row, named as such, rather than vanishing from the sum.
+ * The sessions using the CPU — busiest first, at most `CPU_CULPRITS` plus the
+ * held ones, each with the tab label the phone already knows. A session the
+ * phone has no label for (closed since the reading) keeps its row, named as
+ * such, rather than vanishing from the sum. A held session absent from the
+ * reading is under 1% (the host leaves those out), and says so.
  */
-export function hotSessions(sys: SysStat | undefined, labelOf: (id: string) => string | undefined, n = CPU_CULPRITS):
-  { id: string; label: string; detail: string }[] {
-  const cpu = sys?.cpu;
-  const rows = sys?.procs?.bySession;
-  if (!cpu || !rows?.length) return [];
-  const busy = cpu.splitKnown === false ? cpu.userPct : cpu.userPct + cpu.sysPct;
-  if (busy < CPU_HOT_PCT) return [];
-  return rows.slice(0, n).map((r) => ({
-    id: r.sessionId,
-    label: labelOf(r.sessionId) ?? "a session no longer open",
-    detail: `${r.cpuPct.toFixed(0)}% · mostly ${r.top}${r.procs > 1 ? ` · ${r.procs} processes` : ""}`,
-  }));
+export function topSessions(held: readonly HeldRow<SessionCpuRow>[], at: number, labelOf: (id: string) => string | undefined):
+  { id: string; label: string; detail: string; held: boolean }[] {
+  return held.map((h) => {
+    const r = h.row;
+    const pct = h.current ? `${r.cpuPct.toFixed(0)}%` : "under 1%";
+    const detail = h.inTop
+      ? `${pct} · mostly ${r.top}${r.procs > 1 ? ` · ${r.procs} processes` : ""}`
+      : `${pct} · ${leftAgo(h, at)}`;
+    return { id: r.sessionId, label: labelOf(r.sessionId) ?? "a session no longer open", detail, held: !h.inTop };
+  });
 }
+
+/** How the two lists are made — one line, the rest folded. */
+export const TOP_LISTS_LEAD = `Busiest ${CPU_CULPRITS} programs and sessions, from the desktop's process list.`;
+export const TOP_LISTS_MORE =
+  `A program is every process with that name added up; a session is every process it started — the CLI, ` +
+  `its tools, builds and tests. Percentages are per core as top counts them, so 200% is two cores. ` +
+  `One that drops out of the top ${CPU_CULPRITS} stays listed below the others for ${TOP_HOLD_MS / 1000} seconds, ` +
+  `saying when it left, so the list does not jump between readings.`;
 
 /** How a load average relates to this machine — a count of cores, not a
  *  percentage, because that is what it is. */

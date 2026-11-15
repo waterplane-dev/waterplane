@@ -2,6 +2,7 @@
 
 import type { CostBreakdown } from "../pricing.js";
 import type { ColdStarts } from "../sessioncost.js";
+import type { StoreLoss } from "../deskstorage.js";
 
 /**
  * One metered LLM call waterplane itself made (a plugin's model calls).
@@ -63,6 +64,10 @@ export interface UiUsageDoc {
   since: number;
   /** Keyed by feature id — "toolbar:diff", "overlay:gallery", "action:send". */
   features: Record<string, UiFeatureStat>;
+  /** On `GET /api/ui-usage` only, never in the file: `ui-usage.json` was lost
+   *  and the record is not dismissed, so "never used" may mean "counted since
+   *  `since`". Absent = none, or an older host. */
+  loss?: StoreLoss;
 }
 
 /** Claude Code usage snapshot (scraped from `/usage`; best-effort). */

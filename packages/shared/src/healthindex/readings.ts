@@ -14,9 +14,14 @@ export function healthScoreAtLeast(value: number, good: number): number {
   return Math.max(HEALTH_SCORE_FLOOR, value >= good ? 100 : (100 * value) / good);
 }
 
+/** A score against a good line in a stated direction: the ONE curve entries and the repo's own targets share. */
+export function healthDirScore(better: "lower" | "higher", value: number, good: number): number {
+  return better === "higher" ? healthScoreAtLeast(value, good) : healthScore(value, good);
+}
+
 /** One entry's score against its good line, in the entry's own direction. */
 export function healthEntryScore(entry: HealthEntry, value: number, good: number): number {
-  return HEALTH_HIGHER_IS_BETTER.includes(entry) ? healthScoreAtLeast(value, good) : healthScore(value, good);
+  return healthDirScore(HEALTH_HIGHER_IS_BETTER.includes(entry) ? "higher" : "lower", value, good);
 }
 
 /** The Monday (UTC) of the ISO week holding `day` (`YYYY-MM-DD`), or null for a malformed day. */

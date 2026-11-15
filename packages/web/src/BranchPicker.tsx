@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { GitBranch as GitBranchIcon, Plus } from "lucide-react";
+import { GitBranch as GitBranchIcon, Loader2, Plus } from "lucide-react";
 import type { GitBranch, RepoTarget } from "@waterplane/shared";
 import { api } from "./api";
 import { useRemoteResource } from "./useRemoteResource";
+import { useOfflineGate, offlineSentence } from "./kit/offlineGate";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { Row, RowTitle, RowSub } from "./kit/Row";
@@ -38,7 +39,8 @@ export function BranchPicker({ primary, targets, onOpen, onClose }: Props) {
    * local branches", which is a sentence about the repo, not about the link, on
    * the one screen whose whole job is to list them.
    */
-  const res = useRemoteResource<GitBranch[]>(primary.id, () => api.gitBranches(primary.id));
+  const res = useRemoteResource<GitBranch[]>(`git:branches:${primary.id}`, () => api.gitBranches(primary.id), { cache: { shape: 1 } });
+  const gate = useOfflineGate();
   const branches = res.data;
 
   /** Worktree path already checked out on `branch`, if any (incl. the primary). */
@@ -52,7 +54,8 @@ export function BranchPicker({ primary, targets, onOpen, onClose }: Props) {
     setErr(null);
     const existing = worktreeFor(branch);
     if (existing) { onOpen(existing, `${primary.repoName} · ${branch}`); return; }
-    // Not checked out anywhere → make a worktree for it.
+    // Not checked out anywhere → make a worktree for it: a write on the desktop.
+    if (!gate.online) { setErr(offlineSentence("create a worktree")); return; }
     setBusy(branch);
     const r = await api.newWorktree(primary.id, branch);
     setBusy(null);
@@ -62,7 +65,9 @@ export function BranchPicker({ primary, targets, onOpen, onClose }: Props) {
 
   return (
     <div className="sheet">
-      <SheetHead title={<><GitBranchIcon size={16} /> {primary.repoName} · branch</>} onClose={onClose} />
+      <SheetHead title={<><GitBranchIcon size={16} /> {primary.repoName} · branch</>} onClose={onClose}>
+        {res.inflight && res.data && <Loader2 size={13} className="spin" aria-label="refreshing" />}
+      </SheetHead>
 
       <div className="form">
         <input className="search" placeholder="Filter, or type a new branch name…" value={newName}

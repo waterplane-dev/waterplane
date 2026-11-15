@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { dismissToast, onToast } from "./toast";
+import { dismissToast, onToast, tapToast } from "./toast";
 
 /**
  * The toast, mounted once beside `App` (see `toast.ts`). Renders nothing when
@@ -8,7 +8,8 @@ import { dismissToast, onToast } from "./toast";
  * It is a BUTTON, not a `div`: the clock is now scaled to the length of the
  * sentence and reaches twelve seconds for a long one, so there has to be a way
  * to put it down early — a toast sits over the screen it is explaining. The tap
- * only takes it off screen; the row it wrote into the message log stays.
+ * takes it off screen (and opens the screen its sentence names, when it names
+ * one — a slow job that finished elsewhere); the row in the message log stays.
  *
  * A tap ANYWHERE puts it down too. Reported: a cost notice covering most of the
  * screen was "annoying and must be dismissable by tapping somewhere" — aiming
@@ -28,13 +29,15 @@ export function ToastLayer() {
   useEffect(() => {
     if (!msg) return;
     // Capture phase, so a handler that stops propagation cannot keep it up.
-    const down = () => dismissToast();
+    // A tap ON the toast is its own click (`tapToast`): putting it down here first would unmount
+    // it before the click lands, and a toast that names a screen would never open it.
+    const down = (e: PointerEvent) => { if (!(e.target instanceof Element && e.target.closest(".toast"))) dismissToast(); };
     document.addEventListener("pointerdown", down, true);
     return () => document.removeEventListener("pointerdown", down, true);
   }, [msg]);
   if (!msg) return null;
   return (
-    <button className="toast" role="status" aria-live="polite" title="dismiss" onClick={dismissToast}>
+    <button className="toast" role="status" aria-live="polite" title="dismiss" onClick={tapToast}>
       {msg}
       {/* Only under a sentence long enough to need saying where it went —
           "copied" does not need a footnote. */}

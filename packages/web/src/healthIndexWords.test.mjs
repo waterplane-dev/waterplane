@@ -5,6 +5,7 @@ import {
   healthChip, indexLineGeom, contributionBars, signedWhole, signedTenths, indexExplainWords, gapWords,
   barsCaptionWords, weekChangeWords, HEALTH_ENTRY_NAME, HEALTH_ENTRY_MEASURE, HEALTH_GOOD_WORDS, trendWords,
   weekWhenWords, indexBasketWords, carriedWords, linkSpanWords, sinceBaselineWords, indexVsWords, treeGrowthWords, indexAskLabel,
+  ownComparableWords, ownEntryName,
 } from "./healthIndexWords.ts";
 
 test("absent healthIndex draws no chip, never Health 0", () => {
@@ -93,6 +94,22 @@ test("bars: one scale, fixed order, plain names, absent entries absent", () => {
   assert.equal(HEALTH_ENTRY_NAME.context, "CLAUDE.md + skills");
 });
 
+test("the repo's own targeted readings: on the same bar scale, named as the repo's, and the score said to be not comparable", () => {
+  const own = [{ id: "own:slow", key: "slow", name: "Slow screens", unit: "", better: "lower", target: 5, value: 20, score: 25, contribution: -4 }];
+  const { bars } = contributionBars({ size: 2 }, 200, own);
+  assert.deepEqual(bars.map((b) => b.key), ["size", "own:slow"], "waterplane's first, then the repo's own");
+  assert.equal(bars[1].name, "Slow screens (the repo's own)");
+  assert.ok(bars[1].w > bars[0].w, "one scale: the larger move takes the half-width");
+  assert.deepEqual(contributionBars({ size: 2 }, 200, [{ ...own[0], contribution: undefined }]).bars.map((b) => b.key), ["size"], "no move: no bar, never a zero");
+  assert.equal(ownEntryName("X"), "X (the repo's own)");
+  assert.equal(ownComparableWords(0), null, "nothing of the repo's own counts: no line");
+  assert.match(ownComparableWords(1), /one of the repo's own readings .* not directly comparable with another repo's score\.$/);
+  assert.match(ownComparableWords(3), /^This score counts 3 of the repo's own readings/);
+  for (const word of ["grade", "healthy", "unhealthy", "bad", "should", "worse", "better"]) {
+    assert.doesNotMatch(`${ownComparableWords(1)} ${ownComparableWords(2)}`, new RegExp(`\\b${word}\\b`, "i"), word);
+  }
+});
+
 test("sentences name the first scored week and avoid verdict words", () => {
   const all = [
     indexExplainWords("2026-08-03", "waterplane"), gapWords(1), gapWords(3), barsCaptionWords("2026-10-12"),
@@ -105,6 +122,10 @@ test("sentences name the first scored week and avoid verdict words", () => {
     ...Object.values(HEALTH_ENTRY_NAME), ...Object.values(HEALTH_ENTRY_MEASURE),
   ].join("\n");
   const explain = indexExplainWords("2026-08-03", "waterplane");
+  const ownExplain = indexExplainWords("2026-08-03", "waterplane", { ownCount: 2 });
+  assert.match(ownExplain, /counts 2 of the repo's own readings against the repo's own targets, so it is not directly comparable with another repo's score/);
+  assert.doesNotMatch(ownExplain, /The good values are the same in every repo/, "a score counting own targets is not the same in every repo");
+  assert.match(explain, /The good values are the same in every repo/);
   assert.match(explain, /first scored week, 2026-08-03/);
   assert.match(explain, /out of 100/);
   assert.match(explain, /within 30 of its worst entry/);
@@ -293,7 +314,7 @@ test("thinning is said with both counts; nothing left out says nothing", () => {
 });
 
 test("the region's fixed words", () => {
-  assert.deepEqual(Object.keys(NAV_LABELS), ["score", "longest", "tiles", "weight", "size", "table", "own"]);
+  assert.deepEqual(Object.keys(NAV_LABELS), ["score", "own", "longest", "tiles", "weight", "size", "table"]);
   for (const v of Object.values(NAV_LABELS)) assert.ok(v.length <= 8, `${v} fits a chip`);
   assert.equal(SCRUB_HINT, "Drag across a chart to read a value.");
   assert.equal(axisModeWords("weeks"), "weeks: one point per week, its last reading");

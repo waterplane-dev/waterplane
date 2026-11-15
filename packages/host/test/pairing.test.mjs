@@ -121,6 +121,11 @@ test("redeem with a password: token + host; lanIdentity only to loopback/tailsca
   assert.equal(b.status, 200);
   assert.ok(b.body.token);
   assert.equal(b.body.lanIdentity, undefined, "a LAN redeemer never gets the identity secret");
+
+  const c = await redeemPair({ code: store.mint(null, true).code, deviceName: "Kids" }, "tailscale", deps(r, auth, store));
+  assert.equal(c.status, 200);
+  assert.equal(c.body.scope, "passive");
+  assert.equal(c.body.lanIdentity, undefined, "a passive device never gets the identity secret, even on a trusted path");
 });
 
 test("a re-pair presenting this phone's old token replaces its ledger row — no ghost; anyone else's token is untouched", async () => {

@@ -1,7 +1,7 @@
 // Repo setup compliance: the checklist (GET) flags a fresh repo, the fix
 // endpoint (POST) makes it compliant (gitignore inbox/outbox, CLAUDE.md with the
 // outbox convention, optional Gemini setup script), fixes are idempotent, and an
-// unknown repo 404s.
+// unknown repo 404s. Last: the checklist as a slow job (`routes/apijobs.ts`).
 import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, execFileSync } from "node:child_process";
@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootWait } from "./lib-e2e.mjs";
+import { WebSocket } from "ws";
 // The one spelling of "this row is a finding", shared with the host's
 // `summarize()` and with the phone's filter over the same checklist.
 import { isSetupFinding } from "../packages/shared/dist/index.js";
@@ -358,6 +359,47 @@ bootWait(PORT, 900, async () => {
     check(undone.ok && undone.report.contextLimits.repo === null, "reset clears the override");
     check(undone.report.contextLimits.effective.maxChars === 16_000, "…and the host's line is back");
     check(find(undone.report, "context-weight").status === "warn", "…so the row warns again");
+
+    // ── The same checklist as a slow job (`routes/apijobs.ts`) ──────────
+    // Started, it outlives the request; its transitions come over the one socket WITHOUT the
+    // report; the kept run answers a later GET with the report and fresh confirm tokens.
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+    const frames = [];
+    ws.on("message", (raw) => { const m = JSON.parse(raw.toString()); if (m.t === "slowjob.state") frames.push(m.job); });
+    await new Promise((r) => ws.on("open", r));
+    ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
+    await new Promise((r) => setTimeout(r, 200));
+    // The reset above was a write: it dropped the kept run (`recordSetupWrite`), so a returning
+    // screen must not be handed the pre-write report…
+    const dropped = await j(`/api/repos/${id}/jobs/setup.check`);
+    check(dropped.job === null, "a setup write drops the kept run: no pre-write report survives it");
+    // …and the next plain GET's run is kept again.
+    await j(`/api/repos/${id}/compliance`);
+    const prior = await j(`/api/repos/${id}/jobs/setup.check`);
+    check(prior.job?.state === "done" && prior.job.result?.repoName === "setupdemo", "the old GET's run is kept too: a returning screen reads it");
+    const none = await j(`/api/repos/${id}/jobs/skills.recommend`);
+    check(none.job === null, "a kind nobody started ⇒ { job: null }");
+    const [s1, s2] = await Promise.all([post(`/api/repos/${id}/jobs/setup.check`, {}), post(`/api/repos/${id}/jobs/setup.check`, {})]);
+    check(s1.job?.id && s1.job.id === s2.job?.id, "two starts at once are one run");
+    check([s1.joined, s2.joined].filter(Boolean).length === 1 || s1.job.state === "done", "…the second joined it");
+    let kept = null;
+    for (let i = 0; i < 50 && kept?.job?.state !== "done"; i++) { kept = await j(`/api/repos/${id}/jobs/setup.check`); if (kept.job?.state !== "done") await new Promise((r) => setTimeout(r, 100)); }
+    check(kept?.job?.state === "done" && kept.job.result?.repoName === "setupdemo", "the kept run answers with the report");
+    check(Array.isArray(kept.job.result?.checks), "…the whole report");
+    const byId = await j(`/api/jobs/${s1.job.id}`);
+    check(byId.job?.id === s1.job.id && byId.job.result?.repoName === "setupdemo", "GET /api/jobs/:id answers the same run");
+    const all = await j("/api/jobs");
+    check(all.jobs.some((x) => x.id === s1.job.id && !("result" in x)), "GET /api/jobs lists it, without the result");
+    await new Promise((r) => setTimeout(r, 200));
+    check(frames.some((f) => f.id === s1.job.id && f.state === "done" && f.hasResult), "slowjob.state says it is done");
+    check(frames.every((f) => !("result" in f)), "…and never carries the result");
+    const bad2 = await fetch(`${base}/api/repos/${id}/jobs/nope`, { method: "POST" });
+    check(bad2.status === 400, "an unknown kind is refused, in words");
+    const quietBefore = frames.length;
+    await j(`/api/repos/${id}/compliance`);
+    await new Promise((r) => setTimeout(r, 200));
+    check(frames.length === quietBefore, "the old GET joins quietly: no frames");
+    ws.close();
   } catch (e) {
     console.log("FAIL: threw", e);
     failed = true;

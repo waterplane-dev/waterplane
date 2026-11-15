@@ -5,6 +5,8 @@
 /* Controls are inset like the Backlog's (hints inset themselves). */
 .sk-scroll > .segmented, .sk-scroll > .sk-search, .sk-scroll > .fchips, .sk-scroll > .sk-card, .sk-scroll > .sk-suggest, .sk-scroll > .sk-fold, .sk-scroll > .sk-share, .sk-scroll > .sk-explain, .sk-scroll > .sk-suggest-btn { margin-left: var(--sp-10); margin-right: var(--sp-10); }
 .sk-scroll > .sk-suggest-btn { margin-top: var(--sp-4); }
+/* A running count: the bar lines up with its hint's own inset (.form-hint pads --sp-14) and wears the accent, not the browser's blue. */
+.sk-countbar > progress { display: block; box-sizing: border-box; width: calc(100% - 2 * var(--sp-14)); margin: 0 var(--sp-14) var(--sp-4); accent-color: var(--accent); }
 .sk-level { padding-left: 0; padding-right: 0; }
 .sk-search { margin-top: var(--sp-4); margin-bottom: var(--sp-4); box-sizing: border-box; }
 .sk-sort { margin-bottom: var(--sp-4); }

@@ -135,7 +135,7 @@ test("the WS upgrade is judged strictly — it passes no path", () => {
   assert.equal(checkRequestOrigin({ host: "100.64.0.1:8770", "sec-fetch-site": "cross-site" }).ok, false);
 });
 
-test("CORS reflects one caller, and never a wildcard", () => {
+test("CORS reflects one caller, and never a wildcard (R-security-002)", () => {
   // The blanket `access-control-allow-origin: *` this replaced let any page
   // read the API.
   const ok = corsHeaders({ origin: "http://100.64.0.1:8770" });

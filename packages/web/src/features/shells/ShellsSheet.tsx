@@ -15,7 +15,7 @@ import { api } from "../../api";
 import { fmtSize } from "../../format";
 import { agoText, useRemoteResource } from "../../useRemoteResource";
 import { closeShells, killShell } from "./actions";
-import { RowSub, Row, RowTitle, Hint } from "../../kit";
+import { RowSub, Row, RowTitle, Hint, useOfflineGate } from "../../kit";
 
 /** How often an OPEN row re-reads its output — a shell is live, and "what is
  *  it printing now" is the question that opened it. Only while open. */
@@ -26,7 +26,11 @@ const DETAIL_POLL_MS = 3000;
  * host-side) and the tail of what the shell printed, re-read while open.
  */
 function ShellDetail({ subject, sh }: { subject: SessionInfo; sh: SessionShell }) {
-  const res = useRemoteResource(`shell:${subject.id}:${sh.pid}`, () => api.shellDetail(subject.id, sh.pid));
+  const res = useRemoteResource(`shell:${subject.id}:${sh.pid}`, () => api.shellDetail(subject.id, sh.pid), {
+    // Not cached: a shell's output is live and may hold anything the command printed (tokens, keys);
+    // a copy kept on disk would outlive the shell. Offline it says so (`Empty`), it never shows old output.
+    cache: false,
+  });
   const { reload } = res;
   useEffect(() => {
     const t = setInterval(() => { if (!document.hidden) reload({ quiet: true }); }, DETAIL_POLL_MS);
@@ -112,8 +116,12 @@ function ShellRow({ subject, sh, now }: { subject: SessionInfo; sh: SessionShell
 export function ShellsSheet({ subject }: { subject: SessionInfo }) {
   const list = subject.shellList;
   const now = Date.now();
+  // The list is the session's last snapshot off the socket; a stop is refused offline by `killShell`'s
+  // own `liveSend` sentence, and this line says up front that what is listed may no longer be true.
+  const gate = useOfflineGate();
   return (
     <Sheet title={`${subject.title} · shells`} icon={<SquareTerminal size={16} />} onClose={closeShells}>
+      {list && list.length > 0 && gate.note}
       {!list && (
         <Empty>
           This build hasn't read this session's background shells yet — an older host, or the read is off

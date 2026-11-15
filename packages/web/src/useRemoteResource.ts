@@ -14,6 +14,10 @@
  * screen quietly claiming to be current, which is worse, and it is invisible in
  * review because the sheet looks finished.
  *
+ * The cache is the DEFAULT: a caller that brings no `fromCache`/`toCache` gets the generic
+ * store (`resourceCache.ts`) for free. Data that must never touch disk (a secret, a token,
+ * pairing material) says `cache: false`; a changed DTO bumps `cache: { shape }`.
+ *
  * So: the cache is seeded FIRST (paint immediately, offline or not), the live
  * read replaces it, and `state` never lets the two be confused.
  *
@@ -31,6 +35,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { isOffline } from "./api";
 import { agoText, stalenessNote, type StaleGap } from "./format";
 import { linkOnline, subscribeLink } from "./link";
+import { getResCache, putResCache } from "./offlineCache";
 
 /** How long a cache read may hold up the live one. IndexedDB answers in a few
  *  ms when it works; past this it is not going to, and the host is the answer. */
@@ -90,6 +95,21 @@ export interface RemoteResourceOpts<T> {
   /** Store what the host returned. Failures here are swallowed — a cache that
    *  cannot be written is not a reason to fail a read that succeeded. */
   toCache?: (value: T) => void | Promise<void>;
+  /**
+   * The DEFAULT cache. With neither `fromCache` nor `toCache` the last answer is kept in the
+   * generic store (`rescache`, key = desktop id + `key`; at most 200 rows, values over ~1 MB
+   * skipped) and painted first, labelled with its age, offline too.
+   *  - `false` opts out: for secrets, tokens and pairing data, which must never sit on disk.
+   *  - `{ shape }` is a version number; bump it when the DTO changes so old rows are discarded.
+   * A caller's own `fromCache`/`toCache` always win over this.
+   */
+  cache?: false | { shape?: number };
+  /**
+   * Applied to a value before the DEFAULT cache writes it: drops what must not sit on disk from a
+   * DTO that is otherwise worth keeping — a one-shot consent token (`withoutConfirm`,
+   * `withoutApproveToken` in `resourceCache.ts`). A token alone is not a reason for `cache: false`.
+   */
+  cacheScrub?: (value: T) => T;
 }
 
 /**
@@ -122,7 +142,14 @@ export function useRemoteResource<T>(
   // came up, so it said "the link is down" under a strip reading 185 ms until
   // somebody tapped refresh.
   const online = useSyncExternalStore(subscribeLink, linkOnline);
-  const { enabled = true, offline: forcedOffline = !online, fromCache, toCache } = opts;
+  const { enabled = true, offline: forcedOffline = !online, cache } = opts;
+  // The generic store stands in for whichever half the caller did not bring. The key is
+  // closed over per render; the effect re-reads through the ref, so a key change is seen.
+  const shape = cache ? cache.shape ?? 0 : 0;
+  const useDefault = cache !== false && !opts.fromCache && !opts.toCache;
+  const fromCache = opts.fromCache ?? (useDefault ? () => getResCache<T>(key, shape) : undefined);
+  const scrub = opts.cacheScrub;
+  const toCache = opts.toCache ?? (useDefault ? (v: T) => putResCache(key, shape, scrub ? scrub(v) : v) : undefined);
   const [data, setData] = useState<T | null>(null);
   const [state, setState] = useState<ResourceState>("loading");
   const [age, setAge] = useState<number | null>(null);
@@ -144,8 +171,12 @@ export function useRemoteResource<T>(
   const cacheRef = useRef({ fromCache, toCache });
   cacheRef.current = { fromCache, toCache };
 
+  // The key whose LIVE data (read from the host, or written by this screen) is on screen, and since
+  // when: a re-run of the read (quiet reload, link flap) must not paint the older cached copy over it.
+  const held = useRef<{ key: string; at: number } | null>(null);
+
   const reload = useCallback((o?: { quiet?: boolean }) => {
-    if (!o?.quiet) { setData(null); setAge(null); setError(null); setState("loading"); }
+    if (!o?.quiet) { held.current = null; setData(null); setAge(null); setError(null); setState("loading"); }
     setNonce((n) => n + 1);
   }, []);
 
@@ -168,7 +199,8 @@ export function useRemoteResource<T>(
         // IndexedDB open the WebView never answers) must not hold the LIVE read
         // hostage — that was a Files sheet saying "Reading this folder…" for
         // ever while the host answered the same request in 65 ms.
-        const cached = await Promise.race([
+        const live0 = held.current && held.current.key === mine ? held.current : null;
+        const cached = live0 ? null : await Promise.race([
           cacheRef.current.fromCache?.().catch(() => null) ?? null,
           new Promise<null>((r) => setTimeout(() => r(null), CACHE_WAIT_MS)),
         ]);
@@ -178,12 +210,15 @@ export function useRemoteResource<T>(
           setState("cached");
         }
         if (forcedOffline) {
-          if (stillMine() && !cached) setState("offline");
+          if (!stillMine()) return;
+          if (live0) { setAge(Date.now() - live0.at); setState("cached"); }
+          else if (!cached) setState("offline");
           return;
         }
         try {
           const live = await fetcherRef.current(ac.signal);
           if (!stillMine()) return;
+          held.current = { key: mine, at: Date.now() };
           setData(live);
           setAge(null);
           setError(null);
@@ -194,7 +229,8 @@ export function useRemoteResource<T>(
           const offline = isOffline(e);
           // Keep whatever the cache gave us — it is the only thing on screen, and
           // it is still true about the moment it was taken. Only the LABEL moves.
-          setState(cached ? "cached" : offline ? "offline" : "error");
+          if (live0) setAge(Date.now() - live0.at);
+          setState(cached || live0 ? "cached" : offline ? "offline" : "error");
           setError(offline ? null : String((e as Error)?.message || e));
           setUnanswered(offline);
         }
@@ -209,8 +245,16 @@ export function useRemoteResource<T>(
     return () => { cancelled = true; ac.abort(); };
   }, [key, enabled, forcedOffline, nonce]);
 
+  // A local change is the newest copy there is: it is held as live for this key and written
+  // through, so the "last copy" is never older than this phone's own last write.
+  const set = useCallback((next: T | null) => {
+    held.current = next === null ? null : { key: liveKey.current, at: Date.now() };
+    setData(next);
+    if (next !== null) { try { void Promise.resolve(cacheRef.current.toCache?.(next)).catch(() => {}); } catch { /* best-effort */ } }
+  }, []);
+
   const gap: StaleGap | null = forcedOffline ? "link" : unanswered ? "no-answer" : null;
-  return { data, state, age, error, inflight: busy > 0, gap, reload, set: setData };
+  return { data, state, age, error, inflight: busy > 0, gap, reload, set };
 }
 
 /** Moved to `format.ts`; re-exported so existing importers keep working. */

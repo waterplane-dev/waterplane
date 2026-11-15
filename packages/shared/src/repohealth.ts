@@ -198,6 +198,39 @@ export interface RepoHealthOutcome {
 }
 
 /**
+ * What the engine's `own-backfill` said it did (R-metrics-065) — a person's
+ * tap that reads the repo's OWN readings back over older day rows, in a
+ * scratch worktree (`tools/repohealth/ownbackfill.mjs`). Every count is the
+ * engine's; absent = it did not say (an older engine), never 0.
+ */
+export interface RepoHealthOwnBackfillSummary {
+  /** Commits asked for, after the engine's clamp. */
+  asked?: number;
+  /** Day rows read back and written this run. */
+  read?: number;
+  /** Readings that came out a number, and ones that came out absent (with a reason). */
+  values?: number;
+  absent?: number;
+  /** Day rows still without own readings — what another tap would find. */
+  left?: number;
+  /** `budget`: the run's wall clock ran out; the rest is left for the next tap. */
+  stopped?: "budget" | null;
+}
+
+/** The answer of `POST /api/repos/:id/repohealth/own-backfill` — always 200. */
+export interface RepoHealthOwnBackfillAnswer {
+  ok: boolean;
+  /** The host's or the engine's sentence for why nothing ran (approval, a run
+   *  in flight, an engine without the subcommand, exit 3). Shown as it came. */
+  refused?: string;
+  /** A failure (a kill at the cap, an exit 1) as one sentence. */
+  error?: string;
+  summary?: RepoHealthOwnBackfillSummary | null;
+  /** The view as it reads after the run, so the phone redraws without a second read. */
+  view?: RepoHealthView;
+}
+
+/**
  * ── The plot: the TOOL states, the PHONE draws ──────────────────────────────
  *
  * `plot` prints one JSON line holding every series as points, plus, for each
@@ -566,6 +599,19 @@ export interface RepoHealthOwnSeries extends RepoHealthPlotSeries {
    * which the index counts as an UNKNOWN gate, never a passed one. Absent = no gate.
    */
   gate?: RepoHealthGateDecl;
+  /**
+   * The repo's TARGET for this reading (`health.json` `"target": n`, checked by
+   * the engine's `own.mjs`): its own good line. With one, the reading counts in
+   * the health score (`healthindex/own.ts`); `invalid` is a declaration the
+   * engine refused, which the score counts as UNKNOWN. Absent = not in the score.
+   */
+  target?: number | { invalid: string };
+  /**
+   * The declaration said `"backfill": false`: this reading measures THIS DESKTOP (or today's
+   * clock), not the commit. Such a reading never has a target and never counts in the health
+   * score (R-metrics-069); its tile says so. Absent = reads the commit.
+   */
+  backfill?: false;
 }
 
 /** A declared gate: the failing side of `at`, or the engine's sentence for a refused declaration. */
@@ -584,6 +630,8 @@ export interface RepoHealthPlotOwn {
   series: RepoHealthOwnSeries[];
   absent?: string;
   problems?: string[];
+  /** Older days (HEAD's excluded) with no own entry: what a read-back could still read. Absent from an older engine. */
+  unread?: number;
 }
 
 export interface RepoHealthPlot {

@@ -218,7 +218,7 @@ test("opt-ins never reach the setup checklist", () => {
   assert.ok(!before.includes("opt"));
 });
 
-test("exposure-watch: probe, idempotent fix, other entries kept", async () => {
+test("exposure-watch: probe, idempotent fix, other entries kept (R-security-012)", async () => {
   const { setExposureDir } = await import("../dist/exposure.js");
   const { addExposureTarget, ghOfRemote, targetName } = await import("../dist/exposurewatch.js");
   const { readFileSync } = await import("node:fs");

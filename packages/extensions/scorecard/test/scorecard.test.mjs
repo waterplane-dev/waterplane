@@ -174,7 +174,7 @@ test("private repo: a local reading file is the reading, marked local; a bad fil
   assert.equal(bad.engine.row(bad.worktree), null); // no reading: no row, never a "not public" warn
 });
 
-test("setup row: public but unscored, GitHub error, bad shape", async () => {
+test("setup row: public but unscored, GitHub error, bad shape (R-security-009)", async () => {
   const un = rig({ fetch: fakeFetch({ sc: { status: 404, body: {} } }) });
   un.engine.row(un.worktree); await settle();
   const row = un.engine.row(un.worktree);

@@ -12,7 +12,7 @@
 import { CalendarClock, CircleDot, OctagonPause } from "lucide-react";
 import { ATTENTION_NOUN, attentionTitle, type AttentionKind } from "../../attention";
 
-export function AttentionChip({ kind, n, onClick, repo, on, replies, hint }: {
+export function AttentionChip({ kind, n, onClick, repo, on, replies, hint, scope }: {
   kind: AttentionKind;
   n: number;
   onClick: () => void;
@@ -25,16 +25,19 @@ export function AttentionChip({ kind, n, onClick, repo, on, replies, hint }: {
   replies?: boolean;
   /** `data-hint` id (the long-press explanation). */
   hint?: string;
+  /** A filter twin outside a repo group (the open-tabs list): the filter's
+   *  pill and `on` state, its title naming this place instead of a repo. */
+  scope?: string;
 }) {
   if (n <= 0) return null;
   const Icon = kind === "wait" ? CircleDot : OctagonPause;
-  const cls = repo
+  const cls = repo || scope
     ? (kind === "wait" ? "repo-group-wait" : "repo-group-stat limit")
     : (kind === "wait" ? "head-wait" : "head-wait limit");
   return (
     // A BUTTON, not a label: a count on a control is the way to those rows.
     <button className={`${cls}${on ? " on" : ""}`} data-hint={hint}
-      title={attentionTitle(kind, n, { repo, replies })} onClick={onClick}>
+      title={attentionTitle(kind, n, { repo, scope, replies })} onClick={onClick}>
       <Icon size={13} />{repo ? "" : " "}{n}{repo && kind === "blocked" ? "" : ` ${ATTENTION_NOUN[kind]}`}
       {replies && <CalendarClock size={11} className="wait-sched" />}
     </button>

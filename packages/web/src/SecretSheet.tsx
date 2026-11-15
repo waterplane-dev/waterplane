@@ -5,6 +5,8 @@ import { api, type EnvFileInfo, type SecretResult, type WriteTarget } from "./ap
 import { track } from "./usage";
 import { RepoSelect } from "./RepoPicker";
 import { useRemoteResource } from "./useRemoteResource";
+import { offlineSentence } from "./kit/offlineGate";
+import { linkOnline } from "./link";
 import { SheetHead } from "./Sheet";
 import { RadioRows, Hint } from "./kit";
 
@@ -46,9 +48,9 @@ export function SecretSheet({ repos, onClose }: Props) {
    * cached here on purpose — a stale list of write targets would invite typing
    * a secret at a path that no longer exists.
    */
-  const targetsRes = useRemoteResource<WriteTarget[]>("secret-targets", () => api.secretTargets());
+  const targetsRes = useRemoteResource<WriteTarget[]>("secret:targets", () => api.secretTargets(), { cache: false });
   const targets = targetsRes.data ?? [];
-  const envRes = useRemoteResource<EnvFileInfo[]>(repoId, () => api.envFiles(repoId), { enabled: scope === "repo" && !!repoId });
+  const envRes = useRemoteResource<EnvFileInfo[]>(`secret:envfiles:${repoId}`, () => api.envFiles(repoId), { enabled: scope === "repo" && !!repoId, cache: false });
   const envFiles = envRes.data ?? [];
 
   const chosen = envFiles.find((f) => f.name === file);
@@ -72,6 +74,8 @@ export function SecretSheet({ repos, onClose }: Props) {
         : !!key.trim());
 
   async function submit() {
+    // Refused, not queued: the typed value stays in the field (the last copy) and nothing leaves the phone.
+    if (!linkOnline()) { setResult({ ok: false, error: offlineSentence("save the secret") }); return; }
     track("action:secret.set");
     setBusy(true);
     setResult(null);

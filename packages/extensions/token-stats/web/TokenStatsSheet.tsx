@@ -83,6 +83,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { BackendInfo, TokenConvo, TokenStatsDoc, UsageInfo, UsageReading } from "@waterplane/shared";
 import { ledgers, type LedgerViewDef } from "@waterplane/sdk";
 import { useRemoteResource } from "@waterplane/kit";
+import { useRescan } from "./useRescan.ts";
 import { TokenStatsBody, type SpendView } from "./TokenStatsBody.tsx";
 import type { GuestLedger } from "./guests.ts";
 
@@ -109,10 +110,11 @@ function GuestRead({ def, fresh, online, onRead }: {
 }) {
   const doc = ledgers.viewDoc(def);
   const r = useRemoteResource<unknown>(
-    `ledgerview:${def.id}:${fresh}`,
+    `ledgerview:${def.id}`,
     () => doc.read(fresh > 0),
     { offline: !online, fromCache: doc.fromCache, toCache: doc.toCache },
   );
+  useRescan(fresh, r.reload);
   useEffect(() => {
     onRead(def.id, { doc: r.data ?? null, res: { state: r.state, age: r.age, error: r.error } });
   }, [def.id, r.data, r.state, r.age, r.error, onRead]);
@@ -152,7 +154,7 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
 }) {
   const [fresh, setFresh] = useState(0);
   const res = useRemoteResource<TokenStatsDoc>(
-    `tokenstats:${fresh}`,
+    "tokenstats:ledger",
     () => ledgers.tokenStats.read(fresh > 0),
     {
       offline: !online,
@@ -160,6 +162,7 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
       toCache: ledgers.tokenStats.toCache,
     },
   );
+  useRescan(fresh, res.reload);
   const [reads, setReads] = useState<ReadonlyMap<string, GuestReadState>>(new Map());
   const [onRead] = useState(() => (id: string, r: GuestReadState) =>
     setReads((m) => new Map(m).set(id, r)));

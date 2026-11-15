@@ -28,6 +28,8 @@ import { KindBars, NumRow } from "./LedgerParts.tsx";
 import { DayChart } from "./charts/DayChart.tsx";
 import { SourceWindows } from "./SourceWindows.tsx";
 import { TREND_DAYS } from "./constants.ts";
+import { useRescan } from "./useRescan.ts";
+import { Loader2 } from "lucide-react";
 
 const kindSubs = (kinds: Record<string, number>) => kindRows(kinds).map((r) => `${r.kind} ${fmtCount(r.n)}`);
 
@@ -46,10 +48,11 @@ export function BackendLedgerView({ id, label, online, fresh, reading = null, ta
   onTable?: (v: boolean) => void;
 }) {
   const res = useRemoteResource(
-    `backendtokens:${id}:${fresh}`,
+    `backendtokens:${id}`,
     () => ledgers.backendTokens(id, fresh > 0),
-    { offline: !online },
+    { offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, res.reload);
   const [width, boxRef] = useBoxWidth();
   const doc = res.data;
   const absent = ledgerAbsent(label, doc);
@@ -67,6 +70,7 @@ export function BackendLedgerView({ id, label, online, fresh, reading = null, ta
       <Empty res={res} empty={!doc} thing={`${label}’s token statistics`} noun="scan">
         {null}
       </Empty>
+      {res.inflight && doc && <Loader2 size={13} className="spin" aria-label="refreshing" />}
       {absent && <div className="empty ts-caveat">{absent}</div>}
       {ok && (
         <>

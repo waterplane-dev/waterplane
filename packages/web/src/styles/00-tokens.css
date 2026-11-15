@@ -421,6 +421,11 @@
   --sp-12: 12px;
   --sp-14: 14px;
   --sp-16: 16px;
+  /* THE side margin of a screen: where text, fields, chips and cards start and end on the page.
+     One value, owned by the container that meets the screen edge (a sheet's form, a settings group, a
+     section, a row, an action bar); a child of those never adds its own side gutter. Inner padding of a
+     card or chip is that component's own. Held by scripts/ui/gutters.mjs (npm run test:gutters). */
+  --gutter: 14px;
   --sp-20: 20px;
   --sp-24: 24px;
   --sp-28: 28px;

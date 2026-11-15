@@ -1,8 +1,9 @@
 // healthindex/score: The absolute score: per-entry scores, alerts, the capped headline, the weekly series. Barrel: ../healthindex.ts (read the header there).
-import { HEALTH_ENTRIES, HEALTH_OPTIONAL_ENTRIES, type HealthEntry, HEALTH_GOOD, HEALTH_SCORE_CAP_GAP, HEALTH_ALERT_WARN, HEALTH_ALERT_SEVERE, type HealthSeriesRow, type HealthSizeParts, type HealthAlertSubject, type HealthAlert, type HealthIndexPoint, type HealthIndexSeries } from "./types.js";
-import { healthScore, healthEntryScore, healthWeeks, healthContextGood, type HealthEntryReadings, healthEntryReadings, centralOf, treeOf, DAY_MS } from "./readings.js";
+import { HEALTH_ENTRIES, HEALTH_OPTIONAL_ENTRIES, type HealthEntry, type HealthScoredId, type HealthOwnScore, HEALTH_GOOD, HEALTH_SCORE_CAP_GAP, HEALTH_ALERT_WARN, HEALTH_ALERT_SEVERE, type HealthSeriesRow, type HealthSizeParts, type HealthAlertSubject, type HealthAlert, type HealthIndexPoint, type HealthIndexSeries } from "./types.js";
+import { healthScore, healthEntryScore, healthDirScore, healthWeeks, healthContextGood, type HealthEntryReadings, healthEntryReadings, centralOf, treeOf, DAY_MS } from "./readings.js";
 import { wordOf } from "../wordof.js";
-import { healthCoverage, healthHeadline, type HealthCoverage, type HealthCapKind } from "./coverage.js";
+import { healthCoverage, healthHeadline, healthScoredLabel, type HealthCoverage, type HealthCapKind } from "./coverage.js";
+import { healthOwnTargetsOf } from "./own.js";
 
 const daysBetween = (a: string, b: string): number =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
@@ -78,10 +79,11 @@ function alertOf(entry: HealthEntry, subject: HealthAlertSubject, value: number,
  * entry's score is derived (`value − HEALTH_SCORE_CAP_GAP`), so the wire
  * summary can be worded from its three fields alone.
  */
-export function healthCapWords(s: { value: number; mean: number; cappedBy: HealthEntry | null }): string | null {
+export function healthCapWords(s: { value: number; mean: number; cappedBy: HealthScoredId | null }): string | null {
   if (!s.cappedBy || !(s.value < s.mean)) return null;
   const worst = Math.round(s.value - HEALTH_SCORE_CAP_GAP);
-  return `Capped at ${Math.round(s.value)} by ${wordOf(HEALTH_ENTRY_LABEL, s.cappedBy, "an entry this app version cannot name")} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
+  const by = s.cappedBy.startsWith("own:") ? healthScoredLabel(s.cappedBy) : wordOf(HEALTH_ENTRY_LABEL, s.cappedBy, "an entry this app version cannot name");
+  return `Capped at ${Math.round(s.value)} by ${by} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
 }
 
 /**
@@ -126,14 +128,24 @@ function scoreWeek(r: HealthEntryReadings, row: HealthSeriesRow, disabled: reado
     const a = alertOf(e, e, v, good);
     if (a) alerts.push(a);
   }
-  const n = enabled.length;
+  // The repo's own readings with a target, measured on this row: scored like an
+  // entry in their own direction (`own.ts`); an unmeasured one is an unknown
+  // coverage item and has no score.
+  const own: HealthOwnScore[] = [];
+  for (const o of healthOwnTargetsOf(row)) {
+    if (o.why || o.better === null || o.target === null || o.value === null) continue;
+    own.push({ id: o.id, key: o.key, name: o.name, unit: o.unit, better: o.better, target: o.target, value: o.value, score: healthDirScore(o.better, o.value, o.target) });
+  }
+  const n = enabled.length + own.length;
   // A score of 0 cannot occur (good > 0, value finite), so ln is finite.
-  const mean = Math.exp(enabled.reduce((s, e) => s + Math.log(scores[e] as number), 0) / n);
-  let worst: HealthEntry = enabled[0];
-  for (const e of enabled) if ((scores[e] as number) < (scores[worst] as number)) worst = e;
-  const { index, capKind } = healthHeadline(mean, scores[worst] as number, coverage);
+  const mean = Math.exp((enabled.reduce((s, e) => s + Math.log(scores[e] as number), 0) + own.reduce((s, o) => s + Math.log(o.score), 0)) / n);
+  let worst: HealthScoredId = enabled[0];
+  let worstScore = scores[worst] as number;
+  for (const e of enabled) if ((scores[e] as number) < worstScore) { worst = e; worstScore = scores[e] as number; }
+  for (const o of own) if (o.score < worstScore) { worst = o.id; worstScore = o.score; }
+  const { index, capKind } = healthHeadline(mean, worstScore, coverage);
   alerts.sort((a, b) => a.score - b.score);
-  return { index, mean, scores, sizeParts, cappedBy: capKind === "worst" ? worst : null, capKind, coverage, alerts, enabled };
+  return { index, mean, scores, own, sizeParts, cappedBy: capKind === "worst" ? worst : null, capKind, coverage, alerts, enabled };
 }
 
 /**
@@ -155,6 +167,7 @@ export function healthIndex(
     const base = {
       week, index: s.index, mean: s.mean, scores: s.scores, sizeParts: s.sizeParts,
       cappedBy: s.cappedBy, capKind: s.capKind, coverage: s.coverage, alerts: s.alerts, values: readings.values, prereg,
+      ...(s.own.length ? { own: s.own } : {}),
       central: c.fp, disabled: c.disabled, overridden: c.overridden, tree: treeOf(row),
     };
     if (!prev) {
@@ -169,13 +182,17 @@ export function healthIndex(
       points.push({ ...base, gap: true, lnLink: null, comparable: 0, contributions: {}, spanDays, gapReason });
       continue;
     }
-    // Same fingerprint ⇒ same enabled set, so every entry is in both weeks.
-    const n = s.enabled.length;
+    // Same fingerprint ⇒ same enabled set and same own targets, so every entry is in both weeks.
+    const n = s.enabled.length + s.own.length;
     const contributions: Partial<Record<HealthEntry, number>> = {};
     for (const e of s.enabled) {
       const a = prev.scores[e];
       const b = s.scores[e];
       if (a !== undefined && b !== undefined) contributions[e] = (prev.mean * (Math.log(b) - Math.log(a))) / n;
+    }
+    for (const o of s.own) {
+      const a = prev.own?.find((x) => x.id === o.id)?.score;
+      if (a !== undefined) o.contribution = (prev.mean * (Math.log(o.score) - Math.log(a))) / n;
     }
     points.push({
       ...base, gap: false, lnLink: Math.log(s.index / prev.index), comparable: n, contributions, spanDays,
@@ -189,7 +206,7 @@ export function healthIndex(
 export function healthRowScore(
   row: HealthSeriesRow,
   contextWarnChars: number | null,
-): { index: number; mean: number; scores: Partial<Record<HealthEntry, number>>; cappedBy: HealthEntry | null; capKind: HealthCapKind | null; coverage: HealthCoverage } | null {
+): { index: number; mean: number; scores: Partial<Record<HealthEntry, number>>; cappedBy: HealthScoredId | null; capKind: HealthCapKind | null; coverage: HealthCoverage } | null {
   const s = scoreWeek(healthEntryReadings(row), row, centralOf(row).disabled, contextWarnChars);
   return s ? { index: s.index, mean: s.mean, scores: s.scores, cappedBy: s.cappedBy, capKind: s.capKind, coverage: s.coverage } : null;
 }

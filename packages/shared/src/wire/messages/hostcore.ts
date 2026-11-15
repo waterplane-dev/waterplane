@@ -4,6 +4,7 @@ import type { BackendInfo } from "../backend.js";
 import type { AutoSlotFacts } from "../../intent.js";
 import type { LaunchIntent } from "../../launch.js";
 import type { SentCommand } from "../sent.js";
+import type { StoreLoss } from "../../deskstorage.js";
 import type { DecisionLogEntry, PluginView } from "../../plugin.js";
 import type { UpdateInfo } from "../repo.js";
 import type { ClosedSession, HistoryEntry, NewImage, OpenDelivery, PermissionMode, RecentSession, SessionInfo, SessionSearchResult, SessionSearchScope, SessionShell } from "../session.js";
@@ -273,7 +274,10 @@ export type HostCoreMsg =
    */
   | { t: "session.moded"; id: string; mode?: PermissionMode; reason?: string }
   /** Results for a session.search request (echoes query/scope/id). */
-  | { t: "session.searchResults"; query: string; scope: SessionSearchScope; id?: string; results: SessionSearchResult[] }
+  /** `archived` echoes the ask ONLY when this host searched the archive: absent on
+   *  an ask for it = an older host that cannot, which the sheet says in words.
+   *  `archivedOmitted` = archived conversations that matched past the cap. */
+  | { t: "session.searchResults"; query: string; scope: SessionSearchScope; id?: string; archived?: boolean; archivedOmitted?: number; results: SessionSearchResult[] }
   | {
       t: "backlog.list";
       items: BacklogItem[];
@@ -334,7 +338,9 @@ export type HostCoreMsg =
   | { t: "stream.ended"; streamId: number; cause: StreamEndCause; reason: string }
   /** The decision log, newest first. `sessionId` set when filtered to one session. */
   | { t: "decisions.log"; entries: DecisionLogEntry[]; sessionId?: string }
-  /** The sent-command log, newest first. `sessionId` echoes the filter asked for. */
-  | { t: "sent.log"; entries: SentCommand[]; sessionId?: string }
+  /** The sent-command log, newest first. `sessionId` echoes the filter asked for.
+   *  `loss`: `sent.json` was lost and the record is not dismissed, so a short or
+   *  empty list may be the loss, not the history. Absent = none, or an older host. */
+  | { t: "sent.log"; entries: SentCommand[]; sessionId?: string; loss?: StoreLoss }
   /** One command was just sent — appended live so an open log stays current. */
   | { t: "sent.new"; entry: SentCommand };

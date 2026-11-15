@@ -70,6 +70,11 @@ const MESSAGES_SURFACE = [
   "IntentPatch:type",
   "PROTOCOL_VERSION:value",
   "PeerKind:type",
+  // `POST /api/relay` DTOs (bg-link-send WP1) — HTTP, not members of either union.
+  "RELAY_WAIT_MAX_MS:value",
+  "RelayAckFrame:type",
+  "RelayRequest:type",
+  "RelayResponse:type",
   "decode:value",
   "encode:value",
 ];
@@ -266,6 +271,7 @@ const HOST_T = [
   "notification.list",
   "notify.prefs",
   "onboard.progress",
+  "slowjob.state",
   "op.ack",
   "plugin.actionResult",
   "plugin.error",
@@ -347,5 +353,5 @@ test("ClientMessage carries exactly the pinned message types", () => {
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 82, "a member was added or merged"); // 83 → 82: install.log (android-apps P5)
+  assert.equal(members, 83, "a member was added or merged"); // 83 → 82: install.log (android-apps P5); 82 → 83: slowjob.state (slow jobs, host package 3a)
 });

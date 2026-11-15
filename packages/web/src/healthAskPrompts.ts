@@ -7,7 +7,7 @@
  */
 import { BRAND, REPOHEALTH_OWN_FILE, REPOHEALTH_TOOL, isoWeekOf, type HealthEntry, type RepoHealthPlot, type RepoHealthPoint } from "@waterplane/shared";
 import {
-  HEALTH_ENTRY_MEASURE, HEALTH_ENTRY_NAME, HEALTH_ENTRY_OF_SERIES, HEALTH_ENTRY_ORDER, indexBasketWords, signedTenths,
+  HEALTH_ENTRY_MEASURE, HEALTH_ENTRY_NAME, HEALTH_ENTRY_OF_SERIES, HEALTH_ENTRY_ORDER, indexBasketWords, ownComparableWords, ownEntryName, signedTenths,
 } from "./healthIndexWords.ts";
 import { seriesValueWords } from "./repoHealthWords.ts";
 import { nf } from "./repoHealthWords/repoHealthWordsFmt.ts";
@@ -74,6 +74,10 @@ export interface HealthOwnReading {
   means: string;
   /** The declaration's `better`, attributed to the repo. */
   better: "lower" | "higher" | null;
+  /** The repo's own target (`"target": n`): with one the reading counts in the score. Absent = not in the score. */
+  target?: number;
+  /** A target was declared but could not be read: it counts in the index as unknown. */
+  targetInvalid?: boolean;
 }
 
 /** The repo's own readings as the index prompts carry them. */
@@ -83,6 +87,8 @@ export interface HealthOwnSubject {
   declared: boolean;
   /** The readings with at least one value. */
   readings: readonly HealthOwnReading[];
+  /** How many of the declared readings declare a target (an unreadable one too), measured or not: each counts in the index, an unreadable one as unknown. */
+  targeted?: number;
   /** The engine's reason a declared file yields nothing to list. */
   absent?: string | null;
 }
@@ -157,7 +163,10 @@ export function healthAskContextOf(
   const own = plot?.own;
   if (own) {
     const readings: HealthOwnReading[] = [];
+    let targeted = 0;
     for (const s of own.series) {
+      // One rule, the index's: any declared target counts (an unreadable one as unknown).
+      if (s.target !== undefined) targeted++;
       const got = s.points.filter((p) => p.v != null);
       if (!got.length) continue;
       const a = got[0];
@@ -165,9 +174,9 @@ export function healthAskContextOf(
       const span = got.length === 1
         ? `${seriesValueWords(a.v, s.unit)} on ${a.day} (its only reading so far)`
         : `${seriesValueWords(a.v, s.unit)} on ${a.day} → ${seriesValueWords(b.v, s.unit)} on ${b.day} (${got.length} readings)`;
-      readings.push({ key: s.key, label: s.label, span, means: s.means, better: s.better });
+      readings.push({ key: s.key, label: s.label, span, means: s.means, better: s.better, ...(typeof s.target === "number" ? { target: s.target } : {}), ...(typeof s.target === "object" && s.target ? { targetInvalid: true } : {}) });
     }
-    ctx.own = { file: own.file, declared: own.declared, readings, absent: own.absent ?? null };
+    ctx.own = { file: own.file, declared: own.declared, readings, targeted, absent: own.absent ?? null };
   }
   return ctx;
 }
@@ -207,8 +216,12 @@ function ownBlock(own: HealthOwnSubject | null | undefined): string | null {
   if (!own) return null;
   if (own.readings.length) {
     const lines = own.readings.map((r) =>
-      `- ${r.label} (\`${r.key}\`): ${r.span}${r.better ? `; the repo wants it ${r.better}` : ""}. ${r.means.trim()}`);
-    return `This repo's own readings, declared in ${own.file} — not part of the index, which is built from its ${HEALTH_ENTRY_ORDER.length} readings only:\n\n${lines.join("\n")}`;
+      `- ${r.label} (\`${r.key}\`): ${r.span}${r.better ? `; the repo wants it ${r.better}` : ""}${r.target !== undefined ? `; it declares a target of ${r.target}, so it counts in the index` : r.targetInvalid ? "; it declares a target that could not be read, so it counts in the index as unknown" : ""}. ${r.means.trim()}`);
+    const counted = (own.targeted ?? 0) > 0;
+    const head = counted
+      ? `declared in ${own.file} — one with a target counts in the index like the ${HEALTH_ENTRY_ORDER.length} readings; one without is not part of it`
+      : `declared in ${own.file} — not part of the index, which is built from its ${HEALTH_ENTRY_ORDER.length} readings only`;
+    return `This repo's own readings, ${head}:\n\n${lines.join("\n")}`;
   }
   if (own.declared) return `This repo declares readings of its own in ${own.file}, but none has a value yet${own.absent ? `: ${own.absent.trim()}` : "."}`;
   return `This repo declares no readings of its own; ${own.file} is where one would be declared.`;
@@ -220,6 +233,12 @@ function basketHead(ctx: HealthAskContext): string {
   const overridden = (ctx.variants ?? []).filter((v) => v.kind === "override").map((v) => v.key);
   const b = indexBasketWords({ disabled, overridden }, BRAND.displayName);
   return b ? ` ${b}` : "";
+}
+
+/** The repo's own targeted readings, which count in the score beside the fixed ones (R-metrics-066); empty with none. */
+function ownCountedHead(ctx: HealthAskContext): string {
+  const w = ownComparableWords(ctx.own?.targeted ?? 0);
+  return w ? ` ${w}` : "";
 }
 
 /**
@@ -299,7 +318,7 @@ export function healthIndexRemedyPrompt(w: IndexWeekSubject, repoName: string, c
     `${BRAND.displayName}'s health index for ${repoName} was ${Math.round(w.index)} in the week of ${w.week}` +
     `${w.delta !== null ? ` (${signedTenths(w.delta)} against the week before)` : ""}; each week is the ISO week starting that Monday.` +
     `${vsLine(ctx.vs, w.index)} ` +
-    `It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo, held within 30 points of its worst one, and it falls when a reading grows past its good value.${basketHead(ctx)} ` +
+    `It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo, held within 30 points of its worst one, and it falls when a reading grows past its good value.${basketHead(ctx)}${ownCountedHead(ctx)} ` +
     "That week's move split across the readings like this, in score points, biggest first:";
   const own = ownBlock(ctx.own);
   const engine = engineWords(ctx.engine);
@@ -316,6 +335,8 @@ ${engine ? `${engine} ` : ""}A small move is often nothing: "this was ordinary w
 Change no file, run no fix, commit nothing. Finish with the options as you see them, in order of what each would cost.`;
 }
 
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
 /** One week of the index as the trend prompt lists it. */
 export interface IndexTrendWeek {
   week: string;
@@ -324,6 +345,8 @@ export interface IndexTrendWeek {
   /** Null on the first scored week and on a gap week (its move is not compared). */
   lnLink: number | null;
   contributions: Partial<Record<string, number>>;
+  /** The repo's own targeted readings counted this week; their move sits here, never in `contributions`. */
+  own?: readonly { id: string; name: string; contribution?: number }[];
   /** Why a gap week was marked; absent on an older host. */
   gapReason?: "prereg" | "central" | "coverage" | "nothing";
 }
@@ -370,6 +393,7 @@ export function healthTrendRemedyPrompt(
     const parts = HEALTH_ENTRY_ORDER
       .filter((k) => typeof w.contributions[k] === "number")
       .map((k) => `${HEALTH_ENTRY_NAME[k]} ${signedTenths(w.contributions[k] as number)}`);
+    for (const o of w.own ?? []) if (isNum(o.contribution)) parts.push(`${ownEntryName(o.name)} ${signedTenths(o.contribution)}`);
     const reach = prev ? linkSpanWords(prev.week, w.week) : "";
     return `- ${w.week}: ${Math.round(w.index)} (${prev ? signedTenths(w.index - prev.index) : "?"})${reach} — ${parts.join(", ")}`;
   });
@@ -382,6 +406,20 @@ export function healthTrendRemedyPrompt(
     }
     return n ? `- ${HEALTH_ENTRY_NAME[k]} (\`${k}\`): ${signedTenths(t)} over ${n} week${n === 1 ? "" : "s"}.${measureOf(k)}` : null;
   }).filter(Boolean);
+  // The repo's own targeted readings, in the order they first appear, each totalled like an entry.
+  const ownTotals = new Map<string, { name: string; t: number; n: number }>();
+  for (const w of weeks) {
+    for (const o of w.own ?? []) {
+      if (!isNum(o.contribution)) continue;
+      const e = ownTotals.get(o.id) ?? { name: o.name, t: 0, n: 0 };
+      e.t += o.contribution;
+      e.n++;
+      ownTotals.set(o.id, e);
+    }
+  }
+  for (const [id, e] of ownTotals) {
+    sums.push(`- ${ownEntryName(e.name)} (\`${id}\`): ${signedTenths(e.t)} over ${e.n} week${e.n === 1 ? "" : "s"}. It is a reading this repo declared with a target, and it counts in the score like the others.`);
+  }
   const first = weeks[0];
   const last = weeks[weeks.length - 1];
   const tree = ctx.tree
@@ -399,7 +437,7 @@ export function healthTrendRemedyPrompt(
     `- Where that lever has no measure${ctx.own && !hasOwn ? " — this repo has none of its own yet" : ""}, propose one of this repo's own — what it would count and why it tracks the thing that matters — as a proposal to declare it in ${ownFile} with a script that prints it.`,
     "- Keep it to the few changes worth their cost, about this repo rather than repos in general; a file that is generated or bundled is a case for excluding it from the readings, not for splitting it.",
   ];
-  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules, duplicate code, dead exports, import cycles, files changed together, fixes after a change, tests changed with code — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)} Each week, with what each reading added or took away in score points:
+  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for ${HEALTH_ENTRY_ORDER.length} readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules, duplicate code, dead exports, import cycles, files changed together, fixes after a change, tests changed with code — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)}${ownCountedHead(ctx)} Each week, with what each reading added or took away in score points:
 
 ${rows.join("\n")}
 ${holdingWords(ctx.now?.alerts, ctx.now?.cap)}

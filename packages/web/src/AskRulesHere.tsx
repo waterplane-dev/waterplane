@@ -17,6 +17,7 @@ import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { SetSwitch, SetWarn } from "./SettingsKit";
 import { useRemoteResource, type RemoteResource } from "./useRemoteResource";
+import { withoutConfirm } from "./resourceCache";
 import { Hint } from "./kit/Hint";
 
 export interface AskRulesHandle {
@@ -29,7 +30,7 @@ export interface AskRulesHandle {
 }
 
 export function useAskRules(): AskRulesHandle {
-  const res = useRemoteResource<AskRulesReply>("askrules", () => api.askRules());
+  const res = useRemoteResource<AskRulesReply>("askrules", () => api.askRules(), { cacheScrub: withoutConfirm });
   const [saving, setSaving] = useState(false);
   async function save(next: AskRule[], say: (words: string) => void): Promise<boolean> {
     if (saving) return false;

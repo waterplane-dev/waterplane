@@ -31,6 +31,7 @@ import {
 } from "./logic.ts";
 import type { QueueCtx, SendFns } from "./types.ts";
 import { noteFired } from "./fireFate.ts";
+import { relayHeld } from "./relayOwner.ts";
 
 export function sendFns(c: QueueCtx): SendFns {
   const { connRef, sessionsRef, backendsRef, exitedRef, outboxRef, ackTimers, uploadsInFlight, uploadAborts, busyLanesRef, budgetHeldLanesRef,
@@ -224,6 +225,13 @@ export function sendFns(c: QueueCtx): SendFns {
             // starting up.
             holdUntilIdle: e.holdUntilIdle && (e.pendingCreate || holdWall(e.sessionId)) ? true : undefined }
         : e));
+    }
+    // The background relay may hold this queue (`relayOwner.ts`): nothing goes on the wire until
+    // the page has taken it back — the claim's receipts and written rows decide what is still
+    // to send. Never held without a relay owner, so a browser flushes exactly as before.
+    if (relayHeld()) {
+      flushIdleReason.current = "taking the queue back from the background link";
+      return 0;
     }
     if (connRef.current.status !== "open") {
       flushIdleReason.current = queueIdleReason([], { online: false, queued: 1 });

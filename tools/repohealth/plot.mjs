@@ -514,7 +514,11 @@ function buildOwn(rows, prereg, declared) {
     // A `notRun` row (commands unapproved) carries gates for the index, not a measurement.
     if (rows[i]?.own && typeof rows[i].own === "object" && !rows[i].own.notRun) { latest = rows[i].own; break; }
   }
-  const out = { file: OWN_FILE, declared: !!declared, series: [] };
+  // Older days with no own entry at all: what a backfill tap could still read.
+  // Days it already read keep their entry (a value or a reason), so 0 here is
+  // "every older day was read", whatever the tiles show.
+  const unread = rows.slice(0, -1).filter((r) => !r?.own || typeof r.own !== "object" || r.own.notRun).length;
+  const out = { file: OWN_FILE, declared: !!declared, series: [], ...(declared ? { unread } : {}) };
   if (latest && typeof latest.refused === "string") {
     out.absent = latest.refused;
     return out;
@@ -541,6 +545,10 @@ function buildOwn(rows, prereg, declared) {
       better: d.better === "lower" || d.better === "higher" ? d.better : null,
       // The repo's gate on this reading, as declared (`own.mjs` `gateOf`); judged by the index, never here.
       ...(d.gate && typeof d.gate === "object" ? { gate: d.gate } : {}),
+      // The repo's target (`own.mjs` `targetOf`): with one the reading counts in the health score; scored by the index, never here.
+      ...(typeof d.target === "number" || (d.target && typeof d.target === "object") ? { target: d.target } : {}),
+      // `"backfill": false` (`own.mjs`): the reading measures this desktop, not the commit; the tile says so.
+      ...(d.backfill === false ? { backfill: false } : {}),
       points: pts,
       last: pts.length ? pts[pts.length - 1].v : null,
       reading: read,

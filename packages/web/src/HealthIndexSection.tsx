@@ -31,7 +31,7 @@ export function HealthIndexSection({ repoId, onAsk, onAskTrend, onQualityRun, ax
   onCommits?: (avail: ReturnType<typeof healthCommitsAvailability> | null) => void;
 }) {
   const res = useRemoteResource<HealthIndexResponse>(
-    `healthindex:${repoId}`, () => api.healthIndex(repoId), { enabled: !!repoId });
+    `health:index:${repoId}`, () => api.healthIndex(repoId), { enabled: !!repoId, cache: { shape: 1 } });
   // The index is derived from the series the region above re-reads: when that moves (a refresh,
   // a host run), read the index again — else a first run leaves "no series yet" under its rows.
   const { reload } = res;

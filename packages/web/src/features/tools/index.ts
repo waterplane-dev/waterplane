@@ -12,6 +12,7 @@ import {
 } from "./ToolSheets";
 import { bootStripDoors } from "./actions";
 import { localRtFocus, netFocus } from "./store";
+import { archiveOpen } from "../../archiveOpen";
 
 export const manifest: FeatureManifest = {
   id: "tools",
@@ -25,7 +26,7 @@ export const manifest: FeatureManifest = {
     { id: "nethealth", persisted: false, render: () => createElement(NetHealthToolSheet), onLeave: () => netFocus.set(undefined), keep: keepStores(netFocus) },
     { id: "localrt", persisted: false, render: () => createElement(LocalRtToolSheet), onLeave: () => localRtFocus.set(undefined), keep: keepStores(localRtFocus) },
     { id: "repocolor", persisted: true, render: () => createElement(RepoColorToolSheet) },
-    { id: "archive", persisted: true, render: () => createElement(ArchiveToolSheet) },
+    { id: "archive", persisted: true, render: () => createElement(ArchiveToolSheet), onLeave: () => archiveOpen.set(undefined), keep: keepStores(archiveOpen) },
   ],
   boot: () => bootStripDoors(),
 };

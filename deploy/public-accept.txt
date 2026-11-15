@@ -207,3 +207,9 @@ packages/extensions/links/test/links.test.mjs:697e538c68  # made-up tailnet fixt
 packages/extensions/links/test/links.test.mjs:f1eb6eb8bd  # made-up tailnet fixture in the links extension test (not this tailnet)
 packages/extensions/links/test/links.test.mjs:50d3e60bcf  # made-up tailnet fixture in the links extension test (not this tailnet)
 packages/extensions/links/web/logic.test.mjs:dc8cf07a44  # made-up tailnet fixture in the links extension test (not this tailnet)
+packages/host/test/setupshare.test.mjs:c33a38063a  # placeholder repo key 0123456789abcdef in a setup-share fixture
+packages/shared/test/agentshare.test.mjs:04f1abc42f  # placeholder repo key 0123456789abcdef in a setup-share fixture
+packages/shared/test/agentshare.test.mjs:fb4afe0066  # placeholder repo key fedcba9876543210 in a setup-share fixture
+packages/web/src/agentReadingsWords.test.mjs:81074ebf95  # placeholder repo key 0123456789abcdef in a setup-share fixture
+packages/web/src/core/queue/swRelay.test.mjs:6f50a6210d  # made-up tailnet origin in the relay test (not this tailnet)
+packages/app/android/app/src/test/resources/update-signature-vector.json:b837d18a79  # fixture: regenerated otherKey (a public key, gen-update-vector.mjs)

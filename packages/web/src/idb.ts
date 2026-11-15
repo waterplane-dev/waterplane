@@ -45,6 +45,11 @@
  *    inside the Android shell — so in the APK this store IS the offline grid
  *    (thumbCache.ts).
  *
+ *  - `relay` (v17) — keyed by field name (`plan`, `own`, `receipts`, `written`, `auth`, …): the
+ *    PWA service worker's background relay. The worker writes here too; `idbUpdate` is the one
+ *    read-modify-write in a single transaction, so a claim never loses a write in flight.
+ *  - `rescache` (v16) — keyed `<host id>|<resource key>`: the last answer of any host read
+ *    that did not bring its own cache (`useRemoteResource`, `resourceCache.ts`).
  *  - `extassets` (v13) — keyed `<extension id>/<file>`: an extension's downloaded
  *    engine (the OCR reader's worker, wasm and language data) as Blobs. Not Cache
  *    Storage: the APK has no service worker and plain http has no Cache API.
@@ -88,7 +93,7 @@ function afterMigration(db: IDBDatabase): Promise<IDBDatabase> {
   const copy = copyLegacyStores(db, thisLegacyDbNames()).catch(() => { /* best-effort */ });
   return Promise.race([copy, new Promise((r) => setTimeout(r, MIGRATE_WAIT_MS))]).then(() => db);
 }
-const DB_VERSION = 15;
+const DB_VERSION = 17;
 
 function upgrade(db: IDBDatabase) {
   if (!db.objectStoreNames.contains("transcripts")) db.createObjectStore("transcripts");
@@ -164,6 +169,15 @@ function upgrade(db: IDBDatabase) {
   // (`sdk/extDeviceBlobs.ts`), keyed `<pluginId>/<key>`: the vault's phone mirror (sealed records,
   // the wrap, the local log). Never localStorage. A lost store is a pull again, not a loss of the vault.
   if (!db.objectStoreNames.contains("devblobs")) db.createObjectStore("devblobs");
+  // v16 — the DEFAULT read cache (`resourceCache.ts`, `useRemoteResource`): the last answer of every
+  // host read, keyed `<host id>|<resource key>`. Re-fetchable; capped at 200 rows by its writer.
+  if (!db.objectStoreNames.contains("rescache")) db.createObjectStore("rescache");
+  // v17 — the PWA's background relay (`core/queue/swRelayOwner.ts`, `public/swRelay.js`): the
+  // queue's relay plan, who owns it, the receipts and written ackIds the service worker earned
+  // since the page last claimed, and the bearer (absent when sign-ins are sealed). A copy of the
+  // queue's frames, never the source of truth: the localStorage queue is. Shared with the worker,
+  // which opens this DB versionless and does nothing when the store is not there yet.
+  if (!db.objectStoreNames.contains("relay")) db.createObjectStore("relay");
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
@@ -262,6 +276,48 @@ async function run<T>(store: string, mode: IDBTransactionMode, op: (s: IDBObject
     // instead of failing every write from here on; a store this build knows
     // about but the on-disk version does not (`NotFoundError`, the fallback
     // open above) is a real "no cache" and keeps the handle.
+    if ((err as DOMException)?.name !== "NotFoundError") dbPromise = null;
+    return null;
+  }
+}
+
+/**
+ * Read `keys` of `store` and write what `mutate` returns, in ONE readwrite transaction — so a
+ * second writer (the service worker on the `relay` store) cannot land between the read and the
+ * write. `mutate` gets the values (absent ⇒ undefined) and returns `{ put, del, result }`.
+ * Resolves `result` once the transaction COMMITTED, or null on any failure (nothing written).
+ */
+export async function idbUpdate<T>(
+  store: string, keys: readonly string[],
+  mutate: (vals: Record<string, unknown>) => { put?: Record<string, unknown>; del?: readonly string[]; result: T },
+): Promise<T | null> {
+  try {
+    const db = await openDb();
+    if (!db) return null;
+    return await new Promise<T | null>((resolve) => {
+      const tx = db.transaction(store, "readwrite");
+      const s = tx.objectStore(store);
+      const vals: Record<string, unknown> = {};
+      let left = keys.length;
+      let out: T | null = null;
+      const write = () => {
+        try {
+          const r = mutate(vals);
+          for (const [k, v] of Object.entries(r.put ?? {})) s.put(v, k);
+          for (const k of r.del ?? []) s.delete(k);
+          out = r.result;
+        } catch { tx.abort(); }
+      };
+      tx.oncomplete = () => resolve(out);
+      tx.onerror = () => resolve(null);
+      tx.onabort = () => resolve(null);
+      if (!left) { write(); return; }
+      for (const k of keys) {
+        const req = s.get(k);
+        req.onsuccess = () => { vals[k] = req.result; if (--left === 0) write(); };
+      }
+    });
+  } catch (err) {
     if ((err as DOMException)?.name !== "NotFoundError") dbPromise = null;
     return null;
   }

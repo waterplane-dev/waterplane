@@ -12,19 +12,22 @@
  * Two things about it are load-bearing and were wrong when it lived inline in
  * main.ts:
  *
- *   • The TTL outlives the client's queue. It was 15 min while the phone's
- *     `QUEUE_TTL_MS` (web/outbox.ts) is 30 — so an entry could still be sitting
- *     in localStorage, eligible for one more retry, after the host had already
- *     forgotten it. That is a double-type hole, not a theoretical one. 45 min
- *     keeps the host's memory strictly longer than anything the client will
- *     still send.
+ *   • The TTL is 45 min. It was set when the phone's queue expired rows at
+ *     30 min (`QUEUE_TTL_MS`, now gone: rows never expire, `web/outbox.ts`),
+ *     so it no longer outlives everything the client may still send — a row
+ *     can sit in localStorage for hours. The cover for the case that matters
+ *     is per record: a verdict earned through the background relay
+ *     (`POST /api/relay`, `server/relay.ts`) — sent while the page was frozen,
+ *     so the page may re-send the same ackId whenever it next wakes — carries
+ *     `keepUntil` and is kept `RELAY_KEEP_MS` (24 h), persisted with the rest.
+ *     A file written before `keepUntil` existed reads exactly as it did.
  *
  *   • It survives a restart. `npm run restart` is routine (every host edit), and
  *     an in-memory-only ledger forgets everything across it — so a queued
  *     `fanout.run` re-sent after a restart would start the whole sweep again.
  *     The map is therefore persisted to <STATE_DIR>/acks.json:
  *
- *       { "updatedAt": …, "acks": { "<ackId>": { ts, ok, reason?, itemId?, sessionId?, runId?, op? } } }
+ *       { "updatedAt": …, "acks": { "<ackId>": { ts, ok, reason?, itemId?, sessionId?, runId?, op?, keepUntil? } } }
  *
  * Three details of HOW it is persisted are load-bearing, because the window they
  * cover is exactly the window a restart lands in:
@@ -52,7 +55,7 @@
  *
  * A file that is PRESENT and does not parse is not "start empty" any more: it is
  * moved aside (`jsonstore.ts`, `acks.json.corrupt-<ts>`), logged, and the loss
- * is held in `lost` for one TTL so `main.ts` can tell a person. Inside that
+ * is held in `lost` for the longest any record is kept (`RELAY_KEEP_MS`) so `main.ts` can tell a person. Inside that
  * window an UNKNOWN ackId whose message says it was first sent before the loss
  * (`firstSentAt`/`sentAt`, `shared/sendstamp.ts`) is REFUSED, never run —
  * `preLossRefusal` below, asked by every ackId path (`durableOp`,
@@ -106,6 +109,10 @@ export interface AckRecord {
    *  opposite reactions from the phone, and a retry must not be told the wrong
    *  one. */
   state?: "ok" | "notready" | "unconfirmed" | "unsubmitted" | "stale" | "rescued" | "forked";
+  /** Kept until this instant instead of `ts + ACK_TTL_MS` — set for a verdict
+   *  the background relay earned (`keepLong`). Absent ⇒ the ordinary TTL; an
+   *  older file never has it. Never shortens a record below its TTL. */
+  keepUntil?: number;
 }
 
 interface AckDoc {
@@ -113,8 +120,20 @@ interface AckDoc {
   acks: Record<string, AckRecord>;
 }
 
-/** Must stay > the client's QUEUE_TTL_MS (30 min) — see the header. */
+/** The ordinary record's life. The phone's queue no longer expires rows, so
+ *  this is NOT longer than everything a client may re-send — see the header. */
 export const ACK_TTL_MS = 45 * 60_000;
+/** A relay-earned verdict's life (`keepLong`): the page that owns the row may
+ *  be frozen for hours before it re-sends the same ackId. */
+export const RELAY_KEEP_MS = 24 * 60 * 60_000;
+/** How many ackIds may be marked for a long keep before their verdict lands. */
+const LONG_KEEP_MAX = 1000;
+
+/** The instant a record stops being an answer. */
+function expiresAt(rec: AckRecord): number {
+  const ttl = rec.ts + ACK_TTL_MS;
+  return typeof rec.keepUntil === "number" && rec.keepUntil > ttl ? rec.keepUntil : ttl;
+}
 const ACK_MAX = 1000;
 /** Debounce for the high-frequency records only (`input.ack`). Op verdicts skip
  *  it entirely — see the header: a restart lands INSIDE this window. */
@@ -172,10 +191,16 @@ export class AckLedger {
    */
   onWriteError: ((message: string) => void) | null = null;
   private timer: NodeJS.Timeout | null = null;
+  /** ackIds the relay carried whose verdict has not been remembered yet (still
+   *  in flight, or a `retryable` that is never remembered) ⇒ the `keepUntil`
+   *  `remember` stamps when it lands. Memory only: an in-flight delivery does
+   *  not survive a restart either. */
+  private longKeep = new Map<string, number>();
 
   /** Set when the persisted ledger was present but unreadable at boot: when,
    *  where its bytes were kept, and until when a re-send of a pre-loss op may
-   *  still arrive (one TTL — after that nothing it held could be replayed). */
+   *  still arrive (the longest keep, `RELAY_KEEP_MS` — the file may have held a
+   *  relay verdict; after that nothing it held could be replayed). */
   readonly lost: { at: number; movedTo: string | null; until: number } | null = null;
 
   constructor(root: string) {
@@ -184,7 +209,7 @@ export class AckLedger {
     const read = readJsonGuardedDetail<AckDoc | null>(this.path, null, isDoc);
     const now = Date.now();
     if (read.corrupt) {
-      this.lost = { at: now, movedTo: read.corrupt.movedTo, until: now + ACK_TTL_MS };
+      this.lost = { at: now, movedTo: read.corrupt.movedTo, until: now + RELAY_KEEP_MS };
       console.error(
         `[acks] the at-most-once ledger was unreadable (${read.corrupt.error}). Any send retried from before this boot ` +
           "can no longer be recognised as a repeat and may run a second time." +
@@ -194,7 +219,7 @@ export class AckLedger {
     for (const [id, rec] of Object.entries(read.value?.acks ?? {})) {
       // Drop anything already stale on load: replaying a day-old verdict to a
       // client that has long since given up is worse than re-running.
-      if (rec && typeof rec.ts === "number" && now - rec.ts <= ACK_TTL_MS) this.acks.set(id, rec);
+      if (rec && typeof rec.ts === "number" && now <= expiresAt(rec)) this.acks.set(id, rec);
     }
   }
 
@@ -213,32 +238,58 @@ export class AckLedger {
   get(ackId: string): AckRecord | undefined {
     const rec = this.acks.get(ackId);
     if (!rec) return undefined;
-    if (Date.now() - rec.ts > ACK_TTL_MS) { this.acks.delete(ackId); return undefined; }
+    if (Date.now() > expiresAt(rec)) { this.acks.delete(ackId); return undefined; }
     return rec;
+  }
+
+  /**
+   * Keep this ackId's verdict until `until` (`RELAY_KEEP_MS` from now by
+   * default) — asked by the background relay (`server/relay.ts`) BEFORE it
+   * dispatches a frame. Already remembered (the page sent it first) ⇒ that
+   * record is extended and written now; not yet ⇒ the verdict gets `keepUntil`
+   * whenever `remember` lands it. Only ever lengthens.
+   */
+  keepLong(ackId: string, until = Date.now() + RELAY_KEEP_MS): void {
+    const now = Date.now();
+    const rec = this.acks.get(ackId);
+    if (rec && now <= expiresAt(rec)) {
+      if ((rec.keepUntil ?? 0) < until) { rec.keepUntil = until; this.flush(); }
+      return;
+    }
+    this.longKeep.set(ackId, Math.max(until, this.longKeep.get(ackId) ?? 0));
+    if (this.longKeep.size > LONG_KEEP_MAX) {
+      for (const [k, v] of this.longKeep) { if (v < now) this.longKeep.delete(k); }
+      for (const k of this.longKeep.keys()) { if (this.longKeep.size <= LONG_KEEP_MAX) break; this.longKeep.delete(k); }
+    }
   }
 
   /** Record what this ackId did, so a retry re-acks instead of re-running. */
   remember(ackId: string, rec: Omit<AckRecord, "ts">): void {
     const now = Date.now();
-    this.acks.set(ackId, { ...rec, ts: now });
+    const keep = this.longKeep.get(ackId);
+    const long = keep !== undefined && keep > now;
+    if (keep !== undefined) this.longKeep.delete(ackId);
+    this.acks.set(ackId, long ? { ...rec, ts: now, keepUntil: keep } : { ...rec, ts: now });
     if (this.acks.size > ACK_MAX) {
       for (const [k, v] of this.acks) {
-        if (now - v.ts > ACK_TTL_MS) this.acks.delete(k);
+        if (now > expiresAt(v)) this.acks.delete(k);
       }
       // Still over budget after expiry ⇒ evict by insertion order (Map keeps
       // it), but NON-OP records first. The cap is shared between two very
       // different populations: keystroke-frequency `input.ack` receipts and the
       // handful of op verdicts. Plain oldest-first eviction means enough acked
-      // sends inside the client's 30-minute retry window push a still-retryable
+      // sends inside the window a client still retries in push a still-retryable
       // fan-out verdict out of the ledger — and the next retry re-runs the whole
       // sweep. So op verdicts survive to their TTL; a lost input receipt costs
-      // at most one retyped line.
-      this.evictOldest((v) => !v.op);
+      // at most one retyped line. A relay-earned verdict (`keepUntil`) is
+      // protected the same way: its re-send comes from a page that was frozen.
+      this.evictOldest((v) => !v.op && v.keepUntil === undefined);
       this.evictOldest(() => true);
     }
     // An op verdict is the expensive one to forget and rare enough to afford a
     // synchronous write; everything else rides the debounce. See the header.
-    if (rec.op) this.flush();
+    // A relay-earned one too: the page that will re-send it may be hours away.
+    if (rec.op || long) this.flush();
     else this.schedulePersist();
   }
 

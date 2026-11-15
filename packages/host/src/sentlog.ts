@@ -27,9 +27,9 @@
  */
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { DeliveryShape, SentCommand, SentSource } from "@waterplane/shared";
+import type { DeliveryShape, SentCommand, SentSource, StoreLoss } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, recordWriteLoss, storeLossFor, writeJsonAtomic } from "./jsonstore.js";
 
 /** Ring size. Entries are small (a capped text plus labels). */
 const LOG_LIMIT = 1000;
@@ -158,6 +158,11 @@ export class SentLog {
     this.persist();
   }
 
+  /** The undismissed loss of `sent.json`, if any — rides `sent.log`. */
+  loss(): StoreLoss | undefined {
+    return storeLossFor(this.path);
+  }
+
   private schedule(): void {
     if (this.timer) return;
     this.timer = setTimeout(() => { this.timer = null; this.persist(); }, SAVE_DEBOUNCE_MS);
@@ -169,7 +174,7 @@ export class SentLog {
     try {
       mkdirSync(join(this.path, ".."), { recursive: true });
       writeJsonAtomic(this.path, this.entries);
-    } catch { /* non-fatal — keep serving from memory */ }
+    } catch (e) { recordWriteLoss(this.path, e); /* non-fatal — keep serving from memory */ }
   }
 }
 

@@ -606,24 +606,24 @@ Vault access grants cover apps' API keys on the developer machine and on-demand 
 - shipped: 07b52bcc, c84caaa2
 
 
-### R-vault-115 · built
+### R-vault-115 · shipped
 An agent can ask for several vault changes at once (store values, allow a program, switch on boot unlock, revoke) as one card and one fingerprint, with the steps drawn on the phone; a sequence that stops says which steps ran, and `wp-secret sequence` takes a plan file with no values in it and the values on stdin.
 - asked: 2026-11-06
 - plan: docs/analysis/vault/SEQUENCE-CARD-PLAN.md (built and reviewed 2026-11-06)
 
-### R-vault-116 · built
+### R-vault-116 · shipped
 A value `wp-secret exec` released is replaced by `[secret]` in piped output, raw and in common encodings, so a run does not put a key into an agent's transcript by accident; a terminal run is unchanged.
 - asked: 2026-11-06
 - plan: docs/analysis/vault/BROKER-PLAN.md
 - shipped: bec04d4f
 - not yet tried on a real phone: the card line for a run with raw output
 
-### R-vault-117 · built
+### R-vault-117 · shipped
 A key stored as proxied is never handed to a program: the program gets a local URL and a throwaway token, the daemon adds the real key and forwards only to that provider's fixed host, and every other way out of the daemon refuses it in words, except a backup.
 - asked: 2026-11-06
 - plan: docs/analysis/vault/BROKER-PLAN.md (built and reviewed 2026-11-06 by AI agents only; one provider, Gemini; not yet tried on a real phone or against the real provider)
 
-### R-vault-121 · built
+### R-vault-121 · shipped
 A service that asks the vault when a feature runs can use a proxied key: a brokered fetch gets a local URL and a throwaway token, lives the same life as an exec (under a lease, a grant, once, and across a restart, which ends the token and keeps the lease), and a plain fetch of a proxied key is refused in words naming `proxied()`. The broker keeps itself bounded (dead runs swept every 60 s, 3 tokens per run, 64 overall, a full broker refusing before anything is committed). The one-file client is version 3 (`proxied()`, `callProxied()`; a plain key answers with the value so a program can change before the key flips), a proxied key can be stored from a laptop browser as from the phone, "Who uses my secrets" counts the calls that went through the broker per secret, and a recover ends a re-arm card made for the old phone's key. A rewired program that carries an older client, and the older vault.json copies still readable, are named in words, never removed.
 - asked: 2026-11-07
 - plan: docs/analysis/vault/SERVICE-BROKER-PLAN.md (built and reviewed 2026-11-07 by AI agents only; not yet tried on a real phone or against the real provider)
@@ -692,7 +692,7 @@ Use › Reach › Over time opens on a "by reach" view: per recorded day, how ma
 - asked: 2026-11-08 (owner request: "an aggregated view over time so I see my down scoping progress")
 - shipped: 992e99c1
 
-### R-vault-145 · built
+### R-vault-145 · shipped
 The exposure screen's third reading says in plain words what it counts and why: one sentence first names how many secrets reach the whole account or more (or are not rated), how many of them something on this desktop references (a repo's env file, a grant, a program, a reboot copy) — the ones to downscope or rewire — and how many have no reference seen. The chart draws the referenced count as a solid line inside a dashed line of every wide secret, each with its latest number, and the lists are named "referenced" and "no reference seen". It never says a secret is used: a reference is not use.
 - asked: 2026-11-08 (owner: "the wired in tab is also confusing")
 
@@ -864,6 +864,6 @@ A vault release ask always appears on top, wherever the person is in the app, ov
 - asked: 2026-11-10
 - shipped: d0fd0358
 
-### R-vault-163 · built
+### R-vault-163 · shipped
 Each paired phone has one switch under Copy on this phone, "Everything, and anything added later": while it is on, the desktop copies every login and env secret it can mirror to that phone, including ones stored after the switch was turned on, with no step per secret; turning it off removes from the phone what only the switch had put there. Turning it on or off is one fingerprint card that says what it means, and a removed device loses its switch. Copy on this phone is also a row on the Vault home.
 - asked: 2026-11-13 (owner: "a real full sync")

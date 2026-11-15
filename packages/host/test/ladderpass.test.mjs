@@ -115,7 +115,7 @@ test("a due work item fires through exactly one executor", async () => {
 
 // ── 2. one pass claims before it judges the next row ────────────────────────
 
-test("two due rows in one worktree, one pass: the second waits on serial", async () => {
+test("two due rows in one worktree, one pass: the second waits on serial (R-queue-002)", async () => {
   let armed = false;
   let pending;
   const { store, state, done } = makeStore({ autoFire: () => armed });

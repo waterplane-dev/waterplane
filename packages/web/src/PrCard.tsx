@@ -9,6 +9,7 @@ import { Button, Hint } from "./kit";
 import { openExternal } from "./openExternal";
 import { showToast } from "./toast";
 import { LEASE_RENEW_MS, checksState, checksWords, mergeMethod, pickedMethod, prActionFailWords, reviewWords } from "./prCardLogic";
+import { randId } from "./randId";
 
 /** One failing check's log (or its page), shown under the card until closed. */
 interface LogView { title: string; text: string }
@@ -30,7 +31,7 @@ export function PrCard({ repoId, rules }: { repoId: string; rules: BranchRules }
   const [log, setLog] = useState<LogView | null>(null);
   const [method, setMethod] = useState<MergeMethod | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
-  const holder = useRef(`phone-${Math.random().toString(36).slice(2)}`);
+  const holder = useRef(`phone-${randId(11)}`);
 
   const lease = useCallback(async () => {
     try { setDoc(await api.prLease(repoId, holder.current)); setErr(null); }

@@ -25,7 +25,9 @@
  *    no red region. A reading compared to its own past has no side to be on:
  *    rising lines and rising escape hatches are opposite news, and a hue would
  *    choose for the reader. The slope is a glyph in `currentColor` with its own
- *    word beside it.
+ *    word beside it. The ONE side taken is per METRIC, not per reading: the
+ *    `Aim` line ("lower is better", owner 2026-11-14), the same in ink whatever
+ *    the value — the reader holds the slope against it.
  *  - **Dashes are reserved for thresholds**, which is why the p95 and the
  *    longest file are printed as words under the tape rather than drawn as
  *    rules over it. Nobody chose either number.
@@ -45,11 +47,11 @@
  * to the tool.
  */
 import { useRef, useState, type ReactNode } from "react";
-import { ChevronUp, Minus, Send, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronUp, Minus, Send, TrendingDown, TrendingUp } from "lucide-react";
 import type { RepoHealthPlotSeries, RepoHealthPoint } from "@waterplane/shared";
 import { MIN_READINGS, nearestPlotted, sparkGeom } from "./repoHealthPlot";
 import {
-  pointReadoutWords, rankSentence, rankChipWords, kpiMeaning,
+  pointReadoutWords, rankSentence, rankChipWords, kpiMeaning, aimWords, seriesAim, type SeriesAim,
   seriesValueWords, slopeWords, tileAbsentWords, variantHidesChart, variantWords,
   SERIES_ASK_ALL_LABEL, SERIES_ASK_LABEL, plotAxisModeWords, rankBasisWords, seriesAskNoteWords,
 } from "./repoHealthWords";
@@ -276,6 +278,21 @@ function Slope({ slope }: { slope: RepoHealthPlotSeries["reading"]["slope"] }) {
   );
 }
 
+/** Which way is better for this METRIC (owner, 2026-11-14): one ink line under
+ *  the value, the same whatever the reading — the reader holds the slope against
+ *  it. An open tile adds the reason when it is "neither way". */
+function Aim({ aim, open }: { aim: SeriesAim | null; open: boolean }) {
+  const w = aimWords(aim);
+  if (!w || !aim) return null;
+  const Glyph = "better" in aim ? (aim.better === "lower" ? ArrowDown : ArrowUp) : ArrowUpDown;
+  return (
+    <div className="rh-aim">
+      <span className="rh-aim-short"><Glyph size={12} aria-hidden /> {w.short}</span>
+      {open && w.why ? <span className="rh-aim-why"> — {w.why}</span> : null}
+    </div>
+  );
+}
+
 /**
  * One stat tile: the value, the trend, and what the tool reads into it.
  *
@@ -291,8 +308,11 @@ function Slope({ slope }: { slope: RepoHealthPlotSeries["reading"]["slope"] }) {
  * `actions` is a slot, so this file knows nothing about sending — a chart
  * module that cannot reach a send path cannot become one that applies itself.
  */
-export function SeriesTile({ s, width, actions, means, open, onToggle }: {
+export function SeriesTile({ s, width, actions, means, better, open, onToggle }: {
   s: RepoHealthPlotSeries;
+  /** A repo's OWN reading's declared direction (`null` = declares none);
+   *  absent for the engine's readings, whose direction is the catalog's. */
+  better?: "lower" | "higher" | null;
   width?: number;
   actions?: ReactNode;
   /** A repo's OWN reading: its declared sentence stands where waterplane's
@@ -323,6 +343,7 @@ export function SeriesTile({ s, width, actions, means, open, onToggle }: {
   const drawn = canDraw && w > 0;
   const absent = hidden ? null : tileAbsentWords({ absent: s.absent, readings, minToDraw: MIN_READINGS });
   const toggle = () => { setPickedIndex(null); onToggle?.(); };
+  const aim = seriesAim(s.key, better);
 
   // The head: in the grid the NAME is the toggle (`aria-expanded`), and in a
   // compact tile its hit area is stretched over the whole tile by CSS — the
@@ -357,6 +378,7 @@ export function SeriesTile({ s, width, actions, means, open, onToggle }: {
           <span className="rh-tile-val">{seriesValueWords(s.last, s.unit)}</span>
           <Slope slope={s.reading.slope} />
         </div>
+        <Aim aim={aim} open={false} />
         {plot(false)}
         {/* Absences never fold: a compact tile still says why it has no curve. */}
         {hidden && variant ? <div className="rh-tile-variant">{variant.lead}</div> : null}
@@ -393,6 +415,7 @@ export function SeriesTile({ s, width, actions, means, open, onToggle }: {
         <Slope slope={s.reading.slope} />
         {chip ? <span className="rh-rank">{chip}</span> : null}
       </div>
+      <Aim aim={aim} open />
       {plot(true)}
       {/* The crosshair's answer, in words, in a line that is ALWAYS there.
           Fixed by its own rule in CSS rather than by its content, so dragging
@@ -421,11 +444,13 @@ export function SeriesTile({ s, width, actions, means, open, onToggle }: {
  * tile spans both columns, the rest stay compact. The state is here and not
  * in a tile, because "one at a time" is a fact about the set.
  */
-export function TileGrid<T extends RepoHealthPlotSeries>({ series, actionsFor, meansFor, axis }: {
+export function TileGrid<T extends RepoHealthPlotSeries>({ series, actionsFor, meansFor, betterFor, axis }: {
   series: readonly T[];
   actionsFor?: (s: T) => ReactNode;
   /** A repo's own `means` per tile (see `SeriesTile`). */
   meansFor?: (s: T) => string | undefined;
+  /** A repo's own declared direction per tile (see `SeriesTile`'s `better`). */
+  betterFor?: (s: T) => "lower" | "higher" | null;
   axis?: HealthAxisMode;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -434,7 +459,7 @@ export function TileGrid<T extends RepoHealthPlotSeries>({ series, actionsFor, m
   return (
     <ul className="rh-tiles rh-grid">
       {series.map((s) => (
-        <SeriesTile key={s.key} s={s} axis={axis} means={meansFor?.(s)}
+        <SeriesTile key={s.key} s={s} axis={axis} means={meansFor?.(s)} better={betterFor?.(s)}
           open={open === s.key}
           onToggle={() => setOpenKey((k) => toggleOpen(openAmong(k, keys), s.key))}
           actions={actionsFor?.(s)} />

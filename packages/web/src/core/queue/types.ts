@@ -8,7 +8,7 @@
  */
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type {
-  BudgetVerdict, HostMessage, PeriodState, LaunchIntent, OpenDelivery, RepoTarget, SendBlockReason, SerialWatch, SessionInfo, UsageBudget,
+  BudgetVerdict, HostMessage, PeriodState, LaunchIntent, OpenDelivery, RepoTarget, SendBlockReason, SerialWatch, SessionInfo, StoreLoss, UsageBudget,
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../../outbox";
 import type { HostConnection } from "../../ws";
@@ -19,7 +19,7 @@ import type { DurableOp, QueueBacklogOpts, UploadBuf, UploadProgress } from "../
 
 type Ref<T> = { readonly current: T };
 type Msg<T extends HostMessage["t"]> = Extract<HostMessage, { t: T }>;
-export type BudgetState = { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[] } | null;
+export type BudgetState = { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[]; loss?: StoreLoss } | null;
 
 /** What App hands the queue: the socket, this render's lists and view, and the
  *  compose box it restores into. Everything the queue can own or derive — the

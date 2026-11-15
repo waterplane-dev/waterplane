@@ -63,7 +63,7 @@ const OPTS = [
   { scope: "outbox", kind: "document" },
 ];
 
-test("the sync and async artifact walks answer the same rows over a tree with links out of it", async (t) => {
+test("the sync and async artifact walks answer the same rows over a tree with links out of it (R-security-016)", async (t) => {
   const { base, wt } = fixture();
   t.after(() => rmSync(base, { recursive: true, force: true }));
   for (const o of OPTS) {

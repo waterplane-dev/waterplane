@@ -13,7 +13,8 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { entryProse, onlyUploadsFailed, restorableFailed } from "../../activityRows";
 import { sendModeToast } from "../../composeSend";
-import { pendingLaneId, unpark } from "./logic.ts";
+import { pendingLaneId, relayReaimRefusal, unpark } from "./logic.ts";
+import { relayHeld } from "./relayOwner.ts";
 import { mayBeInSession, revivable } from "./phase.ts";
 import type { QueueCtx, VerbFns } from "./types.ts";
 
@@ -119,6 +120,9 @@ export function verbFns(c: QueueCtx): VerbFns {
     const e = cur.find((x) => x.ackId === ackId);
     if (!e) return false;
     if (!canRetarget(e)) { showToast(e.mode === "op" ? "an action can't be re-aimed" : "already on its way"); return false; }
+    // Never while the background relay may have sent it: a re-aim mints a new ackId, a second run.
+    const relayNo = relayReaimRefusal(e, relayHeld());
+    if (relayNo) { showToast(relayNo); return false; }
     track("action:queue.retarget");
     writeOutbox(retargetEntry(cur, ackId, { ...to, ackId: newAckId() }));
     showToast(to.mode === "backlog" ? "moved to that repo's backlog" : "moved to that session");
@@ -148,6 +152,8 @@ export function verbFns(c: QueueCtx): VerbFns {
     const e = cur.find((x) => x.ackId === ackId);
     if (!e) return;
     if (!canRetarget(e)) { showToast("already on its way"); return; }
+    const relayNo = relayReaimRefusal(e, relayHeld());
+    if (relayNo) { showToast(relayNo); return; }
     /**
      * **The one message the desktop must not be handed, on this path too.**
      *

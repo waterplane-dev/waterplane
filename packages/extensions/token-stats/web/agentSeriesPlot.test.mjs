@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { addLocalDays, AGENT_POINTS_CAP, AGENT_SUB_POINTS_CAP } from "@waterplane/shared";
 import {
   absentSummary, axisOf, clipBuckets, compareWords, coverFrom, DAY_GRAIN_MAX_DAYS, dayGrainOffered, dayKeyOfMs, fmtKChars, fmtReading, MARKER_KINDS, markerWords,
-  modelsIn, markerPickLabel, foldedCompareWords, MARK_ROW_H, partBands, partTwinWords, placeMarkers, ratioScale, readingDef, runsOf, shapePath, slotAtX, slotX, stackTops, valuesOnAxis,
+  bucketFigureWords, figureOrNull, groupedPartOrder, modelsIn, markerPickLabel, foldedCompareWords, MARK_ROW_H, partBands, partTwinWords, placeMarkers, ratioScale, readingDef, runsOf, shapePath, slotAtX, slotX, stackTops, valuesOnAxis,
 } from "./agentSeriesPlot.ts";
 
 const at = (day, h = 12) => new Date(`${day}T${String(h).padStart(2, "0")}:00:00`).getTime();
@@ -124,9 +124,13 @@ test("start-context parts stack in the given order; the biggest four keep a slot
   const tops = stackTops(bands, 2);
   assert.equal(tops[1][0].lo, 10);
   assert.equal(tops[1][0].hi, 40);
-  // The text twin names every part of the bucket, the folded ones too.
+  // The text twin names every part of the bucket, the folded ones too, grouped by whose it is
+  // (`claudeMd` whole is an older host's, so not split).
   assert.equal(partTwinWords({ key: "2026-11-02", parts: buckets[0].parts }, order),
-    "2026-11-02: System 10 · Tools 30 · CLAUDE.md 20 · Memory 5 · Skills 8 · Hooks 1 characters (median per part)");
+    "2026-11-02: yours: Memory 5; the CLI's: System 10 · Tools 30; not split: CLAUDE.md 20 · Skills 8 · Hooks 1 characters (median per part)");
+  // The stack's legend leads each band with its group, groups in order.
+  assert.deepEqual(groupedPartOrder([{ id: "system", label: "system prompt" }, { id: "projectMd", label: "CLAUDE.md, project" }, { id: "zz", label: "zz" }]),
+    [{ id: "projectMd", label: "the repo's: CLAUDE.md, project" }, { id: "system", label: "the CLI's: system prompt" }, { id: "zz", label: "not split: zz" }]);
   assert.equal(partTwinWords({ key: "k", parts: {} }, order), null);
 });
 
@@ -171,6 +175,32 @@ test("the before/after sentence names no side and quotes the band", () => {
   }
 });
 
+test("skill loads draw the mean and say the share with the n; every other reading says its median", () => {
+  const loads = readingDef("skills");
+  assert.equal(figureOrNull({ mean: 0.4, share: 0.25, n: 12 }), 0.4);
+  assert.equal(figureOrNull({ median: 3, n: 5 }), 3);
+  assert.equal(figureOrNull({ absent: "few" }), null);
+  assert.equal(bucketFigureWords(loads, { mean: 0.4, share: 0.25, n: 12 }), "mean 0.40 loads per session, 25% loaded at least one, 12 sessions");
+  assert.equal(bucketFigureWords(readingDef("look"), { median: 3, n: 5 }), "median 3 calls, 5 sessions");
+  assert.equal(bucketFigureWords(loads, { absent: "few" }), null);
+  const axis = axisOf(["2026-11-02"], "week");
+  assert.deepEqual(valuesOnAxis(axis, [{ key: "2026-11-02", skills: { mean: 0.5, share: 0.5, n: 6 } }], (b) => b.skills), [0.5]);
+  // A before/after of means says so.
+  const base = { before: 0.2, after: 0.5, ratio: 2.5, band: [0.7, 1.4], nBefore: 40, nAfter: 38, daysBefore: 10, daysAfter: 9, inside: false, mean: true };
+  assert.match(compareWords(loads, base), /^Skill loads per session \(means: most sessions load no skill/);
+  assert.match(compareWords(loads, base), /0\.20 loads/);
+});
+
+test("the model + CLI marker has its own row, shape and word", () => {
+  const k = MARKER_KINDS.find((x) => x.kind === "modelCli");
+  assert.equal(k.word, "Model + CLI");
+  assert.match(shapePath(k.shape, 10, 10, 5), /^M.*Z$/);
+  const axis = axisOf(["2026-11-02"], "week");
+  const l = placeMarkers([{ t: at("2026-11-03"), kind: "modelCli", label: "model + CLI: model a to b, CLI 2", detail: "d" }], axis, 0, 300);
+  assert.deepEqual(l.rows, ["modelCli"]);
+  assert.match(markerWords(l.placed[0]), /^Model \+ CLI, 2026-11-03: model \+ CLI: model a to b, CLI 2 \(d\)\.$/);
+});
+
 test("the ratio strip puts the band around the ratio and the no-change rule inside the scale", () => {
   const s = ratioScale(0.9, [0.8, 1.2], 200);
   assert.ok(s.band[0] < s.ratio && s.ratio < s.band[1]);
@@ -200,3 +230,19 @@ test("a folded mark lists its changes to pick from, and says which one the compa
 });
 
 test("a marker row is as tall as the touch minimum", () => assert.ok(MARK_ROW_H >= 44));
+
+test("by model: each side names its figure, n and days; the sentence names no side as better; notes carry model + CLI (R-metrics-072)", async () => {
+  const { byModelSideWords, byModelWords, byModelNotes, byModelHelp } = await import("./agentSeriesPlot.ts");
+  const side = (model, value, extra = {}) => ({ model, n: 35, days: 7, value, clis: ["2.1.1"], ...extra });
+  const r = { reading: "look", days: 14, a: side("m1", 20), b: side("m2", 8), ratio: 0.4, band: [0.8, 1.25], inside: false, others: [{ model: "m3", n: 4, days: 2 }], unnamed: 2 };
+  const def = readingDef("look");
+  assert.equal(byModelSideWords(def, r, "a"), "m1: 20 calls (35 sessions on 7 days)");
+  assert.equal(byModelWords(r), "m2 against m1: ratio ×0.4; shuffling whole days between the two models gives ×0.8 to ×1.25, so this is outside normal day-to-day variation.");
+  assert.doesNotMatch(byModelWords(r), /better|worse|improv/i);
+  assert.equal(byModelWords({ absent: "Only one model ran these sessions.", kind: "oneModel", models: [], unnamed: 0 }), "Only one model ran these sessions.");
+  assert.deepEqual(byModelNotes(r), ["Also in these days, not compared: m3 (4 sessions).", "2 sessions do not record their model and are left out."]);
+  assert.match(byModelNotes({ ...r, cliTogether: true, others: [], unnamed: 0 })[0], /changed together/);
+  const sk = { ...r, reading: "skills", mean: true, a: side("m1", 0.2, { share: 0.2 }) };
+  assert.equal(byModelSideWords(readingDef("skills"), sk, "a"), "m1: 0.20 loads mean, 20% loaded one (35 sessions on 7 days)");
+  assert.match(byModelHelp("ALT."), /at least 10 sessions on 4 days.*ALT\./);
+});

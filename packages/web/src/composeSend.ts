@@ -399,3 +399,64 @@ export function busySendRememberedToast(m: SendMode): string {
     ? "won't ask again — Send on a working session now waits until it is free; Settings › Writing & reading › Send while it works changes it"
     : "won't ask again — Send on a working session now goes straight in; Settings › Writing & reading › Send while it works changes it";
 }
+
+// ── Send while the dictation is still out ───────────────────────────────────
+
+/**
+ * **Send tapped while the words being dictated are not in the box yet** — the
+ * microphone is open, or a recording is waiting for the desktop to read it
+ * (the hourglass, a link that is down). Send used to send what was typed, or
+ * nothing at all on an empty box, and the words landed later with nobody
+ * looking. Now it ASKS: send the transcript unread the moment it is back, or
+ * leave it to be read first. Nobody has seen these words, so the ask says so.
+ *
+ * `phone`: the words are coming from the PHONE's recogniser (the desktop's
+ * whisper was not reachable) — those get noticeably more wrong, so sending
+ * them unread carries one more sentence. `typed`: there are words in the box
+ * already, which go with the transcript; *only what's typed* is the old Send —
+ * not offered with the phone's recogniser, which rewrites the box from what it
+ * held at the tap on every word, so the sent words would come straight back.
+ */
+export function dictationSendAsk(o: { typed: boolean; phone: boolean; why?: string | null }): {
+  title: string; lines: string[]; confirmLabel: string; cancelLabel: string; altLabel?: string; tone: "warn" | "info";
+} {
+  const lines = [
+    o.typed
+      ? "Send unread: the transcript goes the moment it is back, after what is typed, without you seeing it."
+      : "Send unread: the transcript goes the moment it is back, without you seeing it.",
+  ];
+  if (o.phone) {
+    let why = (o.why ?? "").trim();
+    while (why.endsWith(".")) why = why.slice(0, -1).trimEnd();
+    lines.push(`It comes from the phone's own recogniser${why ? ` (${why})` : ""}, not the desktop's whisper — it gets far more words wrong, names and code worst of all. Reading it first is safer.`);
+  }
+  const onlyTyped = o.typed && !o.phone;
+  if (onlyTyped) lines.push("Only what's typed: those words go now; the transcript lands in the empty box afterwards.");
+  lines.push("Read it first: nothing is sent — the words land in the box and wait for you.");
+  return {
+    title: "Your words are not back yet",
+    lines,
+    confirmLabel: "Send unread",
+    cancelLabel: "Read it first",
+    ...(onlyTyped ? { altLabel: "Only what's typed" } : {}),
+    tone: o.phone ? "warn" : "info",
+  };
+}
+
+/** Send tapped AGAIN while an unread send is waiting — the way back. */
+export const DICTATION_ARMED_ASK = {
+  title: "Send is waiting for your words",
+  lines: ["It goes, unread, the moment the transcript is back."],
+  confirmLabel: "Keep it",
+  cancelLabel: "Call it off",
+  tone: "info" as const,
+};
+
+/** What becomes of an unread send — said at the moment it changes. */
+export const DICTATION_SEND_TOAST = {
+  armed: "sends unread when your words are back — tap Send again to call it off",
+  off: "called off — the words land in the box and wait for you",
+  lost: "not sent — the recording did not come back into this box; what is there stays",
+  empty: "not sent — nothing came back from the recording",
+  left: "not sent — you left that session before your words came back",
+} as const;

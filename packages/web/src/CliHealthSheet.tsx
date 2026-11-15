@@ -48,7 +48,7 @@ import {
   type HostMessage,
   type SignalRecord,
 } from "@waterplane/shared";
-import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint, Button } from "./kit";
+import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint, Button, useOfflineGate } from "./kit";
 import { loadCliHealthSnap } from "./localState";
 
 /** The `clihealth` frame's checkout pointer — present only from a developer's install. */
@@ -117,10 +117,11 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
    *  desktop has no code to inspect, so they never see the button. */
   onInspect?: (facts: InspectFacts, source: CliHealthSource) => void;
 }) {
-  const res = useRemoteResource<CliHealthDoc>("clihealth", request, {
+  const res = useRemoteResource<CliHealthDoc>("clihealth:board", request, {
     offline: !online,
     fromCache: async () => loadCliHealthSnap(),
   });
+  const gate = useOfflineGate();
   const doc = res.data;
   // One clock for the whole render. Ten rows each calling `Date.now()` would
   // grade the last signal a few milliseconds later than the first — invisible,
@@ -163,7 +164,7 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
   return (
     <div className="sheet">
       <StaleHead title={<><Waypoints size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />CLI health</>} onClose={onClose}
-        bare iconSize={14} onRefresh={() => res.reload()}
+        bare iconSize={14} onRefresh={() => res.reload({ quiet: true })}
         refreshTitle="re-read — the board is a point-in-time answer, not a live feed" />
 
       <Hint>
@@ -203,10 +204,11 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
               <ConfirmButton className="key cli-clear"
                 title="you have read these: drop their misses so the board reads clean until something new fails"
                 confirm={<>clear {warned.length === 1 ? "it" : `all ${warned.length}`} — read?</>}
-                onConfirm={() => { if (onClearWarnings(through, warned.length)) res.reload(); }}>
+                onConfirm={gate.guard("clear the warnings", () => { if (onClearWarnings(through, warned.length)) res.reload({ quiet: true }); })}>
                 <Check size={13} /> clear {warned.length} warning{warned.length === 1 ? "" : "s"}
               </ConfirmButton>
             )}
+            {gate.note}
           </div>
         )}
 

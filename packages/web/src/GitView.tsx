@@ -22,6 +22,8 @@ import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./u
 import { Button } from "./kit/Button";
 import { Row, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { offlineSentence } from "./kit/offlineGate";
+import { linkOnline } from "./link";
 import { PrCard } from "./PrCard";
 import { cardVisible, pushLabel as pushLabelText } from "./prCardLogic";
 import { behindLabel, branchUpstream, incomingReading, incomingWords } from "./gitCounts";
@@ -261,14 +263,20 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * and nothing said anything at all. `error` and `offline` are separate states
    * here for exactly that reason.
    *
-   * Not cached: a working tree's status is only ever interesting as of NOW —
-   * showing yesterday's staged files and offering to commit them is worse than
-   * saying the link is down.
+   * Cached like every host read: offline the last status shows with its age, and every write
+   * (`refuse`) says it cannot run — yesterday's staged files are never offered a commit.
    */
-  const statusRes = useRemoteResource<GitStatus>(repoId, () => api.gitStatus(repoId));
+  const statusRes = useRemoteResource<GitStatus>(`git:status:${repoId}`, () => api.gitStatus(repoId), { cache: { shape: 1 } });
+  // Every write below asks this first: with the link down the sheet is a last copy, and a change
+  // made against it would be lost or look done. It refuses in the note line, in words.
+  const refuse = (verb: string): boolean => {
+    if (linkOnline()) return false;
+    setNote(offlineSentence(verb));
+    return true;
+  };
   const status = statusRes.data;
   // Keyed on the disclosure too, so opening it reads and closing it stops.
-  const branchRes = useRemoteResource<GitBranch[]>(`${repoId}:${showBranches}`, () => api.gitBranches(repoId), { enabled: showBranches });
+  const branchRes = useRemoteResource<GitBranch[]>(`git:branches:${repoId}`, () => api.gitBranches(repoId), { enabled: showBranches, cache: { shape: 1 } });
   const branches = branchRes.data;
 
   const refresh = () => statusRes.reload({ quiet: true });
@@ -297,6 +305,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   }, [openFile, repoId, diffRead]);
 
   async function toggleStage(f: GitFile) {
+    if (refuse("stage this file")) return;
     track("action:git.stage");
     await api.gitStage(repoId, f.path, f.staged);
     refresh();
@@ -311,6 +320,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * that stops a second call is the flag, not the pointer.
    */
   async function writeMessage() {
+    if (refuse("draft a commit message")) return;
     if (writing) return;
     track("action:git.message");
     setWriting(true); setNote(null); setDraft(null);
@@ -323,6 +333,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
     else setMessage(r.message);
   }
   async function commit() {
+    if (refuse("commit")) return;
     track("action:git.commit");
     setBusy(true); setNote(null);
     const r = await api.gitCommit(repoId, message, true);
@@ -338,6 +349,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * already running) and the sheet asks after it until it ends.
    */
   async function push(ahead = status?.ahead ?? 0, before = "") {
+    if (refuse("push")) return;
     if (pushStart != null) return;
     track("action:git.push");
     try {
@@ -352,6 +364,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   }
   /** The hook alone, on HEAD or a commit from the history. The same job as a push, so the same clock and steps. */
   async function runChecks(sha?: string) {
+    if (refuse("run the checks")) return;
     if (pushStart != null) return;
     track("action:git.check");
     try {
@@ -365,6 +378,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   }
   /** Only the commits up to `sha`; newer ones stay here. The hook still runs, and takes seconds where it remembers a pass. */
   async function pushTo(sha: string, commits: number) {
+    if (refuse("push")) return;
     if (pushStart != null) return;
     track("action:git.pushTo");
     try {
@@ -385,6 +399,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * Resolves to whether it landed, so `sync` knows whether to go on.
    */
   async function pull(): Promise<string | null> {
+    if (refuse("pull")) return null;
     if (pulling || pushStart != null) return null;
     setPulling(true); setNote(null);
     try {
@@ -407,6 +422,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * fetch, and a replay can change nothing about the count but the fetch can.
    */
   async function sync() {
+    if (refuse("sync")) return;
     if (pulling || pushStart != null) return;
     track("action:git.sync");
     const pulled = await pull();
@@ -468,6 +484,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   function toggleBranches() { setShowBranches((v) => !v); }
   /** Run a branch mutation, surface its result, and refresh status + the list. */
   async function runBranch(label: string, fn: () => Promise<{ ok: boolean; output?: string; error?: string }>) {
+    if (refuse("change branch")) return { ok: false, error: offlineSentence("change branch") };
     track("action:git.branch");
     setBusy(true); setNote(null);
     const r = await fn();
@@ -498,6 +515,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
    * getting the heavier affordance is the right way round.
    */
   async function deleteBranch(b: GitBranch) {
+    if (refuse("delete the branch")) return;
     if (b.current) return;
     let r = await api.gitDeleteBranch(repoId, b.name);
     if (!r.ok && /not fully merged/i.test(r.error ?? "")) {
@@ -593,7 +611,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
         {onBrowse && <Button title="browse files" onClick={() => { track("action:git.browse"); onBrowse(); }}><FolderTree size={16} /></Button>}
         <Button title="history — incoming, not pushed, and what both have" onClick={() => { track("action:git.log"); setLogFocus("all"); }}><History size={16} /></Button>
         <Button className={showBranches ? "active" : ""} title="branches" onClick={toggleBranches}><GitBranchIcon size={16} /></Button>
-        <Button onClick={refresh}><RotateCw size={16} /></Button>
+        <Button title="re-read the working tree" onClick={refresh}><RotateCw size={16} className={statusRes.inflight && status ? "spin" : ""} /></Button>
       </SheetHead>
 
       {status && (

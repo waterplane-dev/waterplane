@@ -150,6 +150,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   plugin: { name: "Plugins", note: "Something an installed plugin wanted you to know — its own words, from the desktop." },
   autofire: { name: "Auto-answered", note: "A question was answered for you, and with what." },
   idle: { name: "Turn finished", note: "Fires on EVERY turn of EVERY session — a handful of agents on a backlog is a notification a minute, which buries the two kinds above. Off unless you turn it on." },
+  "link.back": { name: "Desktop back online", note: "The desktop was unreachable for a couple of minutes or more and is reachable again. One push per outage, so anything you queued meanwhile can go. Words only." },
   info: { name: "Other", note: "Sessions opening, builds, host notices." },
   git: { name: "Git pull / push", note: "A pull or push the desktop ran ended. A failed one needs you and stays until the next run of that verb works or you tap done; a successful push is information; a successful pull says nothing." },
   undelivered: { name: "Prompt not delivered", note: "A session opened but the prompt never made it in. The only report of a message that is otherwise gone — the phone acked the op long before the typing failed." },

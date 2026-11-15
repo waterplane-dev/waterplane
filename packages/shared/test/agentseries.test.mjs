@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   seriesOf, compareAround, derivedMarkers, collapseMarkers, addLocalDays, hourKeyMs,
-  SERIES_MIN_N, isoWeekOf,
+  SERIES_MIN_N, isoWeekOf, MODEL_CLI_TEXT, START_PARTS, START_GROUPS, startGroupOf, partsByGroup,
 } from "../dist/index.js";
 
 const BASE = new Date(2026, 9, 5, 9, 0).getTime(); // Mon 5 Oct 2026, 09:00 local
@@ -123,4 +123,80 @@ test("derivedMarkers: model, CLI, memory and skills steps; same-kind markers col
   assert.equal(c[0].detail, "a; b; c");
   assert.equal(c[1].kind, "tag");
   assert.equal(c[2].count, undefined);
+});
+
+test("skills reading: fresh non-subagent sessions that carry a count; absent (not 0) with fewer than five or no count", () => {
+  const mk = (n, o = {}) => Array.from({ length: n }, (_, i) => pt(BASE + i * 60_000, { skills: i % 3, ...o }));
+  // Not a median: the mean per session and the share that loaded at least one, over the same n.
+  const b = seriesOf(mk(6), { grain: "day" })[0];
+  assert.deepEqual(b.skills, { mean: 1, share: 4 / 6, n: 6 });
+  // Mostly zeros (the real shape): a median would be 0; the mean and share still say something.
+  const sparse = seriesOf(mk(10, {}).map((p, i) => ({ ...p, skills: i < 2 ? 3 : 0 })), { grain: "day" })[0];
+  assert.deepEqual(sparse.skills, { mean: 0.6, share: 0.2, n: 10 });
+  // Every other reading stays a median.
+  assert.ok("median" in b.look && "median" in b.req && "median" in b.start);
+  const few = seriesOf(mk(4), { grain: "day" })[0];
+  assert.match(few.skills.absent, /fewer|at least 5|needs at least/);
+  const unsaid = seriesOf(mk(8, { skills: undefined }), { grain: "day" })[0];
+  assert.ok("absent" in unsaid.skills);
+  const subs = seriesOf(mk(8, { sub: true }), { grain: "day" })[0];
+  assert.ok("absent" in subs.skills);
+});
+
+test("compareAround on skill loads compares means (a median of mostly zeros has no ratio) and says so", () => {
+  const ps = [];
+  for (let d = 0; d < 28; d++) {
+    for (let s = 0; s < 6; s++) ps.push(pt(addLocalDays(BASE, d) + s * 3_600_000, { skills: s === 0 || (d >= 14 && s < 3) ? 1 : 0 }));
+  }
+  const at = hourKeyMs("2026-10-19T00");
+  const r = compareAround(ps, at, { reading: "skills" });
+  assert.ok(!("absent" in r), r.absent);
+  assert.equal(r.mean, true);
+  assert.ok(Math.abs(r.before - 1 / 6) < 1e-9 && Math.abs(r.after - 0.5) < 1e-9, `${r.before} ${r.after}`);
+  assert.equal(r.inside, false);
+  // A median reading carries no `mean` flag.
+  assert.equal("mean" in compareAround(window28(7, 1), at, { reading: "look" }), false);
+});
+
+test("derivedMarkers: a model and a CLI change together are ONE model + CLI marker naming both; separable ones stay two", () => {
+  const days = (fn) => {
+    const ps = [];
+    for (let d = 0; d < 4; d++) for (let s = 0; s < 4; s++) ps.push(pt(addLocalDays(BASE, d) + s * 60_000, fn(d, s)));
+    return ps;
+  };
+  // Same day: both switch on day 2.
+  const same = derivedMarkers(days((d) => ({ model: d >= 2 ? "m2" : "m1", cli: d >= 2 ? "2.2.0" : "2.1.0" })));
+  assert.deepEqual(same.map((x) => x.kind), ["modelCli"]);
+  assert.equal(same[0].label, "model + CLI: model m1 to m2, CLI 2.2.0");
+  assert.equal(same[0].detail, MODEL_CLI_TEXT);
+  assert.equal(same[0].t, hourKeyMs("2026-10-07T00"));
+  assert.doesNotMatch(`${same[0].label} ${same[0].detail}`, /better|worse|improv|regress/i);
+  // Neighbouring days, but no session ran one without the other: day 1 switches the model while its
+  // logs mostly do not say the CLI (no CLI majority), day 2 shows the new CLI.
+  const together = derivedMarkers(days((d, s) => ({
+    model: d >= 1 ? "m2" : "m1",
+    ...(d === 1 && s > 0 ? {} : { cli: d >= 1 ? "2.2.0" : "2.1.0" }),
+  })));
+  assert.deepEqual(together.map((x) => [x.kind, x.t]), [["modelCli", hourKeyMs("2026-10-06T00")]]);
+  // Neighbouring days where day 1 ran the new CLI on the old model: separable, two markers.
+  const apart = derivedMarkers(days((d) => ({ model: d >= 2 ? "m2" : "m1", cli: d >= 1 ? "2.2.0" : "2.1.0" })));
+  assert.deepEqual(apart.map((x) => x.kind), ["cli", "model"]);
+  // Two session days apart: never folded.
+  const far = derivedMarkers(days((d) => ({ model: d >= 3 ? "m2" : "m1", cli: d >= 1 ? "2.2.0" : "2.1.0" })));
+  assert.deepEqual(far.map((x) => x.kind), ["cli", "model"]);
+});
+
+test("start parts: open keys grouped the repo's / yours / the CLI's / not split; an unknown key is not split, never anyone's", () => {
+  assert.deepEqual(START_GROUPS.map((g) => g.id), ["repo", "yours", "cli", "mixed"]);
+  const by = Object.fromEntries(START_PARTS.map((p) => [p.id, p.group]));
+  assert.equal(by.projectMd, "repo");
+  for (const id of ["userMd", "memory", "connectorTools"]) assert.equal(by[id], "yours", id);
+  for (const id of ["system", "tools", "cliDeferred", "cliAgents"]) assert.equal(by[id], "cli", id);
+  // What the log does not split, and what an older host sent whole, are never assigned to one side.
+  for (const id of ["skills", "otherAgents", "hooks", "session", "other", "claudeMd", "deferredTools", "agents"]) assert.equal(by[id], "mixed", id);
+  assert.equal(startGroupOf("someOtherBackendPart"), "mixed");
+  const g = partsByGroup([{ id: "zz" }, { id: "system" }, { id: "projectMd" }, { id: "memory" }]);
+  assert.deepEqual(g.map((x) => [x.group.id, x.parts.map((p) => p.id)]), [["repo", ["projectMd"]], ["yours", ["memory"]], ["cli", ["system"]], ["mixed", ["zz"]]]);
+  // A non-empty note per group, so a heading is never bare.
+  for (const x of START_GROUPS) assert.ok(x.note.length > 20, x.id);
 });

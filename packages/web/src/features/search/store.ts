@@ -9,6 +9,12 @@
 import type { SessionSearchResult } from "@waterplane/shared";
 import { createStore } from "../../sdk";
 
-export interface SearchState { scope: string | null; results: SessionSearchResult[] | null; loading: boolean }
+export interface SearchState {
+  scope: string | null; results: SessionSearchResult[] | null; loading: boolean;
+  /** What the last answer said about the archive: `asked` = the request wanted it,
+   *  `searched` = the host echoed it (absent on an older host), `omitted` = matching
+   *  archived conversations past the host's cap. Null before any answer. */
+  archive?: { asked: boolean; searched: boolean; omitted: number } | null;
+}
 
-export const search = createStore<SearchState>({ scope: null, results: null, loading: false });
+export const search = createStore<SearchState>({ scope: null, results: null, loading: false, archive: null });

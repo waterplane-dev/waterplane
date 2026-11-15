@@ -22,12 +22,14 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
-  BRAND, answerInsertAt, busySerialGroups, laneBusy, padMigratedToast, sessionWall, SYNCED_SETTING_KEYS,
-  type LaunchIntent, type OpenDelivery, type SendBlockReason, type SerialWatch, type SessionInfo,
+  BRAND, MIN_TRY_MS, answerInsertAt, busySerialGroups, laneBusy, padMigratedToast, relayPlan, sessionWall, SYNCED_SETTING_KEYS,
+  type LaunchIntent, type RelayPlan, type OpenDelivery, type SendBlockReason, type SerialWatch, type SessionInfo,
 } from "@waterplane/shared";
 import {
-  isCreateOp, loadOutbox, noteDeadUpload, rescueStrandedPendingDrafts, saveOutbox, OUTBOX_CAP, OUTBOX_HARD_MAX, type OutboxEntry,
+  isCreateOp, loadOutbox, noteDeadUpload, rescueStrandedPendingDrafts, saveOutbox, MAX_SEND_ATTEMPTS, OUTBOX_CAP, OUTBOX_HARD_MAX,
+  type OutboxEntry,
 } from "../../outbox";
+import { activeHost } from "../../hosts";
 import { noteOutstanding, noteSendFailed } from "../../link";
 import { reportShellQueueDepth } from "../../shellLink";
 import { outstandingSync, subscribeSync } from "../../syncState";
@@ -35,9 +37,10 @@ import { showToast } from "../../toast";
 import { useLinger } from "../../useLinger";
 import { useStore } from "../../sdk/store.ts";
 import { useLatest } from "../../sdk/hooks.ts";
-import { prefRef } from "../prefs.ts";
+import { prefRef, usePref } from "../prefs.ts";
 import type { UploadApi } from "../../sdk/types.ts";
-import { blockedStore, outboxStore, persistFailedAtStore, seedOutbox } from "./store.ts";
+import { blockedStore, outboxStore, persistFailedAtStore, relaySentStore, seedOutbox } from "./store.ts";
+import { onRelayClaim, onRelayOpen, relayOpenFlushes, publishRelayPlan, relayHeldStore, relayOwnerHostId } from "./relayOwner.ts";
 import {
   FLUSH_SWEEP_MS, PENDING_PREFIX, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates, laneStateOf,
   budgetHeldLaneSet, budgetReleased,
@@ -105,6 +108,8 @@ export function useQueue(input: QueueDeps): QueueApi {
   const backendsRef = useLatest(given.backends);
   const activeIdRef = useLatest(given.activeId);
   const confirmQueueRef = prefRef("confirmQueue");
+  const autoSendPref = usePref("autoSend");
+  const confirmQueuePref = usePref("confirmQueue");
   /**
    * The usage BUDGET and what it currently says — the host's, not this device's
    * (see `shared/budget.ts`). Held in a ref as well as state because the flusher
@@ -294,7 +299,30 @@ export function useQueue(input: QueueDeps): QueueApi {
     // triaged by hand in Activity, so counting them would leave a permanent
     // "3 waiting" on a phone with nothing left to send.
     reportShellQueueDepth(list.filter((e) => e.status !== "failed").length);
+    // …and, where a background relay is installed (`relayOwner.ts`; an APK with the `relay` cap),
+    // the rows it may send while the page cannot, as the pure `relayPlan` reads them. The owner
+    // crosses its bridge only on a change; with no owner this builds nothing.
+    publishRelayPlan(relayPlanNow);
     return list;
+  }
+  /**
+   * The queue's relay plan from the page's REAL state — the same facts the flusher reads
+   * (`flushOutbox`): the switches, the reconnect hold, the running sessions, the lanes gone,
+   * both budgets and the give-up bound. An unknown fact holds (`RelayFacts`); no active
+   * desktop ⇒ no plan.
+   */
+  function relayPlanNow(): RelayPlan | null {
+    const hostId = activeHost()?.id ?? relayOwnerHostId();
+    if (!hostId) return null;
+    return relayPlan(outboxRef.current, {
+      hostId, now: Date.now(),
+      autoSend: !!env.autoSendRef.current, confirmQueue: !!confirmQueueRef.current, holdQueue: holdQueueRef.current,
+      running: sessionsRef.current.filter((x) => x.running).map((x) => x.id),
+      goneLanes: c.goneLanes?.() ?? [],
+      budgetBlocked: budgetRef.current?.verdict.blocked ?? false,
+      budgetHeldLanes: [...budgetHeldLanesRef.current],
+      maxAttempts: MAX_SEND_ATTEMPTS, minTryMs: MIN_TRY_MS,
+    });
   }
   /**
    * Append to the queue, and make room WITHOUT ever silently dropping something
@@ -499,6 +527,28 @@ export function useQueue(input: QueueDeps): QueueApi {
   Object.assign(c, verbFns(c));
   Object.assign(c, uploadFns(c));
   const wire = wireFns(c);
+  // The background relay hands the queue back (`relayOwner.ts`): apply what it did, say it, flush.
+  // Registered once; the latest render's functions are read through a ref ("timers read refs").
+  const relayFnsRef = useLatest({ apply: wire.applyRelayClaim, flush: () => c.flushOutbox() });
+  // The reconnect drain's own state (the effect below owns it): the relay's open listener must
+  // not flush ahead of it, or the first offline row of each lane goes out before the question.
+  const drainDeferred = useRef(false);
+  const drainSeen = useRef<string | null>(null);
+  useEffect(() => {
+    onRelayClaim((claim) => {
+      const n = relayFnsRef.current.apply(claim);
+      relaySentStore.set(n || null);
+      if (!n) return;
+      // With the reconnect question about to be asked, the question's own line says it (QueueBars).
+      const asking = confirmQueueRef.current && outboxRef.current.some((e) => e.status === "queued" && e.offline && !e.armed);
+      if (!asking) showToast(`sent from the background: ${n}`);
+    });
+    const off = onRelayOpen(() => {
+      if (relayOpenFlushes(drainSeen.current, drainDeferred.current)) relayFnsRef.current.flush();
+    });
+    return () => { onRelayClaim(null); off(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only registration; everything it calls is read through refs
+  }, []);
 
   // ── Effects ─────────────────────────────────────────────────────────────
 
@@ -508,8 +558,20 @@ export function useQueue(input: QueueDeps): QueueApi {
   // and the agent may have finished, asked a question or moved on since. So by
   // default the drain ASKS first (Settings → Install & offline turns it off),
   // and only entries the user already released (`armed`) go out unprompted.
+  // While the page takes the queue back from the background relay (`relayOwner.ts`) the drain
+  // waits: the claim decides which rows the relay already sent. It runs once the gate opens —
+  // only if it was deferred, so a visible/resume claim never asks the question a second time.
+  const relayHeldNow = useStore(relayHeldStore);
   useEffect(() => {
-    if (status !== "open") return;
+    const edge = drainSeen.current !== status;
+    // The count of rows the relay sent belongs to the question this reconnect asks; a tunnel
+    // that drops afterwards starts a new story, which must not inherit it (QueueBars).
+    if (drainSeen.current === "open" && status !== "open") relaySentStore.set(null);
+    drainSeen.current = status;
+    if (status !== "open") { drainDeferred.current = false; return; }
+    if (relayHeldNow) { if (edge) drainDeferred.current = true; return; }
+    if (!edge && !drainDeferred.current) return;
+    drainDeferred.current = false;
     const parked = outboxRef.current.filter((e) => e.status === "queued" && e.offline && !e.armed);
     if (confirmQueueRef.current && parked.length > 0) {
       holdQueueRef.current = true;
@@ -527,13 +589,25 @@ export function useQueue(input: QueueDeps): QueueApi {
       const total = outboxRef.current.filter((e) => e.status !== "failed").length;
       showToast(total > n ? `sending ${total} queued messages…` : `sent ${n} queued message${n > 1 ? "s" : ""}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the drain runs on a status edge only; every queue fact is read through a ref (the header's "timers read refs")
-  }, [status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the drain runs on a status edge (or the relay gate opening after one) only; every queue fact is read through a ref (the header's "timers read refs")
+  }, [status, relayHeldNow]);
   // The question is answered once nothing it was about is parked any more —
   // released, edited away, or pulled back into a compose box. Recomputed from
   // the queue rather than from a count captured at reconnect, which goes stale
   // the moment anything else releases those entries (sending a new message to
   // the same session does exactly that — see armLane).
+  const askWas = useRef(false);
+  useEffect(() => {
+    if (askWas.current && !reconnectAsk) relaySentStore.set(null); // answered: the count was that question's
+    askWas.current = reconnectAsk;
+  }, [reconnectAsk]);
+  // The background relay sends from the last plan it was handed, and a plan is otherwise handed
+  // only on a queue write: "auto off", "ask on reconnect", a budget block or an ended session
+  // change what the page would send without writing a row. Hand the plan again on each of them.
+  useEffect(() => {
+    publishRelayPlan(relayPlanNow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `relayPlanNow` reads refs; these are the facts it reads that have no ref write to follow
+  }, [autoSendPref, confirmQueuePref, budget, sessions, reconnectAsk]);
   const parkedSends = outbox.filter((e) => e.status === "queued" && e.offline && !e.armed);
   useEffect(() => {
     if (!reconnectAsk || parkedSends.length) return;

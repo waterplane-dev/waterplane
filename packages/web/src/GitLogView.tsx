@@ -10,6 +10,8 @@ import { ago } from "./format";
 import { Button } from "./kit/Button";
 import { RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { useOfflineGate, offlineSentence } from "./kit/offlineGate";
+import { linkOnline } from "./link";
 import { checksHint, commitVerbs, verdictWords, type CommitVerbs } from "./gitChecks";
 
 /** Which side the tap came from: the ↑ count opens `out`, the ↓ count `in`. */
@@ -94,7 +96,8 @@ function Section({ repoId, title, hint, rows, total, none, act }: {
  * the desktop's last fetch, which may be days.
  */
 export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushTo, onClose }: Props) {
-  const res = useRemoteResource<GitLog>(`gitlog:${repoId}`, () => api.gitLog(repoId));
+  const res = useRemoteResource<GitLog>(`git:log:${repoId}`, () => api.gitLog(repoId), { cache: { shape: 1 } });
+  const gate = useOfflineGate();
   const log = res.data;
   const [fetching, setFetching] = useState(false);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
@@ -102,6 +105,7 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
 
   async function fetchRemote() {
     if (fetchingRef.current) return;
+    if (!linkOnline()) { setFetchNote(offlineSentence("check the upstream")); return; }
     fetchingRef.current = true;
     setFetching(true); setFetchNote(null);
     try {
@@ -135,6 +139,7 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
   return (
     <div className="sheet">
       <SheetHead title={<>History · {log?.branch ?? "…"}</>} onClose={onClose}>
+        {res.inflight && log && <Loader size={13} className="spin" aria-label="refreshing" />}
         {log?.upstream && (
           <Button onClick={() => { track("action:git.log.fetch"); void fetchRemote(); }}
             title={`fetch ${log.upstream} — moves no branch and no file`}>
@@ -160,7 +165,8 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
       <div className="list git-log">
         <Empty res={res} empty={!log} thing="this branch's history" noun="history" />
         {freshness && <Hint className="git-log-fresh">{freshness}</Hint>}
-        {fetchNote && <Hint className="git-note">{fetchNote}</Hint>}
+        {gate.note}
+        {fetchNote && !gate.sentence && <Hint className="git-note">{fetchNote}</Hint>}
         {log && log.upstream && showIn && (
           <Section repoId={repoId} title="Incoming" hint={`on ${up}, not here — a pull brings these`}
             rows={log.incoming} total={log.incomingTotal}
@@ -170,7 +176,7 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
         {log && log.upstream && showOut && (
           <Section repoId={repoId} title="Not pushed" hint={`here, not on ${up} — a push sends these`}
             rows={log.outgoing} total={log.outgoingTotal} none="Every commit here is already pushed."
-            act={(c, i) => ({ verbs: commitVerbs(log, i, c.check), onCheck, onPushTo })} />
+            act={(c, i) => ({ verbs: commitVerbs(log, i, c.check), onCheck: gate.guard("run the checks", onCheck), onPushTo: gate.guard("push", onPushTo) })} />
         )}
         {log && showShared && (
           <Section repoId={repoId} title={log.upstream ? "On both" : "History"}

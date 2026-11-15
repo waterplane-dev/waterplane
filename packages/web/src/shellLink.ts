@@ -36,7 +36,9 @@
  * reached off the global Capacitor injects rather than an npm import: no
  * native-shell dependency enters the bundle every browser downloads.
  */
-import { PROTOCOL_VERSION, parkedKeyFor, wsUrlFor, type PairTarget, type SavedHost } from "@waterplane/shared";
+import {
+  PROTOCOL_VERSION, parkedKeyFor, relayPlanKey, wsUrlFor, type PairTarget, type RelayClaim, type RelayPlan, type SavedHost,
+} from "@waterplane/shared";
 import { isNativeShell, savedHostBase } from "./hostUrl";
 import { activeHost, listHosts, realHosts } from "./hosts";
 import { shellLinkSet, type ShellLinkCreds, type ShellLinkSpec } from "./shellLinkSet";
@@ -47,6 +49,7 @@ import { isDemo } from "./demo/mode";
 import { PAIR_LINK_INVALID, pairLinkRequest } from "./pairRedeem";
 import { defineShellGlobal, nativePlugin } from "./shellBridge";
 import { showToast } from "./toast";
+import type { RelayOwner } from "./core/queue/relayOwner";
 
 /** The shell nudged us: the phone's network changed while nobody was looking.
  *  `ws.ts` listens for this beside its four viewport events. */
@@ -92,9 +95,18 @@ interface LinkPlugin {
   requestBatteryExemption(): Promise<void>;
   /** Absent on a shell older than the phone-setup checklist. */
   openNotificationSettings?(): Promise<void>;
-  /** Absent on a shell older than memory tokens: `memoryTokens` means `start` takes `tokensInMemory`. */
-  caps?(): Promise<{ memoryTokens?: boolean }>;
+  /** Absent on a shell older than memory tokens: `memoryTokens` means `start` takes `tokensInMemory`;
+   *  `relay` means the three relay methods below exist (the background relay, `core/queue/relayOwner.ts`). */
+  caps?(): Promise<ShellCaps>;
+  /** `relay` only: the queue's relay plan, replacing the last one (sent only on a change). */
+  setQueue?(opts: { plan: RelayPlan }): Promise<void>;
+  /** `relay` only: the page is freezing — the service may send the plan once the app is hidden. */
+  releaseOwnership?(): Promise<void>;
+  /** `relay` only: ownership back to the page, synchronously before it answers; what the relay did since. */
+  claimQueue?(): Promise<RelayClaim>;
 }
+
+interface ShellCaps { memoryTokens?: boolean; relay?: boolean }
 
 function plugin(): LinkPlugin | null {
   // The demo starts no background link and tells it nothing (no queue depth):
@@ -110,18 +122,24 @@ export function shellLinkSupported(): boolean {
   return isNativeShell() && plugin() !== null;
 }
 
-let memoryTokens: boolean | null = null;
+let capsAsked: Promise<ShellCaps> | null = null;
+/** The shell's caps, asked once: a shell does not change under a running page. A throw or an
+ *  absent `caps` is `{}` — an old shell has none of them. */
+function shellCaps(): Promise<ShellCaps> {
+  const p = plugin();
+  if (!p) return Promise.resolve({});
+  capsAsked ??= (async () => {
+    try { return typeof p.caps === "function" ? ((await p.caps()) ?? {}) : {}; } catch { return {}; }
+  })();
+  return capsAsked;
+}
 
 /**
- * Can this shell's link hold sign-ins in memory only? Asked once: a shell does not change under a
- * running page. Anything but a plain yes is no, so an old shell gets no token while sealed.
+ * Can this shell's link hold sign-ins in memory only? Anything but a plain yes is no, so an old
+ * shell gets no token while sealed.
  */
 export async function shellLinkMemoryTokens(): Promise<boolean> {
-  if (memoryTokens !== null) return memoryTokens;
-  const p = plugin();
-  if (!p) return false;
-  try { memoryTokens = typeof p.caps === "function" && (await p.caps())?.memoryTokens === true; } catch { memoryTokens = false; }
-  return memoryTokens;
+  return (await shellCaps()).memoryTokens === true;
 }
 
 /** Is the phone's battery saver on? Null in a browser, or a shell too old to say. */
@@ -295,6 +313,65 @@ export function reportShellQueueDepth(depth: number): void {
   if (n === lastDepth) return;
   lastDepth = n;
   void p.setQueueDepth({ depth: n }).catch(() => { lastDepth = -1; });
+}
+
+// ── The background relay (plan: .claude/outbox/bg-link-send/PLAN.md) ────
+// The APK half of `core/queue/relayOwner.ts`'s `RelayOwner`. These four are the bridge only:
+// what is handed, when ownership moves and what a claim does to the queue are the owner
+// module's and the queue's. An APK without the `relay` cap gets none of these calls.
+
+/** Does this shell carry the relay (`caps().relay`)? Plain yes only; a browser, the demo and an
+ *  older APK say no, and the queue behaves exactly as it did before the relay existed. */
+export async function relayCaps(): Promise<boolean> {
+  const p = plugin();
+  return !!p && typeof p.setQueue === "function" && typeof p.claimQueue === "function"
+    && (await shellCaps()).relay === true;
+}
+
+let lastPlanKey: string | null = null;
+/**
+ * Hand the shell the queue's relay plan — crossing the bridge only when `relayPlanKey` changed,
+ * like `reportShellQueueDepth`. A failed hand forgets the key so the next write tries again.
+ */
+export function handQueue(plan: RelayPlan): void {
+  const p = plugin();
+  if (!p?.setQueue) return;
+  const key = relayPlanKey(plan);
+  if (key === lastPlanKey) return;
+  lastPlanKey = key;
+  void p.setQueue({ plan }).catch(() => { lastPlanKey = null; });
+}
+
+/** The page is going away (`freeze`): the relay may own the queue once the app is hidden. Fire
+ *  and forget — a frozen page cannot wait, and the shell's 330 s fallback covers a lost call. */
+export function releaseOwnership(): void {
+  const p = plugin();
+  if (!p?.releaseOwnership) return;
+  try { void p.releaseOwnership().catch(() => {}); } catch { /* a document being torn down */ }
+}
+
+/** Take the queue back and read what the relay did. Rejects when the shell cannot answer;
+ *  the owner module retries. Anything not array-shaped is read as empty, never guessed. */
+export async function claimQueue(): Promise<RelayClaim> {
+  const p = plugin();
+  if (!p?.claimQueue) return { receipts: [], written: [] };
+  const r = await p.claimQueue();
+  return {
+    receipts: Array.isArray(r?.receipts) ? r.receipts : [],
+    written: Array.isArray(r?.written)
+      ? r.written.filter((w) => w && typeof w.ackId === "string" && typeof w.firstSentAt === "number") : [],
+  };
+}
+
+/**
+ * The APK's `RelayOwner` (`core/queue/relayOwner.ts`), or null when this shell has no relay
+ * methods at all — decided synchronously, so a browser and an older APK never hold the
+ * queue's gate even for a microtask. `available()` is the `caps().relay` check.
+ */
+export function shellRelayOwner(): RelayOwner | null {
+  const p = plugin();
+  if (!p || typeof p.setQueue !== "function" || typeof p.claimQueue !== "function") return null;
+  return { kind: "apk", available: relayCaps, hand: handQueue, release: releaseOwnership, claim: claimQueue };
 }
 
 // ── The two globals the shell calls ──────────────────────────────────────

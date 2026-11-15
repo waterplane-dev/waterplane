@@ -6,13 +6,16 @@
  * - `start`: fresh, interactive (not headless), not a subagent, with a first request;
  * - `subStart`: subagent logs with a first request;
  * - `look`: fresh, not a subagent, reached an edit (`look` present);
- * - `req`: fresh, not a subagent, committed.
+ * - `req`: fresh, not a subagent, committed;
+ * - `skills`: fresh, not a subagent, `skills` present (the log was counted).
  * A bucket with fewer than `SERIES_MIN_N` sessions for a reading has that reading
- * ABSENT with the sentence why — never a median of one or two.
+ * ABSENT with the sentence why — never a median of one or two. `skills` alone is not
+ * a median: most sessions load no skill, so its bucket is the mean per session and the
+ * share that loaded at least one (`SeriesLoads`), over the same sessions and minimum.
  */
 import { isoWeekOf } from "../healthindex.js";
 import { localDayOf, medianOf } from "./stats.js";
-import type { SeriesAbsent, SeriesBucket, SeriesOpts, SeriesPoint, SeriesReading, SeriesValue } from "./types.js";
+import type { SeriesAbsent, SeriesBucket, SeriesLoadsValue, SeriesOpts, SeriesPoint, SeriesReading, SeriesValue } from "./types.js";
 
 /** Fewest sessions a bucket's median is taken over. */
 export const SERIES_MIN_N = 5;
@@ -26,6 +29,7 @@ export function seriesReadingOf(p: SeriesPoint, reading: SeriesReading): number 
     case "start": return isFreshMain(p) && p.headless !== true && num(p.start) ? p.start : undefined;
     case "subStart": return p.sub === true && num(p.start) ? p.start : undefined;
     case "look": return isFreshMain(p) && num(p.look) ? p.look : undefined;
+    case "skills": return isFreshMain(p) && num(p.skills) ? p.skills : undefined;
     case "req": return isFreshMain(p) && p.commit === true && num(p.req) ? p.req : undefined;
   }
 }
@@ -36,6 +40,7 @@ const READING_WORDS: Record<SeriesReading, string> = {
   subStart: "subagent logs with a first request",
   look: "fresh sessions that reached an edit",
   req: "fresh sessions that committed",
+  skills: "fresh sessions whose log counts skill calls",
 };
 
 /** The sentence for too few sessions behind a reading. */
@@ -56,6 +61,12 @@ function valueOf(xs: number[], reading: SeriesReading | "part"): SeriesValue {
   return { median: medianOf(xs)!, n: xs.length };
 }
 
+/** The skill-loads bucket: mean per session and the share with at least one, absent under the minimum. */
+export function loadsOf(xs: readonly number[]): SeriesLoadsValue {
+  if (xs.length < SERIES_MIN_N) return { absent: seriesTooFewText(xs.length, "skills") } satisfies SeriesAbsent;
+  return { mean: xs.reduce((a, b) => a + b, 0) / xs.length, share: xs.filter((x) => x > 0).length / xs.length, n: xs.length };
+}
+
 function bucketOf(key: string, ps: readonly SeriesPoint[]): SeriesBucket {
   const vals = (r: SeriesReading): number[] => ps.map((p) => seriesReadingOf(p, r)).filter((x): x is number => x !== undefined);
   const startSet = ps.filter((p) => seriesReadingOf(p, "start") !== undefined);
@@ -72,6 +83,7 @@ function bucketOf(key: string, ps: readonly SeriesPoint[]): SeriesBucket {
     parts,
     look: valueOf(vals("look"), "look"),
     req: valueOf(vals("req"), "req"),
+    skills: loadsOf(vals("skills")),
     subStart: valueOf(vals("subStart"), "subStart"),
   };
 }

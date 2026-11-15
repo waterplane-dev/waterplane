@@ -327,8 +327,10 @@ export type ClientSessionMsg =
   /** Search terminal text. `id` set = one session (in-CLI find); absent = all
    *  sessions (main-screen search). scope: "recent" = current rendered output,
    *  "history" = full persisted prompt+output history, "prompts" = the persisted
-   *  prompts alone (`SessionSearchScope`). */
-  | { t: "session.search"; query: string; scope: SessionSearchScope; id?: string }
+   *  prompts alone (`SessionSearchScope`). `archived` (all-sessions only) also
+   *  searches the PROMPTS of every archived conversation — the CLI's own prompt
+   *  history, never a log's output (`archivesearch.ts`). */
+  | { t: "session.search"; query: string; scope: SessionSearchScope; id?: string; archived?: boolean }
   | { t: "recent.list" }
   | { t: "recent.clear" }
   /** Drop all entries from the "recently closed" reopen stack (in-memory). */

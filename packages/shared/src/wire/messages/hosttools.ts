@@ -3,6 +3,7 @@
 import type { ArtifactPolicy } from "../../artifacts.js";
 import type { BudgetVerdict, UsageBudget } from "../../budget.js";
 import type { PeriodState } from "../../period.js";
+import type { StoreLoss } from "../../deskstorage.js";
 import type { BillingStatus } from "../../billing.js";
 import type { CliHealth, HealthRollup } from "../../clihealth.js";
 import type { LocalRuntimeSample } from "../localrt.js";
@@ -15,6 +16,7 @@ import type { BuildCandidate } from "../../buildscan.js";
 import type { BuildRecord } from "../../buildstamp.js";
 import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.js";
 import type { OnboardJob } from "../onboard.js";
+import type { SlowJob } from "../slowjob.js";
 import type { LimitResumeMode } from "../session.js";
 import type { HaltState } from "../../halt.js";
 import type { NetRetryConfig } from "../../netretrycfg.js";
@@ -56,6 +58,10 @@ export type HostToolsMsg =
        *  phone shows today's two windows; an older phone ignores it. Additive,
        *  `PROTOCOL_VERSION` stays 2. */
       periods?: PeriodState[];
+      /** `budget.json` was lost (corrupt, unreadable, or a save failed) and
+       *  nobody has dismissed the record: a cap the person set may be gone
+       *  from `budget`. Absent = no loss on record, or an older host. */
+      loss?: StoreLoss;
     }
   /**
    * Which billing profile this desktop's claude runs under (`shared/billing.ts`):
@@ -212,4 +218,10 @@ export type HostToolsMsg =
    * happen without asking.
    */
   | { t: "intent.changed"; intent: Intent }
+  /**
+   * A slow job (`wire/slowjob.ts`) started, moved or settled — broadcast, additive (no
+   * `PROTOCOL_VERSION` bump). Never carries `result`: on `hasResult` the phone fetches
+   * `GET /api/repos/:id/jobs/:kind`. Progress frames are throttled per job; a state change never is.
+   */
+  | { t: "slowjob.state"; job: SlowJob }
   | { t: "error"; message: string; context?: string };

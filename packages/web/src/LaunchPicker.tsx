@@ -96,7 +96,7 @@ export function LaunchPicker({ backends, value, onChange, defaults, nowLead, chi
       {drift && <SetNote as="span">{drift}</SetNote>}
       {children}
     </SetLine>
-    {wheel && spokes.length > 0 && <>
+    {wheel && spokes.length > 0 && <div className="launch-wheel">
       {/* The same picker the live session's popover draws (`WheelPicker`):
           one look everywhere a model is chosen. */}
       <WheelPicker cat={cat} efforts={efforts} value={model ? { model, effort: effort ?? null } : null}
@@ -116,6 +116,6 @@ export function LaunchPicker({ backends, value, onChange, defaults, nowLead, chi
         )}
       </div>
       {versionOpen && <SetLine><ModelField backends={backends} backend={backend} value={model} onChange={setModel} /></SetLine>}
-    </>}
+    </div>}
   </>;
 }

@@ -416,7 +416,14 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 .mw-apply { align-self: stretch; }
 /* Room for its longest sentence, so a pick that changes the words never moves
    the chart under the finger. */
-.mw-says { min-height: 3.9em; margin: 0; padding: 0; }
+.form-hint.mw-says { min-height: 3.9em; margin: 0; padding: 0; }
+/* The wheel's lines take the gutter of whatever holds them (the popover's padding, the launch sheet's
+   `.launch-wheel`): a hint among them adds none of its own, or it would start right of its neighbours. */
+.mw-models .form-hint { padding-left: 0; padding-right: 0; }
+/* In a sheet the wheel meets the screen edge: this column is its gutter (`--gutter`), and the chip rows in it
+   take none of their own. */
+.launch-wheel { display: flex; flex-direction: column; gap: var(--sp-6); padding: 0 var(--gutter); }
+.launch-wheel > .sched-days { padding-left: 0; padding-right: 0; }
 /* The models the wheel may carry, as chips that latch (`WheelPicker`). */
 .mw-models { display: flex; flex-direction: column; gap: var(--sp-6); }
 .mw-models-head { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
@@ -524,7 +531,7 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
    the primary on its own trailing slot (`margin-left: auto`). Touch targets are floored
    at 44px here, and the bar clears the home-indicator inset. */
 .sheet-actions {
-  display: flex; flex-wrap: wrap; gap: var(--sp-8); padding: var(--sp-10);
+  display: flex; flex-wrap: wrap; gap: var(--sp-8); padding: var(--sp-10) var(--gutter);
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   background: var(--panel); border-top: 1px solid var(--line);
 }
@@ -555,7 +562,7 @@ select.search { appearance: none; }
 .search-row .search { flex: 1; margin: var(--sp-10) 0; }
 .spacer { flex: 1; }
 
-.annot-tools { display: flex; gap: var(--sp-6); padding: var(--sp-8); overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
+.annot-tools { display: flex; gap: var(--sp-6); padding: var(--sp-8) var(--gutter); overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
 /* Preset chips wrap instead of scrolling off-screen: a horizontal strip hides
    most of a long list behind a gesture nobody discovers on a phone. */
 .annot-tools.wrap { flex-wrap: wrap; overflow-x: visible; }
@@ -590,7 +597,7 @@ select.search { appearance: none; }
 /* `overflow-wrap: anywhere`, not `word-break: break-all`: a path still breaks
    where it must, but a sentence breaks between WORDS. break-all split prose
    mid-word on every sheet that used this class for prose ("i s running"). */
-.err, .form-hint { padding: var(--sp-8) var(--sp-14); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); overflow-wrap: anywhere; }
+.err, .form-hint { padding: var(--sp-8) var(--gutter); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); overflow-wrap: anywhere; }
 .err { color: var(--dead); }
 
 /* Slash palette */
@@ -607,7 +614,7 @@ select.search { appearance: none; }
 .run { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-10); cursor: pointer; }
 
 /* Gallery */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-8); padding: var(--sp-10); overflow-y: auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-8); padding: var(--sp-10) var(--gutter); overflow-y: auto; }
 /* Anything in this grid that is PROSE rather than a tile spans the whole row.
    `<Empty>` is a grid item like every thumbnail, so it was laid out inside one
    96px column and wrapped to one word per line — a paragraph explaining what the

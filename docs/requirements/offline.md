@@ -33,7 +33,7 @@ The build sheet and the schedule sheet state when their list was last confirmed 
 - shipped: 469c9837
 
 ### R-offline-009 · shipped
-The offline-capable sweep keeps running when the APK app is in the background, not only in the foreground.
+The offline-capable sweep and the terminal's catch-ups keep running when the APK app is in the background for about five minutes after it is hidden; then the background link keeps alerts only.
 - asked: 2026-10-25
 - shipped: 9ba71411
 

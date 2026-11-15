@@ -69,6 +69,7 @@ export const GUARDS = [
   { test: "uifilm", tier: "edit", paths: ["scripts/ui/**", "packages/web/src/core/session/TermArea.tsx", "packages/web/src/ZoomPair.tsx", "packages/web/src/features/demoTour/DemoHook.tsx"] },
   { test: "repohealth-packs", tier: "edit", paths: ["tools/repohealth/**"] },
   { test: "reqpinned", tier: "edit", paths: ["tools/reqpinned.mjs", "docs/requirements/**"] },
+  { test: "reqshape", tier: "edit", paths: ["tools/reqshape.mjs", "docs/requirements/**"] },
   { test: "flakyrate", tier: "edit", paths: ["tools/flakyrate.mjs", "scripts/run-e2e.mjs"] },
   { test: "vaultcoverage", tier: "edit", paths: ["tools/vaultcoverage.mjs"] },
   { test: "repohealth-habits", tier: "edit", paths: ["tools/repohealth/metrics/habits.mjs", "tools/repohealth/metrics/workspace.mjs", "tools/repohealth/git.mjs"] },
@@ -121,6 +122,7 @@ export const GUARDS = [
   { test: "repohealth", tier: "push", paths: [], why: "git history, and shared's dist" },
   { test: "repohealth-own", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },
   { test: "repohealth-central", tier: "push", paths: [], why: "git repos and child processes, and shared's dist" },
+  { test: "repohealth-ownbackfill", tier: "push", paths: [], why: "git repos, worktrees and child processes, and shared's dist" },
   { test: "rune2e", tier: "push", paths: ["scripts/run-e2e.mjs"], why: "spawns run-e2e.mjs, whose lib-brand imports shared/dist" },
 ];
 

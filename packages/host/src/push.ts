@@ -48,6 +48,9 @@ export interface PushPayload {
   level?: NotifyLevel;
   /** The attention item's cause key (`NotificationItem.key`). */
   key?: string;
+  /** `kind: "link.back"` only (`linkback.ts`): this desktop's name and how long it was unreachable. */
+  hostLabel?: string;
+  offlineMs?: number;
 }
 
 /**

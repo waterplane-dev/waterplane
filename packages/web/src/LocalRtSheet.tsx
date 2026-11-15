@@ -13,13 +13,13 @@ import { roomyCeiling } from "./graphGeom";
 import { useLink } from "./link";
 import { dur, hhmm, until } from "./format";
 import { SheetHead } from "./Sheet";
-import { BRAND } from "@waterplane/shared";
+import { BRAND, type ProcRow, type SessionCpuRow } from "@waterplane/shared";
 import { ConfirmButton } from "./Confirm";
 import { SetWarn, SetNote } from "./SettingsKit";
 import { copyText } from "./api";
 import { showToast } from "./toast";
 import {
-  cpuCulpritsText, cpuSplitText, hotSessions, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
+  cpuCulpritsText, cpuSplitText, holdTop, topSessions, TOP_LISTS_LEAD, TOP_LISTS_MORE, type HeldRow, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
   rssSumText, slowAgeSec, swapText, tempText, uptimeText,
 } from "./sysStat";
 import { Button } from "./kit/Button";
@@ -156,9 +156,21 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
   // The volume holding the home folder (the host lists ours first) — the one
   // the top section names, because it is where repos, builds and swap land.
   const homeDisk = sys?.disks?.volumes[0];
-  // Which coding sessions the hot CPU belongs to, labelled as their tabs are.
+  // The busiest programs and sessions, always listed. Each list is HELD across
+  // readings (`holdTop`): one that leaves the top stays TOP_HOLD_MS, saying so.
+  // Keyed on the process table's own clock, so a repeated reading is a no-op.
   const agentRows = useAgents((x) => x.rows);
-  const hot = hotSessions(sys, (id) => agentRows.find((a) => a.id === id)?.label);
+  const heldProcs = useRef<HeldRow<ProcRow>[]>([]);
+  const heldSessions = useRef<HeldRow<SessionCpuRow>[]>([]);
+  const procsAt = sys?.procs?.at ?? 0;
+  if (sys?.procs) {
+    heldProcs.current = holdTop(heldProcs.current, sys.procs.byCpu, (p) => p.name, procsAt);
+    heldSessions.current = sys.procs.bySession
+      ? holdTop(heldSessions.current, sys.procs.bySession, (r) => r.sessionId, procsAt)
+      : [];
+  }
+  const culprits = sys?.procs ? cpuCulpritsText(heldProcs.current, procsAt, procAge) : null;
+  const hot = sys?.procs ? topSessions(heldSessions.current, procsAt, (id) => agentRows.find((a) => a.id === id)?.label) : [];
 
   const modelsPart = (
     <>
@@ -313,7 +325,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                     <span className="lrt-name"><Cpu size={11} aria-hidden="true" /> CPU busy</span>
                     <span className="lrt-size">{Math.round(sys.cpu.userPct + sys.cpu.sysPct)}%</span>
                     <span className="lrt-vram">{cpuSplitText(sys.cpu)}</span>
-                    {cpuCulpritsText(sys, procAge) && <span className="lrt-vram">{cpuCulpritsText(sys, procAge)}</span>}
+                    {culprits && <span className="lrt-vram">{culprits}</span>}
                   </div>
                 ) : null}
                 {/* The sessions behind it: every process under a session's
@@ -327,6 +339,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                     <ChevronRight size={14} aria-hidden="true" className="lrt-agent-go" />
                   </button>
                 ))}
+                {sys?.cpu && (culprits || hot.length > 0) && <SetNote more={TOP_LISTS_MORE}>{TOP_LISTS_LEAD}</SetNote>}
                 {sys?.cpu ? null : (
                   <div className="lrt-row">
                     <span className="lrt-name"><Cpu size={11} aria-hidden="true" /> CPU load</span>

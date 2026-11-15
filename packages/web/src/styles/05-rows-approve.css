@@ -3,6 +3,8 @@
    stripe (--repo-accent, set inline where the repo is known); transparent when
    unset so all lists keep a uniform indent. */
 .row-wrap { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); border-left: 3px solid var(--repo-accent, transparent); }
+/* The repo stripe is drawn inside the gutter: the row's text starts where a bare `.row`'s does. */
+.row-wrap > .row { padding-left: calc(var(--gutter) - 3px); }
 /* A worktree row belongs to its repo, so it wears the repo: the group's fill,
    a connector drawn in the repo hue (the old muted "└" glyph vanished on a
    phone) and the repo named in that hue on the sub line. */
@@ -442,6 +444,11 @@
    is competing for the room, so the bar's vh cap (which exists to stop it eating
    the terminal) would only clip. */
 .q-card .approve-opts { max-height: none; overflow: visible; }
+/* The hint under the buttons keeps clear of them: `.approve-hint`'s -4px top
+   margin is for following a line of text, and under a 46px button it slid in
+   beneath it. A hint that says why a button is missing sits on its own line. */
+.q-card .approve-opts { margin-bottom: var(--sp-8); }
+.q-card .approve-opts > .approve-hint { flex-basis: 100%; margin: 0; }
 /* The commit row: Submit and Esc, never inside the scrolling option list.
    `flex: 0 0 auto` on the row and a top margin that matches the list's gap, so
    it reads as part of the same block without being part of its scroll. */
@@ -475,7 +482,7 @@
 }
 
 /* Segmented filter (local vs external) */
-.segmented { display: flex; gap: var(--sp-6); padding: var(--sp-8) var(--sp-12); background: var(--panel); border-bottom: 1px solid var(--line); }
+.segmented { display: flex; gap: var(--sp-6); padding: var(--sp-8) var(--gutter); background: var(--panel); border-bottom: 1px solid var(--line); }
 .seg { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); min-height: 46px; padding: var(--sp-8); font-size: calc(var(--fs-15) * var(--ui-font, 1)); background: var(--raise); color: var(--muted); border: 1px solid var(--line); border-radius: var(--r-8); cursor: pointer; }
 .seg.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 .tag.rc-tag { color: var(--accent); border: 1px solid var(--accent); }

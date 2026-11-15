@@ -81,3 +81,5 @@ export { runSummaryTask } from "./sidecar/sidecartasks.js";
 export type { SummaryRequest } from "./sidecar/sidecartasks.js";
 export { runCommitTask, runExplainTask, runNameTask, runSkillsTask } from "./sidecar/sidecarname.js";
 export type { NameRequest, NameRun } from "./sidecar/sidecarname.js";
+export { PROBE_ASK_TIMEOUT_MS, PROBE_TOOLS, ProbeStreamReader, probeArgv, probePrompt, runProbeAsk } from "./sidecar/sidecarprobe.js";
+export type { ProbeAsk, ProbeAskRequest } from "./sidecar/sidecarprobe.js";

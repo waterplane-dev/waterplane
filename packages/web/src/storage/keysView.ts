@@ -334,4 +334,10 @@ export const LS_VIEW = {
    * the beginning.
    */
   demoTour: lsKey("demo.tour"),
+  /** The name this phone's person puts on an exported setup block (R-metrics-073): asked once,
+   *  remembered on this phone only, never synced. */
+  setupShareName: lsKey("setupShare.name"),
+  /** Setup blocks imported on this phone (R-metrics-073), each re-read through shared
+   *  `parseSetupShare` on load; this phone only, never synced, removable one by one. */
+  setupShareImports: lsKey("setupShare.imports"),
 } as const;

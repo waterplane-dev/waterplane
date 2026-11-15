@@ -49,6 +49,7 @@ import type { Overlay } from "../../routing";
 import type { HostConnection } from "../../ws";
 import { buildLane, buildNameOf, buildQueueTitle, buildQueuedToast, useBuildNames } from "../../features/build";
 import type { useQueue } from "../queue/useQueue.ts";
+import { randId } from "../../randId";
 
 type Ref<T> = { readonly current: T };
 /** The queue core's return, as App holds it (`const q = useQueue(...)`). */
@@ -417,7 +418,7 @@ export function useSend(deps: SendDeps) {
       const w = i.when;
       const t = i.target;
       const draft: IntentDraft = {
-        id: seed.scheduleId ?? `i_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        id: seed.scheduleId ?? `i_${Date.now().toString(36)}_${randId(4)}`,
         cwd: t.cwd,
         payload: { kind: "prompt", steps },
         target: { kind: "session", sessionId: t.sessionId },
@@ -466,7 +467,7 @@ export function useSend(deps: SendDeps) {
             // rule above: absent is written absent, which is how an edit clears it.
             ...(i.target.kind === "repo" && i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) };
       const entry: ScheduleEntry = {
-        id: seed.scheduleId ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        id: seed.scheduleId ?? `s_${Date.now().toString(36)}_${randId(4)}`,
         name: (i.when.name ?? "").trim() || first.split("\n")[0].slice(0, 60),
         enabled: true,
         rule: i.when.rule,
@@ -526,7 +527,7 @@ export function useSend(deps: SendDeps) {
           : { kind: "repo" };
       const draft: IntentDraft = {
         // Client-minted, and the at-most-once key for the row's whole LIFE.
-        id: `i_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        id: `i_${Date.now().toString(36)}_${randId(4)}`,
         cwd,
         // The whole chain, delivered one turn at a time by `deliverChain`.
         payload: { kind: "prompt", steps },

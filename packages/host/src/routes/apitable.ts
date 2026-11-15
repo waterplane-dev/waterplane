@@ -96,8 +96,13 @@ export interface ApiCtx {
   /** The peer ledger + the trusted-path rule (`peers/routes.ts`): `/api/peers*` and `/api/peer/*`. */
   peers?: PeerStore;
   canManage?(kind: PeerKind): boolean;
+  /** `POST /api/relay` (`server/bgrelay.ts`), bound to the request's own
+   *  identity by `server/http.ts`. Absent ⇒ 503 (a test's stub ctx). */
+  relay?(body: unknown): Promise<{ status: number; body: import("@waterplane/shared").RelayResponse }>;
   /** The first-app onboarding job (`onboard.ts`, `/api/onboard*`). */
   onboard?: OnboardManager;
+  /** Slow jobs (`slowjobs.ts`, `routes/apijobs.ts`): absent ⇒ a per-process registry, no broadcast. */
+  slowJobs?: import("../slowjobs.js").SlowJobs;
   /** A plugin's hook sink (`PluginRegistry.hook`): status + JSON body, possibly HELD. Never rejects. */
   pluginHook?(pluginId: string, payload: unknown): Promise<{ status: number; body: unknown }>;
   /** A plugin's own route (`api.route`, `PluginRegistry.route`): the runner, or null when nothing

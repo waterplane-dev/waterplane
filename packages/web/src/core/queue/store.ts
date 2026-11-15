@@ -34,6 +34,13 @@ export const persistFailedAtStore = createStore<number | null>(null);
  */
 export const blockedStore = createStore<ReadonlyMap<string, SendBlockReason>>(new Map());
 
+/**
+ * How many of this queue's rows the background relay had sent, as of the last claim
+ * (`relayOwner.ts`) — null when it sent none. The reconnect question words it
+ * ("sent from the background: N"); the claim in `useQueue` is its one writer.
+ */
+export const relaySentStore = createStore<number | null>(null);
+
 let seeded = false;
 /** Load the persisted queue into the store, once per page. */
 export function seedOutbox(load: () => OutboxEntry[]): void {

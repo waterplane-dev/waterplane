@@ -14,7 +14,7 @@ export type { LauncherItemCount, LauncherItemDef, SessionViewDef };
 import type { ComponentType, ReactNode } from "react";
 import type {
   AuthState, BackendInfo, BacklogItem, BillingStatus, BudgetVerdict, PeriodState, ClientMessage, ClosedSession, HostMessage, Intent, LaunchIntent, LaunchOpts,
-  MeterSummary, RecentSession, RepoTarget, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, SweepScope, UpdateInfo, UsageBudget, UsageInfo, UsageReading,
+  MeterSummary, RecentSession, RepoTarget, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, StoreLoss, SweepScope, UpdateInfo, UsageBudget, UsageInfo, UsageReading,
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../outbox.ts";
 import type { ResourceState } from "../useRemoteResource.ts";
@@ -302,6 +302,8 @@ export interface CoreApi {
     /** One repo's health chart (the readings sheet's `repohealth` door). */
     openRepoHealth(repo: RepoTarget): void;
     /** The repo-readings checklist on one repo (null = the sheet's own choice), aimed; the setup feature's `openSetup`. */
+    /** The skills & plugins switch on one repo, on its This repo tab or (`target: "all"`) its All repos tab; Claude Code only. */
+    openSkills(repoId: string, target?: "repo" | "all"): void;
     openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch" | "agents"; focus?: "findings" | "context-weight" }): void;
     /** The context & cost sheet for ONE session by id (null = the attached one); never attaches. */
     openContext(sessionId: string | null): void;
@@ -420,7 +422,7 @@ export interface CoreApi {
     readonly closed: ClosedSession[];
     readonly intents: Intent[];
     readonly launches: LaunchIntent[];
-    readonly budget: { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[] } | null;
+    readonly budget: { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[]; loss?: StoreLoss } | null;
     /** Which billing profile the desktop's claude runs under (`billing.status`); null until the host says. */
     readonly billing: BillingStatus | null;
     readonly meter: MeterSummary | null;

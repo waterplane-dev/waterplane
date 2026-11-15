@@ -198,7 +198,7 @@ test("laneStateOf: a trust box is a wall only where the host says delivery does 
   assert.equal(laneBusy(serialStates([copilotS])[0]), false);
 });
 
-test("a folded queue strip holds through delivery; a new row or a failure comes back up", () => {
+test("a folded queue strip holds through delivery; a new row or a failure comes back up (R-queue-019)", () => {
   const a = { ackId: "a" }, b = { ackId: "b" }, c = { ackId: "c" };
   const folded = queueFoldKey([a, b]);
   stow("queue-test", folded);

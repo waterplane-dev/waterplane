@@ -79,9 +79,9 @@
 
 /* Gallery chrome. WHERE is the app's segmented control (one lit tab); WHAT is a row of
    the kit's filter chips under it. */
-.segmented.gallery-scope { gap: var(--sp-4); padding: var(--sp-6) var(--sp-10) var(--sp-8); border-bottom: 0; }
+.segmented.gallery-scope { gap: var(--sp-4); padding: var(--sp-6) var(--gutter) var(--sp-8); border-bottom: 0; }
 .gallery-scope .seg { min-width: 0; min-height: 40px; padding: var(--sp-6) var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); white-space: nowrap; }
-.fchips.gallery-filters { padding: 0 var(--sp-6) var(--sp-2); background: var(--panel); border-bottom: 1px solid var(--line); }
+.fchips.gallery-filters { padding: 0 calc(var(--gutter) - 3px) var(--sp-2); background: var(--panel); border-bottom: 1px solid var(--line); }
 /* The sheet is a flex column and the grid scrolls inside it. These rows scroll sideways, and a
    flex item with overflow set may shrink to nothing: with a long grid the chip row lost its top
    and "combine pictures" became a clipped strip with its own scrollbar (owner, 2026-11-09).
@@ -91,7 +91,7 @@
 /* The kit's FilterChip (kit/FilterChip.tsx): a 30px pill in a 44px touch box, so a filter row
    reads as filters rather than as a second row of buttons, and only a lit one is coloured —
    tinted, because the solid accent fill is a sheet's one primary verb. `.fchips` is the row. */
-.fchips { display: flex; align-items: center; gap: 0; padding: 0 var(--sp-6); overflow-x: auto; scrollbar-width: none; }
+.fchips { display: flex; align-items: center; gap: 0; padding: 0 calc(var(--gutter) - 3px); overflow-x: auto; scrollbar-width: none; }
 .fchips::-webkit-scrollbar { display: none; }
 .fchips.wrap { flex-wrap: wrap; overflow-x: visible; }
 /* Unlit text is --fg, not --muted: a muted chip beside white buttons read as greyed out. */
@@ -229,7 +229,7 @@
 
 /* Forms / backlog */
 .form { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-4) 0; }
-.form .search, .form .send { margin: 0 var(--sp-10); }
+.form .search, .form .send { margin: 0 var(--gutter); }
 /* The desktop add/edit form is free text and inputs, not rows: it needs its own side gutter (rows carry theirs). */
 .form.host-form { padding: var(--sp-8) var(--sp-16) var(--sp-16); }
 .check-list { list-style: none; margin: 0; padding: 0; }
@@ -252,7 +252,7 @@
    already a check row, so its steps are compact rows without their own bottom rule. */
 .app-steps > .check-row { padding: var(--sp-6) var(--sp-10); border-bottom: 0; }
 .app-steps .check-list .check-row { padding: var(--sp-4) var(--sp-10); border-bottom: 0; }
-.bl-row { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-12); border-bottom: 1px solid var(--line); }
+.bl-row { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-12) var(--gutter); border-bottom: 1px solid var(--line); }
 .bl-head { display: flex; align-items: flex-start; gap: var(--sp-8); }
 .bl-main { flex: 1; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
 /* Three lines closed, not two: the row shows the item's OWN text now (a label
@@ -296,7 +296,7 @@
    `.form`'s column and drew its controls — the repo and `assess` — as full-width
    blocks stacked down the phone, chrome before a single item. They are one
    row: the repo grows, the verbs take their own width, and a narrow screen wraps rather than scrolls. */
-.bl-repobar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: var(--sp-8) var(--sp-10); }
+.bl-repobar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: var(--sp-8) var(--gutter); }
 .bl-repobar > .search { flex: 1 1 160px; min-width: 0; margin: 0; }
 /* A `.rc` pill is a STATE and a `.key` is a VERB — the shapes stay apart. But
    a pill's own padding is a 26px target, which is not a fingertip beside a
@@ -312,7 +312,7 @@
 /* Search and the archived cut are ONE row: `show archived (10)` was a
    full-width button of its own between the query and the chips, in a sheet
    whose list starts below the fold. */
-.bl-searchrow { flex-direction: row; align-items: flex-end; gap: var(--sp-8); padding: 0 var(--sp-10); }
+.bl-searchrow { flex-direction: row; align-items: flex-end; gap: var(--sp-8); padding: 0 var(--gutter); }
 .bl-searchrow > .bl-search { flex: 1; min-width: 0; }
 .bl-searchrow > .bl-search .search { margin: 0; }
 /* The icon's 20px cleared the field's own 10px side margin, which this row
@@ -320,12 +320,12 @@
 .bl-searchrow .bl-search-icon { left: 10px; }
 .bl-searchrow > .fchip { align-self: center; margin-right: -3px; }
 /* The backlog's own bulk verbs (`backlog/BulkBars.tsx`): `.link-btn`s, no panel and no frame,
-   on the left edge the chips above them start at (`.bl-fchips > .fchips` 6px + `.fchip` 3px).
+   on the left edge the chips above them start at (`--gutter`).
    They were a `.key` each in an `.annot-tools` panel, which read as a second row of primary
    buttons under the slim filters and began at 8, 22 and 10px. The 44px row is the fingertip
    (the negative margin `.sheet .link-btn` takes would overlap the row above); a bar's note
    shares the verb's edge. */
-.bl-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-16); padding: 0 var(--sp-8); }
+.bl-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-16); padding: 0 var(--gutter); }
 .sheet .bl-bulk .link-btn { min-height: 44px; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
 .bl-bulk > .act-cants { padding: var(--sp-10) 0; }
 .bl-bulk-bar > .form-hint { padding: var(--sp-8) var(--sp-8) var(--sp-2); }

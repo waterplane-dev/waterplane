@@ -25,7 +25,11 @@ skill-listing card of the request breakdown (`CarriedSection`'s `onSkills`).
   read-only under a fold: the CLI ignores `skillOverrides` for plugin skills) and skill rows.
 
 **Reads from core**: `nav.open/close`, `world.backends`, `say.toast`, `say.track`. Reads from the
-host: `GET /api/repos/:id/skills` (polled every 3 s while uses, this repo's or all repos', are still being counted).
+host through the slow-job store (`src/slowJobs.ts`, `useSlowJob`): `skills.inventory` (started by
+opening when the kept list is over a minute old), `skills.uses` (joined while the inventory says a
+count runs; its progress feeds `CountBar`) and `skills.recommend` (ONLY on the suggest tap — the one
+model call). Leaving the screen aborts none; a return shows the last answer with its age and a line
+while a run is still going; a finished suggestion list is shown once per run (`showSuggest`), never applied.
 
 **Rules that apply**: changes reach NEW sessions only (said once at the top); the screen names the
 file a save writes; a re-read never overwrites the draft; an unmeasured row says so, never `0`;

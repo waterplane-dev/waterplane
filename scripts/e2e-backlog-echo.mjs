@@ -1,4 +1,4 @@
-// Backlog instruction delivery: the text reaches the session EXACTLY ONCE.
+// Backlog instruction delivery: the text reaches the session EXACTLY ONCE. (R-queue-012: "not confirmed" only when the prompt did not run)
 //
 // Regression for the repeated-prompt bug: the echo check ANSI-stripped a byte
 // window off the tail of the raw capture, but one claude-TUI repaint is tens of

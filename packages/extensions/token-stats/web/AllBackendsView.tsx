@@ -9,7 +9,9 @@
  */
 import { fmtCount, fmtExact, type BackendTokensDoc, type LocalUsageDoc, type TokenStatsDoc } from "@waterplane/shared";
 import { ledgers } from "@waterplane/sdk";
-import { useRemoteResource, Button } from "@waterplane/kit";
+import { Empty, useRemoteResource, Button } from "@waterplane/kit";
+import { Loader2 } from "lucide-react";
+import { useRescan } from "./useRescan.ts";
 import { runnerCardLines } from "./localRunner.ts";
 import { KindBars, NumRow } from "./LedgerParts.tsx";
 import { claudeCard, guestCard, lastDayWords, ledgerCard, type OverviewCard } from "./overview.ts";
@@ -64,14 +66,22 @@ function Card({ c, onOpen }: { c: OverviewCard; onOpen?: () => void }) {
 
 function LedgerCard({ id, label, online, fresh, onOpen }: { id: string; label: string; online: boolean; fresh: number; onOpen: () => void }) {
   const res = useRemoteResource<BackendTokensDoc>(
-    `backendtokens:${id}:${fresh}`,
+    `backendtokens:${id}`,
     () => ledgers.backendTokens(id, fresh > 0),
-    { offline: !online },
+    { offline: !online, cache: { shape: 1 } },
   );
+  useRescan(fresh, res.reload);
   const card = res.data
     ? ledgerCard(id, label, res.data)
     : { id, label, unit: "tokens", absent: res.state === "offline" ? `${label}’s ledger cannot be read while the desktop is out of reach.` : res.state === "error" ? `${label}’s ledger did not answer${res.error ? `: ${res.error}` : ""}.` : `Reading ${label}’s ledger…` };
-  return <Card c={card} onOpen={onOpen} />;
+  return (
+    <>
+      {/* The last copy says so (age; "checking the desktop" while a read is out) — the card below is whatever is on screen. */}
+      <Empty res={res} empty={false} noun="scan" />
+      {res.inflight && res.data && <Loader2 size={13} className="spin" aria-label="refreshing" />}
+      <Card c={card} onOpen={onOpen} />
+    </>
+  );
 }
 
 /**

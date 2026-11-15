@@ -17,6 +17,7 @@ import { Empty } from "./Empty";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { SetNote } from "./SettingsKit";
+import { randId } from "./randId";
 
 interface Props {
   /** Repos — for the inbox an attachment needs, and for naming a note's own. */
@@ -276,7 +277,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
     // check), so a chained note degrades to its first step rather than to a
     // string with control characters in it.
     const note: PadDraft = {
-      id: isNew ? `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}` : id,
+      id: isNew ? `p_${Date.now().toString(36)}_${randId(4)}` : id,
       text: t,
       // Every save re-stamps, an edit included — which is what makes `ts` the
       // field `mergePad` compares two copies of one note on.

@@ -5,6 +5,11 @@
  * `collapseMarkers`, the ONE fold of same-kind markers on one local day
  * (the host's git markers go through it too).
  *
+ * A model change and a CLI version change on the same day, or on two neighbouring session
+ * days where no session ran the new one of either beside the old one of the other, are ONE
+ * `modelCli` marker naming both: no reading can separate them, and two marks would read as
+ * two explanations.
+ *
  * Words are neutral: a marker says what changed and by how much, never whether
  * that was good.
  */
@@ -29,6 +34,10 @@ function dominant(xs: readonly string[]): string | null {
   for (const [k, n] of c) if (n * 2 > xs.length) return k;
   return null;
 }
+
+/** The detail every `modelCli` marker carries, and the sentence a before/after around one adds. */
+export const MODEL_CLI_TEXT =
+  "The model and the CLI version changed together (the same day, or neighbouring days with no session that ran one change without the other): a before and after around this mark cannot tell which of the two moved a reading.";
 
 /** Fold same-kind markers of one local day (and one repo) into one carrying `count`; sorted by time. */
 export function collapseMarkers(markers: readonly AgentMarker[]): AgentMarker[] {
@@ -82,22 +91,27 @@ export function derivedMarkers(points: readonly SeriesPoint[], opts: { repo?: st
 
   let prevModel: string | null = null;
   const cliSeen = new Set<string>();
+  let prevCli: string | null = null;
   const prevListing = new Map<string, number>();
-  for (const day of days) {
+  // Model and CLI changes by session-day index, folded after the walk (`foldModelCli`).
+  const modelAt: Change[] = [];
+  const cliAt: Change[] = [];
+  for (const [di, day] of days.entries()) {
     const ps = byDay.get(day)!;
     const t = dayStart(day);
 
     const model = dominant(ps.map((p) => p.model).filter((m): m is string => typeof m === "string" && m !== ""));
     if (model !== null) {
-      if (prevModel !== null && model !== prevModel) out.push({ t, kind: "model", label: `model ${prevModel} to ${model}`, ...repo });
+      if (prevModel !== null && model !== prevModel) modelAt.push({ i: di, t, from: prevModel, to: model, words: `model ${prevModel} to ${model}` });
       prevModel = model;
     }
 
     const cli = dominant(ps.map((p) => p.cli).filter((c): c is string => typeof c === "string" && c !== ""));
     if (cli !== null && !cliSeen.has(cli)) {
-      if (cliSeen.size > 0) out.push({ t, kind: "cli", label: `CLI ${cli}`, ...repo });
+      if (cliSeen.size > 0 && prevCli !== null) cliAt.push({ i: di, t, from: prevCli, to: cli, words: `CLI ${cli}` });
       cliSeen.add(cli);
     }
+    if (cli !== null) prevCli = cli;
 
     const startSet = ps.filter((p) => seriesReadingOf(p, "start") !== undefined);
     for (const { part, kind, words } of opts.listings === false ? [] : LISTINGS) {
@@ -112,5 +126,43 @@ export function derivedMarkers(points: readonly SeriesPoint[], opts: { repo?: st
       prevListing.set(part, med);
     }
   }
+  // Did any session on these days run one change without the other (new model on the old CLI, or the reverse)?
+  const separable = (m: Change, c: Change): boolean => {
+    for (let i = Math.min(m.i, c.i); i <= Math.max(m.i, c.i); i++) {
+      for (const p of byDay.get(days[i]!)!) {
+        if ((p.model === m.to && p.cli === c.from) || (p.model === m.from && p.cli === c.to)) return true;
+      }
+    }
+    return false;
+  };
+  out.push(...foldModelCli(modelAt, cliAt, separable, repo));
   return collapseMarkers(out);
+}
+
+/** One model or CLI change: its index among the days with sessions, its day start, the values either side, its words. */
+interface Change { i: number; t: number; from: string; to: string; words: string }
+
+/**
+ * Pair each model change with a CLI change into one `modelCli` marker at the earlier of the two:
+ * on the same session day always, on the next or previous one only when `separable` finds no
+ * session on those days that ran one change without the other. Nearest partner first; a change
+ * with no partner stays its own `model` or `cli` marker.
+ */
+function foldModelCli(models: readonly Change[], clis: readonly Change[], separable: (m: Change, c: Change) => boolean, repo: { repo?: string }): AgentMarker[] {
+  const out: AgentMarker[] = [];
+  const used = new Set<number>();
+  for (const m of models) {
+    let best = -1;
+    clis.forEach((c, j) => {
+      const gap = Math.abs(c.i - m.i);
+      if (used.has(j) || gap > 1 || (gap === 1 && separable(m, c))) return;
+      if (best < 0 || gap < Math.abs(clis[best]!.i - m.i)) best = j;
+    });
+    if (best < 0) { out.push({ t: m.t, kind: "model", label: m.words, ...repo }); continue; }
+    used.add(best);
+    const c = clis[best]!;
+    out.push({ t: Math.min(m.t, c.t), kind: "modelCli", label: `model + CLI: ${m.words}, ${c.words}`, detail: MODEL_CLI_TEXT, ...repo });
+  }
+  clis.forEach((c, j) => { if (!used.has(j)) out.push({ t: c.t, kind: "cli", label: c.words, ...repo }); });
+  return out;
 }

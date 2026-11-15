@@ -14,7 +14,7 @@ import { BRAND, LOST_LEDGER_REFUSAL } from "@waterplane/shared";
 
 const scratch = mkdtempSync(join(tmpdir(), "wp-acklost-"));
 process.env[`${BRAND.envPrefix}ROOT`] ??= scratch;
-const { AckLedger, ACK_TTL_MS, ACK_WRITE_FAILED, ackWriteNotice } = await import("../dist/acks.js");
+const { AckLedger, RELAY_KEEP_MS, ACK_WRITE_FAILED, ackWriteNotice } = await import("../dist/acks.js");
 
 function ledger({ corrupt }) {
   const root = mkdtempSync(join(tmpdir(), "wp-acklost-root-"));
@@ -53,10 +53,10 @@ test("the refusal is skew-free: a phone clock an hour off either way changes not
   }
 });
 
-test("past one TTL nothing is judged; an intact ledger judges nothing", () => {
+test("past the longest keep (a relay verdict's 24 h) nothing is judged; an intact ledger judges nothing", () => {
   const l = ledger({ corrupt: true });
   const late = l.lost.until + 1;
-  assert.equal(l.lost.until - l.lost.at, ACK_TTL_MS);
+  assert.equal(l.lost.until - l.lost.at, RELAY_KEEP_MS);
   assert.equal(l.preLossRefusal({ firstSentAt: 0, sentAt: late }, late), null);
   const ok = ledger({ corrupt: false });
   assert.equal(ok.lost, null);

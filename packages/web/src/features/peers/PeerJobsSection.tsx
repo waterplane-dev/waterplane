@@ -27,7 +27,13 @@ export function PeerJobsSection({ sessions, onOpenSession }: {
   onOpenSession: (sessionId: string) => void;
 }) {
   const now = useNow(30_000);
-  const res = useRemoteResource<PeerJobLedgerRow[]>("peerjobs", () => api.peerJobs());
+  const res = useRemoteResource<PeerJobLedgerRow[]>(
+    "peerjobs:ledger", () => api.peerJobs(),
+    // Not cached: a row carries the job's label (worded from the asker's prompt) and the asking repo's
+    // path, and its state ("running", "waiting") is only true while the peer is reachable — an old
+    // copy would show a finished job as running. The section is secondary and says nothing offline.
+    { cache: false },
+  );
   const rows = res.data ?? [];
   // Never delegated (or not read yet): no section. A read that FAILED is said.
   if (!rows.length && res.state !== "error") return null;

@@ -90,6 +90,8 @@ export type ToastEntry = {
 };
 
 let current: string | null = null;
+/** What a tap on the toast on screen opens, when its sentence names a screen ("… — tap to open"). */
+let currentOpen: (() => void) | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<(m: string | null) => void>();
 
@@ -136,7 +138,7 @@ function remember(text: string, at: number, notif?: NotificationItem): void {
 /** Say one sentence, over whatever screen is up. Replaces any toast still on.
  *  `notif`: the desktop alert it announces, so its row in the log can open it. */
 let held: (() => boolean) | null = null;
-const heldQueue: Array<[string, NotificationItem | undefined]> = [];
+const heldQueue: Array<[string, NotificationItem | undefined, (() => void) | undefined]> = [];
 
 /**
  * While `isHeld()` is true a toast waits instead of drawing under a card that covers the app
@@ -150,18 +152,26 @@ export function holdToastsWhile(isHeld: () => boolean): void {
 export function releaseToasts(): void {
   if (held?.()) return;
   const q = heldQueue.splice(0);
-  for (const [m, n] of q) showToast(m, n);
+  for (const [m, n, o] of q) showToast(m, n, o);
 }
 
-export function showToast(m: string, notif?: NotificationItem): void {
-  if (held?.()) { heldQueue.push([m, notif]); return; }
+export function showToast(m: string, notif?: NotificationItem, open?: () => void): void {
+  if (held?.()) { heldQueue.push([m, notif, open]); return; }
   current = m;
+  currentOpen = open ?? null;
   emit();
   remember(m, Date.now(), notif);
   // Restarted, never stacked: two toasts a second apart are one message being
   // corrected, and the second must not be retired by the first one's clock.
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => { timer = undefined; current = null; emit(); }, toastMs(m));
+  timer = setTimeout(() => { timer = undefined; current = null; currentOpen = null; emit(); }, toastMs(m));
+}
+
+/** The tap on the toast itself: open what its sentence names (`showToast`'s `open`), then put it down. */
+export function tapToast(): void {
+  const open = currentOpen;
+  dismissToast();
+  open?.();
 }
 
 /** Take it off screen now — the tap on the toast itself. The row stays. */
@@ -169,6 +179,7 @@ export function dismissToast(): void {
   if (timer) { clearTimeout(timer); timer = undefined; }
   if (current === null) return;
   current = null;
+  currentOpen = null;
   emit();
 }
 

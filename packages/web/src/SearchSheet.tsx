@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CornerUpRight, ListTodo, MessageSquare, Search, Slash } from "lucide-react";
+import { Archive, BookOpen, CornerUpRight, ListTodo, MessageSquare, Search, Slash } from "lucide-react";
 import type { SessionInfo, SessionSearchMatch, SessionSearchResult, SessionSearchScope } from "@waterplane/shared";
 import { track } from "./usage";
 import { ago } from "./format";
@@ -9,6 +9,7 @@ import { Explain } from "./Explain";
 import { SessionFacts } from "./sessionFacts";
 import type { BackendList } from "./backendCaps";
 import { Hint } from "./kit/Hint";
+import { FilterChip } from "./kit/FilterChip";
 
 interface Props {
   /** The host's backends, so a session row knows a shell by kind. */
@@ -31,8 +32,14 @@ interface Props {
    * claiming to be working. Say which nothing it is instead.
    */
   online?: boolean;
-  /** Fire a search over the wire (App owns the socket + result state). */
-  onSearch: (query: string, scope: SessionSearchScope) => void;
+  /** Fire a search over the wire (App owns the socket + result state). `archived` also
+   *  searches the prompts of archived conversations (all-sessions search only). */
+  onSearch: (query: string, scope: SessionSearchScope, archived: boolean) => void;
+  /** What the last answer said about the archive (null = no answer yet). */
+  archive?: { asked: boolean; searched: boolean; omitted: number } | null;
+  /** Open an archived hit in the archive's reader; null when its repo is not one this phone
+   *  lists (the row then says so instead of offering a tap that goes nowhere). */
+  openArchived?: (r: SessionSearchResult) => (() => void) | null;
   /**
    * The live session list, so a result can say what the launcher row says.
    *
@@ -114,8 +121,16 @@ function Snippet({ m, q }: { m: SessionSearchMatch; q: string }) {
  * it — a word common to a prompt and the reply to it matches the CLI's own
  * output hundreds of times over the one line somebody typed.
  */
-export function SearchSheet({ sessionId, sessionLabel, results, loading, online = true, sessions, backends, onSearch, onOpenSession, onClose }: Props) {
+export function SearchSheet({ sessionId, sessionLabel, results, loading, online = true, sessions, backends, onSearch, archive, openArchived, onOpenSession, onClose }: Props) {
   const [q, setQ] = useState("");
+  /**
+   * Also search ARCHIVED conversations — every closed one the CLI still has a log of. Off by
+   * default: the open sessions are what this sheet is for, and the archive is thousands of
+   * conversations. What it reads there is the person's PROMPTS alone, whatever the scope, because
+   * the logs themselves are far too big to scan per keystroke — the hint says so when it is on.
+   */
+  const [withArchive, setWithArchive] = useState(false);
+  const archiveOn = withArchive && !sessionId;
   /**
    * The default is the question the surface is FOR, and the two surfaces are
    * not asking the same one.
@@ -137,12 +152,16 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
     clearTimeout(timer.current);
     const query = q.trim();
     if (query.length < 2) return;
-    timer.current = window.setTimeout(() => { setShown(query); track(`action:search.${scope}`); onSearch(query, scope); }, 300);
+    timer.current = window.setTimeout(() => {
+      setShown(query); track(`action:search.${scope}${archiveOn ? ".archived" : ""}`); onSearch(query, scope, archiveOn);
+    }, 300);
     return () => clearTimeout(timer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced on the query and scope; `onSearch` is a parent callback, not guaranteed stable
-  }, [q, scope]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced on the query, scope and archive switch; `onSearch` is a parent callback, not guaranteed stable
+  }, [q, scope, archiveOn]);
 
   const totalHits = useMemo(() => (results ?? []).reduce((n, r) => n + r.total, 0), [results]);
+  const archivedCount = useMemo(() => (results ?? []).filter((r) => r.archived).length, [results]);
+  const liveCount = (results?.length ?? 0) - archivedCount;
   const byId = useMemo(() => new Map((sessions ?? []).map((s) => [s.id, s])), [sessions]);
 
   return (
@@ -166,6 +185,23 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
         {SCOPE_HINT[scope].line}
         <Explain of="what this search reads">{SCOPE_HINT[scope].more}</Explain>
       </Hint>
+      {!sessionId && (
+        <div className="srch-archive">
+          <FilterChip on={withArchive} title="also search the conversations you closed" onClick={() => setWithArchive((v) => !v)}>
+            <Archive size={13} /> archived conversations
+          </FilterChip>
+        </div>
+      )}
+      {archiveOn && (
+        <Hint>
+          Archived conversations: your prompts only, never the replies.
+          <Explain of="what the archived search reads">
+            The desktop reads the CLI's own prompt history (every prompt typed into a session), because the
+            conversation logs are far too big to search as you type. A headless run's prompts are not in it.
+            Open a hit to read the whole conversation, and resume it from there.
+          </Explain>
+        </Hint>
+      )}
 
       <div className="list">
         {q.trim().length < 2 && <Empty>Type at least 2 characters.</Empty>}
@@ -181,10 +217,28 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
           totalHits === 0
             ? <Empty>No matches for “{shown}”.</Empty>
             : <>
-                <Hint>{totalHits} match{totalHits === 1 ? "" : "es"} in {results.length} session{results.length === 1 ? "" : "s"}{loading ? " · updating…" : ""}</Hint>
+                <Hint>
+                  {totalHits} match{totalHits === 1 ? "" : "es"} in {liveCount} session{liveCount === 1 ? "" : "s"}
+                  {archivedCount > 0 && <> and {archivedCount} archived conversation{archivedCount === 1 ? "" : "s"}</>}
+                  {loading ? " · updating…" : ""}
+                </Hint>
                 {results.map((r) => (
                   <div key={r.id} className="srch-sess">
-                    {!sessionId && (() => {
+                    {!sessionId && r.archived && (() => {
+                      const open = openArchived?.(r) ?? null;
+                      const head = (
+                        <span className="srch-sess-line">
+                          <span className="srch-sess-title">{r.title}</span>
+                          <span className="srch-sess-repo">{r.repoLabel} · archived</span>
+                          <span className="srch-sess-count">{r.total}</span>
+                          {open && <BookOpen size={13} />}
+                        </span>
+                      );
+                      return open
+                        ? <button className="srch-sess-head" onClick={open} title="read this conversation">{head}</button>
+                        : <div className="srch-sess-head">{head}<Hint>Its folder is not one of this phone's repos, so it cannot be opened from here.</Hint></div>;
+                    })()}
+                    {!sessionId && !r.archived && (() => {
                       const s = byId.get(r.id) ?? null;
                       return (
                         <button className="srch-sess-head" onClick={() => onOpenSession(r.id)} title="open this session">
@@ -209,6 +263,12 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
                   </div>
                 ))}
               </>
+        )}
+        {results != null && q.trim().length >= 2 && archive?.asked && !archive.searched && (
+          <Hint>Archived conversations were not searched: this desktop runs an older version, or keeps no prompt history to read.</Hint>
+        )}
+        {results != null && q.trim().length >= 2 && archive?.searched && archive.omitted > 0 && (
+          <div className="srch-more">+{archive.omitted} more archived conversation{archive.omitted === 1 ? "" : "s"} match (refine the search)</div>
         )}
       </div>
     </div>

@@ -628,7 +628,7 @@ const CS = (over = {}) => ({
   ...over,
 });
 
-test("codeScanningFindings: one row per rule, security results only, Scorecard's uploads skipped", () => {
+test("codeScanningFindings: one row per rule, security results only, Scorecard's uploads skipped (R-security-018)", () => {
   const rows = codeScanningFindings([
     CS(), CS({ number: 59, most_recent_instance: { location: { path: "a.ts", start_line: 2 } } }),
     CS({ number: 1, tool: { name: "Scorecard" }, rule: { id: "BranchProtectionID", security_severity_level: "high" } }),
@@ -644,7 +644,7 @@ test("codeScanningFindings: one row per rule, security results only, Scorecard's
   assert.deepEqual(codeScanningFindings({ message: "Not Found" }, NOW), [], "an error object is not a list");
 });
 
-test("codeScanningFindings: medium is digest while young, alert once the oldest is open over 14 days", () => {
+test("codeScanningFindings: medium is digest while young, alert once the oldest is open over 14 days (R-security-018)", () => {
   const med = { id: "js/incomplete-sanitization", security_severity_level: "medium" };
   const [young] = codeScanningFindings([CS({ rule: med })], NOW);
   assert.equal(young.severity, "moderate");
@@ -653,7 +653,7 @@ test("codeScanningFindings: medium is digest while young, alert once the oldest 
   assert.equal(old.level, "alert");
 });
 
-test("codeScanningUnavailable: a repo without code scanning is a setting, any other failure is not", () => {
+test("codeScanningUnavailable: a repo without code scanning is a setting, any other failure is not (R-security-018)", () => {
   assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Advanced Security must be enabled for this repository to use code scanning."), true);
   assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Code scanning is not enabled for this repository."), true);
   assert.equal(codeScanningUnavailable("gh api x: HTTP 403 Resource not accessible by personal access token"), false);

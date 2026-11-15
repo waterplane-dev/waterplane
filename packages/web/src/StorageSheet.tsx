@@ -44,11 +44,11 @@
  *    it is what identifies the one file that is not.
  */
 import { useEffect, useState } from "react";
-import { HardDrive, Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
+import { AlertTriangle, EyeOff, HardDrive, Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
 import {
-  HOST_STORE_KIND_LABEL, clearableRows, wordOf, hostStoreButtonText, hostStoreResultText,
+  HOST_STORE_KIND_LABEL, clearableRows, storeLossText, wordOf, hostStoreButtonText, hostStoreResultText,
   scopeChipText, surveyHeadText,
-  type HostStoreReport, type HostStoreRow, type SweepScope, type TransportSurvey,
+  type HostStoreReport, type StoreLoss, type HostStoreRow, type SweepScope, type TransportSurvey,
 } from "@waterplane/shared";
 import {
   clearButtonText, clearConfirmText, clearGroupText, clearResultText, fmtBytes,
@@ -63,9 +63,11 @@ import { Empty } from "./Empty";
 import { api } from "./api";
 import { useRemoteResource } from "./useRemoteResource";
 import { ago } from "./format";
+import { lossBytesNote, lossWhenAt } from "./storeLoss";
 import { Button } from "./kit/Button";
 import { Row } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { useOfflineGate } from "./kit/offlineGate";
 
 interface Props {
   onClose: () => void;
@@ -138,11 +140,24 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
 
   // ── The desktop's two readings ────────────────────────────────────────────
   // Through `useRemoteResource` so a cached row says how old it is and offline
-  // is a sentence rather than an empty list. `bump` moves the key, which is how
-  // this app re-reads without blanking what somebody is looking at.
-  const [bump, setBump] = useState(0);
-  const survey = useRemoteResource<TransportSurvey>(`storage.transport.${bump}`, () => api.transportSurvey());
-  const store = useRemoteResource<HostStoreReport>(`storage.host.${bump}`, () => api.hostStore());
+  // is a sentence rather than an empty list. A quiet `reload` re-reads without
+  // blanking what somebody is looking at; the key stays put so the cache row is one.
+  const survey = useRemoteResource<TransportSurvey>("storage:transport", () => api.transportSurvey(), { cache: { shape: 1 } });
+  const store = useRemoteResource<HostStoreReport>("storage:hoststore", () => api.hostStore(), { cache: { shape: 1 } });
+  const gate = useOfflineGate();
+  const reread = () => { survey.reload({ quiet: true }); store.reload({ quiet: true }); };
+
+  /** Hide one lost-store record. Bytes stay; a failure says `why`, a lost answer says so. Then re-read. */
+  async function dismissLoss(l: StoreLoss) {
+    setBusy(true);
+    try {
+      const out = await api.dismissStoreLoss(l.id);
+      setSaid(out.ok ? `Hidden: ${l.store}. Its bytes were not touched.` : `Could not hide that record: ${out.why}`);
+      reread();
+    } catch {
+      setSaid("The desktop didn’t answer, so that record is still listed — re-read to see.");
+    } finally { setBusy(false); }
+  }
 
   /**
    * Clear one row of the DESKTOP's store.
@@ -157,7 +172,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
       const out = await api.hostStoreClear(row.id, at);
       if (out.error) { setSaid(out.error); return; }
       setSaid(hostStoreResultText(row.label, out));
-      setBump((n) => n + 1);
+      reread();
     } catch {
       setSaid("The desktop didn’t answer, so nothing here says whether it ran — re-read to see what is still there.");
     } finally { setBusy(false); }
@@ -170,7 +185,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
   return (
     <div className="sheet">
       <SheetHead title="Storage on this device" onClose={onClose}>
-        {loading && <Loader2 size={13} className="spin" />}
+        {(loading || survey.inflight || store.inflight) && <Loader2 size={13} className="spin" />}
       </SheetHead>
 
       <Hint>
@@ -179,7 +194,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
       {nativeNote && <Hint>{nativeNote}</Hint>}
 
       <div className="annot-tools">
-        <Button onClick={() => { void load(); setBump((n) => n + 1); }}>
+        <Button onClick={() => { void load(); reread(); }}>
           <RefreshCw size={14} /> re-measure
         </Button>
       </div>
@@ -332,6 +347,28 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                 : `${fmtBytes(store.data.total)} in all. Most of it is already bounded by whatever writes it.`}
               {" "}Read {ago(store.data.at)}.
             </Hint>
+            {!!store.data.losses?.length && (
+              <div className="list">
+                {store.data.losses.map((l) => {
+                  const note = lossBytesNote(l);
+                  return (
+                    <div key={l.id} className="row sweep-row storage-row">
+                      <div className="storage-row-head">
+                        <span className="sweep-path"><AlertTriangle size={13} /> {l.store}</span>
+                        <span className="sweep-meta">{ago(lossWhenAt(l))}{l.count && l.count > 1 ? ` · ${l.count} times` : ""}</span>
+                      </div>
+                      <Hint tone="warn">{storeLossText(l)}</Hint>
+                      {l.movedTo && l.movedToExists !== false && <Hint tone="mono"><span className="mono">{l.movedTo}</span></Hint>}
+                      {note && <Hint>{note}</Hint>}
+                      {l.memoryOnly && <Hint>This note could not be saved on the desktop, so it disappears when the host restarts.</Hint>}
+                      <Button onClick={gate.guard("hide this record", () => void dismissLoss(l))}>
+                        <EyeOff size={13} /> Hide this — the bytes stay
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="list">
               {store.data.rows.map((r) => (
                 <div key={r.id} className="row sweep-row storage-row">
@@ -344,7 +381,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                     <Unavailable className="form-hint" cants={[{ label: `clear ${r.label}`, reason: r.cant }]} />
                   ) : r.count > 0 ? (
                     <ConfirmButton className="key" confirm={`Yes — clear ${tallyText(r.count, r.bytes, "file")}`}
-                      disabled={busy} onConfirm={() => void runHostRow(r, store.data!.at)}>
+                      disabled={busy} onConfirm={gate.guard(`clear ${r.label}`, () => void runHostRow(r, store.data!.at))}>
                       <Trash2 size={13} /> {hostStoreButtonText(r)}
                     </ConfirmButton>
                   ) : (
@@ -353,6 +390,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                 </div>
               ))}
             </div>
+            {gate.note}
             {!clearableRows(store.data.rows).length && (
               <Unavailable className="form-hint" cants={[{
                 label: "clear anything here",

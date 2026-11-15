@@ -1,8 +1,8 @@
 import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
-import type { SkillInventoryDoc, SkillRecommendResponse, SkillWriteRequest, SkillWriteResponse } from "@waterplane/shared";
-import type { AgentMarkersResponse, AgentPointsResponse, AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
-import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
-import { nfetch, jget, jpost } from "./webapiFetch";
+import type { SkillWriteRequest, SkillWriteResponse, SlowJob, SlowJobKind } from "@waterplane/shared";
+import type { ProbeResultsView, ProbeStartAnswer, ProbeStartBody, ProbeView, SetupShareBlock, AgentMarkersResponse, AgentPointsResponse, AgentReadingsResponse, OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
+import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthOwnBackfillAnswer, RepoHealthView } from "@waterplane/shared";
+import { nfetch, jget, jpost, jpostOk } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
 
 /** An opt-ins report off the wire, every row through `cleanOptInRow`: a row
@@ -35,13 +35,13 @@ export const repoOpsApi = {
   setSecret: (body: { scope: "host" | "repo"; repoId?: string; file?: string; key?: string; value: string; targetId?: string }) =>
     jpost<SecretResult>("/api/secret", body),
 
-  // Setup compliance checklist (per-repo).
-  compliance: (repoId: string) => jget<ComplianceReport>(`/api/repos/${repoId}/compliance`),
-  // `confirm`: the report's token for a confirm-gated fix, sent with that one id alone.
-  // Skills & plugins switch: read, one-file write (a refusal is a body with `ok:false`), the one tapped model call.
-  skills: (repoId: string) => jget<SkillInventoryDoc>(`/api/repos/${repoId}/skills`),
+  // Slow jobs (the checklist, the skills inventory, its use counts, the skill suggestions): start or
+  // join, read the kept run WITH its result, and the reconnect catch-up. Only `slowJobs.ts` calls these.
+  slowJobStart: (repoId: string, kind: SlowJobKind) => jpostOk<{ job: SlowJob; joined: boolean }>(`/api/repos/${repoId}/jobs/${kind}`, {}),
+  slowJobRead: (repoId: string, kind: SlowJobKind) => jget<{ job: SlowJob | null }>(`/api/repos/${repoId}/jobs/${kind}`),
+  slowJobList: () => jget<{ jobs: SlowJob[] }>("/api/jobs"),
+  // `confirm`: the report's token for a confirm-gated fix, sent with that one id alone. Skills write: a refusal is a body with `ok:false`.
   skillsWrite: (repoId: string, req: SkillWriteRequest) => jpost<SkillWriteResponse>(`/api/repos/${repoId}/skills/write`, req),
-  skillsRecommend: (repoId: string) => jpost<SkillRecommendResponse>(`/api/repos/${repoId}/skills/recommend`, {}, SLOW_OP_TIMEOUT_MS),
   complianceFix: (repoId: string, fixes: string[], confirm?: string) =>
     jpost<ComplianceFixResult>(`/api/repos/${repoId}/compliance/fix`, confirm ? { fixes, confirm } : { fixes }),
   // The context-weight thresholds for one repo. A patch: an absent field keeps
@@ -85,6 +85,18 @@ export const repoOpsApi = {
   /** Session points (host `agentreadings.ts`): one per conversation and subagent log, one repo's or, with no id, every repo's (capped, `cut` says how many older ones are left off). */
   agentPoints: (repoId: string | null) =>
     jget<AgentPointsResponse>(repoId ? `/api/repos/${repoId}/agentpoints` : "/api/agentpoints"),
+  /** Write an exported setup block (R-metrics-073) to the repo's `.claude/outbox/`: the host re-reads it with the import's strict parser. */
+  setupShareWrite: (repoId: string, block: SetupShareBlock) =>
+    jpost<{ ok: true; relPath: string; size: number; mtime: number } | { ok: false; error: string }>(`/api/repos/${repoId}/setupshare`, block),
+  /** The lookup probe (R-metrics-071/074): the pool at HEAD, the defaults and the live status. Spends nothing. */
+  probeView: (repoId: string) =>
+    jget<ProbeView>(`/api/repos/${repoId}/probe`),
+  /** This desktop's stored probe results for the repo, newest first, each with its analysis. */
+  probeResults: (repoId: string) =>
+    jget<ProbeResultsView>(`/api/repos/${repoId}/probe/results`),
+  /** The one call that spends: `accepted` is the estimate the person saw before the tap; a refusal is a sentence. */
+  probeStart: (repoId: string, body: ProbeStartBody) =>
+    jpost<ProbeStartAnswer>(`/api/repos/${repoId}/probe/start`, body),
   /** What changed beside those points: instruction commits and tags, model, CLI and listing steps. */
   agentMarkers: (repoId: string) =>
     jget<AgentMarkersResponse>(`/api/repos/${repoId}/agentmarkers`),
@@ -120,4 +132,7 @@ export const repoOpsApi = {
     jpost<RepoHealthView & { ok: boolean }>(
       `/api/repos/${repoId}/repohealth/refresh`, { ...(scope ? { scope } : {}), ...(approveEngine ? { approveEngine: true, ...(approveToken ? { approveToken } : {}) } : {}), ...(recut ? { recut: true } : {}) }, 200_000,
     ),
+  /** The repo's OWN readings read back over older commits (R-metrics-065); 200 always, a refusal is `refused`. 200 s: the host holds the cap. */
+  repoHealthOwnBackfill: (repoId: string, commits: number) =>
+    jpost<RepoHealthOwnBackfillAnswer>(`/api/repos/${repoId}/repohealth/own-backfill`, { commits }, 200_000),
 };

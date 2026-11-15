@@ -16,9 +16,9 @@
  * adding a `track()` call needs no host change — but they're sanity-capped so a
  * buggy/hostile client can't grow the file without bound.
  */
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, recordWriteLoss, storeLossFor, writeJsonAtomic } from "./jsonstore.js";
 import { join } from "node:path";
-import type { UiUsageDoc } from "@waterplane/shared";
+import type { StoreLoss, UiUsageDoc } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 
 const MAX_FEATURES = 1000;      // distinct ids retained (least-used dropped past this)
@@ -66,6 +66,12 @@ export class UiStats {
     return { ...this.doc, features: { ...this.doc.features } };
   }
 
+  /** The undismissed loss of `ui-usage.json`, if any — `GET /api/ui-usage` adds
+   *  it, so "never used" can say the counts restarted. */
+  loss(): StoreLoss | undefined {
+    return storeLossFor(this.path);
+  }
+
   /** Wipe all counters (start a fresh observation window). */
   reset(): void {
     this.doc = { updatedAt: Date.now(), since: Date.now(), features: {} };
@@ -94,6 +100,6 @@ export class UiStats {
   private persist(): void {
     try {
       writeJsonAtomic(this.path, this.doc, { space: 2 });
-    } catch { /* telemetry must never break the host */ }
+    } catch (e) { recordWriteLoss(this.path, e); /* telemetry must never break the host */ }
   }
 }

@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   reusableWhen, reusableMode, reusableWhere, rememberSend, recallMode, recallWhen,
-  recallWhere, recalledWhenNote, SEND_MEMORY_CAP,
+  recallWhere, recallScreenAim, recalledWhenNote, SEND_MEMORY_CAP,
 } from "./sendMemory.ts";
 
 const NOW = 1_700_000_000_000;
@@ -128,12 +128,23 @@ test("with nothing remembered the strip opens on the session you are looking at"
   assert.equal(recallWhere({ "/r": { where: "other", at: NOW } }, "/r"), "this");
 });
 
-test("the aim is remembered per repo, and one repo's aim is not another's", () => {
+test("the aim is remembered per repo, and one repo's aim is not another's (R-queue-005)", () => {
   let mem = rememberSend({}, "/a", { where: "new" }, NOW);
   mem = rememberSend(mem, "/b", { where: "this" }, NOW);
   assert.equal(recallWhere(mem, "/a"), "new");
   assert.equal(recallWhere(mem, "/b"), "this");
   assert.equal(recallWhere(mem, "/c"), "this");
+});
+
+test("a + new screen aims at itself whatever the repo remembers; + later always at a new session", () => {
+  // 2026-11-14: a remembered `new` aim on a `pending:` screen posted the words
+  // as another session's backlog item, and the session that opened stayed empty.
+  const mem = rememberSend({}, "/a", { where: "new" }, NOW);
+  assert.equal(recallScreenAim({ later: false, pending: true }, mem, "/a"), "this");
+  assert.equal(recallScreenAim({ later: true, pending: true }, mem, "/a"), "new");
+  assert.equal(recallScreenAim({ later: true, pending: false }, {}, "/a"), "new");
+  // A live session keeps the repo's remembered aim.
+  assert.equal(recallScreenAim({ later: false, pending: false }, mem, "/a"), "new");
 });
 
 test("the composer writes the aim without erasing the sheet's WHEN", () => {

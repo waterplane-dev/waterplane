@@ -9,7 +9,7 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
 
 - `review.ts` — `check` / `validate` / `nextStep` / `continueWork`: verbs on work that has SETTLED.
   Verdicts in a sidecar keyed by intent id. A chosen next step POSTS its own intent.
-- `sidecar.ts` + `sidecarroute.ts` + `sidecarclaude.ts` + `sidecartrust.ts` + `sidecaropenai.ts` + `sidecartasks.ts` + `sidecarname.ts` — (`sidecar.ts` is the facade over `sidecar/`: routing, the claude engine and its flags, the folder-trust refusal, the local engine, summary, naming+commit) the ONE place an UNATTENDED completion is bought: engines `claude-p` (today's
+- `sidecar.ts` + `sidecarroute.ts` + `sidecarclaude.ts` + `sidecartrust.ts` + `sidecaropenai.ts` + `sidecartasks.ts` + `sidecarname.ts` + `sidecarprobe.ts` — (`sidecar.ts` is the facade over `sidecar/`: routing, the claude engine and its flags, the folder-trust refusal, the local engine, summary, naming+commit) the ONE place an UNATTENDED completion is bought: engines `claude-p` (today's
   headless call, moved verbatim — envelope, timeouts and `detectHeadlessLimit` unchanged) and
   `openai-compat` (one toolless POST to a local `{baseURL}/chat/completions`). Per-task routing via
   `WATERPLANE_SIDECAR_SUMMARY`/`_ASSESS`/`_REVIEW`/`_NAME`/`_COMMIT`/`_EXPLAIN` (+ `_TIMEOUT_MS` 120000,
@@ -35,6 +35,17 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
   `usage.ts` (`host-ledgers`) is no sidecar but IS an unattended `claude` in a PTY: same halt gate,
   never started under `--doctor`.
   `packages/host/test/sidecar.test.mjs`, `scripts/e2e-sidecar.mjs`.
+- `probe.ts` (+ `sidecar/sidecarprobe.ts`, the seam half) — **the lookup probe** (R-metrics-071): a seeded
+  draw of the repo's committed `.waterplane-shared/probe.json`, asked of THIS desktop's setup in a detached scratch
+  worktree under the tmpdir (pool file deleted from it, removed after; ours only, swept by prefix,
+  never a repo-wide prune). `probe.ts` names no `claude` flag: argv, stream-json reading, the
+  per-question token cap (an `AbortSignal` that kills the process GROUP) and every dropped
+  `runSummaryTask` flag's reason are in `sidecarprobe.ts`. `runToolTask(..., { trustOf: repo })`
+  asks the trust of the repo the scratch checkout was made from — for that caller only. Tap-started
+  only; the start REFUSES unless `accepted` covers the estimate now (`probeAcceptedCovers`); halt
+  asked before each question; stops at `PROBE_BUDGET_FACTOR` × the estimate; a tool input outside
+  the worktree (memory dirs excepted) or naming the key voids the result. `scratchStaysOut` asserts
+  the probe's transcripts never land under the repo's agent-readings slugs. Single-flight per repo.
 - `prompts.ts` — `promptText(name, fallback)`: `<config dir>/prompts/<name>.md` read PER CALL (never
   cached), the pinned default byte for byte when the file is absent, empty or unreadable. EVERY
   spender's instruction wording goes through it; only the wording is overridable, the JSON contracts

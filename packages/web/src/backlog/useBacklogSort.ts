@@ -4,12 +4,13 @@
  */
 import { useState } from "react";
 import type { BacklogSort } from "../backlogFilter";
+import { sortFromStored } from "../backlogFilter/sortDefault";
 import { LS, lsDel, lsGet, lsSet } from "../storage";
 
 const SORT_KEY = LS.backlogSortRun;
 
 export function useBacklogSort() {
-  const [sort, setSortState] = useState<BacklogSort>(() => (lsGet(SORT_KEY) === "1" ? "run" : "newest"));
+  const [sort, setSortState] = useState<BacklogSort>(() => sortFromStored(lsGet(SORT_KEY)));
   const setSort = (next: BacklogSort) => {
     setSortState(next);
     if (next === "run") lsSet(SORT_KEY, "1");

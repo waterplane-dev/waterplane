@@ -185,7 +185,11 @@
 .ts-tile-n { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: 1px; }
 
 /* The one filter row, above everything it scopes. */
-.ts-filter { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-14) 0; flex-wrap: wrap; }
+.ts-filter { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--gutter) 0; flex-wrap: wrap; }
+/* A `.fchip` carries 3px round its pill: a row of them starts 3px early so the pill is on the gutter, on a
+   wrapped line too, and the row's label takes those 3px back. */
+.ts-filter:has(> .fchip) { padding-left: calc(var(--gutter) - 3px); }
+.ts-filter:has(> .fchip) > .ctx-stackpick-lab:first-child { margin-left: 3px; }
 
 /* The week stepper. The arrows are real buttons or nothing at all — never a
    dimmed one (`WeekNav`'s header, and `Unavailable.tsx`'s rule) — so the gap

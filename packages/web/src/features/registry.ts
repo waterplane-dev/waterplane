@@ -61,6 +61,7 @@ import { manifest as cliRestart } from "./cliRestart";
 import { manifest as repoSync } from "./repoSync";
 import { manifest as whatsnew } from "./whatsnew";
 import { manifest as skills } from "./skills";
+import { manifest as slowjobs } from "./slowjobs";
 
 // In-repo EXTENSIONS (packages/extensions/<id>/web): the same contract, globbed, listed after the core.
 const EXTENSION_MODULES = import.meta.glob<{ manifest: FeatureManifest }>("../../../extensions/*/web/index.ts", { eager: true });
@@ -113,6 +114,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   repoSync,
   whatsnew,
   skills,
+  slowjobs,
   // extensions
   ...EXTENSIONS,
 ];

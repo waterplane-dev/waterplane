@@ -9,7 +9,8 @@
  */
 import { useMemo, useSyncExternalStore } from "react";
 import type { BacklogItem } from "@waterplane/shared";
-import { itemHeadline, repoBranchLabel, sessionPickLabel, withShownName } from "@waterplane/shared";
+import { searchBacklog } from "../backlogFilter/rowSearch";
+import { repoBranchLabel, sessionPickLabel, withShownName } from "@waterplane/shared";
 import {
   assessableInCut, backlogCounts, clockGroups, focusRunWords, hasBacklogFilter, hiddenByArchive, matchesBacklogFilter,
   nameableInCut, realLabel, retimeEligible, clockPicks, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
@@ -186,9 +187,7 @@ export function useBacklogCuts(
   // "flaky" was unfindable by the one word a person would type to find it.
   // `itemHeadline` and not `it.headline`, so the string searched is the string
   // shown — a typed label beats a derived title in both.
-  const visible = q
-    ? cut.filter((it) => `${itemHeadline(it) ?? ""} ${it.label ?? ""} ${it.text}`.toLowerCase().includes(q))
-    : cut;
+  const visible = searchBacklog(cut, text);
   const archivedCount = inRepo.filter((it) => it.archived).length;
   /** Every row this repo has, by id — what an ids chip needs to NAME the row on
    *  the other side of a merge. A row the host has since evicted is simply

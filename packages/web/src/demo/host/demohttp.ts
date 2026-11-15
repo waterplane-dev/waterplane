@@ -8,10 +8,10 @@
  *
  * `/api/health` stays in index.ts — it belongs to the disconnect fault.
  */
-import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
+import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, isSlowJobKind, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
-import { demoCompliance, demoSkills } from "./skills.ts";
+import { demoCompliance, demoSkills, demoSlowJob } from "./skills.ts";
 import { demoHealthIndex } from "./healthindex.ts";
 import { findSession, screenLines, sessions } from "./desk.ts";
 import { NOT_IN_DEMO } from "./verdict.ts";
@@ -197,6 +197,20 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     return json(sk[2] === "skills" ? demoSkills(id, now) : demoCompliance(id, String(target.repoName ?? id)));
   }
 
+  // Slow jobs (the checklist and the skills reads): every run is already done — see `demoSlowJob`.
+  const sj = /^\/api\/repos\/([^/]+)\/jobs\/([^/]+)$/.exec(path);
+  if (sj && (method === "GET" || method === "POST") && m.numbers?.skills) {
+    const id = decodeURIComponent(sj[1]);
+    const kind = decodeURIComponent(sj[2]);
+    if (!isSlowJobKind(kind)) return json({ error: "unknown job kind" }, 400);
+    const target = repoTargets(m).find((r) => r.id === id) as { repoName?: unknown } | undefined;
+    if (!target) return json({ error: "no such repo" }, 404);
+    const job = demoSlowJob(kind, id, String(target.repoName ?? id), now);
+    return json(method === "POST" ? { job, joined: false } : { job });
+  }
+  // The reconnect catch-up: no run is ever left running in the demo.
+  if (path === "/api/jobs" && method === "GET") return json({ jobs: [] });
+
   // Repo health: a fictional series for the demo repos, only where the scenario opts in.
   const health = /^\/api\/repos\/([^/]+)\/repohealth$/.exec(path);
   if (health && method === "GET" && m.numbers?.repoHealth) {
@@ -237,6 +251,9 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   }
   if (path === "/api/storage/host" && method === "GET") {
     return json(m.storage?.host ?? { at: now, dir: "demo", rows: [], total: 0, partial: false });
+  }
+  if (path === "/api/storage/host/loss/dismiss" && method === "POST") {
+    return json({ ok: false, why: "the demo's desktop keeps no lost-store records." });
   }
   if (path === "/api/storage/host/clear" && method === "POST") {
     return json({ deleted: 0, bytes: 0, failed: 0, refused: "The demo's desktop keeps no files, so there is nothing to clear." });

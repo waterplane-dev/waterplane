@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, LogIn, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, TextCursorInput, Trash2, User, Wallet, WifiOff } from "lucide-react";
-import type { SentCommand, SentSource } from "@waterplane/shared";
+import type { SentCommand, SentSource, StoreLoss } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
@@ -11,9 +11,14 @@ import { ago } from "./format";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
+import { lossHidesFigures } from "./storeLoss";
+import { StoreLossLine } from "./StoreLossLine";
 
 interface Props {
   entries: SentCommand[];
+  /** `sent.json` was lost: an empty or short list may be the loss, not the history. */
+  loss?: StoreLoss | null;
+  onOpenStorage?: () => void;
   /** When set, only this session's entries are shown (the per-session entry point). */
   filterSessionId?: string | null;
   sessionTitle?: string;
@@ -95,7 +100,7 @@ function clock(ts: number): string {
  * straight into the session so the claim can be checked against the real thing
  * rather than believed.
  */
-export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, onRefresh, onClear, onOpenSession }: Props) {
+export function SentLogSheet({ entries, loss, onOpenStorage, filterSessionId, sessionTitle, onClose, onRefresh, onClear, onOpenSession }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [pick, setWho] = useState<Who>("all");
   const toggle = (id: string) => setOpen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -135,6 +140,8 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
         </span>
       </SheetHead>
 
+      {loss && <StoreLossLine loss={loss} onOpenStorage={onOpenStorage} />}
+
       {/* One line says what this is; the rest of what it means is behind the `?`. The words are
           the sheet's own, unchanged but for the last clause: it said a tap on the row opens the
           session, when the row's text expands and "open the session" is the button that opens it. */}
@@ -164,7 +171,7 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
       )}
 
       <div className="list hist">
-        <Empty empty={shown.length === 0}>Nothing sent yet.</Empty>
+        <Empty empty={shown.length === 0}>{lossHidesFigures(loss) ? "Nothing listed — the log was lost, so earlier sends may be missing." : "Nothing sent yet."}</Empty>
         {shown.map((e) => {
           const src = SOURCE[e.source] ?? { label: e.source, Icon: Send };
           const res = RESULT[e.result] ?? RESULT.written;

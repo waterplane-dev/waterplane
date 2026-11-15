@@ -30,6 +30,8 @@ export interface SeriesPoint {
   parts?: Partial<Record<string, number>>;
   /** Look calls (Read/Grep/Glob/Bash) before the first edit; absent when the session never edited. */
   look?: number;
+  /** Skill calls the session made; absent when the log cannot say. */
+  skills?: number;
   /** Requests the session made. */
   req: number;
   /** The session committed (absent on a subagent log, which is not read for it). */
@@ -49,8 +51,24 @@ export interface SeriesMedian {
 
 export type SeriesValue = SeriesMedian | SeriesAbsent;
 
+/**
+ * Skill loads, the one reading that is not a median: most sessions load no skill, so a weekly
+ * median is 0 or 1 and says nothing. Its bucket is the mean loads per session beside the share of
+ * sessions that loaded at least one, over the same `n` (absent under `SERIES_MIN_N`, like a median).
+ */
+export interface SeriesLoads {
+  /** Mean skill loads per session. */
+  mean: number;
+  /** Sessions that loaded at least one skill, over `n` (0..1). */
+  share: number;
+  /** Sessions both figures are over. */
+  n: number;
+}
+
+export type SeriesLoadsValue = SeriesLoads | SeriesAbsent;
+
 /** The four readings a before/after can be asked about. */
-export type SeriesReading = "start" | "subStart" | "look" | "req";
+export type SeriesReading = "start" | "subStart" | "look" | "req" | "skills";
 
 export interface SeriesBucket {
   /** `YYYY-MM-DD`: the local day, or the Monday of the ISO week. */
@@ -65,6 +83,8 @@ export interface SeriesBucket {
   look: SeriesValue;
   /** Median requests, fresh non-subagent sessions that committed. */
   req: SeriesValue;
+  /** Mean skill calls per session and the share that loaded one, fresh non-subagent sessions whose log says (never a median: see `SeriesLoads`). */
+  skills: SeriesLoadsValue;
   /** Median first-request tokens of subagent logs. */
   subStart: SeriesValue;
 }
@@ -99,9 +119,12 @@ export interface CompareResult {
   daysAfter: number;
   /** The one model every compared session ran. */
   model?: string;
+  /** `before`/`after` are MEANS, not medians (the `skills` reading: a median of mostly zeros has no ratio). Absent = medians. */
+  mean?: true;
 }
 
-export type AgentMarkerKind = "model" | "cli" | "instructions" | "memory" | "skills" | "switch" | "tag";
+/** `modelCli`: a model change and a CLI version change with no session day between them, drawn as ONE marker because no reading can tell them apart. */
+export type AgentMarkerKind = "model" | "cli" | "modelCli" | "instructions" | "memory" | "skills" | "switch" | "tag";
 
 /** Something that changed, drawn on the same time axis as the readings. */
 export interface AgentMarker {

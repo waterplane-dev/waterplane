@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.9.9 - 2026-11-15
+
+### New
+
+- **Queued prompts go out while the phone is in the background.** The phone hands its queue to the desktop, and the reconnect question says "sent from the background: N". A push tells you when the desktop's Tailscale link returns after two minutes or more. The catch-up stops are now 1 minute or off, since the frozen page could never run the 5 and 15 minute ones.
+- **Agent readings open on a setup-cost headline.** One dollar figure per median session comes first, with tokens under it and the split by whose it is. The region has three views: now, week by week, and test & compare.
+- **Compare setups and models.** Sessions can be split by the model they ran on. A "Search test" runs seeded lookup questions against two models, or against a saved baseline, at equal correctness, after a two-tap start on a shown estimate. You can export this desktop's setup block after previewing the exact text, import another one, and read the two side by side.
+- **Repo readings say which way is better, and your own readings count.** Every tile says lower, higher, or neither, with the reason. A repo may declare 12 own readings. A reading that declares a target joins the health score. "Read back 20 commits" gives a thin tile a curve at once and goes away when the older days are filled.
+- **Search can include archived conversations.** An opt-in switch searches your own prompts, and a hit opens in the archive reader.
+- **Lost stores are visible.** Settings > storage lists each store that was corrupt or failed to save, with a hide button. Budget, feature usage and the sent log say so at their top.
+- **Slow reads survive leaving the screen.** Skills & plugins and the setup checklist keep running, and a return shows the last answer with its age. A running use count is a live bar with a percent.
+- **Host-read sheets show their last copy offline,** with its age. A change made offline is refused with a sentence.
+- **Smaller changes.**
+  - The desktop sheet always lists the top CPU programs and sessions.
+  - The open tabs list has a "N waiting" filter.
+  - Send while a dictation is still coming back asks whether to send the transcript unread or read it first.
+
+### Fixed
+
+- **Words sent on a "+ new" screen run in the session it opens.** They no longer become a separate work item that waits for the repo to be free, even after an outage.
+- **A queued prompt is no longer typed twice** after the desktop refused a stale send. The receipt reaches the phone, and a re-send hears the same answer.
+- **Files search hits no longer replace a folder's listing.** Back, a crumb or a folder row shows that folder's own files.
+- **The phone no longer offers the previous CLI proposal** while background agents keep the output busy.
+- **The offline "handled needs the host" hint** has its own line and no longer slides over the queued line below it.
+
+### Security
+
+- **A passive device is never given the LAN identity secret,** and the phone keeps none from a passive pairing.
+
 ## 0.9.8 - 2026-11-13
 
 ### New

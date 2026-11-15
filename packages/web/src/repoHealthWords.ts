@@ -58,3 +58,4 @@ export * from "./repoHealthWords/repoHealthWordsRegion.ts";
 export * from "./repoHealthWords/repoHealthWordsScope.ts";
 export * from "./repoHealthWords/repoHealthWordsOwn.ts";
 export * from "./repoHealthWords/repoHealthWordsCentral.ts";
+export * from "./repoHealthWords/repoHealthWordsAim.ts";

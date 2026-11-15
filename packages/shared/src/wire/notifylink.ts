@@ -14,8 +14,11 @@
  *   which says nothing about its role and does not update with the bundle.
  */
 
-/** The one role a socket may declare today. Absent ⇒ a full client. */
-export type ClientRole = "notify";
+/** A socket's role. Absent ⇒ a full client. `notify` is the APK's background
+ *  link (declared, or guessed off the User-Agent); `relay` is never declared by
+ *  anybody — it is the host's own stand-in socket behind `POST /api/relay`
+ *  (`host/src/server/relay.ts`), so `roleAfterHello` never grants it. */
+export type ClientRole = "notify" | "relay";
 
 /**
  * What a notify link is sent. The three `ShellLinkService.onFrame` reads, plus
@@ -30,12 +33,19 @@ export const NOTIFY_LINK_FRAMES: ReadonlySet<string> = new Set(["notification", 
  *  all) is ignored, so the link can never count as somebody watching. */
 export const NOTIFY_LINK_INBOUND: ReadonlySet<string> = new Set(["hello", "ping"]);
 
+/** What the relay's stand-in socket is sent: the three receipts a relayed
+ *  frame can earn, nothing else (no toast, no snapshot, no PTY bytes). */
+export const RELAY_LINK_FRAMES: ReadonlySet<string> = new Set(["input.ack", "backlog.ack", "op.ack"]);
+
 /** May a socket in this role be sent a frame of this type? */
 export function roleAllows(role: ClientRole | undefined, t: string): boolean {
-  return role !== "notify" || NOTIFY_LINK_FRAMES.has(t);
+  if (role === "notify") return NOTIFY_LINK_FRAMES.has(t);
+  if (role === "relay") return RELAY_LINK_FRAMES.has(t);
+  return true;
 }
 
-/** May a socket in this role send this client frame? */
+/** May a socket in this role send this client frame? A relay socket's frame has
+ *  already passed `relayRefusal` (`queue/queuerelay.ts`), the one accept rule. */
 export function roleAccepts(role: ClientRole | undefined, t: string): boolean {
   return role !== "notify" || NOTIFY_LINK_INBOUND.has(t);
 }

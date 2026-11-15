@@ -95,5 +95,7 @@ test("chip words: one noun per kind, singular/plural in the title, one word per 
   assert.match(attentionTitle("wait", 1), /^1 session is waiting for your answer — tap to answer them here$/);
   assert.match(attentionTitle("blocked", 3), /^3 sessions are blocked — .* tap to see why and steer them$/);
   assert.match(attentionTitle("wait", 2, { repo: "app", replies: true }), /^2 sessions in app are waiting .* reply on a clock — tap to show only those$/);
+  // The open-tabs list's filter twin names its own rows, not "sessions".
+  assert.match(attentionTitle("wait", 1, { scope: "open tab" }), /^1 open tab is waiting for your answer — tap to show only those$/);
   assert.deepEqual(BLOCK_WORD, { auth: "signed out", spend: "out of credit", limit: "at limit", net: "network retry" });
 });

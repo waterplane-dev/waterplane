@@ -114,7 +114,8 @@ Context, tokens, money and repo health as things a person reads: the context win
   a failing test in `tools/repohealth.test.mjs` and `scripts/e2e-hints.mjs`, because a chip with no
   def renders NOTHING. **No coloured band, zone, grade or red region, and no `--warn`/`--dead` on
   the series tiles**: the slope is a glyph in `currentColor` with its word (rising LOC and rising
-  hatches are opposite news); the index's contribution bars are the ONE hue exception
+  hatches are opposite news); **every tile says which way is better** (`repoHealthWordsAim.ts`, R-metrics-075) — per METRIC,
+  never per reading, ink not hue, "neither way" with its reason; a repo's own tile takes its declared `better`; the index's contribution bars are the ONE hue exception
   (`--hix-up`/`--hix-down`). Four validated slots, **never a generated fifth** — `foldPartSeries`
   folds the tail into one hueless band, and a slot follows the ENTITY. **Each card and tile measures its OWN box** (`useBoxWidth`, a
   CALLBACK ref). **Not plotted, and said so with the reason**: tripwires, path lists, and

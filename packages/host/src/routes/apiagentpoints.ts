@@ -10,13 +10,27 @@ import { repoOfWorktree } from "../costwindow.js";
 import { join } from "node:path";
 import { hostStateDir } from "../branddirs.js";
 import { instructionMarkers, readSwitchLog, switchMarkers } from "../agentmarkers.js";
-import { json } from "./apiio.js";
+import { json, readBody } from "./apiio.js";
+import { shareRepoOf, writeSetupShare } from "../setupshare.js";
+import { SETUP_SHARE_MAX_CHARS } from "@waterplane/shared";
 import { route, type ApiEntry, type RepoReq } from "./apitable.js";
 
 /** `GET /api/repos/:id/agentpoints`. */
 export const AGENT_POINTS_REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [
   route<RepoReq>("GET", "agentpoints", async ({ res, wt }, ctx) => {
-    json(res, await agentPointsFor(agentReadingsStore(ctx.root), [wt]));
+    const doc = await agentPointsFor(agentReadingsStore(ctx.root), [wt]);
+    // The repo's identity for the setup block (R-metrics-073): a remote's name and hash, never a path.
+    json(res, doc.ok ? { ...doc, share: await shareRepoOf(wt) } : doc);
+    return true;
+  }),
+  /** `POST /api/repos/:id/setupshare`: an exported setup block, strictly re-read, written to `.claude/outbox/` (never git). */
+  route<RepoReq>("POST", "setupshare", async ({ req, res, wt }) => {
+    let text: string;
+    try { text = (await readBody(req, SETUP_SHARE_MAX_CHARS * 4)).toString("utf8"); } catch {
+      json(res, { ok: false, error: "The block is larger than a setup block can be." }, 200);
+      return true;
+    }
+    json(res, writeSetupShare(wt, text), 200);
     return true;
   }),
   /** `GET /api/repos/:id/agentmarkers`: instruction commits and tags, skills-switch saves, plus model/CLI/listing steps read off the points. */

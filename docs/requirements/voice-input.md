@@ -31,3 +31,8 @@ The voice input button transcribes with the desktop's whisper and returns to it 
 The desktop sets up local dictation on a person's tap: whisper.cpp through brew on macOS, and a model chosen from a pinned list, downloaded from upstream and verified by sha256 — never bundled.
 - asked: 2026-11-12 (owner)
 - note: Host half (`dictatesetup.ts`, `shared/dictatemodels.ts`); refuses below model size + 2 GB free; nothing starts without the tap and a failure is never retried.
+
+### R-voice-input-007 · shipped
+Send tapped while a dictation is not back yet (microphone open, or a recording waiting to be read) asks whether to send the transcript unread the moment it returns or to read it first; when the words come from the phone's own recogniser the ask also warns that its transcription is far less accurate.
+- asked: 2026-11-14 (owner)
+- note: `dictationSendAsk` (`composeSend.ts`); `useVoice`'s `pending`/`finish()`; the armed send is phone-held and in memory only, called off by tapping Send again.

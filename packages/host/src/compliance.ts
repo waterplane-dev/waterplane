@@ -629,9 +629,8 @@ export function summarize(checks: ComplianceCheck[]): Pick<RepoSetupState, "ok" 
   };
 }
 
-/** Build the full report (adds repo id/name + pass rollup). */
-export function checkRepoCompliance(target: RepoTarget): ComplianceReport {
-  const checks = inspectRepo(target.worktreePath);
+/** Build the full report (adds repo id/name + pass rollup); `checks` from `inspectRepoAsync` off the event loop. */
+export function checkRepoCompliance(target: RepoTarget, checks: ComplianceCheck[] = inspectRepo(target.worktreePath)): ComplianceReport {
   return {
     repoId: target.id,
     repoName: target.repoName,

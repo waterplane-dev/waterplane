@@ -8,3 +8,8 @@ export * from "./agentseries/types.js";
 export * from "./agentseries/series.js";
 export * from "./agentseries/compare.js";
 export * from "./agentseries/markers.js";
+export * from "./agentseries/setupcost.js";
+export * from "./agentseries/pattern.js";
+export * from "./agentseries/bymodel.js";
+export * from "./agentseries/share.js";
+export * from "./agentseries/shareparse.js";

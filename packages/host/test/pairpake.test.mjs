@@ -343,6 +343,8 @@ test("a passive code keeps its scope over PAKE, and switches the gate on", async
   assert.equal(w.auth.deviceFor(sealed.token).scope, "passive");
   assert.equal(w.auth.gateTailscale(), true);
   assert.equal(w.gateChanges(), 1);
+  assert.equal(sealed.lanIdentity, undefined, "a passive device never gets the LAN identity secret");
+  assert.ok(sealed.hostId, "the seal still names the desktop");
 });
 
 test("presented in the box retires the caller's own row and nobody else's", async () => {

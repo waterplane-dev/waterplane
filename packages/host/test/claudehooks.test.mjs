@@ -76,7 +76,7 @@ function harness({ backend = claudeBackend, cwd = tmpdir(), claudeSessionId } = 
   /** A CLI that keeps repainting `text`, as a working one does; returns the stop. */
   const keepPainting = (text) => { paint(text); const t = setInterval(() => paint(text, 50), 8); return () => clearInterval(t); };
   const ended = () => events.filter((e) => e[0] === "turnEnded").length;
-  const stop = () => { s.info.running = false; slice.detach(s); turn.clearStopVerify(s); if (s.idleTimer) clearTimeout(s.idleTimer); };
+  const stop = () => { s.info.running = false; slice.detach(s); turn.clearStopVerify(s); if (s.idleTimer) clearTimeout(s.idleTimer); if (s.suggestTimer) clearTimeout(s.suggestTimer); };
   return { core, s, events, notes, adopted, rereads, applied, watchStops, hook, paint, keepPainting, ended, stop, slice };
 }
 

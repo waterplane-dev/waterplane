@@ -12,9 +12,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  OWN_FILE, OWN_MAX, gateOf, measureOwn, notRunOwn, parseDeclaration, parseReadingOutput, readingEnv, runReading,
+  OWN_FILE, OWN_MAX, gateOf, measureOwn, notRunOwn, parseDeclaration, parseReadingOutput, readingEnv, runReading, targetOf,
 } from "./repohealth/own.mjs";
 import { ROW_KEYS } from "./repohealth/series.mjs";
+import { parseRepoHealthPlot } from "@waterplane/shared";
 import { measureReach, readsOf } from "./repohealth/reach.mjs";
 
 const ENGINE = fileURLToPath(new URL("./repohealth.mjs", import.meta.url));
@@ -155,6 +156,58 @@ test("the environment carries what starts a program, never the daemon's own secr
   assert.deepEqual(env, { PATH: "/bin", HOME: "/h" });
 });
 
+test("a target is checked like any other field: a bad one means the reading is not run, and is carried as refused", (t) => {
+  assert.equal(targetOf(undefined, "lower"), undefined);
+  assert.equal(targetOf(5, "lower"), 5);
+  assert.equal(targetOf(0.6, "higher"), 0.6);
+  assert.match(targetOf("5", "lower").invalid, /"target" must be a number/);
+  assert.match(targetOf(Number.NaN, "lower").invalid, /must be a number/);
+  assert.match(targetOf(0, "lower").invalid, /above 0/, "the score is a ratio to the target");
+  assert.match(targetOf(-2, "higher").invalid, /above 0/);
+  assert.match(targetOf(5, "sideways").invalid, /needs "better"/);
+  const text = JSON.stringify({ readings: [
+    { key: "t", name: "T", means: "m", better: "lower", run: [node, "-e", "console.log(7)"], target: 5 },
+    { key: "u", name: "U", means: "m", better: "lower", run: ["x"], target: -1 },
+    { key: "n", name: "N", means: "m", better: "higher", run: ["x"] },
+    { key: "9bad", target: 3, run: ["x"] },
+  ] });
+  const d = parseDeclaration(text);
+  assert.equal(d.readings[0].target, 5);
+  assert.equal(d.readings[0].invalid, undefined);
+  assert.match(d.readings[1].invalid, /not run — "target" must be above 0/);
+  assert.ok(d.readings[1].target.invalid, "carried, so the index counts it UNKNOWN rather than dropping it from the score");
+  assert.equal("target" in d.readings[2], false, "no target: the reading stays out of the score");
+  assert.equal(d.unreadTargets, 1);
+  assert.equal(d.unreadGates, 0);
+  const root = tmp(t);
+  const git = { readFileAt: () => text };
+  const own = measureOwn(root, "HEAD", git);
+  assert.deepEqual(own.readings.map((r) => [r.key, r.target, r.value]), [["t", 5, 7], ["u", { invalid: d.readings[1].target.invalid }, null], ["n", undefined, null]]);
+  assert.equal(own.unreadTargets, 1);
+  const nr = notRunOwn(root, "HEAD", git);
+  assert.deepEqual(nr.gates.map((g) => [g.key, g.better, g.target, g.value]), [["t", "lower", 5, null], ["u", "lower", { invalid: d.readings[1].target.invalid }, null]],
+    "unapproved: a targeted reading is still carried, so the index counts it unknown");
+  assert.equal(nr.unreadTargets, 1);
+  assert.equal(parseDeclaration(JSON.stringify({ readings: [] })).unreadTargets, undefined);
+});
+
+test("a reading of this desktop (\"backfill\": false) has its target refused with a sentence, and still runs", (t) => {
+  const text = JSON.stringify({ readings: [
+    { key: "d", name: "D", means: "m", better: "lower", run: [node, "-e", "console.log(3)"], target: 5, backfill: false },
+    { key: "e", name: "E", means: "m", better: "lower", run: [node, "-e", "console.log(4)"], backfill: false },
+  ] });
+  const d = parseDeclaration(text);
+  assert.equal(d.readings[0].invalid, undefined, "not refused whole: it runs untargeted");
+  assert.equal("target" in d.readings[0], false, "so the score cannot count it");
+  assert.equal(d.readings[0].backfill, false);
+  assert.equal(d.problems.length, 1);
+  assert.match(d.problems[0], /"d" has a target and "backfill": false.*cannot count in a score that reads the same on every desktop/);
+  assert.equal(d.unreadTargets, undefined);
+  const own = measureOwn(tmp(t), "HEAD", { readFileAt: () => text });
+  assert.deepEqual(own.readings.map((r) => [r.key, r.target, r.value, r.backfill]), [["d", undefined, 3, false], ["e", undefined, 4, false]]);
+  assert.equal(own.problems.length, 1, "the card's problems line shows the refusal");
+});
+
 test("measureOwn: nothing declared is no field; past the cap is listed, not run", (t) => {
   const root = tmp(t);
   assert.equal(measureOwn(root, "HEAD", { readFileAt: () => null }), undefined);
@@ -165,7 +218,7 @@ test("measureOwn: nothing declared is no field; past the cap is listed, not run"
   assert.equal(own.readings[0].value, 0);
   assert.equal(own.readings[OWN_MAX - 1].value, OWN_MAX - 1);
   assert.equal(own.readings[OWN_MAX].value, null);
-  assert.match(own.readings[OWN_MAX].reason, /past the first 8/);
+  assert.match(own.readings[OWN_MAX].reason, new RegExp(`past the first ${OWN_MAX}`));
   const refused = measureOwn(root, "HEAD", { readFileAt: () => "{" });
   assert.match(refused.refused, /not JSON/);
 });
@@ -206,7 +259,7 @@ test("the engine stores own readings on the HEAD row only, and plot draws them a
   writeFileSync(join(root, "count.mjs"), "console.log(3);\n");
   writeFileSync(join(root, OWN_FILE), JSON.stringify({
     readings: [
-      { key: "three", name: "Three", means: "Always three.", better: "higher", unit: "x", run: ["node", "count.mjs"], gate: { fails: "below", at: 5 } },
+      { key: "three", name: "Three", means: "Always three.", better: "higher", unit: "x", run: ["node", "count.mjs"], gate: { fails: "below", at: 5 }, target: 6 },
       { key: "broken", name: "Broken", means: "Prints words.", better: "lower", run: ["node", "-e", "console.log('hi')"] },
     ],
   }));
@@ -220,13 +273,17 @@ test("the engine stores own readings on the HEAD row only, and plot draws them a
   assert.deepEqual(lines[1].own.readings.map((r) => [r.key, r.value]), [["three", 3], ["broken", null]]);
   assert.match(lines[1].own.readings[1].reason, /not one JSON number/);
   assert.deepEqual(lines[1].own.readings[0].gate, { fails: "below", at: 5 }, "the gate rides with its reading");
+  assert.equal(lines[1].own.readings[0].target, 6, "so does the target the score reads");
+  assert.equal("target" in lines[1].own.readings[1], false);
   assert.ok(Array.isArray(lines[1].reach?.value?.packs), "every row says what the packs could read");
   // Beside the measurements, never one of them: the contract's keys are unchanged.
   assert.deepEqual(Object.keys(lines[1]).filter((k) => k !== "own"), [...ROW_KEYS]);
   const jsFiles = (l) => l.reach.value.packs.reduce((n, p) => n + p.files, 0);
   assert.ok(jsFiles(lines[0]) >= 1 && jsFiles(lines[1]) >= 1, "reach counts the commit's own source files");
 
-  const plot = JSON.parse(execFileSync(node, [ENGINE, "plot", `--root=${root}`], { encoding: "utf8" }));
+  const plotOut = execFileSync(node, [ENGINE, "plot", `--root=${root}`], { encoding: "utf8" });
+  const plot = JSON.parse(plotOut);
+  assert.equal(parseRepoHealthPlot(plotOut).own.series[0].target, 6, "the target survives shared's parse (it names the field)");
   assert.ok(plot.series.length > 0);
   assert.ok(plot.series.every((s) => s.source === "central"));
   assert.ok(!plot.series.some((s) => s.key === "three"), "an own reading is never one of waterplane's");
@@ -239,6 +296,8 @@ test("the engine stores own readings on the HEAD row only, and plot draws them a
   assert.equal(three.last, 3);
   assert.deepEqual(three.gate, { fails: "below", at: 5 }, "plot carries the declaration; the index judges it");
   assert.equal(broken.gate, undefined);
+  assert.equal(three.target, 6, "plot carries the target; the index scores it");
+  assert.equal(broken.target, undefined);
   assert.deepEqual(three.points.map((p) => p.v), [null, 3], "history starts when the reading appears — a hole before, never a 0");
   assert.equal(broken.last, null);
   assert.match(broken.absent, /not one JSON number/);

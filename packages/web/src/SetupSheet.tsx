@@ -34,7 +34,9 @@
  *
  * ── Two reads, never one state ─────────────────────────────────────────────
  *
- * TWO `useRemoteResource`s, two `Empty`s, two age lines. "The checklist could
+ * TWO reads, two `Empty`s, two age lines (the checklist is a slow job on the
+ * desktop, `slowJobs.ts`: leaving the sheet aborts nothing, and a return shows
+ * the last checklist with its age and whether a re-check is still running). "The checklist could
  * not be read" and "the series could not be read" are different sentences with
  * different next actions, and a repo whose series is a 200 is not a repo whose
  * conventions are unknown. One `res` for both would have made each region lie
@@ -67,6 +69,9 @@ import { api } from "./api";
 import { track } from "./usage";
 import { RepoSelect } from "./RepoPicker";
 import { useRemoteResource } from "./useRemoteResource";
+import { withoutApproveToken } from "./resourceCache";
+import { useSlowJob, type SlowJobResource } from "./slowJobs";
+import { SlowJobLine } from "./SlowJobLine";
 import { Sheet } from "./Sheet";
 import { Empty } from "./Empty";
 import { loadPresets, remedyFor, type Preset } from "./presets";
@@ -214,15 +219,16 @@ export function SetupSheet({
   // Two hooks, two keys, two states. A checklist that could not be READ is not
   // a repo with no problems; a series that could not be read is not a repo
   // with no history; and neither sentence is the other's.
-  const checkRes = useRemoteResource<ComplianceReport>(
-    repoId, () => api.compliance(repoId), { enabled: !!repoId });
+  // A slow job: started by opening the sheet when the kept checklist is over a minute old, joined
+  // when one runs; the re-check verb is a fresh run (`reload`), refused in words offline.
+  const checkRes = useSlowJob<ComplianceReport>("setup.check", repoId || null, { enabled: !!repoId, auto: true, verb: "re-check the setup" });
   // WHICH reading region 2 is showing: the repo, or one subtree of it. It
   // lives here and not in the region because it is part of the resource KEY —
   // a scope switch is a different series, so it reloads rather than re-filters
   // something already on screen.
   const [scope, setScope] = useState<string | null>(null);
   const healthRes = useRemoteResource<RepoHealthView>(
-    `repohealth:${repoId}:${scope ?? ""}`, () => api.repoHealth(repoId, scope), { enabled: !!repoId });
+    `repohealth:${repoId}:${scope ?? ""}`, () => api.repoHealth(repoId, scope), { enabled: !!repoId, cacheScrub: withoutApproveToken });
 
   const report = checkRes.data;
   const view = healthRes.data;
@@ -465,7 +471,8 @@ export function SetupSheet({
               ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenInstructionFile ?? onOpenFile}
                   sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions}
                   onSkills={onSkills ? () => onSkills(repoId) : undefined} skillsCant={skillsCant ?? undefined} />
-              : null} />
+              : null}
+              onSkills={onSkills ? () => onSkills(repoId) : undefined} skillsCant={skillsCant ?? undefined} />
           ) : (
             <SeriesRegion
               repo={repo}
@@ -501,7 +508,7 @@ function SetupRegion({
   onOptIns: () => void;
   repoId: string;
   repo: RepoTarget | null;
-  res: ReturnType<typeof useRemoteResource<ComplianceReport>>;
+  res: SlowJobResource<ComplianceReport>;
   report: ComplianceReport | null;
   rows: ComplianceCheck[];
   allRows: ComplianceCheck[];
@@ -633,6 +640,7 @@ function SetupRegion({
       <Empty res={res} empty={!report} thing="the setup checklist" noun="checklist">
         Nothing in this checklist applies to this repo yet.
       </Empty>
+      <SlowJobLine res={res} what="The setup check" />
       {report && kind === "watch" && !allRows.length && (
         <Hint>{WATCH_EMPTY_WORDS} <button className="link-btn" onClick={onOptIns}>{WATCH_EMPTY_LINK}</button></Hint>
       )}

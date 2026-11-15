@@ -5,6 +5,39 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.28
+
+### New
+
+- **Messages you queue while away are sent from the background.** The Android app and the browser app send your queued prompts to the desktop once the link is back, even if the app is not in front. A note says "Sent N to <desktop>" and how many still wait for you to review. The Android notification offers "Send N" for the ones held for your OK, and on Android 12 and newer it asks for the phone's unlock first.
+- **A push tells you when the desktop's link returns.** After an outage of two minutes or more, one notification says it is back. It can be turned off per kind.
+- **Sending while a dictation is not back yet asks you.** You can send the transcript unread the moment it returns, or read it first. The phone's own recogniser adds a quality warning.
+- **The agent readings open on a setup-cost headline.** It shows what a typical session pays to start, in dollars and tokens, split by whose the context is. There are three views: now, week by week, and test and compare.
+- **You can compare two setups.** Export this desktop's setup as a block, check the exact text before it leaves, then import another desktop's block. The two sit side by side. You can also compare readings by model.
+- **A search test runs seeded lookup questions against your setup.** It compares two models, or a setup against a saved baseline, at equal correctness. You see the estimate in dollars and tokens and confirm with two taps before it starts.
+- **A repo's own readings can be read back over older commits.** A tile gets a curve without waiting for new days. A repo can declare up to 12 readings and set a target, and a reading with a target counts in the health score.
+- **Every repo reading says which way is better.** Lower, higher or neither, with the reason.
+- **Skills use is counted.** Skill loads per session show as a weekly line and a fourth reading on the token stats card.
+- **Search can include archived conversations.** An opt-in switch searches your prompts in them, and a hit opens in the archive reader.
+- **Skills & plugins and the setup checklist keep running when you leave the screen.** Coming back shows the last answer with its age. A run that ends while you are elsewhere gives a toast that opens it.
+- **More screens work offline.** They show the last copy with its age, and a change while the link is down is refused with a sentence.
+- **Lost stores are visible.** Settings > storage lists each corrupt or unsaved store with a button to hide the record. The budget, feature usage and sent log say so at their top, and the queue bar says when the phone could not save the queue.
+- **The open tabs list has a "N waiting" filter.** One tap shows only the tabs waiting for your answer.
+- **The desktop sheet always lists the top CPU programs and sessions.** One that drops out of the top 3 stays for 30 seconds and says when it left.
+- **One side margin on every screen.** Lines and chips no longer sit on the screen edge.
+
+### Fixed
+
+- **Words sent on a "+ new" screen now run in the session it opens.** Before, after an outage they could become a separate item that waited two hours.
+- **Skills use counts show a live progress bar.** Before, a count in progress was refused.
+- **A files search no longer leaves its hits in the folder listing.** Back, a crumb or a folder row shows the folder's own list.
+- **The phone no longer offers an out-of-date command-line proposal** while background agents keep the output busy.
+- **The questions card keeps its offline hint on its own line.** The button no longer slides over the queued line.
+- **Repo readings no longer fail on four own readings** whose descriptions were too long.
+- **A passive device no longer gets the desktop's LAN identity secret** at pairing.
+- **A budget cap saved after a lost budget file shows its value** instead of "not known".
+- **Catch-up refreshes after hiding the app stop at about five minutes.** Stored 5 and 15 minute steps now count as 1 minute.
+
 ## 0.1.27
 
 ### New

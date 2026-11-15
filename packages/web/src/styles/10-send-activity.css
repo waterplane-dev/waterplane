@@ -56,7 +56,8 @@
 
 .act-body {
   display: flex; flex-direction: column; gap: var(--sp-4); width: 100%;
-  padding: var(--sp-8) var(--sp-12); text-align: left; background: none; border: 0; color: var(--fg); cursor: pointer;
+  /* The row's 3px stripe is drawn inside the gutter, so the text still starts on it. */
+  padding: var(--sp-8) calc(var(--gutter) - 3px); text-align: left; background: none; border: 0; color: var(--fg); cursor: pointer;
 }
 .act-head { display: flex; align-items: center; gap: var(--sp-6); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 .act-where { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -94,7 +95,7 @@
 .act-t-failed .act-target-state { color: var(--dead); }
 .act-t-done .act-target-state { color: var(--ok); }
 
-.act-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-2) var(--sp-12) var(--sp-4); }
+.act-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-2) calc(var(--gutter) - 3px) var(--sp-4); }
 .act-acts-more { padding-top: 0; }
 /* A row's verbs wrap among themselves; `more` sits beside the group, never in its line.
    A basis of 0 means the group never pushes `more` onto a row of its own: it takes what
@@ -134,9 +135,9 @@
 /* Activity's head: the kit's filter chips (one always lit), the line that NAMES the empty
    buckets instead of drawing a chip reading 0, and the triage toggles. `.act-hint` only carries
    a catalog hint for long press; it must not become a flex item of its own. */
-.fchips.act-fchips { padding: var(--sp-2) var(--sp-6) 0; }
-.act-none { padding: 0 var(--sp-12) var(--sp-4); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
-.fchips.act-toggles { padding: 0 var(--sp-6) var(--sp-2); border-bottom: 1px solid var(--line); }
+.fchips.act-fchips { padding: var(--sp-2) calc(var(--gutter) - 3px) 0; }
+.act-none { padding: 0 var(--gutter) var(--sp-4); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.fchips.act-toggles { padding: 0 calc(var(--gutter) - 3px) var(--sp-2); border-bottom: 1px solid var(--line); }
 .act-hint { display: contents; }
 
 /* ── Triage: eighty-four rows, a couple of minutes ──────────────────────
@@ -165,6 +166,8 @@
    the prose a tenth of a phone's width for a mode nobody is in. */
 .act-row.act-picking { display: flex; align-items: flex-start; gap: 0; }
 .act-row.act-picking .act-rowmain { flex: 1 1 auto; min-width: 0; }
+/* Inside the row's 3px stripe, like `.act-body`'s text. */
+.act-rowmain > .form-hint { padding-left: calc(var(--gutter) - 3px); padding-right: calc(var(--gutter) - 3px); }
 .act-pick {
   flex: 0 0 auto; background: none; border: 0; color: var(--muted);
   padding: var(--sp-10) var(--sp-4) var(--sp-10) var(--sp-8); cursor: pointer;
@@ -501,7 +504,7 @@ button.sched-clock:active { background: var(--raise); }
    the pill may wrap its own words at a large `--ui-font` rather than run off a
    320px screen. Never inside `.section`: its uppercase shouted the zeros. */
 .close-facets { padding: var(--sp-6) 0 var(--sp-4); }
-.close-facet { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: var(--sp-6); padding: 0 var(--sp-10) 0 var(--sp-14); }
+.close-facet { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: var(--sp-6); padding: 0 var(--sp-10) 0 var(--gutter); }
 .close-facet-label {
   flex: 0 0 7.5em; min-height: 44px; display: flex; align-items: center;
   font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted);
@@ -513,7 +516,7 @@ button.sched-clock:active { background: var(--raise); }
 .close-facet-none { padding: 0 0 var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
 /* No chip at all: the line stands in the chip row's place, level with the label. */
 .close-facet-none:first-child { min-height: 44px; display: flex; align-items: center; padding: 0; }
-.close-facets > .form-hint { padding: 0 var(--sp-14) var(--sp-6); }
+.close-facets > .form-hint { padding: 0 var(--gutter) var(--sp-6); }
 /* The list's heading is a `.section` for its spacing, but `.section` uppercases and tracks its
    text: the facet labels above are sentence case, and "THE CUT" shouted over them. Scoped to this
    sheet; every other `.section` keeps its uppercase. */

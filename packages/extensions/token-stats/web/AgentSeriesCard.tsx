@@ -9,16 +9,18 @@
  * says so rather than drawing a zero.
  */
 import { useMemo, useState } from "react";
+import { Loader2, Plug } from "lucide-react";
 import {
-  compareAround, derivedMarkers, normalizeModel, repoLabel, seriesOf, START_PARTS,
+  agentSourceText, BY_MODEL_DEFAULT_DAYS, compareAround, derivedMarkers, MODEL_CLI_TEXT, normalizeModel, repoLabel, seriesOf, SKILLS_RULE_TEXT, START_PARTS,
   type AgentMarker, type AgentPoint, type SeriesBucket, type SeriesReading,
 } from "@waterplane/shared";
 import { Empty, MODEL_SLOT, modelBands, SERIES, SLOT, useBoxWidth, useRemoteResource, Button } from "@waterplane/kit";
 import { ledgers, useCore } from "@waterplane/sdk";
 import { ScopeCard } from "./TokenInsights.tsx";
+import { AgentModelCompare } from "./AgentModelCompare.tsx";
 import {
   absentSummary, absentWhy, allAbsent, axisOf, clipBuckets, COMPARE_NOTE, compareWords, coverFrom, dayGrainOffered, fmtKChars, fmtReading,
-  type Grain, MARKER_KINDS, markerKind, markerWords, medianOrNull, MARK_GAP, MARK_ROW_H, markerPickLabel, foldedCompareWords, modelsIn, partBands, partTwinWords, placeMarkers,
+  type Grain, MARKER_KINDS, markerKind, markerWords, bucketFigureWords, groupedPartOrder, MARK_GAP, MARK_ROW_H, markerPickLabel, foldedCompareWords, modelsIn, partBands, partTwinWords, placeMarkers,
   type PlacedMarker, ratioScale, READINGS, readingDef, runsOf, shapePath, slotAtX, slotX, stackTops, valuesOnAxis, yScale,
 } from "./agentSeriesPlot.ts";
 
@@ -40,11 +42,17 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
   /** Which change of a folded mark the before/after is centred on (index into its `markers`); 0 = the earliest. */
   const [markSub, setMarkSub] = useState(0);
   const [slot, setSlot] = useState<number | null>(null);
+  /** Over time (one model, one reading) or by model (every reading, two models side by side, R-metrics-072). */
+  const [view, setView] = useState<"time" | "model">("time");
+  const [byDays, setByDays] = useState(BY_MODEL_DEFAULT_DAYS);
   const [width, boxRef] = useBoxWidth();
   const one = scope !== "all";
+  // The skills switch reads one repo's files: this card's repo, or with every repo picked the one in
+  // front of you (it opens on All repos, which is the same file for every repo).
+  const skillsRepo = one ? scope : c.world.activeRepo?.id ?? targets[0]?.id ?? null;
 
-  const pts = useRemoteResource(`agentpoints:${scope}`, () => ledgers.agentPoints(one ? scope : null), { offline: !online });
-  const mk = useRemoteResource(`agentmarkers:${scope}`, () => ledgers.agentMarkers(scope), { offline: !online, enabled: one });
+  const pts = useRemoteResource(`agentpoints:${scope}`, () => ledgers.agentPoints(one ? scope : null), { offline: !online, cache: { shape: 1 } });
+  const mk = useRemoteResource(`agentmarkers:${scope}`, () => ledgers.agentMarkers(scope), { offline: !online, enabled: one, cache: { shape: 1 } });
   const doc = pts.data && pts.data.ok ? pts.data : null;
   const refusal = pts.data && !pts.data.ok ? pts.data.error : null;
 
@@ -91,11 +99,11 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
     () => (at ? compareAround(points, at.t, { reading, ...(model ? { model } : {}) }) : null),
     [at, points, reading, model]);
 
-  const pick = (b: SeriesBucket) => (reading === "start" ? b.start : reading === "look" ? b.look : reading === "req" ? b.req : b.subStart);
+  const pick = (b: SeriesBucket) => (reading === "start" ? b.start : reading === "look" ? b.look : reading === "req" ? b.req : reading === "skills" ? b.skills : b.subStart);
   const values = useMemo(() => valuesOnAxis(axis, series, pick), [axis, series, reading]); // eslint-disable-line react-hooks/exhaustive-deps
   const why = absentSummary(series, pick);
   const y = yScale(values, CHART_H - 16, 8);
-  const parts = useMemo(() => (reading === "start" ? partBands(axis, series, START_PARTS) : []), [axis, series, reading]);
+  const parts = useMemo(() => (reading === "start" ? partBands(axis, series, groupedPartOrder(START_PARTS)) : []), [axis, series, reading]);
   const tops = useMemo(() => stackTops(parts, n), [parts, n]);
   const partMax = Math.max(0, ...(tops[tops.length - 1] ?? []).map((t) => t.hi));
   const py = yScale([partMax], CHART_H - 16, 8);
@@ -112,9 +120,7 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
   const readBucket = readIdx !== null ? series.find((b) => b.key === axis.keys[readIdx]) : undefined;
   const readout = readIdx === null ? null : readBucket
     ? `${axis.keys[readIdx]}${grain === "week" ? " (week from)" : ""}: ${
-      medianOrNull(pick(readBucket)) !== null
-        ? `median ${fmtReading(def, medianOrNull(pick(readBucket))!)}, ${(pick(readBucket) as { n: number }).n} sessions`
-        : absentWhy(pick(readBucket))}`
+      bucketFigureWords(def, pick(readBucket)) ?? absentWhy(pick(readBucket))}`
     : `${axis.keys[readIdx]}: no sessions.`;
 
   const partTwin = reading === "start" ? partTwinWords(readBucket, START_PARTS) : null;
@@ -141,8 +147,19 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
       <Empty res={pts} empty={!doc} thing="agent readings">
         {refusal ?? "No conversation logs to read."}
       </Empty>
+      {pts.inflight && doc && <Loader2 size={13} className="spin" aria-label="refreshing" />}
       {doc && <>
         {cover?.words && <div className="empty ts-caveat">{cover.words}</div>}
+
+        <div className="ts-filter" role="group" aria-label="view">
+          <span className="ts-scope-tag">view</span>
+          <Button className={view === "time" ? "active" : undefined} onClick={() => { setView("time"); reset(); }}>over time</Button>
+          <Button className={view === "model" ? "active" : undefined} onClick={() => { setView("model"); reset(); }}>by model</Button>
+        </div>
+        {view === "model" ? <>
+          <AgentModelCompare points={points} width={width} days={byDays} setDays={setByDays} hueOf={hueOf} />
+          <div className="empty ts-caveat">{agentSourceText()} Median per model over the chosen days; skill loads compare the mean, with the share that loaded at least one.</div>
+        </> : <>
 
         <div className="ts-filter" role="group" aria-label="model">
           <span className="ts-scope-tag">model</span>
@@ -174,7 +191,7 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
             {y.ticks.map((v) => (
               <g key={v}>
                 <line x1={left} x2={right} y1={y.y(v)} y2={y.y(v)} stroke="var(--line)" strokeWidth={1} />
-                <text x={left - 4} y={y.y(v) + 3} textAnchor="end" fontSize={9} fill="var(--muted)">{def.unit === "tokens" ? fmtReading(def, v).replace(" tokens", "") : String(Math.round(v * 10) / 10)}</text>
+                <text x={left - 4} y={y.y(v) + 3} textAnchor="end" fontSize={9} fill="var(--muted)">{def.unit === "tokens" ? fmtReading(def, v).replace(" tokens", "") : def.unit === "loads" && v < 1 ? v.toFixed(2) : String(Math.round(v * 10) / 10)}</text>
               </g>
             ))}
             {runsOf(values).map((run, k) => run.length === 1
@@ -186,7 +203,12 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
           {readout && <div className="empty ts-caveat">{readout}</div>}
 
           {reading === "start" && parts.length > 0 && <>
-            <div className="section section-head"><span>What the first request carried</span></div>
+            <div className="section section-head"><span>What the first request carried</span>
+              {skillsRepo && <Button onClick={() => c.nav.openSkills(skillsRepo, one ? "repo" : "all")}
+                title={one ? "Turn this repo's skills and plugins on or off; new sessions only" : "Turn skills and plugins on or off for every repo; new sessions only"}>
+                <Plug size={12} /> skills &amp; plugins →
+              </Button>}
+            </div>
             <svg className="ctx-chart" width={width} height={CHART_H} viewBox={`0 0 ${width} ${CHART_H}`} role="img" aria-label="start context by part, characters" style={{ touchAction: "pan-y" }}
               onPointerDown={scrub} onPointerMove={(e) => { if (e.buttons) scrub(e); }}>
               {py.ticks.map((v) => (
@@ -270,6 +292,7 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
               </div>
             )}
             {at && foldedCompareWords(sel, at) && <div className="empty ts-caveat">{foldedCompareWords(sel, at)}</div>}
+            {at?.kind === "modelCli" && <div className="empty ts-caveat">{MODEL_CLI_TEXT}</div>}
             <div className="empty ts-caveat">{compareWords(def, cmp)}</div>
             {!("absent" in cmp) && (() => {
               const s = ratioScale(cmp.ratio, cmp.band, Math.max(60, width - 2 * PAD_R));
@@ -288,8 +311,9 @@ export function AgentSeriesCard({ online }: { online: boolean }) {
           </div>}
 
           <div className="empty ts-caveat">
-            Median per {grain} over {def.over}. A {grain} with fewer than five of them draws no point, and tapping it says how many there were.
+            {agentSourceText()} {reading === "skills" ? "Mean, and the share that loaded at least one," : "Median"} per {grain} over {def.over}. A {grain} with fewer than five of them draws no point, and tapping it says how many there were.{reading === "skills" ? ` ${SKILLS_RULE_TEXT}` : ""}
           </div>
+        </>}
         </>}
       </>}
     </ScopeCard>

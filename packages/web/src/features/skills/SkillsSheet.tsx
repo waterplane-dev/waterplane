@@ -7,47 +7,60 @@
  */
 import { useEffect, useState } from "react";
 import { Plug } from "lucide-react";
+import { agoText } from "../../format";
 import { SKILL_NEW_SESSIONS_ONLY, skillFileLine } from "@waterplane/shared";
 import { SKILL_STATES } from "@waterplane/shared";
-import type { SkillInventoryDoc } from "@waterplane/shared";
-import { api } from "../../api";
+import type { SkillInventoryDoc, SkillRecommendResponse } from "@waterplane/shared";
 import { core, useStore } from "../../sdk";
-import { Button, Empty, Explain, FilterChip, Hint, SearchBox, Sheet, chipRows, toggleChip, useRemoteResource } from "../../kit";
+import { Button, Empty, Explain, FilterChip, Hint, SearchBox, Sheet, chipRows, toggleChip } from "../../kit";
 import { skillSwitchGate } from "../../backendCaps";
 import { skillsAim } from "../../skillsDoor";
+import { useSlowJob } from "../../slowJobs";
+import { SlowJobLine } from "../../SlowJobLine";
 import { SuggestList } from "./SuggestList";
+import { CountBar } from "./CountBar";
 import { RepoFileChoice } from "./RepoFileChoice";
 import { PluginCard, SkillRowView } from "./SkillRows";
-import { aimSkills, applySuggestions, closeSkills, openCarried, recommend, discardDraft, saveChanges, setFilter, setQuery, setSort, setTarget } from "./actions";
+import { aimSkills, applySuggestions, closeSkills, dismissSuggest, openCarried, showSuggest, discardDraft, saveChanges, setFilter, setQuery, setSort, setTarget } from "./actions";
 import {
-  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, chipCount, chipKeys, chipLabel, draftChanges, globalDraftOf, layerOf, levelFor, matches, parkedWords, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords,
+  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, chipCount, chipKeys, chipLabel, draftChanges, globalDraftOf, layerOf, levelFor, matches, parkedWords, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords, isCountingRefusal,
+  isCountingDoc, usesBar, usesIsNewer,
 } from "./logic";
 import { skillsState } from "./store";
-
-const POLL_MS = 3000;
 
 export function SkillsSheet() {
   const c = core();
   const aim = useStore(skillsAim);
   const s = useStore(skillsState);
   // The door's aim becomes this screen's state on mount (and when a door re-aims it).
-  useEffect(() => { if (aim) aimSkills(aim.repoId, aim.backend); }, [aim?.repoId, aim?.backend]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (aim) aimSkills(aim.repoId, aim.backend, aim.target); }, [aim]);
   const gate = skillSwitchGate(c.world.backends, aim?.backend);
   const repoId = s.repoId === aim?.repoId ? s.repoId : null;
-  const res = useRemoteResource<SkillInventoryDoc>(`skills:${repoId}`, () => api.skills(repoId!), { enabled: !!repoId && !gate });
+  // Three slow jobs on the desktop (`slowJobs.ts`): leaving this screen aborts none of them, and
+  // coming back shows the last answer with its age and whether a run is still going.
+  const on = !!repoId && !gate;
+  const inv = useSlowJob<SkillInventoryDoc>("skills.inventory", repoId, { enabled: on, auto: true, verb: "read the skills" });
+  const uses = useSlowJob<SkillInventoryDoc>("skills.uses", repoId, { enabled: on, auto: false, verb: "count the uses" });
+  // The one model call: only ever a tap, never started by opening the screen.
+  const rec = useSlowJob<SkillRecommendResponse>("skills.recommend", repoId, { enabled: on, auto: false, verb: "ask for suggestions" });
+  // The counted inventory replaces the plain one once it is newer; a save's answer is newer than both.
+  const res = usesIsNewer(inv, uses) ? { ...uses, reload: inv.reload, set: inv.set } : inv;
   const doc = res.data;
   const [saveErr, setSaveErr] = useState<{ text: string; stale: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  // Uses are counted in the background on the host; ask again while it counts.
-  const allRepos = doc?.usage.allRepos;
-  const counting = doc?.usage.state === "counting" || !!doc?.usage.refreshing || allRepos?.state === "counting";
+  // Uses are counted in the background on the host: the `skills.uses` job waits for both counts and
+  // reports how far it is, so the bar moves without this screen asking again.
+  const counting = uses.running || isCountingDoc(doc);
   useEffect(() => {
-    if (!counting) return;
-    const t = setTimeout(() => res.reload({ quiet: true }), POLL_MS);
-    return () => clearTimeout(t);
-  }, [counting, doc?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Not again after a failed count: its sentence stays on screen instead of a retry loop.
+    if (!isCountingDoc(doc) || uses.running || uses.job?.state === "failed" || (uses.resultAt ?? 0) > (inv.resultAt ?? 0)) return;
+    uses.start();
+  }, [doc?.at, uses.running, inv.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A finished suggestion run is shown (once per run, and again after a return); never applied.
+  useEffect(() => { if (rec.data) showSuggest(rec.job?.id ?? `at:${rec.resultAt}`, rec.data); }, [rec.data, rec.resultAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const asking = rec.running;
 
   const rows = doc?.rows ?? [];
   // A re-read never overwrites what was chosen; it only forgets rows that are gone.
@@ -92,7 +105,7 @@ export function SkillsSheet() {
     setSaveErr(null);
     const r = await saveChanges(repoId, doc, level, changes);
     setSaving(false);
-    if (r.ok) res.set(r.doc);
+    if (r.ok) inv.set(r.doc);
     else {
       setSaveErr({ text: r.error, stale: r.stale });
       if (r.stale) res.reload({ quiet: true });
@@ -106,7 +119,7 @@ export function SkillsSheet() {
     const r = await applySuggestions(repoId, doc, applyLevel);
     setApplying(false);
     if (!r) return;
-    if (r.ok) res.set(r.doc);
+    if (r.ok) inv.set(r.doc);
     else {
       setSaveErr({ text: r.error, stale: r.stale });
       if (r.stale) res.reload({ quiet: true });
@@ -144,6 +157,7 @@ export function SkillsSheet() {
               ? (showFileLine && <Hint>{skillFileLine(level, layer.path)}</Hint>)
               : <Hint tone="warn">{layer.why ?? `${layer.path} could not be read.`}</Hint>)}
             <Empty res={res} empty={!doc} thing="skills and plugins" />
+            <SlowJobLine res={inv} what="Reading the skills" />
             {doc && (
               <>
                 {doc.hostNote && <Hint>{doc.hostNote}</Hint>}
@@ -158,7 +172,8 @@ export function SkillsSheet() {
                   </div>
                 )}
                 {repoId && <div className="sk-share"><Button className="sk-link" onClick={() => openCarried(repoId)} title="Repo readings: what every turn of this repo carries, skills and plugins included">what every turn carries →</Button></div>}
-                {doc.usage.state === "counting" && <Hint>{usageWords(doc.usage)}</Hint>}
+                <CountBar label="Counting uses in this repo and across all repos" u={usesBar(uses.running ? uses.job : null, doc)} note="Suggestions wait for it." />
+                <SlowJobLine res={{ ...uses, job: uses.job?.state === "failed" ? uses.job : null }} what="Counting uses" />
                 <SearchBox className="sk-search" placeholder="search skills and plugins" value={s.query} onChange={(e) => setQuery(e.target.value)} />
                 {total > 0 && <div className="fchips">
                   {chipRows(chipKeys(usageReady), (k) => ({ count: chipCount(k, split, s.draft, usageReady) }), chipLabel).map((ch) => (
@@ -170,9 +185,12 @@ export function SkillsSheet() {
                     <FilterChip key={k} on={s.sort === k} clears={false} onClick={() => setSort(k)}>{SORT_WORDS[k]}</FilterChip>
                   ))}
                 </div>}
-                {total > 0 && <Button className="sk-suggest-btn" title={RECOMMEND_COST} onClick={() => repoId && recommend(repoId)}>{s.asking ? "Looking at what is used…" : "suggest what to switch off · one model call"}</Button>}
-                {total > 0 && allRepos?.state === "counting" && <Hint>Counting uses across all repos{allRepos.total ? `: ${allRepos.done ?? 0} of ${allRepos.total} logs` : ""}. Suggestions wait for it.</Hint>}
-                {s.suggest && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={applyLayer?.readable ? applyLayer.path : null} globalFile={globalLayer?.readable ? globalLayer.path : null} shared={s.shared} showChoice={!(s.target === "repo" && changes.length > 0 && !!layer?.readable)} applying={applying} onApply={apply} />}
+                {total > 0 && <Button className="sk-suggest-btn" title={RECOMMEND_COST} onClick={() => { if (!asking) rec.start(); }}>{asking ? "Looking at what is used…" : "suggest what to switch off · one model call"}</Button>}
+                {total > 0 && <SlowJobLine res={rec} what="Asking for suggestions" />}
+                {s.suggest && !rec.running && rec.state === "cached" && rec.age !== null && <Hint>Suggested {agoText(rec.age)} — tap suggest for a fresh list.</Hint>}
+                {/* A "still counting" refusal carries a frozen count: the bar above is the live one, so only the next step is said here. */}
+                {s.suggest && isCountingRefusal(s.suggest) && <Hint>{counting ? "Not asked yet: the count above is still running. Tap suggest again when it reaches 100%." : "The count has finished: tap suggest again."} · <Button className="sk-link" onClick={dismissSuggest}>close</Button></Hint>}
+                {s.suggest && !isCountingRefusal(s.suggest) && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={applyLayer?.readable ? applyLayer.path : null} globalFile={globalLayer?.readable ? globalLayer.path : null} shared={s.shared} showChoice={!(s.target === "repo" && changes.length > 0 && !!layer?.readable)} applying={applying} onApply={apply} />}
                 {(s.filter || s.query.trim()) && <Hint>{shownN} of {total} shown{s.filter ? <> · <Button className="sk-link" onClick={() => { setFilter(null); setQuery(""); }}>clear</Button></> : null}</Hint>}
                 {saveErr && <Hint tone="warn">{saveErr.text}{saveErr.stale ? " The list was read again; your choices are kept." : " Your choices are kept."}</Hint>}
                 {plugins.map((r) => <PluginCard key={r.id} row={r} skills={r.skills.map((id) => split.pluginSkills.get(id)).filter((x): x is NonNullable<typeof x> => !!x)} draft={s.draft} level={level} globalDraft={globalDraft} />)}

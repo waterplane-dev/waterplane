@@ -360,9 +360,8 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .rh-head > .rh-push, .rh-head > .explain-chip { margin-right: auto; }
 .rh-head > .explain-body { order: 1; }
 .rh-head > .explain-body > p { margin: 0 0 var(--sp-6); }
-/* The scope row: the kit's chips on the sheet's 14px gutter (pill = row 11 + chip 3). */
-.fchips.rh-scope { padding: 0 var(--sp-10); }
-.rh-scope > .ctx-stackpick-lab { padding: 0 var(--sp-4); }
+/* The scope row: the kit's chips, pills on the gutter like every `.fchips` row. */
+.rh-scope > .ctx-stackpick-lab { padding: 0 var(--sp-4) 0 3px; }
 
 .rh-chart { padding: var(--sp-8) 0 var(--sp-2); }
 /* `touch-action: pan-y` and not `none`: a horizontal drag scrubs the curve,
@@ -447,6 +446,11 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
   flex: 0 1 auto; min-width: 0; padding: 1px var(--sp-6); border: 1px solid var(--line); border-radius: var(--r-pill);
   font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap;
 }
+/* Which way is better for this metric (owner, 2026-11-14): ink like the slope,
+   never a hue — the line is the same whatever the reading, so it carries no news. */
+.rh-aim { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); word-break: break-word; }
+.rh-aim-short { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--fg); opacity: .85; }
+.rh-aim-short > svg { flex: none; }
 /* What the tile measures, in one plain line, under its name. */
 .rh-tile-mean { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); margin-top: -2px; }
 /* A repo's disable or override of this reading: an ink rule at the left, no

@@ -28,7 +28,7 @@
  * still the session's first.
  */
 import { carriedPartsOf } from "./ctxlog/ctxcursor.js";
-import { LOOK_RULE_TEXT, SERIES_MIN_N, START_PARTS, isAgentAbsent, isoWeekOf, hourKey, seriesTooFewText, type AgentStartReading, type SeriesBucket, type SeriesValue, type AgentActivityReading, type AgentSpendReading, type RepoSpendWeek, type AgentCompactReading, type AgentEscapedReading, type AgentExploreReading,
+import { LOOK_RULE_TEXT, SKILLS_RULE_TEXT, SERIES_MIN_N, START_PARTS, isAgentAbsent, isoWeekOf, hourKey, seriesTooFewText, type AgentStartReading, type SeriesBucket, type SeriesValue, type AgentActivityReading, type AgentSpendReading, type RepoSpendWeek, type AgentCompactReading, type AgentEscapedReading, type AgentExploreReading,
   type AgentReadingAbsent, type AgentReadingRules, type AgentReadingsWeek, type StartPart, type AgentReworkReading, type ReworkClass,
   type TokenTotals } from "@waterplane/shared";
 
@@ -77,6 +77,8 @@ export interface StartSummary {
   pt?: Partial<Record<StartPart, number>>;
   /** Looks before the first edit; absent = never edited. */
   lk?: number;
+  /** Skill tool calls the session made (a load = it invoked a skill); absent on a fork, a subagent and a summary written before this field. */
+  sk?: number;
   /** Counted requests (not in a fork's copied prefix). */
   rq: number;
 }
@@ -115,8 +117,9 @@ const strLen = (v: unknown): number | null =>
 
 /**
  * The start-context chars one `attachment` row adds, by part. A row that is not one, or whose shape
- * moved, yields nothing — never a zero. Instruction files split by their own `type`: `AutoMem` is
- * the auto-memory index, every other file (User, Project, Local, managed) is a CLAUDE.md.
+ * moved, yields nothing — never a zero. Parts are cut by WHOSE they are where the record says
+ * (shared `START_PARTS`): instruction files by their own `type`, deferred tools by name, the
+ * subagent listing by `builtInTypes`; what the record does not split stays one part.
  * The attachment shapes are `ctxlog/ctxcursor.ts`'s `carriedPartsOf`; this only regroups them.
  */
 export function startPartsOf(row: Record<string, unknown>): [StartPart, number][] {
@@ -135,15 +138,52 @@ export function startPartsOf(row: Record<string, unknown>): [StartPart, number][
       case "system_prompt": out.push(["system", p.chars]); break;
       case "tool_schemas": out.push(["tools", p.chars]); break;
       case "instructions":
-        for (const f of p.files ?? []) out.push([f.type === "AutoMem" ? "memory" : "claudeMd", f.chars]);
+        for (const f of p.files ?? []) out.push([INSTRUCTION_PART[f.type] ?? "other", f.chars]);
         break;
       case "skill_listing": out.push(["skills", p.chars]); break;
-      case "deferred_tools": out.push(["deferredTools", p.chars]); break;
-      case "agent_listing": out.push(["agents", p.chars]); break;
+      case "deferred_tools": out.push(...deferredSplit(a, p.chars)); break;
+      case "agent_listing": out.push(...agentSplit(a, p.chars)); break;
       case "hook_context": out.push(["hooks", p.chars]); break;
       case "mcp_instructions": out.push(["other", p.chars]); break;
     }
   }
+  return out;
+}
+
+/** An instruction file's part by the `type` the log records (`START_PARTS`); a type not listed is `other`. */
+const INSTRUCTION_PART: Record<string, StartPart> = { Project: "projectMd", User: "userMd", Local: "userMd", Managed: "userMd", AutoMem: "memory" };
+
+const lines = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : typeof v === "string" ? [v] : []);
+
+/**
+ * Deferred tool names cut by name: an `mcp__` line, and every surfaced definition (they are MCP
+ * tools' full schemas), is a connector's; the rest are the CLI's built-in deferred tools. The two
+ * add up to `carriedPartsOf`'s one figure; a part with no chars is not reported (never a zero).
+ */
+function deferredSplit(a: Record<string, unknown>, whole: number): [StartPart, number][] {
+  let cli = 0;
+  for (const l of lines(a.addedLines)) if (!l.trimStart().startsWith("mcp__")) cli += l.length;
+  const out: [StartPart, number][] = [];
+  if (cli > 0) out.push(["cliDeferred", cli]);
+  if (whole - cli > 0) out.push(["connectorTools", whole - cli]);
+  return out;
+}
+
+/**
+ * The subagent listing cut by the record's own `builtInTypes`: a line whose type is built in is the
+ * CLI's, the rest are not split further. Without that list (or with lines and types that do not
+ * pair up one to one) the listing stays whole as `agents`: the log does not say.
+ */
+function agentSplit(a: Record<string, unknown>, whole: number): [StartPart, number][] {
+  const ls = lines(a.addedLines);
+  const types = lines(a.addedTypes);
+  if (!Array.isArray(a.builtInTypes) || ls.length !== types.length) return whole > 0 ? [["agents", whole]] : [];
+  const builtIn = new Set(lines(a.builtInTypes));
+  let cli = 0;
+  ls.forEach((l, i) => { if (builtIn.has(types[i]!)) cli += l.length; });
+  const out: [StartPart, number][] = [];
+  if (cli > 0) out.push(["cliAgents", cli]);
+  if (whole - cli > 0) out.push(["otherAgents", whole - cli]);
   return out;
 }
 
@@ -157,11 +197,12 @@ export const POOLED_MODELS_TEXT = "Every model that ran is pooled in this week's
 
 export const RULES: AgentReadingRules = {
   start:
-    `What a fresh session's first request carried, measured off this desktop's conversation logs (not estimated): the median of its tokens (fresh input + cache read + cache write) over fresh interactive sessions that started this week — forked, continued and headless (claude -p) logs left out. Under it, the median characters per part of that start (the parts the log records before the first request, named as in "what every turn carries"); a part's median is over the sessions that recorded it, and the part medians do not add up to the token figure. Subagent logs that started this week are their own line, never in the session median. A median needs at least ${SERIES_MIN_N} sessions; with fewer the reading is not taken. ${POOLED_MODELS_TEXT}`,
+    `What a fresh session's first request carried, measured off this desktop's conversation logs (not estimated): the median of its tokens (fresh input + cache read + cache write) over fresh interactive sessions that started this week — forked, continued and headless (claude -p) logs left out. Under it, the median characters per part of that start (the parts the log records before the first request, named as in "what every turn carries"), grouped by whose they are: the repo's (instruction files the log types Project, normally committed and so the same for everyone on it; the log names the type, not the folder), yours (global and local CLAUDE.md, memory, connector tools), the CLI's (system prompt, tool schemas, built-in deferred tools and subagents), and not split where the log records one block without saying where each line came from (the skill listing, other subagents, hooks, session context). A part's median is over the sessions that recorded it, and the part medians do not add up to the token figure. Subagent logs that started this week are their own line, never in the session median. A median needs at least ${SERIES_MIN_N} sessions; with fewer the reading is not taken. ${POOLED_MODELS_TEXT}`,
   explore:
     `Two medians over one set of sessions: fresh sessions that started this week and reached a first file edit (Edit, Write, MultiEdit or NotebookEdit). Tokens: the input side (fresh input + cache read + cache write) the session sent before that edit; the split under it is the median session's own. Looks: calls that only read before that edit. ${LOOK_RULE_TEXT} Forked, continued and headless (claude -p) logs are left out; sessions that never edited are counted beside it, not in it; the session's own subagents are in neither figure. A median needs at least ${SERIES_MIN_N} sessions; with fewer the reading is not taken. ${POOLED_MODELS_TEXT}`,
   requests:
     `Median requests (replies from the model, a streamed reply counted once) of a fresh session that ran a git commit that did not error, counted in the week the session STARTED — unlike Compactions, which counts a session in the week its log last moved. Forked, continued, headless and subagent logs are left out. A median needs at least ${SERIES_MIN_N} sessions; with fewer the reading is not taken. ${POOLED_MODELS_TEXT}`,
+  skills: SKILLS_RULE_TEXT,
   rework:
     "Rework = a conversation whose first prompt or title says fix, repair, broken, again, bug, regression, revert or not working, plus every agent of a review-repair workflow run. Feature = a prompt that opens with add, build, implement, create, introduce, make, new, support, design or write and has none of those words. Everything else is unknown, never feature. Tokens are filed under the week they were spent; subagents under their conversation's class.",
   compact:
@@ -257,6 +298,7 @@ export function foldAgentWeeks(convs: readonly ResolvedConv[], weeks: readonly s
     ...(series ? { start: startOf(byWeek.get(week)) } : {}),
     explore: exploreOf(convs, week, series ? (byWeek.get(week)?.look ?? absent(seriesTooFewText(0, "look"))) : undefined),
     ...(series ? { requests: byWeek.get(week)?.req ?? absent(seriesTooFewText(0, "req")) } : {}),
+    ...(series ? { skillLoads: byWeek.get(week)?.skills ?? absent(seriesTooFewText(0, "skills")) } : {}),
     rework: reworkOf(convs, week),
     compact: compactOf(convs, week),
     escaped: escapedOf(escaped, week),
@@ -291,7 +333,10 @@ function activityOf(convs: readonly ResolvedConv[], week: string): AgentActivity
 
 function startOf(b: SeriesBucket | undefined): AgentStartReading | AgentReadingAbsent {
   if (!b) return absent("No session or subagent started in this repo this week.");
-  const parts = START_PARTS.flatMap(({ id }) => (b.parts[id] ? [{ id, chars: b.parts[id]! }] : []));
+  // Named parts in list order, then any part this version cannot name (open keys), never dropped.
+  const named = new Set(START_PARTS.map((p) => p.id));
+  const ids = [...START_PARTS.map((p) => p.id), ...Object.keys(b.parts).filter((id) => !named.has(id)).sort()];
+  const parts = ids.flatMap((id) => (b.parts[id] ? [{ id, chars: b.parts[id]! }] : []));
   return { fresh: b.fresh, tok: b.start, parts, sub: b.subStart };
 }
 

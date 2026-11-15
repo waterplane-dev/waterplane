@@ -151,31 +151,55 @@ test("cpuSplitText: Windows' one figure is not split, and the WSL VM's figure sa
   assert.doesNotMatch(cpuSplitText({ ...base, sysPct: 5 }), /WSL/);
 });
 
-test("a hot CPU row names the top programs by CPU, folded, and only when hot", () => {
+test("the CPU row names the top programs by CPU, folded, at any load", async () => {
+  const { holdTop } = await import("./sysStat.ts");
   const byCpu = [
     { name: "node", cpuPct: 975.4, rssBytes: GB, procs: 12 },
     { name: "kernel_task", cpuPct: 310, rssBytes: GB, procs: 1, pid: 0 },
     { name: "claude", cpuPct: 90, rssBytes: GB, procs: 23 },
     { name: "Chrome", cpuPct: 40, rssBytes: GB, procs: 30 },
   ];
-  const sys = (userPct, sysPct) => ({ cpu: { userPct, sysPct, idlePct: 100 - userPct - sysPct, spanMs: 4000 }, procs: { at: 0, byCpu, byMem: [], count: 900, rssSumBytes: 0, cap: 8 } });
-  assert.equal(cpuCulpritsText(sys(67, 32)), "Using it most: node 975% (12 processes) · kernel_task 310% · claude 90% (23 processes).");
-  assert.equal(cpuCulpritsText(sys(50, 20)), null);
-  assert.match(cpuCulpritsText(sys(67, 32), 3), /read 3s earlier/);
-  assert.equal(cpuCulpritsText({ cpu: sys(90, 5).cpu }), null);
+  const held = holdTop([], byCpu, (p) => p.name, 0);
+  assert.equal(cpuCulpritsText(held, 0), "Using it most: node 975% (12 processes) · kernel_task 310% · claude 90% (23 processes).");
+  assert.match(cpuCulpritsText(held, 0, 3), /read 3s earlier/);
+  assert.equal(cpuCulpritsText([], 0), null);
 });
 
-test("a hot CPU names its sessions by tab label, busiest first; a closed one stays, named as such", async () => {
-  const { hotSessions } = await import("./sysStat.ts");
+test("a program that leaves the top stays 30 s, after the leaders, saying when it left", async () => {
+  const { holdTop, TOP_HOLD_MS } = await import("./sysStat.ts");
+  const row = (name, cpuPct) => ({ name, cpuPct, rssBytes: GB, procs: 1 });
+  const key = (p) => p.name;
+  let h = holdTop([], [row("a", 90), row("b", 80), row("c", 70), row("d", 10)], key, 0);
+  // d overtakes c: c is held, with its current figure (still in the table).
+  h = holdTop(h, [row("a", 90), row("b", 80), row("d", 75), row("c", 20)], key, 8000);
+  assert.deepEqual(h.map((x) => [x.key, x.inTop, x.current]), [["a", true, true], ["b", true, true], ["d", true, true], ["c", false, true]]);
+  assert.equal(cpuCulpritsText(h, 8000), "Using it most: a 90% · b 80% · d 75% · c 20%, left the top 3 8s ago.");
+  // Same reading again: idempotent.
+  assert.deepEqual(holdTop(h, [row("a", 90), row("b", 80), row("d", 75), row("c", 20)], key, 8000), h);
+  // c gone from the table entirely: last figure, said as such.
+  h = holdTop(h, [row("a", 90), row("b", 80), row("d", 75)], key, 20000);
+  assert.match(cpuCulpritsText(h, 20000), /c, left the top 3 20s ago \(was 20%\)/);
+  // Past the hold it is dropped.
+  h = holdTop(h, [row("a", 90), row("b", 80), row("d", 75)], key, TOP_HOLD_MS);
+  assert.deepEqual(h.map((x) => x.key), ["a", "b", "d"]);
+  // Back in the top: listed as a leader again, the hold forgotten.
+  h = holdTop(h, [row("c", 99), row("a", 90), row("b", 80)], key, TOP_HOLD_MS + 1000);
+  assert.deepEqual(h.map((x) => [x.key, x.inTop]), [["c", true], ["a", true], ["b", true], ["d", false]]);
+});
+
+test("sessions are named by tab label, busiest first, at any load; a closed one stays, named as such; a held one under 1% says so", async () => {
+  const { holdTop, topSessions } = await import("./sysStat.ts");
   const bySession = [
     { sessionId: "a", cpuPct: 492, rssBytes: GB, procs: 4, top: "node" },
     { sessionId: "b", cpuPct: 60, rssBytes: GB, procs: 1, top: "claude" },
   ];
-  const sys = (u) => ({ cpu: { userPct: u, sysPct: 0, idlePct: 100 - u, spanMs: 4000 }, procs: { at: 0, byCpu: [], byMem: [], count: 9, rssSumBytes: 0, cap: 8, bySession } });
   const labels = { a: "app · tests" };
-  assert.deepEqual(hotSessions(sys(95), (id) => labels[id]), [
-    { id: "a", label: "app · tests", detail: "492% · mostly node · 4 processes" },
-    { id: "b", label: "a session no longer open", detail: "60% · mostly claude" },
+  const key = (r) => r.sessionId;
+  let h = holdTop([], bySession, key, 0);
+  assert.deepEqual(topSessions(h, 0, (id) => labels[id]), [
+    { id: "a", label: "app · tests", detail: "492% · mostly node · 4 processes", held: false },
+    { id: "b", label: "a session no longer open", detail: "60% · mostly claude", held: false },
   ]);
-  assert.deepEqual(hotSessions(sys(50), (id) => labels[id]), []);
+  h = holdTop(h, [bySession[1]], key, 5000);
+  assert.deepEqual(topSessions(h, 5000, (id) => labels[id])[1], { id: "a", label: "app · tests", detail: "under 1% · left the top 3 5s ago", held: true });
 });

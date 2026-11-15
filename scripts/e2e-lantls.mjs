@@ -121,6 +121,7 @@ async function phaseA(lan) {
     const tlsPort = await freePort();
     const root = newRoot();
     await boot(port, root, { ...knobs, [E.TLS_PORT]: String(tlsPort) });
+    // R-security-023: without the opt-in (or with TLS off, or the host on loopback) nothing listens on the TLS port, no key is minted
     check(!(await answers("127.0.0.1", tlsPort)), `${label}: nothing on the TLS port on loopback`);
     if (lan) check(!(await answers(lan, tlsPort)), `${label}: nothing on the TLS port on the LAN address`);
     check(!existsSync(keyFile(root)), `${label}: no key minted`);
@@ -131,6 +132,7 @@ async function phaseA(lan) {
 
 async function phaseB(lan, root, port, tlsPort) {
   await boot(port, root, { [E.ALLOW_PUBLIC]: "1", [E.TLS_PORT]: String(tlsPort) });
+  // R-security-023: with the opt-in the TLS listener is up, LAN-only, and the same token gate applies
   check(await logSays(/listening https:/), "the TLS listener came up");
   check(!(await answers("127.0.0.1", tlsPort)), "not on loopback: the LAN addresses only");
 

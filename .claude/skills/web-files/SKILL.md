@@ -122,6 +122,19 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   documents, file-browser listings). `prefetchTranscript()` and the term feed's 5-min
   `sweepTranscripts()` (`core/term/useTermFeed.ts`, over `offlineCache.ts`; it continues with terminal screens) are
   what make the reader work offline for a session you have not opened yet.
+  - **Every host read through `useRemoteResource` is cached BY DEFAULT** (IndexedDB `rescache`,
+  host-scoped, newest 200, 1 MB per entry). The key is namespaced and STABLE (`kind:repoId`; never a bare repoId,
+  never a refresh counter — refresh is `reload({quiet:true})`). `cache:{shape:n}` is the bump point when the DTO
+  changes; `cache:false` only for secrets, tokens, pairing, process lines, or live state a stale copy would misstate
+  (peer jobs); rules in `resourceCache.ts`. The screen shows the age line when `cached` and a refresh mark while `inflight` with data on screen.
+- `offlineGate.tsx` (kit) — **offline is read-only**: a desktop write (POST/PUT/DELETE) goes through
+  `useOfflineGate().guard(verb, fn)`, which offline runs nothing and says why in a sentence — never dimmed, never
+  queued. `liveSend` refuses on its own; the send queue is MEANT to queue offline — never gate it.
+- `slowJobs.ts` (rules: `slowJobsLogic.ts`, wire: `features/slowjobs`) — **long work (a model call, a scan, a check) outlives
+  the screen**: host `slowjobs.ts` (`host-work`) runs it; `useSlowJob()` has `useRemoteResource`'s shape. Leaving never
+  aborts, a second start joins, the result is kept on the host 30 min and in `rescache`, and a toast names it if it
+  finishes on another screen. A new slow host call gets a job kind, never a longer timeout. Screens still to move:
+  [offline-cache-audit](../../../docs/analysis/offline-cache-audit.md).
 - `shellLink.ts` — the background link, the half that isn't Java. `ShellLinkService` fixes backgrounding
   by EXISTING; everything the page tells it is a PARAMETER, because none of it is a fact about the APK.
   `shellNudge` is listened for BESIDE the four wake events, deliberately not through them.

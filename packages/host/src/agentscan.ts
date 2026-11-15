@@ -17,6 +17,7 @@ import { performance } from "node:perf_hooks";
 import { CONTINUED_RE, EDIT_TOOLS, classifyRework, isLookCall, startPartsOf, weekOfMs, type AgentLogSummary, type ConvSummary, type StartSummary, type WeekTally } from "./agentclass.js";
 import type { StartPart } from "@waterplane/shared";
 import { SCAN_CHUNK } from "./tokenscan.js";
+import { SKILL_CALL_MARK, skillCallsOf } from "./skills/skilluse.js";
 import { firstSightIn, isAnchor, usageRecordOf, type UsageRecord } from "./ctxlog/usagerecord.js";
 
 const SLICE_MS = 8;
@@ -105,6 +106,8 @@ function bumpWeek(wk: Record<string, WeekTally>, ts: number, u: { input: number;
  */
 class StartReading {
   private model: string | undefined;
+  /** A counted request ran on a different model than the first: the session has no single model. */
+  private switched = false;
   private cli: string | undefined;
   private start: number | undefined;
   private parts: Partial<Record<StartPart, number>> = {};
@@ -112,6 +115,19 @@ class StartReading {
   private edited = false;
   private req = 0;
   private seenTools = new Set<string>();
+  private skills = 0;
+  private seenSkills = new Set<string>();
+  /** A subagent log is not read for skill loads (its reading stays absent, never 0). */
+  constructor(private readonly countsSkills = true) {}
+  /** The Skill calls of one assistant row: `skills/skilluse.ts`'s parser, deduped by call id. */
+  skill(row: Record<string, unknown>, prefix: boolean): void {
+    if (prefix || !this.countsSkills) return;
+    for (const { id } of skillCallsOf(row)) {
+      if (this.seenSkills.has(id)) continue;
+      this.seenSkills.add(id);
+      this.skills++;
+    }
+  }
   /** `"type":"attachment"` rows are only wanted until the anchor request has been seen. */
   get wantsAttachments(): boolean { return this.start === undefined; }
   version(row: Record<string, unknown>): void {
@@ -126,6 +142,7 @@ class StartReading {
     if (prefix) return;
     this.req++;
     this.model ??= u.model ?? undefined;
+    if (u.model && this.model && u.model !== this.model) this.switched = true;
     if (this.start === undefined && isAnchor(u)) this.start = u.carried;
   }
   /** One tool_use block, in order. */
@@ -138,11 +155,13 @@ class StartReading {
   result(forked: boolean): StartSummary | undefined {
     if (!this.req && this.cli === undefined) return undefined;
     return {
-      ...(!forked && this.model ? { md: this.model } : {}),
+      // A session that switched model (opusplan, /model) is left without one, never filed wholly under the first.
+      ...(!forked && this.model && !this.switched ? { md: this.model } : {}),
       ...(this.cli ? { cli: this.cli } : {}),
       ...(!forked && this.start !== undefined ? { st: this.start } : {}),
       ...(!forked && this.start !== undefined && Object.keys(this.parts).length ? { pt: this.parts } : {}),
       ...(!forked && this.edited ? { lk: this.looks } : {}),
+      ...(!forked && this.countsSkills ? { sk: this.skills } : {}),
       rq: this.req,
     };
   }
@@ -219,9 +238,10 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
     const wantTitle = line.includes('"aiTitle"');
     const wantPrompt = prompt === undefined && line.includes('"type":"user"');
     const wantAttach = sr.wantsAttachments && line.includes('"type":"attachment"');
+    const wantSkill = line.includes(SKILL_CALL_MARK);
     const wantResult = (commits.size > 0 || repairCalls.size > 0) && line.includes('"tool_result"');
     if (!prefix && line.includes('"compact_boundary"')) cp++;
-    if (!(isHead || wantUsage || wantTitle || wantPrompt || wantResult || wantAttach)) return;
+    if (!(isHead || wantUsage || wantTitle || wantPrompt || wantResult || wantAttach || wantSkill)) return;
     const row = pre ?? parse(line);
     if (!row) return;
     head++;
@@ -260,6 +280,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
       }
     }
     if (row.type !== "assistant") return;
+    if (wantSkill) sr.skill(row, prefix);
     const u = usageRecordOf(row, firstSight);
     if (u && (u.input || u.output || u.cacheRead || u.cacheWrite)) {
       any = true;
@@ -303,7 +324,7 @@ export async function summarizeConv(path: string, id: string, size: number, mtim
 export async function summarizeAgentLog(path: string, rel: string, size: number, mtime: number, chunkBytes?: number): Promise<AgentLogSummary | null> {
   const firstSight = firstSightIn(new Set<string>());
   const wk: Record<string, WeekTally> = {};
-  const sr = new StartReading();
+  const sr = new StartReading(false);
   let t0: number | undefined;
   let head = 0;
   const handle = (line: string): void => {

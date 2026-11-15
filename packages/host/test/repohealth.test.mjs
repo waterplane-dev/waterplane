@@ -727,7 +727,7 @@ function gatedFake() {
   };
 }
 
-test("an unapproved repo engine is never spawned: needsApproval, path, a sentence", async () => {
+test("an unapproved repo engine is never spawned: needsApproval, path, a sentence (R-security-003)", async () => {
   const wt = worktree("// committed code\n");
   const g = gatedFake();
   const view = await readRepoHealth(wt, g.deps);
@@ -754,7 +754,7 @@ test("an approved repo engine runs status then plot", async () => {
   assert.equal(view.series.rows, 158);
 });
 
-test("an engine edited after approval asks again", async () => {
+test("an engine edited after approval asks again (R-security-003)", async () => {
   const wt = worktree("// v1\n");
   const g = gatedFake();
   approveEngine(wt, g.root);
@@ -1011,4 +1011,125 @@ test("with the token, the approved engine runs", async () => {
   assert.equal(approveWithConsent(browserReq, wt, token, g.root, gate), null);
   await refreshRepoHealth(wt, g.deps);
   assert.ok(g.argvs.some((a) => a[1] === "update"));
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Reading the repo's OWN readings back (R-metrics-065): a person's tap only,
+// and only where the repo's commands are already approved.
+
+const backfillMod = await import("../dist/repohealth.js");
+
+test("own-backfill: unapproved commands are refused in words, and nothing spawns", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  const g = gatedFake();
+  const deps = { ...g.deps, engine: () => ({ path: "/bundled/repohealth.mjs", kind: "bundled" }) };
+  const a = await backfillMod.backfillOwnReadings(wt, 20, deps);
+  assert.equal(a.ok, false);
+  assert.match(a.refused, /approve them first/);
+  assert.deepEqual(g.argvs, [], "no spawn at all");
+  // An unapproved REPO engine: refused too.
+  const own = worktree("// committed code\n");
+  const g2 = gatedFake();
+  const b = await backfillMod.backfillOwnReadings(own, 20, g2.deps);
+  assert.equal(b.ok, false);
+  assert.match(b.refused, /approve it once/);
+  assert.deepEqual(g2.argvs, []);
+  // Nothing declared: nothing to read back.
+  const none = bundledWorktree(JSON.stringify({ central: {} }));
+  const c = await backfillMod.backfillOwnReadings(none, 20, { ...g.deps, engine: deps.engine, approved: () => true });
+  assert.match(c.refused, /declares no commands/);
+});
+
+test("own-backfill: approved, the argv is fixed, the count clamped, and the view comes back", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  let during = null;
+  const f = fake({
+    "own-backfill": ok(JSON.stringify({ ownBackfill: { asked: 60, read: 2, values: 2, absent: 1, left: 0, stopped: null } }) + "\n"),
+  }, { emit: { "own-backfill": ["… 1/2 commits\n"] } });
+  const deps = { ...f.deps, spawn: async (w, step, onStderr, argv) => {
+    const p = await f.deps.spawn(w, step, onStderr, argv);
+    if (step === "own-backfill") during = (await readRepoHealth(w, f.deps)).run;
+    return p;
+  } };
+  const a = await backfillMod.backfillOwnReadings(wt, 999, deps);
+  assert.equal(a.ok, true);
+  assert.deepEqual(a.summary, { asked: 60, read: 2, values: 2, absent: 1, left: 0, stopped: null });
+  assert.match(during?.note ?? "", /reading back own readings: 1\/2 commits/, "a poll during the run sees its progress");
+  const argv = f.argvs.find((x) => x[1] === "own-backfill");
+  assert.deepEqual(argv, [BUNDLED.path, "own-backfill", `--root=${wt}`, "--commits=60", `--budget-ms=${Math.max(1000, REPOHEALTH_TIMEOUT_MS - 30_000)}`]);
+  assert.ok(a.view && a.view.tool, "the view as it reads after the run");
+  assert.equal(backfillMod.ownBackfillCommits("20"), backfillMod.OWN_BACKFILL_DEFAULT, "a string is not a count");
+  assert.equal(backfillMod.ownBackfillCommits(-3), backfillMod.OWN_BACKFILL_DEFAULT);
+  assert.equal(backfillMod.ownBackfillCommits(7.5), 7);
+});
+
+test("own-backfill: single-flight with the refresh — a backfill during a run is refused, a refresh during a backfill joins it", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const f = fake();
+  const deps = { ...f.deps, spawn: async (w, step, onStderr, argv) => {
+    if (step === "update" || step === "own-backfill") await gate;
+    return f.deps.spawn(w, step, onStderr, argv);
+  } };
+  const refresh = refreshRepoHealth(wt, deps);
+  const refused = await backfillMod.backfillOwnReadings(wt, 5, deps);
+  assert.equal(refused.ok, false);
+  assert.match(refused.refused, /already in progress/);
+  release();
+  await refresh;
+  let release2;
+  const gate2 = new Promise((r) => { release2 = r; });
+  const deps2 = { ...f.deps, spawn: async (w, step, onStderr, argv) => {
+    if (step === "own-backfill") await gate2;
+    return f.deps.spawn(w, step, onStderr, argv);
+  } };
+  const before = f.calls.length;
+  const bf = backfillMod.backfillOwnReadings(wt, 5, deps2);
+  const joined = refreshRepoHealth(wt, deps2);
+  release2();
+  await bf;
+  await joined;
+  // It waits for the backfill, then runs its own update: the backfill's closing view carries the
+  // PREVIOUS refresh's outcome, which must never be reported as this refresh's.
+  const calls = f.calls.slice(before);
+  assert.ok(calls.indexOf("own-backfill") >= 0 && calls.indexOf("update") > calls.indexOf("own-backfill"), `the refresh ran its own update after the backfill: ${calls}`);
+});
+
+test("own-backfill: a kill at the cap is an error sentence and the scratch worktree is swept", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  const f = fake({ "own-backfill": { code: null, stdout: "", stderr: "", timedOut: true } });
+  const swept = [];
+  const a = await backfillMod.backfillOwnReadings(wt, 5, { ...f.deps, sweep: async (w) => { swept.push(w); return 1; } });
+  assert.equal(a.ok, false);
+  assert.match(a.error, /process group was killed/);
+  assert.deepEqual(swept, [wt]);
+  // Exit 3 is the engine's refusal, verbatim without its prefix; exit 2 an engine without the subcommand.
+  const r3 = await backfillMod.backfillOwnReadings(wt, 5, fake({ "own-backfill": { code: 3, stdout: "", stderr: "repohealth: HEAD declares no readings.\n", timedOut: false } }).deps);
+  assert.equal(r3.refused, "HEAD declares no readings.");
+  const r2 = await backfillMod.backfillOwnReadings(wt, 5, fake({ "own-backfill": { code: 2, stdout: "", stderr: "unknown command\n", timedOut: false } }).deps);
+  assert.match(r2.refused, /predates reading back/);
+});
+
+test("own-backfill's sweep removes only our prefix under tmpdir, and git's record of it", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "waterplane-rh-sweep-"));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+  const git = (args) => execFileSync("git", ["-c", "user.email=e@e", "-c", "user.name=e", ...args], { cwd: repo, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    git(["init", "-q", "-b", "main"]);
+    writeFileSync(join(repo, "a"), "a");
+    git(["add", "."]);
+    git(["commit", "-qm", "a"]);
+    const ours = mkdtempSync(join(tmpdir(), backfillMod.OWN_SCRATCH_PREFIX));
+    const theirs = mkdtempSync(join(tmpdir(), "someone-elses-"));
+    git(["worktree", "add", "--detach", "--force", ours, "HEAD"]);
+    git(["worktree", "add", "--detach", "--force", theirs, "HEAD"]);
+    assert.equal(await backfillMod.sweepOwnScratch(repo), 1);
+    const listed = git(["worktree", "list"]);
+    assert.ok(!listed.includes(backfillMod.OWN_SCRATCH_PREFIX));
+    assert.ok(listed.includes("someone-elses-"), "another worktree is not ours to remove");
+    git(["worktree", "remove", "--force", theirs]);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });

@@ -15,6 +15,7 @@ import { rivalTexts } from "../opendeliveries.js";
 import { createToIntent } from "../intents/adapters.js";
 import { withoutBacklogMark } from "../backlog.js";
 import { localStartNotice } from "../localslot.js";
+import { searchArchivedPrompts } from "../archivesearch.js";
 import type { InputVerdict, Route, RouteSpec, RouteTable } from "./types.js";
 
 /** Replaced session id → the session that replaced it, for this process's
@@ -742,8 +743,19 @@ const onSessionHistory: Route<"session.history"> = (a) => {
 };
 
 const onSessionSearch: Route<"session.search"> = (a) => {
-    void a.c.sessions.search(a.msg.query, a.msg.scope, a.msg.id).then((results) =>
-      a.c.send(a.ws, { t: "session.searchResults", query: a.msg.query, scope: a.msg.scope, id: a.msg.id, results }));
+    void a.c.sessions.search(a.msg.query, a.msg.scope, a.msg.id).then((results) => {
+      // Archived conversations: all-sessions search only, prompts only, and never one that is
+      // open right now (it was just searched live). `null` = no prompt history to read, so
+      // `archived` is not echoed and the sheet says the archive was not searched.
+      const arch = a.msg.archived && !a.msg.id
+        ? searchArchivedPrompts(a.msg.query, new Set(a.c.sessions.list().map((s) => s.claudeSessionId).filter((x): x is string => !!x)))
+        : null;
+      a.c.send(a.ws, {
+        t: "session.searchResults", query: a.msg.query, scope: a.msg.scope, id: a.msg.id,
+        ...(arch ? { archived: true, archivedOmitted: arch.omitted } : {}),
+        results: arch ? [...results, ...arch.results] : results,
+      });
+    });
 };
 
 const onLimitSetAuto: Route<"limit.setAuto"> = (a) => {

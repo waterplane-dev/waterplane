@@ -113,3 +113,8 @@ Web Push is done by the host itself on node:crypto, with the web-push library an
 - asked: 2026-11-07
 - shipped: a2ac6c16, 583eb05e
 
+### R-notifications-024 · shipped
+"Desktop back online" is a notification kind, on by default and switchable: once per outage, when the desktop's own network link is reachable again after at least a couple of minutes down, so prompts queued meanwhile can go (R-queue-023). Words only; it names the desktop.
+- asked: 2026-11-14 (owner)
+- shipped: ddedfc181
+- note: not yet seen during a real outage.

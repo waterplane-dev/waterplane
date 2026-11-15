@@ -73,6 +73,7 @@ const ALLOWED = {
     ["back * 7 * DAY_MS", "a rate-limit window is 168 elapsed hours long, not seven calendar days"],
     ["end - 7 * DAY_MS", "same: the window's length in elapsed time"],
   ],
+  "packages/host/src/acks.ts": [["RELAY_KEEP_MS = 24 * 60 * 60_000", "how long a relayed ack verdict is kept: an elapsed duration, never a calendar day"]],
   "packages/host/src/agentclass.ts": [["base - i * 7 * 86_400_000", "UTC days have 24 h: Monday-UTC week keys, printed with toISOString"]],
   "packages/host/src/pricefetch.ts": [
     ["const DAY_MS = 24 * 3_600_000;", "elapsed age of a price read and of unpriced tokens, never a calendar step"],

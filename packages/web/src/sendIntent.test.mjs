@@ -166,7 +166,7 @@ test("a repo send is never blocked for want of a session", () => {
  * The row remembers the CONVERSATION instead (`IntentTarget.resumeConvId`,
  * snapshotted host-side), so the pair is sayable and the target stands.
  */
-test("a clock may name a session, and the sheet says what happens if it has gone", () => {
+test("a clock may name a session, and the sheet says what happens if it has gone (R-queue-006)", () => {
   const t = { kind: "session", sessionId: "s1", cwd: "/dev/myapp" };
   assert.equal(sendBlocker({ prompts: ["x"], target: t, when: at(WEEKLY), sequential: false }, NOW + 3600e3), null,
     "the pair the composer seeds must not open on a dead button");

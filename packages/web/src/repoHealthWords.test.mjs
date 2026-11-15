@@ -1094,6 +1094,22 @@ test("every tile the sheet draws has a one-line meaning; an unknown key has none
   assert.equal(kpiMeaning("dups.pairsPerKloc"), null);
 });
 
+test("every tile says which way is better, or why neither is (owner, 2026-11-14)", async () => {
+  const { SERIES_AIM, seriesAim, aimWords } = await import("./repoHealthWords.ts");
+  const { readFileSync } = await import("node:fs");
+  // Every key the engine draws, read off the tool, so a new reading fails here until it has an aim.
+  const tool = ["readings.mjs", "plot.mjs"].map((f) => readFileSync(new URL(`../../../tools/repohealth/${f}`, import.meta.url), "utf8")).join("\n");
+  const keys = [...tool.matchAll(/key: "((?:size|retouch|hatches|context|untested|graph|habits)\.\w+)"/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 14, `found ${keys.length} engine keys`);
+  for (const k of keys) assert.ok(SERIES_AIM[k], `${k} has no aim: say lower, higher, or why neither`);
+  assert.deepEqual(aimWords(seriesAim("size.p95")), { short: "lower is better", why: null });
+  assert.deepEqual(aimWords(seriesAim("habits.testsWithCode")), { short: "higher is better", why: null });
+  assert.match(aimWords(seriesAim("context.skillCount")).why, /description/);
+  assert.equal(aimWords(seriesAim("x", "higher")).short, "higher is better", "a repo's declared aim wins");
+  assert.match(aimWords(seriesAim("x", null)).why, /declares no direction/);
+  assert.equal(aimWords(seriesAim("unknown.key")), null, "a key with no entry gets no line, never a guess");
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Whose reading: waterplane's, or the repo's own.
 // ───────────────────────────────────────────────────────────────────────────
@@ -1127,6 +1143,12 @@ test("provenance words: each group is named once, the repo's aim is the repo's, 
   for (const word of ["score", "grade", "healthy", "unhealthy", "good", "bad", "should", "worse", "better", "improve", "regress"]) {
     assert.doesNotMatch(everything, new RegExp(`\\b${word}\\b`, "i"), `"${word}" is a verdict; a repo's direction is reported as the repo's`);
   }
+});
+
+test("a reading of this desktop says so with the one shared phrase, and says it is not in the score", async () => {
+  const { ownThisDesktopText } = await import("@waterplane/shared");
+  assert.match(ownThisDesktopText(), /^Reads this desktop, not the commit/);
+  assert.match(ownThisDesktopText(), /not in the health score/);
 });
 
 test("a repo's disable or override is said on the tile, attributed, and a disabled tile draws no chart", async () => {

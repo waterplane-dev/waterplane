@@ -65,6 +65,9 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "scripts/build-record.mjs",
   // CPace's domain separator: a wire constant both ends must agree on across a rename, so never read from BRAND.
   (p) => p === "packages/shared/src/pake.ts",
+  // The probe pool is data (JSON cannot import BRAND), and its answers are this repo's real env knobs,
+  // LaunchAgent label and domain: a lookup question must name the thing the answer is spelled as.
+  (p) => p === ".waterplane-shared/probe.json",
   (p) => p === "packages/app/capacitor.config.ts",
   (p) => p === "packages/app/android/app/build.gradle",
   (p) => p.startsWith("packages/app/android/app/src/") && /\/(strings\.xml|AndroidManifest\.xml)$|\.java$/.test(p),

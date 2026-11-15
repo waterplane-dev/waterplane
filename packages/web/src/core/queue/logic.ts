@@ -3,8 +3,8 @@
  * scheme, and the handful of derivations the queue core and its bars share.
  * No React, no socket, no storage — `logic.test.mjs` runs it under `node --test`.
  */
-import { retryDelay, sessionBudgetHeld, withFirstSentAt } from "@waterplane/shared";
-import type { ClientMessage, SessionInfo } from "@waterplane/shared";
+import { retryDelay, sessionBudgetHeld } from "@waterplane/shared";
+import type { SessionInfo } from "@waterplane/shared";
 import type { OutboxEntry } from "../../outbox";
 import { entryProse } from "../../activityRows.ts";
 
@@ -295,86 +295,56 @@ export function markAttempt(x: OutboxEntry, now: number): OutboxEntry {
 }
 
 /**
- * The socket frame for one attempt of an entry (after `markAttempt`), or null
- * when there is nothing to write (an upload is an HTTP POST; an op row with no
- * payload). Every frame carries `firstSentAt` = the entry's `firstTryAt`, the
- * same on every retry of the same ackId; `web/ws.ts` adds `sentAt` at the write.
+ * The socket frame for one attempt of an entry (after `markAttempt`) — moved
+ * to shared (`queue/queueframe.ts`, unchanged) so the background relay builds
+ * the same frames; re-exported here so the flusher and its tests keep one door.
  */
-export function entryFrame(e: OutboxEntry): ClientMessage | null {
-  const firstSentAt = e.firstTryAt;
-  if (e.mode === "upload") return null;
-  if (e.mode === "op") {
-    // A durable ACTION, sent verbatim: the payload was frozen (ackId and all)
-    // when it was queued, so a re-send after a reload is the same message and
-    // the host's persisted ledger re-acks it instead of starting a second
-    // session / sweep / build. Deliberately NO session.record (nothing was
-    // typed) and NO submitting Return — an op settles in `op.ack`, not in a
-    // composer. The stamp rides on top of the frozen payload, not inside it,
-    // so the stored op stays byte-identical.
-    if (!e.op) return null;
-    return firstSentAt == null ? e.op : withFirstSentAt(e.op, firstSentAt);
-  }
-  if (e.mode === "backlog") {
-    // Durable work item: the host de-dupes on the same ackId, so a reconnect
-    // re-send can't add it twice (host `routes/work.ts` "backlog.add").
-    return {
-      t: "backlog.add", text: e.text, repoDir: e.cwd, label: e.label ?? e.text.slice(0, 40),
-      fire: e.fire, targetSessionId: e.targetSessionId, autoFire: e.autoFire, ackId: e.ackId, firstSentAt,
-      // Additive, v1: an older desktop ignores both and runs `text`, which
-      // is `steps[0]` — turn one of the chain, never nothing.
-      steps: e.steps, resume: e.resume,
-      // Additive, v1: absent inherits the global setting on the desktop.
-      ...(typeof e.closeWhenDone === "boolean" ? { closeWhenDone: e.closeWhenDone } : {}),
-      // Additive: an older desktop ignores it and the session is not flagged.
-      ...(e.flagWhenDone ? { flagWhenDone: true } : {}),
-      // Additive: an older desktop ignores it and the item runs uncapped.
-      ...(e.budget ? { budget: e.budget } : {}),
-      // Additive: an older desktop ignores it and opens on its own defaults.
-      ...(e.launch ? { launch: e.launch } : {}),
-      // Additive: an older desktop ignores it and the row waits for the budget.
-      ...(e.pastBudget ? { pastBudget: true } : {}),
-    };
-  }
-  if (e.answer) {
-    // An ANSWER to a question box: raw keystrokes, not prose. No `submit`
-    // (there is no composer to echo-check and no Return to prove — the digit
-    // IS the submit for a single-choice box), and `expectPrompt` so the host
-    // writes nothing if that question is no longer the one on screen. That
-    // guard is what lets this entry have been sitting in localStorage since
-    // before the tunnel came back.
-    //
-    // `promptSubmit` is the exception to "the digit IS the submit": a checkbox
-    // box confirms on its own Submit ROW, so the host has to put the cursor
-    // there before the Return — which is a thing only the side that can see
-    // the screen can do.
-    //
-    // `promptChoice` is the second exception, and the stronger one: an
-    // opencode permission box has no digits at all, so there is no keystroke
-    // this side could send. The entry names the option and the host walks the
-    // selection there against the rendered screen. Same reason as
-    // `promptSubmit` — only the side that can see the screen can do it — and
-    // the client knows to use it because the published box said `nav`, never
-    // because it knows which binary drew the dialog.
-    return { t: "session.input", id: e.sessionId, data: e.text, ackId: e.ackId, firstSentAt, expectPrompt: e.answer.fingerprint, promptSubmit: e.answer.submitBox, promptChoice: e.answer.choice, ...(e.answer.text !== undefined ? { promptText: e.answer.text } : {}) };
-  }
-  // `submit: true` — the host types it, checks the echo, presses Return and
-  // proves the turn started (deliver.ts), then acks. The client used to own
-  // that Return: a bare, unacked `session.input "\r"` fired 50 ms AFTER the
-  // receipt, i.e. after this entry had already been dropped from the queue. A
-  // socket that died in between left the prompt sitting in the composer with
-  // nothing left to retry and a UI that said "sent" — the lost-prompt bug. No
-  // `session.record` either: the host records it, and only when the text
-  // provably echoed, so history stops listing prompts that never ran. `cwd` is
-  // a HINT, read only if the session turns out to be gone: the host then keeps
-  // the words as a work item in that repo instead of refusing (`state:
-  // "rescued"`). The rescue used to live here — a grace timer on the PHONE's
-  // clock, which only ticks while a tab is foregrounded, i.e. never on the
-  // device this queue exists for.
-  return { t: "session.input", id: e.sessionId, data: e.text, ackId: e.ackId, firstSentAt, submit: true, cwd: e.cwd, view: e.view };
-}
+export { entryFrame } from "@waterplane/shared";
 
 /** The toast an answer tap raises while it is on its way. One function so the
  *  receipt (`wire.ts`) retires exactly these words. */
 export function answerSendingToast(label: string): string {
   return `sending “${label}”…`;
+}
+
+/**
+ * A relay claim's `written` rows (`relayOwner.ts`), applied to the queue: the
+ * background relay put these frames on the wire, so each is the SAME send
+ * continuing, never a new decision. A live row becomes `pending` (open socket:
+ * its ack timer is armed by the caller, and a re-send of the same ackId joins
+ * or is re-acked on the host) or stays `queued` as an attempted retry (no
+ * socket: the reconnect flush re-sends it). Either way: `firstTryAt` is the
+ * EARLIER of the page's and the relay's first send (the lost-ledger rule reads
+ * it as `firstSentAt`), the attempt is counted and the row is `armed` — the
+ * relay sent it, so the reconnect question is not about it any more — and
+ * `relayedAt` marks it as never to be re-aimed. A `failed` row, or one no
+ * longer in the queue, is left alone.
+ */
+export function claimWritten(
+  list: readonly OutboxEntry[], written: readonly { ackId: string; firstSentAt: number }[], open: boolean, now: number,
+): { list: OutboxEntry[]; pending: string[] } {
+  const by = new Map(written.map((w) => [w.ackId, w.firstSentAt]));
+  const pending: string[] = [];
+  const next = list.map((e) => {
+    const at = by.get(e.ackId);
+    if (at == null || e.status === "failed") return e;
+    const firstTryAt = Math.min(e.firstTryAt ?? Infinity, at);
+    const relayedAt = Math.min(e.relayedAt ?? Infinity, at);
+    if (e.status === "pending") return { ...e, firstTryAt, relayedAt };
+    const base = {
+      ...e, firstTryAt, relayedAt, armed: true, attempts: (e.attempts ?? 0) + 1,
+      retryAt: undefined, waitReason: undefined,
+    };
+    if (!open) return { ...base, status: "queued" as const };
+    pending.push(e.ackId);
+    return { ...base, status: "pending" as const, sentAt: now };
+  });
+  return { list: next, pending };
+}
+
+/** Why a row may not be re-aimed while the background relay is involved, or null. */
+export function relayReaimRefusal(e: Pick<OutboxEntry, "relayedAt">, relayHeld: boolean): string | null {
+  if (e.relayedAt != null) return "the background link already sent it — it can't be re-aimed";
+  if (relayHeld) return "taking the queue back from the background link — try again in a moment";
+  return null;
 }

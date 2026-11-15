@@ -17,4 +17,5 @@ export { Explain } from "../../../web/src/Explain.tsx";
 // through the extension host (`shims/sdk.ts`).
 export { useRemoteResource, type RemoteResource, type ResourceState } from "../../../web/src/useRemoteResource.ts";
 export { Empty } from "../../../web/src/Empty.tsx";
+export { useOfflineGate } from "../../../web/src/kit/offlineGate.tsx";
 export { SheetHead } from "../../../web/src/Sheet.tsx";

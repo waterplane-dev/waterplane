@@ -55,15 +55,20 @@ const hintChip = {
 // The phone's read hook and its stats API run in the webview as they are; only their socket-facing
 // imports are swapped: `useRemoteResource.ts`'s `./api` and `./link`, `webapiStats.ts`'s
 // `./webapiFetch` (its `jget` goes through the extension host to the desktop on loopback).
+// `kit/offlineGate.tsx`'s `../link` is swapped the same way (the webview has no socket to lose, so the
+// gate is always open) and `useRemoteResource.ts`'s `./offlineCache` for a store that keeps nothing:
+// the real one reaches the phone's whole api layer, hosts and an IndexedDB the webview has no use for.
 const phoneReads = {
   name: "phone-reads",
   setup(b) {
     const swaps = [
       [path.join(webSrc, "useRemoteResource.ts"), /^\.\/api(\.ts)?$/, "webview/shims/api.ts"],
       [path.join(webSrc, "useRemoteResource.ts"), /^\.\/link(\.ts)?$/, "webview/shims/link.ts"],
+      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/offlineCache(\.ts)?$/, "webview/shims/rescache.ts"],
+      [path.join(webSrc, "kit", "offlineGate.tsx"), /^\.\.\/link(\.ts)?$/, "webview/shims/link.ts"],
       [path.join(webSrc, "webapi", "webapiStats.ts"), /^\.\/webapiFetch(\.ts)?$/, "webview/shims/jget.ts"],
     ];
-    b.onResolve({ filter: /^\.\/(api|link|webapiFetch)(\.ts)?$/ }, (a) => {
+    b.onResolve({ filter: /^\.\.?\/(api|link|webapiFetch|offlineCache)(\.ts)?$/ }, (a) => {
       const hit = swaps.find(([importer, re]) => a.importer === importer && re.test(a.path));
       return hit ? { path: at(hit[2]) } : null;
     });

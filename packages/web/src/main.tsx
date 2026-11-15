@@ -35,7 +35,9 @@ import { installHints } from "./hints";
 import { installPrimaryKey } from "./core/layout/primaryKey";
 import { installDownloads } from "./download";
 import { installDictations } from "./dictateQueue";
-import { installShellBridge, onShellPair } from "./shellLink";
+import { installShellBridge, onShellPair, shellRelayOwner } from "./shellLink";
+import { installRelayLifecycle, installRelayOwner } from "./core/queue/relayOwner";
+import { swRelayOwner } from "./core/queue/swRelayOwner";
 import { syncInstallAllow } from "./nativeInstall";
 import { requestPersistence } from "./persist";
 import { installTheme } from "./theme";
@@ -129,6 +131,12 @@ void refreshThemeOverlay(bgJson);
 // registers a moment later if it exists by then. A no-op in every browser,
 // where it defines two functions nothing will ever call.
 installShellBridge();
+// The background relay's owner (`core/queue/relayOwner.ts`): installed before React mounts so
+// the queue's first flush already waits for the boot claim. The APK's when it carries one, else
+// the PWA service worker's (`swRelayOwner.ts`: a browser with a worker, never the demo); none
+// in an older APK.
+installRelayOwner(shellRelayOwner() ?? swRelayOwner());
+installRelayLifecycle();
 // `window.shellNetChanged` — the shell's network events, for the LAN route
 // (`lanLink.ts`). Same reason as above: defined before anything can miss one.
 installShellNet();

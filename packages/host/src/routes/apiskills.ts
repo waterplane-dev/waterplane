@@ -1,56 +1,18 @@
 /**
  * Skills and plugins switch, read side (docs/analysis/skills-switch/PLAN.md, P2 + P4). REST, no WebSocket
- * message. NOT in `passive.ts`'s allowlist: a passive token is refused (R-skills-014).
+ * message (the `skills.*` slow jobs, `apijobs.ts`, carry the one frame). NOT in `passive.ts`'s allowlist: a passive token is refused (R-skills-014).
  */
-import { dirname, join } from "node:path";
-import type { SkillRow } from "@waterplane/shared";
+import { join } from "node:path";
 import { hostStateDir } from "../branddirs.js";
-import { claudeProjectDir } from "../claudeconfig.js";
-import { gitWorktrees } from "../repos.js";
-import { SkillUseStore } from "../skills/skilluse.js";
-import { buildInventory, type InventoryOut } from "../skills/skillinventory.js";
-import { recommendSkills } from "../skills/skillrecommend.js";
+import { buildInventory } from "../skills/skillinventory.js";
+import { repoDoc } from "../skills/skillrepodoc.js";
 import { applySkillWrite } from "../skills/skillwrite.js";
 import { json, readJson } from "./apiio.js";
+import { forgetSkillJobs, joinAndWait, jobsOf } from "./apijobs.js";
 import { route, type ApiEntry, type RepoReq } from "./apitable.js";
-
-let useStore: SkillUseStore | null = null;
-const store = (root: string): SkillUseStore => (useStore ??= new SkillUseStore({ file: join(hostStateDir(root), "skilluse.json") }));
 
 /** The append-only save record (PLAN.md, "The save record"). */
 const logFile = (root: string): string => join(hostStateDir(root), "skillswitch-log.jsonl");
-
-/** The repo's inventory with this repo's use counts filled in (kicks the background scan). */
-async function repoDoc(root: string, wt: string, repoId: string): Promise<InventoryOut> {
-  const out = await buildInventory({ worktree: wt, repoId });
-  const doc = out.doc;
-  // The primary checkout plus every linked worktree: "in this repo" by construction.
-  const trees = await gitWorktrees(wt);
-  const dirs = [...new Set([wt, ...trees.map((t) => t.path)].map((p) => claudeProjectDir(p)))];
-  const uses = store(root);
-  uses.kick(repoId, dirs);
-  const r = uses.read(repoId, dirs, doc.rows.map((x) => x.id));
-  doc.usage = { ...doc.usage, state: r.state, ...(r.done !== undefined ? { done: r.done, total: r.total } : {}), ...(r.why ? { why: r.why } : {}), ...(r.refreshing ? { refreshing: true } : {}) };
-  if (r.state === "ready" && r.uses) {
-    for (const row of doc.rows) {
-      if (row.kind !== "skill") continue;
-      const c = r.uses[row.id];
-      if (c) (row as SkillRow).uses = c;
-    }
-  }
-  // Every repo on this desktop: one walk of the CLI's whole projects folder, so the All-repos half of
-  // a suggestion stands on counts from all repos, not this one. Files are cached by mtime+size.
-  const all = uses.readAll(dirname(dirs[0]!), doc.rows.map((x) => x.id));
-  doc.usage.allRepos = { state: all.state, ...(all.done !== undefined ? { done: all.done, total: all.total } : {}), ...(all.why ? { why: all.why } : {}), ...(all.refreshing ? { refreshing: true } : {}) };
-  if (all.state === "ready" && all.uses) {
-    for (const row of doc.rows) {
-      if (row.kind !== "skill") continue;
-      const c = all.uses[row.id];
-      if (c) (row as SkillRow).usesEverywhere = c;
-    }
-  }
-  return out;
-}
 
 export const SKILLS_HOST_ROUTES: readonly ApiEntry[] = [
   route("GET", "/api/host/skills", async ({ res }) => {
@@ -62,20 +24,23 @@ export const SKILLS_HOST_ROUTES: readonly ApiEntry[] = [
     const { doc } = await buildInventory();
     const r = applySkillWrite({ logFile: logFile(ctx.root), level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global"], doc });
     if (!r.ok) { json(res, r, r.status); return true; }
+    forgetSkillJobs(jobsOf(ctx));   // a global write changes every repo's inventory
     json(res, { ...r, doc: (await buildInventory()).doc });
     return true;
   }),
 ];
 
 export const SKILLS_REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [
-  route<RepoReq>("GET", "skills", async ({ res, wt, target }, ctx) => {
-    json(res, (await repoDoc(ctx.root, wt, target.id)).doc);
+  // Both join the slow job of the same kind (`apijobs.ts`): a phone on these and one on
+  // `…/jobs/:kind` never run the work twice.
+  route<RepoReq>("GET", "skills", async (r, ctx) => {
+    json(r.res, await joinAndWait(r, ctx, "skills.inventory"));
     return true;
   }),
   // The one spender here: tapped, never unattended. Answers a suggestion LIST; nothing is applied.
-  route<RepoReq>("POST", "skills/recommend", async ({ res, wt, target }, ctx) => {
-    const { doc, files } = await repoDoc(ctx.root, wt, target.id);
-    json(res, await recommendSkills(wt, doc, files));
+  // A second tap while one call runs JOINS it — one call bought, both taps answered.
+  route<RepoReq>("POST", "skills/recommend", async (r, ctx) => {
+    json(r.res, await joinAndWait(r, ctx, "skills.recommend"));
     return true;
   }),
   route<RepoReq>("POST", "skills/write", async ({ req, res, wt, target }, ctx) => {
@@ -83,6 +48,7 @@ export const SKILLS_REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [
     const { doc } = await buildInventory({ worktree: wt, repoId: target.id });
     const r = applySkillWrite({ logFile: logFile(ctx.root), repoId: target.id, level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global", "repo-local", "repo-shared"], worktree: wt, doc });
     if (!r.ok) { json(res, r, r.status); return true; }
+    forgetSkillJobs(jobsOf(ctx), target.id);
     json(res, { ...r, doc: (await repoDoc(ctx.root, wt, target.id)).doc });
     return true;
   }),

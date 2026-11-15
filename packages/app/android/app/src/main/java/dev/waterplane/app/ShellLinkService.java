@@ -30,7 +30,9 @@ import com.getcapacitor.JSObject;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -39,8 +41,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
@@ -56,7 +60,7 @@ import okhttp3.WebSocketListener;
  * closes the socket on the way down. The WebView is not stopped by Capacitor
  * (`KeepRunning` defaults to true); it is stopped by the process being frozen.
  *
- * So this service does two jobs, and the first one it does merely by existing:
+ * So this service does three jobs, and the first one it does merely by existing:
  *
  * <ol>
  *   <li><b>It keeps the process out of the freezer</b>, so the WebView's own
@@ -66,6 +70,9 @@ import okhttp3.WebSocketListener;
  *   <li><b>It holds a deliberately minimal socket of its own</b> for the one
  *       case the WebView can never cover: the app swiped away and the process
  *       gone — which is exactly when a waiting question matters most.</li>
+ *   <li><b>It relays the page's queued sends once the page is frozen or gone</b>
+ *       ({@link ShellRelay}, {@code POST /api/relay}): the frames the queue
+ *       itself built, never one of its own — see below.</li>
  * </ol>
  *
  * <h2>Why {@code specialUse} and not {@code dataSync}</h2>
@@ -80,7 +87,7 @@ import okhttp3.WebSocketListener;
  * allowed from a boot receiver. Its only cost is a Play Store policy review,
  * which is zero for an APK that is sideloaded by design.
  *
- * <h2>The socket speaks three frames, not the protocol</h2>
+ * <h2>The socket speaks a few frames, not the protocol</h2>
  *
  * The duplication worry is the right worry, so the split is explicit. The
  * WebView remains the <em>only</em> speaker of the full protocol — attach,
@@ -95,6 +102,21 @@ import okhttp3.WebSocketListener;
  * ({@link #onPullNew}). Everything else is ignored on
  * purpose — the wire is versioned and a host one version ahead must not make
  * this class fall over.
+ *
+ * <h2>The relay: the queue's own frames, over HTTP</h2>
+ *
+ * Chromium freezes the hidden page at 300 s, and from then on nothing sends
+ * what was queued. So the page hands over a PLAN ({@code setQueue}: per lane,
+ * the leading run of {@code entryFrame}s it would send unasked) and, from its
+ * {@code freeze} handler, the ownership. While this side owns the queue, the
+ * app is not in front and the plan's desktop is connected, each lane's next
+ * frame is POSTed to {@code /api/relay} with that desktop's token, through its
+ * pinned client — one in flight per lane, the next only after {@code ok}. Every
+ * verdict is kept, verbatim, until the page's {@code claimQueue} takes them (and
+ * the ownership) back and replays them through its own receipt handlers. This
+ * side never mints an ackId and never edits or drops a row: the localStorage
+ * queue stays the only source of truth. An older host answers 404 and that
+ * desktop gets the old "open to send" notice.
  *
  * <b>{@code PROTOCOL_VERSION} and the host address are passed in, never
  * compiled in.</b> The version ships in the over-the-air bundle and the APK does
@@ -118,6 +140,9 @@ public class ShellLinkService extends Service {
     /** "Something changed out there — re-check the socket now." Sent by the
      *  connectivity callback, the WorkManager backstop and the boot receiver. */
     static final String ACTION_NUDGE = "dev.waterplane.app.link.NUDGE";
+    /** The backlog alert's "Send N": release exactly {@link #EXTRA_ACK_IDS} ({@link ShellRelay#release}). */
+    static final String ACTION_RELAY_RELEASE = "dev.waterplane.app.link.RELAY_RELEASE";
+    static final String EXTRA_ACK_IDS = "ackIds";
 
     static final String EXTRA_URL = "url";
     static final String EXTRA_PROTOCOL = "protocol";
@@ -217,6 +242,16 @@ public class ShellLinkService extends Service {
      * read on OkHttp's reader thread.
      */
     private static final AtomicBoolean APP_FOREGROUND = new AtomicBoolean(false);
+    /** When the app last left the screen ({@code elapsedRealtime}), 0 while in front or never
+     *  shown. The relay's 330 s fallback when no {@code freeze} signal came. */
+    private static volatile long hiddenSince = 0;
+
+    /** The relay's state, one per process: the plugin's claim and this service share it. */
+    @Nullable private static ShellRelay relayStore;
+    private static final String RELAY_FILE = "shell.relay.json";
+    private static final MediaType JSON_TYPE = MediaType.get("application/json; charset=utf-8");
+    /** OkHttp's whole-call bound for one relay POST: the host's wait (100 s) plus transit. */
+    private static final long RELAY_CALL_S = 110;
 
     /** Live instance, or null. Only used to answer "is it up?" for the plugin's
      *  status call and the WorkManager backstop; never dereferenced for work. */
@@ -247,6 +282,15 @@ public class ShellLinkService extends Service {
      *  not "no desktop saved" (the status line is drawn before anything can have been read). */
     private boolean linksApplied = false;
     private boolean stopping = false;
+    /** The relay's next look ({@link #pumpRelay}); one callback, re-posted, never stacked. */
+    private final Runnable relayPump = this::pumpRelay;
+    /** What the backlog alert last said, so a nudge that finds nothing new does not post it
+     *  again. Cleared on each (re)connect, a release and a claim. Main thread. */
+    @Nullable private String lastBacklogKey;
+    /** The link just came back and has not been told about yet. {@link #pumpRelay} runs on every
+     *  freeze, timer and nudge; the alert is news only after a reconnect or after the relay SENT
+     *  something — never because a held or unsendable row sits in a link that never dropped. */
+    private boolean backlogDue;
 
     // ── Static API for the rest of the shell ─────────────────────────────
 
@@ -346,9 +390,49 @@ public class ShellLinkService extends Service {
         }
     }
 
-    /** Called from {@link MainActivity}'s lifecycle. See {@link #APP_FOREGROUND}. */
+    /** Called from {@link MainActivity}'s lifecycle. See {@link #APP_FOREGROUND}. In front,
+     *  the relay starts no new send from this moment ({@link #pumpRelay} asks first). */
     static void setAppForeground(boolean foreground) {
-        APP_FOREGROUND.set(foreground);
+        boolean was = APP_FOREGROUND.getAndSet(foreground);
+        if (foreground) {
+            hiddenSince = 0;
+            return;
+        }
+        if (was || hiddenSince == 0) hiddenSince = SystemClock.elapsedRealtime();
+        ShellLinkService s = instance;
+        if (s != null) {
+            s.handler.removeCallbacks(s.relayPump);
+            s.handler.postDelayed(s.relayPump, ShellRelay.HIDDEN_FALLBACK_MS + 1_000);
+        }
+    }
+
+    // ── The relay's bridge (ShellLinkPlugin) ─────────────────────────────
+
+    static synchronized ShellRelay relay(Context ctx) {
+        if (relayStore == null) {
+            relayStore = new ShellRelay(new File(ctx.getApplicationContext().getFilesDir(), RELAY_FILE));
+        }
+        return relayStore;
+    }
+
+    /** The page's plan, replacing the last ({@code setQueue}). The page is alive: nothing pumps. */
+    static void setRelayPlan(Context ctx, @Nullable String planJson) {
+        relay(ctx).setPlan(planJson);
+    }
+
+    /** The page is freezing: the relay may own the queue once the app is hidden. */
+    static void releaseRelay(Context ctx) {
+        relay(ctx).releaseOwnership();
+        ShellLinkService s = instance;
+        if (s != null) s.handler.post(s.relayPump);
+    }
+
+    /** Ownership back to the page, synchronously, and what the relay did since the last claim. */
+    static String claimRelay(Context ctx) {
+        String out = relay(ctx).claim();
+        ShellLinkService s = instance;
+        if (s != null) s.handler.post(() -> s.lastBacklogKey = null);
+        return out;
     }
 
     /** Is the user looking at the app? Asked by {@link ShellPullService} for the
@@ -452,6 +536,14 @@ public class ShellLinkService extends Service {
         registerNetworkCallback();
         ShellLinkWorker.schedule(this);
         for (Link l : links) l.ensureSocket(0);
+        if (ACTION_RELAY_RELEASE.equals(action)) {
+            String[] ids = intent.getStringArrayExtra(EXTRA_ACK_IDS);
+            int n = ids == null ? 0 : relay(this).release(Arrays.asList(ids));
+            Log.i(TAG, "relay: released " + n + " of " + (ids == null ? 0 : ids.length));
+            lastBacklogKey = null;
+        }
+        // A nudge (the network, the health worker, a boot) is also the relay's chance.
+        pumpRelay();
         // START_STICKY, not START_REDELIVER_INTENT: the configuration is in
         // SharedPreferences precisely so the restart does not depend on an
         // Intent the platform may or may not have kept.
@@ -777,6 +869,9 @@ public class ShellLinkService extends Service {
         /** What the last summary alert said (its items), so a reconnect that finds the same
          *  cards waiting does not ring again. */
         @Nullable String lastSummaryKey;
+        /** This desktop answered {@code /api/relay} with 404 (an older host) or 403 (a passive
+         *  token): no relay here for this link's life; the old notice instead. */
+        volatile boolean relayUnsupported = false;
         final Runnable connectRunnable = this::connect;
         /** The retry's wake-up ({@link #WAKE_FAST_FOR_MS}); delivered on {@link #handler}. */
         final AlarmManager.OnAlarmListener wakeAlarm = this::onWakeAlarm;
@@ -958,8 +1053,17 @@ public class ShellLinkService extends Service {
                     // is what covers an APK built before this line.
                     int protocol = prefs(ShellLinkService.this).getInt(KEY_PROTOCOL, 1);
                     ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + ",\"role\":\"notify\"}");
-                    // The queue is the page's, and the page is the active desktop's.
-                    if (isActive(Link.this)) reportQueueBacklog(Link.this);
+                    // The queue is the page's, and the page is the active desktop's. The
+                    // plan's desktop gets the relay first; the alert is said once it is idle.
+                    if (relayFor(Link.this)) {
+                        relay(ShellLinkService.this).onConnect();
+                        lastBacklogKey = null;
+                        backlogDue = true;
+                        pumpRelay();
+                    } else if (isActive(Link.this)) {
+                        lastBacklogKey = null;
+                        reportQueueBacklog(Link.this);
+                    }
                     // The notify link never replays: a card raised while this socket was
                     // down would never be seen. Ask once what is waiting there now.
                     fetchSummary();
@@ -1322,6 +1426,12 @@ public class ShellLinkService extends Service {
      * change needs nothing from this file.
      */
     private void postAlert(JSONObject item, Link from) {
+        postAlert(item, from, null);
+    }
+
+    /** {@code action}: one button on the alert (the backlog's "Send N"); such an alert updates
+     *  in place without ringing again. */
+    private void postAlert(JSONObject item, Link from, @Nullable NotificationCompat.Action action) {
         if (APP_FOREGROUND.get()) return;
         String kind = item.optString("kind", "info");
         // Several desktops: the title starts with whose it is, the tag is that desktop's own
@@ -1341,7 +1451,7 @@ public class ShellLinkService extends Service {
         }
         tag = ShellLinkSet.tagFor(hostId, tag);
         int id = tag.hashCode();
-        Notification n = new NotificationCompat.Builder(this, channelFor(kind))
+        NotificationCompat.Builder nb = new NotificationCompat.Builder(this, channelFor(kind))
                 .setSmallIcon(R.drawable.ic_stat_app)
                 .setContentTitle(title)
                 .setContentText(body)
@@ -1349,8 +1459,9 @@ public class ShellLinkService extends Service {
                 .setAutoCancel(true)
                 .setWhen(item.optLong("ts", System.currentTimeMillis()))
                 .setPriority(isUrgent(kind) ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(openAppIntent(ShellLinkSet.openTarget(hostId, tapTarget(sessionId, plugin, item)), id))
-                .build();
+                .setContentIntent(openAppIntent(ShellLinkSet.openTarget(hostId, tapTarget(sessionId, plugin, item)), id));
+        if (action != null) nb.addAction(action).setOnlyAlertOnce(true);
+        Notification n = nb.build();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
         try {
@@ -1363,28 +1474,214 @@ public class ShellLinkService extends Service {
         }
     }
 
+    // ── The background relay ─────────────────────────────────────────────
+
+    /** Is {@code l} the desktop the relay's plan is for, and does it take relays? */
+    private boolean relayFor(Link l) {
+        String host = relay(this).hostId();
+        return host != null && host.equals(l.spec.hostId) && !l.relayUnsupported;
+    }
+
+    @Nullable
+    private Link linkOf(String hostId) {
+        for (Link l : links) if (hostId.equals(l.spec.hostId)) return l;
+        return null;
+    }
+
+    private boolean relayOwns(ShellRelay r) {
+        long since = hiddenSince;
+        long hiddenFor = since == 0 ? 0 : SystemClock.elapsedRealtime() - since;
+        return ShellRelay.mayOwn(r.released(), APP_FOREGROUND.get(), MainActivity.hasLiveActivity(), hiddenFor);
+    }
+
     /**
-     * The residual gap, said out loud: the app was swiped away with prompts
-     * still queued, so nothing on the phone can send them. They are safe —
-     * they are in localStorage and the queue is durable — but they sit until
-     * someone opens the app. When this socket comes back and the persisted
-     * depth is non-zero, say so once.
+     * The relay's one loop, on the main thread: start each lane's next frame when this side owns
+     * the queue, the app is not in front and the plan's desktop is CONNECTED (any other desktop is
+     * never sent to). Idle again, it says what was sent and what waits.
      */
-    private void reportQueueBacklog(Link active) {
+    private void pumpRelay() {
+        handler.removeCallbacks(relayPump);
+        if (stopping) return;
+        ShellRelay r = relay(this);
+        String host = r.hostId();
+        Link l = host == null ? null : linkOf(host);
+        if (l == null || l.closed || l.relayUnsupported || l.socket == null || !"connected".equals(l.status)) return;
+        if (!relayOwns(r)) {
+            reportRelayIdle(l, r);
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (ShellRelay.Send send : r.next(now)) postRelay(l, send);
+        if (r.busy()) return;
+        long at = r.nextRetryAt(now);
+        if (at > 0) {
+            handler.postDelayed(relayPump, at - now);
+            return;
+        }
+        reportRelayIdle(l, r);
+    }
+
+    /** The relay is idle: say what happened — but only when it is news (see {@link #backlogDue}). */
+    private void reportRelayIdle(Link l, ShellRelay r) {
+        if (!backlogDue && r.sentCount() == 0) return;
+        backlogDue = false;
+        reportQueueBacklog(l);
+    }
+
+    /**
+     * One frame, {@code POST /api/relay}: that desktop's own origin, its token as {@code Bearer}
+     * (as {@link Link#fetchSummary}), through its own client — a pinned LAN address keeps its pin.
+     * A partial wake lock holds the phone up for the call. The body is never logged: it is a
+     * person's words.
+     */
+    private void postRelay(Link l, ShellRelay.Send send) {
+        String base = httpBase(l.spec.url);
+        if (base == null) {
+            relay(this).onNoAnswer(send);
+            return;
+        }
+        Request.Builder rb = new Request.Builder().url(base + "/api/relay").post(RequestBody.create(send.body, JSON_TYPE));
+        final String auth = l.offersToken() ? ShellLinkSet.bearer(l.spec.token) : null;
+        if (auth != null) rb.header("Authorization", auth);
+        OkHttpClient once = l.linkClient().newBuilder()
+                .callTimeout(RELAY_CALL_S, TimeUnit.SECONDS)
+                .readTimeout(RELAY_CALL_S, TimeUnit.SECONDS)
+                .build();
+        final PowerManager.WakeLock lock = relayWakeLock();
+        Log.i(TAG, l.spec.label + ": relay " + send.ackId);
+        once.newCall(rb.build()).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, java.io.IOException e) {
+                release(lock);
+                Log.w(TAG, l.spec.label + ": relay " + send.ackId + " no answer: " + e);
+                handler.post(() -> onRelayAnswer(l, send, -1, null, auth != null));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                int code;
+                String body = null;
+                try (Response r = response) {
+                    code = r.code();
+                    if (r.body() != null) body = r.body().string();
+                } catch (java.io.IOException | RuntimeException e) {
+                    code = -1;
+                }
+                release(lock);
+                final int c = code;
+                final String b = body;
+                handler.post(() -> onRelayAnswer(l, send, c, b, auth != null));
+            }
+        });
+    }
+
+    /** The host's answer to one relay POST (main thread), then the next look. */
+    private void onRelayAnswer(Link l, ShellRelay.Send send, int code, @Nullable String body, boolean carriedToken) {
+        ShellRelay r = relay(this);
+        boolean mine;
+        if (code == 200 && body != null) {
+            Map<String, Object> m = null;
+            try {
+                Object o = ShellRelay.Json.read(body);
+                if (o instanceof Map) m = ShellRelay.asMap(o);
+            } catch (IllegalArgumentException e) {
+                m = null;
+            }
+            Object ack = m == null ? null : m.get("ack");
+            if (ack instanceof Map) mine = r.onAck(send, ShellRelay.asMap(ack), System.currentTimeMillis());
+            else if (m != null && Boolean.TRUE.equals(m.get("pending"))) mine = r.onPending(send);
+            else mine = r.onNoAnswer(send);
+        } else if (code == 422) {
+            mine = r.onRefused(send);
+        } else if (code == 404 || code == 403) {
+            // An older host (no route) or a passive token: the old notice, for this link's life.
+            l.relayUnsupported = true;
+            mine = r.onRefused(send);
+            Log.i(TAG, l.spec.label + ": relay unsupported (" + code + ")");
+        } else {
+            if (code == 401 && carriedToken && !l.closed && !l.authPaused) l.refused();
+            mine = r.onNoAnswer(send);
+        }
+        if (!mine) Log.i(TAG, l.spec.label + ": relay " + send.ackId + " answered after a claim; the page has it");
+        Log.i(TAG, l.spec.label + ": relay " + send.ackId + " → " + code);
+        if (l.relayUnsupported) {
+            reportQueueBacklog(l);
+            return;
+        }
+        pumpRelay();
+    }
+
+    @Nullable
+    private PowerManager.WakeLock relayWakeLock() {
+        try {
+            PowerManager pm = getSystemService(PowerManager.class);
+            if (pm == null) return null;
+            PowerManager.WakeLock w = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "waterplane:link-relay");
+            w.setReferenceCounted(false);
+            w.acquire((RELAY_CALL_S + 5) * 1000);
+            return w;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "relay: no wake lock: " + e);
+            return null;
+        }
+    }
+
+    private static void release(@Nullable PowerManager.WakeLock w) {
+        if (w == null) return;
+        try { if (w.isHeld()) w.release(); } catch (RuntimeException e) { Log.d(TAG, "wake lock release: " + e); }
+    }
+
+    /**
+     * What the queue holds, said out loud once the link is back: what the relay SENT to this
+     * desktop, and what still waits for the person ("Sent 2 to studio. 1 waits for you — open to
+     * review"), with a "Send N" action for the rows held only by the reconnect question. With no
+     * relay (an older host, the page still owning) it is the old notice: the prompts are safe in
+     * localStorage and sit until someone opens the app. Never while the app is in front.
+     */
+    /** Whether a notification action can be made to ask for the phone's unlock (API 31+). */
+    static boolean authActionSupported() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+    }
+
+    private void reportQueueBacklog(Link l) {
         if (APP_FOREGROUND.get()) return;
         int depth = prefs(this).getInt(KEY_QUEUE, 0);
-        if (depth <= 0) return;
+        ShellRelay r = relay(this);
+        boolean relayed = relayFor(l);
+        if (!relayed && !isActive(l)) return;
+        int sent = relayed ? r.sentCount() : 0;
+        // "Send N" types held prompts into the desktop on one tap, and the app lock lives in the page
+        // only: the action asks for the phone's own unlock (API 31+). Where that cannot be asked it is
+        // not offered, and the notice says "open to review" instead.
+        List<String> releasable = relayed && authActionSupported() ? r.releasable() : Collections.<String>emptyList();
+        int waits = Math.max(0, depth - sent);
+        if (sent == 0 && waits == 0) return;
+        String key = sent + "|" + waits + "|" + releasable;
+        if (key.equals(lastBacklogKey)) return;
+        lastBacklogKey = key;
         JSONObject item = new JSONObject();
         try {
             item.put("kind", "undelivered");
-            item.put("title", depth == 1 ? "1 prompt waiting" : depth + " prompts waiting");
-            item.put("body", "The link is back. Open the app to send " + (depth == 1 ? "it" : "them") + ".");
+            item.put("title", ShellRelay.backlogTitle(sent, waits));
+            item.put("body", ShellRelay.backlogBody(sent, waits, releasable.size(), l.spec.label));
             item.put("tag", "queue-depth");
             item.put("id", "queue-depth");
         } catch (org.json.JSONException e) {
             return;
         }
-        postAlert(item, active);
+        NotificationCompat.Action send = null;
+        if (!releasable.isEmpty()) {
+            // Exactly these ackIds: a row edited or re-aimed since has another id and stays.
+            Intent i = new Intent(this, ShellLinkService.class).setAction(ACTION_RELAY_RELEASE)
+                    .putExtra(EXTRA_ACK_IDS, releasable.toArray(new String[0]));
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+            PendingIntent pi = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? PendingIntent.getForegroundService(this, 4772, i, flags)
+                    : PendingIntent.getService(this, 4772, i, flags);
+            send = new NotificationCompat.Action.Builder(0, "Send " + releasable.size(), pi)
+                    .setAuthenticationRequired(true).build();
+        }
+        postAlert(item, l, send);
     }
 
     /**

@@ -62,6 +62,9 @@ const SURFACES = {
     "queueIdleReason:value", "retargetEntry:value", "retryDelay:value",
     "roundDelay:value", "selectSendable:value", "sendEligible:value",
     "serialGroup:value", "serialHolders:value", "serialLead:value", "serialWaitText:value", "sessionWall:value", "uploadAttemptWasted:value",
+    // The background relay (bg-link-send WP1): the frame builder moved from web, the plan and its types.
+    "QueueFrameEntry:type", "entryFrame:value", "RELAY_OPS:value", "relayPlan:value", "relayPlanKey:value", "relayRefusal:value",
+    "RelayClaim:type", "RelayEntry:type", "RelayFacts:type", "RelayItem:type", "RelayLane:type", "RelayPlan:type", "RelayReceipt:type",
   ],
   clihealth: [
     "BROKEN_MISSES:value", "CLI_SIGNALS:value", "CliHealth:type",

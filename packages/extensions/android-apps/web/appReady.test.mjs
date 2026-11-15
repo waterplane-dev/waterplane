@@ -105,7 +105,7 @@ test("failure words: Play Protect and an abandoned session are explained, unknow
   assert.equal(failureText("something new"), "something new");
 });
 
-test("over a plain route the card stops at download and says why, with no button to press", async () => {
+test("over a plain route the card stops at download and says why, with no button to press (R-security-021)", async () => {
   const { appHeadline, appSteps, fixFor } = await import("./appSteps.ts");
   const [r] = readiness([facts()], [], ph({ caps: { ...PHONE, plainRoute: true }, log: [entry({})] }));
   assert.equal(r.blocker?.id, "route");

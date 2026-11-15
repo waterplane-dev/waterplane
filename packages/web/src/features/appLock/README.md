@@ -109,6 +109,10 @@ never in `UI_RESET_KEYS`, all kept by the hard reset.
   the seal row), and the host setup form refuses to save one while old APK + app lock + seal all
   hold (`hostEditGuard.ts`). A plain address that got in some other way (an older build, restored
   storage) is still stranding; the way in is a newer APK or *forget the locked sign-ins*.
+- The LAN identity (`LS.lanIdentity`) is not in the blob and stays plaintext: with it and an
+  imitated saved Wi-Fi name, someone can answer as the desktop on a row with no TLS pin and receive
+  the sign-in next time the app is open there. A pinned row is not affected. SECURITY.md (Sealed
+  sign-ins) says why it is not sealed.
 - A seal that will not open has one way off, by hand: once a refusal about the seal (not a cancel, a
   lockout, another sheet or a plain route) or an unreadable blob, the row offers *forget the locked
   sign-ins*, behind `Confirm.tsx` and the lock's own sheet when the lock is on. It drops held tokens

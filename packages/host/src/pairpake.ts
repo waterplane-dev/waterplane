@@ -211,6 +211,9 @@ export async function pakeFinish(body: Record<string, unknown>, deps: PakeDeps, 
   const facts = sealedFacts(deps);
   const r = await redeem(hit.offer.hash, words.deviceName, words.presented);
   if (!r.body.ok) return { status: r.status, body: refusal(r.body.error, r.body.message) };
-  const sealed: PakeSealedReply = { ...r.body, ...facts };
+  // A passive pairing gets no LAN identity (`redeemPair` holds it back the same way); the facts were
+  // still read first, so a desktop that cannot read its identity never spends the code.
+  const { lanIdentity: id, ...rest } = facts;
+  const sealed: PakeSealedReply = { ...r.body, ...rest, ...(r.body.scope === "passive" ? {} : { lanIdentity: id }) };
   return { status: 200, body: { ok: true, seal: await pakeSeal(hit.offer.kSeal, hit.offer.th, sealed) } };
 }

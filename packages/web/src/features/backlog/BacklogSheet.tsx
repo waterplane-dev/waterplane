@@ -51,7 +51,7 @@ export function BacklogSheet() {
   const sched = useMemo(() => scheduleMaps(schedules), [schedules]);
   // Same key as the week-end burn sheet's read, one cache. Only a FRESH answer
   // draws the sentence: a cached copy may describe last week's pick.
-  const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
+  const burn = useRemoteResource<WeekBurnStatus>("weekburn:status", () => api.getWeekBurn(), { cache: { shape: 1 } });
   const clockParents = useMemo(() => clockParentsOf(intents, intentTitle), [intents]);
   const repoIdForDir = (dir: string) => core.world.repos.find((r) => r.worktreePath === dir)?.id;
   return (

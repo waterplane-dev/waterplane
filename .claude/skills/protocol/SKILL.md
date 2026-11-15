@@ -144,3 +144,5 @@ says the program asked for the mouse the bytes are PASSED THROUGH to it — clau
 `scroll-up`. Exactly one of the two, read fresh per pan (claude also runs in the ALTERNATE screen,
 where a pane has no history).
 [Both measurements.](../../../docs/notes/protocol-and-security.md#panning-the-tui-who-gets-the-wheel-and-why-the-answer-changed)
+
+- **A relayed frame is a queue frame.** `POST /api/relay` (`bgrelay.ts`) carries one `entryFrame` with its own ackId through `handleClientMessage` on a stand-in socket; its verdicts are kept 24 h so a page re-send is re-acked, never retyped. Never add a frame the queue did not build.

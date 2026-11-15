@@ -6,13 +6,13 @@
  */
 import { core, createStore } from "./sdk";
 
-export interface SkillsAim { repoId: string; backend?: string }
+export interface SkillsAim { repoId: string; backend?: string; /** Which tab it opens on; absent = This repo. */ target?: "repo" | "all" }
 
 export const skillsAim = createStore<SkillsAim | null>(null);
 
 /** Open the screen on a repo, for the backend the door's session or repo runs. */
-export function openSkillsFor(repoId: string, backend?: string): void {
-  skillsAim.set({ repoId, backend });
+export function openSkillsFor(repoId: string, backend?: string, target?: "repo" | "all"): void {
+  skillsAim.set({ repoId, backend, ...(target ? { target } : {}) });
   core().say.track("action:skills.open");
   core().nav.open("skills");
 }

@@ -8,6 +8,7 @@ import type { SendWhen } from "../../sendIntent";
 import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
 import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildVersions, buildOpts, buildRepo, buildRunFocus, buildScheduleEdit, builds, type ParamOptions } from "./store";
+import { randId } from "../../randId";
 
 export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
   buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
@@ -163,7 +164,7 @@ export function scanRepo(repoDir: string): void {
 export function saveBuildSchedule(repoDir: string, build: BuildConfig, editing: ScheduleEntry | null,
   when: Extract<SendWhen, { kind: "at" }>, vals: Record<string, string>, preview: number | null): void {
   const c = core();
-  const id = editing?.id ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const id = editing?.id ?? `s_${Date.now().toString(36)}_${randId(4)}`;
   const entry = buildScheduleEntry({ id, editing, repoDir, build, vals, when, preview, now: Date.now() });
   const offline = c.queue.queueOp({ t: "schedule.save", entry }, `sched:${entry.id}`, entry.name);
   c.say.toast(buildScheduleToast(offline, !!editing));

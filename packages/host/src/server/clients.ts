@@ -195,7 +195,7 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const { detail, build, pushHead, outcome, level: explicit, ...wire } = p;
+    const { detail, build, pushHead, linkBack, outcome, level: explicit, ...wire } = p;
     const level = notifyLevel(kind, outcome, explicit);
     const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: wire.title, body: wire.body, sessionId: wire.sessionId, tag: wire.tag, image: wire.image, file: wire.file, backlog: wire.backlog, plugin: wire.plugin, open: wire.open, level };
     if (wire.key) item.key = wire.key;
@@ -215,14 +215,17 @@ export function createClients(deps: ClientsDeps) {
     // A default-off kind (`idle`) the person switched ON asked to be pushed: they said so.
     const askedFor = NOTIFY_DEFAULT_OFF.includes(kind) && notifyPrefs.get?.()[kind] === true;
     const toLinks = level === "attention" || !!wire.pull || pushInfo() || askedFor;
+    // `link.back` is information that is ALWAYS pushed (the phone may be closed — that is the point) but is
+    // not sent to the APK's notify socket: the service worker's push is its only alert, so no duplicate.
+    const pushIt = toLinks || kind === "link.back";
     const frame: HostMessage = { t: "notification", item: sent };
-    for (const ws of clients) { if (toLinks || wsRole.get(ws) !== "notify") send(ws, frame); }
+    for (const ws of clients) { if ((toLinks && kind !== "link.back") || wsRole.get(ws) !== "notify") send(ws, frame); }
     // The older item under this key just became handled — say so, or every
     // phone keeps counting it until its next reconnect.
     if (replaced) broadcastFeed();
     // The push IS the item (plus `pull`, the auto-download transport), so a tap on the OS
     // notification can land where a tap on the feed row does (`sw.js` forwards it whole).
-    if (toLinks) void push.notify({ ...sent, ...(wire.pull ? { pull: wire.pull } : {}) });
+    if (pushIt) void push.notify({ ...sent, ...(wire.pull ? { pull: wire.pull } : {}), ...(linkBack ? linkBack : {}) });
   }
 
   function clearNotifications(): void {

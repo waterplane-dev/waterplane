@@ -153,6 +153,9 @@ export const CHOOSE_NAV_SETTLE_MS = 400;
  *  only has to cover a tall box plus the rows it is anchored against. */
 export const PROMPT_CELL_ROWS = 60;
 export const IDLE_PING_MS = Number(env("IDLE_PING_MS") || 4000); // quiet ⇒ "turn done"
+/** Ceiling on how stale the published CLI proposal may get while output never
+ *  stops (a background agent's panel ticks every second, so the quiet tick never comes). */
+export const CLI_SUGGEST_RECHECK_MS = 5000;
 
 /**
  * How long a `Stop` hook is treated as a CLAIM before it is believed.

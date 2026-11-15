@@ -79,6 +79,9 @@ export * from "./wire/alwayson.js";
 /** Agent readings: per-repo weekly figures only this desktop's conversation logs can give. */
 export * from "./wire/agentreadings.js";
 export * from "./agentseries.js";
+/** The lookup probe: pool, draw, leak check, analysis and estimate (R-metrics-071). */
+export * from "./wire/probe.js";
+export * from "./probe.js";
 
 /** The reader view's document — the CLI's own conversation log, parsed. */
 export * from "./wire/transcript.js";
@@ -433,6 +436,8 @@ export * from "./branchmode.js";
 /** The PR card: the DTO and the one place a PR's blocker is worded. */
 export * from "./wire/pullrequest.js";
 export * from "./wire/skills.js";
+/** Slow jobs: a read or suggestion the host keeps past the screen that asked (`slowjob.state`). */
+export * from "./wire/slowjob.js";
 export * from "./skillstate.js";
 export * from "./skillwords.js";
 export * from "./prview.js";

@@ -10,6 +10,10 @@
  * queue's own (`QueueApi`) or App's view state, passed in.
  */
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useStore } from "../../sdk/store.ts";
+import { persistFailedAtStore, relaySentStore } from "./store.ts";
+import { Hint } from "../../kit/Hint";
+import { ago } from "../../format";
 import {
   AlertTriangle, Check, CloudOff, Hourglass, ListOrdered, Loader, Pause, Radio, RotateCw, SendHorizontal, X, Zap,
 } from "lucide-react";
@@ -65,6 +69,12 @@ export function QueueBars(props: QueueBarsProps) {
   const { entries: outbox, parkedSends, sendSettled, holdQueueRef, flushIdleReason, flushOutbox, idleReason,
     restoreOutbox, dismissOutbox, laneLabel } = q;
   const now = Date.now();
+  // This phone could not write the queue to its own storage (`useQueue.ts` writeOutbox):
+  // what waits lives in memory only. Said as text above everything else, with or without rows.
+  const persistFailedAt = useStore(persistFailedAtStore);
+  // Rows the background relay already sent while the app was hidden (`relayOwner.ts`): the
+  // question is only about what is left, and it says so.
+  const relaySent = useStore(relaySentStore);
   // A row the HOST has not finished asking about is not a failure yet
   // (`sendConfirm.ts`). It is split out of `failed` rather than filtered away:
   // it gets its own sentence in the same strip, because "the desktop is
@@ -121,9 +131,15 @@ export function QueueBars(props: QueueBarsProps) {
     : confirming.length ? { rows: confirming, label: "being confirmed", icon: Hourglass }
     : queued.length ? { rows: queued, label: "queued", icon: status !== "open" ? CloudOff : holdQueueRef.current ? Pause : Hourglass }
     : { rows: flying, label: "sending", icon: Loader };
-  if (!asking && !failed.length && !confirming.length && !queued.length && !inFlight && !pullActive && !sendSettled) return null;
+  if (!asking && !failed.length && !confirming.length && !queued.length && !inFlight && !pullActive && !sendSettled && persistFailedAt == null) return null;
   return (
     <>
+      {persistFailedAt != null && (
+        <Hint tone="warn" role="status">
+          <AlertTriangle size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+          This phone could not save the queue (since {ago(persistFailedAt)}), so what is waiting lives in memory only — reloading the app would lose it.
+        </Hint>
+      )}
       {pullBar}
       <PullBrowserAsk records={pullRecords} />
       {reconnectAsk && parkedSends.length > 0 && (
@@ -131,7 +147,8 @@ export function QueueBars(props: QueueBarsProps) {
           detail={String(parkedSends.length)} icon={Radio}>
         <div className="outbox-recover ask">
           <Radio size={14} />
-          <span>Back online — send {parkedSends.length} message{parkedSends.length > 1 ? "s" : ""} you queued while offline?</span>
+          <span>Back online — send {parkedSends.length} message{parkedSends.length > 1 ? "s" : ""} you queued while offline?
+            {relaySent ? <> (sent from the background: {relaySent})</> : null}</span>
           <Button onPointerDown={keepFocus} onClick={() => {
             track("action:queue.confirm.send");
             const n = flushOutbox(true);

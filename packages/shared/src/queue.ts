@@ -57,19 +57,14 @@ export {
   danglingUploadRefs,
   answerInsertAt,
 } from "./queue/queueuploads.js";
-export {
-  laneBusy,
-  sessionWall,
-} from "./queue/queuelane.js";
+export { laneBusy, sessionWall } from "./queue/queuelane.js";
 export type {
   LaneSessionState,
   SessionWall,
 } from "./queue/queuelane.js";
 export { laneStateOf } from "./queue/queuelanestate.js";
 export type { LaneSource, LaneStateOpts } from "./queue/queuelanestate.js";
-export {
-  selectSendable,
-} from "./queue/queueplan.js";
+export { selectSendable } from "./queue/queueplan.js";
 export type {
   SelectSendableOpts,
   SendBlockReason,
@@ -104,3 +99,6 @@ export {
 export type {
   RetargetableEntry,
 } from "./queue/queueretarget.js";
+export { entryFrame, type QueueFrameEntry } from "./queue/queueframe.js";
+export { RELAY_OPS, relayPlan, relayRefusal, relayPlanKey } from "./queue/queuerelay.js";
+export type { RelayClaim, RelayEntry, RelayFacts, RelayItem, RelayLane, RelayPlan, RelayReceipt } from "./queue/queuerelay.js";

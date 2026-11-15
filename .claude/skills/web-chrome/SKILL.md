@@ -7,6 +7,11 @@ description: "waterplane phone client — the frame around the content (packages
 
 The chrome around whatever is on screen: theme, routing and Back, the link store, the header and its session tabs, the update banner, typing room, the wide layout and the launcher. Router: `web`. Reasoning: [web.md](../../../docs/notes/web.md); moved-out stories: [web.md](../../../docs/notes/web.md#moved-out-of-skill-web-chrome-2026-10-17).
 
+- **Side margins are ONE token, `--gutter`** (`00-tokens.css`): the container that meets the screen edge
+  (`.form` children, `.set-group`, `.section`, `.row`, `.sheet-actions`, `.fchips`, `.launch-wheel`) pads with
+  it; a child adds none of its own; a 3px stripe (`.row-wrap`, `.repo-group`, `.act-row`) or a `.fchip`'s 3px
+  is taken out of it with `calc(var(--gutter) - 3px)`. Never a literal 10/12/16 side padding at page level.
+  `npm run test:gutters` measures it on every reached screen.
 - `theme.ts` + `termTheme.ts` + `themeOverlay.ts` + the palette in `styles/00-tokens.css` — light or dark as a setting (`styles.css` is only the `@import` index of `styles/NN-*.css`: ORDER is the cascade, cut at rule boundaries, wide layout last, ≤650 lines a slice, tests read it via `tools/csssource.mjs`: `cssshape.test.mjs`)
   (`system`/`light`/`dark`, **per device, not synced**: storage.ts `theme: "device"`; written to `<html data-theme>`). Three things are NOT CSS and are
   pushed: the `theme-color` meta, xterm's palette (light MUST state all sixteen), and the Android

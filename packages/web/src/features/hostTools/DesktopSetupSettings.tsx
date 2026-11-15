@@ -15,7 +15,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, Monitor, RefreshCw, Wrench, X } from "lucide-react";
 import type { HostSetupReport } from "@waterplane/shared";
 import { api } from "../../api";
-import { Empty, Button, Hint } from "../../kit";
+import { Empty, Button, Hint, useOfflineGate } from "../../kit";
 import { SetCustom } from "../../SettingsKit";
 import { useRemoteResource } from "../../useRemoteResource";
 import { track } from "../../usage";
@@ -27,7 +27,8 @@ const STATUS_ICON = {
 } as const;
 
 export function DesktopSetupChecklist() {
-  const res = useRemoteResource<HostSetupReport>("hostsetup", () => api.hostSetup());
+  const res = useRemoteResource<HostSetupReport>("hostsetup:report", () => api.hostSetup(), { cache: { shape: 1 } });
+  const gate = useOfflineGate();
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<string[] | null>(null);
   const checks = res.data?.checks ?? [];
@@ -55,6 +56,7 @@ export function DesktopSetupChecklist() {
       label={`desktop setup · ${open ? `${open} to do` : "all set"}`}
       note="What this desktop needs, whichever repo you are in. A fix acts on the desktop's own screen — look there.">
       <Empty res={res} empty={false} noun="checklist" />
+      {gate.note}
       <ul className="check-list">
         {checks.map((c) => (
           <li key={c.id} className={`check-row check-${c.status}`}>
@@ -62,7 +64,7 @@ export function DesktopSetupChecklist() {
               <span className="check-icon">{STATUS_ICON[c.status]}</span>
               <span className="check-label">{c.label}</span>
               {c.fix && (
-                <Button onClick={() => void fix(c.fix!)}>
+                <Button onClick={gate.guard("run that fix", () => void fix(c.fix!))}>
                   <Wrench size={12} /> {busy ? "fixing…" : "fix"}
                 </Button>
               )}
@@ -72,7 +74,7 @@ export function DesktopSetupChecklist() {
         ))}
       </ul>
       {said?.map((n, i) => <Hint key={i}>{n}</Hint>)}
-      <Button onClick={() => { setSaid(null); res.reload({ quiet: true }); }}>
+      <Button onClick={gate.guard("re-check the desktop", () => { setSaid(null); res.reload({ quiet: true }); })}>
         <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
       </Button>
     </SetCustom>

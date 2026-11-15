@@ -215,7 +215,7 @@ test("the strip's lead and the way back are worded once", () => {
   assert.match(AIM_HERE_LABEL, /aim it here/);
 });
 
-test("Send on a working session asks — only for the plain button, aimed here", async () => {
+test("Send on a working session asks — only for the plain button, aimed here (R-queue-008)", async () => {
   const { busySendRoute, BUSY_SEND_ASK, busySendRememberedToast } = await import("./composeSend.ts");
   const base = { how: "now", explicit: false, aimedHere: true, turnActive: true, pending: false, localCmd: false, pref: "" };
   assert.equal(busySendRoute(base), "ask");
@@ -251,4 +251,29 @@ test("the busy ask offers *past the budget* only while the budget holds work", a
   // The receipt never claims it runs NOW — it still waits for the turn.
   assert.match(busyPastBudgetToast(true), /once this turn ends/);
   assert.match(busyPastBudgetToast(false), /link is back/);
+});
+
+test("Send while the dictation is still out asks, and the phone's recogniser carries a quality warning", async () => {
+  const { dictationSendAsk, DICTATION_ARMED_ASK, DICTATION_SEND_TOAST } = await import("./composeSend.ts");
+  // Empty box, desktop whisper: two answers, no warning.
+  const plain = dictationSendAsk({ typed: false, phone: false });
+  assert.equal(plain.confirmLabel, "Send unread");
+  assert.equal(plain.cancelLabel, "Read it first");
+  assert.equal(plain.altLabel, undefined);
+  assert.equal(plain.tone, "info");
+  assert.ok(plain.lines.every((l) => !l.includes("phone's own recogniser")));
+  // Words typed already: the old Send survives as the third answer.
+  const typed = dictationSendAsk({ typed: true, phone: false });
+  assert.equal(typed.altLabel, "Only what's typed");
+  assert.ok(typed.lines.some((l) => l.startsWith("Only what's typed:")));
+  // The phone's recogniser: one more sentence, with the reason, and a warn tone.
+  const phone = dictationSendAsk({ typed: false, phone: true, why: "the desktop is not answering." });
+  assert.equal(phone.tone, "warn");
+  const warn = phone.lines.find((l) => l.includes("phone's own recogniser"));
+  assert.ok(warn && warn.includes("(the desktop is not answering)") && /more words wrong/.test(warn));
+  // …and never *only what's typed*: that recogniser rewrites the box from what it held at the tap.
+  assert.equal(dictationSendAsk({ typed: true, phone: true }).altLabel, undefined);
+  // The way back is named in the receipt, and the re-ask offers it.
+  assert.match(DICTATION_SEND_TOAST.armed, /tap Send again to call it off/);
+  assert.equal(DICTATION_ARMED_ASK.cancelLabel, "Call it off");
 });

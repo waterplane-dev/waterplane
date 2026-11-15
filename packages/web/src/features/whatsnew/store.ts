@@ -67,7 +67,7 @@ export function useHubFacts(): { facts: HubFacts; feed: FeedSource | null } {
   // same inputs the Downloads sheet's gate reads.
   const { caps } = useInstallCaps();
   const records = usePullRecords();
-  const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
+  const burn = useRemoteResource<WeekBurnStatus>("weekburn:status", () => api.getWeekBurn(), { cache: { shape: 1 } });
   const names = new Map(c.world.repos.map((r) => [r.id, r.repoName]));
   const sched = c.world.schedules;
   const facts: HubFacts = {

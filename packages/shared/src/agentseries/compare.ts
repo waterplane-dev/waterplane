@@ -10,6 +10,9 @@
  * are alike (same task, same cache), which a session shuffle would hide and
  * draw the band too narrow. The band is its 2.5–97.5 percentiles.
  *
+ * `skills` compares MEANS (`CompareResult.mean`): most sessions load no skill, so a
+ * pooled median is 0 and has no ratio. Every other reading compares medians.
+ *
  * Same model only: a window whose sessions ran more than one model id (or do
  * not say which) is ABSENT unless a model is named — a model change moves these
  * readings more than any instruction edit does.
@@ -27,19 +30,52 @@ export const COMPARE_MIN_N = 10;
 export const COMPARE_PERMUTATIONS = 500;
 const SEED = 0x5eed2a11;
 
-interface Block { before: boolean; vals: number[] }
+/** One day's sessions on one side: `first` is the before side (or, by model, the first model). */
+export interface DayBlock { first: boolean; vals: number[] }
 
 const absent = (why: string): SeriesAbsent => ({ absent: why });
 
-/** Pooled-median ratio after/before of a split of the blocks; null when the before median is 0 or a side is empty. */
-function ratioOf(blocks: readonly Block[], isBefore: (i: number) => boolean): { before: number; after: number; ratio: number } | null {
+const meanOf = (xs: readonly number[]): number | null => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+
+/** Pooled-median (or mean) ratio after/before of a split of the blocks; null when the before figure is 0 or a side is empty. */
+function ratioOf(blocks: readonly DayBlock[], isBefore: (i: number) => boolean, mean = false): { before: number; after: number; ratio: number } | null {
   const b: number[] = [];
   const a: number[] = [];
   blocks.forEach((bl, i) => (isBefore(i) ? b : a).push(...bl.vals));
-  const mb = medianOf(b);
-  const ma = medianOf(a);
+  const of = mean ? meanOf : medianOf;
+  const mb = of(b);
+  const ma = of(a);
   if (mb === null || ma === null || mb <= 0) return null;
   return { before: mb, after: ma, ratio: ma / mb };
+}
+
+/**
+ * The day-shuffle band — the ONE implementation, used by the before/after and by the model
+ * comparison: the measured second/first ratio of the pooled median (or mean), and the 2.5–97.5
+ * percentiles of that ratio with whole day blocks shuffled between the two sides, keeping each
+ * side's block count, `COMPARE_PERMUTATIONS` times from a fixed seed.
+ */
+export function dayShuffleBand(blocks: readonly DayBlock[], mean: boolean, firstWord = "before"):
+  { seen: { before: number; after: number; ratio: number }; band: [number, number] } | SeriesAbsent {
+  const firstCount = blocks.filter((b) => b.first).length;
+  const seen = ratioOf(blocks, (i) => blocks[i]!.first, mean);
+  if (!seen) return absent(`The ${mean ? "mean" : "median"} ${firstWord} is 0, so there is no ratio to take.`);
+  const rand = seededRandom(SEED);
+  const order = blocks.map((_, i) => i);
+  const ratios: number[] = [];
+  for (let k = 0; k < COMPARE_PERMUTATIONS; k++) {
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j]!, order[i]!];
+    }
+    const sideOf = new Array<boolean>(blocks.length);
+    order.forEach((blockIdx, pos) => { sideOf[blockIdx] = pos < firstCount; });
+    const r = ratioOf(blocks, (i) => sideOf[i]!, mean);
+    if (r) ratios.push(r.ratio);
+  }
+  if (ratios.length < COMPARE_PERMUTATIONS / 2) return absent(`Too many shuffled splits had a ${mean ? "mean" : "median"} of 0 ${firstWord} to draw a band.`);
+  ratios.sort((x, y) => x - y);
+  return { seen, band: [percentileSorted(ratios, 0.025)!, percentileSorted(ratios, 0.975)!] };
 }
 
 export function compareAround(points: readonly SeriesPoint[], atMs: number, opts: CompareOpts): CompareResult | SeriesAbsent {
@@ -58,7 +94,7 @@ export function compareAround(points: readonly SeriesPoint[], atMs: number, opts
     model = models.size === 1 ? [...models][0] : undefined;
   }
 
-  const byKey = new Map<string, Block>();
+  const byKey = new Map<string, { before: boolean; vals: number[] }>();
   for (const p of inWin) {
     const before = p.t0 < atMs;
     const key = `${localDayOf(p.t0)}|${before ? "b" : "a"}`;
@@ -77,29 +113,15 @@ export function compareAround(points: readonly SeriesPoint[], atMs: number, opts
   if (nBefore < COMPARE_MIN_N || nAfter < COMPARE_MIN_N) {
     return absent(`${nBefore} sessions before and ${nAfter} after; a comparison needs at least ${COMPARE_MIN_N} on each side.`);
   }
-  const seen = ratioOf(blocks, (i) => blocks[i]!.before);
-  if (!seen) return absent("The median before is 0, so there is no ratio to take.");
-
-  const rand = seededRandom(SEED);
-  const order = blocks.map((_, i) => i);
-  const ratios: number[] = [];
-  for (let k = 0; k < COMPARE_PERMUTATIONS; k++) {
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [order[i], order[j]] = [order[j]!, order[i]!];
-    }
-    const sideOf = new Array<boolean>(blocks.length);
-    order.forEach((blockIdx, pos) => { sideOf[blockIdx] = pos < daysBefore; });
-    const r = ratioOf(blocks, (i) => sideOf[i]!);
-    if (r) ratios.push(r.ratio);
-  }
-  if (ratios.length < COMPARE_PERMUTATIONS / 2) return absent("Too many shuffled splits had a median of 0 before to draw a band.");
-  ratios.sort((x, y) => x - y);
-  const band: [number, number] = [percentileSorted(ratios, 0.025)!, percentileSorted(ratios, 0.975)!];
+  const mean = opts.reading === "skills";
+  const shuffled = dayShuffleBand(blocks.map((b) => ({ first: b.before, vals: b.vals })), mean);
+  if ("absent" in shuffled) return shuffled;
+  const { seen, band } = shuffled;
   return {
     before: seen.before, after: seen.after, ratio: seen.ratio, band,
     inside: seen.ratio >= band[0] && seen.ratio <= band[1],
     nBefore, nAfter, daysBefore, daysAfter,
     ...(model !== undefined ? { model } : {}),
+    ...(mean ? { mean: true as const } : {}),
   };
 }

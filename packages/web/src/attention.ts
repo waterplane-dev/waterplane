@@ -121,12 +121,12 @@ export const ATTENTION_NOUN: Record<AttentionKind, string> = { wait: "waiting", 
 
 /** The chip's `title`: what the n sessions are, and what a tap does. `repo`
  *  names a per-repo twin (whose tap is the launcher's filter, not the sheet). */
-export function attentionTitle(kind: AttentionKind, n: number, o: { repo?: string; replies?: boolean } = {}): string {
-  const who = `${n} session${n === 1 ? "" : "s"}${o.repo ? ` in ${o.repo}` : ""}`;
+export function attentionTitle(kind: AttentionKind, n: number, o: { repo?: string; scope?: string; replies?: boolean } = {}): string {
+  const who = `${n} ${o.scope ?? `session${n === 1 ? "" : "s"}`}${o.repo ? ` in ${o.repo}` : ""}`;
   const what = kind === "wait"
     ? `${n === 1 ? "is" : "are"} waiting for your answer${o.replies ? " — some already have a reply on a clock" : ""}`
     : `${n === 1 ? "is" : "are"} blocked — signed out, out of credit, at a usage limit or on a network retry`;
-  const tap = o.repo ? "tap to show only those" : kind === "wait" ? "tap to answer them here" : "tap to see why and steer them";
+  const tap = o.repo || o.scope ? "tap to show only those" : kind === "wait" ? "tap to answer them here" : "tap to see why and steer them";
   return `${who} ${what} — ${tap}`;
 }
 

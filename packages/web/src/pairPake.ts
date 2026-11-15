@@ -131,7 +131,8 @@ export function readSealedReply(v: unknown): PakeSealedReply | null {
   const b = v as Record<string, unknown>;
   const host = b.host as Record<string, unknown> | null | undefined;
   if (b.ok !== true || !host || typeof host !== "object" || typeof host.name !== "string" || !isHostId(b.hostId)) return null;
-  if (parseLanIdentity(b.lanIdentity)?.hostId !== b.hostId) return null;
+  // Absent only for a passive pairing; present, it must be one and name this desktop.
+  if (b.lanIdentity === undefined ? b.scope !== "passive" : parseLanIdentity(b.lanIdentity)?.hostId !== b.hostId) return null;
   if (b.tls !== undefined && !cleanHostTls(b.tls)) return null;
   if (b.updateKey !== undefined && !pakeDecode(b.updateKey)?.length) return null;
   return v as PakeSealedReply;

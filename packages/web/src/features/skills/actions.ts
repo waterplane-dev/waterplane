@@ -9,17 +9,19 @@ import { core } from "../../sdk";
 import { initialSkills, skillsState } from "./store";
 import { changeCount, globalDraftOf, levelFor, moveDraft, parkKeyOf, reconcileSuggestions, suggestionChanges, receiptWords, withChoice, withPin, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
 
-/** Bumped whenever the sheet is aimed at another repo, so a Recommend still out cannot land in it. */
-let askSeq = 0;
-
 /** The sheet's own mount: a different repo starts with an empty draft, the same one keeps its unsaved draft. */
-export function aimSkills(repoId: string, backend?: string): void {
+export function aimSkills(repoId: string, backend?: string, target?: Target): void {
   const cur = skillsState.get();
-  if (cur.repoId === repoId) { if (cur.backend !== backend) skillsState.set({ ...cur, backend }); return; }
+  if (cur.repoId === repoId) {
+    if (cur.backend !== backend) skillsState.set({ ...cur, backend });
+    // A door that names a tab opens on it; the draft of the tab it leaves is set aside, never dropped.
+    if (target && target !== cur.target) moveLevel(target, skillsState.get().shared);
+    return;
+  }
   // The old repo's unsaved draft is set aside under it, never dropped; its suggestions and any call still out are not carried.
   const moved = moveDraft(cur.parked, { repoId: cur.repoId, level: levelFor(cur.target, cur.shared), draft: cur.draft }, { repoId, level: levelFor("repo", false) });
-  askSeq++;
   skillsState.set({ ...initialSkills(), repoId, backend, ...moved });
+  if (target === "all") moveLevel("all", false);
 }
 
 export function closeSkills(): void {
@@ -96,20 +98,13 @@ export async function saveChanges(repoId: string, doc: SkillInventoryDoc, level:
   return { ok: true, doc: r.doc, receipt };
 }
 
-/** Ask the desktop for suggestions. One cheap call, on a tap; the answer is a list, never a change. */
-export async function recommend(repoId: string): Promise<void> {
-  if (skillsState.get().asking) return;
-  const seq = ++askSeq;
-  patch({ asking: true, suggest: null, unticked: [] });
-  let r: SkillRecommendResponse;
-  try {
-    r = await api.skillsRecommend(repoId);
-  } catch {
-    r = { ok: false, suggestions: [], dropped: 0, error: "Nothing was suggested: the desktop did not answer." };
-  }
-  // The sheet was aimed at another repo while this was out: the answer is that repo's, not this one's.
-  if (seq !== askSeq || skillsState.get().repoId !== repoId) return;
-  patch({ asking: false, suggest: r });
+/**
+ * A finished suggestion run (`skills.recommend`, a slow job the sheet starts on a tap) put on
+ * screen — once per run: a list the person closed stays closed, a new run replaces it. Never applied.
+ */
+export function showSuggest(runId: string, r: SkillRecommendResponse): void {
+  if (skillsState.get().suggestRun === runId) return;
+  patch({ suggest: r, suggestRun: runId, unticked: [] });
 }
 
 export function dismissSuggest(): void { patch({ suggest: null, unticked: [] }); }

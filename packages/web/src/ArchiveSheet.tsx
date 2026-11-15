@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CantInline } from "./Unavailable";
-import { Archive, ArrowRight, BookOpen, GitBranch, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Archive, ArrowRight, BookOpen, GitBranch, Loader2, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
 import type { ArchivedConversation, ArchiveListing, Bookmark, RepoTarget } from "@waterplane/shared";
 import { repoLabel, repoShown } from "@waterplane/shared";
 import { api } from "./api";
@@ -13,6 +13,8 @@ import { BookmarkIcon, BookmarkNoteEdit, BOOKMARK_ON, BOOKMARK_SET, removeBookma
 import { archiveRowLines, bookmarkChipText, bookmarkCount, bookmarkCutText, withBookmark } from "./core/sessions/bookmarkFacts";
 import { useRemoteResource, ConfirmButton, Empty, FilterChip, SearchBox, StaleHead, Row, RowTitle, RowSub, Hint, Tag } from "./kit";
 import { SheetHead } from "./Sheet";
+import { offlineSentence } from "./kit/offlineGate";
+import { linkOnline } from "./link";
 
 const ICON = 16;
 
@@ -31,6 +33,8 @@ interface Props {
   repos: RepoTarget[];
   /** Repo the sheet opens on — the focused one, or the row that opened it. */
   initialRepoId: string;
+  /** A conversation to open straight in the reader (a session-search hit); Back lands on the list. */
+  initialReading?: ArchivedConversation;
   /** Conversation ids that are already open as live sessions: their rows say so
    *  and resume in place rather than offering a second copy of the same chat. */
   liveIds: Set<string>;
@@ -79,7 +83,7 @@ interface Props {
  * to lose a conversation in this app, and it is not what the × on a session row
  * does.
  */
-export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume, onFork, onOpenLive, showToast, archiveBackends }: Props) {
+export function ArchiveSheet({ repos, initialRepoId, initialReading, liveIds, onClose, onResume, onFork, onOpenLive, showToast, archiveBackends }: Props) {
   const tabs = archiveBackends && archiveBackends.length ? archiveBackends : [CLAUDE_TAB];
   const [backendId, setBackendId] = useState(tabs[0].id);
   // A frame that dropped the lit backend falls back to the first list (claude),
@@ -93,7 +97,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   /** The "Bookmarks (n)" cut (R-conversations-007). */
   const [bmOnly, setBmOnly] = useState(false);
   /** A row open in the read-only reader — a sub-view with its own Back. */
-  const [reading, setReading] = useState<ArchivedConversation | null>(null);
+  const [reading, setReading] = useState<ArchivedConversation | null>(initialReading ?? null);
   useBackStep(!!reading, () => setReading(null));
   /** The row whose bookmark note is being typed — one at a time. */
   const [editing, setEditing] = useState<string | null>(null);
@@ -114,11 +118,13 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   // same field the picker keys on); a 404 there is the host's sentence, which
   // `api.conversations` carries into the resource's `error` for `Empty`.
   const res = useRemoteResource<ArchiveListing>(
-    isClaude ? `${repo?.id ?? ""}|${q}` : `${repo?.id ?? ""}|be:${tab.id}|${q}`,
+    isClaude ? `archive:list:${repo?.id ?? ""}:${q}` : `archive:list:${repo?.id ?? ""}:be:${tab.id}:${q}`,
     (signal) => isClaude
       ? api.archive(repo!.id, { offset: 0, q: q || undefined })
       : api.conversations(tab.id, repo!.worktreePath, { offset: 0, q: q || undefined }, signal),
-    { enabled: !!repo },
+    // Only the unfiltered listing is kept: a search is a host-side cut, and a cached answer to one
+    // query would be painted under the next. Offline, a typed query reads as "no connection".
+    { enabled: !!repo, cache: q ? false : { shape: 1 } },
   );
   /**
    * The repo's bookmarks (`bookmarked=1`), under the same search. ONE listing
@@ -126,10 +132,10 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
    * under it — so the count and the cut can never disagree.
    */
   const bmRes = useRemoteResource<ArchiveListing>(
-    `${repo?.id ?? ""}|bm|${q}`,
+    `archive:bookmarks:${repo?.id ?? ""}:${q}`,
     () => api.archive(repo!.id, { offset: 0, q: q || undefined, bookmarked: true }),
     // Bookmarks are claude's (the host's bookmark routes gate on its jsonl).
-    { enabled: !!repo && isClaude },
+    { enabled: !!repo && isClaude, cache: q ? false : { shape: 1 } },
   );
   const bm = bookmarkCount(bmRes.data);
   const bmCut = bmOnly && isClaude;
@@ -160,6 +166,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
 
   async function del(row: ArchivedConversation) {
     if (!repo) return;
+    if (!linkOnline()) { showToast(offlineSentence("delete the conversation")); return; }
     const r = await (isClaude ? api.archiveDelete(repo.id, row.id) : api.conversationsDelete(tab.id, repo.worktreePath, row.id))
       .catch(() => ({ ok: false, error: "offline" }));
     if (!r.ok) { showToast(`delete failed: ${r.error ?? "?"}`); return; }
@@ -179,6 +186,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   }
   async function bookmark(row: ArchivedConversation, fields: { note?: string; name?: string }) {
     if (!repo) return;
+    if (!linkOnline()) { showToast(offlineSentence("save the bookmark")); return; }
     const was = !!row.bookmark;
     const b = await setBookmark(repo.id, row.id, fields);
     if (!b) return;
@@ -187,6 +195,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   }
   async function unbookmark(row: ArchivedConversation) {
     if (!repo) return;
+    if (!linkOnline()) { showToast(offlineSentence("remove the bookmark")); return; }
     if (await removeBookmark(repo.id, row.id)) patch(row.id, undefined);
   }
 
@@ -219,7 +228,9 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   return (
     <div className="sheet">
       <StaleHead title={<><Archive size={ICON} style={{ verticalAlign: "-3px", marginRight: 4 }} />Archive</>} onClose={onClose}
-        refreshTitle="re-read the archive" onRefresh={() => { res.reload(); bmRes.reload(); }} />
+        refreshTitle="re-read the archive" onRefresh={() => { res.reload({ quiet: true }); bmRes.reload({ quiet: true }); }}>
+        {(res.inflight || bmRes.inflight) && cur.data && <Loader2 size={13} className="spin" aria-label="refreshing" />}
+      </StaleHead>
 
       {repos.length > 1 && (
         <div className="search-row">

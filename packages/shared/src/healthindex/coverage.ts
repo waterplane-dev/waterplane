@@ -71,12 +71,21 @@
  * worst-entry cap, at a fixed height because a gate is pass/fail with no
  * score to add 30 to.
  *
+ * ── The repo's own targets ─────────────────────────────────────────────────
+ *
+ * An own reading that declares a `target` (`own.ts` argues it) is an item of
+ * kind `own`, keyed `own:<key>`: measured where the row has its value, else
+ * unknown with the reason — counted in `measured` and `applicable` exactly as
+ * an entry is. Its target and direction are in `key`, so a re-declared target
+ * marks the week a gap.
+ *
  * `healthHeadlineWords` is the ONE wording of all three caps and the coverage
  * line; the phone card and the VS Code Health view (the same chart) both call
  * it, as does the launcher chip's title.
  */
 import { centralOf } from "./readings.js";
-import { type HealthEntry, HEALTH_ENTRIES, HEALTH_OPTIONAL_ENTRIES, HEALTH_ALERT_WARN, HEALTH_SCORE_CAP_GAP, type HealthSeriesRow } from "./types.js";
+import { healthOwnTargetsOf, healthOwnLabel } from "./own.js";
+import { type HealthEntry, type HealthScoredId, HEALTH_ENTRIES, HEALTH_OPTIONAL_ENTRIES, HEALTH_ALERT_WARN, HEALTH_SCORE_CAP_GAP, type HealthSeriesRow } from "./types.js";
 
 /** Every dimension the index is meant to judge. Order = the order words list them. */
 export const HEALTH_DIMENSIONS = [
@@ -122,9 +131,9 @@ export const HEALTH_GATE_CAP = HEALTH_ALERT_WARN - 1;
 
 /** One applicable dimension (an entry or a gate) and whether it was measured. */
 export interface HealthCoverageItem {
-  /** The dimension id, or `gate:<key>` for a repo gate. */
+  /** The dimension id, `gate:<key>` for a repo gate, or `own:<key>` for the repo's own targeted reading. */
   key: string;
-  kind: "entry" | "gate";
+  kind: "entry" | "gate" | "own";
   label: string;
   state: "measured" | "unknown";
   /** Why it is unknown (always set then), or a note on a measured entry with an unread minority. */
@@ -148,9 +157,9 @@ export interface HealthGate {
 }
 
 export interface HealthCoverage {
-  /** Index entries read. Gates never add to it: a passing gate cannot raise the cap. */
+  /** Index entries and own targeted readings read. Gates never add to it: a passing gate cannot raise the cap. */
   measured: number;
-  /** Index entries that apply, plus each UNKNOWN gate (a gate with no reading is unmeasured, never passed). */
+  /** Index entries and own targeted readings that apply, plus each UNKNOWN gate (a gate with no reading is unmeasured, never passed). */
   applicable: number;
   /** Whether the row said which languages each reading covers (engine `reach`); false = an older engine. */
   reach: boolean;
@@ -297,6 +306,14 @@ export function healthCoverage(row: HealthSeriesRow, enabled: readonly HealthEnt
     }
     items.push(item);
   }
+  const owns = healthOwnTargetsOf(row);
+  for (const o of owns) {
+    items.push({
+      key: o.id, kind: "own", label: healthOwnLabel(o.name),
+      state: o.why ? "unknown" : "measured",
+      ...(o.why ? { reason: o.why } : {}),
+    });
+  }
   const gates = healthGatesOf(row);
   for (const g of gates) {
     items.push({
@@ -309,11 +326,12 @@ export function healthCoverage(row: HealthSeriesRow, enabled: readonly HealthEnt
   // applicable here (declaring easy gates must not dilute unread code), a
   // failing one caps at 49 (`healthHeadline`), an unknown one is an
   // applicable dimension nobody measured.
-  const measured = items.filter((i) => i.kind === "entry" && i.state === "measured").length;
-  const applicable = items.filter((i) => i.kind === "entry" || i.state === "unknown").length;
+  const measured = items.filter((i) => i.kind !== "gate" && i.state === "measured").length;
+  const applicable = items.filter((i) => i.kind !== "gate" || i.state === "unknown").length;
   const key = [
     ...items.map((i) => `${i.key}=${i.state === "measured" ? "m" : "u"}`),
     ...gates.map((g) => `${g.key}:${g.fails ?? "?"}${g.at ?? ""}`),
+    ...owns.map((o) => `${o.id}@${o.better ?? "?"}${o.target ?? ""}`),
   ].join(",");
   return { measured, applicable, reach: packs !== null, items, gates, key };
 }
@@ -345,11 +363,29 @@ export function healthHeadline(mean: number, worst: number, coverage: HealthCove
   return { index, capKind };
 }
 
+/**
+ * How a sentence names whatever holds the score down: an entry by its label,
+ * the repo's own reading by the coverage item that carries its name (or its
+ * key where the caller has no coverage), anything else as unnamed.
+ */
+export function healthScoredLabel(id: string, coverage?: Pick<HealthCoverage, "items"> | null): string {
+  if (id.startsWith("own:")) {
+    return coverage?.items.find((i) => i.key === id)?.label ?? healthOwnLabel(id.slice(4));
+  }
+  return (Object.prototype.hasOwnProperty.call(HEALTH_DIMENSION_DEFS, id) ? HEALTH_DIMENSION_DEFS[id as HealthDimension].label : null)
+    ?? "an entry this app version cannot name";
+}
+
+/** The repo's own readings counted in the score this week; 0 with no coverage (an older host). */
+export function healthOwnCount(coverage: Pick<HealthCoverage, "items"> | null | undefined): number {
+  return coverage ? coverage.items.filter((i) => i.kind === "own").length : 0;
+}
+
 /** What `healthHeadlineWords` reads — a point, or the wire summary. */
 export interface HealthHeadlineSubject {
   value: number;
   mean: number;
-  cappedBy: HealthEntry | null;
+  cappedBy: HealthScoredId | null;
   capKind?: HealthCapKind | null;
   coverage?: HealthCoverage | null;
 }
@@ -387,7 +423,7 @@ export function healthHeadlineWords(s: HealthHeadlineSubject): HealthHeadlineWor
     cap = `Capped at ${v}: only ${c.measured} of ${c.applicable} dimensions could be measured, and an unmeasured one counts for nothing, never for 100.`;
   } else if (kind === "worst" && s.cappedBy && s.value < s.mean) {
     const worst = Math.round(s.value - HEALTH_SCORE_CAP_GAP);
-    cap = `Capped at ${v} by ${HEALTH_DIMENSION_DEFS[s.cappedBy]?.label ?? "an entry this app version cannot name"} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
+    cap = `Capped at ${v} by ${healthScoredLabel(s.cappedBy, c)} (${worst} of 100): the entries average ${Math.round(s.mean)}, and the score stays within ${HEALTH_SCORE_CAP_GAP} of its worst entry.`;
   }
   let coverage: string | null = null;
   if (c) {

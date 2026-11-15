@@ -14,6 +14,6 @@ export const manifest: FeatureManifest = {
     { id: "search", persisted: false, render: () => createElement(SessionSearchSheet) },
   ],
   messages: {
-    "session.searchResults": (msg) => onSearchResults(msg.id, msg.results),
+    "session.searchResults": (msg) => onSearchResults(msg.id, msg.results, msg.archived, msg.archivedOmitted),
   },
 };

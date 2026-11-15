@@ -461,6 +461,13 @@ export function bindHostStateDir(root: string, dir: string): void {
   bound = { root: resolve(root), real: realOr(root), dir: resolve(dir) };
 }
 
+/** The bound state dir, or null before `env.ts` ran (a unit test's process).
+ *  `jsonstore.ts` keeps its loss record here — and ONLY for a store inside it,
+ *  so a test's mkdtemp store never writes into a person's real state dir. */
+export function boundHostStateDir(): string | null {
+  return bound?.dir ?? null;
+}
+
 /**
  * THE directory every global store opens under. For the daemon's own root it
  * is the bound state dir; for any other root — a unit test's mkdtemp, a tool

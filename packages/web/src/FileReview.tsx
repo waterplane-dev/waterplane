@@ -11,6 +11,7 @@ import {
 } from "./fileRemarks";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { randId } from "./randId";
 
 /**
  * Review mode of the file viewer: mark lines, say what should change, send
@@ -59,7 +60,7 @@ export function storedRemarkCount(repoId: string, path: string): number {
   return readStored(repoId, path).remarks.length;
 }
 
-const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const newId = () => `${Date.now().toString(36)}${randId(4)}`;
 
 interface Props {
   repoId: string;

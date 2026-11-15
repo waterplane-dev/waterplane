@@ -347,6 +347,26 @@ test("a seal on a new desktop: the address is what was asked, and everything onl
   assert.equal(sealedAsk(shim(), sealed(), WIFI), null, "nothing to ask about a desktop this phone has never seen");
 });
 
+test("a passive seal keeps no LAN identity: none from a new host, an older host's is dropped, a full pairing's copy goes", () => {
+  const { lanIdentity: _l, ...noId } = sealed();
+  const fresh = shim();
+  const a = storeSealed(fresh, { ...noId, scope: "passive" }, WIFI);
+  assert.equal(a.ok, true);
+  assert.ok(![...fresh.m.keys()].some((k) => k.endsWith(LS.lanIdentity.split(".").pop())), "no identity under any key");
+  assert.ok(!a.wrote.some((k) => k.includes("lanIdentity")));
+
+  const older = shim();
+  const b = storeSealed(older, sealed({ scope: "passive" }), WIFI);
+  assert.equal(b.ok, true);
+  assert.ok(![...older.m.keys()].some((k) => k.endsWith(LS.lanIdentity.split(".").pop())), "an older host's copy is not kept");
+
+  const repaired = shim();
+  const full = storeSealed(repaired, sealed(), WIFI);
+  assert.ok(repaired.getItem(parkedKeyFor(LS.lanIdentity, full.host.id)), "a full pairing keeps it");
+  storeSealed(repaired, sealed({ scope: "passive" }), WIFI);
+  assert.ok(![...repaired.m.keys()].some((k) => k.endsWith(LS.lanIdentity.split(".").pop())), "a re-pair as passive drops it");
+});
+
 test("a sealed row's LAN side: asked on the LAN address it is not stored twice, and a reply cannot name a protected one", () => {
   const same = storeSealed(shim(), sealed({ host: { name: "s", base: "x", httpsUrl: null, lanBase: WIFI.base } }), WIFI);
   assert.equal(same.host.lan, undefined);

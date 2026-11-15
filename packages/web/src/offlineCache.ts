@@ -29,6 +29,8 @@ import { dataSaver } from "./media";
 import { idbClear, idbDel, idbGet, idbGetAll, idbSet } from "./idb";
 import { wantedDetail } from "./transcriptUtil";
 import { LS, lsJson, lsSetJson } from "./storage";
+import { activeHost } from "./hosts";
+import { entryUsable, makeEntry, sweepVictims, type ResCacheEntry } from "./resourceCache";
 
 // ── Transcripts (IndexedDB) ───────────────────────────────────────────────
 
@@ -537,6 +539,32 @@ export function saveHistoryEntries(sessionId: string, entries: HistoryEntry[]): 
   saveHistoryCache(snap);
 }
 
+// ── The default read cache (IndexedDB) ────────────────────────────────────
+//
+// What `useRemoteResource` uses when a caller brings no cache of its own. Rules in
+// `resourceCache.ts`; this is only the disk half. The sweep is read-everything, so it
+// runs on the first write of a page and then one write in ten, not on each.
+
+const RES_STORE = "rescache";
+let resWrites = 0;
+const resHost = () => activeHost()?.id ?? null;
+
+export async function getResCache<T>(key: string, shape: number): Promise<{ value: T; savedAt: number } | null> {
+  const host = resHost();
+  const e = await idbGet<ResCacheEntry>(RES_STORE, `${host ?? "local"}|${key}`);
+  return entryUsable(e, host, key, shape) ? { value: e.value as T, savedAt: e.savedAt } : null;
+}
+
+export async function putResCache(key: string, shape: number, value: unknown): Promise<void> {
+  const e = makeEntry(resHost(), key, shape, value, Date.now());
+  if (!e) return;
+  await idbSet(RES_STORE, e.key, e);
+  if (resWrites++ % 10 === 0) {
+    const all = await idbGetAll<ResCacheEntry>(RES_STORE);
+    for (const k of sweepVictims(all)) await idbDel(RES_STORE, k);
+  }
+}
+
 // ── Letting go of it ────────────────────────────────────────────────────────
 
 /**
@@ -550,7 +578,7 @@ export function saveHistoryEntries(sessionId: string, entries: HistoryEntry[]): 
  * cache it believes is warm. Every other store here is disk-only, and passing
  * them through one door keeps it that way visibly.
  */
-export async function forgetCacheStore(store: "transcripts" | "tooldetail" | "gallery" | "artifacttext" | "tree" | "ctxseries" | "tokenstats"): Promise<boolean> {
+export async function forgetCacheStore(store: "transcripts" | "tooldetail" | "gallery" | "artifacttext" | "tree" | "ctxseries" | "tokenstats" | "rescache"): Promise<boolean> {
   const ok = await idbClear(store);
   if (store === TRANSCRIPT_STORE) resetTranscriptPrefetch();
   return ok;

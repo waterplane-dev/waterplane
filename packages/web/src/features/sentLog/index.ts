@@ -4,7 +4,7 @@
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
 import { onSentNew, openSentForActive } from "./actions";
-import { entries } from "./store";
+import { entries, sentLoss } from "./store";
 import { SentCommandsSheet } from "./SentCommandsSheet";
 
 export { openSentLog } from "./actions";
@@ -14,7 +14,7 @@ export const manifest: FeatureManifest = {
   sheets: [{ id: "sentlog", persisted: false, render: () => createElement(SentCommandsSheet) }],
   commands: [{ id: "sent", run: openSentForActive }],
   messages: {
-    "sent.log": (msg) => entries.set(msg.entries),
+    "sent.log": (msg) => { entries.set(msg.entries); sentLoss.set(msg.loss ?? null); },
     "sent.new": (msg) => onSentNew(msg.entry),
   },
 };

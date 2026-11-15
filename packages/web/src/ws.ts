@@ -10,6 +10,7 @@ import {
 import { baseOfDial, tokenWithheld, wsUrl } from "./hostUrl";
 import { noteHostSeen, noteLinkStatus, noteReload, noteRtt, noteTraffic } from "./link";
 import { SHELL_NUDGE_EVENT } from "./shellLink";
+import { releaseRelay } from "./core/queue/relayOwner";
 import { deviceToken, wsProtocols } from "./deviceToken";
 import { LS } from "./storage";
 import { demoTransport } from "./demo/transport";
@@ -137,7 +138,9 @@ export class HostConnection {
       // socket NOW while we still can, so resume starts from a clean "closed"
       // and reconnects immediately instead of trusting a zombie.
       document.addEventListener("resume", wake);
-      document.addEventListener("freeze", () => this.dropSocketForSleep());
+      // …and the queue goes to the background relay (`core/queue/relayOwner.ts`): the freshest
+      // plan, then ownership. A no-op with no relay owner (a browser, an older APK).
+      document.addEventListener("freeze", () => { releaseRelay(); this.dropSocketForSleep(); });
     }
     if (typeof window !== "undefined") {
       window.addEventListener("online", wake);

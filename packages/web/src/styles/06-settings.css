@@ -39,7 +39,7 @@
 .build-runs .row.active { background: var(--accent-wash); box-shadow: var(--stripe); }
 /* Copy / send-to-session over an open run's log. Mid-list, not a sheet foot, so no
    home-indicator inset. */
-.sheet-actions.build-log-acts { padding: var(--sp-6) var(--sp-12); }
+.sheet-actions.build-log-acts { padding: var(--sp-6) var(--gutter); }
 .build-log {
   /* Fixed share of the viewport with its own scroll: tall enough to read,
      bounded so the controls above it stay one short scroll away. */
@@ -396,7 +396,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    and the label is the only thing that tells them apart anyway. */
 .set-doors { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 /* Above the scroll in Settings: same side inset as the search box under it. */
-.set-doors-top { margin: var(--sp-6) var(--sp-16) 0; }
+.set-doors-top { margin: var(--sp-6) var(--gutter) 0; }
 .set-door {
   display: inline-flex; align-items: center; gap: var(--sp-6);
   min-height: 40px; padding: 0 var(--sp-12);
@@ -432,7 +432,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    it found. */
 .set-search {
   display: flex; align-items: center; gap: var(--sp-8);
-  margin: var(--sp-8) var(--sp-16) var(--sp-4); padding: 0 var(--sp-10);
+  margin: var(--sp-8) var(--gutter) var(--sp-4); padding: 0 var(--sp-10);
   background: var(--well); border: 1px solid var(--line); border-radius: var(--r-10);
 }
 .set-search-ico { flex: none; color: var(--muted); }
@@ -451,7 +451,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 /* Drawn LAST in the markup so it can read this render's tally, floated to the
    top so it reads first. See `SetFilterBar`. */
 .set-filter-bar { order: -1; }
-.set-group { padding: var(--sp-14) var(--sp-16); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-12); }
+.set-group { padding: var(--sp-14) var(--gutter); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-12); }
 .set-title { margin: 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); letter-spacing: .02em; }
 .set-row { display: flex; flex-wrap: wrap; gap: var(--sp-10); align-items: center; }
 /* Which desktops a sign-in lock touches: read, never tapped, so none of a list row's height. */

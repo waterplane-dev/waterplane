@@ -46,7 +46,7 @@ export function SlashSheet({ cwd, backend, backends = null, onPick, unsupported,
    * the age label are now shared.
    */
   const key = backend ? `${cwd}\n${backend}` : cwd;
-  const res = useRemoteResource<SlashListDoc>(key, () => api.slash(cwd, backend), {
+  const res = useRemoteResource<SlashListDoc>(`slash:${key}`, () => api.slash(cwd, backend), {
     // Not even asked for a backend that has no such concept — see `unsupported`.
     enabled: !unsupported,
     fromCache: async () => {
@@ -81,6 +81,7 @@ export function SlashSheet({ cwd, backend, backends = null, onPick, unsupported,
         {/* Cached rows ALWAYS say how old they are — the one promise this
             palette used to make with the word "cached" and no number. */}
         {res.state === "cached" && res.age != null && <span className="gallery-meta"><CloudOff size={12} /> cached · {agoText(res.age)}</span>}
+        {res.inflight && res.data && <span className="gallery-meta"><Loader2 size={12} className="spin" /> refreshing…</span>}
         {res.state === "offline" && <span className="gallery-meta"><CloudOff size={12} /> offline</span>}
         {res.state === "error" && <span className="gallery-meta"><CircleAlert size={12} /> host refused</span>}
       </SheetHead>

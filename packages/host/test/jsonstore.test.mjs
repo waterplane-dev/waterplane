@@ -143,15 +143,15 @@ test("a fresh vapid.json is written 0600; an old wider one is tightened", () => 
   assert.equal(statSync(keys).mode & 0o777, 0o600);
 });
 
-test("a corrupt acks.json is kept, logged, and the loss is held for one TTL", async () => {
-  const { ACK_TTL_MS } = await import("../dist/acks.js");
+test("a corrupt acks.json is kept, logged, and the loss is held for the longest keep", async () => {
+  const { RELAY_KEEP_MS } = await import("../dist/acks.js");
   const { root, dir } = stateDir();
   writeFileSync(join(dir, "acks.json"), '{"updatedAt":1,"acks":{"a1":{"ts":');
   const before = Date.now();
   const { value: ledger, lines } = quietly(() => new AckLedger(root));
   assert.ok(ledger.lost, "the ledger SAYS it lost its memory");
   assert.ok(ledger.lost.at >= before);
-  assert.equal(ledger.lost.until, ledger.lost.at + ACK_TTL_MS);
+  assert.equal(ledger.lost.until, ledger.lost.at + RELAY_KEEP_MS);
   assert.ok(ledger.lost.movedTo && ledger.lost.movedTo.includes("acks.json.corrupt-"));
   assert.equal(readFileSync(ledger.lost.movedTo, "utf8"), '{"updatedAt":1,"acks":{"a1":{"ts":');
   assert.ok(lines.some((l) => l.includes("at-most-once")), "logged loudly");

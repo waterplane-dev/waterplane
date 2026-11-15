@@ -3,6 +3,18 @@
  * desktop's claude conversation logs can say about a repo, one ISO week at a
  * time (host `agentreadings.ts`, `GET /api/repos/:id/agentreadings`).
  *
+ * Under the headline, `ProbeCard.tsx` (R-metrics-074): start a lookup probe and read its newest
+ * result; then `SetupShareCard.tsx` (R-metrics-073): this desktop's setup block to export (its probe
+ * slot filled from the newest non-void result), and a colleague's imported one side by side. The
+ * probe's view and results are read here, so the headline's "last probe" line, the probe card and
+ * the export block read one fetch and "read again" re-reads them too.
+ *
+ * It opens on the headline (`Headline`, R-metrics-070): the setup cost per median session at
+ * list price with its tokens and its split by whose it is, the last probe, and one neutral pattern
+ * sentence around the newest change (shared `setupCostOf` / `setupPatternOf`, over the same points
+ * and markers the token-stats card reads). Under it, ONCE for the region, where every reading here
+ * comes from (`agentSourceText`, R-metrics-069); each card repeats it only in its `?`.
+ *
  * Readings, not the health score and not a checklist: no stripe, no status
  * colour, counted in nothing, and nothing here refuses or applies anything.
  * Each reading carries a `?` whose words are the HOST's rule (`doc.rules`), so
@@ -31,25 +43,37 @@
  * By repo), activity off the same logs as rework: both absent FIELDS on an
  * older host, and then no card.
  */
-import { useEffect, useState } from "react";
-import { fmtCount, fmtUsdShort, isAgentAbsent, tokenTotal, type AgentReadingAbsent, type AgentReadingsResponse, type AgentReadingsWeek, type RepoTarget, type SeriesMedian } from "@waterplane/shared";
+import { useEffect, useMemo, useState } from "react";
+import {
+  BY_MODEL_DEFAULT_DAYS, SETUP_COST_DAYS, agentSourceText, compareByModelAll, fmtCount, fmtUsdShort, isAgentAbsent, priceListSource, priceSourceText, setupCostOf, setupPatternOf, setupPatternText, tokenTotal,
+  type AgentMarkersResponse, type AgentPointsResponse, type ProbeResultsView, type ProbeView, type AgentReadingAbsent, type AgentReadingsResponse, type AgentReadingsWeek, type RepoTarget, type SeriesLoads, type SeriesMedian,
+} from "@waterplane/shared";
 import { api } from "./api";
-import { useRemoteResource } from "./useRemoteResource";
+import { useRemoteResource, type RemoteResource } from "./useRemoteResource";
 import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { KindBar } from "./kit/chart/TokenComposition";
 import { RefreshKey } from "./RepoHealthCards";
 import { AgentWeekBars } from "./AgentWeekBars";
+import { SetupShareCard } from "./SetupShareCard";
+import { ProbeCard } from "./ProbeCard";
+import { FilterChip } from "./kit/FilterChip";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit";
+import { CalendarRange, FlaskConical, Gauge, Plug } from "lucide-react";
+import { probeLastLine, probeResultsUnreadLine, probeShareOf } from "./probeWords";
 import {
-  AGENT_REGION_WORDS, CARRIED_TITLE, PICK_HINT, START_PARTS_CAP, TABLE_NOTE, compactBeside, compactLine, escapedLines, exploreBeside, exploreLine,
-  escapedFigure, figures, fmtMedian, looksLine, readout, requestsLine, reworkBeside, reworkLine, reworkWhole, spendBeside, startLine, startPartLines, startSubLine,
+  AGENT_REGION_WORDS, AGENT_VIEW_HELP, AGENT_VIEW_LABEL, byModelRow, CARRIED_TITLE, HEADLINE_TITLE, PROBE_NONE, headlineHelp, setupCostBeside, setupCostFigure, setupCostLine, setupSplitLine, PICK_HINT, START_PARTS_CAP, TABLE_NOTE, compactBeside, compactLine, escapedLines, exploreBeside, exploreLine,
+  escapedFigure, figures, fmtMedian, looksLine, readout, requestsLine, skillsLine, reworkBeside, reworkLine, reworkWhole, spendBeside, startLine, startPartGroups, startSubLine, fmtMean,
   weekCells, weekHeading,
 } from "./agentReadingsWords";
 
 type Bars = Omit<React.ComponentProps<typeof AgentWeekBars>, "weeks" | "picked" | "onPick" | "label"> & { line: string };
 
-function Reading({ title, rule, bars, pick, children }: {
+function Reading({ title, rule, bars, pick, children, chartTitle }: {
   title: string; rule: string; bars: Bars;
+  /** A headline over the chart, for a card that draws more than one. */
+  chartTitle?: string;
   pick: { weeks: string[]; i: number; set: (i: number) => void };
   children?: React.ReactNode;
 }) {
@@ -58,12 +82,65 @@ function Reading({ title, rule, bars, pick, children }: {
     <div className="rh-card">
       <div className="section-head">
         <span className="rh-chart-label">{title}</span>
-        <Explain of={title}>{rule}</Explain>
+        <Explain of={title}>{rule} {agentSourceText()}</Explain>
       </div>
       <div className="rh-gutter">
+        {chartTitle ? <div className="ar-chart-title">{chartTitle}</div> : null}
         <AgentWeekBars {...chart} weeks={pick.weeks} picked={pick.i} onPick={pick.set} label={title} />
         <div className="rh-scrub">{line}</div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The region's headline (R-metrics-070): what the setup costs a median session, in dollars at list
+ * price with the tokens beside it and its split by whose it is; the last probe (none yet); one
+ * pattern sentence around the newest change. Then, ONCE for the whole region, where every reading
+ * here comes from (R-metrics-069) — each card says it again only in its `?`.
+ */
+function Headline({ pts, mk, probes }: { pts: RemoteResource<AgentPointsResponse>; mk: RemoteResource<AgentMarkersResponse>; probes: RemoteResource<ProbeResultsView> }) {
+  const points = pts.data?.ok ? pts.data.points : null;
+  const markers = mk.data?.ok ? mk.data.markers : null;
+  const cost = useMemo(() => (points ? setupCostOf(points, { now: Date.now() }) : null), [points]);
+  const pattern = useMemo(() => (points && markers ? setupPatternOf(points, markers) : null), [points, markers]);
+  // Compare by model (R-metrics-072): one compact row, only when two models have enough sessions.
+  const byModel = useMemo(() => (points ? byModelRow(compareByModelAll(points, { now: Date.now() }), BY_MODEL_DEFAULT_DAYS) : null), [points]);
+  const source = agentSourceText();
+  const lastProbe = probes.data?.ok ? probes.data.results[0] ?? null : null;
+  // A rerun's two sides are its baseline (before) and itself (now): the line names them, so it needs the baseline.
+  const lastBase = lastProbe?.result.against && probes.data?.ok ? probes.data.results.find((x) => x.result.id === lastProbe.result.against)?.result ?? null : null;
+  return (
+    <div className="rh-card">
+      <div className="section-head">
+        <span className="rh-chart-label">{HEADLINE_TITLE}</span>
+        <Explain of={HEADLINE_TITLE}>{headlineHelp(cost && !isAgentAbsent(cost) ? cost : null)}</Explain>
+      </div>
+      <div className="rh-gutter">
+        {cost === null ? (
+          <div className="rh-cap">{pts.data && !pts.data.ok ? `Sessions could not be read: ${pts.data.error}`
+            : !pts.data && pts.state === "offline" ? "Sessions could not be read: the desktop is not reachable right now."
+              : !pts.data && pts.state === "error" ? `Sessions could not be read${pts.error ? `: ${pts.error}` : "."}`
+                : "Reading this repo's sessions…"}</div>
+        ) : isAgentAbsent(cost) ? <div className="rh-cap">{cost.absent}</div> : (<>
+          <div className="ar-headline">{setupCostFigure(cost)}</div>
+          <div>{setupCostLine(cost)}</div>
+          <div>{setupSplitLine(cost)}</div>
+          <div className="rh-cap">{setupCostBeside(cost, SETUP_COST_DAYS, priceSourceText(priceListSource()))}</div>
+        </>)}
+        {lastProbe ? <div>{probeLastLine(lastProbe.result, lastProbe.analysis, lastBase)}</div>
+          : cost === null ? null
+            : probes.data?.ok ? <div className="rh-cap">{PROBE_NONE}</div>
+              : <div className="rh-cap">Last probe: {probeResultsUnreadLine(probes.state === "loading" && !probes.data, probes.error)}</div>}
+        {pattern ? <div>{isAgentAbsent(pattern) ? pattern.absent : setupPatternText(pattern)}</div>
+          : mk.data && !mk.data.ok ? <div className="rh-cap">Changes could not be read: {mk.data.error}</div> : null}
+        {byModel ? (<>
+          <div>{byModel.line}</div>
+          {byModel.notes.map((n) => <div key={n} className="rh-cap">{n}</div>)}
+        </>) : null}
+        {/* Once for the whole region, the same words everywhere (R-metrics-069). */}
+        <div className="rh-cap">{source}</div>
       </div>
     </div>
   );
@@ -80,14 +157,32 @@ function series<R>(weeks: readonly AgentReadingsWeek[], at: number, newest: stri
   return { values, line };
 }
 
-export function AgentReadingsRegion({ repo, carried }: {
+/** The region's three views: what a session carries now, the weekly readings, and the
+ *  costed tests (search test + compare setups). One chip row, `ContextSheet`'s grammar. */
+export type AgentView = "now" | "weeks" | "tests";
+
+export function AgentReadingsRegion({ repo, carried, onSkills, skillsCant }: {
   repo: RepoTarget | null;
   /** The always-on list (`AlwaysOnRows`, off the setup checklist's report): what every turn here
    *  carries before an agent spends anything. Its threshold stays on the set-up row. */
   carried?: React.ReactNode;
+  /** The skills & plugins switch for this repo, at the top of the region whatever view is open. */
+  onSkills?: () => void;
+  skillsCant?: string;
 }) {
+  const [view, setView] = useState<AgentView>("now");
   const repoId = repo?.id ?? "";
   const res = useRemoteResource<AgentReadingsResponse>(`agentreadings:${repoId}`, () => api.agentReadings(repoId), { enabled: !!repoId });
+  // The headline's points and markers: the same keys and fetchers as the token-stats Agent readings
+  // over time card (one fetch serves both), held here so "read again" re-reads them too.
+  const pts = useRemoteResource<AgentPointsResponse>(`agentpoints:${repoId}`, () => api.agentPoints(repoId), { enabled: !!repoId });
+  const mk = useRemoteResource<AgentMarkersResponse>(`agentmarkers:${repoId}`, () => api.agentMarkers(repoId), { enabled: !!repoId });
+  // The lookup probe (R-metrics-074): the status is never served from the cache (a stale "running" would mislead).
+  const probeView = useRemoteResource<ProbeView>(`probe:${repoId}`, () => api.probeView(repoId), { enabled: !!repoId, cache: false });
+  const probes = useRemoteResource<ProbeResultsView>(`proberesults:${repoId}`, () => api.probeResults(repoId), { enabled: !!repoId });
+  const shareProbe = useMemo(() => (probes.data?.ok ? probeShareOf(probes.data.results) : null), [probes.data]);
+  const busy = res.inflight || pts.inflight || mk.inflight || probeView.inflight || probes.inflight;
+  const readAgain = () => { res.reload({ quiet: true }); pts.reload({ quiet: true }); mk.reload({ quiet: true }); probeView.reload({ quiet: true }); probes.reload({ quiet: true }); };
   const doc = res.data?.ok ? res.data : null;
   const refused = res.data && !res.data.ok ? res.data : null;
   const weeks = doc?.weeks ?? [];
@@ -104,6 +199,7 @@ export function AgentReadingsRegion({ repo, carried }: {
   const hasStart = weeks.some((w) => w.start !== undefined);
   const hasLooks = weeks.some((w) => !isAgentAbsent(w.explore) && w.explore.looks !== undefined);
   const hasRequests = weeks.some((w) => w.requests !== undefined);
+  const hasSkills = weeks.some((w) => w.skillLoads !== undefined);
   const medTick = (v: number) => fmtMedian(Math.round(v * 10) / 10);
 
   return (
@@ -111,14 +207,36 @@ export function AgentReadingsRegion({ repo, carried }: {
       <div className="ts-filter" role="group" aria-label="agent readings">
         <span className="ctx-stackpick-lab">agents</span>
         <Explain of="what agent readings are">{AGENT_REGION_WORDS}</Explain>
-        <RefreshKey busy={res.inflight} label={res.inflight ? "reading…" : "read again"} onClick={() => res.reload({ quiet: true })} />
+        <RefreshKey busy={busy} label={busy ? "reading…" : "read again"} onClick={readAgain} />
+        {/* The switch is the action this region most often leads to, so it sits at the top of every
+            view, as well as on the always-on list's "In this repo" heading. */}
+        {onSkills ? <Button onClick={onSkills} title="Turn skills and plugins off or down for this repo or every repo; new sessions only">
+          <Plug size={12} /> skills &amp; plugins →
+        </Button> : null}
       </div>
-      {carried ? (
-        <div className="rh-card">
-          <div className="section-head"><span className="rh-chart-label">{CARRIED_TITLE}</span></div>
-          <div className="rh-gutter">{carried}</div>
-        </div>
-      ) : null}
+      {!onSkills && skillsCant ? <Hint>{skillsCant}</Hint> : null}
+      <div className="ts-filter" role="group" aria-label="agent readings view">
+        <FilterChip on={view === "now"} clears={false} onClick={() => setView("now")}><Gauge size={14} /> {AGENT_VIEW_LABEL.now}</FilterChip>
+        <FilterChip on={view === "weeks"} clears={false} onClick={() => setView("weeks")}><CalendarRange size={14} /> {AGENT_VIEW_LABEL.weeks}</FilterChip>
+        <FilterChip on={view === "tests"} clears={false} onClick={() => setView("tests")}><FlaskConical size={14} /> {AGENT_VIEW_LABEL.tests}</FilterChip>
+      </div>
+      <div className="rh-cap rh-gutter">{AGENT_VIEW_HELP[view]}</div>
+      {view === "now" ? (<>
+        {repoId ? <Headline pts={pts} mk={mk} probes={probes} /> : null}
+        {carried ? (
+          <div className="rh-card">
+            <div className="section-head"><span className="rh-chart-label">{CARRIED_TITLE}</span></div>
+            <div className="rh-gutter">{carried}</div>
+          </div>
+        ) : null}
+      </>) : null}
+      {view === "tests" ? (<>
+        {/* The search test (R-metrics-074): start one against its estimate, read the newest result. */}
+        {repoId ? <ProbeCard repoId={repoId} view={probeView} results={probes} pts={pts} /> : null}
+        {/* Compare setups (R-metrics-073): export this desktop's setup block, import a colleague's. */}
+        {repoId ? <SetupShareCard repoId={repoId} pts={pts} probe={shareProbe} /> : null}
+      </>) : null}
+      {view === "weeks" ? (<>
       <Empty res={res} empty={!doc} thing="this repo's agent readings" noun="reading">
         {refused ? <>{refused.error}</> : null}
       </Empty>
@@ -132,14 +250,20 @@ export function AgentReadingsRegion({ repo, carried }: {
             {week.start && !isAgentAbsent(week.start) ? (<>
               {week.start.parts.length ? (<>
                 <div className="rh-cap">{START_PARTS_CAP}</div>
-                {startPartLines(week.start).map((l) => <div key={l}>{l}</div>)}
+                {startPartGroups(week.start).map((g) => (
+                  <div key={g.id} className="ar-part-group">
+                    <div className="ar-chart-title">{g.heading}</div>
+                    <div className="rh-cap">{g.note}</div>
+                    {g.lines.map((l) => <div key={l}>{l}</div>)}
+                  </div>
+                ))}
               </>) : null}
               <div className="rh-cap">{startSubLine(week.start)}</div>
             </>) : null}
           </Reading>
         ) : null}
 
-        <Reading title="Before the first edit" rule={doc.rules.explore} pick={pk}
+        <Reading title="Before the first edit" rule={doc.rules.explore} pick={pk} chartTitle="Tokens sent before the first edit"
           bars={{ ...series(weeks, at, newest, (w) => w.explore, (r) => [r.medianTok], (r) => exploreLine(r)), fmtTick: fmtCount }}>
           {isAgentAbsent(week.explore) ? null : <KindBar bag={week.explore.split} whole={tokenTotal(week.explore.split)} />}
           {hasLooks ? (() => {
@@ -148,6 +272,7 @@ export function AgentReadingsRegion({ repo, carried }: {
             const looks = series<SeriesMedian>(weeks, at, newest,
               (w) => (isAgentAbsent(w.explore) ? w.explore : w.explore.looks), (r) => [r.median], looksLine);
             return (<>
+              <div className="ar-chart-title">Look calls before the first edit</div>
               <AgentWeekBars values={looks.values} weeks={pk.weeks} picked={pk.i} onPick={pk.set} label="look calls before the first edit" fmtTick={medTick} />
               {isAgentAbsent(week.explore) ? null : <div className="rh-scrub">{looks.line}</div>}
             </>);
@@ -160,6 +285,11 @@ export function AgentReadingsRegion({ repo, carried }: {
             bars={{ ...series<SeriesMedian>(weeks, at, newest, (w) => w.requests, (r) => [r.median], requestsLine), fmtTick: medTick }} />
         ) : null}
 
+        {hasSkills ? (
+          <Reading title="Skill loads per session" rule={doc.rules.skills ?? ""} pick={pk}
+            bars={{ ...series<SeriesLoads>(weeks, at, newest, (w) => w.skillLoads, (r) => [r.mean], skillsLine), fmtTick: fmtMean }} />
+        ) : null}
+
         {hasSpend ? (
           <Reading title="Spend" rule={doc.rules.spend ?? ""} pick={pk}
             bars={{ ...series(weeks, at, newest, (w) => w.spend, (r) => [r.usd], figures.spend), fmtTick: fmtUsdShort }}>
@@ -170,14 +300,14 @@ export function AgentReadingsRegion({ repo, carried }: {
         {hasActivity ? (
           <Reading title="Who did the work" rule={doc.rules.activity ?? ""} pick={pk}
             bars={{ ...series(weeks, at, newest, (w) => w.activity, (r) => [r.mainTok, r.agentTok], figures.activity),
-              fmtTick: fmtCount, parts: ["conversations' own", "subagents"] }}>
+              fmtTick: fmtCount, parts: ["conversations' own", "subagents"], share: true }}>
           </Reading>
         ) : null}
 
         <Reading title="Rework spend" rule={doc.rules.rework} pick={pk}
           bars={{ ...series(weeks, at, newest, (w) => w.rework,
             (r) => [tokenTotal(r.byClass.rework), tokenTotal(r.byClass.feature), tokenTotal(r.byClass.unknown)], (r) => reworkLine(r)),
-            fmtTick: fmtCount, parts: ["rework", "feature", "unknown"] }}>
+            fmtTick: fmtCount, parts: ["rework", "feature", "unknown"], share: true }}>
           {isAgentAbsent(week.rework) ? null : (<>
             <KindBar bag={reworkWhole(week.rework)} whole={week.rework.totalTok} />
             <div className="rh-cap">{reworkBeside(week.rework)}</div>
@@ -243,6 +373,7 @@ export function AgentReadingsRegion({ repo, carried }: {
           </div>
           <div className="rh-cap rh-gutter">{TABLE_NOTE}</div>
         </div>
+      </>) : null}
       </>) : null}
     </div>
   );

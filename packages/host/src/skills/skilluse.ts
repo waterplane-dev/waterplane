@@ -46,6 +46,25 @@ const addDay = (m: Record<string, Bag>, d: string, k: string) => add((m[d] ??= {
 const COMMAND = /<command-name>\/?([^<\s]+)<\/command-name>/;
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
+/** Substring a raw log line holds when it may carry a Skill call (the pre-filter). */
+export const SKILL_CALL_MARK = '"name":"Skill"';
+
+/**
+ * The ONE definition of "a skill use": the `Skill` tool_use blocks of an assistant row, each with
+ * its call id (callers dedupe by it: a streamed reply writes its blocks on several rows) and the
+ * skill's name without a leading slash. The skills screen's counts and the agent readings' skill
+ * loads both ask this.
+ */
+export function skillCallsOf(row: any): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = [];
+  if (row?.type !== "assistant" || !Array.isArray(row.message?.content)) return out;
+  for (const b of row.message.content) {
+    if (b?.type !== "tool_use" || b.name !== "Skill" || typeof b.input?.skill !== "string" || typeof b.id !== "string") continue;
+    out.push({ id: b.id, name: b.input.skill.replace(/^\//, "") });
+  }
+  return out;
+}
+
 /** Read one log into its summary. Null when unreadable. */
 export async function summarizeUse(path: string, size: number, mtime: number, now: number, chunk = SCAN_CHUNK): Promise<UseFile | null> {
   const all: Bag = {}, typedAll: Bag = {};
@@ -55,7 +74,7 @@ export async function summarizeUse(path: string, size: number, mtime: number, no
   const recent = mtime >= addLocalDays(now, -KEEP_DAYS);
   const handle = (line: string): void => {
     if (line.charCodeAt(0) !== 123) return;
-    const isSkill = line.includes('"name":"Skill"');
+    const isSkill = line.includes(SKILL_CALL_MARK);
     const isCmd = line.includes("<command-name>");
     if (!isSkill && !isCmd) return;
     let row: any;
@@ -63,11 +82,9 @@ export async function summarizeUse(path: string, size: number, mtime: number, no
     const d = typeof row.timestamp === "string" ? row.timestamp.slice(0, 10) : "";
     const inWindow = recent && d >= keepFrom && /^\d{4}-\d\d-\d\d$/.test(d);
     if (isSkill && row.type === "assistant" && Array.isArray(row.message?.content)) {
-      for (const b of row.message.content) {
-        if (b?.type !== "tool_use" || b.name !== "Skill" || typeof b.input?.skill !== "string" || typeof b.id !== "string") continue;
-        if (seen.has(b.id)) continue;
-        seen.add(b.id);
-        const name = b.input.skill.replace(/^\//, "");
+      for (const { id, name } of skillCallsOf(row)) {
+        if (seen.has(id)) continue;
+        seen.add(id);
         add(all, name);
         if (inWindow) addDay(day, d, name);
       }

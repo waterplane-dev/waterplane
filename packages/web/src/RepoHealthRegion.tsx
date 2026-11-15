@@ -43,6 +43,7 @@ import { LongestFiles } from "./RepoHealthLongest";
 import { Magnitudes } from "./RepoHealthMags";
 import { ReadingsTable } from "./RepoHealthTable";
 import { OwnReadings } from "./RepoHealthOwn";
+import { OWN_BACKFILL_COMMITS, ownBackfillExhausted, ownBackfillResultWords } from "./repoHealthOwnBackfill";
 import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
   SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
@@ -123,9 +124,31 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   const now = useNow(1000);
 
   const { reload } = res;
+  /** Reading the repo's OWN readings back (R-metrics-065): the request is
+   *  here, the card draws it (`RepoHealthOwn.tsx`). Keyed by repo so a switch
+   *  never shows another repo's answer. */
+  const [backfill, setBackfill] = useState<{ repoId: string; busy: boolean; startedAt: number; result: string | null; exhausted: boolean } | null>(null);
+  const backfillHere = backfill && repo && backfill.repoId === repo.id ? backfill : null;
+  async function runBackfill() {
+    if (!repo || backfillHere?.busy) return;
+    const repoId = repo.id;
+    track("action:repohealth.ownbackfill");
+    setBackfill({ repoId, busy: true, startedAt: Date.now(), result: null, exhausted: false });
+    // The read polls while busy (below), so the desktop's progress line shows.
+    reload({ quiet: true });
+    try {
+      const a = await api.repoHealthOwnBackfill(repoId, OWN_BACKFILL_COMMITS);
+      if (a.view) res.set(a.view);
+      else await reload({ quiet: true });
+      setBackfill({ repoId, busy: false, startedAt: 0, result: ownBackfillResultWords(a), exhausted: ownBackfillExhausted(a) });
+    } catch (e) {
+      // Only a transport failure reaches here. A refusal is a body.
+      setBackfill({ repoId, busy: false, startedAt: 0, result: String((e as Error)?.message || e), exhausted: false });
+    }
+  }
   // `!!view.run` rather than the object: a fresh object arrives with every poll
   // and the effect would tear down and re-arm its own interval each time.
-  const hostRunning = !!view?.run;
+  const hostRunning = !!view?.run || !!backfillHere?.busy;
   useEffect(() => {
     if (!hostRunning) return;
     const t = window.setInterval(() => reload({ quiet: true }), POLL_MS);
@@ -553,9 +576,30 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
             <div className="rh-cap rh-gutter">{mixedPlotWords(series?.versions)}</div>
           ) : null}
 
+          {/* The repo's OWN readings come right after the score (owner,
+              2026-11-14): they are the numbers the repo itself said matter.
+              Named apart from the engine's readings below by their own heading;
+              one line on how to add one where the repo declares none. */}
+          {repo ? (
+            <OwnReadings plot={plot} repoName={repo.repoName} series={drawn.own?.series} axis={drawnAxis}
+              backfill={scope ? undefined : {
+                busy: !!backfillHere?.busy,
+                secs: backfillHere?.busy ? (now - backfillHere.startedAt) / 1000 : 0,
+                note: view?.run?.note ?? null,
+                result: backfillHere?.result ?? null,
+                exhausted: !!backfillHere?.exhausted,
+                onRun: () => { void runBackfill(); },
+              }}
+              actionsFor={onRemedy ? (s) => (
+                <Button className="rh-verb" type="button" onClick={() => askAbout({ ...s, detail: s.means })}>
+                  <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
+                </Button>
+              ) : undefined} />
+          ) : null}
+
           {/* WHOSE readings these are, once, as a heading — never a badge per
-              card. Everything from here to the repo's own card is the
-              engine's; the repo's own, if any, are named apart. */}
+              card. Everything from here down is the engine's; the repo's own
+              card above is named apart. */}
           <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
           {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap rh-gutter">{l}</div>)}
 
@@ -604,16 +648,6 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
             </SectionCard>
           ) : null}
 
-          {/* The repo's OWN readings, apart from everything above and from
-              the index: one line on how to add one where it declares none. */}
-          {repo ? (
-            <OwnReadings plot={plot} repoName={repo.repoName} series={drawn.own?.series} axis={drawnAxis}
-              actionsFor={onRemedy ? (s) => (
-                <Button className="rh-verb" type="button" onClick={() => askAbout({ ...s, detail: s.means })}>
-                  <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
-                </Button>
-              ) : undefined} />
-          ) : null}
         </>
       ) : null}
 

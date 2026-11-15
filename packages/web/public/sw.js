@@ -22,6 +22,60 @@ const BRAND_NAME = "__BRAND_NAME__";
  *  the purge until the page has copied it (web/src/boot/brandMigrate.ts). */
 const LEGACY_SLUGS = "__BRAND_LEGACY_SLUGS__".split(",").filter(Boolean);
 const SHELL = `${BRAND_SLUG}-shell-__SW_BUILD__`;
+/** The page's IndexedDB name in a browser (`dbNameFor(null)`), where the relay store lives. */
+const BRAND_CACHE = "__BRAND_CACHE__";
+
+// The background relay (`swRelay.js`, PLAN bg-link-send WP8): queued prompts the page would
+// send unasked, carried over `fetch` while no page can. Versioned by the build so a new relay
+// arrives with the worker that loads it. Guarded: a context without `importScripts` (a node
+// test running this file) simply has no relay, and every handler below behaves as before.
+if (typeof importScripts === "function") {
+  try { importScripts("/swRelay.js?v=__SW_BUILD__"); } catch { /* no relay this build */ }
+}
+const relay = () => (typeof WPRelay === "object" && WPRelay ? WPRelay : null);
+/** Actions are drawn on Android (Chromium) only; iOS shows none and says so with maxActions 0. */
+const canAct = () => {
+  try { return (self.Notification?.maxActions ?? 0) > 0 && !/iPhone|iPad|iPod/.test(self.navigator?.userAgent || ""); } catch { return false; }
+};
+function relayEnv(R) {
+  return {
+    store: R.idbStore(BRAND_CACHE),
+    fetch: (u, i) => fetch(u, i),
+    now: () => Date.now(),
+    pageVisible: async () => (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).some((w) => w.visibilityState === "visible"),
+  };
+}
+/** One wake, then the notification it ends in (`push` given ⇒ always one: iOS requires it). */
+async function relayWake(push) {
+  const R = relay();
+  if (!R) return null;
+  const rep = await R.runRelay(relayEnv(R)).catch(() => null);
+  if (rep && rep.more && self.registration.sync) self.registration.sync.register("queue").catch(() => {});
+  const n = rep ? R.notice(rep, push, BRAND_NAME, canAct()) : null;
+  if (n) {
+    await self.registration.showNotification(n.title, {
+      body: n.body,
+      tag: (push && push.tag) || "relay",
+      renotify: false,
+      icon: "/assets/icon-192.png",
+      badge: "/assets/icon-192.png",
+      actions: n.actions,
+      data: { relayRelease: n.release, item: push ? notifItem(push) : null },
+      requireInteraction: !!push || n.release.length > 0,
+    });
+  }
+  return { rep, shown: !!n };
+}
+
+// Background Sync (Chromium; iOS has none): the page registers "queue" when its plan is not
+// empty and the link is down, or as it freezes. Rejecting asks the browser to try again later
+// — only for a reason that can pass (no network, the page not yet frozen).
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "queue" || !relay()) return;
+  event.waitUntil(relayWake(null).then((r) => {
+    if (r?.rep?.transient && !r.rep.sent) throw new Error("relay: try again later");
+  }));
+});
 
 // Image thumbnails, cached across builds. The name is deliberately NOT
 // build-hashed: a deploy changes the app bundle, not the pictures, and wiping
@@ -125,7 +179,18 @@ self.addEventListener("push", (event) => {
   // agent finishes a build. Best-effort: no Background Fetch support (iOS, or a
   // non-secure context) just leaves the item queued for the in-page fallback.
   if (data.pull && data.file) event.waitUntil(startPull(data.pull, data.file).catch(() => {}));
-  event.waitUntil(
+  // The desktop is reachable again (host `linkback.ts`): run the relay, then show ONE
+  // notification saying what was sent and what waits — or the push's own words. iOS
+  // requires every push to show one, so a failed relay still falls through to the plain one.
+  if (data.kind === "link.back" && relay()) {
+    event.waitUntil(relayWake(data).then((r) => (r && r.shown ? null : showPlain(data))).catch(() => showPlain(data)));
+    return;
+  }
+  event.waitUntil(showPlain(data));
+});
+
+function showPlain(data) {
+  return (
     self.registration.showNotification(data.title, {
       body: data.body,
       tag: data.tag,
@@ -135,9 +200,9 @@ self.addEventListener("push", (event) => {
       badge: "/assets/icon-192.png",
       data: { sessionId: data.sessionId, plugin: data.plugin, image: data.image, file: data.file, item: notifItem(data) },
       requireInteraction: true,
-    }),
+    })
   );
-});
+}
 
 // The feed item a push stands for, for a tap with no session, file, image or
 // plugin to open: the page's `openNotif` lands it (a health move opens its repo's
@@ -154,6 +219,14 @@ function notifItem(d) {
 // Tapping a notification focuses the app and asks it to open that session.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  // "Send N" on a relay notification (Android): release exactly the rows it named, if they are
+  // still in the plan as the same frames, and run the relay. No window opens.
+  if (event.action === "relay-send" && relay()) {
+    const R = relay();
+    const wanted = event.notification.data?.relayRelease || [];
+    event.waitUntil(R.release(relayEnv(R), wanted).then(() => relayWake(null)).catch(() => {}));
+    return;
+  }
   const sessionId = event.notification.data?.sessionId;
   const image = event.notification.data?.image;
   const file = event.notification.data?.file;

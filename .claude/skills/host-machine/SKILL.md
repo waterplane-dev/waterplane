@@ -31,7 +31,7 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   so a new store is never deleted by default. **Containment is NOT `contained()`** — this dir is
   outside every worktree: no path arrives from the client, names are **matched never sanitised**
   (`..json.bak` is a non-match), symlinks skipped, plus `inRoot()` as the realpath belt. **`at` is
-  the contract** . `GET /api/storage/transport` · `GET /api/storage/host` · `POST …/host/clear`, outside the
+  the contract** . **Lost stores** (`jsonstore.ts`): a corrupt/unreadable read or a swallowed save (`recordWriteLoss(path, e)` from that catch) is ONE record in `store-losses.json` (last 50; persisted only inside the bound state dir, else `memoryOnly`), listed as the report's `losses` and as the owning reading's `loss` (`budget.state`, `sent.log`, `GET /api/ui-usage`); `POST …/host/loss/dismiss` (in `apistats.ts`) hides one, never touches bytes. `GET /api/storage/transport` · `GET /api/storage/host` · `POST …/host/clear`, outside the
   `/api/repos/` prefix, clear **200 even when it refuses**. `hoststore.test.mjs` ·
   `transportsurvey.test.mjs` · `e2e-storage.mjs`.
 - `localrt.ts` — **what the LOCAL model runner is holding**, off ollama's `/api/ps` + the OS.

@@ -36,9 +36,9 @@ async function listTransport(repoId: string, signal: AbortSignal): Promise<strin
  */
 export function useTransportIndex(repoId: string | null, enabled: boolean): readonly string[] | undefined {
   const res = useRemoteResource<string[]>(
-    repoId ?? "",
+    `transport:index:${repoId ?? ""}`,
     (signal) => listTransport(repoId as string, signal),
-    { enabled: enabled && !!repoId },
+    { enabled: enabled && !!repoId, cache: { shape: 1 } },
   );
   return res.data ?? undefined;
 }

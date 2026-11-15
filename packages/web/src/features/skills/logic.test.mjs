@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   bucket, canInherit, chipCount, chipKeys, draftChanges, levelFor, matches, pluginTag, reconcileDraft, receiptWords, saveWords, saveNote, applyNote, suggestionName, sortRows, splitRows,
-  stateTag, summaryWords, rowView, sourceWords, overriddenWords, withPin, fallbackAt, globalDraftOf, suggestionChanges, suggestionLevers, suggestionMeanings, suggestionUses, applyFilesWords, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, parkedWords, reconcileSuggestions,
+  stateTag, summaryWords, rowView, sourceWords, overriddenWords, withPin, fallbackAt, globalDraftOf, suggestionChanges, suggestionLevers, suggestionMeanings, suggestionUses, applyFilesWords, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, parkedWords, reconcileSuggestions, countProgress, isCountingRefusal, isCountingDoc, usesBar, usesIsNewer,
 } from "./logic.ts";
 
 const skill = (id, o = {}) => ({ kind: "skill", id, source: "personal", set: {}, effective: "on", from: "default", switchable: true, listingChars: 400, ...o });
@@ -243,4 +243,36 @@ test("keep for this repo pins the followed value; follow removes it", () => {
   assert.deepEqual(withPin({}, held, "repo-local"), {}, "already its own");
   assert.equal(rowView(held, "repo-local", { "skill:b": "inherit" }).value, "on");
   assert.equal(canInherit(skill("c"), "repo-local", { "skill:c": "off" }), true, "an unsaved own value can be undone");
+});
+
+test("a running count is a bar only once the host has a total", () => {
+  assert.deepEqual(countProgress({ state: "counting", done: 4515, total: 25443 }), { done: 4515, total: 25443, pct: 17 });
+  assert.equal(countProgress({ state: "counting", done: 3 }), null);
+  assert.equal(countProgress({ state: "ready", done: 9, total: 9 }), null);
+  assert.equal(countProgress({ state: "counting", done: 30, total: 20 }).pct, 100);
+});
+
+test("only a still-counting refusal is swapped for the live bar", () => {
+  const r = (error, ok = false) => ({ ok, suggestions: [], dropped: 0, error });
+  assert.ok(isCountingRefusal(r("Counting uses across all repos is still running (4515 of 25443 logs). Try again in a moment.")));
+  assert.ok(isCountingRefusal(r("Counting uses is still running. Try again in a moment.")));
+  assert.ok(!isCountingRefusal(r("Cannot recommend: there are no use counts to go on.")));
+  assert.ok(!isCountingRefusal(null));
+});
+
+test("the count bar is fed by the uses job: its own progress, the sentence alone without a size, nothing once nothing counts", () => {
+  const counting = { usage: { state: "counting" } };
+  const ready = { usage: { state: "ready", allRepos: { state: "ready" } } };
+  assert.deepEqual(usesBar({ progress: { done: 3, total: 10 } }, ready), { state: "counting", done: 3, total: 10 });
+  assert.deepEqual(usesBar({}, ready), { state: "counting" });
+  assert.deepEqual(usesBar(null, counting), { state: "counting" });
+  assert.equal(usesBar(null, ready), undefined);
+  assert.equal(isCountingDoc({ usage: { state: "ready", allRepos: { state: "counting" } } }), true);
+  assert.equal(isCountingDoc(null), false);
+});
+
+test("the counted inventory shows only once it is newer than the plain read or a save", () => {
+  assert.equal(usesIsNewer({ resultAt: 5 }, { data: {}, resultAt: 6 }), true);
+  assert.equal(usesIsNewer({ resultAt: 7 }, { data: {}, resultAt: 6 }), false);
+  assert.equal(usesIsNewer({ resultAt: null }, { data: null, resultAt: 6 }), false);
 });

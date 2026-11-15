@@ -22,8 +22,11 @@
  * A `.corrupt-*` copy is `unknown` to `hoststore.ts`: counted, shown, never
  * cleared by it.
  */
+import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import type { StoreLoss, StoreLossKind } from "@waterplane/shared";
+import { boundHostStateDir } from "./branddirs.js";
 import { inRoot } from "./paths.js";
 
 export interface WriteJsonOpts {
@@ -147,9 +150,10 @@ export function readJsonGuardedDetail<T>(path: string, fallback: T, accept?: (v:
     const msg = String((e as Error).message);
     if (opts.keepUnreadable || PROCESS_LEVEL.has((e as NodeJS.ErrnoException).code ?? "")) {
       console.error(`[jsonstore] ${path} could not be read (${msg}); left in place; starting from defaults`);
+      addLoss(path, "unreadable", msg, null);
       return { value: fallback, corrupt: { movedTo: null, error: msg, unreadable: true } };
     }
-    const r = moveAside(path, fallback, `could not be read (${msg})`, msg);
+    const r = moveAside(path, fallback, `could not be read (${msg})`, msg, "unreadable");
     r.corrupt!.unreadable = true;
     return r;
   }
@@ -162,11 +166,11 @@ export function readJsonGuardedDetail<T>(path: string, fallback: T, accept?: (v:
     error = String((e as Error).message);
   }
   if (error === null) return { value: parsed as T };
-  return moveAside(path, fallback, `is corrupt (${error})`, error);
+  return moveAside(path, fallback, `is corrupt (${error})`, error, "corrupt");
 }
 
 /** Keep `path`'s bytes under a `.corrupt-` name, say so once, and hand back the fallback. */
-function moveAside<T>(path: string, fallback: T, what: string, error: string): GuardedRead<T> {
+function moveAside<T>(path: string, fallback: T, what: string, error: string, kind: "corrupt" | "unreadable"): GuardedRead<T> {
   let movedTo: string | null = corruptPathFor(path);
   try { renameSync(path, movedTo); } catch { movedTo = null; }
   console.error(
@@ -174,6 +178,7 @@ function moveAside<T>(path: string, fallback: T, what: string, error: string): G
       (movedTo ? `kept as ${movedTo}` : "could not move it aside") +
       "; starting from defaults",
   );
+  addLoss(path, kind, error, movedTo);
   return { value: fallback, corrupt: { movedTo, error } };
 }
 
@@ -185,4 +190,206 @@ export function isPlainObject(v: unknown): boolean {
 /** `readJsonGuardedDetail`, value only. */
 export function readJsonGuarded<T>(path: string, fallback: T, accept?: (v: unknown) => boolean): T {
   return readJsonGuardedDetail(path, fallback, accept).value;
+}
+
+// ── The record of what was lost ─────────────────────────────────────────────
+//
+// A move-aside keeps the bytes; a swallowed write keeps the daemon up. Neither
+// tells a PERSON — and the figure built on the defaults (a cap that is no
+// longer set, "never used", an empty sent list) reads as the truth. So every
+// loss is one record in `<state dir>/store-losses.json`: the file, when, what
+// kind, the error, and where the bytes went. It survives a restart because a
+// loss usually happens AT boot and is looked at later.
+//
+// The record file is read with a plain try/catch, never `readJsonGuarded`:
+// that would record a loss of the loss log, inside the loss log. A damaged one
+// is renamed aside by hand (the same rule, no record) before it is replaced.
+// Only a store INSIDE the bound host state dir is persisted; anything else (a
+// repo's state dir, a unit test's mkdtemp — whose process may have bound the
+// real state dir by importing `env.ts`) is kept in memory, `memoryOnly`, so no
+// test ever writes a record into a person's real state dir.
+//
+// A record, never an action: dismissing one hides it and touches no bytes.
+
+/** The record file's name in the state dir (`hoststore.ts` lists it as bounded). */
+export const STORE_LOSS_FILE = "store-losses.json";
+/** How many records are kept, oldest dropped first. */
+export const STORE_LOSS_KEEP = 50;
+const ERROR_MAX = 400;
+
+interface LossRecord extends Omit<StoreLoss, "movedToExists" | "memoryOnly"> { dismissedAt?: number }
+
+let lossFileOverride: string | null | undefined;
+let memLosses: LossRecord[] = [];
+
+/** Tests: where the record file is (`null` = memory only, `undefined` = the
+ *  bound state dir again). Also forgets the in-memory records. */
+export function setStoreLossFile(path: string | null | undefined): void {
+  lossFileOverride = path === undefined || path === null ? path : resolve(path);
+  memLosses = [];
+}
+
+function lossFile(): string | null {
+  if (lossFileOverride !== undefined) return lossFileOverride;
+  const d = boundHostStateDir();
+  return d ? join(d, STORE_LOSS_FILE) : null;
+}
+
+/** Whether a loss of `path` goes to the record file (else memory). */
+function persists(path: string): boolean {
+  if (lossFileOverride !== undefined) return lossFileOverride !== null;
+  const d = boundHostStateDir();
+  return !!d && resolve(path).startsWith(d + sep);
+}
+
+function isLossRecord(v: unknown): v is LossRecord {
+  const r = v as LossRecord;
+  return !!r && typeof r === "object" && typeof r.id === "string" && typeof r.path === "string" && typeof r.store === "string"
+    && typeof r.at === "number" && (r.kind === "corrupt" || r.kind === "unreadable" || r.kind === "write-failed")
+    && typeof r.error === "string" && (r.movedTo === null || typeof r.movedTo === "string");
+}
+
+/** The record file's list, or null when it must not be written over (present
+ *  but unreadable). Absent ⇒ []. Unparseable ⇒ renamed aside, then []. */
+function readLossFile(f: string): LossRecord[] | null {
+  let raw: string;
+  try {
+    raw = readFileSync(f, "utf8");
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "ENOENT" ? [] : null;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (Array.isArray(v)) return v.filter(isLossRecord);
+  } catch { /* set aside below */ }
+  try { renameSync(f, corruptPathFor(f)); } catch { return null; }
+  console.error(`[jsonstore] ${f} is corrupt; kept as a .corrupt- copy; starting a new record`);
+  return [];
+}
+
+/** Persist `list` to the record file, or keep it in memory when that fails. */
+function saveLossFile(f: string, list: LossRecord[]): boolean {
+  try {
+    writeJsonAtomic(f, list, { space: 2 });
+    return true;
+  } catch (e) {
+    console.error(`[jsonstore] could not save ${f} (${String((e as Error).message)}); the record is kept in memory only`);
+    return false;
+  }
+}
+
+function trim(list: LossRecord[]): LossRecord[] {
+  return list.length > STORE_LOSS_KEEP ? list.slice(-STORE_LOSS_KEEP) : list;
+}
+
+function addLoss(path: string, kind: StoreLossKind, error: string, movedTo: string | null, now = Date.now()): void {
+  try {
+    const full = resolve(path);
+    const f = lossFile();
+    if (f !== null && full === f) return; // the record file never records itself
+    const err = error.length > ERROR_MAX ? `${error.slice(0, ERROR_MAX)}…` : error;
+    const onDisk = f !== null && persists(full) ? readLossFile(f) : null;
+    const list = onDisk ?? memLosses;
+    // A save that keeps failing is ONE loss, not fifty records evicting the rest.
+    // Memory records count too: a record whose own save failed lives only there.
+    const last = [...(onDisk ?? []), ...memLosses].reverse().find((r) => r.path === full && !r.dismissedAt);
+    let rec: LossRecord;
+    let fromMem = false;
+    if (kind === "write-failed" && last?.kind === "write-failed") {
+      rec = last;
+      fromMem = memLosses.includes(last);
+      rec.lastAt = now;
+      rec.count = (rec.count ?? 1) + 1;
+      rec.error = err;
+    } else {
+      rec = { id: `${now.toString(36)}-${randomBytes(3).toString("hex")}`, store: basename(full), path: full, at: now, kind, error: err, movedTo };
+      list.push(rec);
+    }
+    if (fromMem && onDisk) {
+      // The disk is writable again: move the memory-only record there.
+      const merged = trim([...onDisk.filter((r) => r.id !== rec.id), rec]);
+      if (saveLossFile(f!, merged)) { memLosses = memLosses.filter((r) => r.id !== rec.id); return; }
+      return; // still unwritable: the record stays in memory, already updated
+    }
+    if (onDisk && saveLossFile(f!, trim(list))) return;
+    // Memory: either it never goes to disk, or the disk write just failed — then
+    // this record alone is kept here (memory wins over disk for the same id).
+    memLosses = trim(onDisk ? [...memLosses.filter((r) => r.id !== rec.id), rec] : list);
+  } catch (e) {
+    // Recording a loss must never turn a boot that survived it into one that did not.
+    console.error(`[jsonstore] could not record a loss of ${path}: ${String((e as Error).message)}`);
+  }
+}
+
+/**
+ * A store's save threw and the store swallowed it to stay up. Call from that
+ * catch so the person can be told; the store's own decision is unchanged.
+ * Never throws.
+ */
+export function recordWriteLoss(path: string, err: unknown, now = Date.now()): void {
+  addLoss(path, "write-failed", String((err as Error)?.message ?? err), null, now);
+}
+
+function allLosses(): { r: LossRecord; memoryOnly: boolean }[] {
+  const f = lossFile();
+  const disk = f ? readLossFile(f) ?? [] : [];
+  const inMem = new Set(memLosses.map((r) => r.id));
+  return [
+    ...disk.filter((r) => !inMem.has(r.id)).map((r) => ({ r, memoryOnly: false })),
+    ...memLosses.map((r) => ({ r, memoryOnly: true })),
+  ].sort((a, b) => b.r.at - a.r.at);
+}
+
+function toWire(r: LossRecord, memoryOnly: boolean): StoreLoss {
+  const { dismissedAt: _d, ...rest } = r;
+  return {
+    ...rest,
+    ...(r.movedTo ? { movedToExists: existsSync(r.movedTo) } : {}),
+    ...(memoryOnly ? { memoryOnly: true } : {}),
+  };
+}
+
+/** Every loss nobody dismissed, newest first, each saying whether its
+ *  `movedTo` is still on disk. Never throws. */
+export function listStoreLosses(): StoreLoss[] {
+  try {
+    return allLosses().filter(({ r }) => !r.dismissedAt).map(({ r, memoryOnly }) => toWire(r, memoryOnly));
+  } catch {
+    return [];
+  }
+}
+
+/** The newest undismissed loss of the store at `path` — what that store's own
+ *  reading carries as `loss`. Undefined = none on record. */
+export function storeLossFor(path: string): StoreLoss | undefined {
+  const full = resolve(path);
+  try {
+    const hit = allLosses().find(({ r }) => r.path === full && !r.dismissedAt);
+    return hit ? toWire(hit.r, hit.memoryOnly) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a dismiss did. `unknown` = no record by that id (already trimmed, or
+ *  never). The record is kept, marked; the bytes are never touched. */
+export type DismissLossResult = { ok: true; already?: boolean } | { ok: false; why: string };
+
+export function dismissStoreLoss(id: string, now = Date.now()): DismissLossResult {
+  const inMem = memLosses.find((r) => r.id === id);
+  if (inMem) {
+    if (inMem.dismissedAt) return { ok: true, already: true };
+    inMem.dismissedAt = now;
+    return { ok: true };
+  }
+  const f = lossFile();
+  const disk = f ? readLossFile(f) : null;
+  const onDisk = disk?.find((r) => r.id === id);
+  if (onDisk) {
+    if (onDisk.dismissedAt) return { ok: true, already: true };
+    onDisk.dismissedAt = now;
+    if (!saveLossFile(f!, disk!)) return { ok: false, why: `the record file ${f} could not be saved; nothing was changed` };
+    return { ok: true };
+  }
+  return { ok: false, why: "no loss on record with that id — it may have been dropped as one of the oldest" };
 }

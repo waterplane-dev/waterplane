@@ -82,6 +82,13 @@ function titleOf(id: string, path: string): string {
   return out;
 }
 
+/** The archive listing's own label for one conversation (its log's first prompt),
+ *  for a reader outside this module — session search's archived rows. "" for a
+ *  bad id, a missing log or a log with no prompt yet. */
+export function archivedTitle(cwd: string, id: string): string {
+  return archivedExists(cwd, id) ? titleOf(id, transcriptPath(cwd, id)) : "";
+}
+
 /** Every conversation log for a directory, newest first, as id + stat only. */
 function statAll(cwd: string): Array<{ id: string; path: string; mtime: number; size: number }> {
   const dir = claudeProjectDir(cwd);

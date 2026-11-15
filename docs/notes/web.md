@@ -7609,6 +7609,17 @@ lives in a module whose test bans verdict words (`repoHealthWords.ts`), why its 
 module whose test bans the arithmetic of a reading (`repoHealthPlot.ts`), and why its drawing
 (`RepoHealthTiles.tsx`) may not name `--warn` or `--dead`.
 
+**Which way is better — per metric, not per reading** (`repoHealthWordsAim.ts`, owner 2026-11-14,
+R-metrics-075). A newcomer looking at "0 files ↘ falling" or "787 ↗ rising" could not tell good
+news from bad: the slope glyph is deliberately unjudged, so the tile never said which direction the
+metric wants. Every tile now carries one ink line under its value — "lower is better", "higher is
+better", or "neither way is simply better" with a one-sentence reason on the opened tile
+(`context.skillCount`, `habits.deletionRatio`, `habits.netNegative`). This does not break the
+no-side rule above: the line is a property of the METRIC, identical whatever the reading, so it
+still never says whether today is good news, and it has no hue. A repo's own reading takes its
+declared `better` (one that declares none says so); a key the engine adds later fails
+`repoHealthWords.test.mjs` until it has an entry — absent, never a guess.
+
 **Two reads, never one state.** Two `useRemoteResource` hooks on two keys, two `Empty`s, two age
 lines, two write halves. "The checklist could not be read" and "the series could not be read" are
 different sentences with different next actions, and a repo whose series 500s is not a repo whose
@@ -9460,3 +9471,39 @@ Drops are runs of adjacent minutes holding a no-socket probe, so one is never st
 pocket. Bytes carry their source (`noteTraffic`'s third argument) because a total without a split
 cannot answer "on what". The sheet's landing is taken twice: the charts arrive after the first scroll
 and push the target down.
+
+## Offline reads, offline writes, slow jobs — `resourceCache.ts`, `offlineGate.tsx`, `slowJobs.ts`, `slowJobsLogic.ts` (2026-11-13)
+
+The owner reads the phone on a link that drops every evening, and leaves screens whose work takes minutes. Before
+this, 29 of 34 host-read screens had no cache — "Reading…" on every visit and nothing offline — and Skills & plugins
+or the setup checklist lost their answer when the screen closed, because `useRemoteResource` aborted the request on
+unmount and the answer lived in component state.
+
+- `resourceCache.ts` holds the pure rules for the default cache `useRemoteResource` now uses when a caller passes no
+  `fromCache`/`toCache`: one IndexedDB store `rescache`, key `<host>|<resource key>`, newest 200 by `savedAt`, entries
+  over 1 MB not stored, `v` (the caller's `cache:{shape}`) discards an entry whose DTO changed. Keys had to become
+  namespaced and stable: a bare repoId collided between compliance, git status and branches, and a refresh counter in
+  the key missed the cache and piled rows. Opt-outs (`cache:false`) are secrets, pairing, shell process lines and peer
+  jobs (a stale copy would show finished jobs running).
+- `kit/offlineGate.tsx` (`useOfflineGate`) is how "offline is read-only" is said: a guarded tap runs nothing and the
+  note says why. It reads the socket (`link.ts`), not `navigator.onLine`. The send queue is deliberately not gated.
+- `slowJobs.ts` is the phone half of host `slowjobs.ts` (see host.md): a store outside any component, fed by
+  `slowjob.state` on the one socket and re-synced from `GET /api/jobs` on `welcome`; the result is fetched by GET (the
+  frame never carries it) and kept in `rescache`. `slowJobsLogic.ts` is its pure reducer (fetch or not, toast or not).
+  It sits at the src root because both `SetupSheet.tsx` and `features/skills` read it and a feature cannot import a feature.
+
+What is still to move is listed in [offline-cache-audit](../analysis/offline-cache-audit.md).
+
+## The background relay keeps the queue's rule (`core/queue/relayOwner.ts`, `swRelayOwner.ts`, `public/swRelay.js`)
+
+"Never a send path that bypasses the queue" still holds when the page is frozen and the APK's
+`ShellLinkService` or the PWA's service worker sends in its place (`POST /api/relay`, host side in the
+`bgrelay.ts` section of `host.md`). The relay sends only `entryFrame` output — the frame the queue
+itself built, with the queue's own ackIds — one per lane at a time, from a plan (`relayPlan`,
+`shared/queuerelay.ts`) the page hands over whenever the queue changes. It never mints, edits or
+deletes a row. Its verdicts come back as receipts that the page applies through the queue's ordinary
+ack handlers when it claims ownership again (`claimQueue`; `written` first, then receipts), so a row
+is settled by the same code whether the page or the relay sent it. The localStorage queue stays the
+source of truth: a row the relay wrote is `relayedAt`-marked, never re-aimed, and re-sent with the
+same ackId if the receipt never arrived. Rows held by the reconnect question (`needsRelease`) go only on
+a person's "Send N". Tests: `ShellRelayTest`, `swRelay.test.mjs`, `e2e-relay.mjs`.

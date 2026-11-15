@@ -5,7 +5,9 @@ description: "waterplane's test layers and how to add to them: node --test over 
 
 # waterplane testing
 
-Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
+Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it. A test that proves a
+requirement names its ID (`R-<area>-<nnn>`) in its title or beside the assertion, only when it
+really fails on that behaviour (skill `requirements`).
 
 1. **`npm run test:unit`** — `node --test` over `packages/shared/test/*.test.mjs` (on `shared/dist`),
    `packages/web/src/**/*.test.mjs` (the TypeScript itself via node's type stripping — a test imports
@@ -33,6 +35,8 @@ Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
    the same protocol checks against the real host and the demo's fake, not yet in `npm test`),
    **`npm run test:ui`** (`scripts/ui/run.mjs`: Playwright journeys with aria snapshots, scratch web build,
    never `packages/web/dist`; the `journey-fault-*` ones are fault tests, not docs gifs),
+   **`npm run test:gutters`** (`scripts/ui/gutters.mjs`, ~3 min: every `screenlist.mjs` screen, each line
+   that starts near its frame's left edge must start on `--gutter` or bleed full width; names the element),
    **`npm run test:vscode`**, and **`scripts/smoke-real-cli.mjs`** (opt-in, spends cents: the daemon
    against the REAL `claude`, since every e2e runs the stub). `npm test` = lint, `test:unit`, `test:host`,
    `run-e2e.mjs`. `scripts/with-tmp.mjs` + `lib-testtmp.mjs` wrap every unit/host run in a private tmp dir.

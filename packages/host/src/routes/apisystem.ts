@@ -351,7 +351,8 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
   route("GET", "/api/ui-usage", ({ res }, ctx) => {
-    json(res, ctx.uiStats.get());
+    const loss = ctx.uiStats.loss();
+    json(res, loss ? { ...ctx.uiStats.get(), loss } : ctx.uiStats.get());
     return true;
   }),
   route("DELETE", "/api/ui-usage", ({ res }, ctx) => {

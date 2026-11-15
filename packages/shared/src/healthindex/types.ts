@@ -5,6 +5,10 @@ export const HEALTH_ENTRIES = [
   "dups", "deadExports", "cycles", "cochange", "fixAfterChange", "testsWithCode",
 ] as const;
 export type HealthEntry = (typeof HEALTH_ENTRIES)[number];
+/** One of the repo's OWN readings that declares a target and so joins the score (`own.ts`): `own:<key>`, so it can never clash with an entry. */
+export type HealthOwnId = `own:${string}`;
+/** Anything that has a score in the mean: one of waterplane's entries or one of the repo's own targeted readings. */
+export type HealthScoredId = HealthEntry | HealthOwnId;
 
 /**
  * The entries a week may be scored WITHOUT: where the row's reading is absent
@@ -120,8 +124,8 @@ export interface HealthSeriesRow {
   central?: HealthRowCentral | null;
   /** Which index dimensions each active pack could read (engine `reach.mjs`); absent = an older engine. Read by `coverage.ts`. */
   reach?: { value?: { packs?: unknown } | null } | null;
-  /** The repo's own readings (engine `own.mjs`), HEAD rows only. The index reads only their `gate`s (`coverage.ts`). */
-  own?: { readings?: unknown; gates?: unknown; refused?: unknown; unreadGates?: unknown; notRun?: unknown } | null;
+  /** The repo's own readings (engine `own.mjs`), HEAD rows only. The index reads their `gate`s (`coverage.ts`) and their `target`s (`own.ts`); a reading with neither stays out of it. */
+  own?: { readings?: unknown; gates?: unknown; refused?: unknown; unreadGates?: unknown; unreadTargets?: unknown; notRun?: unknown } | null;
 }
 
 /** `row.central` — written by the engine's `central.mjs`. */
@@ -167,13 +171,22 @@ export interface HealthIndexPoint {
   scores: Partial<Record<HealthEntry, number>>;
   /** Size's two sub-readings; null where size is disabled. */
   sizeParts: HealthSizeParts | null;
-  /** The worst entry when the WORST-ENTRY cap set the headline, else null. */
-  cappedBy: HealthEntry | null;
+  /** The worst entry (or the repo's own targeted reading, `own:<key>`) when the WORST-ENTRY cap set the headline, else null. */
+  cappedBy: HealthScoredId | null;
   /** Which cap set the headline; null when the mean did. Optional: absent from an older host. */
   capKind?: HealthCapKind | null;
   /** What applied this week, what was measured, and the repo's gates. Optional: absent from an older host. */
   coverage?: HealthCoverage;
-  /** Every entry or size sub-reading under `HEALTH_ALERT_WARN`, worst first. */
+  /**
+   * The repo's own readings that declare a target and were MEASURED this week,
+   * each scored against its target like an entry and counted in the mean, the
+   * worst-entry cap and coverage. An own target with no reading is an unknown
+   * coverage item instead (`coverage.items`, kind `own`), never a score. Absent
+   * = none counted (or an older host). Their move sits in `contribution` here,
+   * not in `contributions`, which stays keyed by waterplane's entries.
+   */
+  own?: HealthOwnScore[];
+  /** Every entry or size sub-reading under `HEALTH_ALERT_WARN`, worst first. The repo's own readings raise none: the cap names them. */
   alerts: HealthAlert[];
   /** A prereg or `central` change since the previous scored week: the score
    *  stands as measured, but the link is not used to call a move. */
@@ -213,6 +226,23 @@ export interface HealthIndexPoint {
   /** Source files and lines this week (`classics`), so growth can be stated;
    *  null where that reading was absent. */
   tree: { files: number; loc: number } | null;
+}
+
+/** One of the repo's own readings scored against its own target (`own.ts`). */
+export interface HealthOwnScore {
+  id: HealthOwnId;
+  key: string;
+  /** The declaration's `name`, attributed to the repo. */
+  name: string;
+  unit: string;
+  better: "lower" | "higher";
+  /** The repo's own good line. */
+  target: number;
+  value: number;
+  /** 0–100, by the same curve an entry in that direction uses (`healthDirScore`). */
+  score: number;
+  /** Its share of the mean's move, in log points, as `contributions` (absent on the first week and a gap). */
+  contribution?: number;
 }
 
 export interface HealthIndexSeries {

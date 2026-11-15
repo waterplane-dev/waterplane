@@ -25,6 +25,19 @@ test("a ratio under one gets a fractional top, not a scale floored at 1", () => 
   assert.ok(g.top < 1 && g.top >= 0.4, String(g.top));
 });
 
+test("share draws each week as a 100% stack on a fixed 0–100 axis; a zero week stays empty", () => {
+  const g = weekBars([[1, 3], [50, 50], [0, 0], null], 400, 100, 0, 0, 3, true);
+  assert.equal(g.top, 100);
+  assert.deepEqual(g.ticks, [0, 50, 100]);
+  for (const c of g.cols.slice(0, 2)) {
+    const h = c.parts.reduce((a, p) => a + p.h, 0);
+    assert.ok(Math.abs(h - 100) < 1e-9, String(h));
+  }
+  assert.ok(Math.abs(g.cols[0].parts[0].h - 25) < 1e-9);
+  assert.deepEqual(g.cols[2].parts, []);
+  assert.equal(g.cols[3].parts, null);
+});
+
 test("a tap picks by slot, clamped; labels never collide and the picked week keeps its label", () => {
   assert.equal(colAt(45, 40, 120, 12), 0);
   assert.equal(colAt(155, 40, 120, 12), 11);

@@ -567,6 +567,19 @@ test("the trend ask lists every week, the gaps as gaps, and each reading's total
   assert.doesNotMatch(p, /Escape hatches \(`hatches`\)/, "a reading with no contribution has no total, not a zero");
 });
 
+test("the trend ask names the repo's own targeted readings among each week's movers and in the totals", () => {
+  const own = (c) => [{ id: "own:cov", name: "Coverage", contribution: c }];
+  const weeks = [
+    TREND[0],
+    { ...TREND[1], own: own(-4) },
+    { ...TREND[3], own: own(1.5) },
+  ];
+  const p = healthTrendRemedyPrompt(weeks, "2026-08-17", "myapp");
+  assert.match(p, /- 2026-08-24: 97 \(−3\.0\) — File length −2\.0, Re-touched files −1\.0, Coverage \(the repo's own\) −4\.0/);
+  assert.match(p, /Coverage \(the repo's own\) \(`own:cov`\): −2\.5 over 2 weeks/);
+  assert.doesNotMatch(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp"), /the repo's own\) \(`/, "no own reading, no own line");
+});
+
 test("the trend ask reads the trend first, asks which proposals to keep, then posts only those as held backlog rows", () => {
   const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
   assert.match(p, /Is myapp getting healthier\?/);
@@ -597,6 +610,20 @@ const PLOT = {
     ],
   },
 };
+
+test("an own reading with a target is said to count in the index, in the list and in both heads", () => {
+  const plot = JSON.parse(JSON.stringify(PLOT));
+  plot.own.series[0].target = 8;
+  const ctx = healthAskContextOf(plot, "repo", "2026-08-17");
+  assert.equal(ctx.own.targeted, 1);
+  assert.equal(ctx.own.readings[0].target, 8);
+  for (const p of [healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", ctx), healthIndexRemedyPrompt(INDEX_WEEK, "myapp", ctx)]) {
+    assert.match(p, /This repo's own readings, declared in \.waterplane-shared\/health\.json — one with a target counts in the index/);
+    assert.doesNotMatch(p, /not part of the index/, "a targeted reading is never called outside the score");
+    assert.match(p, /it declares a target of 8, so it counts in the index/);
+    assert.match(p, /This score counts one of the repo's own readings against the repo's own target, so it is not directly comparable/);
+  }
+});
 
 test("the engine is named from the wire: own copy, bundled, or nothing at all", () => {
   const own = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", { engine: "repo" });

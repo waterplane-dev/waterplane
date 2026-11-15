@@ -82,8 +82,13 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
-  /** The query the HOST answered, i.e. we are looking at search hits. */
-  const [searched, setSearched] = useState<string | null>(null);
+  /** The search's answer, keyed by the folder it was read for, so any change of `dir` (Back, a crumb, a
+   *  folder row) drops it without each of them having to clear it. Kept here, never via `tree.set`: that
+   *  writes through to the cached folder listing. */
+  const [found, setFound] = useState<{ dir: string; q: string; listing: TreeListing } | null>(null);
+  /** The query the HOST answered for THIS folder, i.e. we are looking at search hits. */
+  const searched = found && found.dir === dir ? found.q : null;
+  const hits = found && found.dir === dir ? found.listing : null;
   const [open, setOpen] = useState<TreeFile | null>(null);
 
   // ── Listing ─────────────────────────────────────────────────────────
@@ -94,7 +99,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
   // tell us that: it stays true while the Tailscale path is dead, which is the
   // exact failure this whole sheet has to survive.
   const tree = useRemoteResource<TreeListing>(
-    `${repoId}:${dir}`,
+    `tree:${repoId}:${dir}`,
     (signal) => api.tree(repoId, dir, undefined, signal),
     {
       fromCache: async () => {
@@ -104,12 +109,12 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
       toCache: (l) => putTreeListing(repoId, dir, l),
     },
   );
-  const listing = tree.data;
+  const listing = searched && hits ? hits : tree.data;
 
   const load = useCallback((path: string) => {
-    setSearched(null);
+    setFound(null);
     setError(null);
-    if (path === dir) tree.reload();
+    if (path === dir) tree.reload({ quiet: true });
     else setDir(path);
   }, [dir, tree]);
 
@@ -120,10 +125,11 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
     const q = filter.trim();
     if (!q) return;
     track("action:files.search");
+    const at = dir;
     setLoading(true); setError(null);
     try {
-      const l = await api.tree(repoId, dir, q);
-      tree.set(l); setSearched(q);
+      const l = await api.tree(repoId, at, q);
+      setFound({ dir: at, q, listing: l });
     } catch {
       setError("search needs the host — showing this folder only");
     } finally {

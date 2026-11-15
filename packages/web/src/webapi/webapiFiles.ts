@@ -149,4 +149,5 @@ export const filesApi = {
    */
   hostStoreClear: (store: string, at: number) =>
     jpost<HostStoreOutcome & { error?: string }>("/api/storage/host/clear", { store, at }),
+  dismissStoreLoss: (id: string) => jpost<{ ok: true } | { ok: false; why: string }>("/api/storage/host/loss/dismiss", { id }),
 };

@@ -82,7 +82,7 @@ test("the host answers /api/auth/* before its token gate — the exemption the p
   assert.equal(lockedPassiveMayAsk({ url: "/api/passive/state", method: "POST" }), false);
 });
 
-test("every call the passive screen makes is one a locked passive token is let through", async () => {
+test("every call the passive screen makes is one a locked passive token is let through (R-security-028)", async () => {
   for (const name of PASSIVE_SCREEN) {
     const r = await requestOf(name);
     assert.ok(lockedPassiveMayAsk(r), `${name}: ${r.method} ${r.url} is refused to a passive device (passive.ts)`);

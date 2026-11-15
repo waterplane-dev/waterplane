@@ -168,10 +168,11 @@ test("the store is written by writeOutbox alone, ref first, never through an upd
   const hook = files.find((f) => f.rel === "core/queue/useQueue.ts").text;
   assert.equal((hook.match(/outboxStore\.set\(/g) ?? []).length, 1, "one store write in the hook: writeOutbox's");
   const body = hook.slice(hook.indexOf("function writeOutboxImpl("));
-  const order = ["saveOutbox(list)", "outboxRef.current = list", "outboxStore.set(list)", "reportShellQueueDepth("]
+  const order = ["saveOutbox(list)", "outboxRef.current = list", "outboxStore.set(list)", "reportShellQueueDepth(", "publishRelayPlan("]
     .map((s) => body.indexOf(s));
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])),
-    "writeOutbox: persist → ref → store → shell depth, in that order (the flusher reads the ref synchronously)");
+    "writeOutbox: persist → ref → store → shell depth → relay plan, in that order (the flusher reads the ref\n" +
+    "synchronously, and the relay plan is built off the ref, so it must come after it)");
   assert.doesNotMatch(hook, /outboxStore\.set\(\s*\(/, "never a functional updater — the ref is the truth");
   assert.match(body, /persistFailedAtStore\.set\(\s*saveOutbox\(list\)\s*\?\s*null\s*:\s*Date\.now\(\)\s*\)/,
     "saveOutbox's result must reach persistFailedAtStore — a dropped return value hides a refused write");

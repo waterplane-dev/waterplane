@@ -33,6 +33,7 @@ import {
 import { activeHostId, addHost, readHosts, setHostPins, setHostTlsOff, setHostUpdateKey, updateHost, type KV } from "./hosts.ts";
 import { forgetHeldToken, heldToken, holdToken, isDeviceToken } from "./deviceToken.ts";
 import type { PairAsk } from "./pairPake.ts";
+import { parseLanIdentity } from "./lanRoute.ts";
 import { LS } from "./storage.ts";
 
 /** The pair form's two fields, as typed. */
@@ -322,10 +323,13 @@ export function storeSealed(kv: KV, reply: PakeSealedReply, asked: PairTarget): 
     if (!r.ok) return r;
     host = r.host;
   }
+  // A passive device never keeps the LAN identity, even from an older host that still sends it, and a
+  // re-pair as passive drops the copy a full pairing left (SECURITY.md: passive scope).
   const identity = scopedKeys(LS.lanIdentity, host.id, activeHostId(kv));
-  for (const k of identity) kv.setItem(k, JSON.stringify(reply.lanIdentity));
+  const keep = reply.scope === "passive" ? null : parseLanIdentity(reply.lanIdentity);
+  for (const k of identity) { if (keep) kv.setItem(k, JSON.stringify(keep)); else kv.removeItem(k); }
   const signIn = writeSignIn(kv, host, reply);
-  return { ok: true, host, added: !row, ...signIn, wrote: [...identity, ...signIn.wrote], moved: !!row && row.base !== rowBase };
+  return { ok: true, host, added: !row, ...signIn, wrote: [...(keep ? identity : []), ...signIn.wrote], moved: !!row && row.base !== rowBase };
 }
 
 /** The address the pair form opens on: a shell that says there is no tailnet here takes the LAN one. */

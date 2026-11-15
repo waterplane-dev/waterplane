@@ -31,9 +31,10 @@ import { restartOfferClosed } from "../Banners";
 import {
   PAD_EMPTY_TOAST, PAD_KEPT_TOAST, WHERE_UNPICKED_TOAST, sendModeToast, whereGoneToast, type SendMode, type SendWhere,
   busyPastBudgetToast, busySendAsk, busySendRememberedToast, busySendRoute,
+  dictationSendAsk, DICTATION_ARMED_ASK, DICTATION_SEND_TOAST,
 } from "../../composeSend";
 import { hardSendAsk } from "../../budgetInput";
-import { recallMode, recallWhen, recallWhere, recalledWhenNote } from "../../sendMemory";
+import { recallMode, recallScreenAim, recallWhen, recalledWhenNote } from "../../sendMemory";
 import type { SendTarget } from "../../sendIntent";
 import { addPadNote, loadDraft, padNoteId, saveDraft } from "../../outbox";
 import { PIPE_PAD, decodePipe, keyToBytes } from "../../cliKeys";
@@ -56,6 +57,8 @@ import { isLaterId } from "../queue/logic.ts";
 import type { QueueApi, SendApi } from "../send/useSend";
 
 type Ref<T> = { readonly current: T };
+/** `sendCompose`'s arguments, kept whole so an unread send resumes the same decision. */
+type SendArgs = [SendMode | undefined, boolean, SendMode | undefined, boolean, boolean, boolean, boolean];
 
 // Ceiling for the auto-growing compose box. The terminal above it has to keep
 // showing something, so the input stops growing here and scrolls instead.
@@ -341,10 +344,12 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     // The aim follows the repo too, and the session `other` named does NOT:
     // it belonged to the repo you were in, and carrying it across would aim
     // this repo's next prompt at a conversation in another one.
-    setSendWhere(recallWhere(sendMemRef.current, active?.cwd));
+    // A `+ new` screen IS the new session: its words go into it, never into
+    // yet another one the repo's remembered aim would post (`recallScreenAim`).
+    setSendWhere(recallScreenAim({ later, pending }, sendMemRef.current, active?.cwd));
     setSendWhereSid(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sendMemRef is a ref; the repo is the key
-  }, [active?.cwd, later]);
+  }, [active?.cwd, later, pending]);
 
   /**
    * The compose bar's microphone, aimed at THIS session's draft.
@@ -575,7 +580,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     // every other chat box, and the one way to send with Enter set to newline.
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (compose.trim() || besidePicture()) sendCompose();
+      if (compose.trim() || besidePicture() || voice.pending) sendCompose();
       return;
     }
     if (e.key !== "Enter" || !enterSends) return;
@@ -630,7 +635,27 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * (`/usage`) opens a view and starts no turn, so a pinned item watching for
    * one would never settle.
    */
-  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false, restartAsked = false) {
+  /**
+   * **An unread send: Send was tapped while the dictation was still out**, and
+   * the person said to send the transcript the moment it is back
+   * (`dictationSendAsk`). `landed` is null while waiting; the effect below sends
+   * from a render that HAS the words — `sendCompose` reads the box by closure.
+   * Phone-held and in memory only: a reload drops it, and then the words land
+   * where they always did and wait for a person — never a send nobody chose.
+   */
+  const [unread, setUnread] = useState<{ sid: string; base: string; args: SendArgs; landed: boolean | null } | null>(null);
+  useEffect(() => {
+    if (!unread || unread.landed === null) return;
+    setUnread(null);
+    if (!active || active.id !== unread.sid) { showToast(DICTATION_SEND_TOAST.left); return; }
+    if (!unread.landed) { showToast(DICTATION_SEND_TOAST.lost); return; }
+    if (compose.trim() === unread.base.trim()) { showToast(DICTATION_SEND_TOAST.empty); return; }
+    track("action:compose.dictation.sent");
+    sendCompose(...unread.args);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per landing; `active`/`compose` are read as of that render on purpose
+  }, [unread]);
+
+  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false, restartAsked = false, dictationAsked = false) {
     // A picture open on the annotator beside this box: ask whether it goes
     // too, every time — sending the words alone and leaving the marked picture
     // behind is the mistake this exists for. Yes is the annotator's own Send &
@@ -648,6 +673,34 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       }).then((yes) => {
         if (yes) { track("action:compose.send.picture"); picture(how === "idle" ? "queue" : "run"); }
         else sendCompose(mode, true);
+      });
+      return;
+    }
+    // The words being dictated are not in the box yet: the microphone is open
+    // or a recording waits to be read. Ask whether they go unread the moment
+    // they are back; a tap outside or *read it first* sends nothing.
+    if (!dictationAsked && active && unread) {
+      void askChoice(DICTATION_ARMED_ASK).then((r) => {
+        if (!r || r.ok) return;
+        track("action:compose.dictation.calloff");
+        setUnread(null);
+        showToast(DICTATION_SEND_TOAST.off);
+      });
+      return;
+    }
+    if (!dictationAsked && active && voice.pending) {
+      const args: SendArgs = [mode, pictureAsked, busyPick, pastBudget, budgetAsked, restartAsked, true];
+      const phone = voice.listening && voice.engine === "browser";
+      const sid = active.id;
+      void askChoice(dictationSendAsk({ typed: !!compose.trim(), phone, why: voice.fallback })).then((r) => {
+        if (!r) return;
+        if (r.alt) { track("action:compose.dictation.typedonly"); sendCompose(...args); return; }
+        if (!r.ok) { track("action:compose.dictation.readfirst"); return; }
+        track(phone ? "action:compose.dictation.unread.phone" : "action:compose.dictation.unread");
+        const armed = { sid, base: composeNow.current, args, landed: null };
+        setUnread(armed);
+        showToast(DICTATION_SEND_TOAST.armed);
+        void voice.finish().then((ok) => setUnread((u) => (u === armed ? { ...u, landed: ok } : u)));
       });
       return;
     }

@@ -53,6 +53,7 @@ import {
   releaseHold,
   type HeldClip,
 } from "./dictateHold";
+import { randId } from "./randId";
 
 /**
  * No progress for this long ⇒ the transfer is wedged; abort it and put the clip
@@ -114,6 +115,12 @@ export function dictationState(): DictateHoldState {
   return { held: load().length, sending: sending !== null };
 }
 
+/** The ids still waiting to be read — how a box tells its own clip landed,
+ *  went elsewhere or was dropped (`useVoice`'s `finish`). */
+export function heldDictationIds(): Set<string> {
+  return new Set(load().map((c) => c.id));
+}
+
 export function subscribeDictations(fn: () => void): () => void {
   listeners.add(fn);
   return () => { listeners.delete(fn); };
@@ -134,7 +141,7 @@ export async function holdDictation(wav: Blob, o: { seconds: number; lang?: stri
   const held = load();
   const refusal = holdRefusal(held, wav.size);
   if (refusal) return { error: refusal };
-  const id = `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = `d_${Date.now().toString(36)}_${randId(6)}`;
   await idbSet(STORE, id, wav);
   // Written, and CHECKED — by key, never by reading the blob back: `idbSet`
   // swallows a quota refusal, and an index entry with no bytes behind it is a

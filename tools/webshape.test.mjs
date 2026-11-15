@@ -543,6 +543,8 @@ const BACKLOG_SPLIT_FILES = {
   "backlogFilter/nextFire.ts": 70, // the one `▶ next` predicate, shared with the Automation foot
   "backlogFilter/rowFilter.ts": 130,
   "backlogFilter/rowSort.ts": 60,
+  "backlogFilter/rowSearch.ts": 20,
+  "backlogFilter/sortDefault.ts": 15,
   "backlogFilter/titleWords.ts": 175,
   "backlogFilter/retimeMany.ts": 110, // +clockPicks: one clock's movable rows as one tap
   "backlogFilter/rowWords.ts": 120, // +holderOffer (the serial row's way to the session it waits behind)
@@ -1006,7 +1008,7 @@ test("every file in annotator/ is listed once, under its cap", () => {
 const WEBCLIENT_FACADES = {
   "api.ts": 35,
   "Gallery.tsx": 20,
-  "repoHealthWords.ts": 60,
+  "repoHealthWords.ts": 61, // +the aim slice
 };
 
 /** Every file in the split folders, by path under `packages/web/src`, and its cap. */
@@ -1020,7 +1022,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
   "webapi/webapiHost.ts": 176, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold)
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 123, // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers
+  "webapi/webapiRepoOps.ts": 138, // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
@@ -1044,6 +1046,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "gallery/useGalleryOpen.ts": 50,
   "gallery/useGalleryPick.ts": 35,
   "gallery/useGalleryViewer.ts": 110,
+  "repoHealthWords/repoHealthWordsAim.ts": 55, // which way is better, per metric (owner, 2026-11-14)
   "repoHealthWords/repoHealthWordsCentral.ts": 70, // a repo's disable/override of a central reading, on its tile
   "repoHealthWords/repoHealthWordsEngine.ts": 115,
   "repoHealthWords/repoHealthWordsFmt.ts": 85, // +middleEllipsis, the longest card's path

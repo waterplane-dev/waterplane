@@ -19,6 +19,7 @@ import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { normalizeDeviceName, type DeviceTokenResponse, type PassiveAuthFields, type PassiveStateResponse, type PeerKind, logTag, envName, BRAND } from "@waterplane/shared";
+import { SlowJobs } from "../slowjobs.js";
 import { passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "../passive.js";
 import { requestPeerKind, isProxied } from "../net.js";
 import { RateLimiter, rateKey } from "../ratelimit.js";
@@ -36,6 +37,7 @@ import { contained } from "../paths.js";
 import { WEB_DIST } from "../webbundle.js";
 import { brandIndexHtml, brandManifest, iconUrlsTag, themeIconFile, themeIconUrls, themeOverlayState, THEME_ICON_PREFIX } from "../themeoverlay.js";
 import type { ServerCtx } from "./ctx.js";
+import { createRelay } from "./bgrelay.js";
 import { backendInfos } from "../backends/index.js";
 
 // ── HTTP: API router, then static web app ────────────────────────────
@@ -48,6 +50,8 @@ const MIME = {
 } as Record<string, string>;
 
 export function createHttp(ctx: ServerCtx) {
+  /** `POST /api/relay`'s stand-in sockets (`bgrelay.ts`); reads `ctx` at call time. */
+  const bgRelay = createRelay(ctx);
   /** Password logins per source address: a burst of 10, then one every two seconds. */
   const loginLimit = new RateLimiter({ burst: 10, perSec: 0.5 });
   /** All source addresses together: behind a proxy every caller can look like one, and many can look like many. */
@@ -64,6 +68,8 @@ export function createHttp(ctx: ServerCtx) {
   // or over 1 MB ⇒ `BadBody`, answered 400/413 by `fail` — never "wrong password"
   // for a body that never arrived whole.
   const readSmallJson = (req: IncomingMessage): Promise<any> => readJsonBody(req, { optional: true });
+  /** Slow jobs (`slowjobs.ts`): one registry per host, its transitions on the one socket. */
+  const slowJobs = new SlowJobs({ onChange: (job) => ctx.broadcast({ t: "slowjob.state", job }) });
 
   /**
    * LAN password gate HTTP surface (always reachable, even from an un-authed LAN
@@ -384,13 +390,15 @@ export function createHttp(ctx: ServerCtx) {
           usage: ctx.usage.get(), readings: ctx.usageSources.readings(), billing: ctx.billing.status(),
           budget: ctx.budget.get(), periods: ctx.budget.periods(), backends: backendInfos(),
         }),
-        intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
+        intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard, slowJobs,
         pluginHook: (id, payload) => ctx.plugins.hook(id, payload),
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
         pluginAsset: (id, file) => ctx.plugins.assetFile(id, file),
         pluginReadme: (id) => ctx.plugins.readme(id),
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
+        // Bound to THIS request's identity — what the token gate above admitted.
+        relay: (body) => bgRelay.relay(body, { kind, tok, deviceId: ctx.auth.deviceFor(tok, kind)?.id }),
       });
       if (handled) return;
       // A self-signed TLS port answers a plain page in place of the app (`lantls.ts`).

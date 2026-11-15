@@ -45,6 +45,7 @@ export function endSession(core: SessionCore, session: Session, facts: EndFacts)
   core.finalizeCapture(session);
   if (session.promptTimer) clearTimeout(session.promptTimer);
   if (session.idleTimer) clearTimeout(session.idleTimer);
+  if (session.suggestTimer) { clearTimeout(session.suggestTimer); session.suggestTimer = null; }
   core.retireAgentPoll(session);
   core.checkAgents(session); // running is false: clears agents/shells/shellList, arms nothing
   core.clearStopVerify(session);

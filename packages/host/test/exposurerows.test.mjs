@@ -45,7 +45,7 @@ test("the newest row gives a summary and one row per finding; built-in accepts s
   assert.equal(byId(rows, "exposure:A2:node-pty").accepted.builtIn, true);
 });
 
-test("accept writes the CLI's file format and the row comes back accepted; undo removes it", () => {
+test("accept writes the CLI's file format and the row comes back accepted; undo removes it (R-security-007)", () => {
   const w = world();
   const r = setExposureAccept(w.wt, { id: "exposure:A1:left-pad@1.0.0", accept: true, reason: "fine" });
   assert.deepEqual(r, { ok: true });

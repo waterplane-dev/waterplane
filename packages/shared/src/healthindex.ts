@@ -78,6 +78,13 @@
  *   engine's). Either way the row carries a fingerprint of what was applied
  *   (`central.fp`), and a change of it marks the week `gap` like a prereg
  *   change — a repo's own tweak is never a health move.
+ * - **A repo's own reading with a TARGET joins the score (2026-11-14,
+ *   `healthindex/own.ts` argues it).** Declared in its committed
+ *   `health.json` with `"target": n`, it is scored against that target by the
+ *   curve an entry in its direction uses, as `own:<key>`, in the mean, the
+ *   worst-entry cap and coverage; absent = unknown with the reason. One
+ *   without a target stays out, as before. A score that counts own readings
+ *   is not directly comparable with another repo's, and the phone says so.
  * - **Alerts name the offender.** Any entry (or size sub-reading) scoring
  *   under 50 is a `warn`, under 25 `severe`, each with ONE sentence worded
  *   here so the phone and VS Code say it alike; the longest-file alert names
@@ -107,6 +114,9 @@ export {
 } from "./healthindex/types.js";
 export type {
   HealthEntry,
+  HealthOwnId,
+  HealthScoredId,
+  HealthOwnScore,
   HealthSeriesRow,
   HealthRowCentral,
   HealthSizeParts,
@@ -119,6 +129,7 @@ export {
   healthScore,
   healthScoreAtLeast,
   healthEntryScore,
+  healthDirScore,
   isoWeekOf,
   healthWeeks,
   healthContextGood,
@@ -180,7 +191,17 @@ export {
   healthCoverageCap,
   healthHeadline,
   healthHeadlineWords,
+  healthScoredLabel,
+  healthOwnCount,
 } from "./healthindex/coverage.js";
+export {
+  healthOwnTargetsOf,
+  healthOwnLabel,
+  healthOwnId,
+} from "./healthindex/own.js";
+export type {
+  HealthOwnTarget,
+} from "./healthindex/own.js";
 export type {
   HealthDimension,
   HealthDimensionDef,

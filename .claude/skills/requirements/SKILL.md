@@ -38,6 +38,20 @@ One or two sentences: observable behaviour, from the user's side, as an end stat
 - Behaviour, not implementation: "Child mode has one canvas and no save", not
   "ChildActivity hides the save button".
 
+## A shipped item names its test
+
+When an item becomes `shipped`, the test that proves it writes its ID (`R-<area>-<nnn>`) in its
+title or a comment beside the assertion, so `grep -rn R-<area>-<nnn>` finds what guards it before
+anyone changes it. `tools/reqpinned.mjs` counts these as the `reqPinned` reading.
+
+- **Name an ID only where the test really fails if that behaviour breaks.** A loose match raises
+  the number and hides the item that has no test; leave it unpinned instead.
+- No test at all yet: write one in the cheapest layer that can fail (skill `testing`), or leave
+  the item unpinned. Never add a test that only exists to carry the ID.
+- Wording, layout and placement items are proven by the screen review, not a unit test; they may
+  stay unpinned.
+- A mark, not a gate: nothing refuses a commit over an unpinned item.
+
 ## Who updates it
 
 `node scripts/requirements/update.mjs .` reads the prompts and commits since

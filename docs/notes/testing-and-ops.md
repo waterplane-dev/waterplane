@@ -654,6 +654,7 @@ What each pins: the per-script sections above. Rough map —
 `setupwatch` the compliance sweep nobody asks for (repo-scope only, never writes) ·
 `backlog*`/`manualfire`/`onesession`/`fanout` work delivery · `agentintent` an agent's loopback post for later (one row per key, the mark, browsers/proxies refused) · `queue`/`opqueue`/`ack`/`submit`/
 `answer`/`startprompt` the offline send queue and at-most-once rules ·
+`relay` the background relay's `POST /api/relay` (a relayed submit re-acked, never retyped, over the page socket and 46 min later; page-first joined; raw keys/no ackId 422; passive 403) ·
 `autopull`/`netfuse`/`netstats` download queue + link telemetry ·
 `hook`/`limit`/`limitqueue`/`resurrect`/`resume`/`restore`/`tmux`/`livereclaim` session lifecycle ·
 `fanout` also pins that a sweep SURVIVES a restart mid-run and reconciles, rather than losing its

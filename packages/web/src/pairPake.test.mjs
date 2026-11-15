@@ -105,6 +105,9 @@ test("readSealedReply: one bad field and none of it is believed", () => {
   assert.ok(readSealedReply(SEALED));
   const { tls: _t, updateKey: _u, ...bare } = SEALED;
   assert.ok(readSealedReply(bare), "no TLS listener and no key is a real desktop");
+  const { lanIdentity: _l, ...noId } = SEALED;
+  assert.ok(readSealedReply({ ...noId, scope: "passive" }), "a passive pairing carries no LAN identity");
+  assert.equal(readSealedReply(noId), null, "a full pairing without its LAN identity is not believed");
   for (const bad of [
     null, "x", { ...SEALED, ok: false }, { ...SEALED, host: null }, { ...SEALED, hostId: "NOT AN ID" },
     { ...SEALED, lanIdentity: { hostId: "other123", secret: "s".repeat(32) } },

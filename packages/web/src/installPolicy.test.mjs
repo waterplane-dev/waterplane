@@ -23,7 +23,7 @@ test("an apk is recognised by name or by declared type", () => {
   assert.equal(isApkRow({}), false);
 });
 
-test("over a plain route a finished APK offers no install, and the row says why and what to do", () => {
+test("over a plain route a finished APK offers no install, and the row says why and what to do (R-security-021)", () => {
   const offer = installOffer(row(), { ...PHONE, plainRoute: true });
   assert.equal(offer.verb, null);
   assert.match(offer.reason, /do not download or install on this route/);

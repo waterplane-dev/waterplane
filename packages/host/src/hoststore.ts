@@ -66,6 +66,7 @@ import { join } from "node:path";
 import type { HostStoreOutcome, HostStoreReport, HostStoreRow } from "@waterplane/shared";
 import { hostStoreTotal } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
+import { listStoreLosses } from "./jsonstore.js";
 import { inRoot } from "./paths.js";
 import { clearThumbCache, thumbCacheUsage } from "./thumbs.js";
 
@@ -98,6 +99,8 @@ const BOUNDED_LEDGERS: Record<string, string> = {
   "netstats.json": "one rolling window, rewritten in place.",
   "usage-meter.json": "one rolling window, rewritten in place.",
   "localusage.json": "120 days per local model, rewritten in place.",
+  // `jsonstore.ts`' record of stores that were lost; STORE_LOSS_KEEP.
+  "store-losses.json": "the last 50 lost-store records — it cannot grow past that.",
 };
 
 /** The unbounded record — the finding this report exists to surface. */
@@ -277,7 +280,7 @@ export function hostStoreReport(root: string, now = Date.now()): HostStoreReport
   ];
 
   const { total, partial } = hostStoreTotal(rows);
-  return { at: now, dir, rows, total, partial: partial || !readable };
+  return { at: now, dir, rows, total, partial: partial || !readable, losses: listStoreLosses() };
 }
 
 /**

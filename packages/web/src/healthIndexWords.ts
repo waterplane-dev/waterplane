@@ -9,7 +9,7 @@
  * turns it into pixels, and words it. Absent stays absent — `healthIndex`
  * missing from a RepoTarget draws NO chip, never `Health 0`.
  */
-import type { HealthEntry, HealthIndexPoint, RepoHealthIndex } from "@waterplane/shared";
+import type { HealthEntry, HealthIndexPoint, HealthOwnScore, RepoHealthIndex } from "@waterplane/shared";
 import { healthHeadlineWords, wordOf } from "@waterplane/shared";
 
 /** The baskets in the order the index names them, with the plain names the phone shows. */
@@ -165,6 +165,8 @@ export function healthChip(hi: RepoHealthIndex | null | undefined, repoName: str
 export interface IndexBasket {
   disabled?: readonly HealthEntry[];
   overridden?: readonly HealthEntry[];
+  /** The repo's own readings with a target that count in the score (`healthOwnCount`). */
+  ownCount?: number;
 }
 
 /** `A`, `A and B`, `A, B and C`. */
@@ -198,10 +200,11 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
 export function indexExplainWords(firstWeek: string, product: string, basket?: IndexBasket | null): string {
   const changed = indexBasketWords(basket, product);
   const good = HEALTH_ENTRY_ORDER.map((e) => wordOf(HEALTH_GOOD_WORDS, e, e)).join("; ");
-  const read = `A score out of 100 for ${product}'s ${HEALTH_ENTRY_ORDER.length} readings against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it (tests changed with code: as the share halves under it). The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind the quiet ones. It also never exceeds the share of the readings that could be measured, because a reading nobody could read counts for nothing, never for 100. The repo's own readings stay out of the average; the only way one counts is a gate the repo declares, and a failing gate holds the score under 50.`;
+  const read = `A score out of 100 for ${product}'s ${HEALTH_ENTRY_ORDER.length} readings against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it (tests changed with code: as the share halves under it). The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind the quiet ones. It also never exceeds the share of the readings that could be measured, because a reading nobody could read counts for nothing, never for 100. The repo's own readings count only where the repo declares it: one with a target is scored against that target the same way and joins the average, the worst-entry rule and the measured share; a failing gate holds the score under 50; any other stays out.`;
   const trend = `The second line is the trend: the score now against the first scored week, ${firstWeek}, and against last week.`;
-  if (!changed) return `${read} ${trend} The good values are the same in every repo, so repos compare where the same readings could be measured; the card says where one could not.`;
-  return `${read} ${changed} ${trend} Beside another repo's score it compares like with like only on the readings both read the same way.`;
+  const own = ownComparableWords(basket?.ownCount ?? 0);
+  if (!changed && !own) return `${read} ${trend} The good values are the same in every repo, so repos compare where the same readings could be measured; the card says where one could not.`;
+  return `${read} ${changed ? `${changed} ` : ""}${own ? `${own} ` : ""}${trend} Beside another repo's score it compares like with like only on the readings both read the same way.`;
 }
 
 /**
@@ -446,12 +449,12 @@ export function thinnedWords(kept: number, total: number): string | null {
 /** The sticky jump bar's chip labels, by section key. */
 export const NAV_LABELS = {
   score: "Score",
+  own: "Own",
   longest: "Longest",
   tiles: "Tiles",
   weight: "Weight",
   size: "Size",
   table: "Table",
-  own: "Own",
 } as const;
 export type HealthNavKey = keyof typeof NAV_LABELS;
 
@@ -477,7 +480,8 @@ export function barsWeeksOnlyWords(week: string): string {
 /* ── the bars ────────────────────────────────────────────────────────────── */
 
 export interface ContribBar {
-  key: HealthEntry;
+  /** An entry, or `own:<key>` for the repo's own targeted reading. */
+  key: string;
   name: string;
   /** Log points; positive = the index rose because of this reading. */
   value: number;
@@ -496,23 +500,47 @@ export interface ContribBar {
 export function contributionBars(
   contributions: Partial<Record<HealthEntry, number>>,
   width: number,
+  own: readonly HealthOwnScore[] = [],
 ): { zeroX: number; bars: ContribBar[] } {
   const zeroX = width / 2;
-  const present = HEALTH_ENTRY_ORDER.filter((k) => typeof contributions[k] === "number" && Number.isFinite(contributions[k]));
+  // The repo's own targeted readings after waterplane's, on the SAME scale: one chart, one ruler.
+  const present: { key: string; name: string; value: number }[] = [
+    ...HEALTH_ENTRY_ORDER.filter((k) => typeof contributions[k] === "number" && Number.isFinite(contributions[k]))
+      .map((k) => ({ key: k as string, name: wordOf(HEALTH_ENTRY_NAME, k, k), value: contributions[k] as number })),
+    ...own.filter((o) => typeof o.contribution === "number" && Number.isFinite(o.contribution))
+      .map((o) => ({ key: o.id as string, name: ownEntryName(o.name), value: o.contribution as number })),
+  ];
   let max = 0;
-  for (const k of present) max = Math.max(max, Math.abs(contributions[k] as number));
+  for (const p of present) max = Math.max(max, Math.abs(p.value));
   const half = Math.max(0, width / 2 - 1);
-  const bars = present.map((key): ContribBar => {
-    const value = contributions[key] as number;
+  const bars = present.map(({ key, name, value }): ContribBar => {
     const len = max > 0 ? (Math.abs(value) / max) * half : 0;
     const side = Math.round(value * 10) === 0 ? "none" : value > 0 ? "up" : "down";
     return {
-      key, name: wordOf(HEALTH_ENTRY_NAME, key, key), value,
+      key, name, value,
       x: value >= 0 ? zeroX : zeroX - len, w: len, side,
-      words: `${wordOf(HEALTH_ENTRY_NAME, key, key)} ${signedTenths(value)}`,
+      words: `${name} ${signedTenths(value)}`,
     };
   });
   return { zeroX, bars };
+}
+
+/** How the breakdown names one of the repo's own targeted readings: as the repo's, never as one of waterplane's. */
+export function ownEntryName(name: string): string {
+  return `${name} (the repo's own)`;
+}
+
+/**
+ * The one line under the score when the repo's own readings count in it. Null
+ * where none do — a score built from waterplane's readings alone needs no such
+ * line. `n` counts every own reading with a target, measured or not: an
+ * unmeasured one still moves the measured share.
+ */
+export function ownComparableWords(n: number): string | null {
+  if (!(n > 0)) return null;
+  return n === 1
+    ? "This score counts one of the repo's own readings against the repo's own target, so it is not directly comparable with another repo's score."
+    : `This score counts ${n} of the repo's own readings against the repo's own targets, so it is not directly comparable with another repo's score.`;
 }
 
 /** One decimal, real minus sign: `+1.4`, `−0.6`, `±0.0` (a bar of a point or two reads as 0 in whole numbers). */

@@ -120,3 +120,5 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   Re-time's *let past the budget* sends `intent.waive` for exactly `budgetHeldIds` (`isBudgetHeld`: due, no waiver in force), drawn only when the budget holds them; never `intent.run` (`bulkverbs.test.mjs`).
   **Every string here is pinned by `sendIntent.test.mjs`** — a reword is a decision about the app's
   vocabulary and edits the test in the same change.
+
+- **The background relay (APK service, PWA service worker) sends only `entryFrame` output with the queue's ackIds** and never mints, edits or deletes a row; its receipts re-enter through `claimQueue` into the queue's own ack handlers. While the claim gate is held nothing is re-aimed. [Why.](../../../docs/notes/web.md#the-background-relay-keeps-the-queues-rule-corequeuerelayownerts-swrelayownerts-publicswrelayjs)

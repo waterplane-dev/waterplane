@@ -185,6 +185,77 @@ export interface HostStoreReport {
   rows: HostStoreRow[];
   total: number | null;
   partial: boolean;
+  /** Every store the host lost and nobody has dismissed yet, newest first
+   *  (`host/jsonstore.ts` keeps them). Absent = an older host that keeps no
+   *  such record; `[]` = nothing lost. */
+  losses?: StoreLoss[];
+}
+
+// ── A store the host lost ───────────────────────────────────────────────────
+
+/**
+ * What happened to a store file the host could not use.
+ *
+ * `corrupt` — present but did not parse (or had the wrong shape): moved aside.
+ * `unreadable` — present but could not be read at all (EACCES, EIO): moved
+ *   aside, or left in place for a store that refuses on it or a process-level
+ *   error (EMFILE …) — then `movedTo` is null.
+ * `write-failed` — a save threw and the store went on serving from memory:
+ *   what is on disk is the last save that worked, or nothing.
+ */
+export type StoreLossKind = "corrupt" | "unreadable" | "write-failed";
+
+/**
+ * One loss, as the host recorded it — so a figure built on the store's
+ * defaults (a cap that is no longer set, "never used", an empty sent list)
+ * can say WHY it reads that way. A record, never an action: dismissing one
+ * hides it and touches no bytes.
+ */
+export interface StoreLoss {
+  id: string;
+  /** The store file's own name (`budget.json`, `ui-usage.json`, `sent.json`) —
+   *  short and stable across restarts, what a sheet matches on. */
+  store: string;
+  /** The store file's absolute path on the desktop. */
+  path: string;
+  /** When it first happened, epoch ms. */
+  at: number;
+  /** A failed write that kept failing is ONE record: the latest repeat, and
+   *  how many there were. Both absent = it happened once. */
+  lastAt?: number;
+  count?: number;
+  kind: StoreLossKind;
+  /** The error as the OS or the parser said it (capped). */
+  error: string;
+  /** Where the bytes went (`<name>.corrupt-<ts>`), or null: left in place, or
+   *  the move itself failed. */
+  movedTo: string | null;
+  /** Whether `movedTo` was still on disk at the moment this was read. Absent
+   *  when `movedTo` is null. */
+  movedToExists?: boolean;
+  /** True when the host could not persist this record (the store sits outside
+   *  the host's state dir, or the record file could not be written): it is
+   *  gone after the next restart. Absent = persisted. */
+  memoryOnly?: boolean;
+}
+
+/** The store keys the owning sheets read — the `store` a reading's `loss`
+ *  carries, here so a sheet that matches a storage reading spells it once. */
+export const STORE_KEYS = { budget: "budget.json", uiUsage: "ui-usage.json", sent: "sent.json" } as const;
+
+/** The one sentence for a loss, without the time (the phone words that in its
+ *  own clock). Says where the bytes are, or that there are none to look for. */
+export function storeLossText(l: StoreLoss): string {
+  const what = l.kind === "write-failed"
+    ? `${l.store} could not be saved (${l.error})${l.count && l.count > 1 ? `, ${l.count} times` : ""}; the last copy that did save is still on disk`
+    : l.kind === "unreadable"
+      ? `${l.store} could not be read (${l.error})`
+      : `${l.store} was damaged (${l.error})`;
+  if (l.kind === "write-failed") return `${what}.`;
+  if (!l.movedTo) return `${what}; it was left where it is and the host started from defaults.`;
+  return l.movedToExists === false
+    ? `${what}; its bytes were kept as ${l.movedTo}, which has since been removed.`
+    : `${what}; the host started from defaults and kept its bytes as ${l.movedTo}.`;
 }
 
 /** The rows a phone may actually act on — one predicate, so the count on the

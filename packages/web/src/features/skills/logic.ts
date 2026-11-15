@@ -478,3 +478,35 @@ export function repoFileHelp(shared: boolean): string {
 
 export const RECOMMEND_COST = "Asks a model on this desktop to look at your skills and plugins, for this repo and for all repos at once: this spends one model call.";
 export const SUGGEST_ONLY_LIST = "Nothing was changed by this list. Each row sets All repos and this repo together, from uses here and in every repo on this desktop; untick what you want to keep as it is, then apply.";
+
+/** A running count as a bar: `done of total` and a whole percent; null while the host has no total yet (never a 0% that was not measured). */
+export function countProgress(u: { state: string; done?: number; total?: number } | undefined): { done: number; total: number; pct: number } | null {
+  if (!u || u.state !== "counting" || !u.total || u.total <= 0) return null;
+  const done = Math.min(Math.max(u.done ?? 0, 0), u.total);
+  return { done, total: u.total, pct: Math.floor((done / u.total) * 100) };
+}
+
+/** The host refused to suggest only because a count was still running. Its numbers are a snapshot, so the sheet shows the live bar instead. */
+export function isCountingRefusal(r: SkillRecommendResponse | null): boolean {
+  return !!r && !r.ok && r.suggestions.length === 0 && /^Counting uses\b/.test(r.error ?? "");
+}
+
+/** The inventory doc says a use count is still running (this repo's, a refresh, or all repos'). */
+export function isCountingDoc(doc: SkillInventoryDoc | null | undefined): boolean {
+  return !!doc && (doc.usage.state === "counting" || !!doc.usage.refreshing || doc.usage.allRepos?.state === "counting");
+}
+
+/** The counted inventory (`skills.uses`) is on screen only once it is newer than the plain read or a save's answer. */
+export function usesIsNewer(inv: { resultAt: number | null }, uses: { data: unknown; resultAt: number | null }): boolean {
+  return uses.data !== null && (uses.resultAt ?? 0) > (inv.resultAt ?? 0);
+}
+
+/**
+ * The count bar's input: the running `skills.uses` job's own progress (both scans summed by the
+ * host; absent while neither knows its size, so the bar is the sentence alone), or — with no run
+ * heard of — the doc's word that it counts. Nothing once nothing counts.
+ */
+export function usesBar(running: { progress?: { done: number; total: number } } | null, doc: SkillInventoryDoc | null | undefined): { state: string; done?: number; total?: number } | undefined {
+  if (running) return { state: "counting", ...(running.progress ? { done: running.progress.done, total: running.progress.total } : {}) };
+  return isCountingDoc(doc) ? { state: "counting" } : undefined;
+}

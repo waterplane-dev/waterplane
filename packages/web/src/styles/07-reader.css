@@ -7,6 +7,9 @@
    320px screen — Android multiplies this px text by the system font scale on
    top of `--ui-font`, so the widest case is far past the label at 1. */
 .srch-scope .seg { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+/* The archive switch sits under the three stores, left-aligned like a filter row. */
+.srch-archive { display: flex; margin: var(--sp-4) var(--sp-12) 0; }
+.srch-archive .fchip-pill svg { vertical-align: -2px; margin-right: var(--sp-4); }
 .srch-sess { border-bottom: 1px solid var(--line); padding: var(--sp-4) 0 var(--sp-8); }
 /* The result header carries the launcher row's facts under its title line, so
    it stacks: title line first, then the tag/meta strip and the prompt gist. */
@@ -284,9 +287,9 @@
    switch rows, full width, so the state is the `on`/`off` at the edge and never
    words glued to a button. The head is a `.section`, so the sentence its `?`
    opens is put back into sentence case. */
-.artifact-policy { display: flex; flex-direction: column; gap: var(--sp-6); padding: 0 var(--sp-12) var(--sp-10); }
-.artifact-policy > .form-hint { padding: 0 var(--sp-2); }
-.ap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-6); padding: var(--sp-14) var(--sp-2) 1px; }
+.artifact-policy { display: flex; flex-direction: column; gap: var(--sp-6); padding: 0 var(--gutter) var(--sp-10); }
+.artifact-policy > .form-hint { padding: 0; }
+.ap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-6); padding: var(--sp-14) 0 1px; }
 .ap-head .explain-body { text-transform: none; letter-spacing: 0; line-height: var(--lh-14); }
 /* "keep − 3 +" on ONE line, under the switch it belongs to. The count is a
    READOUT between two steppers, plain text and never a third button. */
@@ -525,7 +528,7 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
   color: var(--accent);
   background: var(--accent-wash);
   border-left: 3px solid var(--accent);
-  padding: var(--sp-6) var(--sp-10) var(--sp-6) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  padding: var(--sp-6) var(--sp-10) var(--sp-6) calc(var(--gutter) - 3px); font-size: calc(var(--fs-12) * var(--ui-font, 1));
 }
 .filter-bar-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .filter-bar-clear {

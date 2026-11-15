@@ -69,7 +69,7 @@ The repo backlog is never lost; backlog items persist.
 - asked: 2026-10-24, 2026-10-24
 
 ### R-queue-016 · shipped
-The backlog lists the most recently added entry at the top by default, with run order one tap away, and opens on the new entry whenever an item is added.
+The backlog lists the most recently added entry at the top by default, with run order one tap away, so in that default order a newly added item is the first row.
 - asked: 2026-10-27, 2026-10-29
 - shipped: 12680a47, 8aecff3b
 
@@ -93,3 +93,20 @@ Typed words in the retired pad rescue store and give-ups ledger survive the upgr
 - asked: 2026-11-04
 - shipped: 4ea4a5ba
 
+
+### R-queue-021 · shipped
+A prompt sent on a "+ new" screen, online or offline, runs in the session that screen opens, exactly once, even when the repo remembers "a new session" as its send aim; the same holds when the session opened while the phone was away.
+- asked: 2026-11-12, 2026-11-14
+- shipped: 336dda3d6
+
+### R-queue-022 · shipped
+On the Android app, when the desktop's link comes back while the app is in the background, the prompts the page would have sent by itself are sent from the background, once each; a prompt that waits on the reconnect question stays put until the person taps "Send N" on the notification. The notification says what was sent and what waits ("Sent 2 to studio. 1 waits for you — open to review"). Nothing is added, edited or deleted in the queue by this; what was sent shows as sent when the app is opened. An older app or desktop keeps the plain "open to send" notice.
+- asked: 2026-11-14 (owner)
+- shipped: 337cfe90d, ba23c6b4e
+- note: not yet tried on a phone.
+
+### R-queue-023 · shipped
+In the browser app, queued prompts the page would send by itself go out from the background too: on Android Chrome when the browser wakes the app after the link returns, and on any browser when the "Desktop back online" push arrives (one notification says what was sent and what waits). On iPhone only that push can start it; an outage on the phone's own side waits until the app is opened. Prompts held for a tap wait for it, as in R-queue-022.
+- asked: 2026-11-14 (owner)
+- shipped: 337cfe90d, 9e918b2bc
+- note: not yet run in a real browser; how long iOS lets the push's work run is unmeasured.

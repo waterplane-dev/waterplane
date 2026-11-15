@@ -53,6 +53,7 @@ const ROUTES = [
   "GET /api/storage/transport",
   "GET /api/storage/host",
   "POST /api/storage/host/clear",
+  "POST /api/storage/host/loss/dismiss",
   "GET /api/search",
   "GET /api/agentpoints",
   "GET /api/transcript",
@@ -86,6 +87,9 @@ const ROUTES = [
   // Skills and plugins switch, read side (`routes/apiskills.ts`); never in passive.ts.
   "GET /api/host/skills",
   "POST /api/host/skills/write",
+  // Slow jobs (`routes/apijobs.ts`): a read kept past the screen; never in passive.ts.
+  "GET /api/jobs",
+  "GET /api/jobs/:id",
   "POST /api/host/screenshot",
   "POST /api/host/clipboard",
   "GET /api/host/ocr",
@@ -110,6 +114,9 @@ const ROUTES = [
   // The week-end burn (weekburn.ts): the status and the weekly pick.
   "GET /api/weekburn",
   "POST /api/weekburn",
+  // The background relay (server/bgrelay.ts): one queued frame from a phone with no page; POST only.
+  "POST /api/relay",
+  "* /api/relay",
   // The repo scope: resolves the target, then the table below (relative to it).
   "* /api/repos/:id/*",
   "POST /api/repos/:id/archive/bookmark",
@@ -140,8 +147,10 @@ const ROUTES = [
   "GET /api/repos/:id/agentreadings",
   "GET /api/repos/:id/agentpoints",
   "GET /api/repos/:id/agentmarkers",
+  "POST /api/repos/:id/setupshare",
   "POST /api/repos/:id/repohealth/scopes",
   "POST /api/repos/:id/repohealth/refresh",
+  "POST /api/repos/:id/repohealth/own-backfill",
   "POST /api/repos/:id/artifacts/seen",
   "GET /api/repos/:id/artifacts/*",
   "GET /api/repos/:id/sweep/*",
@@ -179,11 +188,17 @@ const ROUTES = [
   "POST /api/repos/:id/git/prs/automerge",
   "POST /api/repos/:id/git/prs/close",
   "POST /api/repos/:id/git/prs/log",
+  // The lookup probe (R-metrics-071, routes/apiprobe.ts): two reads, one tap-started spender.
+  "GET /api/repos/:id/probe",
+  "GET /api/repos/:id/probe/results",
+  "POST /api/repos/:id/probe/start",
   "GET /api/repos/:id/worktree/leftover",
   "POST /api/repos/:id/worktree/remove",
   "GET /api/repos/:id/skills",
   "POST /api/repos/:id/skills/recommend",
   "POST /api/repos/:id/skills/write",
+  "POST /api/repos/:id/jobs/:kind",
+  "GET /api/repos/:id/jobs/:kind",
 ];
 
 // ── Against the table ───────────────────────────────────────────────────────

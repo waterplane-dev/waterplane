@@ -32,6 +32,7 @@ import {
   parseRepoHealthPlot,
   parseRepoHealthProgress,
   parseRepoHealthStatus,
+  parseOwnBackfill,
   parseUpdateSummary,
   recutCommandOf,
 } from "../dist/repohealthread.js";
@@ -893,4 +894,14 @@ test("acceptsRecut arrives only as a literal true; anything else is not declared
   assert.equal(parseRepoHealthMeasure(JSON.stringify({ ...MEASURE, acceptsRecut: true }))?.acceptsRecut, true);
   assert.equal("acceptsRecut" in (parseRepoHealthMeasure(JSON.stringify(MEASURE)) ?? {}), false);
   assert.equal("acceptsRecut" in (parseRepoHealthMeasure(JSON.stringify({ ...MEASURE, acceptsRecut: "yes" })) ?? {}), false);
+});
+
+test("parseOwnBackfill: the engine's own-backfill line, rebuilt from named fields; junk counts dropped, never 0 (R-metrics-065)", () => {
+  const line = JSON.stringify({ ownBackfill: { asked: 20, read: 3, values: 4, absent: 2, left: 0, stopped: null, swept: 1, extra: "x" } });
+  assert.deepEqual(parseOwnBackfill(`noise\n${line}\n`), { asked: 20, read: 3, values: 4, absent: 2, left: 0, stopped: null });
+  assert.deepEqual(parseOwnBackfill(JSON.stringify({ ownBackfill: { read: -1, values: 1.5, left: "3", stopped: "later" } })), {},
+    "a count that is not a non-negative integer is absent, not 0");
+  assert.equal(parseOwnBackfill(""), null);
+  assert.equal(parseOwnBackfill("repohealth: +3 rows"), null, "another subcommand's summary is not one");
+  assert.equal(parseOwnBackfill(undefined), null);
 });

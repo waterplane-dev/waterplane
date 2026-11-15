@@ -456,7 +456,7 @@ test("busyIntentGroups counts both sources and keys them the same way", () => {
 // predecessor lets the next one go, one with a question open holds it — and a
 // session a PERSON opened is never the queue's business. A row sat five hours
 // behind "'myrepo' (working)", a hand session, while its owner worked by hand.
-test("a hand session never holds a serial row — only queued work does", () => {
+test("a hand session never holds a serial row — only queued work does (R-queue-007)", () => {
   const i = intent({ serial: true, target: { kind: "repo", fresh: true } });
   const verdictWith = (sessions, occupied = []) => intentVerdict(i, facts({
     sessions,
