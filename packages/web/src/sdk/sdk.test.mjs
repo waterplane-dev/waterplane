@@ -155,3 +155,18 @@ test("extDeviceStorage: a device corner — a host switch neither parks nor repl
     globalThis.localStorage = prev;
   }
 });
+
+import { aimEvidence, cutByIds, evidenceCutWords, evidenceFocus, peekEvidence } from "./evidence.ts";
+
+test("evidence aim: peek answers only its own screen, cutByIds is the one cut", () => {
+  aimEvidence({ screen: "skills", ids: ["a", "c"] });
+  assert.deepEqual(peekEvidence("skills")?.ids, ["a", "c"]);
+  assert.equal(peekEvidence("tokens"), null);
+  const rows = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  assert.deepEqual(cutByIds(rows, ["a", "c"], (r) => r.id).map((r) => r.id), ["a", "c"]);
+  assert.equal(cutByIds(rows, [], (r) => r.id).length, 3);
+  assert.equal(cutByIds(rows, undefined, (r) => r.id).length, 3);
+  assert.match(evidenceCutWords(2, 3, "skills"), /^2 of 3 skills shown/);
+  aimEvidence(null);
+  assert.equal(evidenceFocus.get(), null);
+});

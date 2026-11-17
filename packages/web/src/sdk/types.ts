@@ -304,6 +304,8 @@ export interface CoreApi {
     /** The repo-readings checklist on one repo (null = the sheet's own choice), aimed; the setup feature's `openSetup`. */
     /** The skills & plugins switch on one repo, on its This repo tab or (`target: "all"`) its All repos tab; Claude Code only. */
     openSkills(repoId: string, target?: "repo" | "all"): void;
+    /** The Setup check sheet on a repo (null = machine and account), on a scope. */
+    openSetupCheck(repoId: string | null, aim?: { scope?: "repo" | "machine" | "account"; weight?: "finding"; screen?: string }): void;
     openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch" | "agents"; focus?: "findings" | "context-weight" }): void;
     /** The context & cost sheet for ONE session by id (null = the attached one); never attaches. */
     openContext(sessionId: string | null): void;

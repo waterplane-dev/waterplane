@@ -11,10 +11,14 @@ export interface SkillsState {
   repoId: string | null;
   /** The backend of the door's session or repo, so the gate names the right label. */
   backend?: string;
+  /** Where a card's FIRST tap applies (the door's choice); each changed card then shows and changes its own. */
   target: Target;
   /** Repo level only: write `.claude/settings.json` (shared) instead of the gitignored local file. */
   shared: boolean;
+  /** This repo's unsaved choices (the file `shared` names). */
   draft: Draft;
+  /** All repos' unsaved choices: cards whose scope pair says All repos. */
+  allDraft: Draft;
   /** Unsaved drafts of other files and repos, kept until their file is on screen again. */
   parked: Parked;
   filter: FilterKey | null;
@@ -28,6 +32,6 @@ export interface SkillsState {
   unticked: string[];
 }
 
-export const initialSkills = (): SkillsState => ({ repoId: null, target: "repo", shared: false, draft: {}, parked: {}, filter: null, sort: "heaviest", query: "", suggest: null, suggestRun: null, unticked: [] });
+export const initialSkills = (): SkillsState => ({ repoId: null, target: "repo", shared: false, draft: {}, allDraft: {}, parked: {}, filter: null, sort: "heaviest", query: "", suggest: null, suggestRun: null, unticked: [] });
 
 export const skillsState = createStore<SkillsState>(initialSkills());

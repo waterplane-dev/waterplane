@@ -149,16 +149,28 @@ export function useBackStep(open: boolean, close: () => void): void {
   const [armed, rearm] = useState(0);
   useEffect(() => {
     if (!open) return;
-    const { id, depth, key } = pushStep();
-    steps.set(depth, { id, close: () => { closeRef.current(); rearm((n) => n + 1); } });
-    return () => {
-      // Closed by a Back: `popStepsTo` already took it out, and the entry is gone.
-      if (steps.get(depth)?.id !== id) return;
-      steps.delete(depth);
-      if (routeStack.keys[depth] === key) routeStack.keys[depth] = VACANT;
-      queueRetire();
-    };
+    return armStep(() => { closeRef.current(); rearm((n) => n + 1); });
   }, [open, armed]);
+}
+
+/**
+ * One step entry above the screen on top, owned by the CALLER rather than by a mounted view: `close`
+ * runs when a Back pops it; the returned `retire` takes it away by any other means. `useBackStep` is
+ * this tied to a component's lifetime. A drill-down whose state lives in a store (the Setup check's
+ * all-repos → rule → repo) arms its steps itself, at the tap: a door opened over the drilled screen
+ * unmounts the sheet, and a step that died with the unmount left the Back from that door landing one
+ * level too far down (the entry under it was a dead step, so the pop kept going).
+ */
+export function armStep(close: () => void): () => void {
+  const { id, depth, key } = pushStep();
+  steps.set(depth, { id, close });
+  return () => {
+    // Closed by a Back: `popStepsTo` already took it out, and the entry is gone.
+    if (steps.get(depth)?.id !== id) return;
+    steps.delete(depth);
+    if (routeStack.keys[depth] === key) routeStack.keys[depth] = VACANT;
+    queueRetire();
+  };
 }
 
 /**

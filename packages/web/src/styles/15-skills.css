@@ -7,7 +7,6 @@
 .sk-scroll > .sk-suggest-btn { margin-top: var(--sp-4); }
 /* A running count: the bar lines up with its hint's own inset (.form-hint pads --sp-14) and wears the accent, not the browser's blue. */
 .sk-countbar > progress { display: block; box-sizing: border-box; width: calc(100% - 2 * var(--sp-14)); margin: 0 var(--sp-14) var(--sp-4); accent-color: var(--accent); }
-.sk-level { padding-left: 0; padding-right: 0; }
 .sk-search { margin-top: var(--sp-4); margin-bottom: var(--sp-4); box-sizing: border-box; }
 .sk-sort { margin-bottom: var(--sp-4); }
 .sk-explain { display: flex; flex-wrap: wrap; }
@@ -41,3 +40,10 @@ details[open] > summary > .sk-chev { transform: rotate(90deg); }
 .sk-file .seg { min-width: 0; min-height: 44px; }
 /* A suggestion's reason is the first thing read, in body colour; its lever lines and counts follow muted. */
 .sk-card .sk-why { color: var(--fg); }
+/* A changed card's own scope pair (SkillRows.tsx ScopePair): smaller than the value selector above it, so the two never read as one control. */
+.sk-scope { display: flex; align-items: center; gap: var(--sp-6); }
+.sk-scope > .form-hint { flex: none; padding-right: 0; }
+.sk-scope .segmented { flex: 1; gap: var(--sp-4); padding: 0; background: none; border-bottom: 0; }
+.sk-scope .seg { min-width: 0; min-height: 44px; padding: var(--sp-4); font-size: calc(var(--fs-13) * var(--ui-font, 1)); background: none; }
+/* Picked = outlined accent text, never the value selector's fill: two filled pairs on one card read as one control. */
+.sk-scope .seg.on { background: none; color: var(--accent); border-color: var(--accent); font-weight: var(--fw-semibold); }

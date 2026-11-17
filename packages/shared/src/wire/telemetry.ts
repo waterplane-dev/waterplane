@@ -46,6 +46,10 @@ export interface MeterSummary {
   byModel: MeterModelStat[];
   /** When the meter last recorded a call (epoch ms), or 0 if none. */
   lastAt: number;
+  /** Calls whose model has no price: counted in `calls`, charged nothing in `costUsd`. Absent = an older host that did not say. */
+  unpricedCalls?: number;
+  /** In + out tokens of those calls. Absent with `unpricedCalls`. */
+  unpricedTok?: number;
 }
 
 /** How often one UI feature was used (host-side, aggregated over all devices). */

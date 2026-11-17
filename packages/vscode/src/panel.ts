@@ -8,7 +8,7 @@ import { BRAND } from "@waterplane/shared";
 import type { TabId, ToExtension, ToWebview } from "./protocol.js";
 
 const TITLES: Record<TabId, string> = {
-  session: "Session", all: "All sessions", "always-on": "Always-on context", health: "Repo health", prompts: "Prompts",
+  session: "Session", all: "All sessions", "always-on": "Always-on context", health: "Repo health", findings: "Findings",
 };
 const panelTitle = (tab: TabId): string => `${BRAND.name} · ${TITLES[tab]}`;
 

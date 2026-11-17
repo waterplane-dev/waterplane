@@ -57,13 +57,13 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Bot, Check, EyeOff, Lightbulb, ListChecks, Plug, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
+  Activity, AlertTriangle, Bot, Check, EyeOff, Lightbulb, RefreshCw, Send, ShieldAlert, ToggleRight, Wrench, X,
 } from "lucide-react";
 import { AgentReadingsRegion } from "./AgentReadingsRegion";
 import { AGENT_REGION_WORDS } from "./agentReadingsWords";
 import { isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
 import type {
-  ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, ComplianceTriageRequest, RepoHealthPlotSeries, RepoHealthView, RepoTarget,
+  ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, ComplianceTriageRequest, RepoHealthView, RepoTarget,
 } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
@@ -80,25 +80,23 @@ import {
 } from "./setupRemedy";
 import { ConfirmButton } from "./Confirm";
 import { ContextLimitsEditor } from "./ContextLimits";
-import { AskRulesHere } from "./AskRulesHere";
-import { SeriesSpark } from "./RepoHealthTiles";
 import { SeriesRegion } from "./RepoHealthRegion";
 import { OptInRegion } from "./OptInRegion";
 import { OPTINS_REGION_WORDS } from "./optInSeed";
 import type { SendSeed } from "./sendIntent";
-import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
-import { bothClocksWords, rankSentence, regionWords, seriesValueWords } from "./repoHealthWords";
+import { regionWords } from "./repoHealthWords";
 import { core } from "./core/api";
 import { Explain } from "./Explain";
 import { FilterChip } from "./kit/FilterChip";
 import type { CoreApi } from "./sdk/types";
+import { aimEvidence, peekEvidence } from "./sdk/evidence";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { AlwaysOnRows, type SessionDoor } from "./AlwaysOnRows";
 import { AcceptControl, AcceptedSection, StaleMarksSection, DigestGroup, TriageControl } from "./ExposureAccept";
 import {
-  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, exposureSource, inExposureMainList,
+  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, exposureCut, exposureMeta, exposureSource, inExposureMainList,
   clearTriageRequest, WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
   WATCH_RECHECK_LABEL, WATCH_RECHECK_RUNNING, WATCH_RECHECK_TITLE, watchRecheckFailed,
 } from "./exposureWords";
@@ -116,10 +114,9 @@ const STATUS_ICON = {
  *  about its dependencies are different questions with different owners.
  *  `agents` is region 5 (`AgentReadingsRegion.tsx`): weekly readings off this desktop's own
  *  conversation logs — against its own past like the series, counted in nothing. */
-export type ReadingsRegion = "setup" | "series" | "optins" | "watch" | "agents";
-
-// `CLAUDE_MD_KEY` / `DESC_KEY` (the weight stack's two series) live in
-// `repoHealthPlot.ts`, a leaf both regions read, so region 2 never imports this sheet back.
+export type ReadingsRegion = "series" | "optins" | "watch" | "agents";
+/** A stored or forwarded route that still says `setup` lands on the first region: the set-up checklist is the Setup check sheet's now. */
+const regionOf = (r: ReadingsRegion | "setup" | undefined): ReadingsRegion => (!r || r === "setup" ? "series" : r);
 
 interface Props {
   repos: RepoTarget[];
@@ -130,7 +127,7 @@ interface Props {
   /** Which region to open on. The badge and the checklist entry land on
    *  `setup`; the repo-health entry lands on `series`. Both are the same
    *  sheet, so a reader who arrived for one can see the other exists. */
-  initialRegion?: ReadingsRegion;
+  initialRegion?: ReadingsRegion | "setup";
   /**
    * Open region 1 already cut to the open findings.
    *
@@ -181,7 +178,7 @@ interface Props {
 }
 
 export function SetupSheet({
-  repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onSeed, onCapture,
+  repos, initialRepoId, initialRegion, focus, onRemedy, onOpenFile, onSeed, onCapture,
   sessionDoorsFor, onAllSessions, onSkills, skillsCant, onOpenInstructionFile, onClose,
 }: Props) {
   const primaryRepos = repos.filter((r) => r.isPrimary);
@@ -189,17 +186,13 @@ export function SetupSheet({
   // the id we were handed — fall back rather than render an empty select.
   const [repoId, setRepoId] = useState(
     initialRepoId && repos.some((r) => r.id === initialRepoId) ? initialRepoId : primaryRepos[0]?.id ?? "");
-  const [region, setRegion] = useState<ReadingsRegion>(initialRegion);
+  const [region, setRegion] = useState<ReadingsRegion>(regionOf(initialRegion));
   // The cut is the tap, not a setting: it starts where the caller aimed it and
   // is cleared by the bar's own button. Re-aimed when the caller changes its
   // mind (the badge tapped again while the sheet is up).
   const [cut, setCut] = useState(focus === "findings");
   useEffect(() => { setCut(focus === "findings"); }, [focus]);
-  useEffect(() => { setRegion(initialRegion); }, [initialRegion]);
-  /** The badge counts both checklist regions. Aimed at the findings with none left under set-up but
-   *  some under watch, land on watch: a count's tap opens the rows it counted, not an empty cut. */
-  const [landed, setLanded] = useState(false);
-  useEffect(() => { setLanded(false); }, [focus, initialRegion, repoId]);
+  useEffect(() => { setRegion(regionOf(initialRegion)); }, [initialRegion]);
 
   /** The checklist's WRITE half — a fix in flight, and what it said. The read's
    *  own states belong to its hook; mixing the two is how "the checklist could
@@ -318,8 +311,6 @@ export function SetupSheet({
   const watchChecks = allChecks.filter(isWatchCheck);
   const setupChecks = allChecks.filter((c) => !isWatchCheck(c));
   const checks = region === "watch" ? watchChecks : setupChecks;
-  /** The badge's findings that are NOT in the region on screen — said on the cut, with a way there. */
-  const otherFindings = (region === "watch" ? setupChecks : watchChecks).filter(isSetupFinding).length;
   // Two kinds of open finding, and the difference is not cosmetic: one is an
   // idempotent patch the host writes, the other is work. `Fix all` used to mean
   // only the first, so a repo whose findings were all of the second kind showed
@@ -353,20 +344,6 @@ export function SetupSheet({
     }
   }
 
-  useEffect(() => {
-    if (landed || !report || !cut || region !== "setup") return;
-    setLanded(true);
-    if (!setupChecks.some(isSetupFinding) && watchChecks.some(isSetupFinding)) setRegion("watch");
-  }, [landed, report, cut, region, setupChecks, watchChecks]);
-
-  // `focus: "context-weight"` (the context sheet's door): bring that row into view once it is drawn.
-  useEffect(() => {
-    if (focus !== "context-weight" || !report || region !== "setup") return;
-    document.querySelector('[data-check="context-weight"]')?.scrollIntoView({ block: "start" });
-  }, [focus, report, region, repoId]);
-
-  const plot = view?.plot ?? null;
-  const claudeMdSeries = plot?.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null;
 
   return (
     <Sheet
@@ -398,15 +375,10 @@ export function SetupSheet({
               chip styles on one screen. One of the two is always lit, so no ×. */}
           <div className="ts-filter" role="group" aria-label="reading">
             <span className="ctx-stackpick-lab">reading</span>
-            {/* Back to the repo's own reading with the region. The checklist
-                half reads `claudeMdSeries` off the same plot, and a subtree's
+            {/* Back to the repo's own reading with the region. A subtree's
                 CLAUDE.md series is a different claim about a different file —
                 so the scope is dropped rather than left to leak into a region
                 that has no picker to say it is on. */}
-            <FilterChip on={region === "setup"} clears={false}
-              onClick={() => { setRegion("setup"); setScope(null); }}>
-              <ListChecks size={14} /> set-up
-            </FilterChip>
             <FilterChip on={region === "series"} clears={false} onClick={() => setRegion("series")}>
               <Activity size={14} /> over time
             </FilterChip>
@@ -426,11 +398,9 @@ export function SetupSheet({
               : region === "watch" ? WATCH_REGION_WORDS : region === "agents" ? AGENT_REGION_WORDS : regionWords(region)}</Explain>
           </div>
 
-          {region === "setup" || region === "watch" ? (<>
+          {region === "watch" ? (<>
             <SetupRegion
-              kind={region}
-              elsewhere={cut ? otherFindings : 0}
-              onElsewhere={() => setRegion(region === "watch" ? "setup" : "watch")}
+              kind="watch"
               onOptIns={() => { setRegion("optins"); setScope(null); }}
               repoId={repoId}
               repo={repo}
@@ -454,23 +424,18 @@ export function SetupSheet({
               onMark={setMark}
               onFixAll={() => void fixEverything()}
               onRemedy={onRemedy}
-              claudeMdSeries={claudeMdSeries}
-              descSeries={plot?.series.find((s) => s.key === DESC_KEY) ?? null}
-              onAgents={() => { setRegion("agents"); setScope(null); }}
-              onSkills={onSkills ? () => onSkills(repoId) : undefined}
-              skillsCant={skillsCant ?? undefined}
             />
-            {/* Not a check — a choice about this repo, kept beside the checklist
-                because this is the screen a repo's own settings are on. */}
-            {repo && region === "setup" && <AskRulesHere repo={repo} say={showToast} />}
           </>) : region === "optins" ? (
             <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
               onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
           ) : region === "agents" ? (
             <AgentReadingsRegion repo={repo} carried={report
-              ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenInstructionFile ?? onOpenFile}
-                  sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions}
+              ? <><AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenInstructionFile ?? onOpenFile}
+                  sessionDoors={sessionDoorsFor?.(repoId)} onAllSessions={onAllSessions} focusPath={peekEvidence("alwayson")?.path} onFocused={() => aimEvidence(null)}
                   onSkills={onSkills ? () => onSkills(repoId) : undefined} skillsCant={skillsCant ?? undefined} />
+                {/* The always-on weight's threshold: the one line a person can argue with, beside the list it measures. */}
+                {report.contextLimits && <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
+                  setAt={report.contextLimitsSetAt} onReport={(r) => checkRes.set(r)} />}</>
               : null}
               onSkills={onSkills ? () => onSkills(repoId) : undefined} skillsCant={skillsCant ?? undefined} />
           ) : (
@@ -495,15 +460,11 @@ export function SetupSheet({
 // ───────────────────────────────────────────────────────────────────────────
 
 function SetupRegion({
-  kind, elsewhere, onElsewhere, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
-  bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onMark, onFixAll, onRemedy, claudeMdSeries, descSeries,
-  onAgents, onSkills, skillsCant,
+  kind, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
+  bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onMark, onFixAll, onRemedy,
 }: {
   /** Which cut of the checklist this is: the conventions, or the daily watch (`isWatchCheck`). */
-  kind: "setup" | "watch";
-  /** Under the findings cut: how many of the badge's findings live in the OTHER region (0 = none / no cut). */
-  elsewhere: number;
-  onElsewhere: () => void;
+  kind: "watch";
   /** The empty watch region's door to the opt-ins region, where the watch is switched on. */
   onOptIns: () => void;
   repoId: string;
@@ -531,35 +492,10 @@ function SetupRegion({
   onMark: (req: ComplianceTriageRequest) => Promise<string | null>;
   onFixAll: () => void;
   onRemedy?: (prompt: string, repo: RepoTarget, label: string) => void;
-  /** The series' own reading of the two halves of the always-on weight, when
-   *  there is one. Region 1 draws it on exactly one row and nowhere else. */
-  claudeMdSeries: RepoHealthPlotSeries | null;
-  descSeries: RepoHealthPlotSeries | null;
-  /** Switch to the agents region, where the always-on list is drawn. */
-  onAgents?: () => void;
-  /** The switch screen for this repo's skills and plugins; `skillsCant` is the sentence when there is none. */
-  onSkills?: () => void;
-  skillsCant?: string;
 }) {
   // The watch re-check's run and its one sentence, for the repo it ran on (a switch hides it).
   const [watchRunAt, setWatchRun] = useState<{ repoId: string; running: boolean; ok?: boolean; sentence?: string } | null>(null);
   const watchRun = watchRunAt?.repoId === repoId ? watchRunAt : null;
-  // What the context-weight row's figure is made of, file by file, plus this desktop's rows and
-  // the doors to what a live session actually carried. Absent `instructions` (an older host) is
-  // said by the component, never drawn as an empty list.
-  // The list itself lives in the agents region (what every turn carries, beside what the agents
-  // spent); this row keeps the threshold it is measured against and a door to the list.
-  const aoRows = report && (onAgents || onSkills || skillsCant)
-    ? <div className="sheet-actions">
-        {onAgents && <Button onClick={onAgents} title="The always-on list, file by file, and what each live session carried">
-          <Bot size={12} /> what it is made of →
-        </Button>}
-        {onSkills && <Button onClick={onSkills} title="Turn skills and plugins off or down for this repo or every repo; new sessions only">
-          <Plug size={12} /> switch skills &amp; plugins →
-        </Button>}
-        {!onSkills && skillsCant && <Hint>{skillsCant}</Hint>}
-      </div>
-    : null;
   function card(c: ComplianceCheck) {
     if (!report) return null;
     // Per row, the same two answers as the bulk button. A preset is
@@ -578,16 +514,6 @@ function SetupRegion({
       ? { label: agentVerb(c.id, setupRows()), run: () => runRowAgent(setupRows().byCheck(c.id)!.agent!, repo, c.label) }
       : { label: agentVerb(c.id, setupRows()), run: () => onRemedy!(remedyPrompt([c], repo.repoName, setupRows()), repo, c.label.toLowerCase()) }
       : null;
-    // The one row whose finding is a COMPARISON: it quotes a
-    // threshold, so it is the only place that threshold can be
-    // argued with. Everything else here is a fact about the repo.
-    const limits = c.id === "context-weight" && report.contextLimits
-      ? <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
-          setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />
-      : null;
-    const twin = c.id === "context-weight"
-      ? <WeightTwin claudeMd={claudeMdSeries} desc={descSeries} workingTree={c.alwaysOnChars ?? null} />
-      : null;
     // An exposure finding: the line it crossed, where it came from, then Accept….
     const xpSource = c.exposure ? exposureSource(c.exposure) : null;
     const xp = c.exposure
@@ -600,7 +526,7 @@ function SetupRegion({
       : null;
     return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
       size={report.autoCompactDefault} onIgnore={onIgnore}
-      extra={<>{twin}{c.id === "context-weight" ? aoRows : null}{limits}{xp}</>} />;
+      extra={xp} />;
   }
   // The watch's re-check RUNS the collector on the desktop (host `exposurerun.ts`), then re-reads.
   async function onWatchRun() {
@@ -616,7 +542,6 @@ function SetupRegion({
     setWatchRun({ repoId: forRepo, running: false, ...r });
   }
   const xcut = exposureCut(allRows);
-  const hasAlwaysOn = !!(report?.instructions?.files.length || report?.instructions?.desktop?.length);
 
   return (
     <>
@@ -670,8 +595,6 @@ function SetupRegion({
             <div className="section filter-bar">
               <span className="filter-bar-txt">
                 {findingsCutWords(rows.length, allRows.length, kind === "watch" ? xcut.digest.length : allRows.filter(isSetupConsider).length)}
-                {elsewhere > 0 && <> · <button className="link-btn" onClick={onElsewhere}>
-                  {cutElsewhereWords(elsewhere, kind === "watch" ? "setup" : "watch")}</button></>}
               </span>
               <button className="filter-bar-clear" onClick={onClearCut}>
                 <X size={14} /> clear
@@ -679,9 +602,10 @@ function SetupRegion({
             </div>
           )}
 
-          <ul className="check-list">
-            {rows.filter((c) => !c.ignored && inExposureMainList(c)).map(card)}
-          </ul>
+          {(() => {
+            const main = rows.filter((c) => !c.ignored && inExposureMainList(c));
+            return <ul className="check-list">{main.map(card)}</ul>;
+          })()}
 
           {/* Digest rows count in nothing and ciqkit has dozens: ONE closed head, the same cards inside.
               Not under the findings cut — a digest row is not a finding. */}
@@ -720,84 +644,9 @@ function SetupRegion({
           {!cut && <StaleMarksSection marks={xcut.summary?.staleMarks ?? []}
             onClear={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
 
-          {/* A repo with no CLAUDE.md has nothing to weigh and therefore no
-              row — but it will be measured against this line the moment it
-              gets one, and this sheet is the only place that line is visible.
-              So the control survives the row's absence rather than appearing
-              out of nowhere later. Drawn under the cut as well: the line is
-              not a finding, so hiding it with the passing rows would remove a
-              control that has nothing to do with the filter. */}
-          {kind === "setup" && (report.contextLimits || hasAlwaysOn) && !allRows.some((c) => c.id === "context-weight") && (
-            <div className="check-row check-pass">
-              <div className="check-top"><span className="check-label">Agent context weight</span></div>
-              <div className="check-detail">
-                Nothing to weigh yet — this repo has no CLAUDE.md.
-                {report.contextLimits ? " These are the thresholds it will be measured against once it does." : ""}
-              </div>
-              {/* No CLAUDE.md is not no always-on context: a `.mcp.json` server, a subagent or
-                  this desktop's own files still ride every turn, so the door to their list stays. */}
-              {hasAlwaysOn && aoRows}
-              {report.contextLimits && <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
-                setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />}
-            </div>
-          )}
         </>
       )}
     </>
-  );
-}
-
-/**
- * The one row that is measured BOTH ways, showing both.
- *
- * The check above states the working tree as it is now and compares it to a
- * line the user can change. This adds the same quantity as the series read it
- * on the last commit measured: the two halves' sparklines, the total at that
- * commit, and the tool's own rank sentence. The two numbers are printed by
- * their CLOCK and reconciled by nothing — see this file's header.
- *
- * Absent, not zeroed, wherever the series has nothing: a row that silently
- * loses its second half is a row that reads as having only ever had one.
- */
-function WeightTwin({ claudeMd, desc, workingTree }: {
-  claudeMd: RepoHealthPlotSeries | null;
-  desc: RepoHealthPlotSeries | null;
-  /**
-   * The check's own figure for the WORKING TREE, now carried on the wire
-   * rather than stated only inside its sentence. With it, the line names both
-   * clocks and both numbers; without it (an older desktop) it says where the
-   * other figure is instead. Never reconciled — a gap between them IS the
-   * reading, because it means CLAUDE.md or a skill has been edited since the
-   * last commit the series measured.
-   */
-  workingTree: number | null;
-}) {
-  if (!claudeMd && !desc) return null;
-  const at = claudeMd?.points[claudeMd.points.length - 1]?.sha7
-    ?? desc?.points[desc.points.length - 1]?.sha7 ?? null;
-  const total = claudeMd?.last != null && desc?.last != null ? claudeMd.last + desc.last : null;
-  const both = bothClocksWords(workingTree, total, at);
-  return (
-    <div className="rh-twin">
-      {both ? <div className="rh-twin-line">{both}</div> : null}
-      <ul className="rh-twin-rows">
-        {[claudeMd, desc].filter(Boolean).map((s) => (
-          <li key={s!.key}>
-            <span className="rh-twin-key">{s!.label}</span>
-            <span className="rh-twin-val">{seriesValueWords(s!.last, s!.unit)}</span>
-            {/* A fixed width here on purpose: this miniature sits inside a
-                checklist row, which has no measured box of its own, and it is
-                a second look at a number the row already states rather than a
-                chart anybody reads a value off. The full-size curve is the
-                tile in the other region. */}
-            <SeriesSpark points={s!.points} width={96} height={18} label={s!.label} />
-          </li>
-        ))}
-      </ul>
-      {rankSentence(claudeMd?.reading ?? desc?.reading) ? (
-        <div className="rh-twin-read">{rankSentence(claudeMd?.reading ?? desc?.reading)}</div>
-      ) : null}
-    </div>
   );
 }
 

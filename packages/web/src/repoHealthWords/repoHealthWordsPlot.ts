@@ -128,6 +128,8 @@ export function bothClocksWords(
   workingTree: number | null | undefined,
   measured: number | null | undefined,
   sha7: string | null | undefined,
+  /** The working-tree clock's words (shared `CONTEXT_CLOCK.tree`), handed in: this slice imports only its siblings. */
+  treeClock = "in the working tree",
 ): string | null {
   const now = workingTree != null && Number.isFinite(workingTree) ? seriesValueWords(workingTree) : null;
   const then = measured != null && Number.isFinite(measured) ? seriesValueWords(measured) : null;
@@ -139,8 +141,8 @@ export function bothClocksWords(
   // that figure is rather than repeating it, and the day the report carries the
   // count, passing it here prints both side by side with no other change.
   if (now == null) {
-    return `${then} ${at} — the sentence above is the same number in the working tree as it is now. Two clocks, left as they are.`;
+    return `${then} ${at} — the sentence above is the same number ${treeClock} as it is now. Two clocks, left as they are.`;
   }
-  if (then == null) return `${now} in the working tree — the series has no reading of it to sit beside.`;
-  return `${now} in the working tree · ${then} ${at} — two clocks on one number, left as they are.`;
+  if (then == null) return `${now} ${treeClock} — the series has no reading of it to sit beside.`;
+  return `${now} ${treeClock} · ${then} ${at} — two clocks on one number, left as they are.`;
 }

@@ -239,3 +239,33 @@ test("an unknown reason a newer host sends is a generic sentence, never undefine
   assert.equal(sessionBudgetUnknownText("someFutureReason"), "can't tell: this budget could not be checked — nothing is held");
   assert.equal(sessionBudgetText({ state: "unknown", unit: "usd", max: 2, spent: null, why: "someFutureReason" }), "can't tell: this budget could not be checked — nothing is held");
 });
+
+import { sessionMoney, weekCalibration } from "../dist/index.js";
+
+test("sessionMoney: own + agents; agents only unpriced keep the own figure and count (D4)", () => {
+  assert.deepEqual(sessionMoney({ own: 2, ownUnpriced: 0, agents: { usd: 1, unpriced: 5, spent: true } }), { usd: 3, agentUsd: 1, unpricedTok: 5, withheld: false });
+  assert.deepEqual(sessionMoney({ own: 2, ownUnpriced: 1, agents: { usd: 0, unpriced: 7, spent: true } }), { usd: 2, agentUsd: null, unpricedTok: 8, withheld: false });
+  assert.equal(sessionMoney({ own: 0, ownUnpriced: 3, agents: { usd: 0, unpriced: 0, spent: false } }).usd, null, "zero is no figure, never $0");
+});
+
+test("sessionMoney: agents unread, or spent with no sayable cost, withhold the whole figure", () => {
+  assert.equal(sessionMoney({ own: 2, ownUnpriced: 0, agents: null }).withheld, true);
+  const w = sessionMoney({ own: 2, ownUnpriced: 0, agents: { usd: null, unpriced: 0, spent: true } });
+  assert.equal(w.withheld, true);
+  assert.equal(w.usd, null);
+  assert.equal(sessionMoney({ own: 2, ownUnpriced: 0, agents: { usd: null, unpriced: 0, spent: false } }).usd, 2, "no agent spend, nothing withheld");
+});
+
+test("weekCalibration: the spend, the floor and the undated refusal in one answer", () => {
+  const usage = { weeklyPct: 20, weeklyResetAt: NOW + 86_400_000 };
+  assert.equal(weekCalibration({ usage, hereUsd: 10 }).usdPerPct, 0.5);
+  assert.equal(weekCalibration({ usage, hereUsd: 0.5 }).usdPerPct, null, "under the dollar floor");
+  assert.equal(weekCalibration({ usage: { ...usage, weeklyPct: 2 }, hereUsd: 10 }).usdPerPct, null, "under the percent floor");
+  assert.equal(weekCalibration({ usage, hereUsd: null }).usdPerPct, null);
+  const u = weekCalibration({ usage, hereUsd: 10, undated: 3 });
+  assert.equal(u.usdPerPct, null);
+  assert.match(u.refused, /could not date/);
+  const j = weekCalibration({ usage, hereUsd: 10, jobs: { usd: 2, byPeer: [{ peer: "pc", usd: 2 }], text: "incl. $2.00 on pc" } });
+  assert.equal(j.usdPerPct, 0.6);
+  assert.equal(j.incl, "incl. $2.00 on pc");
+});

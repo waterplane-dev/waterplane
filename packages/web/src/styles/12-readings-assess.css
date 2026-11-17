@@ -612,3 +612,27 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .readings-sheet .ao-group-headrow { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); flex-wrap: wrap; }
 .readings-sheet .ao-group-headrow .ao-group-head { margin-top: 0; }
 .readings-sheet .ao-group-headrow { margin-top: var(--sp-8); }
+
+/* 17-setupcheck.css: the Setup check sheet (features/setupCheck). Cards for findings, folds for the
+   checked-off, waived, not-checked and install lists. Row text wraps; controls are 44px tall. */
+.sc-scroll { padding-bottom: var(--sp-12); }
+.segmented.sc-scope { gap: var(--sp-4); padding: var(--sp-6) var(--gutter) var(--sp-8); border-bottom: 0; background: none; }
+.sc-scope .seg { min-width: 0; min-height: 44px; padding: var(--sp-6) var(--sp-4); font-size: calc(var(--fs-13) * var(--ui-font, 1)); white-space: normal; text-align: center; line-height: 1.2; }
+.sc-scroll > * { flex-shrink: 0; }
+.sc-scroll > .sc-fold, .sc-scroll > .sc-card, .sc-scroll > .sc-head, .sc-scroll > .sc-link, .sc-scroll > select.search { margin-left: var(--gutter); margin-right: var(--gutter); }
+.sc-head { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); padding: var(--sp-6) 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
+.sc-link { background: none; border: 0; color: var(--muted); text-decoration: underline; min-height: 44px; padding: 0 var(--sp-4); align-self: flex-start; }
+.sc-card { overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: var(--r-8); margin: var(--sp-6) 0; padding: var(--sp-8); background: var(--panel); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sc-what { color: var(--fg); }
+.sc-block { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--sp-4) 0; padding: var(--sp-6); border: 1px solid var(--line); border-radius: var(--r-8); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.sc-sub { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.sc-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-2); }
+.sc-scroll > .sc-grp, .sc-scroll > .sc-age { margin-left: var(--gutter); margin-right: var(--gutter); }
+.sc-grp { overflow-wrap: anywhere; border-top: 1px solid var(--line); padding: var(--sp-6) 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.sc-grp .sc-link { padding: 0; min-height: 44px; }
+.sc-repo-row > .row, .sc-clear-row > .row { width: 100%; text-align: left; }
+.sc-fold { margin-top: var(--sp-6); }
+.sc-card > .sc-fold { margin-top: 0; border-top: 1px solid var(--line); }
+.sc-fold > summary { cursor: pointer; color: var(--muted); min-height: 44px; display: flex; align-items: center; list-style: none; }
+.sc-fold > summary::-webkit-details-marker { display: none; }
+.sc-chk { overflow-wrap: anywhere; padding: var(--sp-6) 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-2); }

@@ -41,6 +41,7 @@ import { manifest as backlog } from "./backlog";
 import { manifest as activity } from "./activity";
 import { manifest as queue } from "./queue";
 import { manifest as setup } from "./setup";
+import { manifest as setupCheck } from "./setupCheck";
 import { manifest as hostTools } from "./hostTools";
 import { manifest as hosts } from "./hosts";
 import { manifest as peers } from "./peers";
@@ -94,6 +95,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   activity,
   queue,
   setup,
+  setupCheck,
   hostTools,
   hosts,
   peers,

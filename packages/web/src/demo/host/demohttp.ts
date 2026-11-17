@@ -8,6 +8,7 @@
  *
  * `/api/health` stays in index.ts — it belongs to the disconnect fault.
  */
+import { demoAllRepos, demoSetupCheck } from "./setupcheck.ts";
 import { ASK_RULE_BACKENDS, PRICES_AS_OF, cleanRepoDisplayName, isSlowJobKind, SUGGESTED_ASK_RULES, filterGalleryRows, summarizeWaiting, zeroCost, zeroTotals, type GalleryQuery, type RepoTarget, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
 import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
@@ -195,6 +196,19 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     const target = repoTargets(m).find((r) => r.id === id) as { repoName?: unknown } | undefined;
     if (!target) return json({ error: "no such repo" }, 404);
     return json(sk[2] === "skills" ? demoSkills(id, now) : demoCompliance(id, String(target.repoName ?? id)));
+  }
+
+  // The Setup check's all-repos overview: three demo repos and one that could not be checked.
+  if (path === "/api/setupcheck/repos" && method === "GET" && m.numbers?.skills) {
+    const rs = (repoTargets(m) as { id?: string; repoName?: string }[]).filter((r) => typeof r.id === "string").slice(0, 3).map((r) => ({ id: String(r.id), name: String(r.repoName ?? r.id) }));
+    return json(demoAllRepos(rs, now));
+  }
+
+  // The Setup check: one small document, repo findings for the repo asked about (scenario `skills-switch`).
+  if (path === "/api/setupcheck" && method === "GET" && m.numbers?.skills) {
+    const rid = q.repo ? decodeURIComponent(q.repo) : null;
+    const t = rid ? (repoTargets(m).find((r) => r.id === rid) as { repoName?: unknown } | undefined) : undefined;
+    return json(demoSetupCheck(t ? rid : null, t ? String(t.repoName ?? rid) : null, now));
   }
 
   // Slow jobs (the checklist and the skills reads): every run is already done — see `demoSlowJob`.

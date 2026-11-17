@@ -1,5 +1,5 @@
 /** The Totals box and the costliest conversations under it, hook-free: every value is a render value of TokenStatsBody. */
-import { type ComponentProps } from "react";
+import { type ComponentProps, type ReactNode } from "react";
 import { CircleHelp } from "lucide-react";
 import {
   type CostBreakdown, DOLLARS_WHY, DOLLARS_WHY_HEAD, fmtCount, fmtExact, fmtUsd, priceSourceText, type TokenConvo, type TokenStatsDoc, tokenTotal,
@@ -21,7 +21,7 @@ import { type FoldRead, foldStateText } from "./weekBands.ts";
  * grids. Hook-free — every value it reads is a render value of `TokenStatsBody`,
  * which keeps all the state, so moving this out cannot change a hook's position.
  */
-export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, scopeRepos, scopeRes, reposRefusal, top, pts, weekTwin, nameOf, onExplain, isLive, canOpen, onOpenConvo }: {
+export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, scopeRepos, scopeRes, reposRefusal, top, topBar, pts, weekTwin, nameOf, onExplain, isLive, canOpen, onOpenConvo }: {
   doc: TokenStatsDoc;
   money: boolean;
   table: boolean;
@@ -51,6 +51,8 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
   /** The costliest conversations for the span on screen: the rows, the span's total they are a
    *  share of, and the words the section's tag and caption carry. */
   top: { rows: TokenConvo[]; total: number; tag: string; note?: string };
+  /** The Setup check's cut on this list, drawn above the rows (its "n of N" and clear); absent when uncut. */
+  topBar?: ReactNode;
   /** A costliest row's dollars as weekly points, off the screen's one calibration; null where it
    *  refused or the row did not run wholly inside this week (`convoInWeek`). */
   pts?: (usd: number, c: TokenConvo) => string | null;
@@ -122,7 +124,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
           the counterfactual, which nothing else says; the rate table
           under it is method and folds. */}
       {money && <>
-        <div className="empty ts-caveat">
+        <div className="empty ts-caveat" data-ev="writes">
           This is a <b>counterfactual, not a bill</b>: what the same traffic would have cost billed
           through the API at published pay-as-you-go rates ({priceSourceText(doc)}).
           {/* Both of these are counted over the WHOLE corpus, so they
@@ -166,7 +168,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
           rule the unpriced and fast-mode clauses follow. Drawn only
           when it happened. */}
       {!active && !dcut && coldNote && (
-        <div className="empty ts-caveat">{coldNote}</div>
+        <div className="empty ts-caveat" data-ev="cold">{coldNote}</div>
       )}
 
 
@@ -177,7 +179,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
           ? <DaysTiles days={dcut.cut.days} totals={dcut.cut.totals} cost={dcut.cut.cost} calendarDays={dcut.calendarDays} money={money} />
           : <Tiles doc={doc} money={money} />}
 
-        <div className="section section-head">
+        <div className="section section-head" data-ev="models">
           <span>By model <ScopeTag>{scopeWords}</ScopeTag></span>
         </div>
         {(active ?? dcut?.cut)
@@ -228,11 +230,12 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
       </ScopeCard>
 
       {/* ── The conversations that carried the bill ─────────────────── */}
-      <div className="section section-head">
+      <div className="section section-head" data-ev="top">
         <span>Costliest conversations <ScopeTag>{top.tag}</ScopeTag></span>
       </div>
+      {topBar}
       {top.note && <div className="empty ts-caveat">{top.note}</div>}
-      {!top.rows.length && !top.note && <div className="empty">No conversation ran in {scopeWords}.</div>}
+      {!top.rows.length && !top.note && <div className="empty">{topBar ? "None of the named conversations is in this span." : `No conversation ran in ${scopeWords}.`}</div>}
       {!!top.rows.length && <>
         <TopConvos rows={top.rows} total={top.total} pts={pts}
           nameOf={nameOf} onExplain={onExplain} isLive={isLive} canOpen={canOpen} onOpen={onOpenConvo} />

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   bucket, canInherit, chipCount, chipKeys, draftChanges, levelFor, matches, pluginTag, reconcileDraft, receiptWords, saveWords, saveNote, applyNote, suggestionName, sortRows, splitRows,
-  stateTag, summaryWords, rowView, sourceWords, overriddenWords, withPin, fallbackAt, globalDraftOf, suggestionChanges, suggestionLevers, suggestionMeanings, suggestionUses, applyFilesWords, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, parkedWords, reconcileSuggestions, countProgress, isCountingRefusal, isCountingDoc, usesBar, usesIsNewer,
+  stateTag, summaryWords, rowView, sourceWords, withPin, fallbackAt, suggestionChanges, suggestionLevers, suggestionMeanings, suggestionUses, applyFilesWords, tickedChars, applyWords, spendWords, emptyWords, usageWords, usesWords, withChoice, withoutSent, moveDraft, reconcileSuggestions, countProgress, isCountingRefusal, isCountingDoc, usesBar, usesIsNewer,
+  scopeOf, withScopedChoice, withScope, changedOf, hereChanges,
 } from "./logic.ts";
 
 const skill = (id, o = {}) => ({ kind: "skill", id, source: "personal", set: {}, effective: "on", from: "default", switchable: true, listingChars: 400, ...o });
@@ -157,8 +158,6 @@ test("switching file or repo sets the draft aside and brings it back; nothing ty
   const d = { "skill:a": "off", "skill:b": "name-only" };
   const away = moveDraft({}, { repoId: "r1", level: "repo-local", draft: d }, { repoId: "r1", level: "global" });
   assert.deepEqual(away.draft, {});
-  assert.match(parkedWords(away.parked, "r1", "global"), /^2 unsaved choices are kept for This repo/);
-  assert.equal(parkedWords(away.parked, "r2", "global"), null);
   const back = moveDraft(away.parked, { repoId: "r1", level: "global", draft: {} }, { repoId: "r1", level: "repo-local" });
   assert.deepEqual(back.draft, d);
   assert.deepEqual(back.parked, {});
@@ -215,21 +214,9 @@ test("an unsaved All-repos choice shows on the repo rows that follow it", () => 
   const v = rowView(p, "repo-local", {}, g);
   assert.equal(v.value, false);
   assert.equal(sourceWords(v), "follows All repos (unsaved): off");
-  assert.deepEqual(globalDraftOf({ "r1\nglobal": g }, "r1", "repo-local", {}), g);
-  assert.deepEqual(globalDraftOf({}, "r1", "global", g), g);
   // a repo that set its own value is not moved by it
   const own = plugin("data@synced", { set: { "repo-local": true }, from: "repo-local" });
   assert.equal(rowView(own, "repo-local", {}, { "plugin:data@synced": false }).value, true);
-});
-
-test("All repos shows the all-repos value, not this repo's, and says when this repo overrides it", () => {
-  const p = plugin("sales@synced", { set: { global: false, "repo-local": true }, enabled: true, from: "repo-local" });
-  const v = rowView(p, "global", {});
-  assert.equal(v.value, false);
-  assert.match(overriddenWords(v), /This repo sets its own: on/);
-  assert.equal(overriddenWords(rowView(plugin("x@y"), "global", {})), null);
-  const s = skill("a", { set: { "repo-local": "off" }, effective: "off", from: "repo-local" });
-  assert.equal(rowView(s, "global", {}).value, "on");
 });
 
 test("keep for this repo pins the followed value; follow removes it", () => {
@@ -275,4 +262,33 @@ test("the counted inventory shows only once it is newer than the plain read or a
   assert.equal(usesIsNewer({ resultAt: 5 }, { data: {}, resultAt: 6 }), true);
   assert.equal(usesIsNewer({ resultAt: 7 }, { data: {}, resultAt: 6 }), false);
   assert.equal(usesIsNewer({ resultAt: null }, { data: null, resultAt: 6 }), false);
+});
+
+test("a card's scope: its first tap takes the screen's default, then the card says and changes its own", () => {
+  const p = plugin("sales@synced");
+  const none = { draft: {}, allDraft: {} };
+  assert.equal(scopeOf(p, none, "repo"), "repo");
+  assert.equal(scopeOf(p, none, "all"), "all");
+  // This repo: only the repo file's draft
+  const here = withScopedChoice(none, p, "repo-local", false, "repo");
+  assert.deepEqual(here, { draft: { "plugin:sales@synced": false }, allDraft: {} });
+  assert.equal(scopeOf(p, here, "all"), "repo", "a changed card keeps its own scope whatever the default");
+  // the pair moves the shown value to All repos; the card still shows off
+  const all = withScope(here, p, "repo-local", "all");
+  assert.deepEqual(all, { draft: {}, allDraft: { "plugin:sales@synced": false } });
+  assert.equal(rowView(p, "repo-local", all.draft, all.allDraft).value, false);
+  assert.deepEqual(withScope(all, p, "repo-local", "repo"), here, "and back");
+  assert.deepEqual(changedOf(all), { "plugin:sales@synced": false });
+  assert.deepEqual(hereChanges(all, [p], "repo-local"), [{ kind: "plugin", id: "sales@synced", to: false }]);
+});
+
+test("All repos on a card means here too: this repo's own value is dropped, so the card shows the tap", () => {
+  const own = plugin("data@synced", { set: { "repo-local": true }, from: "repo-local" });
+  const d = withScopedChoice({ draft: {}, allDraft: {} }, own, "repo-local", false, "all");
+  assert.deepEqual(d, { draft: { "plugin:data@synced": "inherit" }, allDraft: { "plugin:data@synced": false } });
+  assert.equal(rowView(own, "repo-local", d.draft, d.allDraft).value, false);
+  assert.equal(scopeOf(own, d, "repo"), "all");
+  // tapping back to what All repos already holds leaves nothing for All repos; nothing typed is lost to a wrong file
+  const p = plugin("sales@synced", { set: { global: false }, enabled: false, from: "global" });
+  assert.deepEqual(withScopedChoice({ draft: {}, allDraft: {} }, p, "repo-local", false, "all"), { draft: {}, allDraft: {} });
 });

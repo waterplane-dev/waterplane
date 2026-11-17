@@ -112,7 +112,12 @@ export function claudeBinResolution(): ClaudeBinResult {
   // A miss is never cached: installing claude and retrying must work without a host restart. Nor is
   // a hit trusted blindly: a package-manager upgrade unlinks the command for minutes, so the cached
   // answer is re-checked (one stat or PATH scan) and re-resolved when it has gone.
-  if (cached && !cached.missing && (cached.bin.includes("/") ? existsSync(cached.bin) : pathHas(cached.bin, process.platform))) return cached;
+  // A FOUND answer is a stand-in for PATH, never a replacement: during an npm upgrade PATH misses for a
+  // moment, the scan picks a stale ~/.local/bin/claude, and before this check that pick stuck for the
+  // life of the process: sessions spawned the old native install and the update button turned into
+  // `claude update`, installing native versions beside the npm one (2026-11-09 and 11-17).
+  const backOnPath = cached?.source === "found" && pathHas("claude", process.platform);
+  if (cached && !cached.missing && !backOnPath && (cached.bin.includes("/") ? existsSync(cached.bin) : pathHas(cached.bin, process.platform))) return cached;
   cached = findClaudeBin({
     env: process.env,
     platform: process.platform,

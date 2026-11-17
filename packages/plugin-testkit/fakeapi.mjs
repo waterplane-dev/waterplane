@@ -89,7 +89,7 @@ export function fakeApi(opts = {}) {
   const calls = {
     backend: [], onHook: [], setStatus: [], onSettings: [], on: [], setBadge: [], decision: [], ruleAllows: [], bind: [], log: [],
     seedSettings: [], suggest: [], answer: [], meter: [], notify: [], notifyDone: [], notifyDoneExcept: [], revokeDevice: [], handle: [], push: [], handToAgent: [], route: [], stream: [],
-    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFix: [], sessionOf: [],
+    offerFile: [], screenReader: [], storeReader: [], thermalReader: [], usageProbe: [], setupCheck: [], setupFinding: [], setupFix: [], sessionOf: [],
   };
   const screens = new Map();
   const sessions = new Map();
@@ -150,6 +150,7 @@ export function fakeApi(opts = {}) {
     claudeUsage: () => null,
     repo: async () => null,
     setupCheck: (fn) => reg(calls.setupCheck, fn),
+    setupFinding: (fn) => reg(calls.setupFinding, fn),
     setupFix: (fid, fn) => reg(calls.setupFix, { id: fid, fn }),
     handle: (method, fn) => reg(calls.handle, { method, fn }),
     push: (event, data) => { calls.push.push({ event, data }); return null; },

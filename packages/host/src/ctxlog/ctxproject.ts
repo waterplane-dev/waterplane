@@ -2,7 +2,7 @@
 import { updateContextLog } from "./ctxupdate.js";
 import { agentEnvelope, agentSpendAt, liveAgentOf } from "./ctxagents.js";
 import type { ContextSpark, ContextWindowSource } from "@waterplane/shared";
-import { seriesCostFields, downsample } from "@waterplane/shared";
+import { seriesCostFields, downsample, sessionMoney } from "@waterplane/shared";
 import { projectCarried, projectCold, projectCompaction } from "./ctxcursor.js";
 import type { ContextLog, SeriesCursor } from "./ctxcursor.js";
 import type { AgentUsage } from "./ctxagents.js";
@@ -114,16 +114,23 @@ function costFields(cur: SeriesCursor, agents: AgentUsage): Partial<ContextSpark
   // cost, and the rule `usageTok` follows applies to money first: a figure that
   // leaves the agents out is worse than no figure. So an absent agent cost
   // withholds the WHOLE reading rather than publishing the parent's half of it.
+  // The ONE rule is shared `sessionMoney` (VS Code's headline asks it too): an agent tally that
+  // cannot say what its logs cost withholds the WHOLE reading, and agents that only ran unpriced
+  // models leave the own cost standing beside the unpriced count.
   if (!agents.cost) return {};
-  const total = cur.cost.total + agents.cost.total;
-  const unpriced = cur.unpriced + (agents.unpriced || 0);
+  const m = sessionMoney({
+    own: cur.cost.total,
+    ownUnpriced: cur.unpriced,
+    agents: { usd: agents.cost.total, unpriced: agents.unpriced || 0, spent: agents.tok > 0 },
+  });
+  if (m.withheld) return {};
   const fastTok = cur.fastTok + (agents.fastTok ?? 0);
   const fastUsd = cur.fastUsd + (agents.fastUsd ?? 0);
   return {
     ...(fastTok > 0 ? { fastTok, fastUsd } : {}),
-    ...(total > 0 ? { costUsd: total } : {}),
-    ...(total > 0 && agents.cost.total > 0 ? { agentCostUsd: agents.cost.total } : {}),
-    ...(unpriced > 0 ? { unpricedTok: unpriced } : {}),
+    ...(m.usd != null ? { costUsd: m.usd } : {}),
+    ...(m.agentUsd != null ? { agentCostUsd: m.agentUsd } : {}),
+    ...(m.unpricedTok > 0 ? { unpricedTok: m.unpricedTok } : {}),
   };
 }
 

@@ -147,6 +147,7 @@ const CLIENT_T = [
   "launch.list",
   "launch.run",
   "limit.first",
+  "link.log",
   "limit.resume",
   "limit.session",
   "limit.setAuto",
@@ -347,7 +348,7 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 148, "a member was added or merged"); // 147 → 148: signin.continue (blocked sessions D1a); 148 → 149: session.netRetryNow (Retry now, R-connection-024); 149 → 147: install.get/report (android-apps P5)
+  assert.equal(members, 149, "a member was added or merged"); // 147 → 148: signin.continue (blocked sessions D1a); 148 → 149: session.netRetryNow (Retry now, R-connection-024); 149 → 147: install.get/report (android-apps P5); 148 → 149: link.log (the background link's own log)
 });
 
 test("HostMessage carries exactly the pinned message types", () => {

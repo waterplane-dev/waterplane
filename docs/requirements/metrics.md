@@ -44,10 +44,11 @@ The header sparkline shows agent activity in addition to token usage.
 - asked: 2026-09-26
 - shipped: 1a37973
 
-### R-metrics-010 · shipped
+### R-metrics-010 · superseded
 The all-sessions view has well-structured data, visible charts and extra cost/usage insights, with filter buttons clearly tied to what they filter.
 - asked: 2026-09-26
 - shipped: ae9c3d7
+- superseded-by: R-metrics-078
 
 ### R-metrics-011 · shipped
 Cost is shown as a trend over time with a per-repository breakdown.
@@ -301,7 +302,7 @@ Every Agent readings figure is a weekly bar chart over the same twelve weeks, an
 - shipped: host agentclass.ts + routes/apirepowork.ts, shared healthspend.ts repoSpendByWeek, web AgentWeekBars.tsx + agentWeekPlot.ts
 
 ### R-metrics-062 · shipped
-The always-on list (what every turn in a repo carries: its instruction files, subagents, MCP servers, hooks and this desktop's own files, with the doors to what each live session actually carried) is the first card of the agents region rather than under the set-up checklist's context-weight row. That row keeps its sentence, its threshold and its two-clocks figure, and gains a "what it is made of" door to the list; the context sheet's repo-readings door lands on the agents region.
+The always-on list (what every turn in a repo carries: its instruction files, subagents, MCP servers, hooks and this desktop's own files, with the doors to what each live session actually carried) is the first card of the agents region rather than under the set-up checklist's context-weight row. That row (since 2026-11-16 a finding in the Setup check, `repo.context-weight`) keeps its sentence, its threshold and its two-clocks figure, and gains a "what it is made of" door to the list (the threshold form sits on the agents region's always-on card); the context sheet's repo-readings door lands on the agents region.
 - asked: 2026-11-11
 - shipped: web SetupSheet.tsx, AgentReadingsRegion.tsx, features/context/actions.ts
 
@@ -392,3 +393,73 @@ The repo reports the share of vault host source lines that no vault test or e2e 
 - asked: 2026-11-11
 - shipped: a46a7f450, 41b50e65d
 
+
+### R-metrics-078 · shipped
+Setup check is one ranked list of findings in three groups (this repo, this machine, account); a machine finding is shown once, never under each repo.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/findingrules.test.mjs, packages/host/src/setupcheck/setupcheck.test.mjs
+
+### R-metrics-079 · shipped
+Each finding states its saving per week in dollars at list price with tokens beside it, worded as the billing profile words money; the saving is absent where it cannot be priced (claude-local, opencode, an unpriced model) and never estimated from nothing.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/findings.test.mjs
+
+### R-metrics-080 · shipped
+A machine finding's saving is summed over every repo's sessions on this desktop and says how many sessions and repos.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/findings.test.mjs
+
+### R-metrics-081 · shipped
+Each finding names the backends it read; a backend it could not read is named as not read, never as fine.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/findings.test.mjs, packages/shared/test/findingrules.test.mjs
+
+### R-metrics-082 · shipped
+A finding's evidence door opens the existing screen cut to that item, with "n of N" and a clear.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/web/src/features/setupCheck/logic.test.mjs, packages/extensions/token-stats/web/tokenFocus.test.mjs
+
+### R-metrics-083 · shipped
+The repo badge counts exactly the rows its tap opens.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/web/src/features/setupCheck/logic.test.mjs
+
+### R-metrics-084 · shipped
+No composite score; findings are ordered by priced saving, then tokens.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/findings.test.mjs
+
+### R-metrics-085 · shipped
+A finding can be waived with a reason, per repo or for this machine, and is then listed folded and not counted.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/host/src/setupcheck/setupcheck.test.mjs
+
+### R-metrics-091 · shipped
+Every findings view lists, beside its findings, what was checked and found fine ("checked, nothing to fix") and what could not be checked with the reason ("not checked: ..."), so the view is never empty; a waived finding moves to the checked-off list labelled "waived: <reason>". This holds on the phone's Setup check, the token-stats line ("N findings · M checks passed"), VS Code's Findings and the CLI.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §0)
+- shipped: 42966152a, 8d3f3b7c9, c9392c6e3, 9971e5019; tests: packages/shared/test/findings.test.mjs, packages/host/test/setupcheckcli.test.mjs
+
+### R-metrics-086 · shipped
+Setup check has an "all repos" view: a repo finding that repeats is listed once with the repos it is open in, counted against the repos it could be checked in ("in 7 of 33 repos"); machine and account findings are not repeated there. Auto-compact from the user-level setting (or none anywhere) is one machine finding; only a repo whose own settings override it has a repo finding.
+- asked: 2026-11-16 (owner, ALL-REPOS.md and its decision 4)
+- shipped: tests: packages/shared/test/findingsrollup.test.mjs, packages/shared/test/findingrules.test.mjs, packages/host/test/setupcheck.test.mjs, packages/web/src/features/setupCheck/logic.test.mjs
+
+### R-metrics-087 · shipped
+Repos are not ranked against each other and no saving is summed across findings or repos; within one rule its repos are ordered by that rule's own saving, absent last.
+- asked: 2026-11-16 (owner, ALL-REPOS.md decision 1)
+- shipped: tests: packages/shared/test/findingsrollup.test.mjs
+
+### R-metrics-088 · shipped
+The all-repos view lists the repos with nothing open and, apart from them, the repos that could not be checked, each with its reason; a hidden repo is left out and said so.
+- asked: 2026-11-16 (owner, ALL-REPOS.md §3.3)
+- shipped: tests: packages/shared/test/findingsrollup.test.mjs, packages/host/test/setupcheck.test.mjs
+
+### R-metrics-089 · shipped
+A count of repos on a rule opens exactly those repos, and a repo there opens its own check cut to that rule, with "n of N" and a clear at both steps; Back returns to the overview with the group still open.
+- asked: 2026-11-16 (owner, ALL-REPOS.md §3.2)
+- shipped: tests: packages/shared/test/findingsrollup.test.mjs, packages/web/src/features/setupCheck/logic.test.mjs, scripts/ui/journey-back-lands.mjs
+
+### R-metrics-090 · shipped
+The main menu has a "setup check" line that needs no repo and carries no count; it opens all repos with two or more primary repos, else that repo, else this machine.
+- asked: 2026-11-16 (owner, ALL-REPOS.md §3.5 and decision 2)
+- shipped: tests: packages/web/src/features/setupCheck/logic.test.mjs, scripts/ui/journey-back-lands.mjs

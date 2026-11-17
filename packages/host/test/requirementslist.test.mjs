@@ -36,7 +36,7 @@ const handlers = new Map();
 const hand = [];
 const rows = new Map(); // key -> { id, state }: what the fake store already holds
 const api = {
-  setupCheck: () => () => {}, setupFix: () => () => {},
+  setupCheck: () => () => {}, setupFinding: () => () => {}, setupFix: () => () => {},
   handle: (m, fn) => { handlers.set(m, fn); return () => handlers.delete(m); },
   repo: async (id) => (id === "repo1" ? scope : null),
   handToAgent: async (repoId, prompt, opts) => {

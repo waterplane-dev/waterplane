@@ -4,7 +4,7 @@ import { fmtAge, isLive, isRunning } from "../src/data/running";
 import { useNow } from "./HealthView";
 
 const TITLES: Record<TabId, string> = {
-  session: "Session", all: "All sessions", "always-on": "Always-on context", health: "Repo health", prompts: "Optimisation prompts",
+  session: "Session", all: "All sessions", "always-on": "Always-on context", health: "Repo health", findings: "Findings",
 };
 const base = (f: string): string => f.split(/[\\/]/).filter(Boolean).pop() ?? f;
 

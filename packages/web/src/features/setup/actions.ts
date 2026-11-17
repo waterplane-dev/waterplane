@@ -94,7 +94,7 @@ export function openInstructionFile(repoId: string, relPath: string): void {
   const c = core();
   c.say.track("action:files.fromReadings");
   const back = c.nav.overlay;
-  if (back === "setup") setupAim.set({ ...setupAim.get(), region: "setup" });
+  if (back === "setup") setupAim.set({ ...setupAim.get(), region: "agents" });
   c.files.browseTo(repoId, relPath, back);
 }
 

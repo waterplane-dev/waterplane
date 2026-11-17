@@ -10,21 +10,21 @@ lines: rules in both.
 
 - `host-core` — agentpoll.ts, agents.ts, answergate.ts, apiretry.ts, askrules.ts, askwatch.ts, authgate.ts, blockpush.ts, boxes.ts, boxkit.ts, boxread.ts, budgetwatch.ts, builtin.ts, claude-endpoint.ts, claude-local.ts, claude.ts, claudebin.ts, claudemodels.ts, composer.ts, convid.ts, core.ts, ctxseries.ts, deliver.ts, deliverknobs.ts, deliverproof.ts, deliverreturn.ts, deliverrun.ts, deliverscreen.ts, delivertypes.ts, derive.ts, drive.ts, echo.ts, endsession.ts, giveuplatch.ts, halt.ts, haltall.ts, health.ts, idlewatch.ts, knobs.ts, limitretry.ts, links.ts, livemode.ts, loopwatch.ts, overhead.ts, passive.ts, pluginapi.ts, pluginassets.ts, pluginfiles.ts, pluginloader.ts, pluginregistry.ts, pluginroutes.ts, pluginrpc.ts, pluginstreams.ts, ptyenv.ts, record.ts, recoverwrite.ts, resume.ts, roster.ts, screenlog.ts, sessionSearch.ts, sessions.ts, settle.ts, setupcontrib.ts, shell.ts, shells.ts, sidechannel.ts, signinwait.ts, tmux.ts, toolloop.ts, turn.ts, types.ts, wall.ts, wavegate.ts
 - `host-ledgers` — agentclass.ts, agentreadings.ts, agentscan.ts, besidespend.ts, billing.ts, billingwire.ts, budget.ts, burnwatch.ts, claudeconfig.ts, convlog.ts, costwindow.ts, ctxagents.ts, ctxcursor.ts, ctxlog.ts, ctxproject.ts, ctxupdate.ts, ctxwindow.ts, localledger.ts, meter.ts, periodspend.ts, sessionbudget.ts, tokenscan.ts, tokenstats.ts, transcript.ts, transcriptlog.ts, transcriptparse.ts, transcriptscreen.ts, transcriptturns.ts, turnagents.ts, usage.ts, usagelog.ts, usagerecord.ts, usagesourcelog.ts, usagesources.ts
-- `host-machine` — androidenv.ts, apkcheck.ts, appready.ts, artifacts.ts, autopull.ts, builds.ts, buildscan.ts, buildversions.ts, capture.ts, captureconfig.ts, capturehelpers.ts, capturekit.ts, capturepass.ts, capturesettle.ts, captureverdict.ts, compliance.ts, confirmgate.ts, contextlimits.ts, dictate.ts, files.ts, git.ts, healthwatch.ts, hoststore.ts, localrt.ts, localusage.ts, ocrlocal.ts, optins.ts, repohealth.ts, repohealthapproval.ts, repohealthscopes.ts, reposkill.ts, reposkilltext.ts, secrets.ts, settings.ts, setupprefs.ts, setupwatch.ts, signkey.ts, sysstat.ts, toolchain.ts, transportsurvey.ts, tree.ts, worktreeleftover.ts, worktreeowner.ts
+- `host-machine` — androidenv.ts, apkcheck.ts, appready.ts, artifacts.ts, autopull.ts, builds.ts, buildscan.ts, buildversions.ts, capture.ts, captureconfig.ts, capturehelpers.ts, capturekit.ts, capturepass.ts, capturesettle.ts, captureverdict.ts, collect.ts, compliance.ts, confirmgate.ts, contextlimits.ts, dictate.ts, efficiencywrite.ts, files.ts, git.ts, healthwatch.ts, hoststore.ts, localrt.ts, localusage.ts, ocrlocal.ts, optins.ts, readers.ts, repohealth.ts, repohealthapproval.ts, repohealthscopes.ts, reposkill.ts, reposkilltext.ts, secrets.ts, settings.ts, setupprefs.ts, setupwatch.ts, signkey.ts, store.ts, sysstat.ts, toolchain.ts, transportsurvey.ts, tree.ts, worktreeleftover.ts, worktreeowner.ts
 - `host-spenders` — assess.ts, changebrief.ts, commitmsg.ts, explainjob.ts, hassapply.ts, hassexec.ts, hassinput.ts, hassrun.ts, hassstore.ts, naming.ts, probe.ts, prompts.ts, review.ts, sidecar.ts, sidecarclaude.ts, sidecarname.ts, sidecaropenai.ts, sidecarprobe.ts, sidecarroute.ts, sidecartasks.ts, sidecartrust.ts
 - `host-work` — adapters.ts, agentexposure.ts, agentfollowup.ts, agentintents.ts, agentpeer.ts, apijobs.ts, apiweekburn.ts, archive.ts, backlog.ts, backlogcore.ts, backlogedits.ts, backlogfollowup.ts, backlogknobs.ts, backlogsessions.ts, backlogstore.ts, backlogtitles.ts, backlogwording.ts, clock.ts, contract.ts, convfork.ts, disk.ts, fanout.ts, fire.ts, jobs.ts, ladder.ts, manager.ts, requeue.ts, slowjobs.ts, store.ts, watch.ts, weekburn.ts, workassess.ts, workbacklog.ts, workbuild.ts, workintent.ts, workschedule.ts, write.ts
 - `heuristics` — prompt.ts, question.ts, askbox.ts, login.ts, shelllinks.ts, limit.ts, limitlog.ts, clihealth.ts, context.ts, permmode.ts, keyhints.ts, limitretry.ts, spendwall.ts, planbox.ts, clisuggest.ts
 
 **By symptom**:
 
-- a prompt was typed but never confirmed, or typed twice → `host-core` (`deliver.ts`, `settle.ts`)
-- deferred work fired late, twice, or never; slow work lost → `host-work`
+- a prompt typed but unconfirmed, or twice → `host-core` (`deliver.ts`, `settle.ts`)
+- deferred work late, twice or never → `host-work`
 - the daemon spent money unwatched → `host-spenders`
 - a token, context, cost or limit figure wrong → `host-ledgers`
 - the CLI's screen misread → `heuristics`
-- uploads, artifacts, builds, screenshots, dictation → `host-machine`
+- uploads, builds, screenshots, dictation → `host-machine`
 - the wire, an ackId, a new message type → `protocol`
-- a plugin answered a box, or is listed broken → `host-core` (`answergate.ts`)
+- a plugin answered a box → `host-core` (`answergate.ts`)
 
 **Splitting `sessions.ts`, `intents/manager.ts`, `main.ts` or `deliver.ts`:** load `refactoring`;
 the cut: [host-architecture.md](../../../docs/notes/host-architecture.md).
@@ -43,7 +43,7 @@ server half of "the second tap IS the consent" (`CONFIRM_GATED_FIXES`, `/api/onb
   through `containRepoDir` first. **An unknown `t` is ignored, never thrown**.
 - `env.ts` — `ROOT` + the three `.env` loads, **`main.ts`'s FIRST import** so every `WATERPLANE_*`
   knob a module reads at import sees the files; the merge is `envfiles.ts`: the shell beats every
-  file, a later file beats an earlier one. A new knob may be read at import — never import a host module
+  file, a later file beats an earlier one. Never import a host module
   ahead of `env.ts` in `main.ts`, and keep `env.ts`'s own imports env-free. `rootchoice.ts`: root precedence env > `root.json` > auto, read ONCE at boot, so it must stay env-free; `root.json` lives in the config dir (never `.env`/state dir); only `AuthManager.canManage` (loopback + Tailscale) writes it; `branddirs.ts` alone spells a legacy dir name and moves state at boot.
 - `main.ts` — entry point: boot-order constructions (singletons, `DOCTOR` gate), `ctx` assignments, `handleClientMessage`, `main()`; exports nothing.
 - `server/` (`ctx.ts`, `clients.ts`, `intentDeps.ts`, `intentEvents.ts`, `billingwire.ts`, `scan.ts`, `deliveries.ts`, `wsops.ts`, `liveness.ts`, `sessionEvents.ts`, `http.ts`, `shutdown.ts`, `firstapp.ts`, `ctxseal.ts`, `plugins.ts`, `bgrelay.ts`) — `main.ts`'s pieces, factories over `ServerCtx`

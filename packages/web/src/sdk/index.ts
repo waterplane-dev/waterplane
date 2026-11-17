@@ -17,7 +17,7 @@ export type {
 export { core } from "../core/api.ts";
 export { createStore, keepStores, useStore, type Store } from "./store.ts";
 export { mapWith, mapWithout, useCore, useLatest, useQueueEntries } from "./hooks.ts";
-export { useBackStep } from "../backStep.ts";
+export { armStep, useBackStep } from "../backStep.ts";
 /** This device's preferences (`core/prefs.ts`) — read-only from a feature; the
  *  Settings sheet is their writer. */
 export { useConnStatus, watchConnStatus } from "./connStatus.ts";
@@ -52,6 +52,7 @@ export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
 export type { StreamFrame } from "@waterplane/shared";
 export { ledgers, type CachedRead } from "./ledgers.ts";
+export { aimEvidence, cutByIds, evidenceCutWords, peekEvidence, useEvidenceFocus } from "./evidence.ts";
 /** A host list's rows with its read time, read as unread / empty / rows (`listRead.ts`). */
 export { listRead, type HostList, type ListRead } from "../listRead.ts";
 export { secretFillers } from "./secretFillers.ts";

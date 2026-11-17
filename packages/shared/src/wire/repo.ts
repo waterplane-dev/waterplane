@@ -2,7 +2,7 @@
 import type { ContextLimitsView } from "../contextweight.js";
 import type { RepoHealthIndex } from "../healthindex.js";
 import type { RepoInstructionsDoc } from "./alwayson.js";
-import type { ExposureTriage } from "../exposure.js";
+import { isWatchCheck, type ExposureTriage } from "../exposure.js";
 import type { BranchRules } from "../branchmode.js";
 
 /**
@@ -398,6 +398,12 @@ export interface ComplianceCheck {
    */
   alwaysOnChars?: number;
   /**
+   * `context-weight` only: the row is a warn because two always-on files repeat each other and for
+   * no other reason (the weight itself is lean). The repeat has its own finding
+   * (`repo.instruction-overlap:*`), so the weight finding must not say it a second time.
+   */
+  overlapOnly?: boolean;
+  /**
    * A thing to CONSIDER, not a finding: a cost reading against a line
    * somebody chose (`context-weight`, `auto-compact`), where nothing is broken
    * and "leave it as it is" is a legitimate answer. It keeps its `warn`
@@ -463,6 +469,17 @@ export interface ComplianceCheck {
 /** The checks that are a thing to consider rather than a finding, and the only
  *  ones a person may ignore per repo. One list, read by both ends. */
 export const ADVISORY_CHECKS: readonly string[] = ["context-weight", "auto-compact", "apk-install", "exposure", "skill-frontmatter"];
+
+/** The checks about how good the repo's agent setup is (what the agent reads and how it behaves),
+ *  as against the plumbing a `waterplane install` lays down. One list, read by both ends. */
+export const SETUP_QUALITY_CHECKS: readonly string[] = ["context-weight", "skill-frontmatter", "auto-compact", "env-gitignored"];
+
+/** Which group a checklist row belongs to: `quality` (the list above), `watch` (the daily outside
+ *  view, `isWatchCheck`) or `install` (everything `waterplane install` sets up). */
+export function setupRowKind(c: Pick<ComplianceCheck, "id"> & Partial<ComplianceCheck>): "quality" | "watch" | "install" {
+  if (SETUP_QUALITY_CHECKS.includes(c.id)) return "quality";
+  return isWatchCheck(c as ComplianceCheck) ? "watch" : "install";
+}
 
 /**
  * Whether one check is a FINDING — the predicate behind every setup number.

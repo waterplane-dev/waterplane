@@ -16,13 +16,10 @@ import { performance } from "node:perf_hooks";
 import { hourKey, isColdRebuild, priceKeyOf } from "@waterplane/shared";
 import { firstSightIn, isAnchor, usageRecordOf } from "./ctxlog/usagerecord.js";
 
-/** Six numbers: the four kinds, the 1-hour SUBSET of the cache writes (which is
- *  what the 2x price tier is charged on), and the turn count. Positional because
- *  there are ~9,500 of these and the key names would be most of the file. */
-export type Tally = [input: number, output: number, cacheRead: number, cacheWrite: number, cacheWrite1h: number, turns: number];
-
-export const CROSS = "\u0000";
-export const crossKey = (hour: string, model: string) => `${hour}${CROSS}${model}`;
+// `Tally`, `CROSS`, `crossKey` live in shared/ledgerfold.ts; re-exported for the importers here.
+import { CROSS, crossKey, type Tally } from "@waterplane/shared";
+export { CROSS, crossKey };
+export type { Tally };
 
 export interface FileSummary {
   /** A subagent transcript (`<conversation>/subagents/agent-*.jsonl`) rather

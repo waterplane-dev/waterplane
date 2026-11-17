@@ -31,7 +31,40 @@ export const NOTIFY_LINK_FRAMES: ReadonlySet<string> = new Set(["notification", 
 
 /** The client frames a notify link may send. Anything else (an attach above
  *  all) is ignored, so the link can never count as somebody watching. */
-export const NOTIFY_LINK_INBOUND: ReadonlySet<string> = new Set(["hello", "ping"]);
+export const NOTIFY_LINK_INBOUND: ReadonlySet<string> = new Set(["hello", "ping", "link.log"]);
+
+/** One thing the phone's background link saw, on the PHONE's clock (ms): `ev` a short
+ *  lower-case word (`dial`, `open`, `fail`, `closed`, `retry`, `wake`, `net-up`, `net-lost`,
+ *  `alert`), `d` an optional detail. The APK keeps a ring of these while the link is down
+ *  and sends them in one `link.log` frame on each reconnect (`host/src/linklog.ts`). */
+export interface LinkLogEvent { at: number; ev: string; d?: string }
+
+/** At most this many events per frame; the APK's ring holds no more. */
+export const LINK_LOG_MAX_EVENTS = 300;
+const LINK_LOG_EV_RE = /^[a-z][a-z-]{0,15}$/;
+const LINK_LOG_DETAIL_MAX = 160;
+
+/**
+ * A `link.log` frame's events, kept only where every field has its shape, with `at` moved
+ * onto the HOST's clock: the phone stamps `sentAt` at the write, so `hostNow - sentAt`
+ * (transit included, a fraction of a second) is the skew. No usable `sentAt` ⇒ `skewMs` 0 and
+ * the phone's own times. An unknown word is kept: an APK newer than this host may say more.
+ */
+export function cleanLinkLog(raw: unknown, sentAt: unknown, hostNow: number): { skewMs: number; events: LinkLogEvent[] } {
+  const skewMs = typeof sentAt === "number" && Number.isFinite(sentAt) && sentAt > 0 ? Math.round(hostNow - sentAt) : 0;
+  const events: LinkLogEvent[] = [];
+  if (!Array.isArray(raw)) return { skewMs, events };
+  for (const e of raw.slice(-LINK_LOG_MAX_EVENTS)) {
+    if (!e || typeof e !== "object") continue;
+    const { at, ev, d } = e as Record<string, unknown>;
+    if (typeof at !== "number" || !Number.isFinite(at) || at <= 0) continue;
+    if (typeof ev !== "string" || !LINK_LOG_EV_RE.test(ev)) continue;
+    const out: LinkLogEvent = { at: at + skewMs, ev };
+    if (typeof d === "string" && d) out.d = d.slice(0, LINK_LOG_DETAIL_MAX);
+    events.push(out);
+  }
+  return { skewMs, events };
+}
 
 /** What the relay's stand-in socket is sent: the three receipts a relayed
  *  frame can earn, nothing else (no toast, no snapshot, no PTY bytes). */

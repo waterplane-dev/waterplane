@@ -304,3 +304,17 @@ test("registry: an urgent plugin notify lands on the approval kind, tagged with 
   await reg.action("echo", "ping");
   assert.deepEqual(notes.map(([k, p]) => [k, p.plugin, p.title]), [["approval", "echo", "a"], ["plugin", "echo", "c"]]);
 });
+
+test("registry: setupFinding contributes findings; a throw drops them and is the plugin's status (H2)", async () => {
+  const cfg = mkdtempSync(join(tmpdir(), "waterplane-regcfg-"));
+  const root = mkdtempSync(join(tmpdir(), "waterplane-regroot-"));
+  const pd = join(cfg, "plugins");
+  const finding = (id) => `{ id: ${JSON.stringify(id)}, rule: "r", scope: "repo", kind: "quality", weight: "consider", what: "w", backends: { understood: [], unread: [] }, evidence: null, remedy: { kind: "howto", text: "t" }, waive: { via: "none" } }`;
+  plugin(pd, "1-good", manifest({ id: "good", name: "Good" }), `export function activate(api) { api.setupFinding(async () => [${finding("repo.good")}, { nope: 1 }, { id: "repo.nowaive", rule: "r", what: "w" }]); }`);
+  plugin(pd, "2-bad", manifest({ id: "bad", name: "Bad" }), `export function activate(api) { api.setupFinding(() => { throw new Error("no good"); }); }`);
+  const { reg } = registry(cfg, root);
+  await reg.loadAll();
+  const got = await reg.setupFindings({ worktree: root });
+  assert.deepEqual(got.findings.map((f) => f.id), ["repo.good"], "a malformed row, and one with no waive, are dropped");
+  assert.deepEqual(got.answered, ["good"], "the thrower did not answer");
+});

@@ -210,6 +210,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   identity), **square-rooted** with the caption saying so. **Both ends of the stepper are SENTENCES**,
   never a dimmed arrow. A past window is the SAME `WindowCut`; **`hours` is OPTIONAL** (absent = the
   host folded it) and `isCut` keys on `openedAt`.
+- `hostSpendWords.ts` + `HostSpendLine.tsx` + `FindingsLine.tsx` — the host's own metered calls (split: priced vs no price, never summed into the dollars) and the one line "N findings about this spend" into the Setup check; the charts stay as evidence.
 - `WeekCard.tsx` + `weekBands.ts` — (chart: `charts/RepoHourChart.tsx`) **"Where the week went"**; the cost
   view opens on the week since the reset and “By repo” follows ANY window. A tapped hour is a FILTER
   (`weekCut` feeds column AND list; “n of N” + clear). Four hues follow their repo (`repoSlots`), the

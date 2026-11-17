@@ -1,9 +1,7 @@
 /**
- * The all-sessions screen's findings and its scope cards — kept out of
+ * The all-sessions screen's costliest list and its scope cards — kept out of
  * `TokenStatsSheet.tsx`, which is past three thousand lines already.
  *
- * - `InsightsPanel` — `statsInsights.ts`'s sentences. Nothing here acts: each
- *   finding carries a "try" line a person reads, never a button that applies it.
  * - `TopConvos` — the dearest conversations, agents folded in, each with the
  *   door the context sheet already has: *explain the cost*, which starts a new
  *   session that reads that one log and proposes fixes without making any.
@@ -14,54 +12,11 @@
  *   (`ScopeTag`), so a chart scrolled to in the middle still says what it shows.
  */
 import { useState, type ReactNode } from "react";
-import { Lightbulb, SearchCheck, BarChart3 } from "lucide-react";
+import { SearchCheck, BarChart3 } from "lucide-react";
 import { firstRequestWords } from "./headline.ts";
 import { firstBarPcts, FIRST_BAR_CAPTION } from "./firstBars.ts";
 import { agentModelInsight, fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
-import type { Insight, SpanInsight } from "./statsInsights.ts";
 import { Button } from "@waterplane/kit";
-
-/** The span cut of the insights: the span's own findings, each with its move against the span
- *  before. `items` null = the span's fold has not answered; `note` says why, or what is left out. */
-export interface InsightsScope {
-  on: boolean;
-  set: (on: boolean) => void;
-  /** The span in words — "the last 30 days". */
-  words: string;
-  items: SpanInsight[] | null;
-  note?: string;
-}
-
-export function InsightsPanel({ items, scope }: { items: Insight[]; scope?: InsightsScope | null }) {
-  const cut = !!scope?.on;
-  const shown: SpanInsight[] = cut ? scope!.items ?? [] : items;
-  if (!items.length && !scope) return null;
-  return (
-    <div className="ts-insights">
-      <div className="ts-insights-head">
-        <Lightbulb size={14} /> What drives the cost{" "}
-        {!scope && <ScopeTag muted>whole record · not cut to the span</ScopeTag>}
-      </div>
-      {scope && (
-        <span className="ts-seg-chips" role="group" aria-label="insights over">
-          <Button className={cut ? "active" : undefined} onClick={() => scope.set(true)}>{scope.words}</Button>
-          <Button className={!cut ? "active" : undefined} onClick={() => scope.set(false)}>whole record</Button>
-        </span>
-      )}
-      {cut && scope?.note && <div className="ts-insight-body">{scope.note}</div>}
-      {cut && scope?.items && !shown.length && <div className="ts-insight-body">Nothing in {scope.words} is large enough to name.</div>}
-      {!cut && scope && !items.length && <div className="ts-insight-body">Nothing on record is large enough to name.</div>}
-      {shown.map((i) => (
-        <div key={i.id} className="ts-insight">
-          <div className="ts-insight-head">{i.head}</div>
-          {i.delta && <div className="ts-insight-body">{i.delta}</div>}
-          <div className="ts-insight-body">{i.body}</div>
-          {i.tryThis && <div className="ts-insight-try"><b>Try:</b> {i.tryThis}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function when(ms: number | null): string {
   if (ms == null) return "";

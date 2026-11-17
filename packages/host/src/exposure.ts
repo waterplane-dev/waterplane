@@ -264,6 +264,17 @@ export function setExposureAccept(worktree: string, req: ComplianceAcceptRequest
   }
 }
 
+/** Is this finding already accepted in the watch's own accepts file (a person's accept on the exposure screen)? False when unreadable or none. */
+export function isExposureAccepted(worktree: string, id: string): boolean {
+  try {
+    const key = exposureKeyOf(id);
+    const s = key ? seriesFor(worktree) : null;
+    if (!key || !s) return false;
+    const cur = readAccepts(s.acceptsFile);
+    return cur.ok && !!cur.data && Object.hasOwn(cur.data, key);
+  } catch { return false; }
+}
+
 const TRIAGE_STATES: readonly ExposureTriageState[] = ["seen", "investigating", "fixed"];
 
 /**

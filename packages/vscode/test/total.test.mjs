@@ -99,3 +99,12 @@ test("an unreadable subagents dir: no total, said in words, the conversation's o
   assert.equal(back.doc.agentsUnread, null);
   assert.ok(Math.abs(data.sessionTotal(back.doc).cost.total - data.sessionTotal(first.doc).cost.total) < 1e-12);
 });
+
+test("agents that only ran unpriced models keep the own figure (one rule with the host)", () => {
+  const split = { input: 5, output: 0, cacheRead: 0, cacheWrite: 0 };
+  const own = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, total: 2 };
+  const t = data.sessionTotal({ agentsUnread: null, unpricedTok: 0, cost: own, agents: { split, cost: null, unpricedTok: 5 } });
+  assert.equal(t.cost.total, 2);
+  assert.equal(t.withheld, false);
+  assert.equal(t.unpricedTok, 5);
+});

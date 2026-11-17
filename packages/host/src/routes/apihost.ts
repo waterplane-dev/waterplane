@@ -23,6 +23,7 @@ import { setupPrefsStore } from "../setupprefs.js";
 import { repoNamesStore } from "../reponames.js";
 import { askRulesStore } from "../askrules.js";
 import { ASK_RULES_SCOPE, browserOriginRefusal, confirmGate } from "../confirmgate.js";
+import { invalidateSetupCheck } from "../setupcheck/store.js";
 import { hostChecks, hostFixes } from "../plugins/setupcontrib.js";
 import { canReadRepoHealth } from "../repohealth.js";
 import { surveyTransport } from "../transportsurvey.js";
@@ -58,7 +59,7 @@ const setupPrefs: ApiHandler = async ({ req, res, method }) => {
   if (method === "POST") {
     const body = await readJson(req);
     const r = store.setAutoCompactDefault(body?.autoCompactDefault ?? null);
-    if (!r.ok) { json(res, { ok: false, error: r.error }, 400); return true; }
+    if (!r.ok) { json(res, { ok: false, error: r.error }, 400); return true; } invalidateSetupCheck();
   }
   const d = store.autoCompactDefault();
   json(res, { ok: true, autoCompactDefault: d.value, chosen: d.chosen });
@@ -300,6 +301,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     const { fixes } = await readJson(req);
     const list = Array.isArray(fixes) ? fixes.map(String) : [];
     const ran = hostFixes(list, ctx.root);
+    invalidateSetupCheck();
     const reply: HostSetupFixResult = {
       ok: true,
       applied: ran.filter((r) => r.outcome.applied).map((r) => r.id),

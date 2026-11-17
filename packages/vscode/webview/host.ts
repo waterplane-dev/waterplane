@@ -1,7 +1,7 @@
 /** The one door to the extension host: `acquireVsCodeApi()` may be called ONCE per webview. */
 import { useEffect, useRef, useState } from "react";
 import type {
-  CorpusDoc, HealthDoc, HealthRunState, LiveState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
+  CorpusDoc, FindingsDoc, HealthDoc, HealthRunState, LiveState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
 } from "../src/protocol";
 
 interface VsCodeApi {
@@ -44,7 +44,7 @@ const kept = (): Kept => (api.getState() as Kept | undefined) ?? {};
 const keep = (k: Kept): void => api.setState({ ...kept(), ...k });
 
 /** The views the panel can show; the remembered one is only honoured when it is still one of these. */
-export const TAB_IDS: readonly TabId[] = ["session", "all", "always-on", "health", "prompts"];
+export const TAB_IDS: readonly TabId[] = ["session", "all", "always-on", "health", "findings"];
 
 export function loadTab<T extends string, F extends T | null>(valid: readonly T[], fallback: F): T | F {
   return valid.find((t) => t === kept().tab) ?? fallback;
@@ -68,6 +68,7 @@ export interface ExtensionState {
   live: LiveState | null;
   weight: { doc: WeightDoc | null; why?: string } | null;
   prompts: { list: PromptDef[]; terminal: string | null };
+  findings: { doc: FindingsDoc | null; why?: string } | null;
   folders: { list: string[]; active: string };
   /** Keyed by folder: a health reading belongs to one folder and only that one. */
   health: Record<string, HealthState>;
@@ -81,6 +82,7 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
   const [live, setLive] = useState<ExtensionState["live"]>(null);
   const [weight, setWeight] = useState<ExtensionState["weight"]>(null);
   const [prompts, setPrompts] = useState<ExtensionState["prompts"]>({ list: [], terminal: null });
+  const [findings, setFindings] = useState<ExtensionState["findings"]>(null);
   const [folders, setFolders] = useState<ExtensionState["folders"]>({ list: [], active: "" });
   const [health, setHealth] = useState<ExtensionState["health"]>({});
   const tabCb = useRef(onTab);
@@ -97,6 +99,7 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
         case "live": setLive(m.live); break;
         case "weight": setWeight({ doc: m.doc, why: m.why }); break;
         case "prompts": setPrompts({ list: m.list, terminal: m.terminal }); break;
+        case "findings": setFindings({ doc: m.doc, why: m.why }); break;
         case "folders": setFolders({ list: m.list, active: m.active }); break;
         case "health": setHealth((h) => ({ ...h, [m.folder]: { doc: m.doc, why: m.why, run: m.run } })); break;
         case "tab": tabCb.current?.(m.id, m.ledger); break;
@@ -107,5 +110,5 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
     return () => window.removeEventListener("message", on);
   }, []);
 
-  return { session, sessions, corpus, live, weight, prompts, folders, health };
+  return { session, sessions, corpus, live, weight, prompts, findings, folders, health };
 }

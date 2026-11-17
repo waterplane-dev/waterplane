@@ -93,6 +93,7 @@ const BOUNDED_LEDGERS: Record<string, string> = {
   "sent.json": "a 1000-entry ring — it cannot grow past that.",
   "decision-log.json": "a 500-entry ring — it cannot grow past that.",
   "limit-events.jsonl": "rotates itself at 256 KB.",
+  "link-events.jsonl": "rotates itself at 256 KB.",
   "usagelog.jsonl": "capped at 5000 rows and 30 days.",
   "deliveries.json": "bounded by its own writer.",
   "ui-usage.json": "bounded by its own writer.",

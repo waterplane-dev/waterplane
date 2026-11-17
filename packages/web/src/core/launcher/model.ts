@@ -93,13 +93,15 @@ export const openingTitle = (o: { status: OutboxStatus; n: number }) =>
  *  entries all say it, and four hand-rolled copies of one sentence is four
  *  chances for the amber wording and the red wording to drift apart. */
 export const setupTitle = (s: RepoSetupState) =>
-  `repo setup: ${s.issues} ${!s.ok ? "issue" : "thing to look at"}${s.issues > 1 ? "s" : ""}${s.fixable ? `, ${s.fixable} one-tap fixable` : ""} — open the checklist`;
-/** The menu entry, which is ALWAYS drawn: the checklist is reachable whether
+  `repo setup: ${s.issues} ${!s.ok ? "issue" : "thing to look at"}${s.issues > 1 ? "s" : ""}${s.fixable ? `, ${s.fixable} one-tap fixable` : ""} — open the setup check`;
+/** The menu entry, which is ALWAYS drawn: the setup check is reachable whether
  *  or not anything is wrong, so with a clean (or unchecked) repo it is the
  *  bare verb and only a rollup with findings carries its count. */
-export const setupMenuLabel = (s?: RepoSetupState) => (s && s.issues > 0 ? `repo readings · ${s.issues}` : "repo readings");
+/** The menu line's number is the badge's count, so it opens the badge's cut; with no number it opens everything. */
+export const setupMenuAim = (s?: RepoSetupState): { weight?: "finding" } => (s && s.issues > 0 ? { weight: "finding" } : {});
+export const setupMenuLabel = (s?: RepoSetupState) => (s && s.issues > 0 ? `setup check · ${s.issues}` : "setup check");
 export const setupMenuTitle = (s?: RepoSetupState) =>
-  (s && s.issues > 0 ? setupTitle(s) : "open this repo's readings");
+  (s && s.issues > 0 ? setupTitle(s) : "open this repo's setup check");
 
 // ── Order ──────────────────────────────────────────────────────────────────
 // Live-session row order: STABLE BY CREATION TIME, oldest on top, newest at the

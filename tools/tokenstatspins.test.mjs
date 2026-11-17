@@ -71,9 +71,9 @@ test("P2: each ledger read is made once, and the caches are touched only by sdk/
   // The cost window (2026-10-09): the body reads the week (`weekcost:`) and the cut's span
   // (`costwindow:`); the fan-out sheet reads the last similar run for its cost hint.
   // 2026-10-15: the body's third read is the dollar period's (`periodcost:`, the month card).
-  // 2026-11-11: the fourth is the span before the cut's (`costwindow-prev:`), for the insights' deltas.
+  // 2026-11-16 (setup check X1): the insights' span-before read (`costwindow-prev:`) is gone.
   assert.deepEqual(counts("ledgers.costWindow("), {
-    "extensions/token-stats/web/TokenStatsBody.tsx": 4,
+    "extensions/token-stats/web/TokenStatsBody.tsx": 3,
     "web/src/features/fanout/FanoutCostHint.tsx": 1,
   });
   const cache = {};
@@ -125,16 +125,18 @@ const HOOKS = {
     "useState", "useOfflineGate", "useState", "useState", "useState", "useRemoteResource", "useRescan", "useState", "useCallback", "useState", "useState", "useState", "useState",
     // 2026-10-15: ONE `span` state replaced `range`, `scope` and the calendar week's `weekAt` (and
     // its seeding effect); the day and hour derivations moved below `active`, which they now read.
-    "useState", "useBoxWidth",
+    // 2026-11-16 (setup check P2): `topIds` (the costliest list's door cut) and the landed-once ref.
+    "useState", "useState", "useRef", "useBoxWidth",
     // the two live cuts, the specs, then the tokenwindows, usagelog and week cost-window reads, the
     // dollar period's memo and its read, the grids and `picked`
     "useMemo", "useMemo", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useMemo", "useRemoteResource", "useRescan", "useMemo", "useMemo",
     // range, days, daily, running, trend, mixRows, bands, agentDays, hourRows, hourly, the three fills
     "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
-    // the span's own cost window and its repos; the calibration, the calendar cut, the clock, insights
-    "useRemoteResource", "useRescan", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
-    // 2026-11-11 (R-usage-031): the insights' span switch, the span before's read, the span's insights
-    "useState", "useRemoteResource", "useRescan", "useMemo",
+    // the span's own cost window and its repos; the calibration, the calendar cut, the clock, the span's money words
+    "useRemoteResource", "useRescan", "useMemo", "useMemo", "useMemo", "useMemo",
+    // the Setup check door's scroll-to-box effect. (2026-11-16, setup check X1: the insights panel and
+    // its span-before read are gone; `FindingsLine` is one line into the Setup check, its own hooks.)
+    "useEffect",
   ],
 };
 
@@ -163,10 +165,10 @@ test("P4: each resource key is written once across the viewer", () => {
 });
 
 // ── P5: the wrapper and the door ─────────────────────────────────────────────
-test("P5: the explain action is tracked once, the sheet closes itself four times (onClose, explain, two always-on doors), App still reads the usage store", () => {
+test("P5: the explain action is tracked once, the sheet closes itself five times (onClose, explain, two always-on doors, the findings line), App still reads the usage store", () => {
   const sum = (c) => Object.values(c).reduce((a, b) => a + b, 0);
   assert.equal(sum(counts('"action:tokens.explainCost"')), 1);
-  assert.equal(sum(counts('nav.close("tokens")')), 4);
+  assert.equal(sum(counts('nav.close("tokens")')), 5);
   assert.match(FILES.find((f) => f.rel === "web/src/App.tsx").text, /\buseUsage\(\)/);
   const routing = readFileSync(join(SRC, "routing.ts"), "utf8");
   const persisted = /export const PERSISTED_OVERLAYS[^[]*\[([^\]]*)\]/.exec(routing)?.[1] ?? "";

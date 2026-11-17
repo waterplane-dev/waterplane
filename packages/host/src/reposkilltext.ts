@@ -1,4 +1,4 @@
-import { BRAND, envName, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
+import { BRAND, EFFICIENCY_RULES, efficiencyRule, envName, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
 
 /**
  * The BODY of the repo-facing skill — what the agent in a driven repo learns
@@ -33,6 +33,8 @@ export function repoSkillBody(): string {
   const param = paramEnvName("<ID>");
   const olderParam = legacyParamEnvNames("<ID>")[0];
   const base = `$${HOST_API_ENV}`;
+  // The generic rules (`shared/efficiencyrules.ts`) are the one copy; this text frames them.
+  const subagents = EFFICIENCY_RULES.find((r) => r.id === "subagents")!;
   return `
 # Working in a repo driven by ${N}
 
@@ -55,19 +57,15 @@ repo's own meaning and say so in one line rather than guess.
 - **\`${base}\` is the ${N} host that started this session** (set in its
   environment; every \`curl\` below uses it). Empty means no ${N} host started
   this shell: the routes below are not reachable from here.
-- **The reader is on a phone.** Long terminal output is unreadable there. Say
-  the conclusion in a few lines; put anything bigger (a report, a table, a diff,
-  a screenshot) in a FILE in the outbox and name it.
-- **The person may be away.** A question you ask can sit for hours. Batch your
-  questions, ask them at the end of what you can do without the answer, and
-  never block on a choice you could make and report.
+- **The reader is on a phone.** Long terminal output is unreadable there.
+  ${efficiencyRule("terse")} That file goes in the outbox (below).
+- **The person may be away.** ${efficiencyRule("batch")}
 - **A choice box may be answered for the person.** A plugin they installed may
   suggest, or with their switch on answer, a routine question while they are
   away — never a permission, a plan/trust dialog, or anything destructive. Word
   questions so the safe, reversible option is obvious.
 - **Your session may stop and resume.** On a usage limit the CLI exits; ${N}
-  resumes it with \`--continue\` at the reset. Keep work resumable: commit or note
-  progress as you go rather than holding it all in the conversation.
+  resumes it with \`--continue\` at the reset. ${efficiencyRule("resumable")}
 - **Prompts may arrive unattended.** A backlog item, a schedule or a chain can
   start a fresh session here with a prompt written earlier. Treat it as
   written by the person, at the time they wrote it.
@@ -77,12 +75,8 @@ repo's own meaning and say so in one line rather than guess.
   and must never ask for one in chat; ask the person to set KEY from the phone.
   If the desktop has a secrets tool and its skill is installed, follow that skill
   for anything it covers (reading a key, using a login).
-- **Subagent windows are not capped by the session's compaction setting.** An
-  agent re-reads its whole window on every step, so one that grows to 500k
-  costs that much per step. Give each agent one narrow work package, set
-  \`model\` explicitly (Sonnet for mechanical lanes), and brief it to return
-  before about 200k of context. For a repo's own agent definitions, \`maxTurns\`
-  in the frontmatter caps how many steps an agent may take.
+- **${subagents.lead}** ${subagents.body}
+  ${efficiencyRule("max-turns")}
 
 ## Showing the person something: the outbox
 

@@ -36,6 +36,11 @@ export function priceCall(model: string, inTok: number, outTok: number): number 
   return (inTok * p.in + outTok * p.out) / 1_000_000;
 }
 
+/** True when the price table covers the model: a $0 from an unpriced model is not a free call. */
+export function isPriced(model: string): boolean {
+  return PRICES.some((x) => model.startsWith(x.prefix));
+}
+
 const MAX_EVENTS = 5000; // rolling cap; summary is what matters, not deep history
 
 export class Meter {
@@ -81,11 +86,13 @@ export class Meter {
     const today = { calls: 0, inTok: 0, outTok: 0, costUsd: 0 };
     const models = new Map<string, MeterModelStat>();
     let lastAt = 0;
+    let unpricedCalls = 0, unpricedTok = 0;
 
     for (const ev of this.events) {
       total.calls++; total.inTok += ev.inTok; total.outTok += ev.outTok; total.costUsd += ev.costUsd;
       if (ev.ts >= dayMs) { today.calls++; today.inTok += ev.inTok; today.outTok += ev.outTok; today.costUsd += ev.costUsd; }
       if (ev.ts > lastAt) lastAt = ev.ts;
+      if (!isPriced(ev.model)) { unpricedCalls++; unpricedTok += ev.inTok + ev.outTok; }
       let m = models.get(ev.model);
       if (!m) { m = { model: ev.model, calls: 0, inTok: 0, outTok: 0, costUsd: 0 }; models.set(ev.model, m); }
       m.calls++; m.inTok += ev.inTok; m.outTok += ev.outTok; m.costUsd += ev.costUsd;
@@ -96,6 +103,8 @@ export class Meter {
       today,
       byModel: [...models.values()].sort((a, b) => b.costUsd - a.costUsd || b.calls - a.calls),
       lastAt,
+      unpricedCalls,
+      unpricedTok,
     };
   }
 

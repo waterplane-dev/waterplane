@@ -105,6 +105,7 @@ export async function main(argv: string[]): Promise<number> {
     case "version": case "--version": case "-v": console.log(versionLine()); return 0;
     case "service": return lazy("./service.js", "service", rest);
     case "pair": return lazy("./pair.js", "pair", rest);
+    case "setup-check": return lazy("./setupcheck.js", "setup-check", rest);
     case "update": return lazy("./selfupdate.js", "update", rest);
     case "help": case "--help": case "-h": console.log(HELP); return 0;
     default:

@@ -1,4 +1,4 @@
-import { CHARS_PER_TOKEN, alwaysOnTotalsWords, fmtCount, overlapWords } from "@waterplane/shared";
+import { CHARS_PER_TOKEN, CONTEXT_CLOCK, alwaysOnTotalsWords, fmtCount, overlapWords } from "@waterplane/shared";
 import type { AlwaysOnRow } from "@waterplane/shared";
 import type { PromptDef, ToExtension, WeightDoc } from "../src/protocol";
 import { useState } from "react";
@@ -144,7 +144,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
             <span className="ts-leg"><i className="wt-a" /><b>CLAUDE.md, imports, rules</b> {fmtCount(r.alwaysOnChars - descTotal)} chars</span>
             <span className="ts-leg"><i className="wt-b" /><b>Skill descriptions</b> {fmtCount(descTotal)} chars</span>
           </div>
-          <div className="empty ctx-note">{r.note}</div>
+          <div className="empty ctx-note">{r.note} Measured {CONTEXT_CLOCK.tree}.</div>
           {r.advice && <div className="empty ctx-note">{r.advice}</div>}
         </>
       ) : null}

@@ -15,6 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { remedyPrompt } from "../../shared/dist/index.js";
 
 const SRC = readFileSync(new URL("./presets.ts", import.meta.url), "utf8");
 
@@ -34,6 +35,12 @@ function defaults() {
   const re = /id: "([^"]+)",\s*\n\s*title: "((?:[^"\\]|\\.)*)",\s*\n\s*text: (`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*")/g;
   for (const m of block.matchAll(re)) {
     out.push({ id: m[1], title: m[2], text: m[3].slice(1, -1) });
+  }
+  // Text built from the shared remedy words (`text: GROOM_TEXT,`): resolved through the same function.
+  const facts = { warnChars: 16_000, warnSource: "default", out: ".claude/outbox" };
+  const built = { GROOM_TEXT: "groom", OTHER_AGENTS_TEXT: "other-agents" };
+  for (const m of block.matchAll(/id: "([^"]+)",\s*\n\s*title: "((?:[^"\\]|\\.)*)",\s*\n\s*text: ([A-Z_]+),/g)) {
+    out.push({ id: m[1], title: m[2], text: remedyPrompt(built[m[3]], facts).join("\n\n") });
   }
   // The one-liners written inline (`{ id: "init", title: "/init", text: "/init" }`).
   for (const m of block.matchAll(/\{ id: "([^"]+)", title: "([^"]*)", text: "([^"]*)" \}/g)) {

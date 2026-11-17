@@ -2,7 +2,7 @@
 // what it is sent. The host's `send` asks `roleAllows` for every frame.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NOTIFY_LINK_FRAMES, roleAccepts, roleAfterHello, roleAllows, roleFromUserAgent } from "../dist/index.js";
+import { NOTIFY_LINK_FRAMES, LINK_LOG_MAX_EVENTS, cleanLinkLog, roleAccepts, roleAfterHello, roleAllows, roleFromUserAgent } from "../dist/index.js";
 
 test("an OkHttp UA is the native link; the WebView's Chrome UA and no UA are not", () => {
   assert.equal(roleFromUserAgent("okhttp/4.12.0"), "notify");
@@ -39,4 +39,27 @@ test("a notify link may say hello and ping, and can never attach", () => {
   assert.equal(roleAccepts("notify", "session.attach"), false);
   assert.equal(roleAccepts("notify", "session.input"), false);
   assert.equal(roleAccepts(undefined, "session.attach"), true);
+});
+
+test("the link may send its own log; cleanLinkLog keeps well-formed events on the host's clock", () => {
+  assert.equal(roleAccepts("notify", "link.log"), true);
+  const { skewMs, events } = cleanLinkLog([
+    { at: 1000, ev: "fail", d: "x".repeat(500) },
+    { at: 2000, ev: "open" },
+    { at: "3000", ev: "open" }, // at not a number
+    { at: 4000, ev: "Bad Word" },
+    null, 7,
+    { at: 5000, ev: "some-future-word", d: "" },
+  ], 9000, 10_500);
+  assert.equal(skewMs, 1500);
+  assert.deepEqual(events.map((e) => [e.at, e.ev, e.d?.length]), [[2500, "fail", 160], [3500, "open", undefined], [6500, "some-future-word", undefined]]);
+});
+
+test("cleanLinkLog: no usable sentAt means the phone's own times; not an array means none; the newest are kept", () => {
+  assert.deepEqual(cleanLinkLog([{ at: 1, ev: "dial" }], undefined, 99), { skewMs: 0, events: [{ at: 1, ev: "dial" }] });
+  assert.deepEqual(cleanLinkLog("nope", 5, 9), { skewMs: 4, events: [] });
+  const many = Array.from({ length: LINK_LOG_MAX_EVENTS + 5 }, (_, i) => ({ at: i + 1, ev: "retry" }));
+  const kept = cleanLinkLog(many, 0, 0).events;
+  assert.equal(kept.length, LINK_LOG_MAX_EVENTS);
+  assert.equal(kept[0].at, 6);
 });

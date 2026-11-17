@@ -1352,8 +1352,9 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   the same place, and the gesture pops one entry. "Settings → Downloads → close lands on the
   launcher" was the in-app arrow skipping the sheet the person came from, while the swipe returned to
   it; so a close (same session and focus, no sheet) whose entry below is on the same session and
-  focus now goes to THAT entry, sheet and all. Everything else still unwinds to a screen already in
-  the stack, so the stack stays a path of distinct screens. **Steps inside a sheet are history too
+  focus now goes to THAT entry, sheet and all. A bare screen already in the stack is still unwound to; a SHEET
+  is never unwound to, it is pushed again (a door opens over the screen it was tapped on, so
+  Back returns there; the lower copy stays a plain step). **Steps inside a sheet are history too
   (`backStep.ts`, `useBackStep(open, close)`).** The file browser held an opened file in `useState`
   and pushed nothing, so the swipe from a file popped the whole browser to the main view — "open a
   file, swipe back, I'm on the main view instead of the folder". Eight sheets had that shape (files,

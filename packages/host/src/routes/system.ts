@@ -107,6 +107,11 @@ const onLocalRtEvict: Route<"localrt.evict"> = (a) => {
   });
 };
 
+/** The phone's background link sends what it saw while it was down (`linklog.ts`). */
+const onLinkLog: Route<"link.log"> = (a) => {
+  a.c.linkLog.phone(a.c.wsDevice.get(a.ws), a.msg.events, a.msg.sentAt);
+};
+
 const onPing: Route<"ping"> = (a) => {
     a.c.send(a.ws, { t: "pong" }); // heartbeat — lets the client detect a dead socket
 };
@@ -125,7 +130,7 @@ const onHello: Route<"hello"> = (a) => {
     // (`shared/wire/notifylink.ts`). `send` would drop them all anyway; this
     // skips building twenty frames per reconnect for nobody.
     const role = roleAfterHello(a.msg.role, a.c.wsRole.get(a.ws));
-    if (role) { a.c.wsRole.set(a.ws, role); return; }
+    if (role) { a.c.wsRole.set(a.ws, role); a.c.linkLog.opened(a.ws, { role, via: "hello", device: a.c.wsDevice.get(a.ws) }); return; }
     a.c.send(a.ws, { t: "session.list", sessions: a.c.sessions.list() });
     a.c.send(a.ws, { t: "recent.list", recent: a.c.sessions.listRecent() });
     a.c.send(a.ws, { t: "closed.list", closed: a.c.sessions.listClosed() });
@@ -502,6 +507,7 @@ const onHostHalt: Route<"host.halt"> = (a) => {
 
 export const systemRoutes: RouteTable = {
   "ping": onPing,
+  "link.log": onLinkLog,
   "host.halt": onHostHalt,
   "hello": onHello,
   "update.status": onUpdateStatus,

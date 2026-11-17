@@ -80,12 +80,13 @@
  * start disagreeing.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import type { BackendInfo, TokenConvo, TokenStatsDoc, UsageInfo, UsageReading } from "@waterplane/shared";
+import type { BackendInfo, MeterSummary, TokenConvo, TokenStatsDoc, UsageInfo, UsageReading } from "@waterplane/shared";
 import { ledgers, type LedgerViewDef } from "@waterplane/sdk";
 import { useRemoteResource } from "@waterplane/kit";
 import { useRescan } from "./useRescan.ts";
 import { TokenStatsBody, type SpendView } from "./TokenStatsBody.tsx";
 import type { GuestLedger } from "./guests.ts";
+import type { TokenFocus } from "./tokenFocus.ts";
 
 /** One view's read, as `GuestRead` lifts it into the sheet. */
 type GuestReadState = Omit<GuestLedger, "def" | "backend">;
@@ -121,12 +122,15 @@ function GuestRead({ def, fresh, online, onRead }: {
   return null;
 }
 
-export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn, doors, afterOverTime }: {
+export function TokenStatsSheet({ online, ledgerTabs, usage, spend, hostSpend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn, doors, afterOverTime, findingsLine, focus }: {
+  /** A Setup check door's aim, handed to the body. */
+  focus?: TokenFocus | null;
   /** Usage readings per source, and the one the launcher chip opened this sheet on (see `TokenStatsBody`). */
   readings?: readonly UsageReading[];
   openedOn?: string | null;
   /** Doors drawn first in the body — see `TokenStatsBody`. */
   doors?: ReactNode;
+  findingsLine?: ReactNode;
   /** Drawn after the Over time box — see `TokenStatsBody`. */
   afterOverTime?: ReactNode;
   onClearOn?: () => void;
@@ -138,6 +142,8 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
   usage: UsageInfo | null;
   /** The billing profile, the budget and its dollar periods (`world.billing` / `world.budget`). */
   spend?: SpendView;
+  /** The host's own metered calls (`meter.status`); absent = no line. */
+  hostSpend?: MeterSummary | null;
   /** Re-scrape `/usage` on the desktop. `quiet` suppresses the toast, for the
    *  automatic refresh this screen does on open. */
   onRefreshUsage: (quiet?: boolean) => void;
@@ -172,11 +178,11 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
   return (
     <div className="sheet">
       {views.map((def) => <GuestRead key={def.id} def={def} fresh={fresh} online={online} onRead={onRead} />)}
-      <TokenStatsBody doc={res.data} res={res} guests={guests} usage={usage} spend={spend} online={online}
+      <TokenStatsBody doc={res.data} res={res} guests={guests} usage={usage} spend={spend} hostSpend={hostSpend} online={online}
         onRefreshUsage={onRefreshUsage}
         onClose={onClose} onRescan={() => setFresh((n) => n + 1)}
         nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} ledgerTabs={ledgerTabs} fresh={fresh}
-        readings={readings} openedOn={openedOn} onClearOn={onClearOn} doors={doors} afterOverTime={afterOverTime} />
+        readings={readings} openedOn={openedOn} onClearOn={onClearOn} doors={doors} afterOverTime={afterOverTime} findingsLine={findingsLine} focus={focus} />
     </div>
   );
 }

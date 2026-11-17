@@ -37,7 +37,19 @@ interface Doc {
    *  `noteOptInSends`). Remembered because the session that carried them, and
    *  its history, are gone once it closes. */
   optInSent: Record<string, Record<string, number>>;
+  /** Machine and account findings a person waived, by finding id (`setupcheck/`). Repo findings keep `ignored` and the accepts file. */
+  waived?: Record<string, { reason?: string; at: string }>;
 }
+
+/** Only these two scopes are waived here: a repo finding is ignored or accepted where it always was. */
+export const WAIVABLE_ID = /^(machine|account)\.[a-z0-9][a-z0-9.:+_-]{0,120}$/i;
+
+/**
+ * A repo finding with no setup check behind it (overlaps, permissions, health, watch rows) is waived
+ * here, PER REPO: the stored key is `<realpath>::<finding id>`, so one repo's waiver never hides the same finding in another.
+ */
+const REPO_WAIVER = /^.{1,1024}::repo\.[a-z0-9][a-z0-9.:+@/_-]{0,160}$/i;
+const REPO_FINDING_ID = /^repo\.[a-z0-9][a-z0-9.:+@/_-]{0,160}$/i;
 
 function key(worktree: string): string {
   try { return realpathSync(worktree); } catch { return worktree; }
@@ -51,7 +63,7 @@ export class SetupPrefsStore {
     this.path = join(hostStateDir(root), "setupprefs.json");
     try {
       if (existsSync(this.path)) {
-        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown; optInSent?: unknown };
+        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown; optInSent?: unknown; waived?: unknown };
         // Cleaned on the way IN too: a hand-edit must not put an unreadable
         // window or a non-advisory id where the checklist reads it.
         if (raw?.autoCompactDefault != null) {
@@ -63,6 +75,15 @@ export class SetupPrefsStore {
             const ids = Array.isArray(v) ? v.map(String).filter((id) => ADVISORY_CHECKS.includes(id)) : [];
             if (ids.length) this.doc.ignored[k] = [...new Set(ids)];
           }
+        }
+        if (raw?.waived && typeof raw.waived === "object" && !Array.isArray(raw.waived)) {
+          const w: Record<string, { reason?: string; at: string }> = {};
+          for (const [id, v] of Object.entries(raw.waived as Record<string, unknown>)) {
+            const o = v as { reason?: unknown; at?: unknown } | null;
+            if (!(WAIVABLE_ID.test(id) || REPO_WAIVER.test(id)) || !o || typeof o !== "object" || typeof o.at !== "string") continue;
+            w[id] = { at: o.at, ...(typeof o.reason === "string" && o.reason.trim() ? { reason: o.reason.trim().slice(0, 300) } : {}) };
+          }
+          if (Object.keys(w).length) this.doc.waived = w;
         }
         if (raw?.optIns && typeof raw.optIns === "object" && !Array.isArray(raw.optIns)) {
           for (const [k, v] of Object.entries(raw.optIns as Record<string, unknown>)) {
@@ -122,6 +143,38 @@ export class SetupPrefsStore {
     const cur = new Set(this.doc.ignored[k] ?? []);
     if (ignore) cur.add(id); else cur.delete(id);
     if (cur.size) this.doc.ignored[k] = [...cur]; else delete this.doc.ignored[k];
+    this.save();
+    return { ok: true };
+  }
+
+  /** The desktop's and account's waivers, plus (with a worktree) that repo's own, under their plain finding ids. */
+  waivedFindings(worktree?: string): Record<string, { reason?: string; at: string }> {
+    const out: Record<string, { reason?: string; at: string }> = {};
+    const prefix = worktree ? `${key(worktree)}::` : null;
+    for (const [id, w] of Object.entries(this.doc.waived ?? {})) {
+      if (WAIVABLE_ID.test(id)) out[id] = w;
+      else if (prefix && id.startsWith(prefix)) out[id.slice(prefix.length)] = w;
+    }
+    return out;
+  }
+
+  /** Waive (or, with `null`, take back) one repo finding for THIS repo only. Refuses in words for any other id. */
+  setRepoWaived(worktree: string, id: string, w: { reason?: string; at: string } | null): { ok: true } | { ok: false; error: string } {
+    if (!REPO_FINDING_ID.test(id)) return { ok: false, error: `"${id}" is not a repo finding` };
+    const k = `${key(worktree)}::${id}`;
+    const cur = { ...(this.doc.waived ?? {}) };
+    if (w) cur[k] = { at: w.at, ...(w.reason?.trim() ? { reason: w.reason.trim().slice(0, 300) } : {}) }; else delete cur[k];
+    if (Object.keys(cur).length) this.doc.waived = cur; else delete this.doc.waived;
+    this.save();
+    return { ok: true };
+  }
+
+  /** Waive (or, with `null`, take back) one machine or account finding. Refuses in words for any other id. */
+  setWaived(id: string, w: { reason?: string; at: string } | null): { ok: true } | { ok: false; error: string } {
+    if (!WAIVABLE_ID.test(id)) return { ok: false, error: `"${id}" is not a machine or account finding; a repo finding is ignored or accepted on its own row` };
+    const cur = { ...(this.doc.waived ?? {}) };
+    if (w) cur[id] = { at: w.at, ...(w.reason?.trim() ? { reason: w.reason.trim().slice(0, 300) } : {}) }; else delete cur[id];
+    if (Object.keys(cur).length) this.doc.waived = cur; else delete this.doc.waived;
     this.save();
     return { ok: true };
   }
@@ -188,6 +241,10 @@ export function setupPrefsStore(): SetupPrefsStore | null {
 /** The window the checklist writes and passes at — the chosen one, else the shipped one. */
 export function autoCompactDefault(): string {
   return current?.autoCompactDefault().value ?? AUTO_COMPACT_SUGGESTED;
+}
+
+export function waivedFindings(worktree?: string): Record<string, { reason?: string; at: string }> {
+  return current?.waivedFindings(worktree) ?? {};
 }
 
 export function ignoredChecks(worktree: string): string[] {

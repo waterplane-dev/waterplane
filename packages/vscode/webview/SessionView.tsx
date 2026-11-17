@@ -19,6 +19,7 @@ import { Loading } from "./Loading";
 import { CostBlock, ListPrice } from "./Money";
 import { sessionTotal } from "../src/data/sessiontotal";
 import { TurnList } from "./TurnList";
+import { PromptActions } from "./Actions";
 import { TabLinks } from "./TabLinks";
 import { CarriedSection } from "../../web/src/CarriedSection";
 
@@ -196,6 +197,14 @@ export function SessionView({ doc, why, prompts, terminal, selectedTurn, onSelec
           <CompactionPanel l={doc.compaction} windowTok={windowTok} tok={lastTok} />
           {coldNote && <div className="empty ctx-note">{coldNote}</div>}
         </>
+      )}
+
+      {prompts.some((p) => p.id === "handoff-fresh-session") && (
+        <section className="prompt-card" aria-labelledby="pr-handoff">
+          <h3 id="pr-handoff">Hand off to a fresh session</h3>
+          <p>Asks the current session to write a handoff note, so a fresh session can start light. Copied or typed into the terminal, never sent.</p>
+          <PromptActions id="handoff-fresh-session" terminal={terminal} post={post} />
+        </section>
       )}
 
       <TurnList turns={doc.turnCosts} windowTok={windowTok} updatedAt={doc.updatedAt} selected={selectedTurn} onSelect={onSelectTurn}

@@ -26,7 +26,7 @@ export function featureSheetId(feature: string, sheet: string): FeatureSheetId {
 }
 export const isFeatureSheetId = (o: unknown): o is FeatureSheetId => typeof o === "string" && FEATURE_SHEET_RE.test(o);
 
-export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "pluginManager" | "pluginSettings" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "elsewhere" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | "skills" | FeatureSheetId;
+export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "pluginManager" | "pluginSettings" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "elsewhere" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | "skills" | "setupcheck" | FeatureSheetId;
 
 // Overlays worth putting in the URL (reload-stable; the transient ones —
 // "image"/"collage"/"slash"/"text" — need in-memory state, so they're never
@@ -245,8 +245,9 @@ export const VACANT = "\u0000vacant";
  * Leaving a session for the launcher does the same when the entry below is
  * the launcher (a sheet on it included) on the same focus.
  *
- * Otherwise the old rules: a screen already in the stack is UNWOUND to (the
- * stack stays a path of distinct screens), anything else is pushed. Steps and
+ * Otherwise: a bare screen already in the stack is UNWOUND to; a SHEET never is (a door opens it over
+ * the screen it was tapped on, so Back returns there even when the same sheet is lower down) —
+ * it is pushed. Steps and
  * `VACANT` slots over the current screen are not screens: the decision is taken
  * from the screen under them, and a close or an unwind takes them with it.
  *
@@ -294,7 +295,12 @@ export function routeStep(
       if (!ka && kr === r && whole) return { kind: "go", delta: below - depth };
     }
   }
-  for (let i = top - 1; i >= 0; i--) {
+  // A door never unwinds to a copy of its sheet lower in the stack, ADJACENT OR NOT: usage -> setup check
+  // -> "token stats" must Back to the setup check, which is the entry directly above the old usage.
+  // History cannot delete the lower entry, so a SHEET is pushed again and the older copy stays a plain
+  // step to pass through. A close names a BARE screen (handled above, one Back) and a bare screen is a
+  // leave: still searched for all the way down.
+  for (let i = top - 1; i >= 0 && !o; i--) {
     if (stack[i] === key) return { kind: "go", delta: i - depth };
   }
   return { kind: "push" };

@@ -41,6 +41,7 @@ import { ensureDesktopKey, findKey, keysDir, linkKey, type EnsureResult, type Li
 import { newRepo, packageId, templateName, type NewRepoOpts, type NewRepoResult, type TemplateId } from "./scaffold.js";
 import { checkRepoCompliance, fixRepoCompliance } from "./compliance.js";
 import { targetId } from "./repos.js";
+import { invalidateSetupCheck } from "./setupcheck/store.js";
 import { createToIntent, intentToBuildRun } from "./intents/adapters.js";
 import { writeTextAtomic } from "./jsonstore.js";
 
@@ -581,6 +582,7 @@ export function makeOnboardDeps(h: OnboardHost): OnboardDeps {
         .map((c) => c.fix as string);
       if (!fixes.length) return { ok: true, applied: [], notes: [] };
       const r = fixRepoCompliance(target, fixes);
+      invalidateSetupCheck();
       return { ok: r.ok, applied: r.applied ?? [], notes: r.notes ?? [], ...(r.ok ? {} : { error: r.error }) };
     },
     builds: {

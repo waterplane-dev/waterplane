@@ -22,10 +22,8 @@
 import { basename } from "node:path";
 import type { CostBreakdown, ModelSlice, TokenDay, TokenGroup, TokenHour, TokenHourSlot, TokenTotals } from "@waterplane/shared";
 import {
-  PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourKey, isPriced, priceKeyLabel, tokenTotal, zeroCost, zeroTotals,
+  PRICES_AS_OF, addCost, addTotals, costOf, eachFileCell, uncross, dayToMs, hourKey, isPriced, priceKeyLabel, tokenTotal, zeroCost, zeroTotals,
 } from "@waterplane/shared";
-import { CROSS } from "../../../host/src/tokenscan.js";
-import type { Tally } from "../../../host/src/tokenscan.js";
 import { foldCostWindow, repoOfWorktree, undatedFields } from "../../../host/src/costwindow.js";
 import type { Files } from "../../../host/src/costwindow.js";
 import type { CorpusDoc } from "../protocol.js";
@@ -40,12 +38,6 @@ export const WEEK_DAYS = 7;
 /** The span filter's calendar spans (`span.ts`' `SPANS`), each folded whole into `spans`. */
 export const SPAN_DAYS = [30, 90] as const;
 
-const uncross = (k: string): [hour: string, model: string] => {
-  const i = k.indexOf(CROSS);
-  return i < 0 ? ["", k] : [k.slice(0, i), k.slice(i + 1)];
-};
-const tallyToTotals = (t: Tally): TokenTotals =>
-  ({ input: t[0], output: t[1], cacheRead: t[2], cacheWrite: t[3], cacheWrite1h: t[4], turns: t[5] });
 const nest = <T>(m: Map<string, Map<string, T>>, a: string, b: string, blank: () => T): T => {
   const inner = m.get(a) ?? m.set(a, new Map()).get(a)!;
   return inner.get(b) ?? inner.set(b, blank()).get(b)!;
@@ -98,7 +90,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
   let logs = 0;
 
   for (const [slug, byFile] of Object.entries(files)) {
-    for (const sum of Object.values(byFile)) {
+    for (const [fileKey, sum] of Object.entries(byFile)) {
       logs++;
       if (sum.sub) subagentLogs++; else conversations++;
       if (sum.f) fastTurns += sum.f;
@@ -128,13 +120,10 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
           if (asRead) cold.premiumUsd += Math.max(0, wrote.total - asRead.total);
         }
       }
-      for (const [key, t] of Object.entries(sum.x)) {
-        const [hour, model] = uncross(key);
+      eachFileCell(slug, fileKey, sum, ({ hour, day, model, totals: v, cost: c }) => {
         // The day is a PREFIX of the hour; an undated record is in the totals and in no day.
-        const day = hour.slice(0, 10);
         const slot = hour.length >= 13 ? Number(hour.slice(11, 13)) : NaN;
         const inSlot = slot >= 0 && slot < 24;
-        const v = tallyToTotals(t);
         if (day) addTotals(get(days, day, zeroTotals), v);
         if (hour) {
           addTotals(get(hours, hour, zeroTotals), v);
@@ -151,8 +140,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
         const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0, ctxTok: 0 })) : null;
         // The context those requests sent, as the host's ledger counts it: the health score's spend line reads it.
         if (dr) { dr.turns += v.turns; dr.ctxTok += v.input + v.cacheRead + v.cacheWrite; }
-        const c = costOf(v, model, day || undefined);
-        if (!c) { addTotals(unpriced, v); continue; }
+        if (!c) { addTotals(unpriced, v); return; }
         if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }
         addCost(cost, c);
         if (sum.sub) addCost(subCost, c);
@@ -168,7 +156,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
         addCost(get(modelCost, model, zeroCost), c);
         addCost(get(repoCost, repoKey, zeroCost), c);
         addCost(nest(repoModelCost, repoKey, model, zeroCost), c);
-      }
+      });
     }
   }
 

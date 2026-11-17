@@ -30,7 +30,7 @@ Skills, instructions and CLAUDE.md views show both token count and character cou
 - shipped: bdbf97ce
 
 ### R-instructions-007 · shipped
-The repo readings sheet keeps what the outside world reports about a repo (exposure watch, Scorecard) in a fourth region, watch, separate from the repo's set-up checklist.
+The repo readings sheet keeps what the outside world reports about a repo (exposure watch, Scorecard) in a region of its own, watch, separate from the Setup check (Repo readings has four regions: series, agents, opt-ins, watch).
 - asked: 2026-10-26
 - shipped: fcf473d4
 
@@ -63,3 +63,8 @@ A repo can have a compact context file sized to a local model's context window, 
 The always-on list names every SessionStart and UserPromptSubmit hook of the user's settings, the repo's settings files and enabled plugins: one row per file and event with its command count and no size, saying that its output reaches every session or every prompt, that a session's context view measures it as "hook context", and that /hooks lists it. A disabled plugin's hooks are not listed, and the context-weight threshold does not count these rows.
 - asked: 2026-11-03 (owner)
 - shipped: 7ab24a8e
+
+### R-instructions-014 · shipped
+A repo can take the generic efficiency rules into its own CLAUDE.md or AGENTS.md from a finding, behind a tap and a confirm; a block edited by hand is never overwritten; nothing is committed.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/shared/test/efficiencyrules.test.mjs, packages/host/src/setupcheck/efficiencywrite.test.mjs

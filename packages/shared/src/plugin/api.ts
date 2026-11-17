@@ -4,6 +4,7 @@ import type { PluginBackendDef, PluginScreenReader, PluginStoreReader, PluginHtt
 import type { PeerKind } from "../wire/messages.js";
 import type { PluginStreamHandlers } from "../stream.js";
 import type { ComplianceCheck } from "../wire/repo.js";
+import type { Finding } from "../findings/types.js";
 import type { AppRepoFacts } from "../wire/install.js";
 import type { PluginThermalReader, PluginUsageProbe } from "../pluginreadings.js";
 import type { BindLook, BindVerdict } from "../bindconv.js";
@@ -252,6 +253,13 @@ export interface HostPluginApi {
    * row and becomes the plugin's status line. Returns an unregister.
    */
   setupCheck(fn: (repo: SetupSubject) => ComplianceCheck | null): () => void;
+  /**
+   * Contribute findings to the Setup check (a claim about the repo, this machine or the account,
+   * with its evidence and remedy). Asked on each check run of each repo, so keep it cheap. A throw
+   * drops these findings and becomes the plugin's status line, as for `setupCheck`. Returns an
+   * unregister. Additive: a plugin that never calls it is unchanged.
+   */
+  setupFinding(fn: (repo: SetupSubject) => Finding[] | Promise<Finding[]>): () => void;
   /**
    * Handle the fix a contributed row names in `fix`. Ids the core owns
    * (`gitignore`, `claude-md`, …) or another plugin already took are refused:

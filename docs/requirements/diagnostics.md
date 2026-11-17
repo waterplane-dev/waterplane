@@ -1,7 +1,7 @@
 # diagnostics
 
 ### R-diagnostics-001 · shipped
-Repo health checks run with configurable alerts for config bloat and skill-file usage, config-grooming prompt templates are offered in fan-out, the main view shows warnings for repos with health/quality issues, and a navigation button leads directly to where an issue can be fixed. A button can automatically fix all validation findings at once, and thresholds are configurable per repo through the UI.
+Repo health checks run with configurable alerts for config bloat and skill-file usage, config-grooming prompt templates are offered in fan-out, the main view shows warnings for repos with health/quality issues, and a navigation button (the badge, landing on the Setup check cut to the findings) leads directly to where an issue can be fixed. A button can automatically fix all validation findings at once, and thresholds are configurable per repo through the UI.
 - asked: 2026-09-12, 2026-09-12
 - shipped: 9dc4fed, aa20495, d620752, 44fc0b0, 540fa52
 

@@ -231,8 +231,3 @@ export const watchRecheckFailed = (why: string): string => `The watch did not ru
 export const WATCH_EMPTY_WORDS =
   "Not watched yet: the daily exposure watch has no rows for this repo, and Scorecard has no reading yet.";
 export const WATCH_EMPTY_LINK = "add this repo to the exposure watch";
-
-/** The findings cut's tail in one region, when the badge's count also holds findings in the other. */
-export function cutElsewhereWords(n: number, region: "watch" | "setup"): string {
-  return `${n} more ${n === 1 ? "finding is" : "findings are"} under ${region === "watch" ? "watch" : "set-up"}`;
-}

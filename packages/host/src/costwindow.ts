@@ -32,14 +32,14 @@
 
 import { basename } from "node:path";
 import {
-  COST_CONVOS_CAP, addCost, addTotals, clipClosedText, costOf, hourFloor, hourKeyMs, tokenTotal, undatedLogsOf, undatedSince,
+  COST_CONVOS_CAP, addCost, addTotals, clipClosedText, hourFloor, hourKeyMs, tokenTotal, undatedLogsOf, undatedSince,
   priceListSource, zeroCost, zeroTotals,
   type ClosedSession, type CostBreakdown, type CostConvo, type CostConvoHour, type CostConvoRest, type CostHour, type CostHourRepo,
   type CostLaunch, type CostWindowDoc, type Intent, type ModelSlice, type SessionInfo, type SessionOrigin,
-  type TokenTotals,
+  type TokenTotals, eachFileCell, uncross,
 } from "@waterplane/shared";
 import { notePriceGap } from "./pricegap.js";
-import { CROSS, type FileSummary, type Tally } from "./tokenscan.js";
+import type { FileSummary } from "./tokenscan.js";
 
 /** slug (project dir name) → path below it, no extension → summary (`tokenstats.ts`' store). */
 export type Files = Record<string, Record<string, FileSummary>>;
@@ -64,14 +64,6 @@ export function repoOfWorktree(w: string): string {
 
 const UNKNOWN_REPO = "unknown repo";
 const repoLabel = (repo: string): string => (repo ? basename(repo) || repo : UNKNOWN_REPO);
-
-const uncross = (k: string): [hour: string, model: string] => {
-  const i = k.indexOf(CROSS);
-  return i < 0 ? ["", k] : [k.slice(0, i), k.slice(i + 1)];
-};
-
-const tallyToTotals = (t: Tally): TokenTotals =>
-  ({ input: t[0], output: t[1], cacheRead: t[2], cacheWrite: t[3], cacheWrite1h: t[4], turns: t[5] });
 
 type Bag = { totals: TokenTotals; cost: CostBreakdown };
 const bag = (): Bag => ({ totals: zeroTotals(), cost: zeroCost() });
@@ -211,13 +203,11 @@ export function foldCostWindow(
       const cKey = `${slug}\u0000${convoId}`;
       const repo = repoOf.get(cKey)?.repo ?? "";
       let cv: ConvoAcc | undefined;
-      for (const [key, tally] of Object.entries(sum.x)) {
-        const [hour, model] = uncross(key);
-        if (!hour) continue;
+      eachFileCell(slug, fileKey, sum, ({ hour, model, totals: v, cost: c }) => {
+        if (!hour) return;
         const h = hourKeyMs(hour);
-        if (!(h >= fromHour && h < to)) continue;
-        const v = tallyToTotals(tally);
-        if (tokenTotal(v) <= 0) continue;
+        if (!(h >= fromHour && h < to)) return;
+        if (tokenTotal(v) <= 0) return;
         if (!cv) {
           cv = slot(convos, cKey, () => ({
             id: convoId, repo, ...bag(), agentTotals: zeroTotals(), agentCost: zeroCost(),
@@ -228,8 +218,6 @@ export function foldCostWindow(
           if (sub) cv.agents++;
         }
 
-        const day = hour.slice(0, 10);
-        const c = costOf(v, model, day);
         const ha = slot(hours, hour, () => ({ ...bag(), byRepo: new Map(), byModel: new Map() }));
         const touched: Bag[] = [slot(cv.byModel, model, bag), slot(ha.byModel, model, bag), slot(ha.byRepo, repo, bag)];
         const agentSide: Bag[] = sub ? [slot(cv.agentByModel, model, bag)] : [];
@@ -243,12 +231,12 @@ export function foldCostWindow(
         if (sub) { addTotals(agentTotals, v); addTotals(cv.agentTotals, v); for (const b of agentSide) addTotals(b.totals, v); }
         // An unpriced model adds tokens and no money — never a zero charge,
         // which reads as free.
-        if (!c) { addTotals(unpriced, v); notePriceGap(model, hourKeyMs(hour)); continue; }
+        if (!c) { addTotals(unpriced, v); notePriceGap(model, hourKeyMs(hour)); return; }
         ch.usd += c.total;
         addCost(cost, c); addCost(cv.cost, c); addCost(ha.cost, c);
         for (const b of touched) addCost(b.cost, c);
         if (sub) { addCost(agentCost, c); addCost(cv.agentCost, c); for (const b of agentSide) addCost(b.cost, c); }
-      }
+      });
     }
   }
 

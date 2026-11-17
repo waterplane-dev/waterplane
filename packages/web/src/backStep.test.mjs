@@ -245,8 +245,10 @@ test("routeLanding: every branch of the routing effect and what it files", async
   assert.deepEqual(routeLanding([L, s, g], 2, g, false, 2), { kind: "known", depth: 2, how: "stay" }, "the effect's echo of a pop");
   // ML1: a notification re-targeting the open git view files its ask with THAT entry
   assert.deepEqual(routeLanding([L, s, g], 2, g, false, -1), { kind: "stay", how: "stay" });
-  // a tap naming a screen below unwinds to it: a FRESH open, its kept stores forgotten
-  assert.deepEqual(routeLanding([L, s, g, send], 3, g, false, -1), { kind: "go", delta: -1, forget: true, how: "open" });
+  // a door naming a SHEET below never unwinds to it: pushed again over the opener, so Back returns there
+  assert.deepEqual(routeLanding([L, s, g, send], 3, g, false, -1), { kind: "push", how: "push" });
+  // a tap naming a bare screen below unwinds to it: a FRESH open, its kept stores forgotten
+  assert.deepEqual(routeLanding([L, s, g, send], 3, L, false, -1), { kind: "go", delta: -3, forget: true, how: "open" });
   // a close of Send lands ONE step down, on git: a return, the pop reads the entry back
   assert.deepEqual(routeLanding([L, s, g, send], 3, s, false, -1), { kind: "go", delta: -1, forget: false, how: "return" });
   assert.deepEqual(routeLanding([L, s], 1, g, false, -1), { kind: "push", how: "push" });

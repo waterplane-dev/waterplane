@@ -4,6 +4,7 @@ import type { ProbeResultsView, ProbeStartAnswer, ProbeStartBody, ProbeView, Set
 import type { ComplianceAcceptRequest, ExposureRunResult, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceTriageRequest, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthOwnBackfillAnswer, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost, jpostOk } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
+import type { AllReposResponse, EfficiencyRulesState, EfficiencyWriteAnswer, SetupCheckResponse } from "../setupCheckTypes";
 
 /** An opt-ins report off the wire, every row through `cleanOptInRow`: a row
  *  this phone cannot read is dropped, never rounded into an offer. */
@@ -14,6 +15,16 @@ function cleanOptInReport(r: OptInReport): OptInReport {
 
 /** Branches, secrets, setup compliance and repo health. One slice of `api` (see api.ts). */
 export const repoOpsApi = {
+  /** The Setup check: ranked findings, what passed, what could not be checked. No repo = this desktop and account. */
+  setupCheck: (repoId: string | null) =>
+    jget<SetupCheckResponse>(repoId ? `/api/setupcheck?repo=${encodeURIComponent(repoId)}` : "/api/setupcheck"),
+  setupCheckRepos: (hidden: readonly string[]) => jget<AllReposResponse>(`/api/setupcheck/repos${hidden.length ? `?hidden=${encodeURIComponent(hidden.join(","))}` : ""}`),
+  setupCheckWaive: (body: { id: string; waive: boolean; repo?: string; reason?: string; via?: "ignore" | "accept" }) =>
+    jpost<{ ok: boolean; error?: string }>("/api/setupcheck/waive", body),
+  /** The generic efficiency rules block: both candidate files and what a write would do. */
+  efficiencyRules: (repoId: string) => jget<EfficiencyRulesState>(`/api/repos/${repoId}/efficiencyrules`),
+  efficiencyRulesWrite: (repoId: string, body: { target: string; confirm: string; baseSha: string }) =>
+    jpost<EfficiencyWriteAnswer>(`/api/repos/${repoId}/efficiencyrules`, body),
   gitBranches: (repoId: string) =>
     jget<{ branches: GitBranch[] }>(`/api/repos/${repoId}/git/branches`).then((d) => d.branches),
   gitCheckout: (repoId: string, branch: string) =>

@@ -25,11 +25,12 @@ import { openScheduleCut } from "../../features/schedule";
 import { openAssessFor, openBacklogCut, openBacklogFor } from "../../features/backlog";
 import { openActivity } from "../../features/activity";
 import { openRepoHealth, openSetup } from "../../features/setup";
+import { openSetupCheck } from "../../features/setupCheck";
 import { healthChip } from "../../healthIndexWords";
 import { openBrowseFor, openGalleryFor, openOutboxFor, pickImageFor } from "../../features/images";
 import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
-import { openingText, openingTitle, queuedChipCut, setupMenuLabel, setupMenuTitle, setupTitle } from "./model";
+import { openingText, openingTitle, queuedChipCut, setupMenuAim, setupMenuLabel, setupMenuTitle, setupTitle } from "./model";
 import { SessionRow } from "./SessionRow";
 import { RepoShownAs } from "./RepoShownAs";
 import { ExtBoundary } from "../ExtBoundary";
@@ -294,7 +295,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         })()}
         {main?.setup && main.setup.issues > 0 && (
           <button className={`repo-group-stat ${!main.setup.ok ? "bad" : "warn"}`} title={setupTitle(main.setup)}
-            onClick={() => { track("action:repo.setup"); openSetup(main.id, { focus: "findings" }); }}>
+            onClick={() => { track("action:repo.setup"); openSetupCheck(main.id, { weight: "finding" }); }}>
             <ListChecks size={13} />{main.setup.issues}
           </button>
         )}
@@ -475,7 +476,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
               verdict is readable from here without going back out
               to the row. */}
           {main && <button className="more-act" title={setupMenuTitle(main.setup)}
-            onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetup(main.id); }}><ListChecks size={ICON} />{setupMenuLabel(main.setup)}</button>}
+            onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetupCheck(main.id, setupMenuAim(main.setup)); }}><ListChecks size={ICON} />{setupMenuLabel(main.setup)}</button>}
           {/* What this repo fetches to the phone on its own — the
               rules are PER REPO and stored with the project, so
               the repo row is where they belong. The only door to
@@ -540,7 +541,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
               `!ok` styles — `failing` is gone from the wire. */}
           {t.setup && t.setup.issues > 0 && (
             <button className={`row-chip ${!t.setup.ok ? "bad" : "warn"}`} title={setupTitle(t.setup)}
-              onClick={(e) => { e.stopPropagation(); track("action:repo.setup"); openSetup(t.id, { focus: "findings" }); }}><ListChecks size={12} />{t.setup.issues}</button>
+              onClick={(e) => { e.stopPropagation(); track("action:repo.setup"); openSetupCheck(t.id, { weight: "finding" }); }}><ListChecks size={12} />{t.setup.issues}</button>
           )}
         </RowSub>
         {!t.ownerSessionId && <LeftoverLine r={leftovers.get(t.id)} />}
@@ -561,7 +562,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           <button className="more-act" onClick={() => { track("action:repo.capture"); setRepoMenu(null); openCaptureFor(t); }}><ScanEye size={ICON} />capture</button>
           {/* Same always-on door as the repo header's. */}
           <button className="more-act" title={setupMenuTitle(t.setup)}
-            onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetup(t.id); }}><ListChecks size={ICON} />{setupMenuLabel(t.setup)}</button>
+            onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetupCheck(t.id, setupMenuAim(t.setup)); }}><ListChecks size={ICON} />{setupMenuLabel(t.setup)}</button>
           <button className="more-act" data-hint="repo.hide" onClick={() => { track("action:repo.hide"); setRepoMenu(null); toggleHideRepo(t.id); }}><EyeOff size={ICON} />hide</button>
           {!t.ownerSessionId && <LeftoverRemove t={t} r={leftovers.get(t.id)} onChanged={() => { setRepoMenu(null); leftoverChanged(); }} />}
         </div>

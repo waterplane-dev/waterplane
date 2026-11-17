@@ -12,6 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionInfo } from "@waterplane/shared";
 import { agentCallerRefusal } from "./agentintents.js";
 import { resolveFollowUpSession } from "./agentfollowup.js";
+import { invalidateSetupCheck } from "./setupcheck/store.js";
 import { exposureFindingsFor, setExposureTriage } from "./exposure.js";
 
 const GET_PATH = "/api/agent/exposure";
@@ -58,6 +59,7 @@ export async function handleAgentExposure(req: IncomingMessage, res: ServerRespo
   const by = { kind: "agent" as const, ...(repo ? { repo } : {}), session: sess.id };
   const r = setExposureTriage(dir, { id: body.triageId, state: body.state, fixedIn: body.fixedIn, commit: body.commit, note: body.note }, by);
   if (!r.ok) { d.json(res, { ok: false, error: r.error }, 400); return true; }
+  invalidateSetupCheck();
   try { await d.refresh?.(found.dir); } catch { /* the mark is saved; the next sweep moves the badge */ }
   d.json(res, { ok: true, triageId: body.triageId });
   return true;

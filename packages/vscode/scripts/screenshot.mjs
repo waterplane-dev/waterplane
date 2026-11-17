@@ -21,7 +21,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, "..");
 // The extension's ids are the ones its package.json declares; the suite reads them from the env.
 const manifest = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8"));
-const VIEWS = ["session", "all", "health"];
+// Opt-in real mode: `--workspace <dir> --real-home [--out <dir>] [--views a,b,...]` opens that folder and
+// leaves HOME / CLAUDE_CONFIG_DIR as they are, so the extension reads the real ~/.claude logs (read-only).
+// VS Code still gets a throwaway user-data-dir and extensions-dir; no desktopUrl is set. Names are then
+// vscode-setupcheck-<view>.png in --out (default media/ is for the fictional listing mode only, unchanged).
+// Extra views there: findings-end (Findings scrolled to its end) and tree (the sidebar tree focused).
+// Each shot's first ~300 chars of visible text are printed (webview DOM text, or the sidebar for tree).
+const ARGS = { _: [] };
+for (let i = 2; i < process.argv.length; i++) {
+  const a = process.argv[i];
+  if (a === "--real-home") ARGS.realHome = true;
+  else if (["--workspace", "--out", "--views"].includes(a)) ARGS[a.slice(2)] = process.argv[++i];
+  else ARGS._.push(a);
+}
+const REAL = Boolean(ARGS.workspace && ARGS.realHome);
+if (ARGS.workspace && !ARGS.realHome) { console.error("--workspace needs --real-home (it reads your real ~/.claude)"); process.exit(2); }
+const VIEWS = REAL ? (ARGS.views ?? "findings,findings-end,tree,all,always-on,session").split(",") : ["session", "all", "health"];
 const WIDTH = 1600, HEIGHT = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,7 +55,7 @@ function vscodeBin() {
 }
 
 function vsixFile() {
-  if (process.argv[2]) return resolve(process.argv[2]);
+  if (ARGS._[0]) return resolve(ARGS._[0]);
   const all = readdirSync(pkg).filter((n) => n.startsWith(`${manifest.name}-`) && n.endsWith(".vsix"))
     .map((n) => join(pkg, n)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   if (!all.length) { console.error("No .vsix here. Run `npm run package` first."); process.exit(2); }
@@ -165,10 +180,11 @@ const bin = vscodeBin();
 const root = realpathSync(mkdtempSync(join(tmpdir(), "wp-vscode-shot-")));
 const dirs = Object.fromEntries(["unpacked", "user", "exts", "claude", "sig"].map((d) => [d, join(root, d)]));
 for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
-const work = join(root, "todo-garden");
-mkdirSync(work);
+const work = REAL ? resolve(ARGS.workspace) : join(root, "todo-garden");
+if (!REAL) mkdirSync(work);
 execFileSync("unzip", ["-q", vsix, "-d", dirs.unpacked]);
 
+if (!REAL) { // the fictional repo, its history and its generated sessions (skipped over a real folder)
 const gitEnv = { ...process.env };
 delete gitEnv.GIT_DIR; delete gitEnv.GIT_WORK_TREE; delete gitEnv.GIT_INDEX_FILE;
 const git = (a, env = {}) => execFileSync("git", ["-C", work, ...a], { stdio: "ignore", env: { ...gitEnv, ...env } });
@@ -232,6 +248,7 @@ for (let d = 6; d >= 1; d--) {
   }
 }
 writeSession(slugDir(work), work, "3f2a9c41-7b1e-4d2a-9c3e-5a6b7c8d9e0f", { start: Date.now() - 4.2 * 3600_000, prompts: PROMPTS, long: true });
+}
 
 mkdirSync(join(dirs.user, "User"), { recursive: true });
 writeFileSync(join(dirs.user, "User", "settings.json"), JSON.stringify({
@@ -248,7 +265,7 @@ writeFileSync(join(dirs.user, "User", "settings.json"), JSON.stringify({
 }));
 
 const port = await new Promise((res) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
-const env = { ...process.env, CLAUDE_CONFIG_DIR: dirs.claude, WP_SHOT_SIG: dirs.sig, WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher,
+const env = { ...process.env, ...(REAL ? { WP_SHOT_REAL: "1" } : {}), ...(REAL ? {} : { CLAUDE_CONFIG_DIR: dirs.claude }), WP_SHOT_SIG: dirs.sig, WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher,
   WP_SHOT_STORAGE: join(dirs.user, "User", "globalStorage", `${manifest.publisher}.${manifest.name}`.toLowerCase()) };
 for (const k of Object.keys(env)) if (k.startsWith("VSCODE_") || k === "ELECTRON_RUN_AS_NODE") delete env[k];
 
@@ -259,7 +276,8 @@ const proc = spawn(bin, [
   "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes",
   `--remote-debugging-port=${port}`, "--new-window", work,
 ], { env, stdio: "ignore" });
-const killer = setTimeout(() => { console.error("timed out after 4 min"); proc.kill("SIGKILL"); }, 4 * 60_000);
+const killMin = REAL ? 20 : 4; // real mode waits for the first scan of the real logs
+const killer = setTimeout(() => { console.error(`timed out after ${killMin} min`); proc.kill("SIGKILL"); }, killMin * 60_000);
 
 const page = await workbench(port);
 const browser = await attach((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
@@ -267,18 +285,46 @@ const s = await attach(page.webSocketDebuggerUrl);
 const { result: { windowId } = {} } = await browser.call("Browser.getWindowForTarget", { targetId: page.id });
 if (windowId) await browser.call("Browser.setWindowBounds", { windowId, bounds: { left: 40, top: 40, width: WIDTH, height: HEIGHT, windowState: "normal" } });
 
-const out = join(pkg, "media");
+const out = REAL ? resolve(ARGS.out ?? join(pkg, "media")) : join(pkg, "media");
+mkdirSync(out, { recursive: true });
+const webText = `(() => { const d = document.querySelector("iframe#active-frame")?.contentDocument; const r = d?.getElementById("root"); return r ? r.innerText : null; })()`;
+const scrollEnd = `(() => { const d = document.querySelector("iframe#active-frame")?.contentDocument; if (!d) return 0; let n = 0; for (const e of [d.scrollingElement, ...d.querySelectorAll("*")]) if (e && e.scrollHeight > e.clientHeight + 4) { e.scrollTop = e.scrollHeight; n++; } return n; })()`;
+/** Evaluate in the extension's webview (the outer vscode-webview frame holds the page in #active-frame). */
+async function inWebview(expression) {
+  const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+  for (const t of targets.filter((x) => x.type === "iframe" && x.url.startsWith("vscode-webview://") && x.url.includes("/index.html") && x.webSocketDebuggerUrl)) {
+    const w = await attach(t.webSocketDebuggerUrl);
+    try {
+      const v = (await w.call("Runtime.evaluate", { expression, returnByValue: true })).result?.result?.value;
+      if (v != null && v !== "" && v !== 0) return v;
+    } finally { w.close(); }
+  }
+  return null;
+}
 for (const view of VIEWS) {
   while (!existsSync(join(dirs.sig, `${view}.req`))) await sleep(200);
   await sleep(Number(process.env.WP_SHOT_SETTLE_MS ?? 6000)); // the scan, the charts' first draw
   // Below the title bar, which a development host labels "[Extension Development Host]".
   const box = (await s.call("Runtime.evaluate", { expression: `[document.querySelector(".part.titlebar")?.offsetHeight ?? 0, innerWidth, innerHeight]`, returnByValue: true })).result?.result?.value;
   const [top, w, h] = box ?? [0, WIDTH, HEIGHT];
+  let seen = "";
+  if (REAL) {
+    // Over real logs the first scan takes minutes; the views say "reading" until it is done.
+    // Wait for it (up to WP_SHOT_SCAN_MS) so a picture shows findings, not the reading state.
+    const until = Date.now() + Number(process.env.WP_SHOT_SCAN_MS ?? 840000);
+    const sidebar = async () => (await s.call("Runtime.evaluate", { expression: `document.querySelector(".part.sidebar")?.innerText ?? ""`, returnByValue: true })).result?.result?.value ?? "";
+    while (Date.now() < until && /reading the logs|reading logs|reading…/i.test(view === "tree" ? await sidebar() : ((await inWebview(webText)) ?? ""))) await sleep(2000);
+    if (view === "findings-end") { await inWebview(scrollEnd); await sleep(500); }
+    seen = view === "tree"
+      ? ((await s.call("Runtime.evaluate", { expression: `document.querySelector(".part.sidebar")?.innerText ?? ""`, returnByValue: true })).result?.result?.value ?? "")
+      : (await inWebview(webText)) ?? "";
+  }
   const shot = await s.call("Page.captureScreenshot", { format: "png", clip: { x: 0, y: top, width: w, height: h - top, scale: 1 } });
   if (!shot.result?.data) { console.error(`no picture for ${view}: ${JSON.stringify(shot.error)}`); process.exit(1); }
-  const file = join(out, `listing-${view}.png`);
+  const file = join(out, REAL ? `vscode-setupcheck-${view}.png` : `listing-${view}.png`);
   writeFileSync(file, Buffer.from(shot.result.data, "base64"));
-  console.log(`wrote ${file}`);
+  console.log(`wrote ${file} (${shot.result.data.length * 0.75 | 0} bytes)`);
+  if (REAL) console.log(`  text[${view}]: ${JSON.stringify(seen.replace(/\s+/g, " ").trim().slice(0, 300))}`);
   writeFileSync(join(dirs.sig, `${view}.done`), "");
 }
 s.close(); browser.close();

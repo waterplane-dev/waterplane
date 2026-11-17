@@ -1,27 +1,26 @@
 /**
  * Every writer of the skills store, the doors into the sheet, and the one save path. Nothing here
- * applies itself: `saveChanges` runs on a tap, writes the ONE file the screen named, and the host
+ * applies itself: `saveChanges` runs on a tap, writes one named file (Save: one per scope the cards chose), and the host
  * refuses what it cannot write safely.
  */
 import type { SkillChange, SkillInventoryDoc, SkillRecommendResponse, SwitchLevel } from "@waterplane/shared";
 import { api } from "../../api";
 import { core } from "../../sdk";
 import { initialSkills, skillsState } from "./store";
-import { changeCount, globalDraftOf, levelFor, moveDraft, parkKeyOf, reconcileSuggestions, suggestionChanges, receiptWords, withChoice, withPin, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
+import { changeCount, levelFor, moveDraft, parkKeyOf, reconcileSuggestions, scopeOf, suggestionChanges, receiptWords, withPin, withScope, withScopedChoice, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
 
-/** The sheet's own mount: a different repo starts with an empty draft, the same one keeps its unsaved draft. */
+/** The sheet's own mount: a different repo starts with empty drafts, the same one keeps its unsaved ones. */
 export function aimSkills(repoId: string, backend?: string, target?: Target): void {
   const cur = skillsState.get();
   if (cur.repoId === repoId) {
-    if (cur.backend !== backend) skillsState.set({ ...cur, backend });
-    // A door that names a tab opens on it; the draft of the tab it leaves is set aside, never dropped.
-    if (target && target !== cur.target) moveLevel(target, skillsState.get().shared);
+    // A door that names a scope sets where a card's first tap applies; cards already changed keep their own.
+    if (cur.backend !== backend || (target && target !== cur.target)) skillsState.set({ ...cur, backend, ...(target ? { target } : {}) });
     return;
   }
-  // The old repo's unsaved draft is set aside under it, never dropped; its suggestions and any call still out are not carried.
-  const moved = moveDraft(cur.parked, { repoId: cur.repoId, level: levelFor(cur.target, cur.shared), draft: cur.draft }, { repoId, level: levelFor("repo", false) });
-  skillsState.set({ ...initialSkills(), repoId, backend, ...moved });
-  if (target === "all") moveLevel("all", false);
+  // The old repo's unsaved drafts are set aside under it, never dropped; its suggestions and any call still out are not carried.
+  const repo = moveDraft(cur.parked, { repoId: cur.repoId, level: levelFor("repo", cur.shared), draft: cur.draft }, { repoId, level: levelFor("repo", false) });
+  const all = moveDraft(repo.parked, { repoId: cur.repoId, level: "global", draft: cur.allDraft }, { repoId, level: "global" });
+  skillsState.set({ ...initialSkills(), repoId, backend, target: target ?? "repo", parked: all.parked, draft: repo.draft, allDraft: all.draft });
 }
 
 export function closeSkills(): void {
@@ -30,21 +29,13 @@ export function closeSkills(): void {
 
 const patch = (p: Partial<ReturnType<typeof skillsState.get>>) => skillsState.set({ ...skillsState.get(), ...p });
 
-// The level is a different file: a draft made against one file is not a draft for another, so each
-// file keeps its own and is shown again when it comes back (nothing typed is dropped).
-function moveLevel(target: Target, shared: boolean): void {
-  const s = skillsState.get();
-  const moved = moveDraft(s.parked, { repoId: s.repoId, level: levelFor(s.target, s.shared), draft: s.draft }, { repoId: s.repoId, level: levelFor(target, shared) });
-  skillsState.set({ ...s, target, shared, ...moved });
-}
-export const setTarget = (target: Target): void => moveLevel(target, skillsState.get().shared);
 /**
  * Which repo file the save writes. The draft COMES ALONG (the choice sits on the save bar, beside the
  * draft it is about); a draft set aside for the other file is merged under it, never dropped.
  */
 export function setShared(shared: boolean): void {
   const s = skillsState.get();
-  if (s.shared === shared || s.target !== "repo") return;
+  if (s.shared === shared) return;
   const there = levelFor("repo", shared);
   const parked = { ...s.parked };
   const waiting = parked[parkKeyOf(s.repoId, there)] ?? {};
@@ -54,19 +45,25 @@ export function setShared(shared: boolean): void {
 export const setFilter = (filter: FilterKey | null): void => patch({ filter });
 export const setSort = (sort: SortKey): void => patch({ sort });
 export const setQuery = (query: string): void => patch({ query });
-export const discardDraft = (): void => patch({ draft: {} });
+export const discardDraft = (): void => patch({ draft: {}, allDraft: {} });
 
+/** A selector tap, written where the card's own scope says (its first tap: the screen's default). */
 export function choose(row: Row, to: Want): void {
   const s = skillsState.get();
-  const level = levelFor(s.target, s.shared);
-  patch({ draft: withChoice(s.draft, row, level, to, globalDraftOf(s.parked, s.repoId, level, s.draft)) });
+  patch(withScopedChoice(s, row, levelFor("repo", s.shared), to, scopeOf(row, s, s.target)));
+}
+
+/** The card's This repo / All repos pair: its chosen value moves to the other file. */
+export function scopeCard(row: Row, scope: Target): void {
+  const s = skillsState.get();
+  if (scopeOf(row, s, s.target) === scope) return;
+  patch(withScope(s, row, levelFor("repo", s.shared), scope));
 }
 
 /** Keep what a repo row follows as its own value, so a later All-repos change leaves this repo alone. */
 export function pin(row: Row): void {
   const s = skillsState.get();
-  const level = levelFor(s.target, s.shared);
-  patch({ draft: withPin(s.draft, row, level, globalDraftOf(s.parked, s.repoId, level, s.draft)) });
+  patch({ draft: withPin(s.draft, row, levelFor("repo", s.shared), s.allDraft) });
 }
 
 /** The door back to the readings: what every turn of this repo carries, skills included. */
@@ -90,12 +87,36 @@ export async function saveChanges(repoId: string, doc: SkillInventoryDoc, level:
   if (!r.ok) return { ok: false, error: r.error, stale: r.status === 409 };
   // Clear only what was sent and is still what the person chose: taps made during the round trip stay.
   if (clearDraft) {
-    patch({ draft: withoutSent(skillsState.get().draft, changes) });
+    const now = skillsState.get();
+    patch(level === "global" ? { allDraft: withoutSent(now.allDraft, changes) } : { draft: withoutSent(now.draft, changes) });
   }
   const note = r.ignoredNote ? ` ${r.ignoredNote}` : "";
   const receipt = receiptWords(r.changed.length, r.file) + note;
   if (toast) core().say.toast(receipt);
   return { ok: true, doc: r.doc, receipt };
+}
+
+/**
+ * Save = the one write, once per file the cards' scopes name: All repos first, then this repo's
+ * file, each with the rev the screen read. A refusal of the second write says the first one landed.
+ */
+export async function saveDrafts(repoId: string, doc: SkillInventoryDoc, repoLevel: SwitchLevel, all: SkillChange[], here: SkillChange[]): Promise<SaveResult> {
+  let cur = doc;
+  const receipts: string[] = [];
+  if (all.length) {
+    const r = await saveChanges(repoId, cur, "global", all, true, false);
+    if (!r.ok) return r;
+    cur = r.doc;
+    if (r.receipt) receipts.push(r.receipt);
+  }
+  if (here.length) {
+    const r = await saveChanges(repoId, cur, repoLevel, here, true, false);
+    if (!r.ok) return receipts.length ? { ...r, error: `All repos was saved; this repo's file was not. ${r.error}` } : r;
+    cur = r.doc;
+    if (r.receipt) receipts.push(r.receipt);
+  }
+  if (receipts.length) core().say.toast(receipts.join(" "));
+  return { ok: true, doc: cur };
 }
 
 /**

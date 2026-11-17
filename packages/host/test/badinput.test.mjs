@@ -153,8 +153,9 @@ test("a WS frame that is not an object with a string t is answered with an error
     authStateFor: () => ({}),
     socketAuthorized: () => true, // every frame is dispatched here; the revoke/relock drop is clients.test.mjs's subject
     send: (_ws, m) => sent.push(m), broadcast() {},
-    clients: new Set(), attached: new Map(), wsKind: new Map(), wsToken: new Map(), wsDevice: new Map(),
+    clients: new Set(), attached: new Map(), wsKind: new Map(), wsToken: new Map(), wsDevice: new Map(), wsRole: new Map(),
     netstats: { noteSocketOpen() {}, noteSocketClose() {} },
+    linkLog: { opened() {}, closed() {}, event() {} },
     recomputeWatched() {},
     plugins: { streams: { socketGone() {} } }, // a closing socket ends its plugin streams
     handleClientMessage: (_ws, m) => handled.push(m),

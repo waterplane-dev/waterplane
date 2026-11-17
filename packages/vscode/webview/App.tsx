@@ -7,7 +7,7 @@ import { SessionView } from "./SessionView";
 import { OverviewView } from "./OverviewView";
 import { WeightView } from "./WeightView";
 import { HealthView } from "./HealthView";
-import { PromptsView } from "./PromptsView";
+import { FindingsView } from "./FindingsView";
 import { ViewHead } from "./ViewHead";
 
 const IDS = TAB_IDS;
@@ -23,7 +23,7 @@ export function App() {
   const [ledger, setLedger] = useState<string | null>(null);
   const choose = (id: TabId) => { setTab(id); saveTab(id); };
   // The tree asked for a view: it arrives after `ready`, so it wins over the remembered one.
-  const { session, sessions, corpus, live, weight, prompts, folders, health } = useExtension((id, led) => { if (IDS.includes(id)) { choose(id); setLedger(led ?? null); } });
+  const { session, sessions, corpus, live, weight, prompts, findings, folders, health } = useExtension((id, led) => { if (IDS.includes(id)) { choose(id); setLedger(led ?? null); } });
 
   // A selected prompt belongs to one session; another session's numbers mean nothing.
   const sessionId = session?.doc?.id;
@@ -61,10 +61,7 @@ export function App() {
             <div className="empty absent" role="note">No folder is open, so there is no history to measure.</div>
           )
         )}
-        {tab === "prompts" && (
-          <PromptsView list={prompts.list} terminal={prompts.terminal} selectedTurn={turn}
-            have={{ session: !!session?.doc, weight: !!weight?.doc, health: !!h?.doc?.plot, rising: !!h?.doc?.plot?.series.some((s) => s.reading?.slope === "rising") }} post={post} />
-        )}
+        {tab === "findings" && <FindingsView doc={findings?.doc ?? null} why={findings?.why} terminal={prompts.terminal} post={post} />}
       </main>
 
       <footer>

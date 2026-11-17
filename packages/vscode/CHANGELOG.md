@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.11 - 2026-11-17
+
+### New
+
+- **A Setup check that ranks what to fix.** Findings are ranked by the weekly saving they promise, with a list of what was checked off and a list of what could not be checked. A trend or concentration too thin to judge is shown as not checked, never as passed. A finding can be waived with a reason and taken back later. In VS Code the Findings node comes first in the tree and opens a Findings tab. Token stats now ends in one line into the Setup check instead of its own insights panel, and the Prompts tab is gone (hand off from the session view).
+- **An all-repos view of the Setup check.** It shows group counts that open their repos, with "nothing open" and "not checked" folded away. The auto-compact window is a finding for the machine, not one per repo. The repo menu's Setup check line opens the same cut its number counts.
+- **Efficiency rules can be written into your repo.** You see the exact text first, and nothing is written until you confirm. A file that changed since the screen was drawn is refused, as are links and a second instruction file. The write never commits.
+
+### Fixed
+
+- **Back returns step by step.** A door onto a sheet that is already lower in the stack now opens it again over the screen you tapped it on. Usage, Setup check and Token stats unwind in order, and so do Repo readings, Setup check and the always-on list. Each drill-down level inside a Setup check card is one Back step.
+- **The This repo / All repos switch sits on each card in Skills & plugins.** A changed card shows its own scope pair, every card shows what this repo ends up with, and Save writes each file the cards name. A long scope label wraps inside its segment instead of crossing the pill.
+- **VS Code Findings no longer shows stale results.** Older runs are dropped, cached logs are read first, and the tab says "reading the logs" instead of a count. The tree shows the error text when a run fails.
+- **Checks that read only files no longer carry a "read: claude" line.** That line is about agents' conversations and only buried CLAUDE.md and settings checks. Checks that read the ledger or carry a saving keep it.
+
 ## 0.9.10 - 2026-11-15
 
 ### New

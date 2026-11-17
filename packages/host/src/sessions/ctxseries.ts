@@ -18,7 +18,7 @@ import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { STORE_FILE_RE } from "./knobs.js";
 import { stripAnsi } from "../prompt.js";
 import { subagentsDir } from "../agents.js";
-import { autoCompactFor } from "../compliance.js";
+import { autoCompactFor } from "../setupcheck/readers.js";
 import { detectContext } from "../context.js";
 import { agentCumOf, agentUsage, projectContextLog, sparkOf, updateContextLog, withAgentRuns, type AgentUsage, type SeriesCursor } from "../ctxlog.js";
 import { ContextWindowStore } from "../ctxwindow.js";

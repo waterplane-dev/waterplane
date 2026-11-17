@@ -5,11 +5,15 @@
  */
 import { useEffect, useState } from "react";
 import type { TokenConvo } from "@waterplane/shared";
-import { core, explainCostPrompt, ledgers, useCore } from "@waterplane/sdk";
+import { core, explainCostPrompt, ledgers, useCore, useEvidenceFocus } from "@waterplane/sdk";
+import type { TokenFocus } from "./tokenFocus.ts";
 import { AgentSeriesCard } from "./AgentSeriesCard.tsx";
 import { AlwaysOnDoors } from "./AlwaysOnDoors.tsx";
 import { ledgerBackends } from "./backendLedger.ts";
 import { TokenStatsSheet } from "./TokenStatsSheet.tsx";
+import { FindingsLine } from "./FindingsLine.tsx";
+import { SPEND_SCREEN } from "./findingsLineLogic.ts";
+import { useRemoteResource } from "@waterplane/kit";
 
 /**
  * The costliest-conversations row's door: a NEW session in the conversation's
@@ -43,13 +47,20 @@ export function TokensSheet() {
   // need to. The body holds its own copy for the `all` button (a prop read here would not move).
   const [openedOn] = useState(() => c.world.tokensOpenOn);
   useEffect(() => { core().world.clearTokensOn(); }, []);
+  // A Setup check door: read once (StrictMode-safe), forgotten by the hook.
+  const focus: TokenFocus | null = useEvidenceFocus("tokens");
   const active = c.world.active;
   const doors = <AlwaysOnDoors hasSession={!!active}
     onSession={() => { c.say.track("action:tokens.ctxDoor"); c.nav.close("tokens"); c.nav.openContext(null); }}
-    onRepo={() => { c.say.track("action:tokens.setupDoor"); c.nav.close("tokens"); c.nav.openSetup(c.world.activeRepo?.id ?? null, { region: "setup" }); }} />;
-  return <TokenStatsSheet doors={doors} afterOverTime={<AgentSeriesCard online={c.conn.status === "open"} />} readings={c.world.usageReadings} openedOn={openedOn} onClearOn={c.world.clearTokensOn}
+    onRepo={() => { c.say.track("action:tokens.setupDoor"); c.nav.close("tokens"); c.nav.openSetup(c.world.activeRepo?.id ?? null, { region: "agents" }); }} />;
+  const repoId = c.world.activeRepo?.id ?? null;
+  const check = useRemoteResource(`setupcheck-line:${repoId ?? "none"}`, () => ledgers.setupCheck(repoId), { offline: c.conn.status !== "open", cache: { shape: 1 } });
+  const findingsLine = <FindingsLine data={check.data} onOpen={(n) => {
+    c.say.track("action:tokens.setupCheckDoor"); c.nav.close("tokens"); c.nav.openSetupCheck(repoId, n > 0 ? { screen: SPEND_SCREEN } : {});
+  }} />;
+  return <TokenStatsSheet doors={doors} focus={focus} findingsLine={findingsLine} afterOverTime={<div data-ev="agents"><AgentSeriesCard online={c.conn.status === "open"} /></div>} readings={c.world.usageReadings} openedOn={openedOn} onClearOn={c.world.clearTokensOn}
     online={c.conn.status === "open"} views={views} backends={c.world.backends}
-    ledgerTabs={ledgerBackends(c.world.backends, views.map((v) => v.id))} usage={u} spend={{ profile: c.world.billing?.profile ?? null, budget: c.world.budget?.budget ?? null, periods: c.world.budget?.periods ?? null }} onRefreshUsage={ledgers.refreshUsage}
+    ledgerTabs={ledgerBackends(c.world.backends, views.map((v) => v.id))} usage={u} spend={{ profile: c.world.billing?.profile ?? null, budget: c.world.budget?.budget ?? null, periods: c.world.budget?.periods ?? null }} hostSpend={c.world.meter} onRefreshUsage={ledgers.refreshUsage}
     onClose={() => { c.world.clearTokensOn(); c.nav.close("tokens"); }}
     nameOf={(id) => {
       const s = live(id);

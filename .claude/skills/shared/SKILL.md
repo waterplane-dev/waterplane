@@ -92,8 +92,8 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
 - `dictateterms.ts` — **the person's dictation vocabulary** (synced `waterplane.dictate.terms`, one
   term per line, `TERM: misheard, misheard`), parsed by ONE function on both ends and sent with each
   clip. Two levers: whisper's `--prompt` and corrections after the fact. Re-casing touches only
-  identifier-shaped terms (≥3 chars, digit or inner capital); a prompt handed back on silence is
-  refused as no speech (`isPromptEcho`). The browser engine gets corrections only.
+  identifier-shaped terms; a prompt handed back on silence is
+  refused as no speech (`isPromptEcho`).
 - **The install log's rules (moved to the android-apps extension's `shared/wire.mts`; core's copy is gone) — what an install log may claim.** Keyed, idempotent merging (a phone re-states its
   whole history on every connect), `at` ABSENT where the shell could not stamp it, devices DERIVED from
   the entries, a repeat FILLS IN and never blanks, and `installReportFrom` refusing every non-terminal
@@ -228,7 +228,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   so a field nobody named is dropped in silence. Adding a field ⇒ name it in the parser AND type it;
   the test asserts every key path the real engine emits survives the parse. Reasoning:
   [host.md](../../../docs/notes/host.md#repohealthts-and-repohealthreadts-in-shared--one-subject-two-failure-modes).
-- `wire/alwayson.ts` + `desktopfiles.ts` + `alwaysonwords.ts` — **what every turn carries**, three readers one vocabulary: the repo's rows (`agentfiles.ts` `instructionInventory`, widened to `.claude/agents/*.md`, `CLAUDE.local.md`, `.mcp.json` server names), this desktop's rows (`desktopInventory`, `scope: "desktop"`), and the session's measured `SessionCarried`. **The threshold (`alwaysOnChars`) is unchanged and counts only `countedByThreshold` rows; the rest are LISTED (D1).** **An unsized row (MCP server, plugin pack, context hook, declined server, unreadable source) has no `chars` and is never 0** — it carries a sentence saying why. Carried = the INITIAL set plus the KINDS that changed later (`laterKinds`); `prompt_snapshot` parts are optional and labelled undocumented; the unattributed remainder is a named row beside `firstRequestTok`; chars are fact, tokens `~` estimates. `alwaysOnRows` / `carriedRows` are the one wording for phone and VS Code. Reasoning: [host.md](../../../docs/notes/host.md#what-every-turn-carries--measured-per-session).
+- `wire/alwayson.ts` + `desktopfiles.ts` + `alwaysonwords.ts` — **what every turn carries**, three readers one vocabulary: the repo's rows (`agentfiles.ts` `instructionInventory`, widened to `.claude/agents/*.md`, `CLAUDE.local.md`, `.mcp.json` server names), this desktop's rows (`desktopInventory`, `scope: "desktop"`), and the session's measured `SessionCarried`. **The threshold (`alwaysOnChars`) is unchanged and counts only `countedByThreshold` rows; the rest are LISTED (D1).** **An unsized row (MCP server, plugin pack, context hook, declined server, unreadable source) has no `chars` and is never 0** — it carries a sentence saying why. Carried = the INITIAL set plus the KINDS that changed later (`laterKinds`); `prompt_snapshot` parts are optional and labelled undocumented; the unattributed remainder is a named row; chars are fact, tokens `~` estimates. `alwaysOnRows` / `carriedRows`: one wording for phone and VS Code. [host.md](../../../docs/notes/host.md#what-every-turn-carries--measured-per-session).
 - `healthindex.ts` (a barrel over `healthindex/`) + `contextweight.ts` — the health SCORE: absolute 0–100 vs fixed `HEALTH_GOOD`
   values, headline `min(geomean of the MEASURED entries, worst + 30, 100·measured/applicable, 49 if a repo gate fails)` with `cappedBy`, `capKind`, `coverage` and `alerts` (`healthindex/coverage.ts`: an entry whose languages' packs cannot read it on over a fifth of the files is UNKNOWN, never 100; `healthHeadlineWords` is the ONE wording of caps, coverage and gates). The one layer that takes a side. **Context's good line is
   `HEALTH_CONTEXT_GOOD_SHARE` × the repo's warn line** (`contextweight.ts`
@@ -261,3 +261,4 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   absent or unparseable is ABSENT, never a guess.
 - `buildstamp.ts` — one build identifier (version + commit + time), worded the same in the artifact
   and on the phone; every field but `at` optional, and absent means nobody said.
+- `findings/` + `ledgerfold.ts` + `sessionmoney.ts` + `remedyprompts.ts` + `contextclock.ts` — **Setup check engine**: pure rules over one `FindingFacts`; result `{findings, passed, notChecked}`; a rule that could not run is "not checked: <why>", never a pass. No composite score. `findings/rollup.ts`: all-repos groups, ONE `repoRollupCut` for a count, its rows and its bar; repos never ranked, no sum.

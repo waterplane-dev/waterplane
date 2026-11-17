@@ -1,6 +1,6 @@
 /** Everything the screen draws, given a document: all of the sheet's state and derivations, the skeleton, and the contributed tabs. */
-import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { BarChart3, Loader, RefreshCw } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Loader, RefreshCw, X } from "lucide-react";
 import {
   coldStartText, type CostBreakdown, type CostWindowDoc, cumulative, dayToMs, hourKeyMs, ptsCalibration, ptsText,
   rankRepos, repoRowAsGroup, weekUsdPerPct,
@@ -8,9 +8,10 @@ import {
   type UsageHistoryDoc, type UsageInfo, zeroCost, zeroTotals, fmtCount,
   hasScrapedWindows, periodStates, windowStartHour, type BillingProfile, type PeriodState, type UsageBudget,
 } from "@waterplane/shared";
+import { HostSpendLine } from "./HostSpendLine.tsx";
+import { cutTop, focusSpan, type TokenFocus } from "./tokenFocus.ts";
 import { periodCap, periodReadSpan, primaryUsdPeriod } from "@waterplane/sdk";
-import { InsightsPanel, ScopeCard, ScopeTag, type InsightsScope } from "./TokenInsights.tsx";
-import { spanFoldText, spanInsights, statsInsights, windowInput } from "./statsInsights.ts";
+import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import {
   type CutRefusal, isCut, LIVE_WINDOWS, type LiveWindowId, seriesCut, windowCut, windowGrids, type WindowCut,
   windowSpecs,
@@ -28,7 +29,7 @@ import {
 } from "./span.ts";
 import { WeekCard } from "./WeekCard.tsx";
 import { PeriodCard } from "./PeriodCard.tsx";
-import { convoInWeek, docFor, foldStateText, prevSpan, scopeSpan, weekSpan } from "./weekBands.ts";
+import { convoInWeek, docFor, foldStateText, scopeSpan, weekSpan } from "./weekBands.ts";
 import { type WindowScope } from "./WindowHeats.tsx";
 import { LimitWindows } from "./LimitWindows.tsx";
 import { useRescan } from "./useRescan.ts";
@@ -39,7 +40,7 @@ import { TotalsCard } from "./TotalsCard.tsx";
 import { AllBackendsView } from "./AllBackendsView.tsx";
 import { LocalRunnerView } from "./LocalRunnerView.tsx";
 import { showRunnerTab } from "./localRunner.ts";
-import { readingAfterResets, type LocalUsageDoc, type UsageReading } from "@waterplane/shared";
+import { readingAfterResets, type LocalUsageDoc, type MeterSummary, type UsageReading } from "@waterplane/shared";
 import { SourceWindows } from "./SourceWindows.tsx";
 import { openedOnFor, openedTarget, READING_TAB, readingChips, readingForLedger } from "./sourceWords.ts";
 import { allNoteText, splitLocal, splitNoteText } from "./localSplit.ts";
@@ -86,9 +87,13 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors, afterOverTime }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, hostSpend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors, afterOverTime, findingsLine, focus = null }: {
+  /** A Setup check door's aim: the span, the box to scroll to, the conversations to cut the costliest list to. */
+  focus?: TokenFocus | null;
   /** Doors to what every turn carries (always-on context); drawn first in the scroll region. */
   doors?: ReactNode;
+  /** The one line into the Setup check (phone only; VS Code has its own Findings view). */
+  findingsLine?: ReactNode;
   afterOverTime?: ReactNode; // drawn after the Over time box: the phone's agent readings, none in VS Code
   /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
   lead?: ReactNode;
@@ -125,6 +130,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   usage?: UsageInfo | null;
   /** The billing profile and dollar periods. Absent (a static render, an older core) = a subscription's screen as ever. */
   spend?: SpendView;
+  /** The host's own metered calls; drawn as one line under the totals when it has any. */
+  hostSpend?: MeterSummary | null;
   /** A kept-readings history to draw instead of reading one — static renders
    *  only, same reason as `initialRange`. */
   usageHistory?: UsageHistoryDoc | null;
@@ -316,7 +323,9 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    * made days ago and shown nowhere. It OPENS on the week since its reset — "where did the week
    * go" is the question this screen is opened with; a week that cannot be cut falls to all time.
    */
-  const [span, setSpan] = useState<SpanSel>(initialSpan);
+  const [span, setSpan] = useState<SpanSel>(focusSpan(focus) ?? initialSpan);
+  const [topIds, setTopIds] = useState<readonly string[] | null>(focus?.box === "top" && focus.ids?.length ? focus.ids : null);
+  const landed = useRef(false);
   /** The live window the span names, in the shape the heat grids and the stepper speak. */
   const scope: WindowScope = isLiveSpan(span.id) ? { id: span.id, back: span.back } : null;
   const setScope = (x: WindowScope) => setSpan(x ? { id: x.id, back: x.back } : { id: "all", back: 0 });
@@ -649,39 +658,13 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
       note: `Of the ${doc.top?.length ?? 0} dearest conversations on record, the ones that ran in ${scopeWords} — each at its whole cost, and its share is of all time.`,
     };
   })();
-  const insights = useMemo(() => (doc ? statsInsights(doc, Date.now()) : []), [doc]);
-  /** The insights cut to the span — the span's own fold, against the span before it (a second
-   *  fold, read only while the cut is on). Whole record stays one tap away. */
-  const [insightsCut, setInsightsCut] = useState(true);
-  const recordFrom = doc?.days.length ? dayToMs(doc.days[0].day) : null;
-  const prev = ss ? prevSpan(ss, wk, calDays, recordFrom) : null;
-  const prevRead = useRemoteResource<CostWindowDoc>(
-    `costwindow-prev:${prev?.key ?? "none"}`,
-    () => ledgers.costWindow(prev!.from, prev!.to, fresh > 0),
-    { enabled: !!prev && insightsCut, offline: !online, cache: { shape: 1 } },
-  );
-  useRescan(fresh, prevRead.reload);
-  const prevDoc = docFor(prevRead.data, prev?.from ?? null);
-  const spanItems = useMemo(() => {
-    if (!scopeDoc) return null;
-    const unpriced = new Set((doc?.models ?? []).filter((m) => m.priced === false).map((m) => m.key));
-    return spanInsights(windowInput(scopeDoc, unpriced), prevDoc ? windowInput(prevDoc, unpriced) : null, prev?.words ?? "");
-  }, [scopeDoc, prevDoc, prev?.words, doc]);
-  const insightsScope: InsightsScope | null = ss
-    ? {
-      on: insightsCut, set: setInsightsCut, words: scopeWords,
-      items: spanItems,
-      note: !scopeDoc
-        ? spanFoldText("This span", scopeRes)
-        : [
-          "Re-caching after breaks is counted over the whole record only.",
-          !prev ? "The record does not reach back a whole span before this one, so nothing is compared."
-            : !prevDoc ? spanFoldText(`${prev.words[0].toUpperCase()}${prev.words.slice(1)}`, prevRead)
-              : null,
-        ].filter(Boolean).join(" "),
-    }
-    : null;
-
+  const topCut = cutTop(top, topIds);
+  // The door's box, brought into view once the sheet has something to show.
+  useEffect(() => {
+    if (!focus || !doc || landed.current) return;
+    landed.current = true;
+    requestAnimationFrame(() => document.querySelector(`[data-ev="${focus.box}"]`)?.scrollIntoView({ block: "start" }));
+  }, [focus, doc]);
   /**
    * ── The grammar of this screen ──────────────────────────────────────────────
    *
@@ -802,7 +785,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
               launcher chip that leads here is about and only they have a clock on them. Rendered
               outside `Empty`, so a desktop with no conversation logs still answers "when do my
               limits reset". A figure under a bar is a filter: it sets the span below. */}
-          <div className="ts-now">
+          <div className="ts-now" data-ev="limits">
           {lead}
           {scraped && <LimitWindows usage={usage ?? null} onRefresh={onRefreshUsage}
             history={history} compact
@@ -868,16 +851,19 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
 
           {doc && grand > 0 && (
             <div className="list ts-list">
-              <InsightsPanel items={insights} scope={insightsScope} />
+              {findingsLine}
 
               <TotalsCard doc={doc} money={money} table={table} active={active}
                 dcut={dcut && calDays != null ? { cut: dcut, calendarDays: calDays, caption: rangeCaption } : null}
                 scope={scope} setScope={setScope} grids={grids} hist={hist} shownTotals={shownTotals} shownCost={shownCost}
                 shownTok={shownTok} coldNote={coldNote} scopeWords={scopeWords} bands={bands} canModel={canModel}
                 days={days} nameOf={nameOf} onExplain={onExplain} isLive={isLive} canOpen={canOpen} onOpenConvo={onOpenConvo}
-                scopeRepos={scopeRepos} scopeRes={scopeRes} reposRefusal={reposRefusal} top={top}
+                scopeRepos={scopeRepos} scopeRes={scopeRes} reposRefusal={reposRefusal} top={topCut.top}
+                topBar={topCut.bar ? <div className="section filter-bar"><span className="filter-bar-txt">{topCut.bar}</span><button className="filter-bar-clear" onClick={() => setTopIds(null)}><X size={14} /> clear</button></div> : null}
                 weekTwin={ss === "week" && !!weekDoc}
                 pts={(usd, c) => (convoInWeek(c, wk?.from) ? ptsText(usd, weekCal) : null)} />
+
+              <div data-ev="hostspend"><HostSpendLine meter={hostSpend} /></div>
 
               <OverTimeCard doc={doc} money={money} table={table} dayCharts={effId !== "session"} narrow={days.length <= 14}
                 rangeCaption={rangeCaption} rangeWords={rangeWords} clock={clock} hourNote={hourNote}

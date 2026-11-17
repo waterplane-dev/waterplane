@@ -1,3 +1,4 @@
+import { DEFAULT_CONTEXT_LIMITS, remedyPrompt } from "@waterplane/shared";
 import { LS, lsDel, lsGet, lsSetJson } from "./storage";
 /**
  * Fan-out presets — the routine sweeps you run across every repo, as one-tap
@@ -22,6 +23,13 @@ const MAX_TEXT = 8000;
 
 /** Where a read-only sweep should drop its report — the phone-facing outbox. */
 const OUT = ".claude/outbox";
+
+/** The remedies' words live in `@waterplane/shared` (`remedyprompts.ts`), one copy beside VS Code's.
+ *  NEW installs only: a stored list is never rewritten, it is the person's own typed words. A fan-out
+ *  has no per-repo reading, so the warn line is the shipped default and the text says a repo's own wins. */
+const REMEDY_FACTS = { warnChars: DEFAULT_CONTEXT_LIMITS.maxChars, warnSource: "default", out: OUT } as const;
+const GROOM_TEXT = remedyPrompt("groom", REMEDY_FACTS).join("\n\n");
+const OTHER_AGENTS_TEXT = remedyPrompt("other-agents", REMEDY_FACTS).join("\n\n");
 
 export const DEFAULT_PRESETS: Preset[] = [
   { id: "init", title: "/init", text: "/init" },
@@ -112,42 +120,12 @@ Read-only. Do not edit any file.`,
   {
     id: "claudemd-groom",
     title: "groom CLAUDE.md",
-    text: `Get this repo's always-on context down to what has to be always-on. Measure first and STOP if it is already fine.
-
-WHY: CLAUDE.md is re-read on every turn of every session and every subagent. Measured on one repo, it had grown to 148k chars and was 21% of every token that repo spent in a week.
-
-STEP 1 — measure. Count the characters in CLAUDE.md. **If it is under ~12,000 chars, do nothing at all**: write one line to ${OUT}/claudemd.md saying the size and that no change was needed, and stop. Most repos are already fine and must not be churned.
-
-STEP 2 — classify every section as one of:
-- RULE: dangerous not to know BEFORE acting — the security boundary, "never do X", the commands that are mandatory, what the project is. These STAY in CLAUDE.md.
-- REFERENCE: only needed while editing that area — module indexes, per-area conventions, test maps, protocol detail. These MOVE.
-- REASONING: measurements, past failures, rejected designs. These move to the repo's long-form docs (use the existing convention if there is one, else docs/notes/).
-
-STEP 3 — move, in this order, and never lose a rule:
-a) REASONING to the docs directory FIRST. If a module's only description anywhere is its CLAUDE.md entry, write the doc section BEFORE trimming the entry — otherwise trimming deletes knowledge.
-b) REFERENCE into .claude/skills/<name>/SKILL.md, one skill per area (e.g. one per package or major subsystem). Each needs YAML frontmatter with \`name\` matching the directory and a \`description\` of at least ~120 characters saying BOTH what it covers and when to load it. A skill is chosen from its description alone, so a vague one silently retires every rule inside it.
-c) Leave CLAUDE.md with: what the project is, the mandatory commands, the security model IN FULL, a short "never do these" list, and a table mapping area to skill.
-
-THE ONE HARD RULE: **a skill that is not invoked is a rule that does not exist.** Anything that could cause harm, data loss or a security problem stays in CLAUDE.md. Only reference moves. Delete nothing.
-
-STEP 4 — check .gitignore. If .claude/ is ignored, the skills will not survive a fresh clone. Git cannot re-include below an excluded DIRECTORY, so it needs \`.claude/*\` followed by \`!.claude/skills/\`, not \`.claude/\`. Verify with \`git check-ignore\` that the SKILL.md files are tracked and that any inbox/outbox/local-settings paths are still ignored.
-
-STEP 5 — verify and report. Confirm every rule that was in CLAUDE.md before is still somewhere (file, skill or docs), then write to ${OUT}/claudemd.md: the before and after sizes, what moved where, and anything you deliberately left in place. Do not commit.`,
+    text: GROOM_TEXT,
   },
   {
     id: "other-agents",
     title: "ready for Copilot & local models",
-    text: `Make this repo work as well for GitHub Copilot CLI and local models (Ollama) as it does for Claude. Measure first and change only what is wrong.
-
-1. SKILLS COPILOT CAN LOAD. Copilot reads .claude/skills, .github/skills and .agents/skills but parses their frontmatter as strict YAML, and silently skips a skill whose unquoted description contains ": ". If \`copilot\` is installed, run \`copilot skill list\` — it names every skill it failed to load. Rewrite each failing description as ONE double-quoted line (escape \\" and \\\\). Change no other word.
-
-2. ONE SET OF INSTRUCTIONS. Claude Code and Copilot both read CLAUDE.md on every request; Copilot also reads AGENTS.md and .github/copilot-instructions.md, and other agents read AGENTS.md (some fall back to CLAUDE.md only when there is no AGENTS.md). Never copy CLAUDE.md into a second file — Copilot would carry both. If another agent needs an AGENTS.md, make it one line pointing at CLAUDE.md.
-
-3. A MAP FOR SMALL MODELS. A local model fails by guessing paths and by not knowing how to check its work. Make sure the TOP of CLAUDE.md says, in at most ~15 lines: what each top-level directory holds (where UI components and their styles live, where the logic and its tests live), the one command that runs the tests for a single file, and the build step a test needs first. Add only what is missing; move nothing else.
-
-4. SIZE. Count the characters of CLAUDE.md plus every skill description (the always-on part). A local model with a 32k–64k window should spend under ~16,000 chars (~4k tokens) on it. If it is larger, say which sections are reference that could move into a skill — do not move them in this pass.
-
-5. Write ${OUT}/agents.md: which skills you fixed, what you added to CLAUDE.md, the always-on size before and after, and anything you deliberately left. Do not commit.`,
+    text: OTHER_AGENTS_TEXT,
   },
   {
     id: "commit",

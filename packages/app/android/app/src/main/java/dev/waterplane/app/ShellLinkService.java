@@ -826,6 +826,14 @@ public class ShellLinkService extends Service {
      * One desktop's socket, with its own backoff, auth pause and status. Every field is touched
      * on the main thread ({@link #handler}) except the volatile ones {@link #describe} reads.
      */
+    /** The links' own ring of ups and downs ({@link ShellLinkLog}), sent to each desktop on reconnect. */
+    @Nullable private ShellLinkLog linkLog;
+
+    private ShellLinkLog linkLog() {
+        if (linkLog == null) linkLog = new ShellLinkLog(getFilesDir());
+        return linkLog;
+    }
+
     private final class Link {
         volatile ShellLinkSet.Spec spec;
         /**
@@ -940,6 +948,11 @@ public class ShellLinkService extends Service {
             return r;
         }
 
+        /** One line in this desktop's link log ({@link ShellLinkLog}), on the phone's clock. */
+        void log(String ev, @Nullable String detail) {
+            linkLog().note(spec.hostId, System.currentTimeMillis(), ev, detail);
+        }
+
         void close() {
             closed = true;
             handler.removeCallbacks(connectRunnable);
@@ -973,6 +986,7 @@ public class ShellLinkService extends Service {
         private void onWakeAlarm() {
             if (stopping || authPaused || pinPaused || closed || socket != null) return;
             Log.i(TAG, spec.label + ": woken to retry");
+            log("wake", null);
             holdAwake();
             handler.removeCallbacks(connectRunnable);
             connect();
@@ -1021,6 +1035,7 @@ public class ShellLinkService extends Service {
             status = "connecting";
             refreshStatus();
             Log.i(TAG, "connecting to " + spec);
+            log("dial", null);
             connectStartedAt = System.currentTimeMillis();
             Request.Builder rb = new Request.Builder().url(spec.url);
             // That desktop's own token, to its own url only, as the subprotocol the page's socket
@@ -1053,6 +1068,11 @@ public class ShellLinkService extends Service {
                     // is what covers an APK built before this line.
                     int protocol = prefs(ShellLinkService.this).getInt(KEY_PROTOCOL, 1);
                     ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + ",\"role\":\"notify\"}");
+                    // What this link saw while it was down, to the desktop's link log
+                    // (`host/src/linklog.ts`); an older host ignores the frame.
+                    log("open", null);
+                    String saw = linkLog().drainFrame(spec.hostId, System.currentTimeMillis());
+                    if (saw != null) ws.send(saw);
                     // The queue is the page's, and the page is the active desktop's. The
                     // plan's desktop gets the relay first; the alert is said once it is idle.
                     if (relayFor(Link.this)) {
@@ -1082,6 +1102,7 @@ public class ShellLinkService extends Service {
                     if (ws != socket) return;
                     lastError = t.getMessage();
                     Log.w(TAG, spec.label + ": socket failed: " + t);
+                    log("fail", t.getClass().getSimpleName() + (t.getMessage() != null ? ": " + t.getMessage() : ""));
                     noteTlsFailure(t);
                     dropSocket();
                     if (pinPaused) {
@@ -1098,6 +1119,7 @@ public class ShellLinkService extends Service {
                 handler.post(() -> {
                     if (ws != socket) return;
                     Log.i(TAG, spec.label + ": socket closed " + code + " " + reason);
+                    log("closed", code + (reason != null && !reason.isEmpty() ? " " + reason : ""));
                     // 4403: a passive (kids') token never gets the socket (`host/passive.ts`).
                     // A retry is the same refusal, so it pauses instead of looping.
                     if (code == 4403) { refused(); return; }
@@ -1176,6 +1198,7 @@ public class ShellLinkService extends Service {
             refreshStatus();
             long wait = backoffMs;
             backoffMs = Math.min(BACKOFF_MAX_MS, backoffMs * 2);
+            log("retry", wait + " ms");
             ensureSocket(wait);
             armWake(wait);
         }
@@ -1246,6 +1269,7 @@ public class ShellLinkService extends Service {
             if (sess == null || att == null) return; // not a summary this build can read
             int sessionsN = Math.max(0, sess.optInt("n", 0));
             int attentionN = Math.max(0, att.optInt("n", 0));
+            if (attentionN > 0) log("waiting", attentionN + " card(s) on reconnect");
             List<String> ids = new ArrayList<>();
             JSONArray idArr = sess.optJSONArray("ids");
             if (idArr != null) for (int i = 0; i < idArr.length(); i++) ids.add(idArr.optString(i, ""));
@@ -1338,7 +1362,7 @@ public class ShellLinkService extends Service {
             public void onAvailable(Network network) {
                 handler.post(() -> {
                     Log.i(TAG, "network available");
-                    for (Link l : links) l.reconnectNow();
+                    for (Link l : links) { l.log("net-up", null); l.reconnectNow(); }
                     MainActivity.nudgeWebView("network");
                 });
             }
@@ -1346,6 +1370,7 @@ public class ShellLinkService extends Service {
             @Override
             public void onLost(Network network) {
                 handler.post(() -> {
+                    for (Link l : links) l.log("net-lost", null);
                     for (Link l : links) if (!l.authPaused && !l.routeLocked) l.status = "reconnecting";
                     refreshStatus();
                 });
@@ -1432,8 +1457,11 @@ public class ShellLinkService extends Service {
     /** {@code action}: one button on the alert (the backlog's "Send N"); such an alert updates
      *  in place without ringing again. */
     private void postAlert(JSONObject item, Link from, @Nullable NotificationCompat.Action action) {
-        if (APP_FOREGROUND.get()) return;
         String kind = item.optString("kind", "info");
+        // When the alert reached the phone, against the desktop's `alert` row for the same card.
+        String by = item.optString("plugin", "");
+        from.log("alert", kind + (by.isEmpty() ? "" : " " + by) + (APP_FOREGROUND.get() ? " (app open, not shown)" : ""));
+        if (APP_FOREGROUND.get()) return;
         // Several desktops: the title starts with whose it is, the tag is that desktop's own
         // (two desktops' equal tags must not replace each other), and the tap says which desktop
         // to open it on — the page switches only on that tap (`shellOpenTarget.ts`).

@@ -37,6 +37,7 @@ import { setPrNotify } from "./prs.js"; import { setGitOutcomeSink } from "./git
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js"; import { createLinkBack } from "./linkback.js";
 import { NetStats } from "./netstats.js";
+import { createLinkLog } from "./linklog.js";
 import { DecisionLog } from "./decisionlog.js";
 import { createPlugins } from "./server/plugins.js";
 import { hostSecretDir } from "./secrets.js"; import { createPeerStore } from "./peers/store.js"; import { startPeerJobs } from "./peers/agentpeer.js"; import { setPeerServe, setPeerSelfAddr } from "./peers/routes.js"; import { createPeerServe } from "./peers/serve.js";
@@ -142,7 +143,7 @@ const {
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
   send, broadcast, notifications, notify, notificationFeed, clearNotifications, handleNotification,
   resolveAttention, resolveAttentionPrefix, attention,
-} = createClients({ auth, notifyPrefs, push, sessions, attention: new AttentionStore(ROOT) }); ctx.healthWatch = createHealthWatch(ROOT, notify);
+} = createClients({ auth, notifyPrefs, push, sessions, attention: new AttentionStore(ROOT), linkLog: (ctx.linkLog = createLinkLog(ROOT)) }); ctx.healthWatch = createHealthWatch(ROOT, notify);
 Object.assign(ctx, {
   attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,

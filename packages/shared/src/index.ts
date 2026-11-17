@@ -97,6 +97,11 @@ export * from "./clientframe.js";
 // A per-session budget (tokens, dollars, window percent): the verdict, the
 // calibration and the one predicate both ends hold a session's sends by.
 export * from "./sessionbudget.js";
+export * from "./sessionmoney.js";
+export * from "./remedyprompts.js";
+export * from "./contextclock.js";
+/** The generic efficiency rules and the one block format a repo carries them in (`planEfficiencyWrite`). */
+export * from "./efficiencyrules.js";
 export * from "./spendwarn.js";
 
 // Send-queue scheduling (offline outbox): the one-send-per-session lane rule.
@@ -277,6 +282,10 @@ export * from "./calday.js";
  *  counterfactual, not a bill, and the module says so at length. */
 export * from "./pricing.js";
 export * from "./pricelist.js";
+
+/** One iteration over the token ledger's hour×model cells, for every fold that reads it. */
+export * from "./ledgerfold.js";
+export * from "./findings.js";
 
 /** The durable Intent — one "do this, there, when that is true", owned by the
  *  HOST, and the one ladder that decides whether it may run yet. */

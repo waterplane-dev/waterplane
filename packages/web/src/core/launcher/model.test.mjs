@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
-  openCountByRepo, queuedChipCut, queuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
+  openCountByRepo, queuedChipCut, queuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuAim, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
   starredSpared, closeMarked, isCloseSpared, markedWords, sessionRepoShownIn, repoShownByKey,
 } from "./model.ts";
 
@@ -196,9 +196,11 @@ test("an in-flight open always says how many, one included", () => {
 });
 
 test("the setup menu entry is always a door, with its count only when there are findings", () => {
-  assert.equal(setupMenuLabel(undefined), "repo readings");
-  assert.equal(setupMenuLabel({ ok: true, issues: 0, fixable: 0 }), "repo readings");
-  assert.equal(setupMenuLabel({ ok: false, issues: 3, fixable: 1 }), "repo readings · 3");
+  assert.equal(setupMenuLabel(undefined), "setup check");
+  assert.equal(setupMenuLabel({ ok: true, issues: 0, fixable: 0 }), "setup check");
+  assert.equal(setupMenuLabel({ ok: false, issues: 3, fixable: 1 }), "setup check · 3");
+  assert.deepEqual(setupMenuAim({ ok: false, issues: 3, fixable: 1 }), { weight: "finding" }, "a number on the line opens the cut it counts");
+  assert.deepEqual(setupMenuAim({ ok: true, issues: 0, fixable: 0 }), {});
 });
 
 test("a row title outside the list is never empty", () => {

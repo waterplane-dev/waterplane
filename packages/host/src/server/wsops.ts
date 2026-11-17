@@ -233,7 +233,7 @@ export function createWsOps(ctx: ServerCtx) {
       // An explicit `hello.role` overrides this; it is the fallback for APKs
       // already installed, which declare nothing.
       const role = roleFromUserAgent(req.headers["user-agent"]);
-      if (role) ctx.wsRole.set(ws, role);
+      if (role) { ctx.wsRole.set(ws, role); ctx.linkLog.opened(ws, { role, via: "user-agent", device: device?.id, peer: kind }); }
       // `hostId` is the LAN identity's, so a phone can tell which desktop a
       // socket landed on; `deviceId` only when this socket IS a ledger device.
       let hostId: string | undefined;
@@ -289,7 +289,7 @@ export function createWsOps(ctx: ServerCtx) {
       // under the socket, 1001 is the phone backgrounding it. They look the same
       // from the app and mean opposite things about the link.
       // Its plugin streams end with it (cause "socket", nothing sent): the phone reopens on reconnect.
-      ws.on("close", (code: number) => { clearInterval(pinger); ctx.netstats.noteSocketClose(ws, code); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
+      ws.on("close", (code: number) => { clearInterval(pinger); ctx.netstats.noteSocketClose(ws, code); ctx.linkLog.closed(ws, { role: ctx.wsRole.get(ws), code, device: device?.id }); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
       ws.on("error", () => { clearInterval(pinger); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
     });
   }

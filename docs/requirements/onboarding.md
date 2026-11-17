@@ -58,7 +58,7 @@ person's next message changes the app on their phone.
 - shipped: first-app WP7 (the finished checklist's *open the session* attaches the job's session with the suggested prompt in the composer as an unsent draft, once per job; a description was already sent as the first prompt and seeds nothing)
 
 ### R-onboarding-008 · shipped
-The setup steps the journey runs are also rows in the repo-setup checklist (build configured, Android
+The setup steps the journey runs are also rows in the repo-setup checklist (the Setup check's "waterplane install" group: build configured, Android
 toolchain, signing key), usable on any existing repo one tap at a time.
 - asked: 2026-10-01 (first-app plan, docs/analysis/first-app-plan.md)
 - shipped: first-app WP7 (`setupRemedy.ts`: `android-toolchain` and `signing-key` are core fixes with their consent words on the armed button, next to WP5's `builds-configured`)
@@ -106,7 +106,7 @@ The README shows a film of the whole setup, from the first install step to the f
 
 
 ### R-onboarding-017 · shipped
-Beside the repo-setup checklist, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy, app screenshots). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
+Beside the Setup check, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy, app screenshots). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
 - asked: 2026-10-16
 - shipped: 1b62447
 
@@ -130,7 +130,7 @@ Setup shows the npm install command for Claude Code, states that a paid Claude s
 - shipped: c45c5387
 
 ### R-onboarding-022 · shipped
-The setup checklist mentions low disk space with a recommendation.
+The setup checklist (the Setup check's install group) mentions low disk space with a recommendation.
 - asked: 2026-10-21
 - shipped: ab5ce674
 

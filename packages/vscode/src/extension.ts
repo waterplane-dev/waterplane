@@ -35,10 +35,12 @@ import { CopilotQuota } from "./copilotquota.js";
 import { CopilotLocalReader, userDirOf } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
+import { findingsFor, remedyCopy } from "./data/findings.js";
+import { formJoin } from "./data/promptform.js";
 import type { ScanJob, ScanMsg } from "./scanworker.js";
 import type { CopilotSwitches } from "./protocol.js";
 import { COPILOT_LEDGER } from "./protocol.js";
-import type { CorpusDoc, HealthDoc, LiveState, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
+import type { CorpusDoc, FindingsDoc, HealthDoc, LiveState, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
 import { RestartWatch } from "./restartwatch.js";
 import { DEFAULT_DESKTOP_URL, readLive, readPath } from "./hostlink.js";
 import { StatusBar } from "./statusbar.js";
@@ -77,7 +79,7 @@ export function allowedUrl(raw: string): vscode.Uri | null {
   } catch { return null; }
 }
 
-const TABS: readonly TabId[] = ["session", "all", "always-on", "health", "prompts"];
+const TABS: readonly TabId[] = ["session", "all", "always-on", "health", "findings"];
 const isTab = (v: unknown): v is TabId => typeof v === "string" && (TABS as readonly string[]).includes(v);
 
 class Ext implements vscode.Disposable {
@@ -113,6 +115,12 @@ class Ext implements vscode.Disposable {
   private rows: RowsState = blankRows(null);
   private session: { folder: string | null; doc: SessionDoc | null; why?: string } = { folder: null, doc: null };
   private weight: { doc: WeightDoc | null; why?: string } = { doc: null };
+  /** The Setup check for the active folder, ranked, with its checked-off list; recomputed from what is already read. */
+  private findings: { doc: FindingsDoc | null; why?: string; reading?: boolean } = { doc: null };
+  private findingsAt = 0;
+  /** Each run takes a number; a run that is no longer the latest drops its result (an older one finishing last must not win). */
+  private findingsRun = 0;
+  private corpusLoadP: Promise<void> | null = null;
   private lens!: InstructionLens;
   private corpus: { doc: CorpusDoc | null; why?: string } = { doc: null };
   private scanning: { done: number; total: number } | null = null;
@@ -273,6 +281,7 @@ class Ext implements vscode.Disposable {
       this.lastScanAt = 0;
       this.corpus = { doc: null };
       this.corpusLoaded = false;
+      this.corpusLoadP = null;
       this.summary = null;
       void this.ctx.globalState.update(SUMMARY_KEY, undefined);
       this.pushSummary();
@@ -373,6 +382,37 @@ class Ext implements vscode.Disposable {
     this.post({ t: "weight", ...this.weight });
     this.lens.refresh();
     this.postHealth(folder);
+    void this.refreshFindings(folder, false);
+  }
+
+  /**
+   * Run the Setup check over what is already read (weight, corpus, the desktop's facts). Cheap, but
+   * the session watcher fires on every log write, so an unforced call within 30 s of the last is skipped.
+   */
+  private async refreshFindings(folder: string, force: boolean): Promise<void> {
+    if (this.disposed || folder !== this.activeFolder) return;
+    const now = Date.now();
+    if (!force && this.findings.doc?.folder === folder && now - this.findingsAt < 30_000) return;
+    this.findingsAt = now;
+    const run = ++this.findingsRun;
+    // The log rules need the corpus: read the cached one first (a tree-only user never opens the panel), and
+    // while a first scan has nothing to show, say "reading the logs", never a count of rules that could not run.
+    await this.loadCachedCorpus();
+    if (this.disposed || folder !== this.activeFolder || run !== this.findingsRun) return;
+    if (!this.corpus.doc && this.scanning) {
+      this.findings = { doc: null, why: "Reading the logs first, so the findings count what was checked.", reading: true };
+    } else {
+      try {
+        const doc = await findingsFor({ folder, weight: this.weight.doc, corpus: this.corpus.doc, now, live: this.desktopUrl() ? this.live?.doc ?? null : null, configDir: this.configDir() });
+        if (this.disposed || folder !== this.activeFolder || run !== this.findingsRun) return;
+        this.findings = { doc };
+      } catch (e) {
+        if (run !== this.findingsRun) return;
+        this.findings = { doc: null, why: sentence(e) };
+      }
+    }
+    this.post({ t: "findings", ...this.findings });
+    this.tree.refresh();
   }
 
   /** The panel's pending default view, now that the active folder has been read (see `defaultPending`). */
@@ -389,6 +429,7 @@ class Ext implements vscode.Disposable {
     if (folder !== this.activeFolder) return;
     try { this.weight = { doc: await weighFolder(folder, copilotSwitches(), this.configDir()) }; } catch (e) { this.weight = { doc: null, why: sentence(e) }; }
     this.post({ t: "weight", ...this.weight });
+    void this.refreshFindings(folder, true);
   }
 
   private folderKeys(): string[] {
@@ -456,15 +497,20 @@ class Ext implements vscode.Disposable {
    * Show the last finished fold while the scan that replaces it runs. Async and off the activation
    * path (called when the panel is shown or says `ready`); a scan that finished first wins.
    */
-  private async loadCachedCorpus(): Promise<void> {
-    if (this.corpusLoaded || this.disposed) return;
+  private loadCachedCorpus(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (this.corpusLoaded) return this.corpusLoadP ?? Promise.resolve();
     this.corpusLoaded = true;
+    return this.corpusLoadP = this.readCachedCorpus();
+  }
+
+  private async readCachedCorpus(): Promise<void> {
     const dir = this.configDir();
     const doc = await loadCorpus(this.corpusFile(), dir, buildText);
     if (!doc || this.disposed || this.corpus.doc || dir !== this.configDir()) return;
     this.corpus = this.corpus.why ? { doc, why: this.corpus.why } : { doc };
     this.post({ t: "corpus", ...this.corpus, ...(this.scanning ? { scanning: this.scanning } : {}) });
-    if (this.activeFolder) this.postHealth(this.activeFolder);
+    if (this.activeFolder) { this.postHealth(this.activeFolder); void this.refreshFindings(this.activeFolder, true); }
   }
 
   /** An asked-for scan (the command, the "Re-read" link): the same scan, with VS Code's own spinner until it ends. */
@@ -484,6 +530,8 @@ class Ext implements vscode.Disposable {
     this.scanning = { done: 0, total: 0 };
     this.statusBar.setScan(this.scanning);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning });
+    // A first scan has no corpus to count over: say "reading the logs" now, not a count that scan will change.
+    if (!this.corpus.doc && this.activeFolder) void this.refreshFindings(this.activeFolder, true);
     const dir = this.ctx.globalStorageUri.fsPath;
     const job: ScanJob = {
       configDir: this.configDir(), cacheFile: path.join(dir, "tokenstore.v5.json"),
@@ -508,7 +556,7 @@ class Ext implements vscode.Disposable {
         this.statusBar.setScan(null);
         if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
         // The score's spend line is folded off this scan: the open folder's reading gains it now.
-        if (this.activeFolder) this.postHealth(this.activeFolder);
+        if (this.activeFolder) { this.postHealth(this.activeFolder); void this.refreshFindings(this.activeFolder, true); }
         resolve();
       };
       fs.mkdir(dir, { recursive: true }).then(() => {
@@ -564,6 +612,7 @@ class Ext implements vscode.Disposable {
     if (this.disposed) return;
     this.live = live;
     this.post({ t: "live", live });
+    if (this.activeFolder) void this.refreshFindings(this.activeFolder, true);
   }
 
   // ---- webview traffic ------------------------------------------------------------------------
@@ -590,6 +639,8 @@ class Ext implements vscode.Disposable {
       corpus: this.corpus.doc,
       scanning: this.scanning,
       weight: this.weight.doc,
+      findings: this.findings.doc?.folder === folder ? this.findings.doc : null,
+      findingsWhy: this.findings.doc?.folder === folder ? null : this.findings.why ? { text: this.findings.why, reading: !!this.findings.reading } : null,
       health: h?.doc ?? null,
       healthRunning: !!h?.run,
       quota: this.quota.state,
@@ -723,6 +774,7 @@ class Ext implements vscode.Disposable {
     }, to);
     if (this.activeFolder && this.rows.folder === this.activeFolder) this.post(this.sessionsMsg(this.activeFolder), to);
     this.post({ t: "weight", ...this.weight }, to);
+    this.post({ t: "findings", ...this.findings }, to);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning ?? undefined }, to);
     void this.loadCachedCorpus();
     if (this.live) this.post({ t: "live", live: this.live }, to);
@@ -788,6 +840,11 @@ class Ext implements vscode.Disposable {
           this.post({ t: "receipt", text, ...(m.tap != null ? { tap: m.tap } : {}) }, from);
           break;
         }
+        case "finding": {
+          const text = await this.runFinding(m.id, m.how);
+          this.post({ t: "receipt", text, ...(m.tap != null ? { tap: m.tap } : {}) }, from);
+          break;
+        }
         case "healthRead": if (this.known(m.folder)) { this.postHealth(m.folder, from); void this.health.read(this.healthRoot(m.folder)); } break;
         case "healthScope": if (this.known(m.folder)) void this.health.setScope(this.healthRoot(m.folder), typeof m.scope === "string" ? m.scope : null); break;
         case "healthRefresh": if (this.known(m.folder)) this.refreshShown(m.folder); break;
@@ -816,6 +873,20 @@ class Ext implements vscode.Disposable {
     } catch (e) {
       const m = (e instanceof Error ? e.message : String(e)).replace(/\.$/, "");
       return how === "copy" ? `Could not copy it: ${m}.` : `Could not type it into the terminal: ${m}.`;
+    }
+  }
+
+  /** Copy or type one finding's remedy text. It is the text the Findings view showed the person; nothing is sent. */
+  private async runFinding(id: string, how: "copy" | "terminal"): Promise<string> {
+    const f = this.findings.doc?.findings.find((x) => x.id === id);
+    if (!f) return "That finding is no longer in the list. Re-read it and try again.";
+    const paras = remedyCopy(f, this.weight.doc);
+    if (!paras) return "This finding has no text to copy.";
+    try {
+      return (await deliver(formJoin(paras, how), how)).message;
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).replace(/\.$/, "");
+      return how === "copy" ? `Could not copy it: ${msg}.` : `Could not type it into the terminal: ${msg}.`;
     }
   }
 

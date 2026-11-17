@@ -1,6 +1,7 @@
 /**
  * Skills & plugins — what every new session of this repo carries, and the switches for it.
- * Reads the inventory from the host, keeps a DRAFT, writes one named settings file on Save.
+ * Reads the inventory from the host, keeps a DRAFT per file (each changed card names its own: this
+ * repo or All repos), writes the named settings files on Save.
  * Rules (CLAUDE.md, `ux`, `web-numbers`): the total comes with its split; a count on a chip is a
  * filter (`logic.bucket` feeds both); controls sit ABOVE the rows; what cannot be done says why in
  * words; the draft is never overwritten by a re-read; nothing applies itself.
@@ -11,7 +12,7 @@ import { agoText } from "../../format";
 import { SKILL_NEW_SESSIONS_ONLY, skillFileLine } from "@waterplane/shared";
 import { SKILL_STATES } from "@waterplane/shared";
 import type { SkillInventoryDoc, SkillRecommendResponse } from "@waterplane/shared";
-import { core, useStore } from "../../sdk";
+import { core, cutByIds, evidenceCutWords, useEvidenceFocus, useStore } from "../../sdk";
 import { Button, Empty, Explain, FilterChip, Hint, SearchBox, Sheet, chipRows, toggleChip } from "../../kit";
 import { skillSwitchGate } from "../../backendCaps";
 import { skillsAim } from "../../skillsDoor";
@@ -21,9 +22,9 @@ import { SuggestList } from "./SuggestList";
 import { CountBar } from "./CountBar";
 import { RepoFileChoice } from "./RepoFileChoice";
 import { PluginCard, SkillRowView } from "./SkillRows";
-import { aimSkills, applySuggestions, closeSkills, dismissSuggest, openCarried, showSuggest, discardDraft, saveChanges, setFilter, setQuery, setSort, setTarget } from "./actions";
+import { aimSkills, applySuggestions, closeSkills, dismissSuggest, openCarried, showSuggest, discardDraft, saveDrafts, setFilter, setQuery, setSort } from "./actions";
 import {
-  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, chipCount, chipKeys, chipLabel, draftChanges, globalDraftOf, layerOf, levelFor, matches, parkedWords, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords, isCountingRefusal,
+  RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, changedOf, chipCount, chipKeys, chipLabel, draftChanges, hereChanges, keyOf, layerOf, levelFor, matches, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords, isCountingRefusal,
   isCountingDoc, usesBar, usesIsNewer,
 } from "./logic";
 import { skillsState } from "./store";
@@ -32,6 +33,9 @@ export function SkillsSheet() {
   const c = core();
   const aim = useStore(skillsAim);
   const s = useStore(skillsState);
+  // The Setup check's door: the skills it named, with the rest said to be hidden and a way back.
+  const focus = useEvidenceFocus("skills");
+  const [ids, setIds] = useState<readonly string[] | null>(focus?.ids?.length ? focus.ids : null);
   // The door's aim becomes this screen's state on mount (and when a door re-aims it).
   useEffect(() => { if (aim) aimSkills(aim.repoId, aim.backend, aim.target); }, [aim]);
   const gate = skillSwitchGate(c.world.backends, aim?.backend);
@@ -68,7 +72,8 @@ export function SkillsSheet() {
   useEffect(() => {
     if (!doc) return;
     const kept = reconcileDraft(s.draft, doc.rows);
-    if (Object.keys(kept).length !== Object.keys(s.draft).length) skillsState.set({ ...skillsState.get(), draft: kept });
+    const keptAll = reconcileDraft(s.allDraft, doc.rows);
+    if (Object.keys(kept).length !== Object.keys(s.draft).length || Object.keys(keptAll).length !== Object.keys(s.allDraft).length) skillsState.set({ ...skillsState.get(), draft: kept, allDraft: keptAll });
     // The same for the suggestions: one a Save or re-read has made untrue is not offered, and the list says so.
     const sg = skillsState.get().suggest;
     if (sg?.suggestions.length) {
@@ -80,32 +85,33 @@ export function SkillsSheet() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new read can make a draft or suggestion untrue; a draft edit picks from rows already on screen
   }, [doc?.at]);
 
-  const level = levelFor(s.target, s.shared);
-  const kept = parkedWords(s.parked, repoId, level);
-  // An unsaved All-repos choice already shows on This repo's rows that follow it.
-  const globalDraft = globalDraftOf(s.parked, repoId, level, s.draft);
+  // Every card shows what THIS repo ends up with; each changed card says which file its choice goes to.
+  const level = levelFor("repo", s.shared);
+  const d = { draft: s.draft, allDraft: s.allDraft };
   const layer = layerOf(doc, level);
-  // A recommendation is built on THIS repo's counts, so it is applied in this repo's file, whatever the segment shows.
-  const applyLevel = levelFor("repo", s.shared);
-  const applyLayer = layerOf(doc, applyLevel);
   const globalLayer = layerOf(doc, "global");
   const changes = draftChanges(s.draft, rows);
-  const sav = savingsFor(rows, changes);
+  const allChanges = draftChanges(s.allDraft, rows);
+  const changedN = Object.keys(changedOf(d)).filter((k) => rows.some((r) => keyOf(r) === k)).length;
+  const sav = savingsFor(rows, hereChanges(d, rows, level));
+  // The files this save writes, each of which must be readable (a file that is not is said, never written blind).
+  const writes = [allChanges.length ? globalLayer : undefined, changes.length ? layer : undefined].filter((l): l is NonNullable<typeof l> => !!l);
+  const blocked = writes.find((l) => !l.readable);
   const split = splitRows(rows);
   const usageReady = doc?.usage.state === "ready";
 
-  const cut = s.filter ? bucket(s.filter, split, s.draft, usageReady) : null;
-  const plugins = sortRows((cut ? cut.plugins : split.plugins).filter((r) => matches(r, s.query)), s.sort);
-  const skills = sortRows((cut ? cut.skills : split.skills).filter((r) => matches(r, s.query)), s.sort);
-  const bundled = cut ? [] : sortRows(split.bundled.filter((r) => matches(r, s.query)), "name");
+  const cut = s.filter ? bucket(s.filter, split, changedOf(d), usageReady) : null;
+  const plugins = sortRows(cutByIds(cut ? cut.plugins : split.plugins, ids ?? undefined, (r) => r.id).filter((r) => matches(r, s.query)), s.sort);
+  const skills = sortRows(cutByIds(cut ? cut.skills : split.skills, ids ?? undefined, (r) => r.id).filter((r) => matches(r, s.query)), s.sort);
+  const bundled = cut || ids ? [] : sortRows(split.bundled.filter((r) => matches(r, s.query)), "name");
   const total = split.plugins.length + split.skills.length;
   const shownN = plugins.length + skills.length;
 
   async function save() {
-    if (!doc || !repoId || !changes.length || saving) return;
+    if (!doc || !repoId || !changedN || saving || blocked) return;
     setSaving(true);
     setSaveErr(null);
-    const r = await saveChanges(repoId, doc, level, changes);
+    const r = await saveDrafts(repoId, doc, level, allChanges, changes);
     setSaving(false);
     if (r.ok) inv.set(r.doc);
     else {
@@ -118,7 +124,7 @@ export function SkillsSheet() {
     if (!doc || !repoId || applying) return;
     setApplying(true);
     setSaveErr(null);
-    const r = await applySuggestions(repoId, doc, applyLevel);
+    const r = await applySuggestions(repoId, doc, level);
     setApplying(false);
     if (!r) return;
     if (r.ok) inv.set(r.doc);
@@ -128,33 +134,25 @@ export function SkillsSheet() {
     }
   }
 
-  const footer = changes.length > 0 && layer?.readable ? (
+  const footer = changedN > 0 && writes.length > 0 && !blocked ? (
     <div className="sk-foot">
-      {s.target === "repo" && <RepoFileChoice shared={s.shared} onChange={() => setSaveErr(null)} />}
-      <Hint>{saveNote(layer.path, sav.tokens, sav.unmeasured)}</Hint>
+      {changes.length > 0 && <RepoFileChoice shared={s.shared} onChange={() => setSaveErr(null)} />}
+      <Hint>{saveNote(writes.map((l) => l.path).join(" and "), sav.tokens, sav.unmeasured)}</Hint>
       <div className="sk-foot-btns">
-        <Button variant="primary" onClick={save}>{saving ? "Saving…" : saveWords(changes.length)}</Button>
+        <Button variant="primary" onClick={save}>{saving ? "Saving…" : saveWords(changedN)}</Button>
         <Button onClick={() => { discardDraft(); setSaveErr(null); }}>discard</Button>
       </div>
     </div>
   ) : undefined;
-  // With a draft the footer names the file; the top line says it only while there is none (never twice).
-  const showFileLine = !(changes.length > 0 && layer?.readable);
+  // With a draft the footer names the files; the top line says this repo's file only while there is none (never twice).
+  const showFileLine = !footer;
 
   return (
     <Sheet title="Skills & plugins" icon={<Plug size={16} />} onClose={closeSkills} footer={footer}>
       <div className="sheet-scroll sk-scroll">
         {gate ? <Hint>{gate}</Hint> : (
           <>
-            {/* raw buttons: the app's .seg segmented control is a plain button pair everywhere (05-rows-approve.css) */}
-            <div className="segmented sk-level" role="group" aria-label="Where the change applies">
-              <button className={`seg${s.target === "repo" ? " on" : ""}`} aria-pressed={s.target === "repo"} onClick={() => { setTarget("repo"); setSaveErr(null); }}>This repo</button>
-              <button className={`seg${s.target === "all" ? " on" : ""}`} aria-pressed={s.target === "all"} onClick={() => { setTarget("all"); setSaveErr(null); }}>All repos</button>
-            </div>
-            <Hint>{s.target === "all"
-              ? "Every repo follows these unless it sets its own."
-              : "Rows follow All repos until you pick a different value here."}</Hint>
-            {kept && <Hint>{kept}</Hint>}
+            {blocked && <Hint tone="warn">{blocked.why ?? `${blocked.path} could not be read.`}</Hint>}
             {layer && (layer.readable
               ? (showFileLine && <Hint>{skillFileLine(level, layer.path)}</Hint>)
               : <Hint tone="warn">{layer.why ?? `${layer.path} could not be read.`}</Hint>)}
@@ -178,7 +176,7 @@ export function SkillsSheet() {
                 <SlowJobLine res={{ ...uses, job: uses.job?.state === "failed" ? uses.job : null }} what="Counting uses" />
                 <SearchBox className="sk-search" placeholder="search skills and plugins" value={s.query} onChange={(e) => setQuery(e.target.value)} />
                 {total > 0 && <div className="fchips">
-                  {chipRows(chipKeys(usageReady), (k) => ({ count: chipCount(k, split, s.draft, usageReady) }), chipLabel).map((ch) => (
+                  {chipRows(chipKeys(usageReady), (k) => ({ count: chipCount(k, split, changedOf(d), usageReady) }), chipLabel).map((ch) => (
                     <FilterChip key={ch.key} on={s.filter === ch.key} onClick={() => setFilter(toggleChip(s.filter, ch.key))}>{ch.text}</FilterChip>
                   ))}
                 </div>}
@@ -192,15 +190,16 @@ export function SkillsSheet() {
                 {s.suggest && !rec.running && rec.state === "cached" && rec.age !== null && <Hint>Suggested {agoText(rec.age)} — tap suggest for a fresh list.</Hint>}
                 {/* A "still counting" refusal carries a frozen count: the bar above is the live one, so only the next step is said here. */}
                 {s.suggest && isCountingRefusal(s.suggest) && <Hint>{counting ? "Not asked yet: the count above is still running. Tap suggest again when it reaches 100%." : "The count has finished: tap suggest again."} · <Button className="sk-link" onClick={dismissSuggest}>close</Button></Hint>}
-                {s.suggest && !isCountingRefusal(s.suggest) && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={applyLayer?.readable ? applyLayer.path : null} globalFile={globalLayer?.readable ? globalLayer.path : null} shared={s.shared} showChoice={!(s.target === "repo" && changes.length > 0 && !!layer?.readable)} applying={applying} onApply={apply} />}
-                {(s.filter || s.query.trim()) && <Hint>{shownN} of {total} shown{s.filter ? <> · <Button className="sk-link" onClick={() => { setFilter(null); setQuery(""); }}>clear</Button></> : null}</Hint>}
+                {s.suggest && !isCountingRefusal(s.suggest) && <SuggestList res={s.suggest} unticked={s.unticked} doc={doc} file={layer?.readable ? layer.path : null} globalFile={globalLayer?.readable ? globalLayer.path : null} shared={s.shared} showChoice={!(footer && changes.length > 0)} applying={applying} onApply={apply} />}
+                {ids && <Hint>{evidenceCutWords(shownN, total, "skills and plugins")} · <Button className="sk-link" onClick={() => setIds(null)}>clear</Button></Hint>}
+                {!ids && (s.filter || s.query.trim()) && <Hint>{shownN} of {total} shown{s.filter ? <> · <Button className="sk-link" onClick={() => { setFilter(null); setQuery(""); }}>clear</Button></> : null}</Hint>}
                 {saveErr && <Hint tone="warn">{saveErr.text}{saveErr.stale ? " The list was read again; your choices are kept." : " Your choices are kept."}</Hint>}
-                {plugins.map((r) => <PluginCard key={r.id} row={r} skills={r.skills.map((id) => split.pluginSkills.get(id)).filter((x): x is NonNullable<typeof x> => !!x)} draft={s.draft} level={level} globalDraft={globalDraft} />)}
-                {skills.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} globalDraft={globalDraft} />)}
+                {plugins.map((r) => <PluginCard key={r.id} row={r} skills={r.skills.map((id) => split.pluginSkills.get(id)).filter((x): x is NonNullable<typeof x> => !!x)} d={d} level={level} fallback={s.target} />)}
+                {skills.map((r) => <SkillRowView key={r.id} row={r} d={d} level={level} fallback={s.target} />)}
                 {bundled.length > 0 && (
                   <details className="sk-fold sk-bundled">
                     <summary>built in to Claude Code, {bundled.length}</summary>
-                    {bundled.map((r) => <SkillRowView key={r.id} row={r} draft={s.draft} level={level} globalDraft={globalDraft} />)}
+                    {bundled.map((r) => <SkillRowView key={r.id} row={r} d={d} level={level} fallback={s.target} />)}
                   </details>
                 )}
                 {shownN === 0 && bundled.length === 0 && <div className="empty empty-msg">{total === 0 ? "No skills or plugins found for this repo." : "Nothing matches."}</div>}

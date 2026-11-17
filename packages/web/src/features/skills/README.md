@@ -33,5 +33,5 @@ while a run is still going; a finished suggestion list is shown once per run (`s
 
 **Rules that apply**: changes reach NEW sessions only (said once at the top); the screen names the
 file a save writes; a re-read never overwrites the draft; an unmeasured row says so, never `0`;
-a total ships with its split; a repo row FOLLOWS All repos (`rowView`/`fallbackAt`, unsaved All-repos draft included) until a different value is picked there, and says so (`sourceWords`); All repos shows the all-repos value, never this repo's; no dimmed buttons, a locked row prints its sentence; nothing applies
+a total ships with its split; a repo row FOLLOWS All repos (`rowView`/`fallbackAt`, unsaved All-repos draft included) until a different value is picked there, and says so (`sourceWords`); there is no screen-wide This repo / All repos switch: every card shows what this repo ends up with, and a changed card carries its own scope pair (`scopeOf`/`withScopedChoice`; All repos drops this repo's own value too), Save writes each file a card names; no dimmed buttons, a locked row prints its sentence; nothing applies
 itself — the Recommend list (`SuggestList.tsx`) is only a list until its one Apply tap, which goes through the same `saveChanges` with just the ticked rows.

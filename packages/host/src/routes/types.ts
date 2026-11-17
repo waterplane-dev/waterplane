@@ -49,6 +49,7 @@ import type { BudgetStore } from "../budget.js";
 import type { BillingStore } from "../billing.js";
 import type { AckLedger } from "../acks.js";
 import type { NetStats } from "../netstats.js";
+import type { LinkLog } from "../linklog.js";
 
 /** The verdict an ackId-carrying op is remembered by. Mirrors `acks.ts`. */
 export interface OpVerdict {
@@ -144,6 +145,8 @@ export interface HostCtx {
   readonly billing: BillingStore;
   readonly acks: AckLedger;
   readonly netstats: NetStats;
+  /** Timestamped opens/closes of the APK's background link and the alerts it was there (or not) to carry (`linklog.ts`). */
+  readonly linkLog: LinkLog;
 
   /** Which sessions each socket streams. A frame goes only to attached sockets. */
   readonly attached: WeakMap<WebSocket, Set<string>>;

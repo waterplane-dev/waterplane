@@ -31,7 +31,7 @@ Public repos with code run CodeQL, and the OpenSSF Scorecard runs with its resul
 - shipped: 15c0ea03
 
 ### R-security-007 · shipped
-Exposure findings appear on the phone as compliance check rows counting toward the setup badge, with a 'findings' focus showing exactly them. The owner can accept a finding with a reason and expiry (version, date or reading hash); accepted findings stop being reported and stay visible under 'Accepted (n)'.
+Exposure findings appear on the phone as compliance check rows counting toward the setup badge (the Setup check's cut shows exactly them; watch rows open the watch region by their row). The owner can accept a finding with a reason and expiry (version, date or reading hash); accepted findings stop being reported and stay visible under 'Accepted (n)'.
 - asked: 2026-10-26, 2026-10-26
 - shipped: 55a3a885
 

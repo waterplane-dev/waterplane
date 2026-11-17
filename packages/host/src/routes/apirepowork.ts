@@ -10,7 +10,9 @@ import { logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
-import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
+import { FIX_SCOPE, confirmGate, fixBind, fixGateRefusal, gateRefusal, withFixConfirms } from "../confirmgate.js";
+import { efficiencyState, isEfficiencyTarget, writeEfficiencyRules } from "../efficiencywrite.js";
+import { invalidateSetupCheck } from "../setupcheck/store.js";
 import { fixRepoCompliance, setCheckAccepted, setCheckIgnored, setCheckTriaged, setRepoContextLimits } from "../compliance.js";
 import { inspectOptIns, optInSightings, standingPromptsOf } from "../optins.js";
 import { setOptInChoice } from "../setupprefs.js";
@@ -37,6 +39,8 @@ const CAPTURE_WAIT_MS = 5 * 60_000;
 const CAPTURE_POLL_MS = 300;
 /** A whole side of a text diff is for reading on a phone; past this it is cut, and says so. */
 const TEXT_SIDE_MAX = 1024 * 1024;
+/** The `CONFIRM_GATED_FIXES` id the efficiency-rules write is confirmed under. */
+const EFFICIENCY_FIX = "efficiency-rules";
 
 function leftoverInput(wt: string, branch: string, sessions: SessionInfo[]): LeftoverInput {
   return { wt, branch, sessions, ownerLive: worktreeOwners(sessions).has(wt) };
@@ -54,6 +58,8 @@ function checkWrite<R extends { ok: boolean; report?: ComplianceReport }>(path: 
   return route<RepoReq>("POST", path, async ({ req, res, target }, ctx) => {
     const r = set(target, await readJson(req));
     recordSetupWrite(ctx, target, r.report);
+    // A limit, an ignore, an accept or a triage changes what the Setup check reads: never serve the old finding.
+    if (r.ok) invalidateSetupCheck();
     json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
     return true;
   });
@@ -157,6 +163,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     }
     const r = fixRepoCompliance(target, list);
     confirmGate.consume(confirm);
+    invalidateSetupCheck();
     recordSetupWrite(ctx, target, r.report);
     json(res, r.report ? { ...r, report: withFixConfirms(target.worktreePath, r.report) } : r, r.ok ? 200 : 400);
     return true;
@@ -190,6 +197,37 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     const body = await readJson(req);
     const r = setOptInChoice(target.worktreePath, String(body?.id ?? ""), (body?.choice ?? null) as OptInChoice | null);
     json(res, r.ok ? { ok: true, report: optInReport(target, ctx) } : { ok: false, error: r.error }, r.ok ? 200 : 400);
+    return true;
+  }),
+
+  // The generic efficiency rules into the repo's own CLAUDE.md or AGENTS.md (`efficiencywrite.ts`).
+  // The GET draws the confirm and mints its one-shot token, allowed only for the files a write
+  // would change; the POST is the second tap (`confirmgate.ts`) and never commits.
+  route<RepoReq>("GET", "efficiencyrules", ({ res, wt }) => {
+    const doc = efficiencyState(wt);
+    const writable = doc.targets.filter((t) => t.plan === "append" || t.plan === "replace").map((t) => t.target);
+    json(res, { ok: true, ...doc, ...(writable.length ? { confirm: confirmGate.mint(FIX_SCOPE, fixBind(wt, EFFICIENCY_FIX), writable) } : {}) });
+    return true;
+  }),
+  route<RepoReq>("POST", "efficiencyrules", async ({ req, res, wt, target }) => {
+    const body = await readJson(req);
+    const file = body?.target;
+    if (!isEfficiencyTarget(file)) { json(res, { ok: false, error: "choose CLAUDE.md or AGENTS.md — nothing was written" }, 400); return true; }
+    const refused = gateRefusal(req, body?.confirm, FIX_SCOPE, fixBind(wt, EFFICIENCY_FIX), [file]);
+    if (refused) {
+      console.warn(`${logTag} efficiency rules refused ${target.repoName} · ${file}: ${refused}`);
+      json(res, { ok: false, error: `${refused} — nothing was written` }, 403);
+      return true;
+    }
+    const r = writeEfficiencyRules(wt, file, typeof body?.baseSha === "string" ? body.baseSha : "\0");
+    if (r.ok) {
+      confirmGate.consume(body?.confirm);
+      if (r.written) invalidateSetupCheck();
+      if (r.written) console.log(`${logTag} efficiency rules ${r.plan === "append" ? "added to" : "updated in"} ${target.repoName}/${file}`);
+      json(res, { ...r, state: efficiencyState(wt) });
+    } else {
+      json(res, r, r.code === "stale" ? 409 : r.code === "refused" ? 400 : 500);
+    }
     return true;
   }),
 

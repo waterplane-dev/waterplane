@@ -76,6 +76,54 @@ export function withPin(draft: Draft, r: Row, level: SwitchLevel, globalDraft: D
   return { ...draft, [keyOf(r)]: fallbackAt(r, level, globalDraft).value };
 }
 
+// ── a card's own scope: This repo or All repos ──────────────────────────────
+
+/** The two unsaved drafts a card's choice can sit in: this repo's file, and All repos. */
+export interface Drafts { draft: Draft; allDraft: Draft }
+
+/** Where a card's unsaved choice applies; a card with no choice yet takes the screen's default. */
+export function scopeOf(r: Row, d: Drafts, fallback: Target): Target {
+  const k = keyOf(r);
+  return k in d.allDraft ? "all" : k in d.draft ? "repo" : fallback;
+}
+
+const omit = (draft: Draft, k: string): Draft => {
+  if (!(k in draft)) return draft;
+  const next = { ...draft };
+  delete next[k];
+  return next;
+};
+
+/**
+ * A tap on a card's selector, written where the card's scope says. All repos means here too: a
+ * value this repo's file holds of its own is dropped (drafted as "inherit"), so the card shows what
+ * the tap chose; the card's source line says so. This repo leaves All repos alone.
+ */
+export function withScopedChoice(d: Drafts, r: Row, repoLevel: SwitchLevel, to: Want, scope: Target): Drafts {
+  const k = keyOf(r);
+  if (scope === "repo") return { draft: withChoice(d.draft, r, repoLevel, to, d.allDraft), allDraft: omit(d.allDraft, k) };
+  const allDraft = withChoice(d.allDraft, r, "global", to);
+  const held = setAt(r, repoLevel);
+  const draft = held !== undefined && held !== "inherit" ? { ...d.draft, [k]: "inherit" as Want } : omit(d.draft, k);
+  return { draft, allDraft };
+}
+
+/** The card's scope pair: the value it shows now moves to the other file, nothing else changes. */
+export function withScope(d: Drafts, r: Row, repoLevel: SwitchLevel, scope: Target): Drafts {
+  const k = keyOf(r);
+  const value = rowView(r, repoLevel, d.draft, d.allDraft).value;
+  return withScopedChoice({ draft: omit(d.draft, k), allDraft: omit(d.allDraft, k) }, r, repoLevel, value, scope);
+}
+
+/** Both drafts as one map of changed cards, for the "changed" chip and its cut. */
+export const changedOf = (d: Drafts): Draft => ({ ...d.allDraft, ...d.draft });
+
+/** What this repo ends up carrying for each changed card, as changes, so the saving is this repo's. */
+export function hereChanges(d: Drafts, rows: readonly Row[], repoLevel: SwitchLevel): SkillChange[] {
+  const keys = new Set(Object.keys(changedOf(d)));
+  return rows.filter((r) => keys.has(keyOf(r))).map((r) => ({ kind: r.kind, id: r.id, to: rowView(r, repoLevel, d.draft, d.allDraft).value }) as SkillChange);
+}
+
 // ── levels: what a file holds, what it follows ──────────────────────────────
 
 /** The files below a level, nearest first: what the CLI reads when this level holds no key. */
@@ -143,18 +191,6 @@ export function sourceWords(v: RowView): string | null {
   return v.value === f.value ? `kept for this repo · ${said}` : `set for this repo · overrides ${said}`;
 }
 
-/** The line under an All-repos row whose value this repo does not take. */
-export function overriddenWords(v: RowView): string | null {
-  const o = v.overriddenHere;
-  if (!o) return null;
-  return `This repo sets its own: ${valueWord(o.value)}${o.level === "repo-shared" ? " (shared repo file)" : ""}. All repos does not reach it here.`;
-}
-
-/** The unsaved All-repos draft a repo level follows: the live draft on All repos, else the one set aside. */
-export function globalDraftOf(parked: Parked, repoId: string | null, level: SwitchLevel, draft: Draft): Draft {
-  return level === "global" ? draft : parked[parkKey(repoId, "global")] ?? {};
-}
-
 /** What is left of the draft after a save landed: only the entries that were sent AND are still what was chosen; taps made during the round trip stay. */
 export function withoutSent(draft: Draft, sent: readonly SkillChange[]): Draft {
   return Object.fromEntries(Object.entries(draft).filter(([k, v]) => !sent.some((c) => keyOf(c) === k && c.to === v)));
@@ -193,20 +229,6 @@ export function moveDraft(parked: Parked, from: { repoId: string | null; level: 
   const draft = next[k] ?? {};
   delete next[k];
   return { parked: next, draft };
-}
-
-// closed: the three levels are this screen's own table, the loop below never reads a wire key
-const LEVEL_WHERE: Record<SwitchLevel, string> = { global: "All repos", "repo-shared": "the shared repo file", "repo-local": "This repo" };
-/** A sentence for choices kept for the OTHER files of this repo, null when there are none. */
-export function parkedWords(parked: Parked, repoId: string | null, level: SwitchLevel): string | null {
-  const where: string[] = [];
-  let n = 0;
-  for (const lv of Object.keys(LEVEL_WHERE) as SwitchLevel[]) {
-    if (lv === level) continue;
-    const c = Object.keys(parked[parkKey(repoId, lv)] ?? {}).length;
-    if (c) { n += c; where.push(LEVEL_WHERE[lv]); }
-  }
-  return n ? `${n} unsaved ${n === 1 ? "choice is" : "choices are"} kept for ${where.join(" and ")}; switch back to see ${n === 1 ? "it" : "them"}.` : null;
 }
 
 // ── rows, filters, sort ──────────────────────────────────────────────────────

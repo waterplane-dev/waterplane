@@ -6,9 +6,10 @@
  * Every absence is a description in words, never a "$0" or an empty row.
  */
 import * as vscode from "vscode";
-import { BRAND, CHARS_PER_TOKEN, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
+import { BRAND, CHARS_PER_TOKEN, checkedCountWords, contextPct, findingCut, savingWords, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
+import type { Finding } from "@waterplane/shared";
 import { COPILOT_LEDGER } from "./protocol.js";
-import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
+import type { FindingsDoc, HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
 import { alwaysOnTipWords, firstShortWords, newestFirstTok } from "./data/firstwords.js";
 import { copilotWeekWords, currentSummary, thisRepoWeek, weekFigure, weekSplit } from "./data/summary.js";
@@ -35,6 +36,10 @@ export interface NavState {
   corpus: CorpusDoc | null;
   scanning: { done: number; total: number } | null;
   weight: WeightDoc | null;
+  /** The Setup check for the folder, ranked, with its checked-off list; null before it is read. */
+  findings: FindingsDoc | null;
+  /** Why `findings` is null: the logs are still being read (`reading`) or the check failed (`why`). */
+  findingsWhy: { text: string; reading: boolean } | null;
   health: HealthDoc | null;
   healthRunning: boolean;
   quota: QuotaState;
@@ -46,8 +51,8 @@ export interface NavState {
   folderKeys: string[];
 }
 
-/** The views the tree lists. The ready-made prompts are not one: they stay beside the numbers they quote. */
-type NavTab = Exclude<TabId, "session" | "prompts">;
+/** The views the tree lists. The ready-made prompts are not one: each sits on the finding or the numbers it quotes. */
+type NavTab = Exclude<TabId, "session" | "findings">;
 
 type Node =
   | { kind: "folder" }
@@ -55,6 +60,9 @@ type Node =
   | { kind: "session"; row: SessionSummary }
   | { kind: "follow" }
   | { kind: "note"; text: string; tab?: TabId }
+  | { kind: "findings" }
+  | { kind: "finding"; f: Finding }
+  | { kind: "checked" }
   | { kind: "view"; tab: NavTab }
   | { kind: "quota" };
 
@@ -158,12 +166,19 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
       // Insight first: the week's figure leads; the session list sits second while something is
       // being worked on and drops to the bottom when nothing is.
       const view = (tab: NavTab): Node => ({ kind: "view", tab });
-      const top: Node[] = [view("all")];
+      const top: Node[] = [{ kind: "findings" }, view("all")];
       if (s.folders.length > 1) top.push({ kind: "folder" });
       if (s.live) top.push(this.sessionsNode);
       top.push(view("health"), view("always-on"), { kind: "quota" });
       if (!s.live) top.push(this.sessionsNode);
       return top;
+    }
+    if (n.kind === "findings") {
+      const d = s.findings;
+      if (!d) return [{ kind: "note", text: s.findingsWhy?.text ?? "Reading this folder’s setup…" }];
+      const rows: Node[] = findingCut(d.findings, {}).rows.map((f) => ({ kind: "finding", f }));
+      // Never an empty list: what was checked and what could not be is always the last row.
+      return [...rows, { kind: "checked" }];
     }
     if (n.kind !== "sessions") return [];
     this.nodes.clear();
@@ -192,6 +207,37 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     const s = this.state();
     const now = Date.now();
     switch (n.kind) {
+      case "findings": {
+        const d = s.findings;
+        const count = d ? findingCut(d.findings, {}).count : 0;
+        const it = new vscode.TreeItem("Findings", d ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
+        it.id = "findings";
+        it.iconPath = new vscode.ThemeIcon("checklist");
+        it.description = d ? checkedCountWords(count, d.passed.length, d.notChecked.length) : s.findingsWhy && !s.findingsWhy.reading ? "could not be read" : "reading…";
+        it.command = { command: SHOW, title: "Open Findings", arguments: ["findings"] };
+        return it;
+      }
+      case "finding": {
+        const f = n.f;
+        const it = new vscode.TreeItem(f.what, vscode.TreeItemCollapsibleState.None);
+        it.id = `f:${f.id}`;
+        it.iconPath = new vscode.ThemeIcon(f.weight === "finding" ? "warning" : "lightbulb");
+        // The description is the saving where one was priced, else which scope the row is about.
+        it.description = f.saving ? savingWords(f.saving).replace(/ at list price.*$/, "") : f.scope === "repo" ? "this folder" : f.scope === "machine" ? "this desktop" : "account";
+        const md = new vscode.MarkdownString();
+        md.appendText(`${f.what}${f.saving ? `\n\n${savingWords(f.saving)}` : ""}`);
+        it.tooltip = md;
+        it.command = { command: SHOW, title: "Open Findings", arguments: ["findings"] };
+        return it;
+      }
+      case "checked": {
+        const d = s.findings;
+        const it = new vscode.TreeItem(d ? `${d.passed.length} checked, ${d.notChecked.length} not checked` : "checked", vscode.TreeItemCollapsibleState.None);
+        it.iconPath = new vscode.ThemeIcon("pass");
+        it.tooltip = "What ran clean, and what could not be checked and why. Open Findings for the list.";
+        it.command = { command: SHOW, title: "Open Findings", arguments: ["findings"] };
+        return it;
+      }
       case "folder": {
         const it = new vscode.TreeItem(s.folder ? base(s.folder) : "No folder", vscode.TreeItemCollapsibleState.None);
         it.description = "folder · click to switch";

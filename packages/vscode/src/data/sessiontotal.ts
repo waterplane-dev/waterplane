@@ -8,7 +8,7 @@
  * whole reading is withheld. A total of zero is "nothing could be priced", never "$0".
  * Pure: imported by the extension and the webview alike.
  */
-import { tokenTotal } from "@waterplane/shared";
+import { sessionMoney, tokenTotal } from "@waterplane/shared";
 import type { CostBreakdown } from "@waterplane/shared";
 import type { SessionDoc } from "../protocol.js";
 
@@ -48,8 +48,9 @@ export function sessionTotal(d: SessionDoc): SessionTotal {
   const unpricedTok = d.unpricedTok + (a?.unpricedTok ?? 0);
   // Unread agents: their spend is unknown, so ANY total would leave it out. Withheld, said.
   if (d.agentsUnread) return { cost: null, agentUsd: null, unpricedTok, withheld: true, withheldWhy: d.agentsUnread };
-  const agentsSpent = a != null && tokenTotal(a.split) > 0;
-  if (agentsSpent && !a.cost && a.unpricedTok === 0) return { cost: null, agentUsd: null, unpricedTok, withheld: true, withheldWhy: AGENTS_UNPRICED };
+  // The withhold rule is the host's too (`sessionMoney`): agents that spent tokens nothing could say the cost of.
+  const m = sessionMoney({ own: d.cost?.total, ownUnpriced: d.unpricedTok, agents: { usd: a?.cost ? a.cost.total : null, unpriced: a?.unpricedTok ?? 0, spent: a != null && tokenTotal(a.split) > 0 } });
+  if (m.withheld) return { cost: null, agentUsd: null, unpricedTok, withheld: true, withheldWhy: AGENTS_UNPRICED };
   const own = pricedOrNull(d.cost);
   const agent = pricedOrNull(a?.cost);
   const cost = own && agent ? addCosts(own, agent) : own ?? agent;

@@ -8,7 +8,7 @@
  * describe the same stretch to within the hour the scrape fell in — never "the
  * window so far", which would count spend the percentage never saw.
  */
-import { peerWeekSpend, weekCalSpend, weekUsdPerPct, type UsageInfo } from "@waterplane/shared";
+import { peerWeekSpend, undatedSince, weekCalibration, windowStartHour, type UsageInfo } from "@waterplane/shared";
 import { ledgers } from "../../sdk";
 import { WEEK_MS, weekCalKey } from "./logic";
 import { usage, weekAllDesktops, weekRate } from "./store";
@@ -37,13 +37,15 @@ export function calibrateWeek(u: UsageInfo | null): void {
   ])
     .then(([d, jobs, peers]) => {
       const cell = d.series.find((s) => s.id === "weekcal")?.windows.find((w) => w.back === 0);
-      const spend = weekCalSpend({ here: cell?.cost.total, jobs: peerWeekSpend(jobs, openedAt, u.checkedAt), peers, weeklyResetAt: u.weeklyResetAt!, sumAll: all });
+      const cal = weekCalibration({
+        usage: u, hereUsd: cell?.cost.total, undated: undatedSince(d, windowStartHour(openedAt)),
+        jobs: peerWeekSpend(jobs, openedAt, u.checkedAt), peers, sumAll: all,
+      });
       // Only for the reading still on hand; an older host or an empty week
       // leaves the share absent.
-      if (!spend || weekCalKey(usage.get(), Date.now()) !== base) return;
-      if ("refused" in spend) { weekRate.set({ key, resetAt: u.weeklyResetAt!, usdPerPct: null, refused: spend.refused }); return; }
-      const v = weekUsdPerPct(spend.usd, u.weeklyPct);
-      if (v != null) weekRate.set({ key, resetAt: u.weeklyResetAt!, usdPerPct: v, ...(spend.incl ? { incl: spend.incl } : {}) });
+      if (weekCalKey(usage.get(), Date.now()) !== base) return;
+      if (cal.refused) { weekRate.set({ key, resetAt: u.weeklyResetAt!, usdPerPct: null, refused: cal.refused }); return; }
+      if (cal.usdPerPct != null) weekRate.set({ key, resetAt: u.weeklyResetAt!, usdPerPct: cal.usdPerPct, ...(cal.incl ? { incl: cal.incl } : {}) });
     })
     .catch(() => undefined)
     // A failed read is retried by the next reading, never stuck for this one.

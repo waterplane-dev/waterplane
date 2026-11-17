@@ -54,11 +54,11 @@ import {
   addCost, addTotals, costOf, dayToMs, isPriced, priceKeyLabel, priceListSource, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc,
-  type CostWindowDoc, hourKey, hourKeyMs, windowStartHour } from "@waterplane/shared";
+  type CostWindowDoc, hourKey, hourKeyMs, windowStartHour, eachFileCell, eachLedgerCell, uncross } from "@waterplane/shared";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { env } from "./env.js";
 import { notePriceGap } from "./pricegap.js";
-import { CROSS, type FileSummary, summarizeLog, type Tally, walkLogs } from "./tokenscan.js";
+import { type FileSummary, summarizeLog, walkLogs } from "./tokenscan.js";
 import { hostStateDir } from "./branddirs.js";
 import { foldCostWindow, repoOfWorktree, undatedFields, type CostMeta } from "./costwindow.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
@@ -104,12 +104,6 @@ const HOURS_DAYS = Math.max(1, Number(env("TOKENSTATS_HOUR_DAYS") || 14));
  * threefold — 1.76 MB to ~5 MB on the corpus this was built against, which
  * buys the only chart that can show a burst at 14:00.
  */
-const uncross = (k: string): [hour: string, model: string] => {
-  const i = k.indexOf(CROSS);
-  return i < 0 ? ["", k] : [k.slice(0, i), k.slice(i + 1)];
-};
-
-
 /**
  * slug (project dir name) → path within it → summary.
  *
@@ -123,10 +117,6 @@ type Store = Record<string, Record<string, FileSummary>>;
 
 
 
-
-function tallyToTotals(t: Tally): TokenTotals {
-  return { input: t[0], output: t[1], cacheRead: t[2], cacheWrite: t[3], cacheWrite1h: t[4], turns: t[5] };
-}
 
 /**
  * Which cells of a window grid an hour bucket belongs to.
@@ -431,16 +421,13 @@ export class TokenStatsStore {
             }
           }
         }
-        for (const [key, t] of Object.entries(sum.x)) {
-          const [hour, model] = uncross(key);
+        eachFileCell(slug, fileKey, sum, ({ hour, day, model, totals: v, cost: c }) => {
           // The day is a PREFIX of the hour, never a second derivation — see
           // `crossKey`. A record whose timestamp would not parse carries the
           // empty key and is counted into the totals and the model/repo rows
           // but into no time bucket at all, which is the same thing version 3
           // did with its empty day.
-          const day = hour.slice(0, 10);
           const slot = hour.length >= 13 ? Number(hour.slice(11, 13)) : NaN;
-          const v = tallyToTotals(t);
           if (day) addTotals(days.get(day) ?? days.set(day, zeroTotals()).get(day)!, v);
           if (hour) addTotals(hours.get(hour) ?? hours.set(hour, zeroTotals()).get(hour)!, v);
           if (slot >= 0 && slot < 24) addTotals(slots[slot], v);
@@ -464,8 +451,7 @@ export class TokenStatsStore {
             if (!cv.first || hour < cv.first) cv.first = hour;
             if (!cv.last || hour > cv.last) cv.last = hour;
           }
-          const c = costOf(v, model, day || undefined);
-          if (!c) { addTotals(unpriced, v); if (day) notePriceGap(model, dayToMs(day)); continue; }
+          if (!c) { addTotals(unpriced, v); if (day) notePriceGap(model, dayToMs(day)); return; }
           if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }
           addCost(cv.cost, c);
           if (sum.sub) addCost(cv.agentCost, c);
@@ -480,7 +466,7 @@ export class TokenStatsStore {
           if (slot >= 0 && slot < 24) addCost(slotCost[slot], c);
           addCost(modelCost.get(model) ?? modelCost.set(model, zeroCost()).get(model)!, c);
           addCost(repoCost.get(repoKey) ?? repoCost.set(repoKey, zeroCost()).get(repoKey)!, c);
-        }
+        });
       }
     }
 
@@ -661,35 +647,27 @@ export class TokenStatsStore {
     let oldest = "";
     let newest = "";
 
-    for (const files of Object.values(this.store)) {
-      for (const sum of Object.values(files)) {
-        for (const [key, tally] of Object.entries(sum.x)) {
-          const [hour, model] = uncross(key);
-          // A record whose timestamp would not parse carries the empty hour and
-          // is in no time bucket at all — the same thing `aggregate()` does
-          // with it, and the same reason: a window is an instant, and a row
-          // with no instant cannot be put in one.
-          if (!hour) continue;
-          if (!oldest || hour < oldest) oldest = hour;
-          if (!newest || hour > newest) newest = hour;
-          const hourMs = hourKeyMs(hour);
-          const day = hour.slice(0, 10);
-          const v = tallyToTotals(tally);
-          const c = costOf(v, model, day || undefined);
-          for (let i = 0; i < specs.length; i++) {
-            for (const k of windowCells(hourMs, specs[i].anchor, specs[i].lenMs)) {
-              const cell = cells[i].get(k) ?? cells[i].set(k, new Map()).get(k)!;
-              const bag = cell.get(model) ?? cell.set(model, { t: zeroTotals(), c: zeroCost() }).get(model)!;
-              addTotals(bag.t, v);
-              // An unpriced model adds tokens and no money — never a zero
-              // charge, which reads as free. The window's own `priced` story is
-              // the model rows underneath it.
-              if (c) addCost(bag.c, c);
-            }
-          }
+    eachLedgerCell(this.store, ({ hour, model, totals: v, cost: c }) => {
+      // A record whose timestamp would not parse carries the empty hour and
+      // is in no time bucket at all — the same thing `aggregate()` does
+      // with it, and the same reason: a window is an instant, and a row
+      // with no instant cannot be put in one.
+      if (!hour) return;
+      if (!oldest || hour < oldest) oldest = hour;
+      if (!newest || hour > newest) newest = hour;
+      const hourMs = hourKeyMs(hour);
+      for (let i = 0; i < specs.length; i++) {
+        for (const k of windowCells(hourMs, specs[i].anchor, specs[i].lenMs)) {
+          const cell = cells[i].get(k) ?? cells[i].set(k, new Map()).get(k)!;
+          const bag = cell.get(model) ?? cell.set(model, { t: zeroTotals(), c: zeroCost() }).get(model)!;
+          addTotals(bag.t, v);
+          // An unpriced model adds tokens and no money — never a zero
+          // charge, which reads as free. The window's own `priced` story is
+          // the model rows underneath it.
+          if (c) addCost(bag.c, c);
         }
       }
-    }
+    });
 
     const series: TokenWindowSeries[] = specs.map((spec, i) => ({
       id: spec.id,

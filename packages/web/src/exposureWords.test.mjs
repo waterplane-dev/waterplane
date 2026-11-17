@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  acceptRefusal, acceptRequest, cutElsewhereWords, acceptedLine, digestHead, exposureCut, exposureMeta, exposureSource, inExposureMainList,
+  acceptRefusal, acceptRequest, acceptedLine, digestHead, exposureCut, exposureMeta, exposureSource, inExposureMainList,
   untilChoices, untilVersionOffered, untilWords,
 } from "./exposureWords.ts";
 
@@ -66,11 +66,6 @@ test("form: version only when the finding has one; refusal replaces the verb", (
   assert.equal(acceptRefusal("why", "change", ""), null);
   assert.deepEqual(acceptRequest("exposure:a", " why ", "version", " 2.0.2 "), { id: "exposure:a", accept: true, reason: "why", until: { version: "2.0.2" } });
   assert.deepEqual(acceptRequest("exposure:a", "why", "change", "").until, { change: true });
-});
-
-test("cutElsewhereWords names the other region and agrees in number", () => {
-  assert.equal(cutElsewhereWords(1, "watch"), "1 more finding is under watch");
-  assert.equal(cutElsewhereWords(3, "setup"), "3 more findings are under set-up");
 });
 
 import { acceptedByMark, staleMarksHead, clearTriageRequest, triageControl, triageRefusal, triageRequest, TRIAGE_NO_FIXED_WHY } from "./exposureWords.ts";

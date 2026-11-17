@@ -6,7 +6,7 @@
  * popstate handler's body the same way: the restore of a covered sheet's cut runs through it in
  * tests, not by hand (review R2-2b L2).
  */
-import { parseFocus, parseHash, routeFromPop, routeKey, routeToUrl, type Overlay } from "../../routing.ts";
+import { parseFocus, parseHash, routeFromPop, routeKey, routeToUrl, screenOfKey, type Overlay } from "../../routing.ts";
 import { adoptCarried, announceLeaves, forgetKept, keepCovered, popStepsTo, pushBackDepth, restoreKept, routeLanded, routeLanding, routeStack, screenParams, stackView } from "../../backStep.ts";
 import { rememberRoute } from "../../resumeRoute.ts";
 
@@ -48,12 +48,20 @@ export function seedRouteStack(id: string | null, ov: Overlay, repo: string | nu
   pushBackDepth();
 }
 
+/** The key of the entry the last pop landed on: `landRoute` reads it once, to tell a pop onto a live step from a tap. */
+let poppedOnto: string | null = null;
+
 /** The routing effect's body. `first` is true once per document. */
 export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: string | null, first: boolean): void {
   const before = stackView();
   const key = routeKey(activeId, overlay, focusRepo);
   const st = history.state as { navRoute?: string; navDepth?: number } | null;
-  const known = st?.navRoute === key ? (st.navDepth || 0) : -1;
+  // The entry landed on is this screen's own, or a LIVE step over it (a drill-down the screen armed itself, `armStep`:
+  // a Back from a door covering the screen lands on the step, and the screen must stay on it, not unwind through it).
+  // ONLY for the entry a pop just landed on: a tap that re-opens the screen over its own step is still a fresh open.
+  const onStep = !!st?.navRoute && st.navRoute !== key && screenOfKey(st.navRoute) === key && routeStack.keys[st.navDepth || 0] === st.navRoute && poppedOnto === st.navRoute;
+  poppedOnto = null;
+  const known = st?.navRoute === key || onStep ? (st!.navDepth || 0) : -1;
   // What happens, and what is filed with the entry landed on, is ONE pure decision
   // (`routeLanding`, node-tested); this applies its moves.
   const plan = routeLanding(routeStack.keys, routeStack.depth, key, first, known);
@@ -63,7 +71,7 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
   // booted on may be a STEP over that screen (an open file, the explain pane): it
   // carries the screen's params, which the seeded screen entry takes (`adoptCarried`).
   if (plan.kind === "seed") { adoptCarried(key); seedRouteStack(activeId, overlay, focusRepo); }
-  else if (plan.kind === "known") { routeStack.depth = plan.depth; routeStack.keys[plan.depth] = key; pushBackDepth(); }
+  else if (plan.kind === "known") { routeStack.depth = plan.depth; routeStack.keys[plan.depth] = st?.navRoute ?? key; pushBackDepth(); }
   // Closing a sheet is a step BACK, not a new screen — ONE step, the same one
   // the gesture takes (`routeStep`): a sheet opened from another sheet closes
   // to that sheet, never past it to the session. A screen already further
@@ -125,6 +133,7 @@ export function landPop(): { activeId: string | null; overlay: Overlay } | null 
   // keep going, or the press looks like it did nothing.
   if (!r.adopt && popStepsTo(r.depth) && r.depth > 0) { routeStack.depth = r.depth; announceLeaves(before); history.back(); return null; }
   routeStack.depth = r.depth;
+  poppedOnto = r.adopt ? null : r.key;
   if (r.key) routeStack.keys[r.depth] = r.key;
   // A hand-edited hash made an entry with no key of ours: stamp it, so the
   // routing effect finds it KNOWN rather than pushing a twin on top — the

@@ -28,6 +28,7 @@ import type { ServerCtx } from "./ctx.js";
 import type { NotifyParams } from "../routes/types.js";
 import { AttentionStore } from "../attentionstore.js";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
+import type { LinkLog } from "../linklog.js";
 
 /** What `createClients` needs — the managers constructed ahead of it in main. */
 export type ClientsDeps = Pick<ServerCtx, "auth" | "push" | "sessions"> & {
@@ -37,6 +38,8 @@ export type ClientsDeps = Pick<ServerCtx, "auth" | "push" | "sessions"> & {
   attention?: AttentionStore;
   /** How long a distrusted socket may answer the close frame before `terminate()` (default 1 s; a test seam). */
   closeGraceMs?: number;
+  /** Records each attention alert with how many background links were open to carry it; absent ⇒ none (tests). */
+  linkLog?: Pick<LinkLog, "event">;
 };
 
 /** Everything `createClients` built; `main.ts` assigns each into `ctx`. */
@@ -220,6 +223,12 @@ export function createClients(deps: ClientsDeps) {
     const pushIt = toLinks || kind === "link.back";
     const frame: HostMessage = { t: "notification", item: sent };
     for (const ws of clients) { if ((toLinks && kind !== "link.back") || wsRole.get(ws) !== "notify") send(ws, frame); }
+    // "The card came late": was a background link open when it went out? 0 ⇒ the phone only hears on reconnect.
+    if (level === "attention" && kind !== "link.back") {
+      let links = 0;
+      for (const ws of clients) if (wsRole.get(ws) === "notify" && ws.readyState === ws.OPEN) links++;
+      deps.linkLog?.event({ ev: "alert", kind, plugin: wire.plugin, links });
+    }
     // The older item under this key just became handled — say so, or every
     // phone keeps counting it until its next reconnect.
     if (replaced) broadcastFeed();

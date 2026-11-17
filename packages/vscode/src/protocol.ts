@@ -9,6 +9,7 @@ import type {
   CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals, UsageNowDoc,
 } from "@waterplane/shared";
 import type { SessionCarried } from "@waterplane/shared";
+import type { FindingsResult } from "@waterplane/shared";
 import type { InstructionFile, InstructionOverlap, InstructionReader, InstructionTotals } from "@waterplane/shared";
 import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthSeries } from "@waterplane/shared";
 
@@ -19,11 +20,21 @@ import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcom
  */
 export interface LiveState { doc: UsageNowDoc | null; host: string | null; why?: string; at: number }
 
+/** What the Findings view draws: the engine's ranked result with the checked-off list. */
+export interface FindingsDoc extends FindingsResult {
+  at: number;
+  folder: string;
+  /** Sources that could not be read this time, each with its sentence. */
+  absent: { what: string; why: string }[];
+  /** Whether a waterplane desktop answered, so the account scope is in it. */
+  account: boolean;
+}
+
 /** The ledger tab for Copilot Chat's own token counts: an id no desktop backend has, so a desktop's
  *  `copilot` ledger (the Copilot CLI) sits beside it rather than under it. */
 export const COPILOT_LEDGER = { id: "copilot-chat", label: "Copilot Chat" } as const;
 
-export type TabId = "session" | "all" | "always-on" | "health" | "prompts";
+export type TabId = "session" | "all" | "always-on" | "health" | "findings";
 
 export interface SessionRow { id: string; path: string; mtime: number; size: number }
 
@@ -208,6 +219,8 @@ export type ToWebview =
   | { t: "weight"; doc: WeightDoc | null; why?: string }
   /** `terminal` = the active terminal's name, or null when there is none. */
   | { t: "prompts"; list: PromptDef[]; terminal: string | null }
+  /** The ranked Setup check for the active folder, with its checked-off list; null with `why` until it is read. */
+  | { t: "findings"; doc: FindingsDoc | null; why?: string; /** The logs are still being read: no count is said yet. */ reading?: boolean }
   | { t: "folders"; list: string[]; active: string }
   /** What actually happened to a [Copy] / [Type into terminal] tap, posted after acting. */
   | { t: "receipt"; text: string; tap?: number }
@@ -228,6 +241,8 @@ export type ToExtension =
   | { t: "pickSession"; folder: string; id: string | null }
   /** `tap` = the webview's id for this tap, echoed on the `receipt` so the right button shows it. */
   | { t: "prompt"; id: PromptId; how: "copy" | "terminal"; turn?: number; tap?: number }
+  /** One finding's remedy text, copied or typed (never sent), by the finding's id. */
+  | { t: "finding"; id: string; how: "copy" | "terminal"; tap?: number }
   /** Only BRAND.domain / marketplace URLs; the extension validates. */
   | { t: "open"; url: string }
   /** The Health view came on screen: read status+plot (cached 60 s). Never runs `update`. */

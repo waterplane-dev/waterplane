@@ -63,6 +63,10 @@ export interface ApiCtx {
   usageLog: UsageLog;
   /** The other sources' kept readings (`usagesourcelog.ts`), by source id. */
   usageSources: Pick<UsageSourceRegistry, "history">;
+  /** Every source's current reading (`usagesources.ts`): the Setup check reads Copilot's off it. */
+  usageReadings?(): import("@waterplane/shared").UsageReading[];
+  /** The budget's periods at `now` with their spend, and its ceilings: the Setup check's pace reading. */
+  budgetStanding?(now: number): { states: import("@waterplane/shared").PeriodState[]; ceilings: { periodId: string; max: number; unit: string }[] | undefined };
   /** The checker's poll period, passed through so the history can say what
    *  a dense series would have looked like. */
   usagePollMs: number;

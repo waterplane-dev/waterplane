@@ -26,7 +26,7 @@
  *   the file under the finger in a text line; a tap on the picked file clears it (ContextGraph's
  *   agent-lane grammar, the same as the carried strip).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BarChart3, Coins, FileText, Plug } from "lucide-react";
 import { alwaysOnRowFigures, alwaysOnRows, alwaysOnTotalsWords, desktopPathWords, fmtCount } from "@waterplane/shared";
@@ -189,7 +189,7 @@ export function AoFileList({ rows, plot, configDir, onOpen, pick = null, onPick 
           </>
         );
         return (
-          <li key={key} className={seg && pick === key ? "carried-picked" : undefined}>
+          <li key={key} data-ao-key={key} className={seg && pick === key ? "carried-picked" : undefined}>
             <Row>
               {seg && onPick ? (
                 <div className="carried-pick" role="button" tabIndex={0} aria-pressed={pick === key}
@@ -217,7 +217,7 @@ export function AoFileList({ rows, plot, configDir, onOpen, pick = null, onPick 
   );
 }
 
-export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessions, onSkills, skillsCant }: {
+export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessions, onSkills, skillsCant, focusPath, onFocused }: {
   /** `ComplianceReport.instructions`; absent from an older host. */
   doc: RepoInstructionsDoc | undefined;
   repoId: string;
@@ -231,9 +231,26 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
   /** The skills & plugins switch for this repo, on the "In this repo" heading; `skillsCant` is the sentence when there is none. */
   onSkills?: () => void;
   skillsCant?: string;
+  /** A door's aim (the Setup check): bring this file's row into view and pick it on the strip, once. */
+  focusPath?: string;
+  /** Called once the aim has landed (or cannot), so the caller forgets it. */
+  onFocused?: () => void;
 }) {
   const [cut, setCut] = useState<Scope | null>(null);
   const [pick, setPick] = useState<string | null>(null);
+  const focusKey = focusPath && doc && !doc.why
+    ? aoScopeChips(doc).rows.find((r) => r.path === focusPath) : undefined;
+  const focusRowKey = focusKey ? `${focusKey.scope}:${focusKey.path}:${focusKey.kind}` : null;
+  useEffect(() => {
+    if (!focusPath || !doc) return;
+    if (focusRowKey) {
+      setCut(null);
+      setPick(focusRowKey);
+      requestAnimationFrame(() => document.querySelector(`[data-ao-key="${CSS.escape(focusRowKey)}"]`)?.scrollIntoView({ block: "center" }));
+    }
+    onFocused?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- lands once per aim
+  }, [focusPath, focusRowKey, !!doc]);
   const doors = sessionDoors ?? [];
   const doorRow = (onAllSessions || sessionDoors) ? (
     <>

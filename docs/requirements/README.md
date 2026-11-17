@@ -36,7 +36,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [local-models](local-models.md) | 3 | 3 | 0 |
 | [login](login.md) | 1 | 7 | 0 |
 | [messaging](messaging.md) | 3 | 14 | 0 |
-| [metrics](metrics.md) | 12 | 65 | 0 |
+| [metrics](metrics.md) | 20 | 65 | 1 |
 | [models](models.md) | 4 | 12 | 0 |
 | [monitoring](monitoring.md) | 0 | 9 | 0 |
 | [navigation](navigation.md) | 0 | 20 | 0 |

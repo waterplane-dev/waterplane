@@ -464,6 +464,11 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       e.setupChecks.add(fn);
       return () => { e.setupChecks.delete(fn); };
     },
+    setupFinding: (fn) => {
+      if (!live() || typeof fn !== "function") return () => {};
+      e.setupFindings.add(fn);
+      return () => { e.setupFindings.delete(fn); };
+    },
     setupFix: (fixId, fn) => {
       if (!live() || typeof fn !== "function") return () => {};
       const taken = typeof fixId === "string" && fixId ? reg.fixTaken(e, fixId) : "a fix needs an id";

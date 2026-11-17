@@ -30,7 +30,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   `prev`**; a status TRANSITION, a new id or a `null` is NEVER swallowed.
 - `toolbar.ts` / `routing.ts` / `format.ts` / `localState.ts` — slices lifted out of `App.tsx`.
   **Back is a history STACK, not a URL diff**: each screen pushes one entry keyed on `history.state`,
-  landing on a screen already in the stack UNWINDS to it, and a document that BOOTS deep seeds its own
+  landing on a bare screen already in the stack UNWINDS to it, but a SHEET never (a door onto a sheet lower down pushes it again, so Back returns to the opener; a close names the bare screen), and a document that BOOTS deep seeds its own
   ancestors. **A pop is ONE pure decision** (`routeFromPop`, node-tested) that **reads the overlay off the KEY, not the hash** (`overlayFromKey`) — the hash
   drops a transient overlay on purpose; only a key THIS document pushed is trusted. Depth is what
   `window.shellBack()` (a legacy shell calls its old name) answers and is **PUSHED** to the APK shell. **Repo focus is part of the route** (`?repo=`) —

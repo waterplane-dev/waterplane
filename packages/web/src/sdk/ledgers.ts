@@ -16,6 +16,7 @@ import { api } from "../api";
 import { core } from "../core/api";
 import { getLedgerDocAt, getTokenStatsAt, putLedgerDoc, putTokenStats } from "../offlineCache";
 import type { LedgerViewDef } from "./types.ts";
+import type { SetupCheckResponse } from "../setupCheckTypes";
 
 let viewSource: () => readonly LedgerViewDef<any>[] = () => [];
 
@@ -53,8 +54,11 @@ export const ledgers: {
   agentPoints(repoId: string | null): Promise<AgentPointsResponse>;
   /** The changes drawn beside one repo's agent readings. */
   agentMarkers(repoId: string): Promise<AgentMarkersResponse>;
+  /** The Setup check's three lists (`GET /api/setupcheck`); a null repo is machine and account only. */
+  setupCheck(repoId: string | null): Promise<SetupCheckResponse>;
   refreshUsage(quiet?: boolean): void;
 } = {
+  setupCheck: (repoId) => api.setupCheck(repoId),
   agentPoints: (repoId) => api.agentPoints(repoId),
   agentMarkers: (repoId) => api.agentMarkers(repoId),
   peerJobs: () => api.peerJobs(),

@@ -145,3 +145,15 @@ test("explain-rising-metric states what the reading counts in the phone's words,
   assert.match(t.text, /The repo's reason: we count src only\./);
   assert.equal(data.definitionOf({ key: "dups.pairsPerKloc", label: "x" }), null, "a series no index entry reads gets no definition");
 });
+
+test("groom and shrink use the shared remedy words: measure, stop under the line, propose, never commit", async () => {
+  const ctx = await ctxFor(LOG);
+  for (const form of ["copy", "terminal"]) {
+    const g = data.render("groom-claudemd", ctx, form);
+    assert.ok(g.ok);
+    assert.match(g.text, /change nothing/);
+    assert.match(g.text, /16,000 characters/);
+    assert.match(g.text, /do not commit/i);
+    if (form === "terminal") assert.ok(!C0.test(g.text));
+  }
+});

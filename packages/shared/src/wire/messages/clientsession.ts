@@ -2,7 +2,7 @@
 
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
-import type { ClientRole } from "../notifylink.js";
+import type { ClientRole, LinkLogEvent } from "../notifylink.js";
 import type { LaunchOpts, PermissionMode, SendView, SessionSearchScope } from "../session.js";
 
 export type ClientSessionMsg =
@@ -10,6 +10,10 @@ export type ClientSessionMsg =
   // (`wire/notifylink.ts`), which is then sent only the frames it acts on.
   // Additive — an old host ignores it — so `PROTOCOL_VERSION` stays.
   | { t: "hello"; protocol: number; role?: ClientRole }
+  // The background link's own record of its ups and downs, sent on each reconnect
+  // (`wire/notifylink.ts` `cleanLinkLog`). Fire and forget: a frame lost with its socket
+  // costs some log lines, never work. Additive — an old host ignores it.
+  | { t: "link.log"; sentAt: number; events: LinkLogEvent[] }
   | { t: "ping" } // heartbeat — host replies { t: "pong" } so the client can detect a dead (zombie) socket
   | { t: "session.list" }
   // `resumeSessionId`: resume that EXACT claude conversation (`--resume <uuid>`)

@@ -39,7 +39,8 @@ import { BUDGET_STALE_MS } from "./budget.js";
 import { weekUsdPerPct } from "./sessioncost.js";
 import { fmtUsd } from "./pricing.js";
 import { fmtCount, fmtNative } from "./tokens.js";
-import { CLAUDE_LEDGER_LABEL, undatedClause } from "./ledgerspan.js";
+import { CLAUDE_LEDGER_LABEL, undatedClause, undatedWhy } from "./ledgerspan.js";
+import { weekCalSpend, type PeerWeekSpendRow } from "./peer.js";
 
 /** `native`: the backend's own unit (Copilot's AI credits), named by `SessionBudget.nativeUnit` —
  *  never converted to tokens or dollars, never summed with another unit. */
@@ -144,6 +145,38 @@ export function windowUsdPerPct(windowCostUsd: number | null | undefined, pct: n
   return weekUsdPerPct(windowCostUsd, pct);
 }
 
+/** What `weekCalibration` answers: the rate when there is one, else why not (`refused`, a sentence). */
+export interface WeekCalibration {
+  usdPerPct: number | null;
+  /** What the rate counted beyond this desktop (`incl. $0.84 on pc`). */
+  incl?: string;
+  /** A sentence: a rate would have been wrong (undated records, a bigger peer), so none is given. */
+  refused?: string;
+}
+
+/**
+ * THE weekly calibration, one rule for the phone and the host's session budget: the week's spend
+ * (`weekCalSpend`: peers and jobs when the caller has them), REFUSED while records of the ledger
+ * could not be dated (`undatedWhy` — the figure would be a floor), then `windowUsdPerPct`'s floor
+ * on the money and the percent. Null spend and a floor not met are no rate, never a zero.
+ */
+export function weekCalibration(a: {
+  usage: { weeklyPct: number | null | undefined; weeklyResetAt: number | null | undefined };
+  hereUsd: number | null | undefined;
+  /** `undatedSince(doc, windowStart)`'s answer, as is. */
+  undated?: unknown;
+  jobs?: Parameters<typeof weekCalSpend>[0]["jobs"];
+  peers?: readonly PeerWeekSpendRow[] | null;
+  sumAll?: boolean;
+}): WeekCalibration {
+  const clause = undatedWhy(a.undated) ? undatedClause(a.undated) : null;
+  if (clause) return { usdPerPct: null, refused: `% of week not shown: ${clause}.` };
+  const spend = weekCalSpend({ here: a.hereUsd, jobs: a.jobs ?? null, peers: a.peers ?? null, weeklyResetAt: a.usage.weeklyResetAt ?? 0, sumAll: a.sumAll ?? false });
+  if (!spend) return { usdPerPct: null };
+  if ("refused" in spend) return { usdPerPct: null, refused: spend.refused };
+  return { usdPerPct: windowUsdPerPct(spend.usd, a.usage.weeklyPct), ...(spend.incl ? { incl: spend.incl } : {}) };
+}
+
 /**
  * The calibration off one `/usage` reading and what the logs priced in each
  * window up to it. Null when the reading is unusable (not ok, no stamp, older
@@ -164,7 +197,7 @@ export function sessionBudgetCal(
   return {
     checkedAt: u.checkedAt,
     sessionUsdPerPct: gone(u.sessionResetAt) ? null : windowUsdPerPct(costs.session, u.sessionPct),
-    weeklyUsdPerPct: gone(u.weeklyResetAt) ? null : windowUsdPerPct(costs.weekly, u.weeklyPct),
+    weeklyUsdPerPct: gone(u.weeklyResetAt) ? null : weekCalibration({ usage: u, hereUsd: costs.weekly }).usdPerPct,
     ...(su != null && !gone(u.sessionResetAt) ? { sessionUndated: su } : {}),
     ...(wu != null && !gone(u.weeklyResetAt) ? { weeklyUndated: wu } : {}),
   };

@@ -24,3 +24,8 @@ The repo skill text uses the live API address of the running host instead of a h
 - asked: 2026-10-27
 - shipped: 0322545d
 
+
+### R-integrations-006 · shipped
+VS Code shows the same findings as a tree and a tab; a remedy copies or types its prompt and never sends.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/vscode/test/findings.test.mjs

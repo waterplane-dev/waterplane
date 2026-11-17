@@ -57,6 +57,8 @@ export { headline } from "../../../extensions/token-stats/web/headline.js";
 
 // ── Pure pieces the extension and the webview share, exported for the tests.
 export { PROMPTS, render, scrub } from "./promptText.js";
+export { findingsFor, remedyCopy } from "./findings.js";
+export type { FindingsDoc, FindingsInput } from "./findings.js";
 export { sessionTotal } from "./sessiontotal.js";
 export { isLive, isRunning, fmtAge, fmtElapsed, runningTurn, runningWords, anyLive, isRecent, LIVE_MS, RECENT_MS, RUNNING_FRESH_MS } from "./running.js";
 export { alwaysOnTipWords, firstShortWords, newestFirstTok } from "./firstwords.js";

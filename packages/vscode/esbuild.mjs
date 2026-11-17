@@ -42,6 +42,18 @@ const agentsShim = {
   },
 };
 
+// The permissions extension is private (not in the public tree): the Findings view bundles its engine
+// when the tree holds it, and a stand-in that answers nothing when it does not.
+const real = path.resolve(here, "../extensions/permissions/host/vscodebridge.mts");
+const permissionsOptional = {
+  name: "permissions-optional",
+  setup(b) {
+    b.onResolve({ filter: /^permissions-engine$/ }, () => ({
+      path: existsSync(real) ? real : at("src/shims/permissionsabsent.ts"),
+    }));
+  },
+};
+
 // The web HintChip drags hints.ts → storage.ts and usage.ts; the webview gets its own.
 const webSrc = path.resolve(here, "../web/src") + path.sep;
 const hintChip = {
@@ -162,7 +174,7 @@ const configs = [
     target: "node20",
     external: ["vscode"],
     alias,
-    plugins: [envShim, agentsShim],
+    plugins: [envShim, agentsShim, permissionsOptional],
   },
   {
     // The all-sessions scan runs in a worker_threads Worker off the extension host's thread.
@@ -174,7 +186,7 @@ const configs = [
     target: "node20",
     external: ["vscode"],
     alias,
-    plugins: [envShim, agentsShim],
+    plugins: [envShim, agentsShim, permissionsOptional],
   },
   {
     ...common,
@@ -199,7 +211,7 @@ const configs = [
     target: "node20",
     external: ["vscode"],
     alias,
-    plugins: [envShim, agentsShim],
+    plugins: [envShim, agentsShim, permissionsOptional],
   },
   {
     // The repo-health engine in a worker_threads Worker. ESM: the engine uses top-level await,

@@ -34,7 +34,7 @@
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { autoOnProbe, BRAND, cleanPluginValue, PLUGIN_MANIFEST, promptFingerprint, pluginValues, PLUGIN_ARGS_MAX } from "@waterplane/shared";
-import type { AppRepoFacts, AutoOnProbe, PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
+import type { AppRepoFacts, Finding, AutoOnProbe, PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
 import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
@@ -95,6 +95,8 @@ export interface PluginEntry {
   private?: boolean;
   /** Contributed setup rows, asked on every check of every repo. */
   setupChecks: Set<(s: SetupSubject) => ComplianceCheck | null>;
+  /** Contributed Setup-check findings (`api.setupFinding`). */
+  setupFindings: Set<(s: SetupSubject) => Finding[] | Promise<Finding[]>>;
   /** Contributed fixes by fix id — the ids its rows name in `fix`. */
   setupFixes: Map<string, (s: SetupSubject) => SetupFixOutcome>;
   /** `handle(method, fn)` — what `call()` routes to. */
@@ -234,7 +236,7 @@ export class PluginRegistry {
     return {
       ...p, state: "off", status: null, mod: null, gen: 0,
       handlers: { prompt: new Set(), question: new Set(), action: new Set() }, onSettings: new Set(),
-      setupChecks: new Set(), setupFixes: new Map(), methods: new Map(),
+      setupChecks: new Set(), setupFindings: new Set(), setupFixes: new Map(), methods: new Map(),
       backends: new Set(), readers: new Set(), hook: null, routes: [], holds: new Set(),
     };
   }
@@ -467,7 +469,7 @@ export class PluginRegistry {
 
   private clearHandlers(e: PluginEntry): void {
     e.handlers.prompt.clear(); e.handlers.question.clear(); e.handlers.action.clear(); e.onSettings.clear();
-    e.setupChecks.clear(); e.setupFixes.clear(); e.methods.clear();
+    e.setupChecks.clear(); e.setupFindings.clear(); e.setupFixes.clear(); e.methods.clear();
     // Its backends leave the launcher with it (a live session keeps running on
     // the descriptor it was spawned with; the next create is refused in words),
     // and every response it was holding is answered `{}` now — the CLI then
@@ -721,6 +723,30 @@ export class PluginRegistry {
       }
     }
     return out;
+  }
+
+  /**
+   * Every active plugin's contributed findings for one worktree, in load order. A throw drops that
+   * plugin's findings and becomes its status line (as for `setupChecks`); `answered` names the plugins
+   * whose contribution ran without one, so a clean answer can be told from none.
+   */
+  async setupFindings(s: SetupSubject): Promise<{ findings: Finding[]; answered: string[] }> {
+    const findings: Finding[] = [];
+    const answered: string[] = [];
+    for (const e of this.entries) {
+      if (e.state !== "active" || !e.setupFindings.size) continue;
+      let ok = true;
+      for (const fn of [...e.setupFindings]) {
+        try {
+          const got = await fn({ worktree: s.worktree });
+          for (const f of Array.isArray(got) ? got : []) {
+            if (f && typeof f.id === "string" && typeof f.rule === "string" && typeof f.what === "string" && f.waive && typeof f.waive === "object") findings.push(f);
+          }
+        } catch (err) { ok = false; this.handlerFailed(e, "setup finding", err); }
+      }
+      if (ok) answered.push(e.manifest.id);
+    }
+    return { findings, answered };
   }
 
   /** The fix ids active plugins answer, in load order. */

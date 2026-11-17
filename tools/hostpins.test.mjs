@@ -290,7 +290,9 @@ const PINS = [
     // `setupprefs.ts`'s stores in one call, as `installSessionModels` does.
     re: /\b(?:setCliHealth|setOpenDeliveries|setSentLog|installChecklistStores|installSessionModels)\(/g,
     def: defs("setCliHealth", "setOpenDeliveries", "setSentLog", "installChecklistStores", "installSessionModels"),
-    today: { "main.ts": 5 },
+    // cli/setupcheck.ts 0 → 1 (2026-11-16, setup check review): the CLI is its own process entry, so it
+    // installs the same stores before reading, or it judges a repo by defaults while the phone judges it by what the person set.
+    today: { "cli/setupcheck.ts": 1, "main.ts": 5 },
   },
   {
     name: "env file loads (loadEnvFiles)",

@@ -21,13 +21,13 @@ import { LOCAL_CI_SWITCH } from "./localcistatus.js";
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceTriageRequest, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
-import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, frontmatterYamlProblem, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
+import { BRAND, CONTEXT_CLOCK, LEGACY } from "@waterplane/shared";
+import type { BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceTriageRequest, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
+import { ADVISORY_CHECKS, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, frontmatterYamlProblem, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
-import { claudeConfigDir } from "./claudeconfig.js";
+import { autoCompactFor } from "./setupcheck/readers.js";
 import { repoInstructionsDocOrWhy, worktreeFs } from "./alwayson.js";
 import { contextLimitsStore, repoContextLimits } from "./contextlimits.js";
 import { exposureChecksFor } from "./exposure.js";
@@ -93,27 +93,6 @@ const PROJECT_SETTINGS_REL = ".claude/settings.json";
 
 function readOrNull(path: string): string | null {
   try { return readFileSync(path, "utf8"); } catch { return null; }
-}
-
-/**
- * The `autoCompactWindow` a claude session the daemon spawns in this worktree would
- * see, and where it comes from. The env layer is THIS daemon's environment,
- * because a spawned PTY starts from `ptyEnv()` = `process.env` plus a floor,
- * and the claude backend's `spawnEnv` carries only `DISABLE_AUTOUPDATER`. (A pane in an already-running
- * tmux server takes the SERVER's environment instead — a
- * value exported only there is invisible to this read.) The precedence and how
- * much of it was verified against the CLI bundle is `@waterplane/shared`'s
- * `autocompact.ts`. The user layer honours `CLAUDE_CONFIG_DIR` like the CLI.
- */
-export function autoCompactFor(worktree: string): AutoCompactResolution {
-  const userDir = claudeConfigDir();
-  const layer = (path: string) => ({ path, text: readOrNull(path) });
-  return resolveAutoCompact({
-    env: process.env[AUTO_COMPACT_ENV],
-    local: layer(join(worktree, ".claude", "settings.local.json")),
-    project: layer(join(worktree, PROJECT_SETTINGS_REL)),
-    user: layer(join(userDir, "settings.json")),
-  });
 }
 
 /** Transport dirs that must be gitignored (phone↔repo plumbing, not source). */
@@ -295,7 +274,7 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
       const claude = files.some((f) => countedByThreshold(f) && f.parts.some((p) => p.readers.includes("claude")));
       const w = weighContext(claudeWeightInput(files), lim.effective, lim.source);
       const said = [
-        claude ? (w.advice ? `${w.note} ${w.advice}` : w.note) : null,
+        claude ? `${w.advice ? `${w.note} ${w.advice}` : w.note} (Measured ${CONTEXT_CLOCK.tree}.)` : null,
         copilotWeightWords(instructionTotals(files, "copilot"), fmtCount),
         ...overlaps.map((o) => overlapWords(o, fmtCount)),
       ].filter((x): x is string => !!x);
@@ -312,6 +291,7 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
         // sheet prints the two clocks side by side rather than reconciling
         // them. Absent when Claude Code reads nothing here.
         ...(claude ? { alwaysOnChars: w.alwaysOnChars } : {}),
+        ...(overlaps.length && !(claude && w.verdict !== "lean") ? { overlapOnly: true } : {}),
       });
     }
   }

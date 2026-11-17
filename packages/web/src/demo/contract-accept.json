@@ -31,6 +31,9 @@
     "stream.status": "not reachable in demo: stream.open is refused, so no stream is ever open to report on"
   },
   "routes": {
+    "POST /api/setupcheck/waive": "gap: the demo Setup check is read-only: it writes no waive and no instruction file",
+    "GET /api/repos/:param/efficiencyrules": "gap: the demo Setup check is read-only: it writes no waive and no instruction file",
+    "POST /api/repos/:param/efficiencyrules": "gap: the demo Setup check is read-only: it writes no waive and no instruction file",
     "GET /api/host/dictate/setup": "not reachable in demo: the demo desktop reports no local dictation to set up, so the row never offers the setup",
     "POST /api/host/dictate/setup": "not reachable in demo: nothing to install on a desktop that lives in the page",
     "DELETE /api/conversations": "not reachable in demo: no demo backend's facts include conversations, so the archive draws claude's list only",

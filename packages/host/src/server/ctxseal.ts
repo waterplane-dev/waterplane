@@ -20,7 +20,7 @@ export function serverCtxKeys() {
   "capture", "clearNotifications", "clients", "cliHealthStore", "closeDevice", "containRepoDir", "decisionLog", "deliverChain",
   "deliverInput", "deliverySnapshot", "DOCTOR", "durableOp", "enforceAuth", "fanout", "fmtSize",
   "handleClientMessage", "handleNotification", "healthWatch", "imgSeen", "inputsInFlight", "intents", "intentSnapshot",
-  "isAttachedToSomeone", "launchSnapshot", "meter", "naming", "netstats", "notificationFeed", "notifications", "notify",
+  "isAttachedToSomeone", "launchSnapshot", "linkLog", "meter", "naming", "netstats", "notificationFeed", "notifications", "notify",
   "notifyPrefs", "onboard", "openDeliveries", "outSeen", "padNotesFor", "peers", "pluginUpdates", "plugins", "PORT",
   "publishBudget", "pullCatchUp", "pullNewFiles", "pullSeen", "push", "recomputeWatched", "resolveAttention", "resolveAttentionPrefix", "review", "ROOT",
   "scanImages", "scanOutboxDocs", "scanPullCandidates", "scheduleSnapshot", "send", "sentLogStore",

@@ -46,10 +46,15 @@ async function run() {
   await vscode.commands.executeCommand(`workbench.view.extension.${ext}`);
   for (const view of views) {
     if (view === "health") await measure(ext);
-    await vscode.commands.executeCommand(`${ext}.show`, view);
+    // Real-folder mode adds two poses: findings-end (the runner scrolls) and tree (the sidebar tree focused).
+    const tab = view === "findings-end" ? "findings" : view === "tree" ? "all" : view;
+    await vscode.commands.executeCommand(`${ext}.show`, tab);
+    // A live session makes the panel follow it a moment after startup; over a real folder, pose again.
+    if (process.env.WP_SHOT_REAL === "1" && view !== "tree") { await sleep(4000); await vscode.commands.executeCommand(`${ext}.show`, tab); }
+    if (view === "tree") await vscode.commands.executeCommand(`${ext}.sidebar.focus`);
     await vscode.commands.executeCommand("notifications.clearAll");
     fs.writeFileSync(path.join(sig, `${view}.req`), view);
-    await waitFor(path.join(sig, `${view}.done`));
+    await waitFor(path.join(sig, `${view}.done`), process.env.WP_SHOT_REAL === "1" ? 900_000 : 120_000); // real mode waits for the log scan
   }
 }
 

@@ -5,6 +5,30 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.30
+
+### New
+
+- **A Setup check ranks what to fix.** One sheet lists findings for a repo, with a checked-off list, a waived list and a list of what could not be checked. Each finding opens the evidence it rests on, and the cost of a finding is shown as a week's saving where one can be measured.
+- **The Setup check covers all repos.** An all-repos view groups findings by kind, shows counts that open their repos, and folds away repos with nothing open. A main-menu line and the repo menu open it.
+- **Efficiency rules can be written into a repo.** The Setup check shows the text first, then adds it to the repo's instruction file only after you confirm. It never commits, and it refuses links and files it cannot safely rewrite.
+- **Findings can be waived and taken back.** A waived finding says why, and taking it back clears the waiver or tells you why it could not.
+- **The Setup check is in VS Code and the CLI.** A Findings tab lists the checked-off and not-checked rows, and `setup-check` prints the same from the command line without a running host. The VS Code prompts tab is gone; hand off from the session view instead.
+- **Skills and plugins choose their scope on each card.** A changed card shows its own "This repo / All repos" pair and what the repo ends up with. Save writes each file the cards name.
+- **The phone's background link keeps its own log.** It records connects, drops, retries and alerts, and sends them to the host after each reconnect, so a late alert can be traced. This needs a new APK.
+
+### Fixed
+
+- **Back returns step by step.** Opening a sheet that is already lower in the stack puts it on top again, so Back goes through the screens you came from (usage, Setup check, token stats). Each drill-down level inside the Setup check is one Back step.
+- **A check that reads only files no longer shows a "read / not read" backends line.** On a CLAUDE.md or settings check it meant nothing and buried the card.
+- **Waive and take-back reach the right place.** Exposure rows with `@`, `/`, `+` or `#` in their key are recognised, and the badge moves at once.
+- **Counts agree everywhere.** A group's repo count is the same on every screen, and the usage sheet's spend count matches the cut its button opens.
+- **Thin data is "not checked", never "passed".** A trend or concentration too thin to judge, and a machine with no reading, say so.
+- **Context-weight no longer fires on a repeat alone.** The overlap finding says it instead. An overlap no request carried gets no saving, and an auto-compact window set by the environment is reported once for the machine.
+- **VS Code Findings are quieter and faster.** Stale runs are dropped, cached logs are read first, and the tab no longer repeats counts or a caveat.
+- **A long scope label wraps inside its segment** instead of crossing the switch.
+- **Release download counts no longer include each file's one self-check download.**
+
 ## 0.1.29
 
 ### New

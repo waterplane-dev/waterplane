@@ -54,7 +54,7 @@ A skill or plugin that CLAUDE.md or a repo skill refers to is never suggested fo
 - shipped: f17e9a7d
 
 ### R-skills-011 · shipped
-The screen opens from the set-up sheet's agent-context-weight row and from the skill listing in "What every turn carries".
+The screen opens from the Setup check's context-weight finding (formerly the set-up sheet's agent-context-weight row) and from the skill listing in "What every turn carries".
 - asked: 2026-11-12 (owner)
 - shipped: 3c37ae7e
 
@@ -73,9 +73,10 @@ A passive (kids') device cannot read or change the skill switches.
 - asked: 2026-11-12 (plan decision; no owner ask)
 - shipped: 1191f778
 
-### R-skills-015 · shipped
+### R-skills-015 · superseded
 The All repos view shows the value set for all repos, not the value this repo ends up with; a row this repo overrides says so and opens This repo.
 - asked: 2026-11-13 (owner)
+- superseded-by: R-skills-020
 
 ### R-skills-016 · shipped
 In This repo, a row follows the All repos setting (an unsaved All-repos choice included) until the person picks a different value there; each row says whether it follows All repos or is set for this repo, with one tap to follow again or to keep the value for this repo.
@@ -92,3 +93,8 @@ Every suggestion shows its reason as its own first line, and says in plain words
 ### R-skills-019 · shipped
 One suggestion run sets both levers at once: each item says what All repos becomes and what this repo ends up with (its own value, kept against the All-repos change, or following it), weighed on uses in this repo and across every repo on this desktop; one Apply writes both files. All repos is never raised by a suggestion, and an item this repo's files name is kept here.
 - asked: 2026-11-13 (owner)
+
+### R-skills-020 · shipped
+There is no screen-wide This repo / All repos switch: where a change applies is chosen on the card itself. Every card shows what this repo ends up with; a card once changed shows its own this repo / all repos pair, and Save writes each file the changed cards name. All repos on a card applies here too (this repo's own value is removed).
+- asked: 2026-11-16 (owner, marked screenshot)
+- shipped: cd429a71c

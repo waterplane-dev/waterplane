@@ -8,7 +8,7 @@
  * module. No registry ⇒ no contributed rows — which is the state a `--doctor`
  * run or a test that booted none is honestly in.
  */
-import type { BackendInfo, ComplianceCheck, SetupFixOutcome, SetupSubject } from "@waterplane/shared";
+import type { Finding, BackendInfo, ComplianceCheck, SetupFixOutcome, SetupSubject } from "@waterplane/shared";
 import { BACKENDS, backendInfos } from "../backends/index.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import { onPath } from "../pathx.js";
@@ -20,6 +20,8 @@ export interface SetupSource {
   setupChecks(s: SetupSubject): ComplianceCheck[];
   setupFixIds(): string[];
   runSetupFix(id: string, s: SetupSubject): SetupFixOutcome | null;
+  /** Findings contributed through `api.setupFinding`; optional so an older source still fits. */
+  setupFindings?(s: SetupSubject): Promise<{ findings: Finding[]; answered: string[] }>;
 }
 
 let source: SetupSource | null = null;
@@ -36,6 +38,12 @@ export function contributedFixIds(): string[] { return source ? source.setupFixI
  */
 export function contributedChecks(worktree: string): ComplianceCheck[] {
   return source ? source.setupChecks({ worktree }).filter((c) => c.scope !== "host") : [];
+}
+
+/** Findings extensions and plugins contribute about this worktree; none without a registry. A throw is theirs, never the caller's. */
+export async function contributedFindings(worktree: string): Promise<{ findings: Finding[]; answered: string[] }> {
+  if (!source?.setupFindings) return { findings: [], answered: [] };
+  return source.setupFindings({ worktree });
 }
 
 /**

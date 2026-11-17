@@ -242,10 +242,17 @@ test("a feature sheet id survives the route key and is never persisted", () => {
   assert.equal(routeToHash("s1", o), "#a=s1", "the hash names the session and no overlay");
 });
 
+test("a door onto a sheet lower in the stack pushes it again, so Back returns to the opener", () => {
+  const lower = [K(null, null), K("s1", "tokenStats"), K("s1", "setup")];
+  assert.deepEqual(routeStep(lower, 2, K("s1", "tokenStats")), { kind: "push" }, "even directly below: Back from it returns to the opener");
+  const deep = [...lower, K("s1", "alwayson")];
+  assert.deepEqual(routeStep(deep, 3, K("s1", "tokenStats")), { kind: "push" }, "two below: push, never unwind past the opener");
+});
+
 test("a feature sheet over the backlog closes to the backlog in one Back", () => {
   const o = featureSheetId("requirements", "list");
   const stack = [K(null, null), K("s1", null), K("s1", "backlog"), K("s1", o)];
-  assert.deepEqual(routeStep(stack, 3, K("s1", "backlog")), { kind: "go", delta: -1 });
+  assert.deepEqual(routeStep(stack, 3, K("s1", null)), { kind: "go", delta: -1 }, "a close names the bare session: one Back onto the backlog");
   const back = routeFromPop({ navRoute: K("s1", o), navDepth: 3 }, { activeId: "s1", overlay: null }, stack, 2);
   assert.equal(back.overlay, o, "a pop inside our own stack restores the sheet");
 });

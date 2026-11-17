@@ -197,7 +197,7 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
 
         {/* ── what one request costs ──────────────────────────────────── */}
         {days.length > 0 && width > 0 && <>
-          <div className="section section-head">
+          <div className="section section-head" data-ev="requests">
             <span>Cost per request <ScopeTag>{rangeWords}</ScopeTag></span>
           </div>
           <PerRequestSection doc={doc} from={reqSpan?.from ?? days[0].day} to={reqSpan?.to ?? days[days.length - 1].day} compare={!!reqSpan} width={width} table={false} />

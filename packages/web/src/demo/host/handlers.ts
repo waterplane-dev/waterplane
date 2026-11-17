@@ -167,6 +167,8 @@ export const HANDLERS = {
   // `hello` → `welcome` + `helloFrames` is the dispatcher's (index.ts): it
   // needs the protocol fault and the connection, which no handler sees.
   "hello": { tier: "A", run: () => {} },
+  // The APK's background link reporting its own ups and downs; the demo keeps no log.
+  "link.log": { tier: "A", run: () => {} },
 
   // ── sessions ──────────────────────────────────────────────────────────
   "session.list": { tier: "A", run: (c) => { c.reply({ t: "session.list", sessions: sessions(m(c)) }); } },

@@ -60,7 +60,8 @@ import { ProbeCard } from "./ProbeCard";
 import { FilterChip } from "./kit/FilterChip";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit";
-import { CalendarRange, FlaskConical, Gauge, Plug } from "lucide-react";
+import { CalendarRange, FlaskConical, Gauge, ListChecks, Plug } from "lucide-react";
+import { core } from "./sdk";
 import { probeLastLine, probeResultsUnreadLine, probeShareOf } from "./probeWords";
 import {
   AGENT_REGION_WORDS, AGENT_VIEW_HELP, AGENT_VIEW_LABEL, byModelRow, CARRIED_TITLE, HEADLINE_TITLE, PROBE_NONE, headlineHelp, setupCostBeside, setupCostFigure, setupCostLine, setupSplitBasis, setupSplitLine, PICK_HINT, START_PARTS_CAP, TABLE_NOTE, compactBeside, compactLine, escapedLines, exploreBeside, exploreLine,
@@ -240,6 +241,9 @@ export function AgentReadingsRegion({ repo, carried, onSkills, skillsCant }: {
         {onSkills ? <Button onClick={onSkills} title="Turn skills and plugins off or down for this repo or every repo; new sessions only">
           <Plug size={12} /> skills &amp; plugins →
         </Button> : null}
+        <Button onClick={() => core().nav.openSetupCheck(repoId || null)} title="What to change about this setup, and what was checked and is fine">
+          <ListChecks size={12} /> setup check →
+        </Button>
       </div>
       {!onSkills && skillsCant ? <Hint>{skillsCant}</Hint> : null}
       <div className="ts-filter" role="group" aria-label="agent readings view">

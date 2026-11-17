@@ -56,3 +56,13 @@ When a backend CLI (claude or another coding backend) is not installed or not on
 - asked: 2026-10-23, 2026-10-24, 2026-10-24
 - shipped: db06ba93, d791aed3
 
+
+### R-cli-013 · shipped
+`setup-check` prints the findings for a folder with no daemon running.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/host/src/setupcheck/setupcheckcli.test.mjs
+
+### R-cli-014 · shipped
+`setup-check --all` prints each repeated finding once with its repos, then the repos with nothing open and the repos not checked.
+- asked: 2026-11-16 (owner, ALL-REPOS.md decision 3)
+- shipped: setup check A2; tests: packages/host/test/setupcheckcli.test.mjs

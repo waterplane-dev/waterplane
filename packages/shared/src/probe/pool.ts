@@ -103,8 +103,15 @@ export function probeSchedule(questions: readonly string[], arms: readonly Probe
 
 /** The last `ANSWER:` line of a reply, or "". */
 export function probeFinalAnswer(text: string): string {
-  const m = [...text.matchAll(/ANSWER:(.*)$/gim)].pop();
-  return m ? (m[1] ?? "").trim() : "";
+  // Line by line, no `.*$` scan: the same answer as /ANSWER:(.*)$/gim's last match (the text after
+  // the first `ANSWER:` on the last line holding one), with nothing for a ReDoS scanner to flag.
+  const lines = text.split(/\r\n|[\n\r\u2028\u2029]/);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    const m = /ANSWER:/i.exec(line);
+    if (m) return line.slice(m.index + m[0].length).trim();
+  }
+  return "";
 }
 
 /** Every pattern matches the final answer line. A cap hit or no answer line is wrong. */

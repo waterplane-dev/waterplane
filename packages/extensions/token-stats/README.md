@@ -11,8 +11,9 @@ Shows every token this desktop's sessions have used. See it by day, by model and
 # token-stats — the token statistics screen
 
 The all-sessions token ledger sheet: every token this desktop has used, per day, by model and by
-repo (two ledgers, never one number), the live `/usage` windows with their history, insights and
-$/request. Web only — the host's `tokenstats.ts` and the `usage.status` store stay core
+repo (two ledgers, never one number), the live `/usage` windows with their history and $/request. Diagnosis (what to change) lives in the
+Setup check; this screen draws one line into it (`FindingsLine`) and the host's own metered calls
+(`HostSpendLine`). Web only — the host's `tokenstats.ts` and the `usage.status` store stay core
 (`features/tokens`). The numbers rules are `web-numbers`'.
 
 Layers, import rule (`@waterplane/sdk`, `@waterplane/kit`, `@waterplane/shared`, react, lucide-react, this folder),

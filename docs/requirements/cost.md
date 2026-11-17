@@ -131,3 +131,8 @@ Token cost prices every current Anthropic model at its published rates, includin
 - asked: 2026-11-12, 2026-11-13
 - shipped: 359bc9f19, ab85def96, 96746389f, 05d936b05, 257e14b55
 
+
+### R-cost-027 · shipped
+The host's own metered calls are a line in token stats, with unpriced calls counted and never shown as free.
+- asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
+- shipped: setup check plan 2026-11-16; tests: packages/extensions/token-stats/web/hostSpendWords.test.mjs

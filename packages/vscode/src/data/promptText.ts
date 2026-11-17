@@ -11,7 +11,7 @@
  * BOTH forms: a transcript can hold `\x1b[31m` or `\r\nrm -rf ~`, and a prompt that quotes it must
  * not carry it anywhere.
  */
-import { coldStartText, costText, fmtCount, fmtUsd } from "@waterplane/shared";
+import { DEFAULT_CONTEXT_LIMITS, coldStartText, costText, fmtCount, fmtUsd, remedyPrompt } from "@waterplane/shared";
 import { sessionTotal } from "./sessiontotal.js";
 import type { HealthDoc, PromptDef, PromptId, SessionDoc, TurnCost, WeightDoc } from "../protocol.js";
 import { explainRising, splitLongest } from "../health/healthprompts.js";
@@ -35,28 +35,26 @@ export type Rendered = { ok: true; text: string } | { ok: false; why: string };
 
 const NO_CHANGES = "Do not change files; answer in text.";
 const NO_HEALTH = "No repo-health reading for this folder yet — open Repo health in the sidebar and measure it.";
-const PROPOSE = "Propose a diff; apply nothing until I say so.";
 
 function groom(w: WeightDoc, form: PromptForm): string {
   const r = w.reading;
   return formJoin([
     `My always-on context is ${fmtCount(r.alwaysOnChars)} characters (about ${fmtCount(r.alwaysOnTokens)} tokens at roughly 4 characters per token): CLAUDE.md is ${fmtCount(w.claudeMdChars)} characters and ${r.skillCount} skill descriptions make up the rest. Every turn re-sends all of it.`,
-    "Read CLAUDE.md. Keep what is dangerous not to know before acting: security boundaries, never-do rules, commands that must be run a certain way. Move reference material (module indexes, protocol detail, heuristics) into skills that load only when that code is being edited, and drop what is stale or duplicated.",
-    PROPOSE,
+    ...remedyPrompt("groom", { warnChars: DEFAULT_CONTEXT_LIMITS.maxChars, warnSource: "default" }),
   ], form);
 }
 
 function shrink(w: WeightDoc, form: PromptForm): string {
   const longest = [...w.skills].sort((a, b) => b.descChars - a.descChars).slice(0, 8);
   if (!longest.length) return "";
-  const items = longest.map((s) => `${scrub(s.name)}: ${fmtCount(s.descChars)} characters in the description`);
-  const rows = form === "copy" ? items.map((x) => `- ${x}`).join("\n") : items.join("; ");
-  return formJoin([
-    "A skill's description is loaded into every turn; its body only when the skill is used. These descriptions are the longest:",
-    rows,
-    "Rewrite each to say only when the skill applies, in as few words as keep it triggering correctly. Leave the bodies alone.",
-    PROPOSE,
-  ], form);
+  const skills = longest.map((s) => ({ name: scrub(s.name), descChars: s.descChars }));
+  // The rows stay a list in the copy form; the terminal form is one line with no newline in it.
+  const paras = remedyPrompt("shrink-skill-descs", { warnChars: DEFAULT_CONTEXT_LIMITS.maxChars, warnSource: "default", skills });
+  if (form === "copy") {
+    const rows = skills.map((x) => `- ${x.name}: ${fmtCount(x.descChars)} characters in the description`).join("\n");
+    return formJoin([paras[0], paras[1], rows, ...paras.slice(3)], form);
+  }
+  return formJoin(paras, form);
 }
 
 function handoff(s: SessionDoc, form: PromptForm): string {

@@ -1022,7 +1022,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
   "webapi/webapiHost.ts": 176, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold)
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 138, // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
+  "webapi/webapiRepoOps.ts": 149, // +the Setup check (read, all repos, waive) and the efficiency-rules write (plan P1); earlier: // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 119, // +screenTail, the offline terminal of a session this phone never attached
