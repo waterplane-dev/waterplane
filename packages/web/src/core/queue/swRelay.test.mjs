@@ -260,26 +260,41 @@ test("a push always gets words: what was sent, else the push's own body", () => 
   assert.equal(R.notice({ ...sent, held: [] }, null, "waterplane", true).title, "Sent 2 to the desktop");
 });
 
-test("sw.js: a link.back push with the relay loaded shows exactly one notification; other pushes as before", async () => {
+/** `sw.js` in a `vm` with the relay loaded through its own `importScripts`; `store` (optional)
+ *  stands in for the worker's IndexedDB, else the relay finds none. */
+function loadSw(store) {
   const SW = readFileSync(new URL("../../../public/sw.js", import.meta.url), "utf8");
   const RELAY = readFileSync(new URL("../../../public/swRelay.js", import.meta.url), "utf8");
   const on = {};
   const shown = [];
+  const fetched = [];
   const self = {
     addEventListener: (t, fn) => { on[t] = fn; },
     registration: { showNotification: (title, opts) => { shown.push({ title, opts }); return Promise.resolve(); } },
     clients: { matchAll: async () => [], openWindow: async () => {}, claim: async () => {} },
   };
-  const ctx = vm.createContext({ self, URL, URLSearchParams, Response, caches: {}, console, setTimeout, Date, JSON, Promise, Object, Math });
+  const fetch = async (u) => { fetched.push(u); throw new Error("no network in this test"); };
+  const ctx = vm.createContext({ self, URL, URLSearchParams, Response, caches: {}, console, setTimeout, Date, JSON, Promise, Object, Math, fetch });
   ctx.importScripts = () => vm.runInContext(RELAY, ctx);
   vm.runInContext(SW, ctx);
-  assert.equal(typeof ctx.WPRelay, "object", "importScripts loaded the relay");
+  if (store) ctx.WPRelay.idbStore = () => store;
   const run = async (t, ev) => { const waits = []; on[t]({ ...ev, waitUntil: (p) => waits.push(p) }); await Promise.all(waits); };
+  return { ctx, shown, fetched, run };
+}
+
+const LINK_BACK = { kind: "link.back", id: "L1", ts: 1, title: "desk is back", body: "desk is reachable again", tag: "link.back", hostLabel: "desk" };
+
+test("sw.js: a link.back push with the relay loaded shows exactly one notification; other pushes as before", async () => {
+  const { ctx, shown, run } = loadSw();
+  assert.equal(typeof ctx.WPRelay, "object", "importScripts loaded the relay");
   // No IndexedDB in this context: the relay finds nothing, and the push's own words show.
-  await run("push", { data: { json: () => ({ kind: "link.back", id: "L1", ts: 1, title: "desk is back", body: "desk is reachable again", tag: "link.back", hostLabel: "desk" }) } });
+  await run("push", { data: { json: () => LINK_BACK } });
   assert.equal(shown.length, 1);
   assert.equal(shown[0].title, "desk is back");
   assert.equal(shown[0].opts.body, "desk is reachable again");
+  // The relay read nothing (no store): it knows nothing about the queue, so the push stays loud.
+  assert.equal(shown[0].opts.silent, undefined);
+  assert.equal(shown[0].opts.requireInteraction, true);
   await run("push", { data: { json: () => ({ kind: "git", id: "G1", ts: 1, title: "Push failed", body: "lint", tag: "g" }) } });
   assert.equal(shown.length, 2);
   assert.equal(shown[1].opts.body, "lint");
@@ -295,4 +310,72 @@ test("the notice names every row left behind and every row the host refused", ()
   assert.equal(R.notice(refused, null, "waterplane", false).body, "1 was not accepted by studio — open to review. 1 waits for you — open to review.", "a sync wake that sent nothing still says a prompt failed");
   const backoff = { ...base, sent: 0, remaining: 1 };
   assert.equal(R.notice(backoff, null, "waterplane", false), null, "a sync wake only backing off is not news");
+});
+
+test("a refusal (422), an old host (404) and a refused sign-in leave no `written` entry; an earlier unanswered attempt does", async () => {
+  for (const status of [422, 404, 401, 403]) {
+    const r = rig({ answer: () => ({ status, body: status === 422 ? { refused: "no" } : {} }) });
+    await r.page.hand(plan([{ lane: "s1", items: [input("a1")] }]));
+    await r.page.release();
+    await R.runRelay(r.env);
+    assert.equal(r.sent.length, 1);
+    const c = await r.page.claim();
+    assert.deepEqual(c.written, [], `${status}: nothing ran, so the page is not told it was sent`);
+  }
+  // First attempt: no answer (it may have run). Second: refused. The row stays written.
+  let n = 0;
+  const r = rig({ answer: () => (++n === 1 ? new Error("net") : { status: 422, body: { refused: "no" } }) });
+  await r.page.hand(plan([{ lane: "s1", items: [input("a1")] }]));
+  await r.page.release();
+  await R.runRelay(r.env);
+  r.tick(10 * 60_000);
+  await r.page.release();
+  await R.runRelay(r.env);
+  assert.equal(r.sent.length, 2);
+  const c = await r.page.claim();
+  assert.deepEqual(c.written.map((w) => w.ackId), ["a1"], "the first attempt may have run");
+});
+
+test("sw.js: a link.back push to a phone whose handed queue is empty shows ONE silent, unsticky notification", async () => {
+  const wake = async (handed) => {
+    const r = rig({ answer: (f) => ok(f.ackId) });
+    await r.page.beat(); await r.page.hand(handed); await r.page.release();
+    const sw = loadSw(r.store);
+    await sw.run("push", { data: { json: () => LINK_BACK } });
+    return sw;
+  };
+  // Depth 0, read: nothing queued here. iOS/Chrome still need a notification, but no buzz and not sticky.
+  const quiet = await wake(plan([]));
+  assert.equal(quiet.shown.length, 1, "a push always shows exactly one");
+  assert.equal(quiet.shown[0].title, "desk is back");
+  assert.equal(quiet.shown[0].opts.body, "desk is reachable again");
+  assert.equal(quiet.shown[0].opts.silent, true);
+  assert.equal(quiet.shown[0].opts.requireInteraction, false);
+  assert.deepEqual(quiet.fetched, [], "an empty queue sends nothing");
+  // Rows the relay cannot carry (depth 2, no lanes): the same push stays loud.
+  const loud = await wake({ ...plan([]), depth: 2 });
+  assert.equal(loud.shown.length, 1);
+  assert.equal(loud.shown[0].opts.silent, undefined);
+  assert.equal(loud.shown[0].opts.requireInteraction, true);
+});
+
+test("a link.back push is quiet only for a plan that was read and is empty", async () => {
+  const wake = async (handed) => {
+    const r = rig({ answer: (f) => ok(f.ackId) });
+    if (handed) { await r.page.beat(); await r.page.hand(handed); await r.page.release(); }
+    return R.runRelay(r.env);
+  };
+  // Depth 0 on a plan the relay read: nothing queued here, quiet.
+  assert.equal(R.quietPush(await wake(plan([]))), true);
+  // Rows the relay cannot carry: lanes are empty but the queue is not, so the push stays loud.
+  const blocked = { ...plan([]), depth: 2 };
+  const rep = await wake(blocked);
+  assert.equal(rep.remaining, 0);
+  assert.equal(rep.depth, 2);
+  assert.equal(R.quietPush(rep), false);
+  // No relay store / plan read at all: unknown, loud.
+  assert.equal(R.quietPush(await wake(null)), false);
+  assert.equal(R.quietPush(null), false);
+  // A queue the wake could not take (sealed sign-in) is not quiet either.
+  assert.equal(R.quietPush({ ...(await wake(plan([]))), reason: "sealed" }), false);
 });

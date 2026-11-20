@@ -173,7 +173,7 @@ export function localSlotWaitText(f: LocalSlotFacts): string | undefined {
   const n = f.working.length;
   if (f.max == null || n < f.max) return undefined;
   const lead = `waiting for the local model — ${n} local session${n === 1 ? " is" : "s are"} working`;
-  const named = f.working.length === 1 && f.working[0].name ? ` (${f.working[0].name})` : "";
+  const named = f.working.length === 1 && f.working[0]!.name ? ` (${f.working[0]!.name})` : "";
   return `${lead}${named}; this desktop runs ${f.max} at a time`;
 }
 
@@ -185,7 +185,7 @@ export function localSlotWaitText(f: LocalSlotFacts): string | undefined {
 export function localSlotOverText(f: LocalSlotFacts): string | undefined {
   const n = f.working.length;
   if (f.max == null || n < f.max) return undefined;
-  const named = n === 1 && f.working[0].name ? ` (${f.working[0].name})` : "";
+  const named = n === 1 && f.working[0]!.name ? ` (${f.working[0]!.name})` : "";
   return `another local-model session is working${named} — this desktop runs ${f.max} at a time, so they share the local model and turns may be slower`;
 }
 

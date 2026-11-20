@@ -146,7 +146,7 @@ export function HostSwitcherSheet() {
         </div>
       )}
       {PeersSheet && <SetLine style={{ marginTop: 10 }}>
-        <Button onClick={() => setPeers(true)}><Link2 size={ICON} /> Peer desktops</Button>
+        <Button onClick={() => setPeers(true)}><Link2 size={ICON} /> Helper desktops</Button>
       </SetLine>}
       {!hosts.some(isDemoHost) && (
         <SetLine style={{ marginTop: 10 }}>

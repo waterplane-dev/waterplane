@@ -24,7 +24,7 @@ thing to *consider*, never counted, and *ignore in this repo* folds them (host-s
 chosen; nothing is sent by the tap. Shared by BOTH doors, because inline in one the other lost it.
 `openRepoFile` — the tree opened on a file, returning to region 2.
 `seedSend` — `remedy`'s opener for a seed built whole (an opt-in's clock and model ride with its
-words); `openCaptureFromReadings` — an opt-in's `open captures`, via `nav.openCapture`.
+words).
 The context-weight row's always-on list (`AlwaysOnRows.tsx`, read-only): `openInstructionFile`
 (a repo row's file, returning to region 1), `sessionDoorsFor(repoId)` (this repo's running
 sessions, each a door to `openSessionContext` → `nav.openContext`: what its first request carried)

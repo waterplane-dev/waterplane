@@ -7,6 +7,7 @@
  */
 import { FlaskConical, Globe, LogOut, Radar, QrCode, Server, Smartphone } from "lucide-react";
 import { BRAND } from "@waterplane/shared";
+import { Explain } from "../../Explain";
 import { SetAction, SetCustom } from "../../SettingsKit";
 import { isNativeShell } from "../../hostUrl";
 import { isDemo, leaveDemo, tryDemo } from "../../demoEntry";
@@ -21,7 +22,7 @@ export function HostsSettings() {
     <>
       {isNativeShell() && (
         <SetAction
-          id="hosts" label="hosts" icon={Server} opens
+          id="hosts" label="Desktops" icon={Server} opens
           onClick={() => { openHosts(); }}
           note={active
             ? `In use: ${active.name} at ${hostAddress(active.base)}. Add, edit, switch or remove desktops.`
@@ -30,7 +31,7 @@ export function HostsSettings() {
       )}
       {isNativeShell() && (
         <SetAction
-          id="add-desktop" label="add a desktop" icon={Radar} opens
+          id="add-desktop" label="Add a desktop" icon={Radar} opens
           onClick={() => { openHosts(); showAddHost(); }}
           note={`Desktops running ${BRAND.displayName} on your tailnet are listed — one tap adds one. Typing an address or a pairing code still works there.`}
         />
@@ -40,10 +41,11 @@ export function HostsSettings() {
         // without this row nothing said how a second desktop (or a second phone)
         // is reached without the app.
         <SetCustom
-          id="web-desktops" label="another desktop, without the app" icon={Globe}
-          note="In a browser each desktop is its own address — no list, no code. Tap for the steps."
-          more={<WebPairSteps />}
-        />
+          id="web-desktops" label="Another desktop, in a browser" icon={Globe}
+          note="In a browser each desktop is its own address. Open it and add it to your home screen: one icon per desktop."
+        >
+          <Explain of="how to reach another desktop in a browser" label="steps"><WebPairSteps /></Explain>
+        </SetCustom>
       )}
       {isDemo() ? (
         <SetAction
@@ -59,12 +61,12 @@ export function HostsSettings() {
         />
       )}
       <SetAction
-        id="pair-phone" label="pair another phone" icon={QrCode} opens
+        id="pair-phone" label="Add another phone" icon={QrCode} opens
         onClick={openPairQr}
         note="Shows a QR and a one-time code from this desktop. The new phone scans it — web version or the app — and gets its own sign-in."
       />
       <SetAction
-        id="paired-devices" label="paired devices" icon={Smartphone} opens
+        id="paired-devices" label="Phones signed in" icon={Smartphone} opens
         onClick={openPairedDevices}
         note="The phones with their own sign-in for this desktop: when each was last seen, and revoke."
       />
@@ -78,8 +80,8 @@ function WebPairSteps() {
     <ol className="web-pair-steps">
       <li>On the phone: Tailscale installed and signed in to the same tailnet as the desktop.</li>
       <li>
-        Open that desktop's address in the browser — <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code> once
-        it runs <code>tailscale serve</code>, else <code>http://100.x.y.z:8770</code>. Or, on a phone already
+        Open that desktop's address in the browser — https://machine.tailnet.ts.net once
+        it runs tailscale serve, else http://100.x.y.z:8770. Or, on a phone already
         connected to it, Settings → pair another phone: scanning that QR opens a page whose "use web
         version" is the same address.
       </li>

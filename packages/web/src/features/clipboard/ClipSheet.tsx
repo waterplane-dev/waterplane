@@ -3,6 +3,7 @@
  * compose draft, the phone's clipboard or typing. Nothing is typed into the
  * session.
  */
+import { TITLE } from "../../sheetNames";
 import { useState } from "react";
 import { ClipboardPaste, CloudUpload, Eraser, Quote } from "lucide-react";
 import { useCore } from "../../sdk";
@@ -51,7 +52,7 @@ export function ClipSheet() {
 
   return (
     <div className="sheet">
-      <SheetHead title={"To desktop clipboard"} onClose={() => core.nav.close("clip")} />
+      <SheetHead title={TITLE.clip} onClose={() => core.nav.close("clip")} />
       <Hint>
         Puts text on the DESKTOP's system clipboard — nothing is typed into the session.
         Paste your phone's clipboard, pull in the compose draft, or just type below.

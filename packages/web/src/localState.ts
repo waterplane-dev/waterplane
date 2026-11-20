@@ -23,12 +23,12 @@
  * and the questions sheet is read almost exclusively when there is no link to
  * check against.
  */
-import type { BuildConfig, CaptureTarget, LaunchOpts, RepoTarget, ScheduleEntry, SessionInfo } from "@waterplane/shared";
+import type { BuildConfig, LaunchOpts, RepoTarget, ScheduleEntry, SessionInfo } from "@waterplane/shared";
 import { cleanHealth } from "@waterplane/shared";
 import type { CliHealthDoc } from "./CliHealthSheet";
 import type { Snippet } from "./SnippetSheet";
 import { snippetView, type SnippetView } from "./snippetPicks";
-import { LS, lsDel, lsGet, lsJson, lsNum, lsSetJson } from "./storage";
+import { LS, lsDel, lsGet, lsJson, lsJsonUser, lsNum, lsSetJson } from "./storage";
 import { type PendingMarks, parsePendingMarks } from "./pendingMarks";
 
 /** What the compose bar's send button does: straight away, queued for this
@@ -83,7 +83,7 @@ export function loadReposAt(): number {
 
 export const CMD_HISTORY_MAX = 50;
 export function loadCmdHistory(): string[] {
-  return lsJson(LS.cmdHistory, []);
+  return lsJsonUser<string[]>(LS.cmdHistory, [], "command history", Array.isArray);
 }
 
 // Saved reusable compose snippets — personal, cross-repo, and synced through the
@@ -192,44 +192,6 @@ export function saveBuildsSnap(repoDir: string, builds: BuildConfig[]): Record<s
     for (const dir of dirs.sort((a, b) => all[a].at - all[b].at).slice(0, dirs.length - BUILD_SNAP_REPOS)) delete all[dir];
   }
   lsSetJson(LS.snapBuilds, all);
-  return all;
-}
-
-/**
- * Per-repo capture targets, cached exactly as the build commands are.
- *
- * The argument is `saveBuildsSnap`'s and it lands harder here, because of what
- * the capture sheet is FOR: you open it to find out what a screen looks like
- * when you are not at the desk, which is the same moment the link is worst. An
- * uncached list paints as empty, and an empty list is a CLAIM — "this repo has
- * nothing to capture" — about a repo that may have sixteen targets. So the
- * reading is kept, with `listAt` beside it, and the sheet says how old the copy
- * is rather than passing last Tuesday's targets off as this minute's.
- *
- * Only the READING is cached. Running a capture is a durable queued op and
- * saving an edited target list needs the desktop; neither is decided here.
- */
-const CAPTURE_SNAP_REPOS = 40;
-export function loadCaptureSnap(): Record<string, Cached<CaptureTarget[]>> {
-  const v = lsJson<Record<string, Cached<CaptureTarget[]>>>(LS.snapCapture, {});
-  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
-  const out: Record<string, Cached<CaptureTarget[]>> = {};
-  for (const [dir, e] of Object.entries(v)) {
-    if (e && Array.isArray(e.v) && typeof e.at === "number") out[dir] = e;
-  }
-  return out;
-}
-
-export function saveCaptureSnap(repoDir: string, targets: CaptureTarget[]): Record<string, Cached<CaptureTarget[]>> {
-  const all = loadCaptureSnap();
-  all[repoDir] = { v: targets, at: Date.now() };
-  const dirs = Object.keys(all);
-  if (dirs.length > CAPTURE_SNAP_REPOS) {
-    // Oldest first, `saveBuildsSnap`'s rule: the repo you have not opened in
-    // months is the one whose cached copy is worth least.
-    for (const dir of dirs.sort((a, b) => all[a].at - all[b].at).slice(0, dirs.length - CAPTURE_SNAP_REPOS)) delete all[dir];
-  }
-  lsSetJson(LS.snapCapture, all);
   return all;
 }
 

@@ -13,10 +13,16 @@ import type { RepoTarget } from "@waterplane/shared";
 import { featureSheetId, useConnStatus, useStore, type FeatureManifest } from "@waterplane/sdk";
 import { CHECK_ID, PUSH_CHANGED } from "../shared/wire.mts";
 import { ScorecardSheet } from "./ScorecardSheet.tsx";
-import { scoreChip, type ScoreCut } from "./logic.ts";
+import { scoreChip, scoreLine, type ScoreCut } from "./logic.ts";
 import { ensureRead, leaveScorecard, onChanged, openScorecard, views } from "./state.ts";
 
 const cutFor = (repo: RepoTarget): ScoreCut => ({ repo: repo.id });
+
+/** The repo menu line, always there: the reading once known, "not scored" until then (`ensureRead` is TTL-guarded). */
+function menuLabel(repo: RepoTarget): string {
+  void ensureRead(repo);
+  return `Scorecard · ${scoreLine(views.get().get(repo.id)?.view)}`;
+}
 
 export const manifest: FeatureManifest = {
   id: "scorecard",
@@ -25,6 +31,8 @@ export const manifest: FeatureManifest = {
   pushes: { [PUSH_CHANGED]: (data) => onChanged(data) },
   setupRows: [{ check: CHECK_ID, agentVerb: "see the failing checks",
     guidance: "Close the failing OpenSSF Scorecard checks the sheet lists for this repo, one at a time, starting with the lowest score. Where a check cannot pass for a solo maintainer, say why and propose accepting it with a reason; change nothing you were not asked to.", agent: (repo) => openScorecard(repo, cutFor(repo)) }],
+  // Never absent: a repo not scored yet still says so, and a tap opens the sheet that says why.
+  repoActions: [{ id: "open", icon: ShieldCheck, label: (r) => menuLabel(r), run: (r) => openScorecard(r, null) }],
   repoChips: [{
     id: "scorecard",
     icon: ShieldCheck,

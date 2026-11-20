@@ -9,7 +9,7 @@
  * a remove is offered only when the answer is "nothing" — the host re-checks
  * on the remove itself, so a stale reading cannot delete work.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { CircleCheck, TriangleAlert, Trash2 } from "lucide-react";
 import type { RepoTarget, WorktreeLeftover } from "@waterplane/shared";
 import { api } from "../../api";
@@ -62,8 +62,10 @@ async function removeAll(ts: RepoTarget[], done: () => void): Promise<void> {
 }
 
 /** The line above a repo's session-less worktrees: what they are and the one-tap cleanup. */
-export function LeftoverHead({ wts, readings, onChanged }: {
+export function LeftoverHead({ wts, readings, onChanged, style }: {
   wts: RepoTarget[]; readings: Map<string, Reading>; onChanged: () => void;
+  /** The repo's accent (`repoAccentStyle`), so the line carries the rows' stripe and wash. */
+  style?: CSSProperties;
 }) {
   const [busy, setBusy] = useState(false);
   if (!wts.length) return null;
@@ -72,7 +74,7 @@ export function LeftoverHead({ wts, readings, onChanged }: {
   const pending = wts.some((t) => readings.get(t.id)?.state === "loading");
   const kept = n - ok.length;
   return (
-    <div className="wt-leftover-head">
+    <div className="wt-leftover-head" style={style}>
       <RowSub as="div">
         No session is using {n === 1 ? "this worktree" : `these ${n} worktrees`}. A worktree is a second checkout
         of the repo, usually made for an agent; {n === 1 ? "it" : "they"} outlived the session that made {n === 1 ? "it" : "them"}.

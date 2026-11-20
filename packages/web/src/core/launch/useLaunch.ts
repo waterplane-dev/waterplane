@@ -64,7 +64,7 @@ export interface LaunchDeps {
   /** The live terminal geometry (`useTermFeed`): every create is sized by it. */
   geomRef: { readonly current: { cols: number; rows: number } };
   /** The one send path. */
-  queue: Pick<QueueApi, "queueOp" | "enterPending" | "queueSessionPrompt" | "submitInput">;
+  queue: Pick<QueueApi, "queueOp" | "enterPending" | "enterOldestPending" | "queueSessionPrompt" | "submitInput">;
   /** `refreshRepos`' writers — the listing is App's world state. */
   setRepos(r: RepoTarget[]): void;
   setReposAt(ts: number): void;
@@ -85,7 +85,7 @@ export function useLaunch(deps: LaunchDeps) {
   /** The launch-ask switch (`waterplane.launchAsk`), as a ref: the gate is read
    *  from timers and the queue pump, where a closure can be a render behind. */
   const launchAskRef = prefRef("launchAsk");
-  const { queueOp, enterPending, queueSessionPrompt } = deps.queue;
+  const { queueOp, enterPending, enterOldestPending, queueSessionPrompt } = deps.queue;
   const repoForCwd = deps.repoForCwd;
   /**
    * The open that is WAITING on that question: what the sheet says it is about,
@@ -365,20 +365,13 @@ export function useLaunch(deps: LaunchDeps) {
   const pickBackend = (id: string | undefined) => setLaunchOpt({ backend: id, model: undefined, effort: undefined });
 
   function openRepo(t: RepoTarget) {
-    // A create already in flight here is NOT a reason to refuse this one. The
-    // impatient double-tap this used to guard against was a symptom of the tap
-    // showing nothing; it lands on a pending session screen now, immediately,
-    // so the remaining reading of "+ again" is the honest one: a SECOND session
-    // in this repo, with its own prompt, posted when the link is back. Both
-    // creates share the `create:<cwd>` lane, so they are delivered one at a
-    // time, and `serialSessions` is what keeps two agents out of one worktree.
-    // With no link there is nothing to show but the queue, so say what is
-    // already in it before adding to it.
-    const inFlight = deps.openingCwds().get(t.worktreePath);
-    if (inFlight) {
-      showToast(inFlight.status === "pending"
-        ? `${inFlight.n > 1 ? `${inFlight.n} already opening` : "one already opening"} in ${t.repoName} — this is another`
-        : `${inFlight.n > 1 ? `${inFlight.n} already queued` : "one already queued"} in ${t.repoName} — this is another`);
+    // A create already in flight for this repo: the second tap SHOWS it, it does
+    // not start another. The double-tap that opened two sessions was exactly
+    // this. A second session in the same repo is still one tap away from the
+    // send sheet ("a new session"); a different repo has its own entry here.
+    if (deps.openingCwds().has(t.worktreePath)) {
+      enterOldestPending(t.worktreePath);
+      return;
     }
     // With no link, "open a session here" queues an EMPTY terminal for later —
     // which is nothing anyone wanted: the session isn't the goal, the work that

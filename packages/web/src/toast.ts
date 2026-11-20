@@ -87,7 +87,43 @@ export type ToastEntry = {
    * can do what the desktop row did (`openNotif`).
    */
   notif?: NotificationItem;
+  /**
+   * Where a tap on this row lands, for a sentence that is not a desktop alert.
+   * Reported: "I need to be able to click notifications and land in the
+   * respective UI" — a row that says "2 new images" or "reading the repo to
+   * judge these 11 — the proposal lands here" and leads nowhere is a dead end.
+   * Plain data (it is persisted with the log); `openToastGo` walks it.
+   */
+  go?: ToastGo;
 };
+
+/** What a toast row opens, most specific first: the assessment result of a repo,
+ *  one picture (inside its session's strip), else the session it was said in. */
+export type ToastGo = {
+  assessRepoId?: string;
+  image?: { repoId: string; relPath: string };
+  sessionId?: string;
+};
+
+/** The default target: the session on screen when the sentence was said (null = none). */
+let whereNow: (() => ToastGo | null) | null = null;
+export function setToastWhere(f: (() => ToastGo | null) | null): void { whereNow = f; }
+/** The session on screen right now, or null — what a sentence about that session can skip saying twice. */
+export function sessionOnScreen(): string | null { try { return whereNow?.()?.sessionId ?? null; } catch { return null; } }
+/** Put a sentence in the log without drawing it: the screen it is about already shows the fact. */
+export function noteToast(m: string, go?: ToastGo): void { remember(m, Date.now(), undefined, go); }
+
+/** A go is kept only when it names something, and only in its known shape. */
+export function cleanGo(g: unknown): ToastGo | undefined {
+  if (!g || typeof g !== "object") return undefined;
+  const o = g as Record<string, unknown>;
+  const out: ToastGo = {};
+  if (typeof o.assessRepoId === "string" && o.assessRepoId) out.assessRepoId = o.assessRepoId;
+  const im = o.image as Record<string, unknown> | undefined;
+  if (im && typeof im.repoId === "string" && typeof im.relPath === "string") out.image = { repoId: im.repoId, relPath: im.relPath };
+  if (typeof o.sessionId === "string" && o.sessionId) out.sessionId = o.sessionId;
+  return Object.keys(out).length ? out : undefined;
+}
 
 let current: string | null = null;
 /** What a tap on the toast on screen opens, when its sentence names a screen ("… — tap to open"). */
@@ -109,6 +145,7 @@ function readLog(): ToastEntry[] {
     .map((r) => ({
       ts: r.ts, text: r.text, n: Number.isFinite(r.n) && r.n > 0 ? r.n : 1,
       ...(r.notif && typeof r.notif.id === "string" && typeof r.notif.title === "string" ? { notif: r.notif } : {}),
+      ...(cleanGo(r.go) ? { go: cleanGo(r.go) } : {}),
     }))
     .slice(0, LOG_CAP);
 }
@@ -121,15 +158,17 @@ function emitLog(): void {
   for (const fn of logListeners) fn(log);
 }
 
-function remember(text: string, at: number, notif?: NotificationItem): void {
+function remember(text: string, at: number, notif?: NotificationItem, go?: ToastGo): void {
   const head = log[0];
   if (head && head.text === text && at - head.ts < REPEAT_MS) {
     // Ten identical "queued" sentences are one fact with a count, not ten rows
     // pushing the sentence you were looking for off the bottom. The newest
-    // alert wins the tap: it is the one the count ends on.
-    log = [{ ts: at, text, n: head.n + 1, ...((notif ?? head.notif) ? { notif: notif ?? head.notif } : {}) }, ...log.slice(1)];
+    // alert (and target) wins the tap: it is the one the count ends on.
+    const n2 = notif ?? head.notif;
+    const g2 = go ?? head.go;
+    log = [{ ts: at, text, n: head.n + 1, ...(n2 ? { notif: n2 } : {}), ...(g2 ? { go: g2 } : {}) }, ...log.slice(1)];
   } else {
-    log = [{ ts: at, text, n: 1, ...(notif ? { notif } : {}) }, ...log].slice(0, LOG_CAP);
+    log = [{ ts: at, text, n: 1, ...(notif ? { notif } : {}), ...(go ? { go } : {}) }, ...log].slice(0, LOG_CAP);
   }
   lsSetJson(LS.toastLog, log);
   emitLog();
@@ -138,7 +177,7 @@ function remember(text: string, at: number, notif?: NotificationItem): void {
 /** Say one sentence, over whatever screen is up. Replaces any toast still on.
  *  `notif`: the desktop alert it announces, so its row in the log can open it. */
 let held: (() => boolean) | null = null;
-const heldQueue: Array<[string, NotificationItem | undefined, (() => void) | undefined]> = [];
+const heldQueue: Array<[string, NotificationItem | undefined, (() => void) | undefined, ToastGo | undefined]> = [];
 
 /**
  * While `isHeld()` is true a toast waits instead of drawing under a card that covers the app
@@ -152,19 +191,35 @@ export function holdToastsWhile(isHeld: () => boolean): void {
 export function releaseToasts(): void {
   if (held?.()) return;
   const q = heldQueue.splice(0);
-  for (const [m, n, o] of q) showToast(m, n, o);
+  for (const [m, n, o, g] of q) showToast(m, n, o, g);
 }
 
-export function showToast(m: string, notif?: NotificationItem, open?: () => void): void {
-  if (held?.()) { heldQueue.push([m, notif, open]); return; }
+export function showToast(m: string, notif?: NotificationItem, open?: () => void, go?: ToastGo): void {
+  // The target is read NOW, not when a held toast is finally said: the session
+  // on screen at the tap is the one the sentence is about.
+  let g = go;
+  if (!g && !notif) { try { g = whereNow?.() ?? undefined; } catch { g = undefined; } }
+  if (held?.()) { heldQueue.push([m, notif, open, g]); return; }
   current = m;
   currentOpen = open ?? null;
   emit();
-  remember(m, Date.now(), notif);
+  remember(m, Date.now(), notif, g);
   // Restarted, never stacked: two toasts a second apart are one message being
   // corrected, and the second must not be retired by the first one's clock.
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => { timer = undefined; current = null; currentOpen = null; emit(); }, toastMs(m));
+}
+
+/**
+ * Point the newest row at a target, when it is still THESE words — for a
+ * sentence said by a helper that takes no target (`liveSend`'s receipt).
+ */
+export function toastLeadsTo(text: string, go: ToastGo): void {
+  const head = log[0];
+  if (!head || head.text !== text) return;
+  log = [{ ...head, go }, ...log.slice(1)];
+  lsSetJson(LS.toastLog, log);
+  emitLog();
 }
 
 /** The tap on the toast itself: open what its sentence names (`showToast`'s `open`), then put it down. */

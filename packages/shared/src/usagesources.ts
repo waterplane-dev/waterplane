@@ -20,6 +20,7 @@
  * - `usageReadingTitle` never prints `?` — what a source did not say is left
  *   out of the sentence.
  */
+import { fmtUsd } from "./pricing.js";
 import type { UsageInfo, UsageReading, UsageSourceId, UsageWindow } from "./wire/telemetry.js";
 
 /** What a source id may look like: short, lowercase, `[a-z0-9:_-]`. */
@@ -140,7 +141,6 @@ export interface ChipCut {
   total: number;
 }
 
-const fmtUsd = (n: number): string => `$${n >= 100 ? Math.round(n) : n.toFixed(2)}`;
 
 function segmentOf(r: UsageReading, threshold: number): ChipSegment | null {
   const w = hottestWindow(r);
@@ -177,7 +177,7 @@ export function chipCut(readings: readonly UsageReading[] | null | undefined, ma
   const cap = Math.max(1, Math.floor(max));
   const segments = all.slice(0, cap);
   const hidden = all.slice(cap).map((s) => s.label);
-  if (hidden.length) segments[segments.length - 1] = { ...segments[segments.length - 1], hidden };
+  if (hidden.length) segments[segments.length - 1] = { ...segments[segments.length - 1]!, hidden };
   return { segments, hidden, total: all.length };
 }
 

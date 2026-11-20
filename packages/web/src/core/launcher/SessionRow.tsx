@@ -17,7 +17,7 @@ import { PromptPair } from "../../PromptPair";
 import { promptPairParts } from "../../promptPairParts";
 import { backendMark } from "../../backendCaps";
 import { track } from "../../usage";
-import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
+import { gitPending, gitTitle } from "../../gitCounts";
 import { openContextFor } from "../../features/context";
 import { openSessionBudget } from "../../features/sessionBudget";
 import { openBacklogCut } from "../../features/backlog";
@@ -33,6 +33,7 @@ import type { LauncherModel } from "./useLauncherModel";
 import { useSpendWarn } from "../sessions/spendWarn";
 import { FlagIcon, FollowUpLine, followUpButtonTitle, followUpClass } from "../sessions/followUp";
 import { RowTitle, RowSub } from "../../kit/Row";
+import { gitWords, newFilesWords } from "./homeWords";
 import { Tag } from "../../kit/Tag";
 
 const ICON = 16;
@@ -42,8 +43,8 @@ const ICON = 16;
 // Outbox, not inbox: the badge answers "did an agent leave me something", and
 // the inbox holds what this phone uploaded, which it already knows about.
 export const countBadges = (repo: RepoTarget | null, openGitFor: (repoId: string) => void): ReactNode => repo ? (<>
-  {repo.outboxCount > 0 && <button className="row-act count" title={`${repo.outboxCount} new outbox file${repo.outboxCount > 1 ? "s" : ""} since last opened — open gallery`} onClick={() => openOutboxFor(repo.id)}><Images size={14} />{repo.outboxCount}</button>}
-  {gitPending(repo) && <button className="row-act count" title={gitTitle(repo)} onClick={() => openGitFor(repo.id)}><FileDiff size={14} />{repo.changedCount > 0 && repo.changedCount}{gitSyncText(repo) && <span className="git-ab">{gitSyncText(repo)}</span>}</button>}
+  {repo.outboxCount > 0 && <button className="row-act count" title={`${repo.outboxCount} new or modified file${repo.outboxCount > 1 ? "s" : ""} from Claude since last opened — open Images & documents`} onClick={() => openOutboxFor(repo.id)}><Images size={14} />{newFilesWords(repo.outboxCount)}</button>}
+  {gitPending(repo) && <button className="row-act count" title={gitTitle(repo)} onClick={() => openGitFor(repo.id)}><FileDiff size={14} />{gitWords(repo) || "Changes"}</button>}
 </>) : null;
 
 // `headRepoId`: the repo whose outbox/git counts the group header above already
@@ -87,7 +88,7 @@ export function SessionRow({ p, m, s, repoName, headRepoId }: { p: LauncherProps
             (styles.css) and this line shares its row with the status chip. */}
         <span className="row-head">
         {/* Its number among this repo's OPEN sessions, from 0 (`sessionNumbersOf`). */}
-        {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${m.shownOf(repoName)}`}>{sessionNumbers.get(s.id)}</span>}
+        {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${m.shownOf(repoName)}`}>session {sessionNumbers.get(s.id)}</span>}
         {sessionRowBranch(s) && <RowTitle>{sessionRowBranch(s)}</RowTitle>}
         {sessionName(s)
           ? <SessionName s={s} />
@@ -231,7 +232,7 @@ export function SessionRow({ p, m, s, repoName, headRepoId }: { p: LauncherProps
                 conversation log — exactly where the header's reader
                 toggle is absent, and for the same reason. */}
             {canOutline && (() => { const n = turnTally(s); return (
-              <button className={`row-act${n == null ? "" : " tally"}`} title={`outline — where this session got to, without opening the terminal${tallyTitle(n)}`} onClick={() => openReader(s)}><List size={ICON} />{n == null ? null : n}</button>
+              <button className={`row-act${n == null ? "" : " tally"}`} title={`outline — where this session got to, without opening the terminal${tallyTitle(n)}`} onClick={() => openReader(s)}><List size={ICON} />{n == null ? null : `${n} turn${n === 1 ? "" : "s"}`}</button>
             ); })()}
             {(budget || ctx) && <span className="row-side-top">
               {ctx}

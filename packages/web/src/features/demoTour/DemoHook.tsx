@@ -145,7 +145,7 @@ export function DemoStartCue() {
       <Plus size={16} className="demo-hook-hint-icon" />
       <span className="demo-hook-hint-text">
         <b>Start a session on your desktop</b>
-        <span>Tap + now on {TOUR_REPO}: Claude Code opens in that repo, on the desktop’s own tools.</span>
+        <span>Tap New session on {TOUR_REPO}: Claude Code opens in that repo, on the desktop’s own tools.</span>
       </span>
       <button className="demo-hook-x" aria-label="dismiss the cue" onClick={closeStartCue}><X size={14} /></button>
     </div>

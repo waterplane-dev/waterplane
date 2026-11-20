@@ -48,7 +48,7 @@ export function promptLabel(text: string, cap?: number): string {
 export function summarize(blocks: TranscriptBlock[]): string | undefined {
   const texts = blocks.filter((b): b is Extract<TranscriptBlock, { kind: "text" }> => b.kind === "text");
   for (let i = texts.length - 1; i >= 0; i--) {
-    const plain = texts[i].text
+    const plain = texts[i]!.text
       .replace(/```[\s\S]*?```/g, " ")        // fenced code says nothing useful here
       .replace(/^\s{0,3}#{1,6}\s*/gm, "")     // heading markers
       .replace(/[*_`>]/g, "")
@@ -82,11 +82,11 @@ export function downsample(samples: ContextSample[], cap = MAX_SAMPLES): Context
     const from = Math.floor(b * per);
     const to = Math.min(samples.length, Math.floor((b + 1) * per));
     if (to <= from) continue;
-    let lo = samples[from];
-    let hi = samples[from];
+    let lo = samples[from]!;
+    let hi = samples[from]!;
     for (let i = from + 1; i < to; i++) {
-      if (samples[i].tok < lo.tok) lo = samples[i];
-      if (samples[i].tok > hi.tok) hi = samples[i];
+      if (samples[i]!.tok < lo.tok) lo = samples[i]!;
+      if (samples[i]!.tok > hi.tok) hi = samples[i]!;
     }
     if (lo === hi) out.push(lo);
     else if (lo.t <= hi.t) out.push(lo, hi);

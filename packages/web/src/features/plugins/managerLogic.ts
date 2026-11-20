@@ -12,7 +12,7 @@
 import { pluginMaturity } from "@waterplane/shared";
 import type { PluginView } from "@waterplane/shared";
 import type { CoreApi, FeatureManifest } from "../../sdk";
-import { SETTING_GROUPS } from "../../settingsIndex.ts";
+import { sectionOfGroup, sectionTitle } from "../../settingsIndex.ts";
 
 export type ManagerState = "on" | "off" | "failed";
 export type ManagerFilter = "all" | "on" | "off" | "beta" | "private";
@@ -69,7 +69,7 @@ export function firstSentence(text: string | undefined): string {
 }
 
 const humanId = (id: string) => id.replace(/[-_]+/g, " ");
-const groupTitle = (g: string) => SETTING_GROUPS.find((x) => x.id === g)?.title ?? g;
+const groupTitle = (g: string) => sectionTitle(sectionOfGroup(g)) ?? g;
 
 function place(where: string, label: string, extra?: Pick<ManagerPlace, "open" | "unavailable">): ManagerPlace {
   const text = label ? `${where}: ${label}` : where;

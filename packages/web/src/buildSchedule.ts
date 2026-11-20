@@ -7,7 +7,7 @@
  *
  * The cue is a COUNT ON A CONTROL, so it is a filter (CLAUDE.md): the ids it
  * returns are exactly the rules its words describe, and the tap opens
- * Automation cut to exactly those ids. One list (`schedulesForBuild`, shared,
+ * Scheduled cut to exactly those ids. One list (`schedulesForBuild`, shared,
  * narrowed by `isStandingSchedule` — a spent one-off is not a schedule) feeds
  * both. Its words are the schedule cards' own: `describeRule` for WHAT,
  * shared `inWords` for WHEN, `HORIZON_LABEL` for an armed-at-nothing rule.

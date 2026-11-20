@@ -124,6 +124,8 @@ deploy/release-pubkey.pem
 # (the test runners import it only when present). Flip it with the vault.
 !tools/vaultcoverage.mjs
 !tools/vaultcoverage.test.mjs
+# The commitApproved guard reads only the vault's host code: private with it, flipped with it.
+!tools/vaultconsent.test.mjs
 # The vault extension (biometric-gated secrets) stays PRIVATE (owner decision,
 # 2026-10-05). The generic keystore bridge it uses (ShellKeystorePlugin.java,
 # nativeKeystore.ts) is public and names none of it (vault/publictree.json).

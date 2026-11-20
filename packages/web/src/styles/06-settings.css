@@ -252,6 +252,8 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    heading visible, every switch under it gone. A blanket rule about a class
    this screen did not invent is why. */
 .set-group.gone { display: none; }
+/* A folded group is its heading alone: no bottom padding under it, or each shut row carries ~22px of empty band. */
+.set-group[data-folded] { padding-bottom: 0; }
 .set-group[data-group]:not(:has(.set-item)):not(:has(.set-door)) { display: none; }
 
 /* The heading stays put while its own rows scroll under it: with seven groups
@@ -273,7 +275,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
  * short of both edges. */
 .set-group[data-group] > .set-title {
   position: sticky; top: 0; z-index: 2;
-  margin: -14px -16px 0; padding: var(--sp-10) var(--sp-16) var(--sp-8);
+  margin: calc(-1 * var(--sp-14)) calc(-1 * var(--gutter)) 0; padding: var(--sp-10) var(--gutter) var(--sp-8);
   background: var(--bg);
   display: flex; align-items: center;
 }
@@ -340,7 +342,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 .set-lead {
   display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
   font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg);
-  padding: var(--sp-2) var(--sp-2) 0;
+  padding: var(--sp-2) 0 0;
 }
 .set-lead .set-state { margin-left: auto; }
 /* The `<select>` sits in the lead line rather than under it: it is one control

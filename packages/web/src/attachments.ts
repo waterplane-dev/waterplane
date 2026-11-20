@@ -118,10 +118,20 @@ export async function checkAttachments(
     // the artifact listing. Both are cheap and both degrade to `null` — an
     // unanswered listing must read as "could not ask", never as "not there".
     const wantInbox = refs.some((r) => r.relPath.startsWith(".claude/inbox/"));
-    const wantOutbox = refs.some((r) => !r.relPath.startsWith(".claude/inbox/"));
+    // The outbox listing is the NEWEST few hundred (it held 1,600 files on
+    // 2026-11-19), so a whole listing called a week-old proposal "not in the
+    // repo". Ask by name instead — one listing per distinct file name — and a
+    // listing that is still cut short without the file reads as "could not
+    // ask", never as "not there".
+    const outboxPaths = refs.map((r) => r.relPath).filter((p) => !p.startsWith(".claude/inbox/"));
+    const names = [...new Set(outboxPaths.map((p) => p.slice(p.lastIndexOf("/") + 1)))];
     const [inbox, outboxFiles] = await Promise.all([
       wantInbox ? api.inbox(repoId, signal).catch(() => null) : Promise.resolve([]),
-      wantOutbox ? api.artifacts(repoId, "outbox", undefined, { signal }).then((d) => d.files).catch(() => null) : Promise.resolve([]),
+      Promise.all(names.map((name) => api.artifacts(repoId, "outbox", undefined, { query: name, limit: 1000, signal }).then((d) => {
+        const asked = outboxPaths.filter((p) => p.slice(p.lastIndexOf("/") + 1) === name);
+        if (d.truncated && asked.some((p) => !d.files.some((f) => f.relPath === p))) throw new Error("listing cut short");
+        return d.files;
+      }))).then((lists) => lists.flat()).catch(() => null),
     ]);
     // Either half failing leaves the other half's answer usable only if the
     // failing half was not asked about — so a partial failure degrades the whole

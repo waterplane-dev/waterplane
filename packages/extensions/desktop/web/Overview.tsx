@@ -22,7 +22,7 @@ const RECT = {
   border: "2px solid var(--accent)", boxShadow: "0 0 0 1px #000", boxSizing: "border-box",
 } as const;
 
-export const OVERVIEW_TITLE = "overview — the whole desktop; drag the outline, or press anywhere on it, to move the zoomed view there (the middle mouse button also drags the picture)";
+const OVERVIEW_TITLE = "overview — the whole desktop; drag the outline, or press anywhere on it, to move the zoomed view there (the middle mouse button also drags the picture)";
 
 export function Overview({ ctl, map }: { ctl: DesktopController; map: Box }) {
   const wrap = useRef<HTMLDivElement>(null);

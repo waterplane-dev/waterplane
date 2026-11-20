@@ -21,7 +21,7 @@ export interface Meter {
   lat: number[];
 }
 
-export const LAT_SAMPLES = 30;
+const LAT_SAMPLES = 30;
 
 export const newMeter = (): Meter => ({ videoBytes: 0, keyBytes: 0, frames: 0, keyframes: 0, inputs: 0, lat: [] });
 

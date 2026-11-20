@@ -52,6 +52,7 @@ async function relayWake(push) {
   const rep = await R.runRelay(relayEnv(R)).catch(() => null);
   if (rep && rep.more && self.registration.sync) self.registration.sync.register("queue").catch(() => {});
   const n = rep ? R.notice(rep, push, BRAND_NAME, canAct()) : null;
+  const quietPush = !!push && R.quietPush(rep);
   if (n) {
     await self.registration.showNotification(n.title, {
       body: n.body,
@@ -61,7 +62,11 @@ async function relayWake(push) {
       badge: "/assets/icon-192.png",
       actions: n.actions,
       data: { relayRelease: n.release, item: push ? notifItem(push) : null },
-      requireInteraction: !!push || n.release.length > 0,
+      // A push to a phone whose plan was read and is EMPTY (depth 0; unknown or unreadable stays loud) still has
+      // to show one (iOS, Chrome) but quietly — no buzz, not sticky. Every paired phone gets
+      // `link.back`; only a phone with a queue should be bothered.
+      requireInteraction: (!!push || n.release.length > 0) && !quietPush,
+      ...(quietPush ? { silent: true } : {}),
     });
   }
   return { rep, shown: !!n };
@@ -183,7 +188,10 @@ self.addEventListener("push", (event) => {
   // notification saying what was sent and what waits — or the push's own words. iOS
   // requires every push to show one, so a failed relay still falls through to the plain one.
   if (data.kind === "link.back" && relay()) {
-    event.waitUntil(relayWake(data).then((r) => (r && r.shown ? null : showPlain(data))).catch(() => showPlain(data)));
+    // The quiet case (nothing queued here) is decided inside `relayWake`, where the report is. A relay
+    // that failed or threw says nothing about the queue, so that phone gets the plain, loud one.
+    const plain = () => showPlain(data);
+    event.waitUntil(relayWake(data).then((r) => (r && r.shown ? null : plain())).catch(plain));
     return;
   }
   event.waitUntil(showPlain(data));

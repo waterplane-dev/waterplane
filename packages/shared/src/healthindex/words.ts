@@ -76,8 +76,8 @@ export function healthMoveWords(points: readonly HealthIndexPoint[], move: Healt
   // The cap that moved the most, when it was a gate or coverage cap (P1 named only the worst entry).
   let capOther: string | null = null;
   for (let i = Math.max(1, points.length - span); i < points.length; i++) {
-    const p = points[i];
-    const prev = points[i - 1];
+    const p = points[i]!;
+    const prev = points[i - 1]!;
     if (p.gap) continue;
     const x = Math.log(p.mean / prev.mean);
     const k = Math.abs(x) < 1e-12 ? 1 : Math.expm1(x) / x;

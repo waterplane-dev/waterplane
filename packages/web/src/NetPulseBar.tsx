@@ -30,7 +30,7 @@ import { plainHostRoute } from "./hostUrl";
  * average, which is also why the offline stretches are drawn at all.
  *
  * Every reading on the strip is its own tap target, and each one opens the
- * health sheet AT ITS OWN SECTION (`app:open-nethealth` carries a focus, which
+ * Connection screen (Health tab) AT ITS OWN SECTION (`app:open-nethealth` carries a focus, which
  * the sheet scrolls to and flashes). Four separate facts share 22 px, so they
  * can only be shown as a shape and a number here — "2 sends stuck" and "2.0 MB"
  * both invite the question "which?", and answering it by dropping the reader at
@@ -151,6 +151,7 @@ function Traffic({ t }: { t: LinkTraffic }) {
         {up ? <span className="np-rate">{up}</span> : null}
         <span className="np-tot">{fmtTotal(t.up)}</span>
       </span>
+      <span className="np-sv-t np-tot">&nbsp;data</span>
     </span>
   );
 }
@@ -235,7 +236,7 @@ function Stuck({ n }: { n: number }) {
  * `flex: 0 0 auto` and survives any squeeze, because a green mark with its
  * sentence in the title, the hint and the sheet is still the answer, while half
  * a word is not. The count does NOT clip — "3" with the word gone is a reading,
- * "unsav…" is not, and a number that might be truncated is worse than no number.
+ * "not s…" is not, and a number that might be truncated is worse than no number.
  */
 function Saved({ outstanding, ever, stuck }: { outstanding: number; ever: boolean; stuck: number }) {
   if (outstanding > 0) {
@@ -243,7 +244,7 @@ function Saved({ outstanding, ever, stuck }: { outstanding: number; ever: boolea
       <span className="np-unsaved" role="button" data-hint="net.pulse.saved"
         title={`${outstanding} thing${outstanding > 1 ? "s" : ""} written here that the desktop does not have yet — queued sends and settings still to push. They go as soon as the link allows. Tap for what is outstanding`}
         onClick={(e) => openHealth("sends", e)}>
-        <CloudUpload size={10} aria-hidden="true" /> {outstanding}<span className="np-sv-t">&nbsp;unsaved</span>
+        <CloudUpload size={10} aria-hidden="true" /> {outstanding}<span className="np-sv-t">&nbsp;not sent</span>
       </span>
     );
   }
@@ -252,7 +253,7 @@ function Saved({ outstanding, ever, stuck }: { outstanding: number; ever: boolea
     <span className="np-saved" role="button" data-hint="net.pulse.saved"
       title="everything written on this device has reached the desktop and been stored there — nothing is waiting on this device. Tap for the detail"
       onClick={(e) => openHealth("sends", e)}>
-      <CircleCheck size={10} aria-hidden="true" /><span className="np-sv-t">&nbsp;saved</span>
+      <CircleCheck size={10} aria-hidden="true" /><span className="np-sv-t">&nbsp;all sent</span>
     </span>
   );
 }
@@ -333,7 +334,7 @@ function Strip() {
           counting them, which said nothing the marks did not. */}
       <span className="np-link" role="button" data-hint="net.pulse.graph" onClick={(e) => openHealth("link", e)}>
         <Spark samples={samples} ceiling={sum.ceiling} />
-        <span className="np-ms">{label}{sub ? <span className="np-med"> {sub}</span> : null}</span>
+        <span className="np-ms">{label}{sub ? <span className="np-med"> {sub}</span> : null}{open ? <span className="np-sv-t">&nbsp;delay</span> : null}</span>
       </span>
       <RouteChip />
       {restart

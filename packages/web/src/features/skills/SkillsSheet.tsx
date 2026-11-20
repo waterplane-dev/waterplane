@@ -27,11 +27,18 @@ import {
   RECOMMEND_COST, SORT_KEYS, SORT_WORDS, STATE_TITLES, STATE_WORDS, saveNote, bucket, changedOf, chipCount, chipKeys, chipLabel, draftChanges, hereChanges, keyOf, layerOf, levelFor, matches, reconcileDraft, reconcileSuggestions, saveWords, savingsFor, sortRows, splitRows, summaryWords, usageWords, isCountingRefusal,
   isCountingDoc, usesBar, usesIsNewer,
 } from "./logic";
-import { skillsState } from "./store";
+import { skillsEmbedAim, skillsState } from "./store";
+import { EmbeddedBody } from "../../SetupHealthSheet";
 
-export function SkillsSheet() {
+/**
+ * `embedded`: drawn as Setup & health's Skills section (the frame has the one head; the save bar
+ * follows the list). `fromDoor`: a skills door opened the screen, so its aim wins over the section's.
+ */
+export function SkillsSheet({ embedded, fromDoor = true }: { embedded?: boolean; fromDoor?: boolean }) {
   const c = core();
-  const aim = useStore(skillsAim);
+  const doorAim = useStore(skillsAim);
+  const embedAim = useStore(skillsEmbedAim);
+  const aim = embedded && !fromDoor ? embedAim : doorAim;
   const s = useStore(skillsState);
   // The Setup check's door: the skills it named, with the rest said to be hidden and a way back.
   const focus = useEvidenceFocus("skills");
@@ -147,8 +154,7 @@ export function SkillsSheet() {
   // With a draft the footer names the files; the top line says this repo's file only while there is none (never twice).
   const showFileLine = !footer;
 
-  return (
-    <Sheet title="Skills & plugins" icon={<Plug size={16} />} onClose={closeSkills} footer={footer}>
+  const content = (
       <div className="sheet-scroll sk-scroll">
         {gate ? <Hint>{gate}</Hint> : (
           <>
@@ -171,7 +177,7 @@ export function SkillsSheet() {
                     </Explain>
                   </div>
                 )}
-                {repoId && <div className="sk-share"><Button className="sk-link" onClick={() => openCarried(repoId)} title="Repo readings: what every turn of this repo carries, skills and plugins included">what every turn carries →</Button></div>}
+                {repoId && <div className="sk-share"><Button className="sk-link" onClick={() => openCarried(repoId)} title="Setup & health › Sessions: what every turn of this repo carries, skills and plugins included">what every turn carries →</Button></div>}
                 <CountBar label="Counting uses in this repo and across all repos" u={usesBar(uses.running ? uses.job : null, doc)} note="Suggestions wait for it." />
                 <SlowJobLine res={{ ...uses, job: uses.job?.state === "failed" ? uses.job : null }} what="Counting uses" />
                 <SearchBox className="sk-search" placeholder="search skills and plugins" value={s.query} onChange={(e) => setQuery(e.target.value)} />
@@ -208,6 +214,11 @@ export function SkillsSheet() {
           </>
         )}
       </div>
+  );
+  if (embedded) return <EmbeddedBody footer={footer}>{content}</EmbeddedBody>;
+  return (
+    <Sheet title="Skills & plugins" icon={<Plug size={16} />} onClose={closeSkills} footer={footer}>
+      {content}
     </Sheet>
   );
 }

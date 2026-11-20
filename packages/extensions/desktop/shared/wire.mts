@@ -21,10 +21,10 @@ export const STREAM_NAME = "screen";
 
 /** The `control` switch's label, as the manifest declares it and the phone draws it. */
 export const CONTROL_SWITCH = "Let the phone control this desktop";
-/** Where that switch is on the phone, as drawn: the Tools & diagnostics group, its `plugins` row, the
+/** Where that switch is on the phone, as drawn: the Desktops and connection section, its `plugins` row, the
  *  plugin's section (the manifest's name). One string for the host's words and the phone's —
  *  `logic.test.mjs` checks each step against the settings index and the manifest. */
-export const CONTROL_SETTING_PATH = "Settings › Tools & diagnostics › plugins › Live desktop";
+export const CONTROL_SETTING_PATH = "Settings › Desktops and connection › plugins › Live desktop";
 
 /** `kind` of a stream frame. These match the helper's stdout record kinds (helper/PROTOCOL.md). */
 export const FRAME_H264 = 1;

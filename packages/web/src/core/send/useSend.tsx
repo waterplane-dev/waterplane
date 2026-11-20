@@ -43,6 +43,10 @@ import { effectiveMaxWidth, scaleForUpload } from "../../uploadScale";
 import { baseName } from "../../format";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { showToast } from "../../toast";
+import { seedRewriteRefusal } from "../../relayedRow";
+import { showReceipt } from "../../receipt";
+import { showNewSchedule } from "../../features/schedule";
+import { openBacklogIn } from "../../features/backlog";
 import { expectSlotAsk } from "../../slotAskStore";
 import { track } from "../../usage";
 import type { Overlay } from "../../routing";
@@ -338,6 +342,11 @@ export function useSend(deps: SendDeps) {
    * words in it — the one thing that must never be dropped.
    */
   function dispatchIntent(i: SendIntent, seed: SendSeed): boolean {
+    // The row this send replaces may have been written by the background link while the sheet was
+    // open, or confirmed and gone (the relay's receipt, the page's own re-send): posting again would
+    // run its words twice under a new ackId. The words stay in the sheet.
+    const refusal = seedRewriteRefusal(seed.ackId, outboxRef.current);
+    if (refusal) { showToast(refusal); return false; }
     const steps = i.prompts.map((p) => p.trim()).filter(Boolean);
     const first = steps[0] ?? "";
     const label = first.slice(0, 40);
@@ -495,10 +504,21 @@ export function useSend(deps: SendDeps) {
       // holds it, the slot check may ask about the rows it runs beside.
       if (timed && i.target.kind === "repo") expectSlotAsk(entry.id, i.target.cwd);
       if (i.target.kind === "repos" && steps.length > 1) showToast(`scheduled the first step — a sweep is ONE prompt, so the other ${steps.length - 1} were dropped`);
-      else if (timed) showToast(offline
-        ? `queued${chain} — it is saved to the backlog when the link is back`
-        : `queued${where}${chain} for ${entry.nextAt != null ? fmtWhen(entry.nextAt) : "when its window opens"} — it is in the backlog`);
-      else showToast(offline ? `queued${chain} — the schedule is saved when the link is back` : `schedule saved${chain}`);
+      else if (timed) showReceipt({
+        text: offline
+          ? `Queued${chain}. It is saved to the backlog when the link is back.`
+          : `Queued${where}${chain} for ${entry.nextAt != null ? fmtWhen(entry.nextAt) : "when its window opens"}. It is in the backlog.`,
+        // The row is a backlog row: Open lands on that repo's backlog.
+        open: { run: () => openBacklogIn(i.target.kind === "repo" ? i.target.cwd : null) },
+      });
+      else if (offline) showToast(`queued${chain} — the schedule is saved when the link is back`);
+      else showReceipt({
+        text: entry.nextAt != null
+          ? `Scheduled for ${fmtWhen(entry.nextAt)}${chain}.`
+          : `Scheduled${chain}. It waits for the first usage reading (about a minute).`,
+        // Open lands on the Scheduled tab with any old cut cleared, so the new row is in view.
+        open: { run: showNewSchedule },
+      });
       return true;
     }
 

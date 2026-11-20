@@ -25,8 +25,8 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
 
   if (!isNativeShell()) {
     return (
-      <Sheet title="Peer desktops" icon={<Link2 size={ICON} />} onClose={onClose}>
-        <div className="empty">Pairing is done from the Android app, which is the one that knows more than one desktop.</div>
+      <Sheet title="Helper desktops" icon={<Link2 size={ICON} />} onClose={onClose}>
+        <div className="empty">Helper desktops are set up in the Android app, which is the one that knows more than one desktop.</div>
       </Sheet>
     );
   }
@@ -39,9 +39,9 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
   const unread = st.ledgers.filter((l) => !l.rows);
 
   return (
-    <Sheet title="Peer desktops" icon={<Link2 size={ICON} />} onClose={onClose}>
+    <Sheet title="Helper desktops" icon={<Link2 size={ICON} />} onClose={onClose}>
       <Hint>
-        A paired desktop can be handed a job by a session on the other, and its answer comes back to that session. Pairing
+        A helper desktop runs one job for the other and reports back to that session as one prompt. Linking
         gives each desktop the other's address and a fresh secret in each direction; the secrets are made on this device,
         sent once and not kept here.
       </Hint>
@@ -51,7 +51,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
       </Hint>
 
       {cands.length < 2 ? (
-        <div className="empty">Pairing needs two saved desktops. Add the other one under Hosts first.</div>
+        <div className="empty">Helper desktops need two saved desktops. Add the other one under Desktops first.</div>
       ) : (
         <SetLine style={{ display: "grid", gap: 8 }}>
           {(["a", "b"] as const).map((w) => (
@@ -59,7 +59,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
               onChange={(e) => pick(w, e.target.value || null)}>
               <option value="">{w === "a" ? "first desktop…" : "second desktop…"}</option>
               {cands.map((c) => (
-                <option key={c.host.id} value={c.host.id}>{c.host.name}{c.addr ? ` · ${c.addr}` : " · cannot pair"}</option>
+                <option key={c.host.id} value={c.host.id}>{c.host.name}{c.addr ? ` · ${c.addr}` : " · cannot be linked"}</option>
               ))}
             </select>
           ))}
@@ -67,7 +67,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
           <Button onClick={() => {
             if (st.busy > 0) return;
             void pairHosts(st.pick.a ?? "", st.pick.b ?? "");
-          }}><Link2 size={ICON} /> pair both ways</Button>
+          }}><Link2 size={ICON} /> Link as helpers</Button>
           {cands.filter((c) => c.why).map((c) => (
             <Hint key={c.host.id} as="span">{c.host.name}: {c.why}</Hint>
           ))}
@@ -77,11 +77,11 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
       {st.busy > 0 && <Hint>working…</Hint>}
       {st.note && <Hint role="status">{st.note}</Hint>}
 
-      <Hint style={{ marginTop: 10 }}>Paired</Hint>
+      <Hint style={{ marginTop: 10 }}>Helpers</Hint>
       {!st.loaded ? (
         <div className="empty">reading each desktop…</div>
       ) : rows.length === 0 ? (
-        <div className="empty">No desktop is paired with another yet.</div>
+        <div className="empty">No desktop is a helper for another yet.</div>
       ) : (
         <div className="list">
           {rows.map((p) => {
@@ -96,7 +96,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
                   {signIn && <RowSub className="warn" role="status">{signIn}</RowSub>}
                 </Row>
                 <div className="row-acts">
-                  <Button aria-label={`unpair ${pairedTitle(p)}`} onClick={() => void unpair(p)}><Trash2 size={ICON} /></Button>
+                  <Button aria-label={`remove helper link ${pairedTitle(p)}`} onClick={() => void unpair(p)}><Trash2 size={ICON} /></Button>
                 </div>
               </Row>
             );

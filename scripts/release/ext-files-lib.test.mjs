@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { copyExtFiles, extFilesProblem } from "./ext-files-lib.mjs";
+import { copyExtFiles, extFilesProblem, findReleaseJunk, keepInRelease } from "./ext-files-lib.mjs";
 
 test("files: accepts relative folders, refuses escapes and non-arrays", () => {
   assert.equal(extFilesProblem(["cli", "helper"]), null);
@@ -65,4 +65,15 @@ test("files: a symlinked folder or file is refused in words", () => {
     assert.throws(() => copyExtFiles(a, "x", ["cli"], dst), /cli is a symlink/);
     assert.throws(() => copyExtFiles(b, "x", ["cli"], dst), /link\.mjs is a symlink/);
   } finally { for (const d of [a, b, dst]) rmSync(d, { recursive: true, force: true }); }
+});
+
+test("release junk: .pdb debug symbols are dropped from a copy and found in a stage", () => {
+  assert.equal(keepInRelease("/x/node-pty/prebuilds/win32-x64/conpty.pdb"), false);
+  assert.equal(keepInRelease("/x/node-pty/prebuilds/win32-x64/pty.node"), true);
+  const d = mkdtempSync(join(tmpdir(), "junk-"));
+  mkdirSync(join(d, "a/b"), { recursive: true });
+  writeFileSync(join(d, "a/b/conpty.pdb"), "x");
+  writeFileSync(join(d, "a/ok.js"), "x");
+  assert.deepEqual(findReleaseJunk(d), ["a/b/conpty.pdb"]);
+  rmSync(d, { recursive: true, force: true });
 });

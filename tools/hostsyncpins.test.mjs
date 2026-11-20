@@ -15,7 +15,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SRC = join(new URL("..", import.meta.url).pathname, "packages", "host", "src");
@@ -92,4 +92,23 @@ test("setupwatch.ts: what it runs unasked never blocks on git or the three tree 
   const events = read("server/sessionEvents.ts");
   assert.doesNotMatch(events, /setupWatch\.check\(/, "a session create never runs the blocking check");
   assert.match(events, /setupWatch\.checkInBackground\(/, "a session create re-checks in the background");
+});
+
+// The whole host, as a ratchet. The named pins above hold the paths that were converted; this one holds
+// the rest at a count that may only go down, so a blocking child process added to a request or tick path
+// anywhere else is a visible decision (raise it here and say why in the code), not a silent one.
+// `cli/` is the command line (it runs once and exits, no PTYs to stall) and is not counted.
+const HOST_SYNC_CALLS = 31;
+const syncCalls = (text) => (text.match(/\b(?:execSync|execFileSync|spawnSync)\(/g) ?? []).length;
+const walk = (dir, rel = "") => readdirSync(join(dir, rel), { withFileTypes: true }).flatMap((e) => {
+  const r = rel ? `${rel}/${e.name}` : e.name;
+  return e.isDirectory() ? (r === "cli" ? [] : walk(dir, r)) : e.name.endsWith(".ts") ? [r] : [];
+});
+
+test("host-wide: blocking child-process calls outside cli/ may only go down", () => {
+  const per = walk(SRC).map((f) => [f, syncCalls(read(f))]).filter(([, n]) => n > 0);
+  const total = per.reduce((n, [, c]) => n + c, 0);
+  assert.ok(total <= HOST_SYNC_CALLS,
+    `${total} blocking child-process calls in ${per.length} files, pinned at ${HOST_SYNC_CALLS}: ${per.map(([f, c]) => `${f}:${c}`).join(" ")}`);
+  assert.ok(total >= HOST_SYNC_CALLS, `now ${total} (pinned ${HOST_SYNC_CALLS}): lower HOST_SYNC_CALLS to ${total} so the ratchet holds the gain`);
 });

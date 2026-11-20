@@ -5,6 +5,50 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.31
+
+### New
+
+- **Waiting work is one screen.** Activity, Queued, Backlog and Scheduled are tabs of a single Waiting work screen. Every old door opens it on its own tab, and switching tabs is not a Back step.
+- **Setup & health is one screen.** The Setup check, repo readings and Skills & plugins sit together under This repo and This desktop tabs, with sections for Checks, Health score, Watch, Opt-ins, Skills and Sessions. Connection is also one screen, with Health and Speed test tabs.
+- **Settings opens on six folded sections.** Its search also finds screens and says where else they live, and a setting result jumps to its row.
+- **Send has a "More ways to send" menu.** It lists Send now, Send when free, Send at a time, Add to backlog, Start a new session when free and Keep on the pad. Each acts on that one prompt.
+- **Close sessions is one ticked list.** Finished sessions are ticked, filters fold under Narrow down, and the receipt says "Closed N sessions. They are in Archive." with an Open Archive button.
+- **A new session waiting for the desktop reads as one calm state.** One line says what is waiting and why (not answering, no connection, starting the CLI). The extra controls are gone while it waits.
+- **The Android app shows a storm instead of the link-down banner.** The logo's plane holds over rough water and lands once the link has stayed up. Hide lasts one outage, and the plain banner comes back after it. This needs a new APK.
+- **Finished assessments, builds and backlog items notify with a tap target.** The tap opens the result, the build sheet or the backlog cut.
+- **Repo cards use a neutral card with a coloured edge** in both dark and light mode, instead of a tinted wash.
+- **A stuck relayed row has a way out.** "Remove from the list" asks first, says the prompt may have run, and cancels and sends nothing.
+- **Copilot Chat gets its own tab in VS Code.** It shows the plan, this month's count and GitHub's quota windows, with read and stop buttons.
+
+### Security
+
+- **Repeated wrong passwords on the LAN wait, then lock, per untrusted source.**
+- **An unlocked kids' phone can no longer change the code root.**
+
+### Fixed
+
+- **Pictures load over a pinned LAN route** when Tailscale is off on the phone, instead of saying the host was unreachable.
+- **The reader no longer stacks its own requests** on a stalled link. It shows what the terminal shows rather than a copy turns behind.
+- **A long prompt logged in pasted-content tags no longer shows twice.** The stale "CLI has not started it yet" row is gone.
+- **`/clear` keeps following the session.** The next prompt no longer lands in another session or runs twice.
+- **After a host restart, re-attached Claude sessions start idle.** The phone no longer counts 84 of 91 sessions as working and raises the red agent-count toast.
+- **A question box printed last is no longer missed under load.**
+- **A dictation longer than 30 seconds no longer loops one sentence or drops words.**
+- **A file past the newest 300 in the outbox is no longer called missing.**
+- **The CLI's "Fast mode unavailable" refusal reads as off**, and the sheet says why.
+- **Keyboard up: the bars under the terminal are whole or not drawn,** and the compose key row stays above the keyboard. Session header and compose keys are icon-only again.
+- **Only words or Return call off a pending network retry.** Esc, Ctrl-U, shift-tab and arrows no longer do.
+- **Receipts appear only when the result is out of sight.** Closing sessions, or a build settling under its own open sheet, no longer pops one.
+- **The Assess sheet is clearer.** With nothing to retire, the verdict opens, and titles alone make Apply available.
+- **Dollar amounts read the same everywhere:** `$0.50` and `$123.40`.
+- **Installer and doctor hints are clearer.** A failed Node download names the mirror it tried, and a `node_modules` installed from WSL is named as the cause on Windows.
+- **The desktop host no longer stalls every session** while it reads shell detail or stamps a build.
+
+### Removed
+
+- **Verified capture is gone** from the repo menu. The desktop screenshot button stays.
+
 ## 0.1.30
 
 ### New

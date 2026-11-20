@@ -391,15 +391,46 @@ test("tmux missing on macOS without brew: names Homebrew and the command", async
 });
 
 test("tmux missing on Linux: the package manager that is HERE, in the exact command", async () => {
-  const apt = await tmuxCheck({ os: "linux", fakes: { "apt-get": "", dnf: "" } });
+  const apt = await tmuxCheck({ os: "linux", fakes: { "apt-get": "", dnf: "", sudo: "" } });
   assert.equal(apt.code, 1);
   assert.match(apt.out, /Install it with: sudo apt-get install -y tmux/, "apt wins over dnf");
-  assert.equal(apt.ran, "");
-  assert.match((await tmuxCheck({ os: "linux", fakes: { dnf: "" } })).out, /sudo dnf install -y tmux/);
-  assert.match((await tmuxCheck({ os: "linux", fakes: { pacman: "" } })).out, /sudo pacman -S --noconfirm tmux/);
-  const none = await tmuxCheck({ os: "linux" });
+  assert.doesNotMatch(apt.ran, /apt-get/, "only the sudo -n probe ran, never an install");
+  assert.match((await tmuxCheck({ os: "linux", fakes: { dnf: "", sudo: "" } })).out, /sudo dnf install -y tmux/);
+  assert.match((await tmuxCheck({ os: "linux", fakes: { pacman: "", sudo: "" } })).out, /sudo pacman -S --noconfirm tmux/);
+  const none = await tmuxCheck({ os: "linux", fakes: { sudo: "" } });
   assert.equal(none.code, 1);
   assert.match(none.out, /Install tmux with your distribution's package manager/);
+});
+
+// `id` fake: uid and group list, as `id -u` / `id -Gn` print them.
+const idFake = (uid, groups) => `case "$1" in -u) echo ${uid};; -Gn) echo "${groups}";; esac`;
+
+test("tmux missing on Linux without sudo: no sudo line is offered; the pixi route is named (verified on a real no-sudo user)", async () => {
+  // sudo exists but refuses (`sudo -n true` fails), the account is in no sudo group.
+  const r = await tmuxCheck({ os: "linux", fakes: { "apt-get": "", sudo: "exit 1", id: idFake(1000, "wptest3") } });
+  assert.equal(r.code, 1);
+  assert.doesNotMatch(r.out, /Install it with: sudo/);
+  assert.doesNotMatch(r.out, /\[y\/N\]/);
+  assert.match(r.out, /does not have/);
+  assert.match(r.out, /pixi\.sh\/install\.sh/);
+  assert.match(r.out, /pixi global install tmux/);
+  assert.doesNotMatch(r.ran, /RAN apt-get/);
+  // no sudo binary at all behaves the same
+  const nosudo = await tmuxCheck({ os: "linux", fakes: { dnf: "", id: idFake(1000, "wptest3") } });
+  assert.match(nosudo.out, /pixi global install tmux/);
+});
+
+test("tmux missing on Linux: sudo is offered when the account is in a sudo group, even if sudo -n needs a password", async () => {
+  for (const g of ["sudo", "wheel", "admin"]) {
+    const r = await tmuxCheck({ os: "linux", fakes: { "apt-get": "", sudo: "exit 1", id: idFake(1000, `me ${g}`) } });
+    assert.match(r.out, /Install it with: sudo apt-get install -y tmux/, g);
+  }
+});
+
+test("tmux missing on Linux as root: the package manager line has no sudo", async () => {
+  const r = await tmuxCheck({ os: "linux", fakes: { "apt-get": "", id: idFake(0, "root") } });
+  assert.match(r.out, /Install it with: apt-get install -y tmux/);
+  assert.doesNotMatch(r.out, /sudo/);
 });
 
 test("the old 'tmux is optional' wording is gone from the installer", () => {
@@ -621,4 +652,89 @@ test("installer --dictation parsing: =small, a known model as the next word, and
 test("installer dictation: a Ctrl-C trap removes the in-progress .part", async () => {
   const text = await render([entry()]);
   assert.match(text, /trap '[^']*DICTATE_PART[^']*exit 130' INT TERM/);
+});
+
+/** Run installer functions from the rendered script: `body` is shell appended after the definitions. */
+async function driveFn(body, { env = {}, fakes = {} } = {}) {
+  const text = (await render([entry()])).replace(/\nmain "\$@"\s*$/, "\n");
+  const dir = mkdtempSync(join(tmpdir(), "inst-"));
+  const bin = join(dir, "fakebin");
+  mkdirSync(bin);
+  for (const [name, script] of Object.entries(fakes)) {
+    writeFileSync(join(bin, name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  }
+  writeFileSync(join(dir, "drive.sh"), `${text}\n${body}\n`);
+  const r = spawnSync("/bin/sh", [join(dir, "drive.sh")], { encoding: "utf8", stdin: "ignore", env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, ...env } });
+  return { dir, code: r.status, out: (r.stdout || "") + (r.stderr || "") };
+}
+
+test("a Node download that cannot reach nodejs.org says so and offers --node-mirror, keeping curl's exit code", async () => {
+  const r = await driveFn(`NODE_MIRROR="$NODE_MIRROR_DEFAULT"; fetch "$NODE_MIRROR/v1/SHASUMS256.txt" "$HOME/out"`, { fakes: { curl: "exit 6" } });
+  assert.equal(r.code, 6);
+  assert.match(r.out, /the Node download from https:\/\/nodejs\.org\/dist failed \(exit 6\): check the connection, or pass --node-mirror <url\|file:\/\/dir>\./);
+  rmSync(r.dir, { recursive: true, force: true });
+});
+
+test("a failed fetch returns to its caller: `|| die` words and the optional `if !` branch still run", async () => {
+  const a = await driveFn(`NODE_MIRROR="$NODE_MIRROR_DEFAULT"; fetch "https://example.invalid/x" "$HOME/out" || die "CALLER-WORDS"`, { fakes: { curl: "exit 22" } });
+  assert.equal(a.code, 1);
+  assert.match(a.out, /CALLER-WORDS/);
+  const b = await driveFn(`NODE_MIRROR="$NODE_MIRROR_DEFAULT"; if ! fetch "https://example.invalid/x" "$HOME/out"; then echo OPTIONAL-CONTINUES; fi; echo AFTER`, { fakes: { curl: "exit 22" } });
+  assert.equal(b.code, 0);
+  assert.match(b.out, /OPTIONAL-CONTINUES[\s\S]*AFTER/);
+  for (const x of [a, b]) rmSync(x.dir, { recursive: true, force: true });
+});
+
+test("no systemctl at all: no loginctl hint", async () => {
+  const r = await driveFn(`OS=linux; CMD=waterplane; SYSTEMD_RUN_DIR="$HOME"; unset XDG_RUNTIME_DIR; service_bus_hint`, { env: { PATH: "/nonexistent" } });
+  assert.equal(r.out, "");
+  rmSync(r.dir, { recursive: true, force: true });
+});
+
+test("systemctl installed but systemd not PID 1: no loginctl hint; WSL gets the wsl.conf fix", async () => {
+  const fakes = { systemctl: "exit 1" };
+  const plain = await driveFn(`OS=linux; CMD=waterplane; IS_WSL=0; SYSTEMD_RUN_DIR="$HOME/none"; unset XDG_RUNTIME_DIR; service_bus_hint`, { fakes });
+  assert.equal(plain.out, "");
+  const wsl = await driveFn(`OS=linux; CMD=waterplane; IS_WSL=1; SYSTEMD_RUN_DIR="$HOME/none"; unset XDG_RUNTIME_DIR; service_bus_hint`, { fakes });
+  assert.match(wsl.out, /\/etc\/wsl\.conf.*wsl --shutdown.*waterplane service install/);
+  assert.doesNotMatch(wsl.out, /loginctl/);
+  for (const x of [plain, wsl]) rmSync(x.dir, { recursive: true, force: true });
+});
+
+test("a failed download from anywhere else does not blame nodejs.org", async () => {
+  const r = await driveFn(`NODE_MIRROR="$NODE_MIRROR_DEFAULT"; fetch "https://example.invalid/x" "$HOME/out"`, { fakes: { curl: "exit 22" } });
+  assert.equal(r.code, 22);
+  assert.doesNotMatch(r.out, /nodejs\.org/);
+  rmSync(r.dir, { recursive: true, force: true });
+});
+
+test("service install without a user bus names loginctl enable-linger and XDG_RUNTIME_DIR", async () => {
+  const r = await driveFn(`OS=linux; CMD=waterplane; SYSTEMD_RUN_DIR="$HOME"; unset XDG_RUNTIME_DIR; service_bus_hint`, { fakes: { systemctl: "exit 1" } });
+  assert.match(r.out, /loginctl enable-linger \S+ then log in again \(or set XDG_RUNTIME_DIR=\/run\/user\/\d+\), then: waterplane service install/);
+  const mac = await driveFn(`OS=darwin; CMD=waterplane; service_bus_hint`);
+  assert.equal(mac.out, "", "macOS has no user bus to explain");
+  const ok = await driveFn(`OS=linux; CMD=waterplane; SYSTEMD_RUN_DIR="$HOME"; XDG_RUNTIME_DIR=/run/user/1; export XDG_RUNTIME_DIR; service_bus_hint`, { fakes: { systemctl: "exit 0" } });
+  assert.equal(ok.out, "", "a working bus gets no hint");
+  for (const x of [r, mac, ok]) rmSync(x.dir, { recursive: true, force: true });
+});
+
+test("a fresh user with no code folder gets ~/dev, said in one line; a named or existing one is left alone", async () => {
+  const fresh = await driveFn(`ensure_code_root; [ -d "$HOME/dev" ] && echo HAS_DEV`);
+  assert.match(fresh.out, /created .*\/dev as the code folder/);
+  assert.match(fresh.out, /HAS_DEV/);
+  const named = await driveFn(`ensure_code_root; [ -d "$HOME/dev" ] && echo HAS_DEV`, { env: { WATERPLANE_ROOT: "/elsewhere" } });
+  assert.doesNotMatch(named.out, /HAS_DEV/);
+  const usual = await driveFn(`mkdir "$HOME/code"; ensure_code_root; [ -d "$HOME/dev" ] && echo HAS_DEV`);
+  assert.doesNotMatch(usual.out, /HAS_DEV|created/);
+  for (const x of [fresh, named, usual]) rmSync(x.dir, { recursive: true, force: true });
+});
+
+test("the installer's own follow-up lines carry the full path when the bin dir is not on PATH", async () => {
+  const off = await driveFn(`SLUG=waterplane; BIN_DIR="$HOME/.local/bin"; W="$BIN_DIR/waterplane"; DATA="$HOME/d"; write_wrapper; echo "CMD=$CMD"`);
+  assert.match(off.out, new RegExp(`CMD=${off.dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\.local/bin/waterplane`));
+  const on = await driveFn(`SLUG=waterplane; BIN_DIR="$HOME/.local/bin"; W="$BIN_DIR/waterplane"; DATA="$HOME/d"; PATH="$BIN_DIR:$PATH"; write_wrapper; echo "CMD=$CMD"`);
+  assert.match(on.out, /^CMD=waterplane$/m);
+  const text = (await render([entry()]));
+  assert.doesNotMatch(text, /(start|run|hand): \$SLUG /, "follow-up lines use $CMD");
+  for (const x of [off, on]) rmSync(x.dir, { recursive: true, force: true });
 });

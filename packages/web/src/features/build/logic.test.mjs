@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { buildBusyIn, buildLane, buildNameIn, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic.ts";
 
 test("a settled run says so by name; anything else says nothing", () => {
-  assert.equal(buildRunToast({ status: "done", name: "Debug APK" }), "build “Debug APK” done");
-  assert.equal(buildRunToast({ status: "failed", name: "Debug APK" }), "build “Debug APK” failed");
+  assert.equal(buildRunToast({ status: "done", name: "Debug APK" }), "Built “Debug APK”.");
+  assert.equal(buildRunToast({ status: "failed", name: "Debug APK" }), "Build “Debug APK” failed.");
   assert.equal(buildRunToast({ status: "running", name: "Debug APK" }), null);
 });
 

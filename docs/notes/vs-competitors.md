@@ -151,12 +151,8 @@ This is the part with no equivalent found anywhere else compared in Part 3 (each
 - **Build discovery** (`host/src/buildscan.ts`) — what a repo can already build, read off its own
   manifests, so adding a command costs no turn. It invents nothing: a gradle task is offered only
   where the build file gives evidence for it.
-- **The verified capture loop** (`host/src/capture.ts`, `capture/`) — screenshots with a verdict.
-  `verify → settle → diff → emit`; settle is frame-stability, never a sleep; the default output is a
-  ~50-token verdict line rather than an image; backends are web (Playwright, resolved at runtime),
-  android (adb), garmin (shells out to `ciqkit`, never vendors it) and window.
 - **The durable intent store** (`host/src/intents/`) — one lifecycle for every piece of deferred
-  work: scheduled prompts, launches, sweeps, builds, assessments, captures. Nothing is armed with a
+  work: scheduled prompts, launches, sweeps, builds, assessments. Nothing is armed with a
   timer, so restart, sleep and DST cannot mis-fire it. At-most-once by intent id, for ever.
 - **Fan-out** (`host/src/fanout.ts`) — one prompt across N repos, fresh session each, rebuilt from
   rows so it survives the daemon.
@@ -540,7 +536,7 @@ last updated 2026-09-08 per a web search; read 2026-10-02.
 | **Device handoff** | One keypress, state carried | Not a concept found | Not a concept — sessions live host-side and are always live |
 | **Offline queue** | Unknown **?** | Not found | Single send path, durable, at-most-once, 500-row cap, failed rows kept for ever |
 | **Builds** | Not a feature | Not a feature (worktrees, schedules yes) | Token-free build runner, artifact detection, build discovery off manifests |
-| **Screenshots / artifacts** | Not a feature | Not found | `.claude/outbox/` gallery, thumbnails, annotator, collage, verified capture loop |
+| **Screenshots / artifacts** | Not a feature | Not found | `.claude/outbox/` gallery, thumbnails, annotator, collage |
 | **Token / context cost** | Not surfaced | Per-turn tokens, `totalCostUsd`, context window from the SDK result; no history found | First-class: per-turn cost, per-desktop history, per-repo context weight |
 | **Usage-limit handling** | Not surfaced | Not found | Banner + reset parsed, group-blocked, resurrected with `--continue` |
 | **Repo tooling** | — | Git worktrees, plugins | Discovery, git, worktrees, file browser, setup compliance with remedies |

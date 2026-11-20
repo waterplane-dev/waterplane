@@ -11,15 +11,13 @@ export { BL_OFFLINE, HELD_OFFLINE } from "../../backlogFilter.ts";
 /**
  * The queue LANE a *run it now* takes, per kind — each a rule that already
  * existed. A build shares its repo's build lane (one build per worktree), a
- * capture its repo's capture lane (plus a lease on one browser/simulator/
- * screen). A schedule shares the fan-out lane: firing one by hand spawns real
+ * schedule shares the fan-out lane: firing one by hand spawns real
  * sessions, and a sweep is a herd of claude processes either way. Everything
  * else gets a lane of its own — a work item is one prompt into one session,
  * and parking it behind an unrelated sweep is a wait nothing asked for.
  */
 export function runLane(kind: IntentKind, i: { id: string; cwd: string }): string {
   return kind === "build" ? `build:${i.cwd}`
-    : kind === "capture" ? `capture:${i.cwd}`
     : kind === "schedule" ? "fanout"
     : `intent:${i.id}`;
 }
@@ -29,7 +27,6 @@ export function runNowToast(kind: IntentKind, offline: boolean): string {
   return offline ? "queued — it runs when the link is back"
     : kind === "launch" ? "opening it now, without the files it was waiting for"
     : kind === "build" ? "starting the build…"
-    : kind === "capture" ? "taking the capture…"
     : "firing it into the session…";
 }
 

@@ -43,7 +43,7 @@ function harness({ backend = claudeBackend, cwd = tmpdir(), claudeSessionId } = 
     sessions,
     emit: (ev, ...args) => { events.push([ev, ...args]); return true; },
     noteFor: (s, sig, outcome) => { notes.push([sig, outcome]); },
-    adoptClaudeId: (s, id) => { if (id) { adopted.push(id); s.info.claudeSessionId = id; } },
+    adoptClaudeId: (s, id, o) => { if (id && id !== s.info.claudeSessionId && (!s.info.claudeSessionId || o?.replace)) { adopted.push(id); s.info.claudeSessionId = id; } },
     stopClaudeIdWatch: () => { watchStops.push(1); },
     refreshModel: (s, path) => { rereads.push(path); },
     applyPrompt: (s, p) => { applied.push(p); s.info.prompt = p; },
@@ -196,6 +196,40 @@ test("the first hook may be a Notification: the pipe is live, no turn-shaped hoo
     h.hook("SomethingNew", {});
     assert.equal(h.s.turnActive, false, "an unknown event changes nothing beyond the pipe");
     assert.deepEqual(h.notes, [["hook.pipe", "good"]]);
+  } finally { h.stop(); }
+});
+
+// 2.1.326, 2026-11-18: after `/clear` the CLI runs on a NEW conversation id.
+// The host kept the old one, so the next prompt's UserPromptSubmit routed to
+// another session in the cwd, deliver.submit filed a miss, the log check read
+// the dead conversation, and the host's re-send ran the prompt twice.
+test("/clear: the SessionEnd(clear) under the old id hands the session the new id its SessionStart(clear) carries", () => {
+  for (const order of ["end-first", "start-first"]) {
+    const h = harness({ claudeSessionId: "old" });
+    // A second live session in the same cwd, newer and without an id: the cwd
+    // fallback's favourite, and exactly the wrong home for this start.
+    const other = { ...h.s, info: { ...h.s.info, id: "w2", claudeSessionId: undefined }, spawnedAt: Date.now(), submits: [] };
+    h.core.sessions.set("w2", other);
+    h.slice.attach(other);
+    try {
+      const end = () => h.hook("SessionEnd", { session_id: "old", reason: "clear" });
+      const start = () => h.hook("SessionStart", { session_id: "new", source: "clear", transcript_path: "/p/new.jsonl" });
+      if (order === "end-first") { end(); start(); } else { start(); end(); }
+      assert.equal(h.s.info.claudeSessionId, "new", `${order}: the cleared session follows its CLI onto the new conversation`);
+      assert.equal(other.info.claudeSessionId, undefined, `${order}: the cwd's other session never adopts it`);
+      h.hook("UserPromptSubmit", { session_id: "new", prompt: "next" });
+      assert.equal(h.s.turnActive, true, `${order}: the next prompt's hook routes to the session it was typed into`);
+      assert.equal(other.turnActive, false);
+    } finally { h.stop(); other.info.running = false; h.slice.detach(other); }
+  }
+});
+
+test("a SessionStart(clear) with no SessionEnd(clear) behind it is routed nowhere — never by cwd", () => {
+  const h = harness({ claudeSessionId: "old" });
+  try {
+    h.hook("SessionStart", { session_id: "stray", source: "clear" });
+    assert.equal(h.s.info.claudeSessionId, "old", "an id is never replaced without the CLI's own clear");
+    assert.equal(h.s.hooksActive, false, "nothing routed");
   } finally { h.stop(); }
 });
 

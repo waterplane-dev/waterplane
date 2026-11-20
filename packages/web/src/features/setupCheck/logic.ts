@@ -171,3 +171,40 @@ export function doorRepoId(repos: ReadonlyArray<{ id: string; worktreePath: stri
 /** The names the desktop sent for its backends, by id: how a finding's backends line names one a plugin added. */
 export const backendLabels = (list: ReadonlyArray<{ id: string; label: string }> | null | undefined): Record<string, string> =>
   Object.fromEntries((list ?? []).map((b) => [b.id, b.label]));
+
+/** Which scope chips a Setup & health tab draws: This repo has the repo and all-repos views, This desktop the machine and account ones. */
+export function scopesOfTab(tab: "repo" | "desktop"): readonly SetupCheckView[] {
+  return tab === "desktop" ? ["machine", "account"] : ["repo", "all"];
+}
+
+/** The tab a Setup check view sits on. */
+export function tabOfScope(scope: SetupCheckView): "repo" | "desktop" {
+  return scope === "machine" || scope === "account" ? "desktop" : "repo";
+}
+
+const hhmm = (ms: number) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+
+/** Every check of one scope with its state, keyed so a finding that became a pass is the same check. */
+function statesOf(doc: SetupCheckResponse, scope: FindingScope): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const f of doc.findings) if (f.scope === scope) m.set(f.id, `finding:${f.weight}:${f.what}`);
+  for (const p of doc.passed) if (p.scope === scope) m.set(p.id, p.waived !== undefined ? "waived" : "passed");
+  for (const n of doc.notChecked) if (n.scope === scope) m.set(`${n.scope}.${n.rule}:not`, "not");
+  return m;
+}
+
+/**
+ * The line `Check again` always ends on (whole-app journey spec T17): when the desktop's check is
+ * from, and how many checks of this scope changed against the read on screen before the tap.
+ * "Checked 14:02. No change." / "Checked 14:02. 2 checks changed." With nothing read before, just
+ * the time.
+ */
+export function checkAgainWords(before: SetupCheckResponse | null, after: SetupCheckResponse, scope: FindingScope): string {
+  const head = `Checked ${hhmm(after.at)}.`;
+  if (!before || before.pending) return head;
+  const a = statesOf(before, scope), b = statesOf(after, scope);
+  let n = 0;
+  for (const [k, v] of b) if (a.get(k) !== v) n++;
+  for (const k of a.keys()) if (!b.has(k)) n++;
+  return n === 0 ? `${head} No change.` : `${head} ${n} ${n === 1 ? "check" : "checks"} changed.`;
+}

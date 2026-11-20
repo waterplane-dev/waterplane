@@ -257,13 +257,25 @@ detect_platform() {
 
 # ── tools ────────────────────────────────────────────────────────────────
 
+# fetch_failed <url>: a download that could not be made. A Node download names the mirror it
+# tried and the way out; the status stays the downloader's (curl 6 = could not resolve). It RETURNS
+# it, never exits: callers handle a failed fetch themselves (`|| die "..."`, the optional dictation
+# model's `if ! fetch`), and a plain call stops under set -e with that same status.
+fetch_failed() {
+  fetch_rc=$?
+  case "$1" in
+    "$NODE_MIRROR"/*) warn "the Node download from $NODE_MIRROR failed (exit $fetch_rc): check the connection, or pass --node-mirror <url|file://dir>." ;;
+  esac
+  return "$fetch_rc"
+}
+
 # fetch <url-or-path> <out>: a plain path or file:// is copied; anything else is downloaded.
 fetch() {
   case "$1" in
     file://*) cp "${1#file://}" "$2" ;;
     http://*|https://*)
-      if has curl; then curl -fsSL --retry 2 -o "$2" "$1"
-      elif has wget; then wget -q -O "$2" "$1"
+      if has curl; then curl -fsSL --retry 2 -o "$2" "$1" || fetch_failed "$1"
+      elif has wget; then wget -q -O "$2" "$1" || fetch_failed "$1"
       else die "neither curl nor wget is installed; install one and re-run."
       fi ;;
     *) cp "$1" "$2" ;;
@@ -428,18 +440,38 @@ tmux_install_cmd() {
     if has brew && brew_writable; then echo 'brew install tmux'; fi
     return 0
   fi
-  if has apt-get; then echo 'sudo apt-get install -y tmux'
-  elif has dnf; then echo 'sudo dnf install -y tmux'
-  elif has pacman; then echo 'sudo pacman -S --noconfirm tmux'
-  elif has zypper; then echo 'sudo zypper install -y tmux'
-  elif has apk; then echo 'sudo apk add tmux'
+  # Linux: the package manager's line, with sudo only where this account has it. A user without
+  # sudo gets no line (tmux_unavailable names the no-admin route), never one that fails half-way.
+  if [ "$(id -u 2>/dev/null || echo 1)" = 0 ]; then SUDO=''
+  elif linux_can_sudo; then SUDO='sudo '
+  else return 0
   fi
+  if has apt-get; then echo "${SUDO}apt-get install -y tmux"
+  elif has dnf; then echo "${SUDO}dnf install -y tmux"
+  elif has pacman; then echo "${SUDO}pacman -S --noconfirm tmux"
+  elif has zypper; then echo "${SUDO}zypper install -y tmux"
+  elif has apk; then echo "${SUDO}apk add tmux"
+  fi
+}
+
+# linux_can_sudo: this account can run sudo — passwordless (`sudo -n true`) or by membership of
+# the group that grants it (sudo, wheel, admin; a password is asked at install time). A plain
+# user in none of them is refused by sudo, so the installer must not offer it.
+linux_can_sudo() {
+  has sudo || return 1
+  sudo -n true >/dev/null 2>&1 && return 0
+  case " $(id -Gn 2>/dev/null || true) " in *" sudo "*|*" wheel "*|*" admin "*) return 0 ;; esac
+  return 1
 }
 
 # tmux_unavailable: why tmux cannot be installed from here, and who can.
 tmux_unavailable() {
   if [ "$OS" != darwin ]; then
-    echo "Install tmux with your distribution's package manager, then re-run this installer."
+    if [ "$(id -u 2>/dev/null || echo 1)" != 0 ] && ! linux_can_sudo; then
+      echo "tmux is required, and installing it with the package manager needs sudo, which this account does not have. Either ask an administrator for tmux, or install it into your home folder without admin: curl -fsSL https://pixi.sh/install.sh | bash, then open a new terminal and run: pixi global install tmux — then re-run this installer."
+    else
+      echo "Install tmux with your distribution's package manager, then re-run this installer."
+    fi
   elif has brew; then
     echo "Homebrew is here but belongs to $(stat -f %Su "$(brew --repository 2>/dev/null)" 2>/dev/null || echo 'another account'), so brew install tmux would fail for this account. Ask that account to run: brew install tmux — then re-run this installer."
   elif is_mac_admin; then
@@ -704,8 +736,9 @@ EOF
   mv "$W.tmp.$$" "$W"
   say "wrote $W"
   case ":$PATH:" in
-    *":$BIN_DIR:"*) ;;
+    *":$BIN_DIR:"*) CMD="$SLUG" ;;
     *)
+      CMD="$W"
       say "$BIN_DIR is not on your PATH. Add it (this installer does not edit your shell files):"
       case "${SHELL:-}" in
         */zsh) say "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc" ;;
@@ -713,6 +746,36 @@ EOF
         *) say "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.bashrc" ;;
       esac ;;
   esac
+}
+
+# service_bus_hint: a Linux login with no systemd user bus (su, a fresh user) cannot
+# install the login service. Name the fix when that is the cause.
+service_bus_hint() {
+  [ "$OS" = linux ] || return 0
+  # systemd is not PID 1 (the sd_booted test): Alpine, a container, WSL without systemd=true.
+  # systemctl may still be on PATH there, and loginctl enable-linger cannot reach logind.
+  if [ ! -d "${SYSTEMD_RUN_DIR:-/run/systemd/system}" ]; then
+    if [ "${IS_WSL:-0}" = 1 ]; then
+      warn "systemd is not running in this WSL distro, so the login service cannot be registered. Add [boot] and systemd=true on two lines to /etc/wsl.conf, run wsl --shutdown in Windows, reopen the distro, then: $CMD service install"
+    fi
+    return 0
+  fi
+  has systemctl || return 0
+  if [ -z "${XDG_RUNTIME_DIR:-}" ] || ! systemctl --user show-environment >/dev/null 2>&1; then
+    warn "no systemd user session here. Run: loginctl enable-linger $(id -un) then log in again (or set XDG_RUNTIME_DIR=/run/user/$(id -u)), then: $CMD service install"
+  fi
+}
+
+# ensure_code_root: with no root named and no usual code folder, create ~/dev so the doctor's
+# root check passes on a fresh user. An empty folder only; it says so.
+ensure_code_root() {
+  [ -z "$(printenv "${ENV_PREFIX}ROOT" 2>/dev/null || true)" ] || return 0
+  for f in dev code Code src projects Projects repos git Developer workspace source/repos Documents/GitHub; do
+    # The host skips ~/Documents on macOS (a privacy prompt every boot), so it never picks that one.
+    [ "${OS:-}" = darwin ] && [ "$f" = Documents/GitHub ] && continue
+    [ ! -d "$HOME/$f" ] || return 0
+  done
+  if mkdir "$HOME/dev" 2>/dev/null; then say "created $HOME/dev as the code folder (${ENV_PREFIX}ROOT is unset and none of the usual folders existed); clone your repos into it."; fi
 }
 
 # ── https front door ─────────────────────────────────────────────────────
@@ -887,6 +950,7 @@ uninstall() {
 # ── main ─────────────────────────────────────────────────────────────────
 
 main() {
+  CMD="$SLUG"
   WITH_IDS=''; WITHOUT_IDS=''
   VERSION="$DEFAULT_VERSION"; FROM=''; NO_SERVICE=0; NO_OPEN=0; SKIP_CLAUDE=0; UNINSTALL=0
   NODE_MIRROR="$NODE_MIRROR_DEFAULT"; BIN_DIR="$HOME/.local/bin"; VERSION_GIVEN=0
@@ -967,14 +1031,18 @@ main() {
   stage_plugins
   install_release
   write_wrapper
+  ensure_code_root
   place_plugins
   apply_without
   dictation_step
 
   if [ "$NO_SERVICE" = 1 ]; then
-    say "skipped the login service (--no-service). Start the host with: $SLUG start"
+    say "skipped the login service (--no-service). Start the host with: $CMD start"
   else
-    "$W" service install || warn "the service was not installed (see above). You can start the host by hand: $SLUG start"
+    if ! "$W" service install; then
+      warn "the service was not installed (see above). You can start the host by hand: $CMD start"
+      service_bus_hint
+    fi
   fi
   # The installer never sets ${ENV_PREFIX}ALLOW_PUBLIC: the host binds Tailscale and loopback only.
   # ONE ending, phone-facing: the https URL when the host is already fronted, else the
@@ -993,7 +1061,7 @@ main() {
   OPEN_IT=0
   [ "$NO_OPEN" = 1 ] || [ "$NO_SERVICE" = 1 ] || [ "$DOCTOR_OK" = 0 ] || OPEN_IT=1
   finish_desktop "$OPEN_IT"
-  [ "$DOCTOR_OK" = 1 ] || warn "$OUTCOME, but doctor reported problems (see above) — fix those, then run: $SLUG doctor"
+  [ "$DOCTOR_OK" = 1 ] || warn "$OUTCOME, but doctor reported problems (see above) — fix those, then run: $CMD doctor"
 }
 
 main "$@"

@@ -226,7 +226,7 @@ export const RELEASES: readonly Release[] = [
         },
       },
       {
-        id: "automation", icon: "automation", title: `${SHEET.automation} (was Schedules)`,
+        id: "automation", icon: "automation", title: `${SHEET.automation}`,
         line: "Clocks above, and a foot for what runs on its own without one.",
         door: { kind: "sheet", id: "schedule" }, verb: `open ${SHEET.automation}`,
         state: (f) => {

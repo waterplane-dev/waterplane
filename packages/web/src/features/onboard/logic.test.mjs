@@ -159,6 +159,6 @@ test("the artifact is a gallery file of the new repo", () => {
 
 test("existingReposLine: repos listed below are pointed at in words, with their count; none means no line", () => {
   assert.equal(existingReposLine(0), null);
-  assert.equal(existingReposLine(1), "Or tap + now on one of your 1 repo below to open a session in it.");
+  assert.equal(existingReposLine(1), "Or tap New session on one of your 1 repo below to open a session in it.");
   assert.match(existingReposLine(34), /34 repos below/);
 });

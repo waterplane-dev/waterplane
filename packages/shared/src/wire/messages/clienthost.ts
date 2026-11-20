@@ -181,7 +181,7 @@ export type ClientHostMsg =
    * Unload one resident model now, instead of waiting for the runner's own
    * `keep_alive` schedule.
    *
-   * Deliberately NOT durable and never queued offline, `capture.cancel`'s
+   * Deliberately NOT durable and never queued offline, `intent.cancel`'s
    * reason exactly: this is a decision that only means something RIGHT NOW —
    * an eject queued behind a dead tunnel and delivered an hour later unloads
    * whatever is resident THEN, for a reason that may no longer apply, possibly

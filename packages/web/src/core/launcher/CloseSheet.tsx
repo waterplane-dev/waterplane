@@ -16,7 +16,7 @@
  * or a second look.
  */
 import { useEffect, useState } from "react";
-import { CircleDot, Clock, ShieldCheck, SquareTerminal, X } from "lucide-react";
+import { ChevronDown, CircleDot, Clock, SquareTerminal, X } from "lucide-react";
 import type { SessionInfo } from "@waterplane/shared";
 import { shellsChipText, shellsSummary } from "@waterplane/shared";
 import { Sheet } from "../../Sheet";
@@ -26,7 +26,7 @@ import { Explain } from "../../Explain";
 import { useBackStep } from "../../backStep";
 import { SessionFacts, sessionStatus } from "../../sessionFacts";
 import { draftSessionIds } from "../../outbox";
-import { showToast } from "../../toast";
+import { showReceipt } from "../../kit/receiptStore";
 import { track } from "../../usage";
 import { noteSessionClosing } from "../../features/shells";
 import { useBacklog } from "../../features/backlog";
@@ -40,8 +40,8 @@ import { closeMarked, closeScope, markedWords, starredSpared } from "./model";
 import {
   CLOSE_STATE_OPTIONS, CONVO_OPTIONS, type CloseFacets, type CloseCtx, EMPTY_CLOSE_FACETS, STAKES_OPTIONS,
   TIME_EDGE_OPTIONS, UNDER_OPTIONS, CLOSE_STATE_LABEL, CONVO_LABEL, STAKES_LABEL, TIME_EDGE_LABEL, UNDER_LABEL,
-  closeCut, closeFacetCounts, closeFilterBarLabel, closeFacetsActive, closeFootLabel, closeSendList,
-  closeShellsAtStake, closeToast, closeWaitingCount, idleUnknownNote, isKept, timedKeptNote,
+  CLOSE_GROUP_ORDER, closeGroupOf, closeGroupTitle, closeCut, closeFacetCounts, closeFilterBarLabel, closeFacetsActive, closeFootLabel, closeSendList,
+  closeShellsAtStake, closeToast, idleUnknownNote, timedKeptNote,
 } from "./closeModel";
 import { Row, RowSub } from "../../kit/Row";
 import { Hint } from "../../kit/Hint";
@@ -109,11 +109,13 @@ function toggled<T>(set: ReadonlySet<T>, o: T): Set<T> {
   return next;
 }
 
-function CloseRow({ s, repoLabel, kept, onToggleKeep, statusOf, now, timedAt, backends }: {
-  s: SessionInfo; repoLabel?: string; kept: boolean; onToggleKeep: () => void;
+function CloseRow({ s, repoLabel, ticked, onToggleTick, statusOf, now, timedAt, drafted, backends }: {
+  s: SessionInfo; repoLabel?: string; ticked: boolean; onToggleTick: () => void;
   statusOf: (s: SessionInfo) => string; now: number; backends: LauncherProps["backends"];
   /** When the timed prompt aimed at this session fires, as words. */
   timedAt?: string;
+  /** Words typed on this phone in its box and never sent: closing leaves them under a dead id. */
+  drafted?: boolean;
 }) {
   const waiting = statusOf(s) === "wait";
   return (
@@ -123,14 +125,15 @@ function CloseRow({ s, repoLabel, kept, onToggleKeep, statusOf, now, timedAt, ba
         {s.shellList?.length ? (
           <RowSub><SquareTerminal size={11} /> {shellsChipText(shellsSummary(s.shellList, now))} — will stop</RowSub>
         ) : null}
-        {timedAt && <RowSub><Clock size={11} /> a prompt is timed into it · {timedAt}{kept ? " — kept open" : " — its conversation is reopened then"}</RowSub>}
+        {timedAt && <RowSub><Clock size={11} /> a prompt is timed into it · {timedAt}{!ticked ? " — kept open" : " — its conversation is reopened then"}</RowSub>}
+        {drafted && <RowSub className="warn"><CircleDot size={11} /> words typed here, not sent{!ticked ? " — kept open" : " — closing loses them"}</RowSub>}
         {waiting && <RowSub className="warn"><CircleDot size={11} /> waiting on a box — closing answers nothing, it just ends the process</RowSub>}
       </Row>
-      <button className={`row-act${kept ? " on" : ""}`}
-        title={kept ? "kept — tap to put it back in this close" : "keep — leave this one open"}
-        onClick={onToggleKeep}>
-        <ShieldCheck size={ICON} />
-      </button>
+      <label className="row-act on" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+        <input type="checkbox" checked={ticked} onChange={onToggleTick}
+          aria-label={`Close ${s.title || s.id}`} />
+        <span>{ticked ? "Close" : "Keep"}</span>
+      </label>
     </Row>
   );
 }
@@ -144,12 +147,13 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   useBackStep(open, () => setCloseAllPick(null));
 
   const [facets, setFacets] = useState<CloseFacets>(EMPTY_CLOSE_FACETS);
-  const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
+  // The person's own ticks, stored as the choice itself: the default moves with live session state, so an XOR would turn a Keep into Close.
+  const [chosen, setChosen] = useState<ReadonlyMap<string, boolean>>(new Map());
   // Sessions a timed prompt is aimed at, and when it fires — they start KEPT.
   const { items: backlogItems } = useBacklog();
   // Facets reset on close — nothing here is worth restoring, and a filter
   // that survived would open the NEXT close on whatever the last one left.
-  useEffect(() => { if (!open) { setFacets(EMPTY_CLOSE_FACETS); setKept(new Set()); } }, [open]);
+  useEffect(() => { if (!open) { setFacets(EMPTY_CLOSE_FACETS); setChosen(new Map()); } }, [open]);
 
   if (!open) return null;
   const repo = closeAllPick === "*" ? undefined : closeAllPick;
@@ -177,10 +181,13 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     timedAt.set(it.targetSessionId, it.at.nextAt != null ? hhmm(it.at.nextAt) : "when its rule comes round");
   }
   const timed = new Set(timedAt.keys());
-  const sendList = closeSendList(cut, kept, timed);
-  const timedNote = timedKeptNote(cut.filter((s) => timed.has(s.id) && isKept(s.id, kept, timed)).length);
+  // One ticked list: finished sessions start ticked; running, waiting and
+  // timed-prompt targets and sessions holding an unsent draft start unticked. A tap flips the default.
+  const isTicked = (s: SessionInfo) => chosen.get(s.id) ?? (closeGroupOf(ctx.statusOf(s)) === "finished" && !timed.has(s.id) && !ctx.draftIds.has(s.id));
+  const kept = new Set(cut.filter((s) => !isTicked(s)).map((s) => s.id));
+  const sendList = closeSendList(cut, kept);
+  const timedNote = timedKeptNote(cut.filter((s) => timed.has(s.id) && !isTicked(s)).length);
   const shells = closeShellsAtStake(sendList);
-  const waitingN = closeWaitingCount(sendList, ctx);
   const footLabel = closeFootLabel(sendList.length, shells);
   const [idleLead, idleWhy] = splitIdleNote(idleUnknownNote(counts.idleUnknown));
 
@@ -188,7 +195,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     setFacets((f) => ({ ...f, [key]: next }));
   }
   function clearFacets() { setFacets(EMPTY_CLOSE_FACETS); }
-  function toggleKeep(id: string) { setKept((k) => toggled(k, id)); }
+  function toggleTick(s: SessionInfo) { const next = !isTicked(s); setChosen((m) => new Map(m).set(s.id, next)); }
 
   function fire() {
     if (!sendList.length) return;
@@ -198,20 +205,25 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     // OTHER open phone (`features/shells/store.ts`).
     for (const s of sendList) { noteSessionClosing(s.id); send({ t: "session.remove", id: s.id }); }
     setCloseAllPick(null);
-    showToast(closeToast(sendList.length, shells, sparedStars > 0 ? markedHere : "", repo ? shownOf(repo) : repo));
+    // The closed rows leave the launcher the person is looking at, so there is no receipt for that; there is
+    // no Undo either (the conversation is reopened from Archive). Stopped background shells are not on screen: said.
+    if (shells > 0) showReceipt({
+      text: closeToast(sendList.length, shells, sparedStars > 0 ? markedHere : "", repo ? shownOf(repo) : repo),
+      open: { label: "Open Archive", run: () => p.route.setOverlay("archive") },
+    });
   }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 30, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <Sheet
-        title={repo ? `Close sessions in ${shownOf(repo)}?` : "Close sessions?"}
+        title={repo ? `Close sessions in ${shownOf(repo)}` : "Close sessions"}
         icon={<X size={ICON} />}
         onClose={() => setCloseAllPick(null)}
         footer={
           <>
             {footLabel ? (
-              <ConfirmButton className="key danger" confirm={`tap again to ${footLabel}`}
-                title={footLabel} confirmTitle={`tap again to ${footLabel}`}
+              <ConfirmButton className="key danger" confirm={`Tap again: ${footLabel}`}
+                title={footLabel} confirmTitle={`Tap again: ${footLabel}`}
                 onConfirm={fire}>
                 <X size={ICON} /> {footLabel}
               </ConfirmButton>
@@ -256,6 +268,8 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           </div>
         )}
 
+        <details className="close-narrow">
+        <summary>Narrow down<ChevronDown size={16} className="close-narrow-chev" aria-hidden="true" /></summary>
         <div className="close-facets">
         <FacetRow label="State" options={CLOSE_STATE_OPTIONS} counts={counts.state} active={facets.state}
           labels={CLOSE_STATE_LABEL} onToggle={(o) => set("state", toggled(facets.state, o))} />
@@ -280,17 +294,25 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
             labels={Object.fromEntries(repoNames.map((n) => [n, shownOf(n)]))} onToggle={(o) => set("repo", toggled(facets.repo, o))} />
         )}
         </div>
+        </details>
 
         {timedNote && <Hint>{timedNote}</Hint>}
-        {/* Sentence case like the facet labels above it: `.section` uppercases. */}
-        <div className="section section-head close-cut"><span>The cut{waitingN > 0 ? ` · ${waitingN} waiting on a box` : ""}</span></div>
         {cut.length === 0 ? (
           <Empty>Nothing here matches every facet ticked above.</Empty>
         ) : (
-          cut.map((s) => (
-            <CloseRow key={s.id} backends={p.backends} s={s} repoLabel={repo ? undefined : shownOf(sessionRepoName(s))} kept={isKept(s.id, kept, timed)}
-              onToggleKeep={() => toggleKeep(s.id)} statusOf={ctx.statusOf} now={now} timedAt={timedAt.get(s.id)} />
-          ))
+          CLOSE_GROUP_ORDER.map((g) => {
+            const rows = cut.filter((s) => closeGroupOf(ctx.statusOf(s)) === g);
+            if (!rows.length) return null;
+            return (
+              <div key={g}>
+                <div className="section section-head close-cut"><span>{closeGroupTitle(g, rows.length)}</span></div>
+                {rows.map((s) => (
+                  <CloseRow key={s.id} backends={p.backends} s={s} repoLabel={repo ? undefined : shownOf(sessionRepoName(s))}
+                    ticked={isTicked(s)} onToggleTick={() => toggleTick(s)} statusOf={ctx.statusOf} now={now} timedAt={timedAt.get(s.id)} drafted={ctx.draftIds.has(s.id)} />
+                ))}
+              </div>
+            );
+          })
         )}
         </div>
       </Sheet>

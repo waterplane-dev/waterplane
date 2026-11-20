@@ -62,7 +62,7 @@ export const readyLine = (names: readonly string[], bytes: number): string =>
 export const keptLine = (bytes: number): string =>
   `Off. Its reader (${mb(bytes)} MB) is still on this device — delete it, or keep it for when you switch it back on.`;
 
-export const OFF_LINE = "Off. Switch it on in Settings › Tools & diagnostics › plugins (Text in marks): it downloads its reader (English + German, about 8 MB) from this desktop once and then works offline.";
+export const OFF_LINE = "Off. Switch it on in Settings › Plugins › Text in marks: it downloads its reader (English + German, about 8 MB) from this desktop once and then works offline.";
 
 /** The words a failed download says — the desktop's own refusal where it gave one. */
 export function downloadError(status: number | null, said: string | null): string {

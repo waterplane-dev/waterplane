@@ -9,6 +9,7 @@
  * start a 32 MB transfer nobody just asked for).
  */
 import { core, createStore } from "./sdk";
+import type { ConnectionTab } from "./routing";
 
 export type ConnTestKind = "ping" | "speed";
 
@@ -18,16 +19,21 @@ export const DEFAULT_SPEED_MB = 32;
 /** The test the next opening of the speed-test sheet starts by itself. */
 export const connTestStart = createStore<ConnTestKind | null>(null);
 
+/** The tab the Connection screen shows. Set by a door before it opens the screen; a tap on a tab sets it too. */
+export const connectionTab = createStore<ConnectionTab>("health");
+
 export function openConnTest(kind: ConnTestKind): void {
   const c = core();
   connTestStart.set(kind);
+  connectionTab.set("speed");
   c.say.track(`action:conntest.${kind}`);
-  c.nav.open("speedtest");
+  c.nav.open("connection");
 }
 
-/** Connection health, from a screen that is not the strip. */
+/** The Connection screen on its Health tab, from a screen that is not the strip. */
 export function openNetHealth(): void {
   const c = core();
   c.say.track("overlay:nethealth");
-  c.nav.open("nethealth");
+  connectionTab.set("health");
+  c.nav.open("connection");
 }

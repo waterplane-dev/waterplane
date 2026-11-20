@@ -41,6 +41,8 @@ export interface QueueFrameEntry {
   budget?: SessionBudget;
   launch?: LaunchOpts;
   pastBudget?: boolean;
+  /** backlog mode: the row waits for a tap (`Intent.manual`), whatever the auto switch says. */
+  hold?: boolean;
 }
 
 /**
@@ -82,6 +84,8 @@ export function entryFrame(e: QueueFrameEntry): ClientMessage | null {
       ...(e.launch ? { launch: e.launch } : {}),
       // Additive: an older desktop ignores it and the row waits for the budget.
       ...(e.pastBudget ? { pastBudget: true } : {}),
+      // Additive: an older desktop ignores it and the row may start by itself when its auto switch is on.
+      ...(e.hold ? { hold: true } : {}),
     };
   }
   if (e.answer) {

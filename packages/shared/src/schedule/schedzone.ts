@@ -20,7 +20,9 @@ export function zoneOffsetMs(zone: string, at: number): number | null {
     });
     const p: Record<string, number> = {};
     for (const part of dtf.formatToParts(new Date(at))) if (part.type !== "literal") p[part.type] = Number(part.value);
-    const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    const { year, month, day, hour, minute, second } = p;
+    if (year === undefined || month === undefined || day === undefined || hour === undefined || minute === undefined || second === undefined) return null;
+    const asUTC = Date.UTC(year, month - 1, day, hour, minute, second);
     return asUTC - at;
   } catch {
     return null; // not a real IANA zone

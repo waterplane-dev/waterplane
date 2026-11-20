@@ -15,9 +15,9 @@ customized: a plugin adds the button, switch or status line your way of working 
 [How it compares](#how-it-compares) · [Security](SECURITY.md) · [Open source (MIT)](LICENSE) ·
 macOS, Linux, Windows via WSL2 · Android app or web app, no iOS app yet
 
-<a href="https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-1c14b89210.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-1c14b89210.mp4), with pause and seek.*
 <!-- /site:intro -->
 
 - **The real CLI, not a re-implementation.** Every slash command, plan and trust prompt and the
@@ -80,9 +80,9 @@ elsewhere: the Mac Studio builds and runs the simulators while the notebook only
 The window gets a sidebar of repos, the session in the middle and a panel beside it, and it is
 the same sessions, queue and costs, so what you left on the laptop is waiting on the phone.
 
-<a href="https://waterplane-dev.github.io/media/desktop-abba5cda6f.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
+<a href="https://waterplane-dev.github.io/media/desktop-62169b6a41.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
 
-*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-abba5cda6f.mp4).*
+*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-62169b6a41.mp4).*
 
 Desktops can also work for each other. Pair two of them and an agent on one can hand a job to the
 other (run the Windows build, the tests on the bigger machine): the branch travels through your
@@ -136,7 +136,7 @@ here is made by a script, from fictional data.
 >
 > By default it binds only **loopback and your Tailscale IP**, and refuses to bind
 > LAN or public addresses unless you explicitly set `WATERPLANE_ALLOW_PUBLIC=1` (which
-> then requires a password for LAN devices). Keep it that way. Point it only at
+> then requires a password for LAN devices; strongly discouraged, see SECURITY.md). Keep it that way. Point it only at
 > code you trust. [SECURITY.md](SECURITY.md) has the full threat model, and
 > [DISCLAIMER.md](DISCLAIMER.md) covers what else you are agreeing to: arbitrary code
 > execution, what leaves the machine when you pick a hosted model, and what a free tier
@@ -194,9 +194,9 @@ npm run build
 npm start
 ```
 
-<a href="https://waterplane-dev.github.io/media/setup-3bc9b6dc2e.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
+<a href="https://waterplane-dev.github.io/media/setup-2e62e1d154.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
 
-*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-3bc9b6dc2e.mp4), with pause and seek.*
+*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-2e62e1d154.mp4), with pause and seek.*
 
 `npm run doctor` (or `waterplane doctor`) is the first thing to re-run when something misbehaves:
 it names what is wrong and what to type. The host lists the git repos under `~/dev` (or
@@ -221,9 +221,9 @@ updating and every environment variable: [docs/install.md](docs/install.md).
 <!-- site:outbox -->
 ### What Claude made, on your phone
 
-<a href="https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4"><img src="docs/media/gallery-and-files.png" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/gallery-and-files-d979321824.mp4"><img src="docs/media/gallery-and-files.png" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
 
-*[The walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4).*
+*[The walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-d979321824.mp4).*
 
 What Claude leaves in `.claude/outbox/` appears on the phone as a picture or a file, with a badge on
 the repo and a notification. Open it full size, draw a circle or a box on it, type what to change,
@@ -234,9 +234,9 @@ of text to point Claude at it.
 <!-- site:limit -->
 ### When the usage limit hits, it carries on
 
-<a href="https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4"><img src="docs/media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
+<a href="https://waterplane-dev.github.io/media/limit-and-budget-46b258ce97.mp4"><img src="docs/media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-46b258ce97.mp4), with pause and seek.*
 
 When a session hits a Claude usage limit, the host notices, waits for the reset and continues it,
 reopening the conversation with `--continue` if the CLI exited. Bounded retries, and an off switch
@@ -248,9 +248,9 @@ your words kept and the reason said.
 <!-- site:queue -->
 ### Queue it now, or schedule it against the usage windows
 
-<a href="https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4"><img src="docs/media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
+<a href="https://waterplane-dev.github.io/media/queue-and-schedule-ceb0da424f.mp4"><img src="docs/media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-ceb0da424f.mp4), with pause and seek.*
 
 A prompt sent while you are offline or while the session is busy waits in a queue and is typed in
 exactly once. Or post a prompt for later: at a time, when the session goes quiet, after another one
@@ -261,9 +261,9 @@ before the reset, spend what is left"). The Backlog holds a repo's work that nob
 <!-- site:cost -->
 ### Know what it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-9ddb5abc9d.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-9ddb5abc9d.mp4), with pause and seek.*
 
 Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus
 what the *next* turn will cost compared with a fresh session. The token ledger splits every total by
@@ -278,9 +278,9 @@ than a guess.
 <!-- site:health -->
 ### Repo health, so the vibe coding stays maintainable
 
-<a href="https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-a722f285d6.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-a722f285d6.mp4), with pause and seek.*
 
 Vibe coding drifts into a mess quietly, and a steady number does not mean a healthy repo. Each repo
 gets one health score out of 100, measured against fixed good values: file length, files reworked
@@ -341,6 +341,51 @@ each new APK of your app by itself.
 | Machine | CLI health: says when a screen-reading heuristic missed after a Claude Code update. |
 | Machine | Speed test that tells you whether Tailscale gives you a direct link or a relay. |
 | Machine | Secrets written from the phone into a gitignored `.env`, never shown back (plaintext on disk: convenience, not a vault). |
+
+## Where do I find
+
+Each row is generated from the app's door registry and checked by `tools/wherefind.test.mjs`.
+Taps count from Home; a dash means no journey has measured it yet.
+
+<!-- where-find:start (generated by tools/wherefind.mjs; do not edit by hand) -->
+| I want to | Tap | It opens | Taps from Home |
+|---|---|---|---|
+| Add a secret | Settings › **Add a secret** | Add a secret | - |
+| Answer a choice box | Home › **N questions** | Questions | 1 |
+| Answer a pasted list | the session ☰ menu › **Answer the list** | Answer the list | - |
+| Build an APK and install it | a repo row › **Build** | Build - repo | 1 |
+| Change the model | the session ☰ menu › **Switch model** | Switch model | - |
+| Check this repo's setup | a repo row's More › **Setup & health** | Setup & health › This repo | 2 |
+| Commit and push | a repo row › **Changes** | Changes - repo | 1 |
+| Connect a second desktop | Settings › **Desktops**; or the Desktops screen › **Add a desktop** | Desktops; Add a desktop | 3 |
+| Copy text off the screen | the session ☰ menu › **Select text** | Select text | - |
+| Download a file Claude left | Home ☰ menu › **Images & documents** | Images & documents | 2 |
+| Fan out one prompt to several repos | Home › **Fan out** | Fan out | 1 |
+| Find a feature by name | Settings search › **Waiting work** | Waiting work › Activity | 3 |
+| Keep a prompt that is not sent yet | Home ☰ menu › **Pad** | Pad | - |
+| Pin commands into the header | the session header › **Header commands** | Header commands | - |
+| Put text on the desktop clipboard | the session ☰ menu › **To desktop clipboard** | To desktop clipboard | - |
+| Read a file in the repo | a repo row's More › **Browse files** | Browse files - repo | 2 |
+| Reopen a closed session | Home ☰ menu › **Archive** | Archive | 2 |
+| Resend an earlier prompt | the session ☰ menu › **History** | History - session | - |
+| Run a prompt at a set time | Settings › **Waiting work**; or Settings search › **Waiting work** | Waiting work › Scheduled | 3 |
+| Run a slash command | the session ☰ menu › **Slash commands** | Slash commands | - |
+| See a usage-limit stop and when it resumes | Home › **N blocked** | Blocked | 1 |
+| See if the week runs out | the waiting screen › **Usage pace** | Usage pace | - |
+| See or change what is waiting | Home › **Waiting work**; or above the prompt bar › **Waiting work** | Waiting work › Activity | 1 |
+| See what is left to do | a repo row's More › **What is left** | What is left - repo | 2 |
+| See what is left to start | Settings search › **Waiting work** | Waiting work › Backlog | 3 |
+| See what the agent decided | Home ☰ menu › **Decision log** | Decision log - session | - |
+| See what the tokens cost | Settings search › **Token usage** | Token usage | 3 |
+| See what this device holds | Settings › **Storage** | Storage on this device | - |
+| See what was sent | Home ☰ menu › **Sent commands** | Sent commands - session | - |
+| See whether this repo and this desktop are set up well | Home ☰ menu › **Setup & health** | Setup & health › This repo | 2 |
+| Send one prompt to several repos | Home › **Fan out** | Fan out | - |
+| Set what downloads by itself | a repo row's More › **Downloads** | Downloads - repo | 2 |
+| Sign a shell in | the session ☰ menu › **Logins** | Logins | - |
+| Theme and notifications | Settings › **Notifications** | Notifications | 3 |
+| Write a prompt down before sending it | Home ☰ menu › **Pad** | Pad | 2 |
+<!-- where-find:end -->
 
 <!-- site:how-it-works -->
 ## How it works

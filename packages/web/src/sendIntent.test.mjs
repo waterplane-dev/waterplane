@@ -119,7 +119,7 @@ test("the repo label restates the whole decision, one per WHEN", () => {
   // anybody using it once.
   assert.equal(
     sendLabel(send({ kind: "repo", cwd: "/a" }, IDLE), names, null),
-    "Queue for app · a new session when this repo is free");
+    "Start a new session in app when free");
   // `Run in X now` and `Open X when it's free` were the other reading's half of
   // the pair. One target means one label: a second wording for the same send is
   // how two surfaces end up describing one thing as two.
@@ -228,7 +228,7 @@ test("a chain names what it waits for, and whether the condition is on", () => {
 test("the chain label restates the whole decision, one per WHERE", () => {
   assert.equal(
     sendLabel(chained({ kind: "repo", cwd: "/a" }), names, null),
-    "Queue for app · a new session after “migrate the schema”");
+    "Start a new session in app after “migrate the schema”");
   assert.equal(
     sendLabel(chained({ kind: "session", sessionId: "s1", cwd: "/a" }), names, null),
     "Send to a session after “migrate the schema”");
@@ -273,8 +273,8 @@ test("a chain into several repos is refused in words while the composer is still
  * reads before committing.
  */
 test("the offline prefix is not added to a label that already says Queue", () => {
-  assert.equal(offlineLabel("Queue for app · a new session when this repo is free"),
-    "Queue for app · a new session when this repo is free");
+  assert.equal(offlineLabel("Start a new session in app when free"),
+    "Start a new session in app when free");
   assert.equal(offlineLabel("Start in app"), "Queue · Start in app");
   assert.equal(offlineLabel("Fan out to 2 repos"), "Queue · Fan out to 2 repos");
   assert.equal(offlineLabel("Send to a session"), "Queue · Send to a session");
@@ -714,8 +714,8 @@ test("re-time mode refuses only on the WHEN — no words, no target to ask about
   assert.equal(retimeBlocker({ kind: "idle" }, null, 0), "tick the rows to move first");
   const win = { kind: "at", rule: { kind: "window", window: "weekly", edge: "before", offsetMin: -60, oneShot: true }, graceMin: 120 };
   assert.equal(retimeBlocker(win, null, 2), null, "a window rule with no reading yet is not refused");
-  assert.equal(retimeWhenLabel(4, "when it's free"), "Re-time these 4 — when it's free");
-  assert.equal(retimeWhenLabel(1, "now"), "Re-time it — now");
+  assert.equal(retimeWhenLabel(4, "when it's free"), "Change time of these 4 — when it's free");
+  assert.equal(retimeWhenLabel(1, "now"), "Change time of it — now");
 });
 
 test("re-time says what holds it, and names the way past it for what it is", async () => {
@@ -815,7 +815,7 @@ test("the button restates the cap, and says nothing without one", () => {
   assert.equal(sendLabel(repoIntent(), names, null), "Start in app");
   assert.equal(sendLabel(repoIntent(CAP), names, null), "Start in app · budget ≤ $2.00");
   assert.equal(sendLabel(repoIntent(CAP, { kind: "idle" }), names, null),
-    "Queue for app · a new session when this repo is free · budget ≤ $2.00");
+    "Start a new session in app when free · budget ≤ $2.00");
   // A percent is worded by shared, the long way: this is its sentence, not a re-spelling.
   assert.match(sendLabel(repoIntent({ unit: "sessionPct", max: 2, interrupt: true }), names, null), /budget ≤ 2% of this 5-hour window$/);
 });

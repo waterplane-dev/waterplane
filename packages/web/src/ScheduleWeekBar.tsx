@@ -97,8 +97,8 @@ export function ScheduleWeekBar({ entries, usage, title, now = Date.now() }: {
       )}
       {bar.unread.length > 0 && read && (
         <div className="swb-note">
-          {bar.unread.length === 1 ? "One window rule is" : `${bar.unread.length} window rules are`} not armed —
-          the window it tracks has not been read yet.
+          {bar.unread.length === 1 ? "One window rule waits" : `${bar.unread.length} window rules wait`} for the first usage
+          reading (about a minute).
         </div>
       )}
       {bar.sessionless.length > 0 && (

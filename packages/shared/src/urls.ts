@@ -65,7 +65,7 @@ function tailFrom(line: string, from: number): string {
 /** Length of the run of URL characters `s` starts with. */
 function urlPrefixLen(s: string): number {
   let n = 0;
-  while (n < s.length && URL_CHARS.test(s[n])) n++;
+  while (n < s.length && URL_CHARS.test(s[n]!)) n++;
   return n;
 }
 
@@ -90,31 +90,31 @@ export function findUrls(lines: string[]): FoundUrl[] {
   for (let i = 0; i < rows.length; i++) {
     SCHEME.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = SCHEME.exec(rows[i]))) {
+    while ((m = SCHEME.exec(rows[i]!))) {
       const at = m.index;
-      const raw = tailFrom(rows[i], at);
+      const raw = tailFrom(rows[i]!, at);
       // A glyph that no URL is made of, with URL characters on BOTH sides of
       // it, was painted over the link. One that only closes it (`"`, `>`, `’`
       // at the end) is the prose around it, and the link ends there.
       const clean = urlPrefixLen(raw);
       const head = raw.slice(0, clean);
-      let truncated = clean < raw.length - 1 && URL_CHARS.test(raw[clean + 1]);
+      let truncated = clean < raw.length - 1 && URL_CHARS.test(raw[clean + 1]!);
       // A URL only wraps when it ran to the end of the row. Anything with room
       // to spare after it ended there.
-      const wrapped = !truncated && at + head.length === rows[i].length;
+      const wrapped = !truncated && at + head.length === rows[i]!.length;
       let url = head;
       let span = 1;
       if (wrapped) {
         // Collect the candidate run: flush-with-the-first-row, whitespace-free,
         // URL-shaped rows. Nothing is joined yet — the run has to prove it.
-        const indent = indentOf(rows[i]);
-        const width = rows[i].length;
+        const indent = indentOf(rows[i]!);
+        const width = rows[i]!.length;
         const run: string[] = [];
         // A FULL row that is URL characters up to a painted-over glyph: the
         // run goes on under it, and only its clean prefix can be kept.
         let overpainted: string | null = null;
         for (let j = i + 1; j < rows.length; j++) {
-          const r = rows[j];
+          const r = rows[j]!;
           if (indentOf(r) !== indent) break;
           const body = r.slice(indent);
           if (!body) break;
@@ -137,7 +137,7 @@ export function findUrls(lines: string[]): FoundUrl[] {
           let take = 0;
           let short = false;
           for (let k = 0; k < run.length; k++) {
-            short = indent + run[k].length !== width;
+            short = indent + run[k]!.length !== width;
             take = k + 1;
             if (short) break; // a short row ends the URL
           }

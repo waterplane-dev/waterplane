@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { scopedTitle } from "./sheetScope";
+import { TITLE } from "./sheetNames";
 import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, LogIn, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, TextCursorInput, Trash2, User, Wallet, WifiOff } from "lucide-react";
 import type { SentCommand, SentSource, StoreLoss } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
@@ -123,7 +125,7 @@ export function SentLogSheet({ entries, loss, onOpenStorage, filterSessionId, se
 
   return (
     <div className="sheet">
-      <SheetHead title={<><MessageSquare size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Sent commands{sessionTitle ? ` · ${sessionTitle}` : ""}</>} onClose={onClose}>
+      <SheetHead title={<><MessageSquare size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />{scopedTitle(TITLE.sentlog, sessionTitle)}</>} onClose={onClose}>
         {/* The title has to be allowed to shrink: `.brand` is flex:0 0 auto, so
             a long session name pushed refresh and clear straight off the right
             edge of the phone. */}

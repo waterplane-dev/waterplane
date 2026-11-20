@@ -44,7 +44,7 @@ import { CMD_HISTORY_MAX, loadCmdHistory } from "../../localState";
 import type { HeaderCmd } from "../../headerCmds";
 import { useVoice } from "../../useVoice";
 import { baseName } from "../../format";
-import { LS, lsSetJson } from "../../storage";
+import { LS, lsSetJsonUser } from "../../storage";
 import { prefRef, setPref } from "../prefs.ts";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
@@ -137,7 +137,7 @@ export function useComposeDraft() {
     if (!t) return;
     setCmdHistory((prev) => {
       const next = [...prev.filter((x) => x !== t), t].slice(-CMD_HISTORY_MAX);
-      lsSetJson(LS.cmdHistory, next);
+      lsSetJsonUser(LS.cmdHistory, next, "command history");
       return next;
     });
     setHistIdx(-1);
@@ -942,7 +942,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   return {
     ...draft,
     sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid, sendMenu, setSendMenu,
-    cliMode, enterSends, voice, aimedSession, noteSendAim,
+    cliMode, enterSends, voice, aimedSession, noteSendAim, composeAim,
     chord, tapChordMod, sendInput, stepHistory, clearCompose, appendSnippet, focusPipe, toggleCliMode, onPipeInput, flushPipe, onPipeKey,
     onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, runHeaderCmd, seedDraft, typeOn,
     sendNow: () => sendCompose("now"),

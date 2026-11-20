@@ -70,10 +70,14 @@ export function routeContext(base: string, row: RouteRow | null, enforcing: bool
   const ctx: RouteContext = {};
   if (net?.tailnet !== undefined) ctx.tailnet = net.tailnet;
   if (!row) return ctx;
-  const pinned = enforcing && !!row.tls && !row.tlsOff &&
-    [row.base, row.lan?.base].some((b) => !!b && b !== base && tlsBaseOf(b, row.tls) === base);
-  if (pinned || (row.vouched && row.base === base)) ctx.trusted = true;
+  if (pinnedTlsOf(base, row, enforcing) || (row.vouched && row.base === base)) ctx.trusted = true;
   return ctx;
+}
+
+/** Is `base` the TLS address of a pin this row holds, on a shell that enforces it? */
+function pinnedTlsOf(base: string, row: RouteRow, enforcing: boolean): boolean {
+  return enforcing && !!row.tls && !row.tlsOff &&
+    [row.base, row.lan?.base].some((b) => !!b && b !== base && tlsBaseOf(b, row.tls) === base);
 }
 
 /**
@@ -164,6 +168,18 @@ export function setRouteBase(url: string | null): string | null {
 /** The route override in force, or null on the saved address. */
 export function routeBase(): string | null {
   return route;
+}
+
+/**
+ * The route in force when it is the pinned TLS address of the active row, else null. That is the one
+ * route an opaque load may follow: the desktop honours a read ticket there (TLS only), and nowhere
+ * else on the LAN. A phone on such a route with Tailscale off cannot reach the saved tailnet address
+ * at all, so without this every `<img>` was a broken picture (2026-11-18).
+ */
+export function pinnedRouteBase(): string | null {
+  if (route === null) return null;
+  const row = activeRow();
+  return row && pinnedTlsOf(route, row, hasShellTls()) ? route : null;
 }
 
 /** What the shell last said about the network; null until it has, and on a shell with no plugin. */
@@ -326,20 +342,28 @@ export function hostConfigured(): boolean {
  * `<a href>`, Background Fetch, the native download service. Everything that
  * goes through fetch/XHR is already covered by `installHostRouting()`.
  *
- * **Always the SAVED (tailnet) address, never the LAN route.** Every one of
+ * **The SAVED (tailnet) address, never a plain LAN route.** Every one of
  * those loads is OPAQUE: no `Authorization` header can ride on an `<img>`, a
  * Background Fetch or a Java-side download, and the cookie is withheld
  * cross-site. The host gates every `/api/*` on the LAN, so the same URL on
  * the LAN route is a 401 — a blank thumbnail, a failed download — while the
  * tailnet address is trusted by network identity with no token at all. A
  * LAN-only desktop with a pin is `savedHostBase()`'s TLS address here too, where
- * nothing is trusted by network identity: that one load carries a read ticket.
+ * nothing is trusted by network identity: that one load carries a read ticket. So
+ * does a pinned LAN ROUTE (`pinnedRouteBase`), once a ticket for it is held.
  */
 export function abs(url: string): string {
   // The demo has no host to point at: a host FILE is bundled media
   // (`public/demo/media/…`), anything else stays `/api` for the demo's fetch.
   if (isDemo()) return demoMediaUrl(url);
-  return ticketedUrl(resolveHostUrl(savedHostBase(), url), ticket, Date.now());
+  // On a pinned LAN route, and only while a live ticket for it is held: before one lands the saved
+  // address is still the better guess, and a plain route never gets one. Not while the shell says
+  // Tailscale is up: the saved address works then, and a queued download keeps the URL it was given,
+  // so a LAN one would die the moment the phone left the Wi-Fi.
+  const now = Date.now();
+  const lan = routeNet?.tailnet === true ? null : pinnedRouteBase();
+  const base = lan && readTicketLeft(lan, now) > 0 ? lan : savedHostBase();
+  return ticketedUrl(resolveHostUrl(base, url), ticket, now);
 }
 
 // ── The read ticket ─────────────────────────────────────────────────────

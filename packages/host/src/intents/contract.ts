@@ -185,12 +185,6 @@ export interface IntentExecutors {
    *  a headless agent rather than a build command, and dispatching both off
    *  `target.kind` alone would run an assessment through the build pty. */
   assess?(i: Intent): Promise<ExecutorResult>;
-  /** `{kind:"capture"}` — take a picture of a running screen and say how much
-   *  the picture can be trusted. A `shell` target for the third time, and
-   *  dispatched off the PAYLOAD for `assess`'s reason: it spawns no build
-   *  command and no agent, it drives a browser / a device / the desktop, and
-   *  routing on the target alone would hand it to the build pty. */
-  capture?(i: Intent): Promise<ExecutorResult>;
 }
 
 /**

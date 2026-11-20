@@ -1,7 +1,7 @@
 // `.ts` on purpose: `splitHeaderCmds` below is pinned by `headerCmds.test.mjs`
 // under `node --test`, which resolves ESM specifiers literally. Type-only
 // imports are erased and may stay extensionless; a VALUE import may not.
-import { LS, lsDel, lsJson, lsSetJson } from "./storage.ts";
+import { LS, lsDel, lsJsonUser, lsSetJsonUser } from "./storage.ts";
 /**
  * Header commands — the user's own one-tap chips in the session header.
  *
@@ -39,6 +39,7 @@ export const DEFAULT_HEADER_CMDS: HeaderCmd[] = [
 ];
 
 interface Stored { list: HeaderCmd[]; removed: string[] }
+const isStoredShape = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** First non-empty line, shortened — the fallback chip label. */
 export function autoTitle(text: string): string {
@@ -67,7 +68,7 @@ export function loadHeaderCmds(): HeaderCmd[] {
   // all mean "this person has never edited their chips", which is the shipped
   // list — NOT an empty one. An emptied list is a different, stored fact:
   // `{ list: [], removed: [...] }`, which survives the branch below.
-  const parsed = lsJson<Partial<Stored> | null>(KEY, null);
+  const parsed = lsJsonUser<Partial<Stored> | null>(KEY, null, "header commands", isStoredShape);
   if (!parsed || typeof parsed !== "object") return [...DEFAULT_HEADER_CMDS];
   const stored: Stored = {
     list: Array.isArray(parsed.list) ? parsed.list.map(clean).filter((c): c is HeaderCmd => !!c) : [],
@@ -85,7 +86,7 @@ export function saveHeaderCmds(list: HeaderCmd[]): void {
   // An emptied list must STAY empty across a reload: every missing default is
   // recorded as deliberately removed.
   const removed = DEFAULT_HEADER_CMDS.filter((d) => !have.has(d.id)).map((d) => d.id);
-  lsSetJson(KEY, { list: kept, removed } satisfies Stored);
+  lsSetJsonUser(KEY, { list: kept, removed } satisfies Stored, "header commands", isStoredShape);
 }
 
 /** Back to the shipped list — also forgets which defaults were deleted. */

@@ -72,7 +72,7 @@ export function hourKey(t: number): string {
 export function hourKeyMs(key: string): number {
   const [y, m, d] = key.slice(0, 10).split("-").map(Number);
   const h = Number(key.slice(11, 13));
-  return new Date(y, (m || 1) - 1, d || 1, Number.isFinite(h) ? h : 0).getTime();
+  return new Date(y!, (m || 1) - 1, d || 1, Number.isFinite(h) ? h : 0).getTime();
 }
 
 /** Top of the local hour bucket `t` is in: `hourKeyMs(hourKey(t))`, by definition. See `hourKey`. */
@@ -418,13 +418,13 @@ export function ptsCalibration(
 ): PtsCalibration | PtsRefusal {
   const stretches = usageStretches(samples ?? [], "week").filter((s) => s.pts.length >= 2);
   if (!stretches.length) return { why: "noSamples" };
-  const long = stretches.filter((s) => s.pts[s.pts.length - 1].t - s.pts[0].t >= CAL_MIN_SPAN_MS);
+  const long = stretches.filter((s) => s.pts[s.pts.length - 1]!.t - s.pts[0]!.t >= CAL_MIN_SPAN_MS);
   if (!long.length) return { why: "shortStretches" };
-  const climbed = long.filter((s) => s.pts[s.pts.length - 1].v - s.pts[0].v >= CAL_MIN_DPTS);
+  const climbed = long.filter((s) => s.pts[s.pts.length - 1]!.v - s.pts[0]!.v >= CAL_MIN_DPTS);
   if (!climbed.length) return { why: "smallDelta" };
   const measured = climbed.map((s) => {
-    const a = s.pts[0];
-    const b = s.pts[s.pts.length - 1];
+    const a = s.pts[0]!;
+    const b = s.pts[s.pts.length - 1]!;
     const lo = hourFloor(a.t);
     const hi = hourFloor(b.t);
     let usd = 0;
@@ -433,7 +433,7 @@ export function ptsCalibration(
   });
   const priced = measured.filter((m) => m.usd > 0);
   if (!priced.length) return { why: "noCost" };
-  if (priced.length === 1 && priced[0].dPts < CAL_SINGLE_MIN_DPTS) return { why: "smallDelta" };
+  if (priced.length === 1 && priced[0]!.dPts < CAL_SINGLE_MIN_DPTS) return { why: "smallDelta" };
   const usd = priced.reduce((s, m) => s + m.usd, 0);
   const dPts = priced.reduce((s, m) => s + m.dPts, 0);
   const usdPerPt = usd / dPts;

@@ -5,15 +5,16 @@
  * Before any of that, the row shows what needs no sign-in: the plan and this month's requests
  * counted off this machine's Copilot Chat logs (`copilot-usage/host/vscodelocal.mts`, shared with the desktop), re-read every few
  * minutes from disk. The GitHub read is the extension's only network call, so it is OFF until
- * the person turns it on with the tree row's GitHub button; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
+ * the person turns it on with the GitHub button at the top of All sessions › Copilot Chat; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
  * internal one: a shape the parser does not know reads as absent, never as a guessed number.
  * A token is asked for silently on refresh; only the person's press of that button may raise VS Code's own
  * sign-in prompt.
  */
 import * as vscode from "vscode";
-import { BRAND, usageWindowPct } from "@waterplane/shared";
+import { BRAND } from "@waterplane/shared";
 import type { UsageReading } from "@waterplane/shared";
-import { localLines } from "../../extensions/copilot-usage/host/vscodelocal.mts";
+import type { CopilotQuotaView } from "./protocol.js";
+import { localLines, localWords } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import type { CopilotLocalDoc, CopilotLocalReader } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import { parseCopilotQuota } from "../../extensions/copilot-usage/host/ghquota.mts";
 
@@ -54,7 +55,7 @@ export class CopilotQuota implements vscode.Disposable {
 
   get state(): QuotaState { return this.st; }
 
-  /** The row's GitHub button: turn it on (first time), else read again. May raise VS Code's sign-in. */
+  /** The GitHub button on All sessions › Copilot Chat: turn it on (first time), else read again. May raise VS Code's sign-in. */
   async click(): Promise<void> {
     if (!this.st.on) {
       this.st.on = true;
@@ -121,35 +122,10 @@ export class CopilotQuota implements vscode.Disposable {
   }
 }
 
-const WINDOW_NAME: Record<string, string> = { premium: "premium", chat: "chat" };
-
-/** `premium 34% · chat 2%` — each window's used share; null when none has one. */
-export function quotaWords(r: UsageReading): string | null {
-  const bits = r.windows.flatMap((w) => {
-    const pct = usageWindowPct(w);
-    return pct == null ? [] : [`${WINDOW_NAME[w.id] ?? w.id} ${Math.round(pct)}%`];
-  });
-  return bits.length ? bits.join(" · ") : null;
-}
-
-/** The tooltip: each window with its count, the reset date, when it was read. */
-export function quotaTooltip(st: QuotaState): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  if (st.local) for (const l of localLines(st.local)) md.appendText(`${l}\n\n`);
-  const r = st.reading;
-  if (r) {
-    for (const w of r.windows) {
-      const pct = usageWindowPct(w);
-      const count = w.used != null && w.limit != null ? ` (${w.used} of ${w.limit} ${w.unitName ?? ""})`.replace(" )", ")") : "";
-      md.appendText(`${w.id === "premium" ? "Premium requests" : "Chat"}: ${pct == null ? "no share given" : `${Math.round(pct)}% used`}${count}\n\n`);
-    }
-    const reset = r.windows.find((w) => w.resetAt)?.resetAt;
-    if (reset) md.appendText(`Resets ${new Date(reset).toLocaleDateString()}.\n\n`);
-    md.appendText(`Read ${new Date(r.checkedAt).toLocaleTimeString()} from GitHub with your VS Code sign-in.\n\n`);
-  }
-  if (st.why) md.appendText(`${st.why}\n\n`);
-  md.appendText(st.on
-    ? "Click for Copilot Chat's token use on this machine. The GitHub button reads the quota again; it is re-read every 10 minutes while on."
-    : "Click for Copilot Chat's token use on this machine, no sign-in. For GitHub's own figure (the limit and reset date), use the row's GitHub button: VS Code asks once to share the GitHub account it is already signed in with; Cancel keeps this local count. That is the extension's only network call.");
-  return md;
+/** What All sessions › Copilot Chat draws: the same state, with the local reading already in words. */
+export function quotaView(st: QuotaState): CopilotQuotaView {
+  return {
+    on: st.on, busy: st.busy, reading: st.reading, why: st.why,
+    local: st.local ? { words: localWords(st.local), lines: localLines(st.local) } : null,
+  };
 }

@@ -32,7 +32,7 @@ The VS Code extension can be published from a vaulted Azure login that mints tok
 - shipped: 72cf8462, 913c9ae6
 
 ### R-login-007 · shipped
-The app shows the Copilot plan name and this month's local request count without requiring a sign-in.
+The app shows the Copilot plan name and this month's local request count without requiring a sign-in. In VS Code they head All sessions › Copilot Chat, with GitHub's own quota behind a button there (off until pressed).
 - asked: 2026-10-21
 - shipped: 28095657
 

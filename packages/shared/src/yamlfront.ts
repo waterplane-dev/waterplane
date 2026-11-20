@@ -31,7 +31,7 @@ export function keyLine(line: string): [string, string] | null {
   const rest = line.slice(m[0].length);
   if (rest && rest[0] !== " " && rest[0] !== "\t") return null;
   if (/[\n\r\u2028\u2029]/.test(rest)) return null;
-  return [m[1], rest];
+  return [m[1]!, rest];
 }
 /** Characters that may not START a plain YAML scalar. */
 const INDICATOR = /^[-?:,\]}#&*!%@`]/;

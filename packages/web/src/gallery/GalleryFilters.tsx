@@ -26,10 +26,10 @@ export function GalleryFilters({ m }: { m: GalleryModel }) {
           only "all repos", and a one-tab control says nothing the search box does not. */}
       {singleRepo && (
         <div className="segmented gallery-scope">
-          {tab("inbox", "inbox")}
-          {tab("outbox", "outbox")}
-          {tab("repo", "this repo")}
-          {tab("all", "all repos")}
+          {tab("outbox", "From Claude")}
+          {tab("inbox", "From my phone")}
+          {tab("repo", "This repo")}
+          {tab("all", "All repos")}
         </div>
       )}
 

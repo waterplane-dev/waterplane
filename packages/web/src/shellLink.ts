@@ -360,6 +360,7 @@ export async function claimQueue(): Promise<RelayClaim> {
     receipts: Array.isArray(r?.receipts) ? r.receipts : [],
     written: Array.isArray(r?.written)
       ? r.written.filter((w) => w && typeof w.ackId === "string" && typeof w.firstSentAt === "number") : [],
+    ...(r?.lost === true ? { lost: true } : {}),
   };
 }
 

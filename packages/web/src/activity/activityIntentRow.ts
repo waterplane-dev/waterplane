@@ -163,10 +163,7 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
         disabledReason: openable ? needsLink(online, "a follow-up") : "no session is left to drive",
       }),
     );
-  } else if (kind === "build" || kind === "capture") {
-    // One arm for both: a capture's three verbs are a build's three verbs. Its
-    // artifacts are the frames and the sidecar under `.claude/outbox/`, fetched
-    // by the same download action, and `intent.cancel` stops either one.
+  } else if (kind === "build") {
     actions.push(
       // No `needsLink` here on purpose: a download is HTTP plus a local queue
       // (`download.ts`), not a socket message. It is queued with the link down

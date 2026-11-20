@@ -68,7 +68,7 @@ export const RUN_AGAIN_LABEL = "run it again";
  */
 export function runAgainRowNote(it: Pick<BacklogItem, "targetSessionId">): string {
   const head = "it failed, so nothing will pick it up again — put it back in the queue and it runs again ";
-  const tail = " The failure it had stays on the row. “re-fire” beside it runs it this second instead.";
+  const tail = " The failure it had stays on the row. “Start again” beside it runs it this second instead.";
   // A row aimed at a live session: the queue it goes back into is that
   // session's, auto fires it there when the conversation next goes quiet, and
   // saying "a session of its own" here would describe the one thing that will

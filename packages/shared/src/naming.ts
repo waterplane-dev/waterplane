@@ -572,7 +572,7 @@ export function cleanCommitMessage(raw: unknown): string | undefined {
   let s = raw.replace(/\r\n?/g, "\n").trim();
   // A whole answer inside one fence — ```text … ``` — is the commonest wrapper.
   const fence = /^```[a-zA-Z]*\n([\s\S]*?)\n?```$/.exec(s);
-  if (fence) s = fence[1].trim();
+  if (fence) s = fence[1]!.trim();
   for (const [open, close] of QUOTE_PAIRS) {
     if (s.length >= 2 && s.startsWith(open) && s.endsWith(close) && !s.slice(1, -1).includes("\n")) {
       s = s.slice(1, -1).trim();
@@ -584,25 +584,25 @@ export function cleanCommitMessage(raw: unknown): string | undefined {
     .map((l) => l.replace(/\s+$/, ""))
     .filter((l) => !TRAILER_RE.test(l.trim()));
   // `Subject:` / `Commit message:` on the first line is a label, not the words.
-  if (lines.length) lines[0] = lines[0].replace(/^(?:subject|commit message|message)\s*:\s*/i, "").trim();
-  while (lines.length && !lines[0].trim()) lines.shift();
-  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  if (lines.length) lines[0] = lines[0]!.replace(/^(?:subject|commit message|message)\s*:\s*/i, "").trim();
+  while (lines.length && !lines[0]!.trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1]!.trim()) lines.pop();
   if (!lines.length) return undefined;
-  const subject = lines[0].trim().replace(/\.$/, "");
+  const subject = lines[0]!.trim().replace(/\.$/, "");
   if (!subject || subject.length > MAX_COMMIT_SUBJECT) return undefined;
   lines[0] = subject;
   // A subject with a body needs the blank line between them — git reads the
   // second line as body otherwise and `%s` swallows the lot.
-  if (lines.length > 1 && lines[1].trim()) lines.splice(1, 0, "");
+  if (lines.length > 1 && lines[1]!.trim()) lines.splice(1, 0, "");
   // Collapse runs of blank lines, which a model produces freely.
   const out: string[] = [];
   for (const l of lines) {
-    if (!l.trim() && out.length && !out[out.length - 1].trim()) continue;
+    if (!l.trim() && out.length && !out[out.length - 1]!.trim()) continue;
     out.push(l);
   }
   // Body lines come off the END until the whole fits. The subject never does.
   while (out.length > 1 && out.join("\n").length > MAX_COMMIT_CHARS) out.pop();
-  while (out.length > 1 && !out[out.length - 1].trim()) out.pop();
+  while (out.length > 1 && !out[out.length - 1]!.trim()) out.pop();
   const text = out.join("\n").trim();
   if (!text || text.length > MAX_COMMIT_CHARS) return undefined;
   return text;

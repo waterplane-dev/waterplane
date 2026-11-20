@@ -129,7 +129,6 @@ const ROUTES = [
   "GET /api/repos/:id/archive/transcript",
   "GET /api/repos/:id/archive/*",
   "DELETE /api/repos/:id/archive/*",
-  "POST /api/repos/:id/capture/run/*",
   "GET /api/repos/:id/inbox/*",
   "POST /api/repos/:id/inbox/seen",
   "POST /api/repos/:id/inbox/*",

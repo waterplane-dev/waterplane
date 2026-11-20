@@ -5,28 +5,24 @@
  * from App's `overlayViews` is only the props each was handed.
  */
 import type { LaunchOpts } from "@waterplane/shared";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useCore, useQueueEntries, useStore } from "../../sdk";
 import { ArchiveSheet, type ArchiveBackendTab } from "../../ArchiveSheet";
 import { showBackendPicker } from "../../backendCaps";
 import { Empty } from "../../Empty";
 import { LocalRtSheet } from "../../LocalRtSheet";
-import { NetHealthSheet } from "../../NetHealthSheet";
+import { ConnectionSheet } from "../../ConnectionSheet";
+import { connectionTab } from "../../connTest";
+import type { ConnectionTab } from "../../routing";
 import { RepoColorSheet } from "../../RepoColorSheet";
 import { SecretSheet } from "../../SecretSheet";
 import { SheetHead } from "../../Sheet";
-import { SpeedTestSheet } from "../../SpeedTestSheet";
 import { StorageSheet } from "../../StorageSheet";
 import { toolbarItems } from "../../toolbar";
 import { UsageSheet } from "../../UsageSheet";
 import { archiveBackendHint, archiveBackends, archiveStartRepo, knownFeatureIds, liveConversationIds, liveSessionFor } from "./logic";
 import { localRtFocus, netFocus } from "./store";
 import { archiveOpen } from "../../archiveOpen";
-
-export function SpeedTestToolSheet() {
-  const core = useCore();
-  return <SpeedTestSheet onClose={() => core.nav.close("speedtest")} />;
-}
 
 export function SecretToolSheet() {
   const core = useCore();
@@ -62,11 +58,14 @@ export function LocalRtToolSheet() {
     }} />;
 }
 
-export function NetHealthToolSheet() {
+/** The Connection screen. The two old ids (`nethealth`, `speedtest`) stay registered for Settings rows, saved routes and
+ *  callers not yet moved: they draw the same screen on their tab, and close under their own id. */
+export function ConnectionToolSheet({ id = "connection", tab }: { id?: "connection" | "nethealth" | "speedtest"; tab?: ConnectionTab }) {
   const core = useCore();
+  useEffect(() => { if (tab) connectionTab.set(tab); }, [tab]);
   const focus = useStore(netFocus);
   const entries = useQueueEntries();
-  return <NetHealthSheet onClose={() => core.nav.close("nethealth")} onToast={core.say.toast} focus={focus}
+  return <ConnectionSheet onClose={() => core.nav.close(id)} onToast={core.say.toast} focus={focus}
     notDelivered={entries.filter((e) => e.status === "failed").length}
     heldSends={entries.filter((e) => e.status === "queued" || e.status === "pending").sort((a, b) => a.ts - b.ts)}
     onOpenStorage={() => { core.say.track("overlay:storage"); core.nav.open("storage"); }}

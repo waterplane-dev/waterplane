@@ -6,16 +6,18 @@
  */
 import { bindPendingSession, type RelayClaim } from "@waterplane/shared";
 import { isCreateOp, type OutboxEntry } from "../../outbox";
+import { notePromptedSession } from "./promptedSessions";
 import { noteSendConfirmed } from "../../link";
 import { dismissToastIf, showToast } from "../../toast";
-import { answerSendingToast, claimWritten, pendingLaneId, requeue } from "./logic.ts";
+import { ACK_TIMEOUT_MS, answerSendingToast, claimWritten, pendingLaneId, requeue } from "./logic.ts";
 import { noteFireAck } from "./fireFate.ts";
+import { noteReceiptRemoval } from "../../relayedRow";
 import type { Msg, QueueCtx } from "./types.ts";
 
 export interface WireFns {
   onBacklogAck(msg: Msg<"backlog.ack">): void;
   onOpAck(msg: Msg<"op.ack">): void;
-  onInputAck(msg: Msg<"input.ack">): void;
+  onInputAck(msg: Msg<"input.ack">, fromClaim?: boolean): void;
   onDeliveryList(msg: Msg<"delivery.list">): void;
   onDeliverySettled(msg: Msg<"delivery.settled">): void;
   onLaunchList(msg: Msg<"launch.list">): void;
@@ -44,7 +46,7 @@ export function wireFns(c: QueueCtx): WireFns {
   function onBacklogAck(msg: Msg<"backlog.ack">): void {
     const timer = ackTimers.current.get(msg.ackId);
     if (timer != null) { clearTimeout(timer); ackTimers.current.delete(msg.ackId); }
-    if (msg.ok) writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
+    if (msg.ok) { noteReceiptRemoval(msg.ackId); writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId)); }
     else failOutbox(msg.ackId, msg.reason || "could not queue");
     releaseLane();
   }
@@ -69,7 +71,16 @@ export function wireFns(c: QueueCtx): WireFns {
     // receipt — ok or refused, and naming any id that was not waiting.
     if (entry?.op?.t === "signin.continue") showToast(msg.reason || (msg.ok ? "continuing after the sign-in" : "nothing was continued"));
     if (msg.ok) {
-      writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
+      // PARKED create (see below): its chain is marked as held by the desktop BEFORE the create's
+      // row is retired, or the write's orphan reconcile (`orphans.ts`) would fail the chain.
+      if (entry && isCreateOp(entry) && !msg.sessionId && msg.launchId) holdForLaunch(entry.sessionId, entry.ackId);
+      // Retire the create's row AND bind its chain in ONE write: the write reconciles orphans
+      // (`orphans.ts`), and a chain whose create row is gone but not yet re-aimed at the session
+      // the ack named would be failed as an orphan. (Binding does not read the create row.)
+      noteReceiptRemoval(msg.ackId);
+      let retired = outboxRef.current.filter((e) => e.ackId !== msg.ackId);
+      if (entry && isCreateOp(entry) && msg.sessionId) retired = bindPendingSession(retired, entry.sessionId, msg.sessionId, Date.now(), entry.ackId);
+      writeOutbox(retired);
       // A create names the session it made: every prompt queued behind it
       // in this lane now HAS a target, so bind them and let the lane
       // drain. The first prompt travelled inside the op itself (the host
@@ -89,7 +100,10 @@ export function wireFns(c: QueueCtx): WireFns {
           ];
         }
         if (msg.sessionId) {
-          writeOutbox(bindPendingSession(outboxRef.current, entry.sessionId, msg.sessionId, Date.now(), entry.ackId));
+          // The first prompt travels inside the create and is typed later, once the TUI is up: the
+          // session is not empty meanwhile (`promptedSessions.ts`).
+          if ((entry.op as { prompt?: string }).prompt) notePromptedSession(msg.sessionId);
+          // (the chain was bound in the write above.)
           // Someone is standing on this create's pending screen: move
           // them (and their draft) onto the session it just named.
           adoptPendingSession(entry.ackId, msg.sessionId);
@@ -100,10 +114,10 @@ export function wireFns(c: QueueCtx): WireFns {
         // for `launch.opened`, and they stop aging out while they do: the
         // queue's half-hour is a bound on a message nobody is holding, and
         // this one is held by the desktop, which is not going anywhere.
-        else if (msg.launchId) holdForLaunch(entry.sessionId, entry.ackId);
+        // (`holdForLaunch`, done above before the create's row was retired.)
         // Accepted but nameless: nothing to bind to, and leaving them
         // parked would hold the lane silently forever.
-        else failPendingCreates(entry.sessionId, "the session was never named — re-aim these or discard them", entry.ackId);
+        else if (!msg.launchId) failPendingCreates(entry.sessionId, "the session was never named — re-aim these or discard them", entry.ackId);
       }
       // The op created/named a session and the user was looking at the
       // tap that asked for it → open it. Not for an op that was queued
@@ -147,7 +161,7 @@ export function wireFns(c: QueueCtx): WireFns {
     releaseLane(); // ok or not, this lane is free — never strand what's behind it
   }
 
-  function onInputAck(msg: Msg<"input.ack">): void {
+  function onInputAck(msg: Msg<"input.ack">, fromClaim = false): void {
     const timer = ackTimers.current.get(msg.ackId);
     if (timer != null) { clearTimeout(timer); ackTimers.current.delete(msg.ackId); }
     const entry = outboxRef.current.find((e) => e.ackId === msg.ackId);
@@ -168,6 +182,7 @@ export function wireFns(c: QueueCtx): WireFns {
       // The receipt retires the "sending …" toast an answer tap raised: that
       // toast ran its own clock and outlived the very thing it announced.
       if (entry?.answer) dismissToastIf(answerSendingToast(entry.answer.label));
+      noteReceiptRemoval(msg.ackId);
       writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
       releaseLane();
     } else if (msg.retryable) {
@@ -180,8 +195,15 @@ export function wireFns(c: QueueCtx): WireFns {
       // the lane-release timer is a busy-loop that holds the lane.
       // The host's reason rides as `waitReason` — "the shell is running
       // `vim`" is the one thing that tells the person what to do.
+      // On the page's own socket `retryable` PROVES nothing ran and nothing is in flight, so a row the
+      // background link had written is the page's own again: `relayedAt` goes, or edit, discard,
+      // rewrite, put back and re-aim stay refused on a prompt that never ran. A CLAIM's receipt proves
+      // no such thing: the service worker keeps an earlier attempt's retryable while a later attempt
+      // of the same ackId is still in flight (pending, net, worker killed), so a claim never clears it.
       writeOutbox(outboxRef.current.map((e) =>
-        e.ackId === msg.ackId && e.status === "pending" ? { ...requeue(e, false), waitReason: msg.reason || undefined } : e));
+        e.ackId === msg.ackId && e.status === "pending"
+          ? { ...requeue(e, false), waitReason: msg.reason || undefined, ...(fromClaim ? {} : { relayedAt: undefined }) }
+          : e));
       releaseLane();
     } else if (msg.state === "rescued") {
       // The session was gone and the host KEPT the words: they are a work
@@ -189,6 +211,7 @@ export function wireFns(c: QueueCtx): WireFns {
       // session. So this row is finished — dropping it is the whole point,
       // because failing it would offer a re-fire that posts the same prose
       // a second time.
+      noteReceiptRemoval(msg.ackId);
       writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
       showToast(msg.reason || "that session is gone — the words are a backlog item now");
       releaseLane();
@@ -266,6 +289,7 @@ export function wireFns(c: QueueCtx): WireFns {
     // binds the chain of the create that was parked, and not that of
     // another one queued for the same repo behind it.
     writeOutbox(bindPendingSession(outboxRef.current, `create:${msg.cwd}`, msg.sessionId, Date.now(), msg.id));
+    notePromptedSession(msg.sessionId); // a parked create waits for its files only because its prompt names them
     adoptPendingSession(msg.id, msg.sessionId);
     flushOutbox();
   }
@@ -287,6 +311,11 @@ export function wireFns(c: QueueCtx): WireFns {
    * still in this queue are replayed: a receipt for a row already settled says nothing new.
    */
   function applyRelayClaim(claim: RelayClaim): number {
+    // The shell's record of what it sent was unreadable, so no row is marked as relayed. Nothing is
+    // guessed: a plain re-send keeps its ackId and is joined or re-acked by the host (never typed
+    // twice). Re-aiming, rewriting or putting a row back mints a new message, which may run it
+    // twice — so the toast says that, not "never twice".
+    if (claim.lost === true) showToast("the background link lost track of what it sent — check the queue. Waiting rows are safe to send as they are; re-aiming or rewriting one could run it twice");
     const known = new Set(outboxRef.current.map((e) => e.ackId));
     const touched = new Set([...claim.written.map((w) => w.ackId), ...claim.receipts.map((r) => r?.ackId)]
       .filter((id): id is string => typeof id === "string" && known.has(id)));
@@ -306,11 +335,14 @@ export function wireFns(c: QueueCtx): WireFns {
     writeOutbox(r.list);
     for (const id of r.pending) {
       const e = outboxRef.current.find((x) => x.ackId === id);
-      if (e && !ackTimers.current.has(id)) c.armAckTimeout(id, c.ackWindowFor(e));
+      // The relay already wrote this frame: the host holds a verdict for its ackId (a re-send is
+      // joined or re-acked, never retyped), so waiting out the full delivery window (~95 s) only
+      // stalls the lane. Ask again after a round trip.
+      if (e && !ackTimers.current.has(id)) c.armAckTimeout(id, e.relayedAt != null ? ACK_TIMEOUT_MS : c.ackWindowFor(e));
     }
     for (const a of claim.receipts) {
       if (!a || typeof a !== "object" || !known.has(a.ackId)) continue;
-      if (a.t === "input.ack") onInputAck(a);
+      if (a.t === "input.ack") onInputAck(a, true);
       else if (a.t === "backlog.ack") onBacklogAck(a);
       else if (a.t === "op.ack") onOpAck(a);
     }

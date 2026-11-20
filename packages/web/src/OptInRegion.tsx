@@ -60,14 +60,12 @@ function verbIcon(a: OptInAction) {
   }
 }
 
-export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: {
+export function OptInRegion({ repo, onSeed, onSeries, onChecklist }: {
   repo: RepoTarget | null;
   /** Open the Send sheet on this seed. Absent ⇒ the agent verbs say why instead. */
   onSeed?: (seed: SendSeed) => void;
   /** Switch this sheet to region 2. */
   onSeries: () => void;
-  /** Open the capture sheet for this repo. */
-  onCapture?: (repo: RepoTarget) => void;
   /** A `fix` returns the re-run checklist; hand it to region 1 so its rows are current. */
   onChecklist?: (report: ComplianceReport) => void;
 }) {
@@ -131,10 +129,6 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
     }
     if (a.kind === "open" && a.to === "series") {
       return <Button onClick={() => { track("action:optins.series"); onSeries(); }}>{verbIcon(a)} {label}</Button>;
-    }
-    if (a.kind === "open") {
-      if (!repo || !onCapture) return <CantInline>The capture screen cannot be opened from here.</CantInline>;
-      return <Button onClick={() => { track("action:optins.capture"); onCapture(repo); }}>{verbIcon(a)} {label}</Button>;
     }
     if (!repo || !onSeed) return <CantInline>No send surface here — open this repo from the launcher to send it.</CantInline>;
     if (again) {

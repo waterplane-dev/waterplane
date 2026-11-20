@@ -44,6 +44,7 @@ import { autoSaveEligible, downloadAction } from "./downloadState";
 import { nativeSaveSupported } from "./nativeSave";
 import { LS, lsGet, lsSet } from "./storage";
 import { showToast } from "./toast";
+import { showReceipt } from "./kit/receiptStore";
 
 /**
  * Put every finished download into the phone's Downloads, tap or no tap.
@@ -163,10 +164,17 @@ export async function saveNow(id: string, opts: { silent?: boolean } = {}): Prom
     // file now lives. The browser path only HANDED it over — a download it
     // could not tie to a gesture is refused silently — so it says just that.
     const via = pulls.get(id)?.saveVia;
-    showToast(r.ok
-      ? (r.already ? `already in ${r.where}`
-        : via === "browser" ? `handed to ${r.where} — ${name}` : `saved to ${r.where}`)
-      : `could not save ${name} — ${r.error}. It is still on this device; open Downloads to try again`);
+    if (r.ok) {
+      // D5: a result is a receipt with a way to it, not a sentence that is gone in a few seconds. `Open`
+      // lands on Downloads (the one place that lists what is on this phone).
+      showReceipt({
+        text: r.already ? `${name} is already in ${r.where}.`
+          : via === "browser" ? `Handed ${name} to ${r.where}.` : `Saved ${name} to ${r.where}.`,
+        open: { run: openDownloads },
+      });
+    } else {
+      showToast(`could not save ${name} — ${r.error}. It is still on this device; open Downloads to try again`);
+    }
   } finally {
     saving.delete(id);
   }

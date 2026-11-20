@@ -15,8 +15,10 @@
  * feature's own command.
  */
 import { StowHome } from "../../Stowable";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useWholeBars } from "./useWholeBars";
 import type { BackendInfo, BacklogItem, Intent, RepoTarget, SessionInfo, UpdateInfo } from "@waterplane/shared";
+import { repoShown } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import { NetActivity } from "../../NetActivity";
 import type { Connection } from "../conn/useConnection";
@@ -114,9 +116,12 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
   const toolbar: ToolbarCtx = {
     active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, setOverlay, runToolbar, backends,
   };
+  // The bars under the terminal: whole or not drawn, never squeezed (`useWholeBars.ts`).
+  const screenRef = useRef<HTMLDivElement>(null);
+  useWholeBars(screenRef);
   return (
     <StowHome>
-    <div className={`screen${chromeHidden ? " typing" : ""}${fullMode ? " fullscreen" : ""}${readerShown ? " reading" : ""}`}>
+    <div ref={screenRef} className={`screen${chromeHidden ? " typing" : ""}${fullMode ? " fullscreen" : ""}${readerShown ? " reading" : ""}`}>
       <SessionHeader active={active} sessions={sessions} pending={pending} pendingEntry={pendingEntry} status={status} liveSend={liveSend}
         backends={backends} sessionCan={launch.sessionCan} sessionRepoName={sessionRepoName} repoForCwd={repoForCwd}
         setActiveId={setActiveId} setOverlay={setOverlay} removeQueued={removeQueued} closeSession={closeSession}
@@ -131,6 +136,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
         compose={compose} launch={launch} chrome={chrome} backends={backends} readerShown={readerShown}
         hiddenSlash={hdrSplit.hiddenSlash} activeRepoId={activeRepoId} transportKnown={transportKnown}
         setActiveId={setActiveId} closeSession={closeSession}
+        repoName={repoForCwd(active.cwd) ? repoShown(repoForCwd(active.cwd)!) : undefined}
         openOutline={(toolbarCfg.pinned ?? []).includes("outline") ? () => runToolbar("outline") : undefined} />
 
       <NextPromptStrip active={active} outbox={outbox} outboxRef={outboxRef} online={status === "open"} holdWall={holdWall}
@@ -139,7 +145,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
 
       <QueueBars q={q} status={status} reconnectAsk={reconnectAsk} setReconnectAsk={setReconnectAsk}
           autoSend={autoSend} confirmQueue={confirmQueue} pullRecords={pullRecords} setOverlay={setOverlay}
-          stripSessionId={active.id} />
+          stripSessionId={active.id} cardAck={pending ? q.pendingEntry?.ackId : undefined} />
 
       <ComposeBar api={compose} active={active} sessions={sessions} outbox={outbox} online={status === "open"}
         repoForCwd={repoForCwd} uploads={{ uploading, parking, upProg, uploadPending, uploadRowLinger, cancelUploads }}

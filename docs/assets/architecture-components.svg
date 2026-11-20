@@ -65,10 +65,10 @@
   <rect class="box" x="36" y="502" width="538" height="76" rx="7"/>
   <text class="t" x="50" y="524">leaves</text>
   <text class="s" x="50" y="544">backends/ — types, registry, claude, claude-local, readers</text>
-  <text class="s" x="50" y="561">plugins/ — loader, registry, api, rpc, builtin   ·   capture/, cli/</text>
+  <text class="s" x="50" y="561">plugins/ — loader, registry, api, rpc, builtin   ·   cli/</text>
   <rect class="band" x="36" y="586" width="538" height="48" rx="7"/>
   <text class="k" x="50" y="606">local/host-boundary: nothing imports server/ or main; only a facade imports its</text>
-  <text class="s" x="50" y="624">slices; slices meet only through core.ts; backends/ and capture/ import no sessions.</text>
+  <text class="s" x="50" y="624">slices; slices meet only through core.ts; backends/ imports no sessions.</text>
   <rect class="panel" x="610" y="76" width="570" height="568" rx="10"/>
   <text class="h" x="630" y="104">packages/web — the phone (React 18 PWA)</text>
   <rect class="box" x="626" y="118" width="538" height="52" rx="7"/>
@@ -83,7 +83,7 @@
   <text class="s" x="640" y="304">CoreApi, FeatureManifest, createStore, hooks, ledgers, pluginClient</text>
   <rect class="box" x="626" y="330" width="538" height="76" rx="7"/>
   <text class="t" x="640" y="352">features/&lt;name&gt;/ (~44)</text>
-  <text class="s" x="640" y="372">backlog, build, capture, context, fanout, queue, setup, tokens, pull …</text>
+  <text class="s" x="640" y="372">backlog, build, context, fanout, queue, setup, tokens, pull …</text>
   <text class="s" x="640" y="389">each: index.ts (its manifest), store, actions, logic, README</text>
   <rect class="box" x="626" y="414" width="538" height="60" rx="7"/>
   <text class="t" x="640" y="436">kit/ = @waterplane/kit</text>

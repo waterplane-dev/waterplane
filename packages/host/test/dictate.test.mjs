@@ -178,6 +178,21 @@ test("whisperd answers when it is up, with the model, language and prompt it was
   } finally { await d.close(); }
 });
 
+test("a clip past one whisper window asks for timestamps and no carried context; a short one does not", async () => {
+  const d = await fakeWhisperd(() => [200, { text: "ok words here", heard_no_speech: false }]);
+  try {
+    await withEnvAsync({ ...NO_CLI, WATERPLANE_WHISPERD_URL: d.url }, async () => {
+      await transcribe(wav(5));
+      await transcribe(wav(31));
+    });
+    const [short, long] = d.seen;
+    assert.equal(short.query.timestamps, undefined);
+    assert.equal(short.query.context, undefined);
+    assert.equal(long.query.timestamps, "1");
+    assert.equal(long.query.context, "0");
+  } finally { await d.close(); }
+});
+
 test("whisperd that is busy or failing hands the clip to whisper-cli", async () => {
   for (const status of [503, 502, 404]) {
     const d = await fakeWhisperd(() => [status, { error: "busy" }]);

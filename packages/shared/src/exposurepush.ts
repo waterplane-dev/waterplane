@@ -91,7 +91,7 @@ export function exposurePushes(
       const prefix = `${row.repo}\u0000`;
       for (const k of pushed.keys) {
         if (!k.startsWith(prefix)) continue;
-        const fk = k.slice(prefix.length).split("\u0000")[0];
+        const fk = k.slice(prefix.length).split("\u0000")[0]!;
         if (!openKeys.has(fk)) resolve.add(exposureAttentionKey(row.repo, fk));
       }
       if (!open.length) resolve.add(exposureSummaryKey(row.repo));

@@ -103,7 +103,7 @@ interface Props {
   onClose: () => void;
   /** The rules that run an entry, as its cue (`buildSchedule.ts`); absent draws none. */
   scheduleCue?: (b: BuildConfig) => BuildScheduleCue | null;
-  /** The cue's tap: Automation cut to exactly `cue.ids`. */
+  /** The cue's tap: Scheduled cut to exactly `cue.ids`. */
   onOpenScheduleCut?: (cue: BuildScheduleCue) => void;
   /** Save the schedule-a-build form (`schedule.save`, durable). */
   onSaveSchedule?: (b: BuildConfig, entry: ScheduleEntry | null, when: Extract<SendWhen, { kind: "at" }>, vals: Record<string, string>, preview: number | null) => void;

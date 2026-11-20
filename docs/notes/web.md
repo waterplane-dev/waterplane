@@ -1358,7 +1358,7 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   (`backStep.ts`, `useBackStep(open, close)`).** The file browser held an opened file in `useState`
   and pushed nothing, so the swipe from a file popped the whole browser to the main view — "open a
   file, swipe back, I'm on the main view instead of the folder". Eight sheets had that shape (files,
-  git diff, gallery viewer, build and capture editors, snippet editor, fan-out presets, the host
+  git diff, gallery viewer, the build editor, snippet editor, fan-out presets, the host
   switcher). A step pushes one entry (`stepKey`, the screen's key plus `#stepN`, so `overlayFromKey`
   still reads its sheet) and Back closes it; a close by any other route marks the slot `VACANT` and a
   microtask pops it — unless the same commit's routing effect already unwound past it or pushed over
@@ -1560,7 +1560,7 @@ Four rules came out of it, and they are rules about the whole app, not about thi
 
 - **A typed name and a derived one are different facts, and one function tells them apart.**
   `typedName` (`shared/schedule.ts`) is that function: trim both, no name ⇒ nothing, no prose ⇒ the
-  name stands (a build or a capture has no prose at all, and `startsWith("")` is vacuously true —
+  name stands (a build has no prose at all, and `startsWith("")` is vacuously true —
   without the guard every such name would be reported as a truncation of nothing), otherwise null
   when either string is the other's leading slice. The comparison is symmetric because either side
   may be the shorter one. `sliceLen` is the caller's fact: the host cuts at 120, `Backlog.add()` at
@@ -5313,7 +5313,7 @@ mechanical once its sheet reads `Intent`.
   unconditionally — a twenty-minute run is ~800 whole-App renders on every connected phone, the one
   sitting on a terminal in another repo included. Only this sheet reads `progress`, so when it is not
   the open overlay and both the stored and incoming run are the same `runId` and both still
-  `running`, the previous map is kept — the same guard `build.output` and `capture.output` already
+  `running`, the previous map is kept — the same guard `build.output` already
   carry, one rung up. It swallows nothing that matters: a status transition, a new `runId`, a `null`
   run, an unknown repo and every frame while the sheet is open all still land, and `openAssessFor`
   re-asks `assess.state` on open (the overlay ref is written during render, which commits long before
@@ -5321,7 +5321,7 @@ mechanical once its sheet reads `Intent`.
   tap that opened it.
 
   **The pictures an item names.** A backlog item is often about something you looked at — a
-  screenshot, a diagram, a capture in `.claude/outbox/` — and a row that quotes its path asks the
+  screenshot, a diagram in `.claude/outbox/` — and a row that quotes its path asks the
   reader to hold a filename in their head while judging whether the words should be retired. So a row
   whose text `refsIn` finds a file in now draws `AttachStrip compact` UNDER the words. Under, and
   never instead: the words are not passed through `Markdown` here, because this sheet's whole
@@ -7754,8 +7754,7 @@ they became a THIRD region of `Repo readings` with no stripe, no pass/warn/fail 
 the badge. `optInCut` is the one bucketing function — the cards (`offered`), the *On* rows, and the
 two folded heads (*N you said not for me*, *N don't fit this repo*) all come from one call, so the
 number on a fold is the list it opens. A tap never applies anything on its own: `fix` runs the
-host's existing idempotent `complianceFix` and prints what it said, `open` switches to region 2 or
-opens the capture sheet (through `core().nav.openCapture`, since features never import each other),
+host's existing idempotent `complianceFix` and prints what it said, `open` switches to region 2,
 and `agent`/`schedule` SEED the Send sheet through `optInSeed.ts` — for a schedule, the weekly rule
 in the phone's own zone (`DEVICE_TZ`), the catalog's model as the repo target's `launch.model` and
 `waitUntilFree` — where words, clock and model can all still be changed. *walk me through these N…*
@@ -8503,7 +8502,7 @@ Prose cut from `.claude/skills/web/SKILL.md` when it was groomed; the rule stays
 
 ### `App.tsx` — chatty pushes and toasts
 
-**A chatty push nothing on screen reads keeps `prev`** — `build.output`, `capture.output` and `assess.state`'s 1.5 s progress frames all guard on the overlay, or a 20-minute run is ~800 whole-App renders on every phone; a status TRANSITION, a new id or a `null` is NEVER swallowed.
+**A chatty push nothing on screen reads keeps `prev`** — `build.output` and `assess.state`'s 1.5 s progress frames all guard on the overlay, or a 20-minute run is ~800 whole-App renders on every phone; a status TRANSITION, a new id or a `null` is NEVER swallowed.
 
 **A toast's clock is the LENGTH of its words** (`toastMs`) and **every toast is also a ROW** in a bounded log (`ToastLog.tsx`, *On this phone*) apart from the host's alerts, and NEVER counted into the unread badge.
 

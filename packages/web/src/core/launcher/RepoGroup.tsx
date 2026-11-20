@@ -4,7 +4,7 @@
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel, withShownName } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
@@ -15,11 +15,10 @@ import { repoClocksLabel } from "../../clockCuts";
 import { isNativeShell } from "../../hostUrl";
 import { RepoHealthMenuItem } from "../../RepoHealthRegion";
 import { OptInMenuItem } from "../../OptInRegion";
-import { gitPending, gitSyncText, gitTitle, noOrigin } from "../../gitCounts";
+import { gitPending, gitTitle, noOrigin } from "../../gitCounts";
 import { track } from "../../usage";
 import { prefRef } from "../prefs";
 import { openBuildFor, useBuildBusy } from "../../features/build";
-import { openCaptureFor } from "../../features/capture";
 import { openPullRules } from "../../features/pull";
 import { openScheduleCut } from "../../features/schedule";
 import { openAssessFor, openBacklogCut, openBacklogFor } from "../../features/backlog";
@@ -41,6 +40,9 @@ import { AttentionChip } from "./AttentionChip";
 import { LeftoverHead, LeftoverLine, LeftoverRemove, useLeftovers } from "./LeftoverWorktrees";
 import { flaggedChipTitle } from "../sessions/followUpFacts";
 import { RowTitle, RowSub } from "../../kit/Row";
+import type { RepoActionItem } from "../featureRun";
+import { MenuGroup } from "./LauncherItems";
+import { capFirst, counted, gitParts, gitWords, newFilesWords, setupLine, WORK_EXT } from "./homeWords";
 
 const ICON = 16;
 
@@ -70,6 +72,15 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   const orphans = wts.filter((t) => !t.ownerSessionId);
   const { readings: leftovers, recheck: recheckLeftovers } = useLeftovers(orphans.map((t) => t.id));
   const leftoverChanged = () => { refreshRepos(); recheckLeftovers(); };
+  // Extension lines for the ⋯, by group: Requirements is work; the rest
+  // (Permission rules, Vault: this repo, …) are about how the repo is set up.
+  const extActions = { work: [] as RepoActionItem[], setup: [] as RepoActionItem[] };
+  if (main && repoMenu === repoName) for (const a of repoActions(main)) (WORK_EXT.has(a.feature) ? extActions.work : extActions.setup).push(a);
+  const extAct = (a: RepoActionItem) => (
+    <ExtBoundary key={a.key} feature={a.feature} what={`its ${a.id} action`}>
+      <button className="more-act" title={a.title} onClick={() => { track(`action:repo.ext.${a.id}`); setRepoMenu(null); a.run(); }}><a.icon size={ICON} />{capFirst(a.label)}</button>
+    </ExtBoundary>
+  );
   const att = attentionByRepo.get(repoName) ?? { wait: 0, blocked: 0, coding: 0, done: 0, exited: 0 };
   // A filter is an explicit "show me these", so it wins over a collapsed
   // group: leaving the group collapsed would answer the tap by hiding
@@ -147,23 +158,28 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           // gallery's own default is the outbox in the last 4h, so tapping "42"
           // landed on an empty grid — the badge said 42, the sheet said 0.
           // Carry the scope AND the window the number came from.
-          <button className={`focus-btn${main.outboxCount > 0 ? " count" : ""}`}
-            title={main.outboxCount > 0 ? `${main.outboxCount} new outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${shown}`}
+          // The count itself is listed under New session (`.repo-pending`); this
+          // stays the door to the files either way.
+          <button className="focus-btn"
+            title={main.outboxCount > 0 ? `${main.outboxCount} new or modified outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${shown}`}
+            aria-label="Images & documents"
             onClick={() => { track("action:repo.files.header"); main.outboxCount > 0 ? openOutboxFor(main.id) : openGalleryFor(main.id); }}>
-            <Images size={15} />{main.outboxCount > 0 && main.outboxCount}
+            <Images size={15} />
           </button>
         )}
         {/* Always drawn: the git view is where a PUSH lives, and commits waiting
             to go out leave the tree clean — gating on changed files hid it
             exactly then. The counts are files, then ↑out ↓in. */}
         {main && (
-          <button className={`focus-btn${gitPending(main) ? " count" : ""}`}
+          <button className={`focus-btn${gitParts(main).length ? "" : " count"}`} aria-label="Changes"
             title={main.gitFailed ? `the last ${main.gitFailed.verb} failed — open git to see why` : main.gitRunning ? `${main.gitRunning === "push" ? "a push" : main.gitRunning === "check" ? "a check" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
             onClick={() => openGitFor(main.id)}>
             {/* A push runs the pre-push checks for minutes; the spinner says so
                 here, so the row is not read as "22 still to push, nothing doing". */}
-            {main.gitRunning ? <Loader size={13} className="spin" /> : <FileDiff size={13} />}{main.changedCount > 0 && main.changedCount}
-            {gitSyncText(main) && <span className="git-ab">{gitSyncText(main)}</span>}
+            {main.gitRunning ? <Loader size={13} className="spin" /> : <FileDiff size={13} />}
+            {/* The counts ("2 to commit", "1 to push") are listed under New session;
+                with nothing waiting the bare word says this is the door to Changes. */}
+            {gitParts(main).length ? null : "Changes"}
             {noOrigin(main) && <span className="git-ab no-origin"><CloudOff size={12} />no remote</span>}
             {main.gitFailed && <span className="git-ab failed"><CircleAlert size={12} />{main.gitFailed.verb} failed</span>}
           </button>
@@ -179,10 +195,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
       </span>
       </div>
       <span className="repo-group-pin">
-        <button className={`focus-btn${repoMenu === repoName ? " on" : ""}`} aria-label="more actions" aria-expanded={repoMenu === repoName}
+        <button className={`focus-btn${repoMenu === repoName ? " on" : ""}`} aria-label="More actions" aria-expanded={repoMenu === repoName}
           title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === repoName ? null : repoName)); }}><MoreHorizontal size={17} /></button>
         {n > 0 && (
-          <button className="focus-btn danger"
+          <button className="focus-btn danger" aria-label={`Close sessions in ${shown}`}
             title={`close sessions in ${shown} — review the ${n} here, cut by state, idle time, or what is still running underneath`}
             onClick={() => setCloseAllPick(repoName)}><X size={18} /></button>
         )}
@@ -207,22 +223,15 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           collapse the group on the way past). The total focuses the repo
           and the worktree chip cuts to the worktree rows. */}
       <span className="repo-group-stats">
-        {/* **Start something here: now, or later.** The two ways a repo
-            begins work, worded and side by side under its name. They were a
-            bare "+" among five header icons (found only with a first-run
-            word on it) and `send…` one tap deep in "⋯" — so the verb a
-            person opens the launcher FOR was the least visible one on it.
-            `now` is the empty session, opened at once. `later` is the SAME
-            session screen (`enterLater`) with the terminal swapped for the
-            sentence that it starts only when its backlog item runs, and the
-            compose bar aimed at a new session *when it's free* — the one
-            prompt box, paste and drop included, never a second one in a
-            sheet. Works with the tunnel down: Send is a backlog row, and
-            the chevron's *elsewhere or later…* puts it on a clock.
-            Always a "+", never a spinner: what is already in flight is on
-            the chip below (see openingCwds); `now` can always start the
-            NEXT one. An opened idle repo's empty line points here, so
-            `now` is outlined to be found (`.lead`). */}
+        {/* **New session**: the one way a repo begins work, worded under its
+            name (whole-app journey spec D3). It was a "+ now" / "+ later"
+            pair; "later" (`enterLater`, words held for a new session when the
+            repo is free) moved into Send's menu as "Start a new session when
+            free", so the row says one verb and the common path is one tap.
+            Never a spinner: what is already in flight is on the chip below
+            (see openingCwds); New session can always start the NEXT one. An
+            opened idle repo's empty line points here, so it is outlined to be
+            found (`.lead`). */}
         {main && (() => {
           const opening = openingCwds.get(main.worktreePath);
           return (
@@ -231,16 +240,31 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
                 title={opening ? `new session in ${shown} · ${main.branch}, another one now — ${openingTitle(opening)}`
                   : `new session in ${shown} · ${main.branch}, opened now`}
                 onClick={() => { track("action:repo.new.header"); openRepo(main); }}>
-                <Plus size={15} />now
+                <Plus size={15} />New session
               </button>
-              <button className="repo-start-btn"
-                title={`words for a new session in ${shown} — held until the repo is free, or on a clock you pick`}
-                onClick={() => { track("action:repo.send"); enterLater(main.worktreePath); }}>
-                <Plus size={15} />later
-              </button>
+              {/* What waits in the repo, one fact per line under the verb
+                  (owner, 11-19): files to look at, then git. Every number
+                  carries its noun (spec D2); each line opens its screen. */}
+              {(main.outboxCount > 0 || gitParts(main).length > 0) && (
+                <span className="repo-pending">
+                  {main.outboxCount > 0 && (
+                    <button className="repo-pending-line" title={`${newFilesWords(main.outboxCount)} since last opened — open images & documents`}
+                      onClick={() => { track("action:repo.files.pending"); openOutboxFor(main.id); }}>
+                      <Images size={13} />{newFilesWords(main.outboxCount)}
+                    </button>
+                  )}
+                  {gitParts(main).map((w) => (
+                    <button key={w} className="repo-pending-line" title={`${gitTitle(main)} — open Changes`}
+                      onClick={() => { track("action:repo.git.pending"); openGitFor(main.id); }}>
+                      <FileDiff size={13} />{w}
+                    </button>
+                  ))}
+                </span>
+              )}
             </span>
           );
         })()}
+        <span className="repo-group-chips">
         {/* The branch is what the repo row used to say under the
             name, and it is the one fact a repo with nothing
             running still has. With sessions it is redundant — each
@@ -255,7 +279,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           <button className={`repo-group-stat wt${statusFilterActive("worktrees", repoName) ? " on" : ""}`}
             title={`${wt} open worktree${wt > 1 ? "s" : ""} in ${shown} — tap to show only those`}
             onClick={() => toggleStatusFilter("worktrees", repoName)}>
-            <GitBranch size={13} />{wt}
+            <GitBranch size={13} />{counted(wt, "branch copy", "branch copies")}
           </button>
         )}
         {/* The host checks repo wiring on its own (setupwatch.ts) —
@@ -296,7 +320,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         {main?.setup && main.setup.issues > 0 && (
           <button className={`repo-group-stat ${!main.setup.ok ? "bad" : "warn"}`} title={setupTitle(main.setup)}
             onClick={() => { track("action:repo.setup"); openSetupCheck(main.id, { weight: "finding" }); }}>
-            <ListChecks size={13} />{main.setup.issues}
+            <ListChecks size={13} />{main.setup.issues} to fix
           </button>
         )}
         {(() => {
@@ -318,27 +342,27 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             launcher's filter on this repo, so it shows exactly these rows. */}
         <AttentionChip kind="blocked" n={att.blocked} repo={shown} on={statusFilterActive("blocked", repoName)}
           onClick={() => toggleStatusFilter("blocked", repoName)} />
-        <AttentionChip kind="wait" n={att.wait} repo={shown} on={statusFilterActive("wait", repoName)}
+        <AttentionChip kind="wait" n={att.wait} repo={shown} on={statusFilterActive("wait", repoName)} noun={att.wait === 1 ? "question" : "questions"}
           replies={!!waitingRepliesByRepo.get(repoName)} onClick={() => toggleStatusFilter("wait", repoName)} />
         {att.coding > 0 && (
           <button className={`repo-group-stat coding${statusFilterActive("coding", repoName) ? " on" : ""}`}
             title={`${att.coding} session${att.coding > 1 ? "s" : ""} in ${shown} working — tap to show only those`}
             onClick={() => toggleStatusFilter("coding", repoName)}>
-            <Loader size={13} className="spin" />{att.coding}
+            <Loader size={13} className="spin" />{att.coding} working
           </button>
         )}
         {att.done > 0 && (
           <button className={`repo-group-stat done${statusFilterActive("done", repoName) ? " on" : ""}`}
             title={`${att.done} session${att.done > 1 ? "s" : ""} in ${shown} idle — turn finished; tap to show only those`}
             onClick={() => toggleStatusFilter("done", repoName)}>
-            <Check size={13} />{att.done}
+            <Check size={13} />{att.done} idle
           </button>
         )}
         {att.exited > 0 && (
           <button className={`repo-group-stat exited${statusFilterActive("exited", repoName) ? " on" : ""}`}
             title={`${att.exited} exited session${att.exited > 1 ? "s" : ""} in ${shown} — tap to show only those`}
             onClick={() => toggleStatusFilter("exited", repoName)}>
-            <CircleSlash size={11} />{att.exited}
+            <CircleSlash size={11} />{att.exited} exited
           </button>
         )}
         {(queuedByRepo.get(repoName)?.length ?? 0) > 0 && (() => {
@@ -386,7 +410,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
                 track("action:repo.queued.open");
                 openActivity({ keys, label: `the ${q} waiting in ${shown}` });
               }}>
-              <Hourglass size={12} />{q}{queuedChipHeld(q, held)}
+              <Hourglass size={12} />{q} queued{queuedChipHeld(q, held)}
             </button>
           );
         })()}
@@ -415,7 +439,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
                 track("action:repo.clocks.open");
                 openScheduleCut(rc.ids, repoClocksLabel(shown, n), main?.worktreePath);
               }}>
-              <CalendarClock size={12} />{n}
+              <CalendarClock size={12} />{n} scheduled
             </button>
           );
         })()}
@@ -431,7 +455,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className={`repo-group-stat starred${statusFilterActive("starred", repoName) ? " on" : ""}`}
               title={`${st} starred session${st > 1 ? "s" : ""} in ${shown} — tap to show only those`}
               onClick={() => toggleStatusFilter("starred", repoName)}>
-              <Star size={12} fill="currentColor" />{st}
+              <Star size={12} fill="currentColor" />{st} starred
             </button>
           );
         })()}
@@ -444,53 +468,58 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className={`repo-group-stat fu-${fl.tone}${statusFilterActive("followup", repoName) ? " on" : ""}`}
               data-hint="session.followup" title={flaggedChipTitle(fl.n, shown)}
               onClick={() => toggleStatusFilter("followup", repoName)}>
-              <Flag size={12} fill="currentColor" />{fl.n}
+              <Flag size={12} fill="currentColor" />{fl.n} flagged
             </button>
           );
         })()}
+        </span>
       </span>
-      {repoMenu === repoName && (
+      {repoMenu === repoName && main && (
+        // Grouped by task (whole-app journey spec D6, §1): Work, Files, Git, Set up,
+        // then what is about the repo's place on Home. Each line says its screen's title.
         <div className="row-more">
-          {/* First, so a person looking for "a terminal here" finds it
-              without reading the whole menu. */}
-          {main && canShell && <button className="more-act" title="a plain terminal on the desktop in this repo — no agent"
-            onClick={() => { setRepoMenu(null); openShell(main); }}><Terminal size={ICON} />open a shell here</button>}
-          {!focusRepo && <button className="more-act" data-hint="repo.focus" onClick={() => { track("action:repo.focus"); setRepoMenu(null); openFocusWindow(repoName); }}><ExternalLink size={ICON} />{isNativeShell() ? "focus this repo" : "focus window"}</button>}
-          {/* The repo TREE, the one entry point that does not need a
-              live session: the toolbar's `browse` is derived from the
-              ACTIVE SESSION's cwd, so a repo with nothing running could
-              not reach its own files at all. */}
-          {main && <button className="more-act" onClick={() => { track("action:repo.browse"); setRepoMenu(null); openBrowseFor(main.id); }}><FolderTree size={ICON} />browse files</button>}
-          {main && <button className="more-act" onClick={() => { track("action:repo.backlog"); setRepoMenu(null); openBacklogFor(main); }}><ListTodo size={ICON} />backlog</button>}
-          {main && <button className="more-act" onClick={() => { track("action:repo.assess"); setRepoMenu(null); openAssessFor(main); }}><ClipboardCheck size={ICON} />what is left</button>}
-          {main && repoActions(main).map((a) => (
-            <ExtBoundary key={a.key} feature={a.feature} what={`its ${a.id} action`}>
-              <button className="more-act" title={a.title} onClick={() => { track(`action:repo.ext.${a.id}`); setRepoMenu(null); a.run(); }}><a.icon size={ICON} />{a.label}</button>
-            </ExtBoundary>
-          ))}
-          {/* The checklist's ALWAYS-ON door. The chip above is a
-              FINDINGS badge and says nothing when there is nothing
-              to say — so a clean repo, and one the host has not
-              inspected yet, had no way into its own checklist from
-              the launcher at all. It carries the count too, so the
-              verdict is readable from here without going back out
-              to the row. */}
-          {main && <button className="more-act" title={setupMenuTitle(main.setup)}
-            onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetupCheck(main.id, setupMenuAim(main.setup)); }}><ListChecks size={ICON} />{setupMenuLabel(main.setup)}</button>}
-          {/* What this repo fetches to the phone on its own — the
-              rules are PER REPO and stored with the project, so
-              the repo row is where they belong. The only door to
-              them was the Downloads sheet's rules pane, behind a
-              picker holding every repo; from here the repo is
-              already chosen. */}
-          {main && <button className="more-act" title="what this repo downloads to this device by itself"
-            onClick={() => { track("action:repo.pullrules"); setRepoMenu(null); openPullRules(main.worktreePath); }}><Download size={ICON} />download rules</button>}
-          {main && <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />branch</button>}
-          {/* The name this repo wears on the phone (`RepoShownAs`): per repo, so it is HERE and not in Settings. */}
-          {main && <RepoShownAs repo={main} onSaved={() => { setRepoMenu(null); refreshRepos(); }} />}
-          {main && <button className="more-act" data-hint="repo.hide" onClick={() => { track("action:repo.hide"); setRepoMenu(null); toggleHideRepo(main.id); }}><EyeOff size={ICON} />hide</button>}
-          {main && <RepoHealthMenuItem repo={main} onOpen={() => { setRepoMenu(null); openRepoHealth(main); }} />}
-          {main && <OptInMenuItem onOpen={() => { track("action:repo.optins"); setRepoMenu(null); openSetup(main.id, { region: "optins" }); }} />}
+          <MenuGroup title="Work">
+            <button className="more-act" onClick={() => { track("action:repo.backlog"); setRepoMenu(null); openBacklogFor(main); }}><ListTodo size={ICON} />Backlog</button>
+            <button className="more-act" onClick={() => { track("action:repo.assess"); setRepoMenu(null); openAssessFor(main); }}><ClipboardCheck size={ICON} />What is left</button>
+            {/* Work, not Git: a shell is a general tool in the repo's folder, not a git action. */}
+            {canShell && <button className="more-act" title="a plain terminal on the desktop in this repo — no agent"
+              onClick={() => { setRepoMenu(null); openShell(main); }}><Terminal size={ICON} />Open a shell here</button>}
+            {extActions.work.map(extAct)}
+            <button className="more-act" onClick={() => { track("action:repo.build"); setRepoMenu(null); openBuildFor(main); }}><Hammer size={ICON} />Build</button>
+          </MenuGroup>
+          <MenuGroup title="Files">
+            {/* The repo TREE, the one entry point that does not need a
+                live session: the toolbar's `browse` is derived from the
+                ACTIVE SESSION's cwd, so a repo with nothing running could
+                not reach its own files at all. */}
+            <button className="more-act" onClick={() => { track("action:repo.browse"); setRepoMenu(null); openBrowseFor(main.id); }}><FolderTree size={ICON} />Browse files</button>
+            <button className="more-act" onClick={() => { track("action:repo.gallery"); setRepoMenu(null); openGalleryFor(main.id); }}><Images size={ICON} />Images &amp; documents</button>
+            {/* What this repo fetches to the phone on its own — the rules are
+                PER REPO, so the repo row is where they belong. */}
+            <button className="more-act" title="what this repo downloads to this device by itself"
+              onClick={() => { track("action:repo.pullrules"); setRepoMenu(null); openPullRules(main.worktreePath); }}><Download size={ICON} />Downloads</button>
+          </MenuGroup>
+          <MenuGroup title="Git">
+            <button className="more-act" onClick={() => { track("action:repo.git"); setRepoMenu(null); openGitFor(main.id); }}><FileDiff size={ICON} />Changes</button>
+            <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />Branch</button>
+          </MenuGroup>
+          <MenuGroup title="Set up">
+            {/* The checklist's ALWAYS-ON door. The chip above is a FINDINGS
+                badge and says nothing when there is nothing to say — so a clean
+                repo, and one the host has not inspected yet, had no way into its
+                own checklist from Home. The count rides on the line too. */}
+            <button className="more-act" title={setupMenuTitle(main.setup)}
+              onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetupCheck(main.id, setupMenuAim(main.setup)); }}><ListChecks size={ICON} />{setupLine(main.setup)}</button>
+            <RepoHealthMenuItem repo={main} onOpen={() => { setRepoMenu(null); openRepoHealth(main); }} />
+            <OptInMenuItem onOpen={() => { track("action:repo.optins"); setRepoMenu(null); openSetup(main.id, { region: "optins" }); }} />
+            {extActions.setup.map(extAct)}
+          </MenuGroup>
+          <MenuGroup title="On Home">
+            {!focusRepo && <button className="more-act" data-hint="repo.focus" onClick={() => { track("action:repo.focus"); setRepoMenu(null); openFocusWindow(repoName); }}><ExternalLink size={ICON} />{isNativeShell() ? "Focus this repo" : "Focus window"}</button>}
+            {/* The name this repo wears on the phone (`RepoShownAs`): per repo, so it is HERE and not in Settings. */}
+            <RepoShownAs repo={main} onSaved={() => { setRepoMenu(null); refreshRepos(); }} />
+            <button className="more-act" data-hint="repo.hide" onClick={() => { track("action:repo.hide"); setRepoMenu(null); toggleHideRepo(main.id); }}><EyeOff size={ICON} />Hide this repo</button>
+          </MenuGroup>
         </div>
       )}
     </div>
@@ -512,7 +541,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             stranger, not as part of the group it sits in. */}
         <RowTitle><span className="wt-branch">{t.branch.replace(/^worktree-/, "")}</span></RowTitle>
         <RowSub className="repo-sub">
-          <span className="repo-branch wt-of"><GitBranch size={12} />worktree of <b>{shown}</b></span>
+          <span className="repo-branch wt-of"><GitBranch size={12} />branch copy of <b>{shown}</b></span>
           {(() => {
             const o = openingCwds.get(t.worktreePath);
             return o ? (
@@ -523,8 +552,8 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             ) : null;
           })()}
           {t.outboxCount > 0 && (
-            <button className="row-chip" title={`${t.outboxCount} new outbox file${t.outboxCount > 1 ? "s" : ""} since last opened — open gallery`}
-              onClick={(e) => { e.stopPropagation(); track("action:repo.inbox"); openOutboxFor(t.id); }}><Images size={12} />{t.outboxCount}</button>
+            <button className="row-chip" title={`${newFilesWords(t.outboxCount)} since last opened — open images & documents`}
+              onClick={(e) => { e.stopPropagation(); track("action:repo.inbox"); openOutboxFor(t.id); }}><Images size={12} />{newFilesWords(t.outboxCount)}</button>
           )}
           {t.gitFailed && (
             <button className="row-chip bad" title={`the last ${t.gitFailed.verb} failed — open git to see why`}
@@ -533,15 +562,14 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           {gitPending(t) && (
             <button className="row-chip" title={gitTitle(t)}
               onClick={(e) => { e.stopPropagation(); track("action:repo.git"); openGitFor(t.id); }}>
-              <FileDiff size={12} />{t.changedCount > 0 && t.changedCount}
-              {gitSyncText(t) && <span className="git-ab">{gitSyncText(t)}</span>}
+              <FileDiff size={12} />{gitWords(t) || "Changes"}
             </button>
           )}
           {/* Same split as the repo-group chip above: `issues > 0` gates,
               `!ok` styles — `failing` is gone from the wire. */}
           {t.setup && t.setup.issues > 0 && (
             <button className={`row-chip ${!t.setup.ok ? "bad" : "warn"}`} title={setupTitle(t.setup)}
-              onClick={(e) => { e.stopPropagation(); track("action:repo.setup"); openSetupCheck(t.id, { weight: "finding" }); }}><ListChecks size={12} />{t.setup.issues}</button>
+              onClick={(e) => { e.stopPropagation(); track("action:repo.setup"); openSetupCheck(t.id, { weight: "finding" }); }}><ListChecks size={12} />{t.setup.issues} to fix</button>
           )}
         </RowSub>
         {!t.ownerSessionId && <LeftoverLine r={leftovers.get(t.id)} />}
@@ -559,7 +587,6 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           {canShell && <button className="more-act" title="a plain terminal on the desktop in this worktree — no agent"
             onClick={() => { setRepoMenu(null); openShell(t); }}><Terminal size={ICON} />open a shell here</button>}
           <button className="more-act" onClick={() => { track("action:repo.build"); setRepoMenu(null); openBuildFor(t); }}><Hammer size={ICON} />build</button>
-          <button className="more-act" onClick={() => { track("action:repo.capture"); setRepoMenu(null); openCaptureFor(t); }}><ScanEye size={ICON} />capture</button>
           {/* Same always-on door as the repo header's. */}
           <button className="more-act" title={setupMenuTitle(t.setup)}
             onClick={() => { track("action:repo.setup"); setRepoMenu(null); openSetupCheck(t.id, setupMenuAim(t.setup)); }}><ListChecks size={ICON} />{setupMenuLabel(t.setup)}</button>
@@ -579,11 +606,11 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
       {groupHead}
       {idle && !collapsed && (
         <div className="repo-group-empty" style={repoAccentStyle(repoName)}>
-          {main ? <>No active session — start one with <Plus size={15} aria-label="plus" />now under the name above.</>
+          {main ? <>No active session — start one with <b>New session</b> under the name above.</>
             : "No active session."}
         </div>
       )}
-      {!collapsed && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} />}
+      {!collapsed && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} style={repoAccentStyle(repoName)} />}
       {!collapsed && loose.map(wtRow)}
       {!collapsed && groupSessions.map((s) => (
         <Fragment key={s.id}>
@@ -604,7 +631,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
 function BuildHeaderButton({ repo, repoName }: { repo: RepoTarget; repoName: string }) {
   const busy = useBuildBusy(repo);
   return (
-    <button className="focus-btn"
+    <button className="focus-btn" aria-label={`Build ${repoName}`}
       title={busy ? `build “${busy.name}” is running on the desktop — open build to follow it` : `build ${repoName} (run a build command, no tokens)`}
       onClick={() => { track("action:repo.build.header"); openBuildFor(repo); }}>
       {busy ? <Loader size={17} className="spin" /> : <Hammer size={17} />}

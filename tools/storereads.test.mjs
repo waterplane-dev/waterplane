@@ -9,7 +9,7 @@
  *
  * SCOPE: git-tracked files under packages/host/src and packages/extensions/*\/host (tests and dist out; outside
  * a git checkout the directories are walked). A file is judged only if it uses an atomic writer
- * (writeJsonAtomic / writeTextAtomic / writeTextAtomicKeepMode / writeAtomic, the vault's own) AND holds a
+ * (writeJsonAtomic / writeTextAtomic / writeTextAtomicKeepMode / writeAtomic / writeStore, the vault's own) AND holds a
  * raw `JSON.parse(readFileSync(` / `JSON.parse(await readFile(` (a `fs.` / `fsp.` prefix counts).
  *
  * ALLOWED: file -> [[snippet on the parsing line, reason]]. A reason is one of: the file is only READ here (the
@@ -32,15 +32,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCOPE = /^packages\/(?:host\/src|extensions\/[^/]+\/host)\/.+\.(?:ts|mts|mjs)$/;
 const OUT = /(?:^|\/)(?:node_modules|dist|test|tests)\/|\.test\.|\.d\.ts$/;
-const WRITER = /\b(?:writeJsonAtomic|writeTextAtomic|writeTextAtomicKeepMode|writeAtomic)\b/;
+const WRITER = /\b(?:writeJsonAtomic|writeTextAtomic|writeTextAtomicKeepMode|writeAtomic|writeStore)\b/;
 const RAW_PARSE = /JSON\.parse\(\s*(?:await\s+)?(?:\w+\.)?(?:readFileSync|readFile)\(/;
 
 /** Only read here, or guarded by the site itself, or a legacy source left in place. */
 const ALLOWED = {
-  "packages/extensions/android-apps/host/installlog.mts": [
-    ["const parsed = JSON.parse(readFileSync(this.path", "persist() moves a file that does not parse (or cannot be read) aside right before every write: the same rule, hand-rolled"],
-    ["try { JSON.parse(readFileSync(this.path", "that check itself, before the move-aside"],
-  ],
   "packages/host/src/backlog/backlogstore.ts": [["const raw = JSON.parse(readFileSync(path", "a legacy file read for migration, left where it is by design (the line says so)"]],
   "packages/host/src/billing.ts": [["const j = JSON.parse(readFileSync(join(dir, f)", "claude's own settings.json, read for apiKeyHelper, never written here"]],
   "packages/host/src/builds.ts": [["const arr = JSON.parse(readFileSync(path", "save() refuses to overwrite or delete a builds file that exists but does not parse (a repo's file is never moved aside)"]],

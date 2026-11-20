@@ -214,6 +214,8 @@
 }
 .compose-aim-what { flex: 1 1 12em; min-width: 0; color: var(--accent); }
 .compose-aim-what svg { vertical-align: -2px; margin-right: var(--sp-4); }
+/* Typed words this phone could not keep (`LossLine.tsx`): the aim line's frame in the warning colour. */
+.compose-loss .compose-aim-what { color: var(--warn, var(--accent)); }
 
 /* Snippet picker popover — floats above the compose box. */
 .compose { position: relative; }
@@ -340,6 +342,15 @@
   pointer-events: none;
 }
 .term-zoom > * { pointer-events: auto; }
+/* Whole or not drawn (`useWholeBars.ts`): with the keyboard up the terminal can
+   be a strip shorter than these keys, and the row was drawn cut across the
+   output. Under ~two key heights of terminal the corner is not drawn at all.
+   `term-wrap` is sized by the flex column, so size containment costs nothing. */
+.term-wrap { container: termwrap / size; }
+@container termwrap (max-height: 96px) { .term-zoom { display: none; } }
+/* Below the floating connection banner while it is up: under it the buttons were half covered
+   and untappable (owner's 11-18 screenshot). The banner is one line, so one line down. */
+.term-wrap:has(> .conn-banner.floating) .term-zoom { top: calc(6px + 2 * var(--sp-6) + 1.5 * var(--fs-12) * var(--ui-font, 1)); }
 /* The reader's subtree carries its own `--ui-font`, so the wrapper must not be
    a box: `display: contents` keeps `.tr`'s `height: 100%` resolving against
    `.term-wrap` while still passing the inherited property down. */

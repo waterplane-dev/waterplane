@@ -50,9 +50,9 @@ export function bgFreshLabel(v: BgFresh): string {
 
 /** What a hidden app keeps of the terminal, as the row's note says it. */
 export function bgFreshNote(v: BgFresh): string {
-  if (v === "live") return "Hidden, the open session keeps streaming. Freshest offline screen, most battery.";
+  if (v === "live") return "Hidden, the open session streams until Android freezes the app (about five minutes), then alerts only. Freshest offline screen, most battery.";
   if (v === "off") return "Hidden, the open session stops. Offline you read the screen as you left it.";
-  return `Hidden, the open session stops and catches up ${bgFreshLabel(v)}. Catch-ups stop about five minutes after the app is hidden; after that the background link keeps alerts only, and offline you read the screen from the last catch-up.`;
+  return `Hidden, the open session stops and catches up ${bgFreshLabel(v)}. Catch-ups stop about five minutes after the app is hidden; after that the background link keeps alerts only (and still sends your queued prompts), and offline you read the screen from the last catch-up.`;
 }
 
 /** True when a hidden app should let go of the terminal stream. */

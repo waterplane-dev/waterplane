@@ -208,7 +208,10 @@ export function readUltracode(screen: string): UltracodeReading {
  *  model without it answers `<model> doesn't have fast mode`; the mode menu
  *  says `auto mode is off while fast mode is on`. */
 const FAST_ON_RE = /\bFast mode ON\b|\bauto mode is off while fast mode is on\b/;
-const FAST_OFF_RE = /\bFast mode OFF\b|\bdoesn['’]t have fast mode\b/;
+const FAST_OFF_RE = /\bFast mode OFF\b|\bdoesn['’]t have fast mode\b|\bFast mode unavailable:/;
+/** The refusal when an account cannot use it: `Fast mode unavailable: Fast
+ *  mode requires usage credits · /usage-credits to turn them on` (2.1.30x). */
+const FAST_WHY_RE = /\bFast mode unavailable:([^·]*)/;
 
 /**
  * Fast mode as the NEWEST line above the composer says it, or null when no
@@ -220,6 +223,21 @@ export function readFastMode(screen: string): boolean | null {
   for (let i = (frame ? frame.top : rows.length) - 1; i >= 0; i--) {
     if (FAST_OFF_RE.test(rows[i])) return false;
     if (FAST_ON_RE.test(rows[i])) return true;
+  }
+  return null;
+}
+
+/**
+ * Why the CLI refused fast mode, when the NEWEST fast-mode row on screen is
+ * its `Fast mode unavailable: …` refusal; null otherwise (on, off, or nothing).
+ */
+export function readFastRefusal(screen: string): string | null {
+  const rows = screen.split("\n");
+  const frame = composerFrame(rows);
+  for (let i = (frame ? frame.top : rows.length) - 1; i >= 0; i--) {
+    const m = FAST_WHY_RE.exec(rows[i]);
+    if (m) return m[1].trim() || "the CLI gave no reason";
+    if (FAST_OFF_RE.test(rows[i]) || FAST_ON_RE.test(rows[i])) return null;
   }
   return null;
 }

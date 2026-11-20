@@ -46,11 +46,6 @@ import type { track } from "../usage.ts";
 // declares `durable: true`), and because it is now the ONE message behind
 // "run it now" on a launch, a work item, a schedule and a build — four taps
 // that were four ops, of which three were already durable and one was not.
-// `capture.run` joins for `build.run`'s reason and one of its own: a capture
-// takes a lease on a browser, a simulator or the desktop's own screen, so a
-// retry that ran it twice would have two runs fighting over one of those.
-// `capture.cancel` deliberately does NOT join — a cancel delivered an hour late
-// calls off work that has long since run.
 // `intent.post` joins because it is the strongest of them host-side: `ok` is
 // not sent until the row is on the desktop's DISK, which is the moment the
 // phone may forget the words, and that promise is worth nothing if the message
@@ -79,7 +74,7 @@ import type { track } from "../usage.ts";
 // into sessions STILL waiting in the sign-in episode when the frame lands (the
 // rest are named back in the receipt, never typed into), so a late delivery
 // finds the situation as the person left it or is refused.
-export type DurableOp = Extract<ClientMessage, { t: "session.create" | "fanout.run" | "fanout.followup" | "build.run" | "capture.run" | "schedule.save" | "schedule.run" | "intent.run" | "intent.post" | "intent.requeue" | "backlog.name" | "signin.continue" }>;
+export type DurableOp = Extract<ClientMessage, { t: "session.create" | "fanout.run" | "fanout.followup" | "build.run" | "schedule.save" | "schedule.run" | "intent.run" | "intent.post" | "intent.requeue" | "backlog.name" | "signin.continue" }>;
 
 /** A sheet id: every overlay a feature can own is already a member of `Overlay`
  *  in `routing.ts`, because the route stack and Back key on it. An in-repo
@@ -137,6 +132,8 @@ export interface QueueBacklogOpts {
   /** Let this one row past the usage budget as it is added (`intent.waive`'s
    *  waiver, granted by the host). Absent = it waits for the budget. */
   pastBudget?: boolean;
+  /** The row waits for a tap: nothing starts it by itself, whatever the backlog's auto switch says (`Intent.manual`). */
+  hold?: boolean;
 }
 
 /** Ordered background-upload buffer for the session image-annotate flow. */
@@ -254,8 +251,8 @@ export interface CoreApi {
       sendQueuedNow(ackId: string): void;
       toggleHoldQueued(ackId: string): void;
       toggleSerialQueued(ackId: string): void;
-      removeQueued(ackId: string): void;
-      editQueued(ackId: string, text: string): void;
+      removeQueued(ackId: string, opts?: { mayHaveRun?: boolean }): boolean;
+      editQueued(ackId: string, text: string): boolean;
       /** true = moved (false: gone, or refused in a toast). */
       retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): boolean;
       restoreQueued(ackId: string): void;
@@ -273,7 +270,7 @@ export interface CoreApi {
   };
   nav: {
     /** The overlay on top as of the last render — what the chatty-push guards
-     *  (`build.output`, `capture.output`) compare against. */
+     *  (`build.output`) compare against. */
     readonly overlay: Overlay;
     open(o: SheetId): void;
     /** **A sheet may only close ITSELF** (`closeSheet` in App): a close that
@@ -325,11 +322,11 @@ export interface CoreApi {
     openActivity(cut?: { entries: readonly OutboxEntry[]; label: string } | { keys: readonly string[]; label: string }): void;
     /** The git screen (working tree) of one repo. */
     openGit(repoId: string): void;
-    /** The capture sheet for one repo (`features/capture`'s `openCaptureFor`) —
-     *  for a feature that is not the capture feature. */
-    openCapture(repo: RepoTarget): void;
     /** The build sheet of one repo (`features/build`'s `openBuildFor`); with
      *  `schedule`, a build rule's form opens on arrival (its card's *edit*). */
+    /** The assessment sheet of one repo, READING its last run — never starting one
+     *  (`features/backlog`'s `openAssessResult`; a notification tap lands here). */
+    openAssess(repo: RepoTarget): void;
     openBuild(repo: RepoTarget, opts?: { schedule?: ScheduleEntry; run?: string }): void;
   };
   /** Session launch options and the one way to open a session in a folder. */

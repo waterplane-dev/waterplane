@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const { nextLimitAttempt, LADDER_MS } = await import("../dist/limitretry.js");
+const { pending } = await import("../dist/sessions/timers.js");
 const { WallSlice } = await import("../dist/sessions/wall.js");
 const { LIMIT_RESET_BUFFER_MS } = await import("../dist/sessions/knobs.js");
 
@@ -81,7 +82,7 @@ function rig() {
   const wall = new WallSlice(core);
   const s = {
     info: { id: "s1", title: "t", running: true, limit: wall.newLimitState() },
-    limitTimer: null, gaveUp: {},
+    gaveUp: {},
   };
   core.sessions.set("s1", s);
   const done = () => { wall.clearLimitTimer(s); rmSync(core.root, { recursive: true, force: true }); };
@@ -137,7 +138,7 @@ test("still blocked after the attempt at the bare time ⇒ re-armed about a day 
     const wait = s.info.limit.nextAttemptAt - Date.now();
     assert.ok(wait >= 23 * HOUR, `re-armed ${Math.round(wait / MIN)} min out — must be about a day, not now`);
     assert.ok(wait <= DAY);
-    assert.ok(s.limitTimer, "a timer is armed, not a give-up");
+    assert.ok(pending(s, "wall"), "a timer is armed, not a give-up");
   } finally { done(); }
 });
 

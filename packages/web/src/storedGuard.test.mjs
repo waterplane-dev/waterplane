@@ -29,7 +29,7 @@ test("nothing stored is empty, not unreadable", () => {
 
 test("invalid JSON is unreadable and kept aside, key untouched", () => {
   const st = stub({ k: "{not json" });
-  assert.deepEqual(readGuarded(st, "k", [], isArr), { value: [], unreadable: true });
+  assert.deepEqual(readGuarded(st, "k", [], isArr), { value: [], unreadable: true, keptAt: "k.unreadable" });
   assert.equal(st.m.get("k.unreadable"), "{not json");
   assert.equal(st.m.get("k"), "{not json");
 });
@@ -99,4 +99,19 @@ test("a checked write copies an unreadable value aside itself, then writes", () 
   assert.equal(writeChecked(st, "k", [1], isArr), true);
   assert.equal(st.m.get("k.unreadable"), "garbage");
   assert.equal(st.m.get("k"), "[1]");
+});
+
+test("a second, different corruption reports the slot it was actually written to", () => {
+  const st = stub({ k: "one" });
+  assert.equal(readGuarded(st, "k", [], isArr).keptAt, "k.unreadable");
+  st.m.set("k", "two");
+  const r = readGuarded(st, "k", [], isArr);
+  assert.notEqual(r.keptAt, "k.unreadable");
+  assert.equal(st.m.get(r.keptAt), "two");
+});
+
+test("when keeping aside fails the reading carries no keptAt", () => {
+  const r = readGuarded(stub({ k: "bad" }, { failSet: true }), "k", [], isArr);
+  assert.equal(r.unreadable, true);
+  assert.equal("keptAt" in r, false);
 });

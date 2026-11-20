@@ -102,6 +102,20 @@ test("wanted is ordered by rank — the whole content of that verdict", () => {
   assert.deepEqual(groupOf(gs, "wanted").rows.map((r) => r.id), ["b", "c", "a"]);
 });
 
+test("with nothing to retire every strip opens — an all still-wanted run shows its rows, not a count", () => {
+  const gs = assessGroups(
+    proposal({ rows: [row("a", "wanted"), row("b", "wanted"), row("c", "unclear")] }),
+    [item("a"), item("b"), item("c")],
+  );
+  assert.equal(groupOf(gs, "wanted").defaultOpen, true);
+  assert.equal(groupOf(gs, "unclear").defaultOpen, true);
+});
+
+test("titles to write make Apply available with nothing ticked; leaving them does not", () => {
+  assert.equal(assessApplyBlocker({ run: runOf(), picked: 0, names: 11, online: true }), null);
+  assert.match(assessApplyBlocker({ run: runOf(), picked: 0, names: 0, online: true }), /nothing is ticked yet/);
+});
+
 test("a verdict that retires something opens; one that changes nothing you would want back does not", () => {
   const gs = assessGroups(
     proposal({ rows: [row("a", "done"), row("b", "wanted"), row("c", "unclear")] }),

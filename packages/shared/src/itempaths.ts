@@ -115,7 +115,7 @@ export function freshInboxRefs(text: string, now: number, freshMs = INBOX_FRESH_
     if (!p.startsWith(".claude/inbox/")) continue;
     const m = /-([0-9a-z]{8})[0-9a-z]{6}(?:\.[A-Za-z0-9]+)?$/.exec(p);
     if (!m) continue;
-    const at = parseInt(m[1], 36);
+    const at = parseInt(m[1]!, 36);
     if (Number.isFinite(at) && Math.abs(now - at) <= freshMs) out.push(p);
   }
   return out;

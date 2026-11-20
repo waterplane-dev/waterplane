@@ -23,6 +23,7 @@ import { SlowJobs } from "../slowjobs.js";
 import { passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "../passive.js";
 import { requestPeerKind, isProxied } from "../net.js";
 import { RateLimiter, rateKey } from "../ratelimit.js";
+import { LoginGuard, guarded } from "../loginguard.js";
 import { canonicalRequestPath, checkRequestOrigin, corsHeaders } from "../origin.js";
 import { admitReadTicket, cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
 import { SELF_SIGNED_NOTICE_HEADERS, SELF_SIGNED_NOTICE_HTML, selfSignedNoticeFor } from "../lantls.js";
@@ -54,8 +55,20 @@ export function createHttp(ctx: ServerCtx) {
   const bgRelay = createRelay(ctx);
   /** Password logins per source address: a burst of 10, then one every two seconds. */
   const loginLimit = new RateLimiter({ burst: 10, perSec: 0.5 });
-  /** All source addresses together: behind a proxy every caller can look like one, and many can look like many. */
-  const globalLoginLimit = new RateLimiter({ burst: 60, perSec: 2 });
+  /**
+   * All source addresses of one kind together: behind a proxy every caller can look like one, and
+   * many can look like many. Kept per kind, so a LAN flood never spends a gated Tailscale sign-in
+   * (the owner's own phone) and a tailnet peer's flood never blocks the LAN.
+   */
+  const globalLoginLimits = new Map<string, RateLimiter>();
+  const globalLoginLimitFor = (kind: string) => {
+    const k = kind === "tailscale" ? "tailscale" : "other";
+    let l = globalLoginLimits.get(k);
+    if (!l) { l = new RateLimiter({ burst: 60, perSec: 2 }); globalLoginLimits.set(k, l); }
+    return l;
+  };
+  /** Wrong passwords per untrusted source: growing wait, then a lockout (`loginguard.ts`). */
+  const loginGuard = new LoginGuard((l) => console.log(`${logTag} ${l}`));
   // Pairing codes: memory only, so a restart invalidates every outstanding one.
   const pairs = new PairStore();
   const pairDeps = (): PairDeps => ({
@@ -86,7 +99,8 @@ export function createHttp(ctx: ServerCtx) {
       const tok = tokenFromRequest(req.headers);
       const authed = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tok, kind);
       res.writeHead(200, jsonHead);
-      res.end(JSON.stringify({ kind, authed, ...ctx.authStateFor(kind), ...passiveFields(tok) }));
+      // The guard's counts go to a trusted caller only (never an address).
+      res.end(JSON.stringify({ kind, authed, ...ctx.authStateFor(kind), ...passiveFields(tok), ...(ctx.auth.canManage(kind) ? { loginGuard: loginGuard.reading() } : {}) }));
       return;
     }
     // Passive devices (`passive.ts`): the unlock is the passive token's own
@@ -140,14 +154,36 @@ export function createHttp(ctx: ServerCtx) {
     if (url.pathname === "/api/auth/login" && method === "POST") {
       // Before the scrypt verify: a guess costs the host CPU and the attacker only a request.
       const lk = rateKey(req);
-      if (!globalLoginLimit.take("*") || !loginLimit.take(lk)) {
-        res.writeHead(429, { ...jsonHead, "retry-after": String(Math.ceil(Math.max(loginLimit.retryAfterMs(lk), globalLoginLimit.retryAfterMs("*")) / 1000) || 1) });
+      const untrusted = guarded(kind, ctx.auth.needsToken(kind));
+      // The all-sources bucket (one per kind) and the failure guard bind only a source the gate makes
+      // present a password (lan, or a gated Tailscale): a flood must never spend the owner's loopback
+      // sign-in, nor a LAN flood a gated Tailscale one.
+      const globalLoginLimit = globalLoginLimitFor(kind);
+      const gv = untrusted ? loginGuard.check(lk) : { allowed: true, retryAfterMs: 0, locked: false };
+      const refuse = (v: { retryAfterMs: number; locked: boolean }) => {
+        res.writeHead(429, { ...jsonHead, "retry-after": String(Math.ceil(v.retryAfterMs / 1000) || 1) });
+        res.end(JSON.stringify({ ok: false, locked: v.locked, error: v.locked ? "too many wrong passwords from this device — locked for a while" : "wrong password too often — wait before trying again" }));
+      };
+      if (!gv.allowed) { refuse(gv); return; }
+      if ((untrusted && !globalLoginLimit.take("*")) || !loginLimit.take(lk)) {
+        res.writeHead(429, { ...jsonHead, "retry-after": String(Math.ceil(Math.max(loginLimit.retryAfterMs(lk), untrusted ? globalLoginLimit.retryAfterMs("*") : 0) / 1000) || 1) });
         res.end(JSON.stringify({ ok: false, error: "too many attempts — wait a moment and try again" }));
         return;
       }
       const body = await readSmallJson(req);
       if (!ctx.auth.isEnabled()) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "no password set on host" })); return; }
-      if (!ctx.auth.verify(String(body.password ?? ""))) { res.writeHead(401, jsonHead); res.end(JSON.stringify({ ok: false, error: "wrong password" })); return; }
+      // A guarded source's verdict is re-read here, after the body: many requests that passed the
+      // header check while their bodies were withheld must not all get a guess (`LoginGuard.attempt`).
+      const pw = String(body.password ?? "");
+      let passwordOk: boolean;
+      if (untrusted) {
+        const a = loginGuard.attempt(lk, () => ctx.auth.verify(pw));
+        if (a.refused) { refuse(a.verdict); return; }
+        passwordOk = a.ok;
+      } else passwordOk = ctx.auth.verify(pw);
+      if (!passwordOk) {
+        res.writeHead(401, jsonHead); res.end(JSON.stringify({ ok: false, error: "wrong password" })); return;
+      }
       // A browser logging in again replaces its own row rather than adding one.
       ctx.auth.revoke(cookieToken(req.headers.cookie));
       const { token } = ctx.auth.issueToken(normalizeDeviceName(body.deviceName) ?? browserName(req.headers["user-agent"]), kind);
@@ -385,7 +421,7 @@ export function createHttp(ctx: ServerCtx) {
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
         root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, attention: ctx.attention, resolveAttention: ctx.resolveAttention, notify: (k, p) => ctx.notify(k, p), builds: ctx.builds, launches: ctx.intents,
-        periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usageReadings: () => ctx.usageSources.readings(), budgetStanding: (now) => ({ states: ctx.budget.periods(now), ceilings: ctx.budget.get().ceilings }), usagePollMs: USAGE_POLL_MS, bootId: ctx.BOOT_ID, capture: ctx.capture, weekBurn: ctx.weekBurn,
+        periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usageReadings: () => ctx.usageSources.readings(), budgetStanding: (now) => ({ states: ctx.budget.periods(now), ceilings: ctx.budget.get().ceilings }), usagePollMs: USAGE_POLL_MS, bootId: ctx.BOOT_ID, weekBurn: ctx.weekBurn,
         usageNow: () => ({
           usage: ctx.usage.get(), readings: ctx.usageSources.readings(), billing: ctx.billing.status(),
           budget: ctx.budget.get(), periods: ctx.budget.periods(), backends: backendInfos(),

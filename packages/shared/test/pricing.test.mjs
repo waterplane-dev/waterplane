@@ -210,9 +210,18 @@ test("on the real corpus's shape, output dominates the money and cache reads the
 
 // ── the words ─────────────────────────────────────────────────────────────
 
+test("fmtUsd: the one rule - 2 decimals, 2 significant digits under a cent", () => {
+  const rows = [
+    [0, "$0"], [0.5, "$0.50"], [0.5, "$0.50"], [1, "$1.00"], [4.207, "$4.21"], [99.999, "$100.00"],
+    [0.01, "$0.01"], [0.0123, "$0.01"], [0.0042, "$0.0042"], [0.00042, "$0.00042"],
+    [0.0031, "$0.0031"], [0.00999, "$0.01"], [0.009996, "$0.01"], [0.0000042, "$0.0000042"],
+    [-0.0042, "-$0.0042"], [-1, "-$1.00"], [999.4, "$999.40"], [1000.4, "$1,000"], [NaN, "—"], [Infinity, "—"],
+  ];
+  for (const [n, want] of rows) assert.equal(fmtUsd(n), want, String(n));
+});
+
 test("money is formatted so a real amount is never rendered as $0.00", () => {
   assert.equal(fmtUsd(0), "$0");
-  assert.equal(fmtUsd(0.0031), "$0.0031", "below a cent keeps four decimals");
   assert.equal(fmtUsd(4.207), "$4.21");
   assert.equal(fmtUsd(1284.4).replace(/,/g, ""), "$1284");
   assert.equal(fmtUsd(NaN), "—");

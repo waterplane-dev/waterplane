@@ -12,6 +12,7 @@ import { ensureMtime, knownMtime } from "../../fileMtime";
 import { sized, viewerWidth } from "../../media";
 import type { SwipeItem } from "../../ImageSwiper";
 import { core } from "../../sdk";
+import { noteToast, sessionOnScreen } from "../../toast";
 import { ann, galleryCtx, minimizedNewImg, newImages, swipe } from "../../features/images/store";
 import {
   dropStrip, findInStrips, newFilesToast, viewableStrip, galleryCtxForFile, isVideoPath, isViewable, mergeNewImages,
@@ -152,7 +153,15 @@ export function closeSwipe(): void {
 export function onSessionImages(sessionId: string, repoId: string, images: readonly NewImage[]): void {
   newImages.set((prev) => mergeNewImages(prev, sessionId, repoId, images));
   restoreNewImages(sessionId);
-  core().say.toast(newFilesToast(images));
+  // The row in the feed opens what the words count: the first picture, swipeable
+  // through the session's strip, else (markdown only) the session itself.
+  const pic = images.find((x) => isViewable(x.relPath));
+  // On that session's own screen the strip IS the news; a popover over the compose box
+  // would say it twice and cover the words being typed. The row still lands in the log.
+  const words = newFilesToast(images);
+  const go = pic ? { image: { repoId, relPath: pic.relPath }, sessionId } : { sessionId };
+  if (sessionOnScreen() === sessionId) noteToast(words, go);
+  else core().say.toast(words, undefined, undefined, go);
 }
 /** Reference a new image by path in the compose box without annotating. */
 export function referenceNewImage(im: NewImg): void {

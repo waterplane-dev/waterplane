@@ -5,10 +5,10 @@ Shows the public OpenSSF Scorecard of a repo's GitHub remote: a score out of 10 
 ## Where to find it
 - **Repo row** — a "failing" chip with the number of failing checks on a repo's title line. Tap it to open the sheet cut to those checks. No chip when the repo is unscored or nothing is failing.
 - **Sheet** — the score, its history as a line over time, when it was read, the failing checks (with ask Claude and accept), the accepted ones and the passing ones.
-- **Repo readings** — the "OpenSSF Scorecard" row, whose button opens the failing checks.
+- **Setup & health › Watch** — the "OpenSSF Scorecard" row, whose button opens the failing checks.
 
 ## Settings
-Switch the whole plugin on or off in Settings › Tools & diagnostics › plugins. In the sheet, "scored as" lets a private repo use its public mirror's score.
+Switch the whole plugin on or off in Settings › Desktops and connection › plugins. In the sheet, "scored as" lets a private repo use its public mirror's score.
 
 ## For developers
 
@@ -26,7 +26,7 @@ Optional extension: a dev checkout starts it on; for a release, `deploy/ship.jso
 - **ask Claude** files the check's remedy prompt in the repo's backlog and waits for a tap; nothing
   fires. **accept…** asks for a reason (required, up to 500 characters) and then the check no longer
   counts. **stop accepting** (behind a confirm) puts it back.
-- **A setup row** (`scorecard`) in Repo readings, whose hand-to-agent button opens the same cut.
+- **A setup row** (`scorecard`) in Setup & health › Watch, whose hand-to-agent button opens the same cut.
 
 ## Where the data comes from
 

@@ -1689,7 +1689,9 @@ public class ShellLinkService extends Service {
         lastBacklogKey = key;
         JSONObject item = new JSONObject();
         try {
-            item.put("kind", "undelivered");
+            // A report that only says what WAS sent is news, not an alarm: the quieter "info" channel.
+            // Anything still waiting (or a Send N action) stays on the heads-up "undelivered" one.
+            item.put("kind", waits == 0 && releasable.isEmpty() ? "info" : "undelivered");
             item.put("title", ShellRelay.backlogTitle(sent, waits));
             item.put("body", ShellRelay.backlogBody(sent, waits, releasable.size(), l.spec.label));
             item.put("tag", "queue-depth");

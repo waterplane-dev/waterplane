@@ -50,7 +50,7 @@ export const manifest: FeatureManifest = {
   sheets: [{ id: featureSheetId("android-apps", "main"), persisted: false, render: () => createElement(AppsSheet) }],
   launcherItems: [{
     id: "apps",
-    label: "android apps",
+    label: "Android apps",
     title: "android apps — your repos' APKs on this phone: build, download, install",
     icon: Boxes,
     open: (c) => { c.say.track("overlay:apps"); setNextCut({ kind: "all" }); c.nav.open(APPS_SHEET); },

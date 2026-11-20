@@ -106,14 +106,6 @@ mode from a FILE on every invocation so one booted host can be driven through ev
 answering on stdout with the real `--output-format json` envelope (`result`, plus `usage` /
 `total_cost_usd` where the caller reads them).
 
-The capture suite has its own stub instead: `scripts/capture-stub.mjs` is a fake `ciqkit` — argv and,
-mainly, its EXIT CODES (0 captured / 1 failed / **3 captured but OCR contradicted the anchor**, the
-downgrade nothing else can produce). `WATERPLANE_CAPTURE_STUB_EXIT3` / `_FAIL` / `_SCORE` each take a
-number-or-flag PATH rather than a fixed value, because a spawned daemon's env cannot be changed and
-one script needs both outcomes; `shot-score` answers only about a frame REALLY at the path it is
-handed, so asking it about a scratch dir the run already emptied fails the suite instead of
-answering `n/a` for ever — which is indistinguishable from an honest "nobody measured".
-
 What each script pins, in full: [testing-and-ops.md](../../../docs/notes/testing-and-ops.md), whose
 [rough map](../../../docs/notes/testing-and-ops.md#the-rough-map) is the one-line-per-script index.
 

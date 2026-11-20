@@ -57,7 +57,7 @@ export function parseProbe(stdout: string): RawProbe | null {
   };
 }
 
-export function parseWindows(stdout: string): DesktopWindow[] {
+function parseWindows(stdout: string): DesktopWindow[] {
   let o: { windows?: unknown };
   try { o = JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1) ?? "") as { windows?: unknown }; } catch { return []; }
   const out: DesktopWindow[] = [];

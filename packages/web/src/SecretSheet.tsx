@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TITLE } from "./sheetNames";
 import { ShieldCheck } from "lucide-react";
 import { BRAND, type RepoTarget } from "@waterplane/shared";
 import { api, type EnvFileInfo, type SecretResult, type WriteTarget } from "./api";
@@ -98,7 +99,7 @@ export function SecretSheet({ repos, onClose }: Props) {
 
   return (
     <div className="sheet">
-      <SheetHead title={"Set secret"} onClose={onClose} />
+      <SheetHead title={TITLE.secret} onClose={onClose} />
 
       <RadioRows
         label="where the secret applies"

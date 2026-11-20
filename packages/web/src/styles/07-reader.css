@@ -307,7 +307,9 @@
 .upscale-note { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
 
 /* Inbox/outbox file mentions rendered as the file itself (Markdown.tsx).
-   Inline-block so a thumbnail can sit inside a paragraph without breaking it. */
+   A chip sits inline in the sentence; a PICTURE breaks out onto its own line
+   (.fileref-img below) — a 132px box mid-sentence pushed the words around it
+   apart by its own height. */
 .fileref {
   display: inline-flex; align-items: center; gap: var(--sp-4); vertical-align: middle;
   max-width: 100%; margin: 0 var(--sp-2); padding: 1px var(--sp-6);
@@ -316,8 +318,8 @@
   overflow-wrap: anywhere; text-align: left;
 }
 .fileref-img {
-  flex-direction: column; align-items: flex-start; gap: var(--sp-4);
-  padding: var(--sp-4); margin: var(--sp-4) var(--sp-4) var(--sp-2) 0;
+  display: flex; width: fit-content; flex-direction: column; align-items: flex-start; gap: var(--sp-4);
+  padding: var(--sp-4); margin: var(--sp-6) 0; cursor: zoom-in;
 }
 .fileref-img img {
   display: block; max-width: min(132px, 100%); max-height: 132px;

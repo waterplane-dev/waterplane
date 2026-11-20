@@ -16,7 +16,6 @@ import { hostStateDir, repoStateDir } from "../dist/branddirs.js";
 import { writeJsonAtomic } from "../dist/jsonstore.js";
 import { artifactPolicy, saveArtifactPolicy } from "../dist/artifacts.js";
 import { AutoPullManager } from "../dist/autopull.js";
-import { CaptureManager } from "../dist/capture.js";
 import { readScopes, writeScopes } from "../dist/repohealthscopes.js";
 import { loadSummary } from "../dist/sessions/record.js";
 
@@ -54,13 +53,6 @@ for (const [label, bytes] of [["corrupt", CORRUPT], ["wrong-shape", WRONG_SHAPE]
     const r = repo();
     const m = new AutoPullManager(repo());
     check(join(repoStateDir(r), "autopull.json"), bytes, () => m.config(r), () => m.saveConfig(r, m.config(r)));
-  });
-
-  test(`capture.json (${label}) is kept aside before the targets are saved`, () => {
-    const r = repo();
-    const m = new CaptureManager(null);
-    // an array is a valid legacy shape for the targets file, so its wrong shape is a number
-    check(join(repoStateDir(r), "capture.json"), label === "wrong-shape" ? "42" : bytes, () => m.list(r), () => m.save(r, []));
   });
 
   test(`repohealth-scopes.json (${label}) is kept aside before the scopes are saved`, () => {

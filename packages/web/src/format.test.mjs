@@ -180,7 +180,7 @@ test("convoStart refuses to call an un-identified session empty", () => {
   assert.equal(convoStart({ running: true, idleSince: Date.now() }), "unknown");
 });
 
-// ── Helpers lifted out of BuildSheet / CaptureSheet / SnippetSheet / … ────
+// ── Helpers lifted out of BuildSheet / SnippetSheet / … ────
 // Each was a verbatim copy; the outputs below are what every copy printed.
 import { agoText, durSpan, dur, seqId, stripAnsi, clamp, clock, hhmm } from "./format.ts";
 import { seenAgo } from "./features/hosts/logic.ts";

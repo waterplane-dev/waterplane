@@ -5,13 +5,13 @@
  * controls sit ABOVE the rows; a list is never blank — "nothing to fix" still lists the checks that
  * passed, and what could not run says why, never as passed; nothing applies itself.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck } from "lucide-react";
 import { checkedCountWords, repoShown } from "@waterplane/shared";
 import type { ComplianceReport } from "@waterplane/shared";
 import { api } from "../../api";
 import { core, useStore } from "../../sdk";
-import { Empty, Explain, FilterBar, Hint, Sheet, chipRows, useRemoteResource } from "../../kit";
+import { Button, Empty, Explain, FilterBar, Hint, Sheet, chipRows, useRemoteResource } from "../../kit";
 import { loadHiddenRepos } from "../../localState";
 import { RepoSelect } from "../../RepoPicker";
 import { AskRulesHere } from "../../AskRulesHere";
@@ -25,8 +25,17 @@ import { AllRepos } from "./AllRepos";
 import { chipCountOf, headCounts, scopeChips, viewOf } from "./logic";
 import { FindingCard, Fold, NotCheckedRows, PassedRows } from "./SetupCheckRows";
 import { setupCheckAim } from "./store";
+import { EmbeddedBody } from "../../SetupHealthSheet";
+import type { HealthTab } from "../../routing";
+import { checkAgainWords, scopesOfTab, tabOfScope } from "./logic";
+import { retabHealth } from "../../setupHealth";
+import type { SetupCheckResponse } from "../../setupCheckTypes";
 
-export function SetupCheckSheet() {
+/**
+ * `embedded`: drawn inside Setup & health on `tab` — This repo shows the repo and all-repos scopes,
+ * This desktop the machine and account ones; the frame has the one head.
+ */
+export function SetupCheckSheet({ embedded, tab }: { embedded?: boolean; tab?: HealthTab }) {
   const c = core();
   const aim = useStore(setupCheckAim);
   const repos = c.world.repos;
@@ -58,18 +67,32 @@ export function SetupCheckSheet() {
   const rep = useSlowJob<ComplianceReport>("setup.check", repoId, { enabled: needsToken, auto: true, verb: "re-check the setup" });
 
   const reload = () => { res.reload({ quiet: true }); };
+  // Inside Setup & health the lit tab follows the scope drawn (a drill to this machine lights This desktop).
+  const drawnTab = tabOfScope(scope);
+  useEffect(() => { if (embedded && tab && drawnTab !== tab) retabHealth(drawnTab); }, [embedded, tab, drawnTab]);
+  // `Check again` always ends on a visible line (T17, J-88): the read before the tap, then the answer.
+  const [again, setAgain] = useState<{ before: SetupCheckResponse | null; key: string; sawBusy: boolean; line?: string } | null>(null);
+  const againKey = `${repoId ?? "-"}:${scope}`;
+  useEffect(() => {
+    if (!again || again.line || again.key !== againKey) return;
+    if (res.inflight) { if (!again.sawBusy) setAgain({ ...again, sawBusy: true }); return; }
+    if (!again.sawBusy) return;
+    if (res.state === "error" || res.state === "offline") { setAgain({ ...again, line: "Could not check again: the desktop did not answer." }); return; }
+    if (doc && !doc.pending) setAgain({ ...again, line: checkAgainWords(again.before, doc, scope === "all" ? "repo" : scope) });
+  }, [again, againKey, res.inflight, res.state, doc, scope]);
+  const checkAgain = () => { setAgain({ before: doc ?? null, key: againKey, sawBusy: false }); res.reload({ quiet: true }); };
   const ctx = { repoId, profile: c.world.billing?.profile, reload, confirmFor: (id: string) => rep.data?.confirm?.[id] };
 
   const manyRepos = repos.filter((r) => r.isPrimary).length >= 2;
   // A chip says a number only when the document it counts is the one it opens: "all repos" counts rule
   // groups (not repos) and "this repo" with no repo chosen reads a repo-less document, so both go bare.
-  const chips = doc || isAll ? chipRows(scopeChips(!!repoId || repos.some((r) => r.isPrimary), manyRepos), (k) => ({ count: doc && k !== "all" ? chipCountOf(doc, k) : 0 }), (k) => SCOPE_WORDS[k]).map((ch) => (ch.key === "all" || (ch.key === "repo" && !repoId) ? { ...ch, text: SCOPE_WORDS[ch.key] } : ch)) : [];
+  const allChips = doc || isAll ? chipRows(scopeChips(!!repoId || repos.some((r) => r.isPrimary), manyRepos), (k) => ({ count: doc && k !== "all" ? chipCountOf(doc, k) : 0 }), (k) => SCOPE_WORDS[k]).map((ch) => (ch.key === "all" || (ch.key === "repo" && !repoId) ? { ...ch, text: SCOPE_WORDS[ch.key] } : ch)) : [];
+  const chips = embedded && tab ? allChips.filter((ch) => scopesOfTab(tab).includes(ch.key)) : allChips;
   const counts = view ? headCounts(view) : null;
   // A cut's bar (the spend screen, one rule, the badge) says `n of N findings`; the head line then leaves the findings count to it.
   const cutBar = !!view && (!!aim.screen || (scope === "repo" && !!(aim.rule || aim.weight)));
 
-  return (
-    <Sheet title={drilled ? `Setup check · ${scope === "machine" ? SCOPE_WORDS.machine : repo ? repoShown(repo) : SCOPE_WORDS.repo}` : "Setup check"} icon={<ClipboardCheck size={16} />} onClose={stepBack}>
+  const content = (
       <div className="sheet-scroll sc-scroll">
         {scope === "repo" && (
           <RepoSelect
@@ -103,8 +126,10 @@ export function SetupCheckSheet() {
           <>
             <div className="sc-head">
               <span>{checkedCountWords(counts.findings, counts.passed, counts.notChecked, !!cutBar)}</span>
+              <Button onClick={checkAgain} title="read this check again from the desktop">{res.inflight && again && !again.line ? "Checking…" : "Check again"}</Button>
               <Explain of="the setup check" label="what the scopes mean"><p>{SCOPE_EXPLAIN}</p></Explain>
             </div>
+            {again?.line && again.key === againKey && <div className="hint" role="status">{again.line}</div>}
             {scope === "repo" && !repoId && <Hint>{NO_REPO_WORDS}</Hint>}
             {view.rows.map((f) => <FindingCard key={f.id} f={f} ctx={ctx} />)}
             {counts.findings === 0 && <div className="empty empty-msg">Nothing to fix here. What was checked is listed below.</div>}
@@ -127,6 +152,11 @@ export function SetupCheckSheet() {
         {/* Not a check — a choice about this repo, kept beside its findings because this is the screen a repo's own settings are on. */}
         {scope === "repo" && repo && <AskRulesHere repo={repo} say={c.say.toast} />}
       </div>
+  );
+  if (embedded) return <EmbeddedBody>{content}</EmbeddedBody>;
+  return (
+    <Sheet title={drilled ? `Setup check · ${scope === "machine" ? SCOPE_WORDS.machine : repo ? repoShown(repo) : SCOPE_WORDS.repo}` : "Setup check"} icon={<ClipboardCheck size={16} />} onClose={stepBack}>
+      {content}
     </Sheet>
   );
 }

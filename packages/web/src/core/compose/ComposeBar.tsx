@@ -10,7 +10,7 @@
  */
 import { useEffect, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  AppWindow, ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip,
+  AppWindow, ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Clock, Eye, EyeOff, Hourglass, KeyRound, ListPlus, ListTodo, Loader, NotebookPen, Paperclip,
   Plus, Quote, SendHorizontal, Terminal as TerminalIcon, Trash2, Waypoints, X, Zap,
 } from "lucide-react";
 import { sessionPickLabel } from "@waterplane/shared";
@@ -19,7 +19,8 @@ import type { OutboxEntry } from "../../outbox";
 import type { UploadProgress } from "../../sdk/types.ts";
 import type { Overlay } from "../../routing";
 import {
-  AIM_HERE_LABEL, WHERE_LEAD, composeAimNote, composeMenu, composeWhere, sendButtonTitle, sendModeLabel, sendWhereLabel,
+  AIM_HERE_LABEL, MORE_WAYS_LABEL, WHERE_LEAD, composeAimNote, composeMenu, composeWhere,
+  sendButtonTitle, sendModeLabel, sendWhereLabel,
 } from "../../composeSend";
 import { AttachStrip } from "../../AttachStrip";
 import { dropFileRef } from "../../fileRefs";
@@ -38,11 +39,13 @@ import { openBacklogCut, openBacklogIn } from "../../features/backlog";
 import { takeBoxReturn, useBoxReturn } from "../../features/images";
 import type { ComposeApi } from "./useCompose";
 import { attach, useFileDrop } from "./useFileDrop";
+import { useSendMenu } from "./useSendMenu";
 import { canPickWindow, pickWindowShot } from "../../windowShot";
 import { isShellBackend } from "../../backendCaps";
 import { isLaterId, isPendingId } from "../queue/logic.ts";
 import { secretFillers } from "../extensionPoints";
 import { Button } from "../../kit/Button";
+import { LossLine } from "./LossLine";
 import { RowTitle, RowSub } from "../../kit/Row";
 
 const ICON = 16;
@@ -79,7 +82,7 @@ export function ComposeBar(p: ComposeBarProps) {
   const { uploading, parking, upProg, uploadPending, uploadRowLinger, cancelUploads } = p.uploads;
   const {
     compose, setCompose, composeRef, cmdHistory, histIdx, setHistIdx, clearArmed, setClearArmed, setComposeFocused,
-    snippetOpen, setSnippetOpen, sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid,
+    snippetOpen, setSnippetOpen, sendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid,
     sendMenu, setSendMenu, cliMode, enterSends, voice, aimedSession, stepHistory, clearCompose, appendSnippet,
     chord, toggleCliMode, onPipeInput, flushPipe, onPipeKey, onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, noteSendAim,
     secretAskLine, secret, setSecret, secretShown, setSecretShown, dismissSecret, sendSecret, secretFillContext,
@@ -118,6 +121,7 @@ export function ComposeBar(p: ComposeBarProps) {
     el.focus();
     try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* not focusable yet */ }
   }, [boxReturnAt, composeRef, cliMode]);
+  const { queueFromBox } = useSendMenu(p);
   return (
     <>
       {/* **The armed aim, said out loud for as long as it is not this session.**
@@ -151,6 +155,8 @@ export function ComposeBar(p: ComposeBarProps) {
           </div>
         );
       })()}
+
+      <LossLine />
 
       <div className={`compose${dragOver ? " drop-over" : ""}`} {...dropProps}>
         {(uploadPending || uploadRowLinger) && (
@@ -307,26 +313,32 @@ export function ComposeBar(p: ComposeBarProps) {
                 </div>
               );
             })()}
-            {composeMenu().map((m) => (
+            {/* Each row acts on THIS prompt once and arms nothing: the plain
+                Send keeps meaning "now" (J-61). `Start a new session when
+                free` is not drawn on the `+ later` screen, whose Send already
+                is exactly that. */}
+            {composeMenu().filter((m) => !(later && m.key === "newIdle")).map((m) => (
               <button key={m.key}
-                className={`more-act${m.mode && sendMode === m.mode ? " on" : ""}`}
+                className="more-act"
                 onPointerDown={keepFocus} title={m.title}
                 onClick={() => {
                   setSendMenu(false);
-                  if (m.mode) { setSendMode(m.mode); return; }
+                  if (m.key === "now" || m.key === "idle") { sendCompose(m.key); return; }
                   // The row that keeps words instead of aiming them: no target,
                   // no trigger, nothing that fires itself.
                   if (m.key === "pad") { keepOnPad(); return; }
-                  // The one errand: the same words, with the other three answers
-                  // opened up. Seeded to what the button would have done — this
-                  // session, now — with both rows collapsed, so it is an
-                  // EXPANSION of the decision already made and never a fresh one.
+                  if (m.key === "backlog" || m.key === "newIdle") { queueFromBox(m.key); return; }
+                  // `Send at a time...`: the same words in the Send sheet, whose
+                  // When row holds the clock. The box is not cleared until the
+                  // sheet's own button posts them.
                   openComposeSend();
                 }}>
                 {m.icon === "hourglass" ? <Hourglass size={ICON} />
-                  : m.icon === "elsewhere" ? <ChevronsUpDown size={ICON} />
-                    : m.icon === "pad" ? <NotebookPen size={ICON} />
-                      : <SendHorizontal size={ICON} />}
+                  : m.icon === "clock" ? <Clock size={ICON} />
+                    : m.icon === "backlog" ? <ListPlus size={ICON} />
+                      : m.icon === "newsession" ? <Plus size={ICON} />
+                        : m.icon === "pad" ? <NotebookPen size={ICON} />
+                          : <SendHorizontal size={ICON} />}
                 {m.label}
               </button>
             ))}
@@ -457,18 +469,18 @@ export function ComposeBar(p: ComposeBarProps) {
               empty box, the tap says why nothing moved instead. */}
           <button className="mic" onPointerDown={keepFocus}
             onClick={() => cmdHistory.length === 0 ? showToast("nothing sent yet — no earlier message to recall") : stepHistory(-1)}
-            title="Previous sent command"><ArrowUp size={18} /></button>
+            aria-label="Earlier" title="Previous sent command"><ArrowUp size={18} /></button>
           <button className="mic" onPointerDown={keepFocus}
             onClick={() => histIdx === -1 ? showToast("this is your draft — there is nothing newer") : stepHistory(1)}
-            title="Next sent command"><ArrowDown size={18} /></button>
+            aria-label="Newer" title="Next sent command"><ArrowDown size={18} /></button>
           <button className={`mic ${clearArmed ? "on" : ""}`} onPointerDown={keepFocus}
             onClick={() => compose ? clearCompose() : showToast("the message box is already empty")}
-            title={clearArmed ? "Tap again to clear" : "Clear message box"}><Trash2 size={18} /></button>
+            aria-label="Clear" title={clearArmed ? "Tap again to clear" : "Clear message box"}><Trash2 size={18} /></button>
           {/* Voice input: the one control every dictation surface draws
               (`VoiceButton.tsx`, where its states are argued). `useVoice` is
               wired in `useCompose` — this bar dictates into `compose`. */}
           <VoiceButton voice={voice} onPointerDown={keepFocus} />
-          <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickImageFor(activeRepoId) : showToast("not a known repo")} title="Send image to this repo"><Camera size={18} /></button>
+          <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickImageFor(activeRepoId) : showToast("not a known repo")} aria-label="Photo" title="Send image to this repo"><Camera size={18} /></button>
           {/* Desktop browsers only (macOS/Windows web app): any window or screen,
               through the browser's own picker, attached exactly like a Cmd/Ctrl+V.
               Not drawn where the browser cannot capture (phone, the APK). */}
@@ -478,13 +490,13 @@ export function ComposeBar(p: ComposeBarProps) {
                 if ("file" in r) attach([r.file], "window");
                 else if ("error" in r) showToast(r.error);
               }) : showToast("not a known repo")}
-              title="Picture of a window or screen on this computer — opens in the annotator, then attached"><AppWindow size={18} /></button>
+              aria-label="Window" title="Picture of a window or screen on this computer — opens in the annotator, then attached"><AppWindow size={18} /></button>
           )}
-          <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickFileFor(activeRepoId) : showToast("not a known repo")} title="Attach a file of any kind (PDF, doc, zip, audio…) to this repo — images open in the annotator"><Paperclip size={18} /></button>
+          <button className="mic" onPointerDown={keepFocus} onClick={() => activeRepoId ? pickFileFor(activeRepoId) : showToast("not a known repo")} aria-label="Attach" title="Attach a file of any kind (PDF, doc, zip, audio…) to this repo — images open in the annotator"><Paperclip size={18} /></button>
           <button className={`mic ${snippetOpen ? "on" : ""}`} onPointerDown={keepFocus} onClick={() => setSnippetOpen((v) => !v)}
-            title="Insert a saved snippet"><Quote size={18} /></button>
+            aria-label="Snippets" title="Insert a saved snippet"><Quote size={18} /></button>
           <button className="mic" onPointerDown={keepFocus} onClick={() => setOverlay("pad")}
-            title="Prompt pad — park this thought without picking a target yet"><NotebookPen size={18} /></button>
+            aria-label="Pad" title="Prompt pad — park this thought without picking a target yet"><NotebookPen size={18} /></button>
           {/* A COUNT ON A CONTROL IS A FILTER. This badge counted every repo in
               focus and then opened the list on whatever repo the sheet had last
               been left scoped to — so "7" opened a page showing two, and the
@@ -535,8 +547,9 @@ export function ComposeBar(p: ComposeBarProps) {
             <button className={`send send-mode${sendMenu ? " on" : ""}`} onPointerDown={keepFocus}
               onClick={() => setSendMenu((v) => !v)}
               aria-expanded={sendMenu}
+              aria-label={MORE_WAYS_LABEL}
               data-hint="compose.options"
-              title="Change what Send does — which session it runs in, and now or when it's free — or send it somewhere else or later">
+              title={MORE_WAYS_LABEL}>
               <ChevronsUpDown size={14} />
             </button>
           </div>

@@ -169,7 +169,7 @@ function reasonOf(m: { reason?: unknown } | null | undefined, fallback: string):
 function median(xs: readonly number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const n = s.length;
-  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  return n % 2 ? s[(n - 1) / 2]! : (s[n / 2 - 1]! + s[n / 2]!) / 2;
 }
 
 type Field = { value?: unknown; reason?: unknown } | null | undefined;

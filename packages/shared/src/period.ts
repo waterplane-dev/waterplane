@@ -24,7 +24,9 @@ function zoneOffsetMs(zone: string, at: number): number | null {
     for (const part of new Intl.DateTimeFormat("en-US", {
       timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
     }).formatToParts(new Date(at))) if (part.type !== "literal") p[part.type] = Number(part.value);
-    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - at;
+    const { year, month, day, hour, minute, second } = p;
+    if (year === undefined || month === undefined || day === undefined || hour === undefined || minute === undefined || second === undefined) return null;
+    return Date.UTC(year, month - 1, day, hour, minute, second) - at;
   } catch { return null; }
 }
 
@@ -50,7 +52,8 @@ function zoneDate(zone: string, at: number): { y: number; mo: number; d: number 
     for (const part of new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(at))) {
       if (part.type !== "literal") p[part.type] = Number(part.value);
     }
-    if (Number.isFinite(p.year) && Number.isFinite(p.month) && Number.isFinite(p.day)) return { y: p.year, mo: p.month - 1, d: p.day };
+    const { year, month, day } = p;
+    if (year !== undefined && month !== undefined && day !== undefined && Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) return { y: year, mo: month - 1, d: day };
   } catch { /* unknown zone: fall through */ }
   const t = new Date(at);
   return { y: t.getFullYear(), mo: t.getMonth(), d: t.getDate() };

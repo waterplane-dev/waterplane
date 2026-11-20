@@ -191,6 +191,8 @@ export function assessGroups(proposal: AssessProposal, items: readonly AssessIte
       fixedOpen: v === "merged",
     });
   }
+  // Nothing retires ⇒ the verdicts ARE the result: shut, an all-wanted run read as empty.
+  if (!out.some((g) => g.retires)) for (const g of out) g.defaultOpen = true;
   return out;
 }
 

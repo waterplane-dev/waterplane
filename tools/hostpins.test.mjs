@@ -180,7 +180,8 @@ const PINS = [
     // server/deliveries.ts (2026-11-11): the inbox hold's poll — a prompt waits for the picture it names — a new fact.
     //   MOVED (2026-11-12): the poll is `clock.sleep` on the injected `waitclock.ts` Clock (1 → 0), so a test runs it in virtual time.
     // sessions/drive.ts (2026-11-13): `waitReady`'s 150 ms poll is `clock.sleep` on the same Clock (1 → 0), threaded from the delivery.
-    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "server/bgrelay.ts": 1, "sessions/boxread.ts": 3, "sessions/convid.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/apiretry.ts": 2, "sessions/resume.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "sessions/wall.ts": 1, "sessions/signinwait.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
+    //   MOVED (2026-11-19, H2): apiretry 2, resume 1, wall 1, signinwait 1 → 0: the four recovery lanes arm through `sessions/timers.ts` on `clock.after`.
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "server/bgrelay.ts": 1, "sessions/boxread.ts": 3, "sessions/convid.ts": 4, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 1, "sessions/agentpoll.ts": 1, "recover/recoverwrite.ts": 1, "recover/wavegate.ts": 2, "recover/authgate.ts": 2 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -265,9 +266,9 @@ const PINS = [
     today: { "server/shutdown.ts": 3 },
   },
   {
-    name: "main's other subscriptions (autopull / builds / capture / openDeliveries .on)",
-    re: /\b(?:autopull|builds|capture|openDeliveries)\.on\(\s*"/g, scope: MAIN,
-    today: { "main.ts": 2, "server/deliveries.ts": 1, "server/scan.ts": 1 },
+    name: "main's other subscriptions (autopull / builds / openDeliveries .on)",
+    re: /\b(?:autopull|builds|openDeliveries)\.on\(\s*"/g, scope: MAIN,
+    today: { "main.ts": 1, "server/deliveries.ts": 1, "server/scan.ts": 1 },
   },
   {
     name: "notifications (notify calls)",
@@ -282,7 +283,8 @@ const PINS = [
     // sessionEvents.ts 11 → 12 (2026-11-02, blocked-sessions D1a): the sign-in episode's push, once per transition.
     // sessionEvents.ts 14 → 11 (2026-11-02, blocked-sessions C1): the limit event's four phase pushes are
     // ONE call over `recover/blockpush.ts`'s words — same pushes, worded per kind in one place.
-    today: { "main.ts": 5, "server/billingwire.ts": 1, "server/deliveries.ts": 4, "server/intentDeps.ts": 1, "server/intentEvents.ts": 8, "server/plugins.ts": 1, "server/scan.ts": 3, "server/sessionEvents.ts": 12 },
+    // +1 main.ts (2026-11-17): the assessment executor's late-bound `notify` dep — a finished run tells the phone (assess/hassexec.ts raises it).
+    today: { "main.ts": 6, "server/billingwire.ts": 1, "server/deliveries.ts": 4, "server/intentDeps.ts": 1, "server/intentEvents.ts": 8, "server/plugins.ts": 1, "server/scan.ts": 3, "server/sessionEvents.ts": 12 },
   },
   {
     name: "singleton registrations",

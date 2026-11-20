@@ -1,15 +1,12 @@
 /**
  * A per-repo list of things to run, the runs themselves, and their output.
  *
- * Build and capture are the same feature typed twice: a cached per-repo list
- * (`*.list`), a capped list of runs upserted by id (`*.run`), and a streamed
- * output buffer per run (`*.output`) whose chatty frames re-render only while
- * the sheet reading them is on top. App carried both copies line for line; this
- * is the one they move into.
+ * A cached per-repo list (`*.list`), a capped list of runs upserted by id
+ * (`*.run`), and a streamed output buffer per run (`*.output`) whose chatty
+ * frames re-render only while the sheet reading them is on top.
  *
- * What stays with the feature: the toasts (a capture's verdict is not a
- * build's), anything a `*.list` frame carries beyond the list and the runs
- * (`capture.list`'s backends), and decoding the output frame.
+ * What stays with the feature: the toasts, anything a `*.list` frame carries
+ * beyond the list and the runs, and decoding the output frame.
  */
 import type { Cached } from "../localState.ts";
 import { cachedList, type CachedListStore } from "./cached.ts";

@@ -7,6 +7,8 @@ import type { ExecutorResult } from "../intents/manager.js";
 import { AssessStore } from "./hassstore.js";
 import { runAssessment } from "./hassrun.js";
 import { ASSESSABLE_STATES } from "./hassknobs.js";
+import { targetId } from "../repos.js";
+import type { Notify } from "../notifytypes.js";
 
 // ── The executor ─────────────────────────────────────────────────────────────
 
@@ -23,6 +25,30 @@ export interface AssessDeps {
   intents(): readonly Intent[];
   /** The pad notes carrying this `cwd` — the other store "everything left" means. */
   notes(cwd: string): readonly AssessNote[];
+  /**
+   * Told ONCE when a run reaches its final state (done or failed — never a canceled one), with a
+   * tap target: the assessment sheet of that repo. Absent in a test that watches nothing.
+   */
+  notify?: Notify;
+}
+
+/** The one notification a finished run raises. Tag per repo, so a rerun replaces it in the tray. */
+function reportAssessEnd(deps: AssessDeps, i: Intent, ok: boolean, detail: string, proposal: { rows: readonly unknown[]; merges: readonly unknown[]; news: readonly unknown[] } | undefined): void {
+  if (!deps.notify) return;
+  // A run called off while it worked says nothing: the person who called it off knows.
+  if (deps.intents().find((x) => x.id === i.id)?.state === "canceled") return;
+  const repoId = targetId(i.cwd);
+  const name = basename(i.cwd);
+  const n = proposal ? proposal.rows.length + proposal.merges.length + proposal.news.length : 0;
+  try {
+    deps.notify("info", {
+      title: ok ? `Assessment of ${name} is ready` : `Assessment of ${name} failed`,
+      body: ok ? `${n} ${n === 1 ? "proposal" : "proposals"} to review — nothing is applied until you tap` : detail,
+      tag: `assess-${repoId}`,
+      outcome: ok ? "ok" : "failed",
+      open: { to: "assess", repoId, runId: i.id },
+    });
+  } catch { /* a notification must never fail the run's own settling */ }
 }
 
 /**
@@ -83,10 +109,12 @@ export function makeAssessExecutor(deps: AssessDeps): (i: Intent) => Promise<Exe
         // reads a surprising proposal and asks what it actually looked at.
         progress: res.progress,
       });
+      reportAssessEnd(deps, i, res.ok, res.detail, res.proposal);
       return { ok: res.ok, detail: res.detail };
     } catch (err) {
       const detail = `the assessment could not run: ${String(err).slice(0, 200)}`;
       deps.store.set(i.id, { status: "failed", finishedAt: Date.now(), detail });
+      reportAssessEnd(deps, i, false, detail, undefined);
       return { ok: false, detail };
     }
   };

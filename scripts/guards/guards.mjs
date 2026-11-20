@@ -32,7 +32,7 @@ const SKILLS = [".claude/skills/**"];
 /** @type {{test: string, tier: "edit"|"commit"|"push", paths: string[], why?: string}[]} */
 export const GUARDS = [
   // ── edit: pure file readers ────────────────────────────────────────────────
-  { test: "claudemd", tier: "edit", paths: ["CLAUDE.md", ...SKILLS, "docs/notes/**", "tools/skillmap.mjs", "packages/host/src/visualskill.ts"] },
+  { test: "claudemd", tier: "edit", paths: ["CLAUDE.md", ...SKILLS, "docs/notes/**", "tools/skillmap.mjs"] },
   { test: "androidappsboundary", tier: "edit", paths: [...WEB, ...HOST, "packages/shared/src/**"] },
   { test: "webshape", tier: "edit", paths: [...WEB, ...EXT] },
   { test: "cssshape", tier: "edit", paths: ["packages/web/src/styles.css", "packages/web/src/styles/**", "tools/csssource.mjs"] },
@@ -53,6 +53,7 @@ export const GUARDS = [
   { test: "usagerecordpins", tier: "edit", paths: HOST },
   { test: "atomicwrites", tier: "edit", paths: HOST },
   { test: "storereads", tier: "edit", paths: [...HOST, "packages/extensions/*/host/**", "tools/storereads.test.mjs"] },
+  { test: "extstorerename", tier: "edit", paths: ["packages/extensions/*/host/**", "packages/shared/src/storefile.ts", "tools/extstorerename.test.mjs"] },
   { test: "forgeseam", tier: "edit", paths: HOST },
   { test: "landedbase", tier: "edit", paths: [...HOST, "tools/landedbase.test.mjs"] },
   { test: "lanestate", tier: "edit", paths: ["packages/**", "tools/lanestate.test.mjs"] },
@@ -72,6 +73,7 @@ export const GUARDS = [
   { test: "reqshape", tier: "edit", paths: ["tools/reqshape.mjs", "docs/requirements/**"] },
   { test: "flakyrate", tier: "edit", paths: ["tools/flakyrate.mjs", "scripts/run-e2e.mjs"] },
   { test: "vaultcoverage", tier: "edit", paths: ["tools/vaultcoverage.mjs"] },
+  { test: "vaultconsent", tier: "edit", paths: ["packages/extensions/vault/host/**", "tools/vaultconsent.test.mjs"] },
   { test: "repohealth-habits", tier: "edit", paths: ["tools/repohealth/metrics/habits.mjs", "tools/repohealth/metrics/workspace.mjs", "tools/repohealth/git.mjs"] },
   { test: "repohealth-native", tier: "edit", paths: ["tools/repohealth/metrics/native.mjs", "packages/shared/src/repohealthnative.ts"] },
   { test: "repohealth-python", tier: "edit", paths: ["tools/repohealth/packs/python.mjs", "tools/repohealth/lang/python-*.mjs"] },
@@ -83,6 +85,9 @@ export const GUARDS = [
   { test: "guards", tier: "edit", paths: ["scripts/guards/**", "tools/*.test.mjs"] },
 
   // ── commit: typescript / eslint / child processes, still no build ─────────
+  { test: "appglossary", tier: "commit", paths: [...WEB, ...EXT, "README.md", "docs/guide.md", "tools/appglossary.baseline.json", "tools/glossaryscan.mjs"] }, // needs typescript; the whole-app journey spec's glossary (D1)
+  { test: "wherefind", tier: "commit", paths: ["packages/web/src/doors/**", "README.md", "tools/wherefind.mjs"] }, // README "Where do I find" table equals the door registry (D10)
+  { test: "appdoors", tier: "commit", paths: ["packages/web/src/doors/**", "packages/web/src/routing.ts", "packages/web/src/sheetNames.ts", "tools/appdoors.baseline.json"] }, // runs the web TypeScript (type stripping): door label vs title (D1)
   { test: "vaultglossary", tier: "commit", paths: ["packages/extensions/vault/web/**", "packages/extensions/vault/README.md", "tools/vaultglossary.baseline.json"] }, // needs typescript
   { test: "apppins", tier: "commit", paths: WEB },
   { test: "assesspins", tier: "commit", paths: WEB },
@@ -99,6 +104,7 @@ export const GUARDS = [
   { test: "featureboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "hostboundary", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "nosilentsend", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
+  { test: "finishnotify", tier: "commit", paths: ["packages/host/src/**", "packages/web/src/features/notifications/**"] },
   { test: "totalwirewords", tier: "commit", paths: ["tools/eslint/**", "eslint.config.js"] },
   { test: "portlock", tier: "commit", paths: ["scripts/lib-portlock.mjs"] },
   { test: "stublogo", tier: "commit", paths: ["scripts/media/**", "scripts/claude-stub-tui.mjs"] },

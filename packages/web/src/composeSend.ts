@@ -115,8 +115,8 @@ export function sendModeToast(
       : "queued — the session opens and runs this when the link is back";
   }
   return o.online
-    ? "queued on the desktop — it goes in when this session is free"
-    : "queued — it reaches the desktop when the link is back, and goes in when this session is free";
+    ? "Queued. Runs when this session is free."
+    : "Queued. It reaches the desktop when the link is back, then runs when this session is free.";
 }
 
 /**
@@ -135,48 +135,95 @@ export const PAD_EMPTY_TOAST = "nothing in the box to keep — the pad holds wor
 
 /** Which lucide icon a menu row draws. A key, not a component: this file is
  *  pure and node-tested, and importing React into it would end that. */
-export type ComposeMenuIcon = "send" | "hourglass" | "elsewhere" | "pad";
+export type ComposeMenuIcon = "send" | "hourglass" | "clock" | "backlog" | "newsession" | "pad";
 
+/**
+ * One row of Send's menu (glossary row 9). Every row acts on THIS prompt once:
+ * the menu arms nothing, so the plain Send button keeps meaning "now" for the
+ * next prompt (J-61, journey spec T9).
+ */
 export interface ComposeMenuEntry {
-  key: "now" | "idle" | "pad" | "elsewhere";
+  key: "now" | "idle" | "at" | "backlog" | "newIdle" | "pad";
   label: string;
   title: string;
   icon: ComposeMenuIcon;
-  /**
-   * The mode this row ARMS, or null for a row that does something instead of
-   * arming the button. Two rows are null now, so the caller switches on `key`:
-   * `pad` keeps the words, `elsewhere` opens the send sheet.
-   */
+  /** The mode this row sends with, or null for a row that does something
+   *  other than send to the aimed session — the caller switches on `key`. */
   mode: SendMode | null;
 }
 
+/** The chevron beside Send: what it is called, to the eye and to a screen reader. */
+export const MORE_WAYS_LABEL = "More ways to send";
+
 /**
- * The chevron's menu: two modes, one place to keep words, and one errand.
+ * Send's menu: the glossary's five ways to deliver one prompt, then the one
+ * row that delivers nothing (the pad).
  *
- * Deliberately a function returning a fresh array rather than a constant — the
- * component maps it to JSX on every render and a frozen module-level array
- * shared across renders is the kind of thing that grows a mutation later.
+ * A function returning a fresh array rather than a constant — the component
+ * maps it to JSX on every render and a frozen module-level array shared across
+ * renders is the kind of thing that grows a mutation later.
  */
 export function composeMenu(): ComposeMenuEntry[] {
   return [
     {
-      key: "now", label: "now", icon: "send", mode: "now",
+      key: "now", label: "Send now", icon: "send", mode: "now",
       title: "type it into this session straight away",
     },
     {
-      key: "idle", label: "when it's free", icon: "hourglass", mode: "idle",
-      title: "the desktop holds it and types it in when this session can take it — turn ended, no question open, no usage-limit block",
+      key: "idle", label: "Send when free", icon: "hourglass", mode: "idle",
+      title: "the desktop holds it and types it in when this session can take it: turn ended, no question open, no usage-limit block. For this prompt only",
     },
     {
-      key: "pad", label: "keep it on the pad", icon: "pad", mode: null,
-      title: "park the words on the pad — nothing runs them, no backlog, no trigger; you decide later whether they go anywhere",
+      key: "at", label: "Send at a time...", icon: "clock", mode: null,
+      title: "opens the Send sheet, where you pick a clock time, a usage window or another item to wait for",
     },
     {
-      key: "elsewhere", label: "elsewhere or later…", icon: "elsewhere", mode: null,
-      title: "a different session, a new one, several repos — or at a time",
+      key: "backlog", label: "Add to backlog", icon: "backlog", mode: null,
+      title: "a row in this repo's backlog: nothing runs it until you start it there",
+    },
+    {
+      key: "newIdle", label: "Start a new session when free", icon: "newsession", mode: null,
+      title: "a fresh session in this repo, opened by the desktop when the repo and the usage window are free; an empty session on screen is closed",
+    },
+    {
+      key: "pad", label: "Keep on the pad", icon: "pad", mode: null,
+      title: "park the words on the pad: nothing runs them, no backlog, no trigger; you decide later whether they go anywhere",
     },
   ];
 }
+
+/**
+ * The receipt after *Start a new session when free* (journey spec T2).
+ *
+ * `closed`: what became of the session the words were typed in — `closed`
+ * (it was empty and is closed now), `kept` (it had turns, so it stays), or
+ * `opening` (its create is still on the way, so there is nothing to close yet
+ * and it stays). Said every time, because the screen changes under the person.
+ */
+export function newWhenFreeReceipt(o: { repo: string; offline: boolean; closed: "closed" | "kept" | "opening" | "nolink" }): string {
+  const where = o.repo ? ` in ${o.repo}` : "";
+  const held = o.offline
+    ? `Held for a new session${where}: it reaches the desktop when the link is back, then starts when free.`
+    : `Held for a new session${where}, when free.`;
+  // The close is ASKED of the desktop (`session.closecheck`), which closes it or asks first when
+  // something would be lost — so the receipt says it is closing, never that it was closed. With no
+  // link the close is refused outright (2026-11-18 review): say the session stays, and the way out.
+  if (o.closed === "closed") return `${held} Closing the empty session; the desktop asks first if anything would be lost.`;
+  if (o.closed === "nolink") return `${held} The empty session stays open: closing it needs the link. Close it when the link is back.`;
+  if (o.closed === "opening") return `${held} The session on screen is still opening, so it stays.`;
+  return held;
+}
+
+/** The receipt after *Add to backlog*: where the row is, and that nothing runs it yet. */
+export function backlogAddReceipt(o: { repo: string; offline: boolean }): string {
+  const where = o.repo ? ` of ${o.repo}` : "";
+  return o.offline
+    ? `Added to the backlog${where} when the link is back. Nothing runs it until you start it.`
+    : `Added to the backlog${where}. Nothing runs it until you start it.`;
+}
+
+/** The receipt's way on after either: the one screen that lists both. */
+export const OPEN_WAITING_LABEL = "Open Waiting work";
 
 // ── WHERE the next message runs ──────────────────────────────────────
 

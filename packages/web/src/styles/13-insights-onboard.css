@@ -27,6 +27,14 @@
 .ctx-doors { flex-wrap: wrap; padding: var(--sp-8) var(--sp-12) var(--sp-4); background: none; border-top: 0; }
 .ctx-doors ~ .empty-stale { padding: var(--sp-4) var(--sp-12) 0; }
 .ctx-cost .ctx-cost-more { padding: var(--sp-8) 0 0; }
+/* The budget card, folded (ContextSheet `budgetCard`): the head is the summary, a 44px tap row
+   with a chevron that turns when open. */
+.ctx-budget-fold { padding-top: 0; padding-bottom: 0; }
+.ctx-budget-fold > summary { cursor: pointer; list-style: none; min-height: 44px; }
+.ctx-budget-fold > summary::-webkit-details-marker { display: none; }
+.ctx-budget-fold[open] { padding-bottom: var(--sp-10); }
+.ctx-budget-chev { margin-left: auto; flex: none; transition: transform .15s; }
+.ctx-budget-fold[open] > summary > .ctx-budget-chev { transform: rotate(90deg); }
 
 /* ── The all-sessions screen's boxes (TokenInsights.tsx) ──────────────────────
    A filter is the HEAD of the box it filters, and everything it changes is
@@ -588,3 +596,8 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .wn-state { flex: 0 1 auto; max-width: 45%; text-align: right; color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
 .wn-row > .row-sub { line-height: var(--lh-14); }
 .wn-acts { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+
+/* The large-subagent line: its label above, the four chips in one even row (one row at 360 px). */
+.agent-warn .agent-warn-row { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-4) 0 0; }
+.agent-warn-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-6); }
+.agent-warn-chips > .key { min-width: 0; padding-left: 0; padding-right: 0; }

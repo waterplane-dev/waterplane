@@ -182,6 +182,12 @@ export interface InstallLogDoc {
    *  a separate field so a future page of the log cannot silently claim to be
    *  the whole of it. */
   total: number;
+  /** Present only when the host's `installs.json` exists and could not be read: what is listed is
+   *  then only what this run heard, not the history, and nothing new is being saved. Absent otherwise. */
+  unreadable?: string;
+  /** Present when `installs.json` did not parse and was moved aside (to this name): the log starts over
+   *  and the earlier history sits in that file. Saving works. Absent otherwise. */
+  movedAside?: string;
 }
 
 /** How this device identifies itself when it reports. */
@@ -555,6 +561,8 @@ export function installLogLine(e: InstallLogEntry, fmt: (ms: number) => string):
  *  whole reason this exists is that there is more than one phone. */
 export function installLogSummary(doc: InstallLogDoc): string {
   const n = doc.entries.length;
+  if (doc.unreadable) return `The desktop could not read its install log (${doc.unreadable}), so this list may be missing installs and new ones are not being saved. ${n} shown.`;
+  if (doc.movedAside) return `The desktop's install log did not parse and was set aside as ${doc.movedAside}, so this list starts over and is missing earlier installs. ${n} shown.`;
   if (!n) return "Nothing has installed itself yet. An app on a phone's allow-list is logged here the moment a build lands on it.";
   const devices = doc.devices.length;
   const failed = doc.entries.filter((e) => e.outcome === "failed").length;

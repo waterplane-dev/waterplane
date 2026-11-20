@@ -50,8 +50,8 @@ export function AnnToolbar({ m }: { m: AnnModel }) {
       case "move":
         return [
           <Button key={id} className={moveMode ? "active" : ""} onClick={toggleMove} disabled={!shapes.length} title="move/reshape a mark" aria-label="move a mark" aria-pressed={moveMode}><Move size={16} /></Button>,
-          moveMode && (
-            <Button key="del" onClick={deleteSelected} disabled={selected == null} title="delete the selected mark" aria-label="delete the selected mark"><Trash2 size={16} /></Button>
+          moveMode && selected != null && (
+            <Button key="del" onClick={deleteSelected} title="delete the selected mark" aria-label="delete the selected mark"><Trash2 size={16} /></Button>
           ),
           moveMode && (
             <Button key="knobs" className={knobs ? "active" : ""} onClick={toggleKnobs} aria-pressed={knobs}

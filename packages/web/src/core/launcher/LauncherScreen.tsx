@@ -9,7 +9,7 @@
  * its index; the launcher's own state is `useLauncherModel`'s.
  */
 import { useLayoutEffect, useRef } from "react";
-import { Archive, ArrowDownUp, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
+import { Archive, ArrowDownUp, CalendarClock, CircleDot, Hourglass, OctagonPause, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, House, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
@@ -49,12 +49,12 @@ import { RepoGroup } from "./RepoGroup";
 import { ClosedRows } from "./ClosedRows";
 import { PlainFolders, scanPlainFolders } from "./PlainFolders";
 import { CloseSheet } from "./CloseSheet";
-import { LauncherItemKeys, LauncherItems, LauncherMenuBadge } from "./LauncherItems";
+import { LauncherItemKeys, LauncherItems, LauncherMenuBadge, MenuGroup } from "./LauncherItems";
+import { questionsWords } from "./homeWords";
 import { Button } from "../../kit/Button";
 import { AttentionChip } from "./AttentionChip";
 import { Row, RowTitle, RowSub } from "../../kit/Row";
 import { Hint } from "../../kit/Hint";
-import { SHEET } from "../../sheetNames";
 
 export type { LauncherProps } from "./types";
 
@@ -119,7 +119,7 @@ export function LauncherScreen(p: LauncherProps) {
   return (
     <div className="screen">
       <LauncherChrome off={navMenu}>
-      <header className="topbar">
+      <header className="topbar launcher-top">
         {focusRepo ? (
           <div className="brand brand-focus" style={repoAccentStyle(focusRepo)}>
             <Logo size={32} label="" /><span>{m.shownOf(focusRepo)}</span>
@@ -198,86 +198,89 @@ export function LauncherScreen(p: LauncherProps) {
         </Button>
         {navMenu && (
           <div className="row-more nav-more">
-            {isNativeShell() && <HostMenuItem size={ICON} onOpen={() => setNavMenu(false)} />}
-            <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("new"); }}><Plus size={ICON} />new</button>
-            <button className="more-act" title="prompt pad — write a thought now, decide where it goes later"
-              onClick={() => { setNavMenu(false); setOverlay("pad"); }}><NotebookPen size={ICON} />pad</button>
-            {/* Where a posted piece of work is found afterwards. It has to be on
-                the launcher and not behind the recovery bar: that bar appears only
-                while something is in flight, and "what happened to the thing I
-                sent an hour ago" is asked precisely when nothing is. The same
-                argument the archive entry two buttons along is built on — an entry
-                point that exists only when there is something pending is
-                unreachable at the moment you want to ask whether anything is.
-                The badge rides on it and does not replace it: a standing button
-                and a count are not in conflict, and only one of them can be
-                zero. */}
-            <button className="more-act" data-hint="activity.open"
-              title="activity — every prompt, sweep, build, schedule and download you posted, with what became of it. Select rows here to deal with many at once."
-              onClick={() => {
-                track("overlay:activity"); setNavMenu(false);
-                // A count is a filter: with a number on it, the tap opens those rows.
-                openActivity(activityKeys.length ? { keys: activityKeys, label: `the ${activityKeys.length} ${activityKeys.length === 1 ? "row" : "rows"} still open` } : null);
-              }}>
-              <ListOrdered size={ICON} />activity
-              {activityBadge > 0 && <span className="mic-badge">{activityBadge}</span>}
-            </button>
-            <button className="more-act" title="search words across all sessions"
-              onClick={() => { setNavMenu(false); openSearch(null); }}><Search size={ICON} />search</button>
-            <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("gallery"); }}><Images size={ICON} />files</button>
-            {/* The route to the downloads when nothing is downloading. The
-                PullBar strip is rendered only while a transfer is ACTIVE, so
-                the finished files ("on this device · tap to save it") and the
-                per-repo rules were reachable only through Settings → Data
-                usage — three taps and a section nobody looks in for a file.
-                Same argument as activity and archive two buttons along: an
-                entry point that exists only while something is pending is
-                missing at the moment you want to ask whether anything is. The
-                2px rule along the bottom edge is the progress, costing no
-                height; the label says the count either way. */}
-            <button className={`more-act${dl.active > 0 ? " has-bar" : ""}`}
-              title={dl.active > 0
-                ? `downloads — ${dl.active} in flight, ${dl.pct}% of the bytes here${dl.stuck ? " (something is stopped)" : ""}`
-                : "downloads — files fetched to this device, and what each repo fetches on its own"}
-              onClick={() => { track("overlay:pull"); setNavMenu(false); setOverlay("pull"); }}>
-              <Download size={ICON} />downloads
-              {dl.active > 0 ? ` ${dl.active} · ${dl.pct}%` : dl.onPhone > 0 ? ` ${dl.onPhone}` : ""}
-              {dl.active > 0 && <span className={`more-dl-bar${dl.stuck ? " warn" : ""}`} style={{ width: `${dl.pct}%` }} />}
-            </button>
-            {/* The route back to a session closed long enough ago that it has
-                rolled off "Recently closed". Lives here, not in that section's
-                header, because the section disappears once the shortlist empties —
-                which is exactly when the archive is the only way back. */}
-            <button className="more-act" title="archive — every conversation this repo ever had, resumable"
-              onClick={() => { track("overlay:archive"); setNavMenu(false); setOverlay("archive"); }}>
-              <Archive size={ICON} />archive
-            </button>
-            <button className="more-act"
-              title="decision log — usage-limit auto-continues and what plugins suggested or answered"
-              onClick={() => { setNavMenu(false); openDecisions(null); }}>
-              <ScrollText size={ICON} />decisions
-            </button>
-            <button className="more-act" title="sent commands — everything this app typed into a session, including what it decided by itself"
-              onClick={() => { track("overlay:sentlog"); setNavMenu(false); openSentLog(null); }}>
-              <MessageSquare size={ICON} />sent
-            </button>
-            {/* The local/external switch. It used to be a full-width segmented
-                bar directly under the topbar — two 46px buttons of permanent
-                vertical space for a choice almost nobody changes, pushing the
-                first repo below the fold on a phone. It is a view selector, so
-                it belongs with the other nine view entries; what stays visible
-                is which view you are IN, said by the list's own section head
-                and by the marker on the menu button. */}
-            <button className={`more-act${tab === "home" ? " on" : ""}`} title="sessions this app started"
-              onClick={() => { setNavMenu(false); setTab("home"); }}>
-              <ListTodo size={ICON} />local {visibleSessions.length ? `(${visibleSessions.length})` : ""}
-            </button>
-            <button className={`more-act${tab === "external" ? " on" : ""}`} title="`claude` processes running outside this app — resumable from here"
-              onClick={() => { setNavMenu(false); setTab("external"); }}>
-              <TerminalIcon size={ICON} />external {visibleExternal.length ? `(${visibleExternal.length})` : ""}
-            </button>
-            {/* What extensions put on the home menu (Desktop, Links, Vault). None ⇒ nothing drawn. */}
-            <LauncherItems size={ICON} onOpen={() => setNavMenu(false)} />
+            {/* Grouped by task (whole-app journey spec D6, §1): Start, Find, Waiting,
+                Sessions, This desktop. Every line says its screen's title. */}
+            <MenuGroup title="Start">
+              <button className="more-act" title="pick a repo and open a new session in it"
+                onClick={() => { setNavMenu(false); setOverlay("new"); }}><Plus size={ICON} />New project…</button>
+              <button className="more-act" title="fan out — run one prompt in several repos at once (a fresh session each)"
+                onClick={() => { track("overlay:fanout"); setNavMenu(false); setOverlay("fanout"); }}><Split size={ICON} />Fan out</button>
+              <button className="more-act" title="pad — write a thought now, decide where it goes later"
+                onClick={() => { setNavMenu(false); setOverlay("pad"); }}><NotebookPen size={ICON} />Pad</button>
+            </MenuGroup>
+            <MenuGroup title="Find">
+              <button className="more-act" title="search words across all sessions"
+                onClick={() => { setNavMenu(false); openSearch(null); }}><Search size={ICON} />Search</button>
+              <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("gallery"); }}><Images size={ICON} />Images &amp; documents</button>
+              {/* The route to the downloads when nothing is downloading: the
+                  PullBar strip is drawn only while a transfer is ACTIVE. The 2px
+                  rule along the bottom edge is the progress, costing no height. */}
+              <button className={`more-act${dl.active > 0 ? " has-bar" : ""}`}
+                title={dl.active > 0
+                  ? `downloads — ${dl.active} in flight, ${dl.pct}% of the bytes here${dl.stuck ? " (something is stopped)" : ""}`
+                  : "downloads — files fetched to this device, and what each repo fetches on its own"}
+                onClick={() => { track("overlay:pull"); setNavMenu(false); setOverlay("pull"); }}>
+                <Download size={ICON} />Downloads
+                {dl.active > 0 ? ` · ${dl.active} downloading, ${dl.pct}%` : dl.onPhone > 0 ? ` · ${dl.onPhone} on this phone` : ""}
+                {dl.active > 0 && <span className={`more-dl-bar${dl.stuck ? " warn" : ""}`} style={{ width: `${dl.pct}%` }} />}
+              </button>
+              {/* The route back to a session closed long enough ago that it has
+                  rolled off "Recently closed". */}
+              <button className="more-act" title="archive — every conversation this repo ever had, resumable"
+                onClick={() => { track("overlay:archive"); setNavMenu(false); setOverlay("archive"); }}>
+                <Archive size={ICON} />Archive
+              </button>
+            </MenuGroup>
+            <MenuGroup title="Waiting">
+              {/* Where posted work is found afterwards — always drawn, since "what
+                  happened to the thing I sent an hour ago" is asked precisely when
+                  nothing is pending. A count is a filter: with a number on it, the
+                  tap opens exactly those rows. The word carries the count (J-17). */}
+              <button className="more-act" data-hint="activity.open"
+                title="activity, queued, backlog and scheduled, in Waiting work — every prompt, sweep, build, schedule and download you posted, with what became of it"
+                onClick={() => {
+                  track("overlay:activity"); setNavMenu(false);
+                  openActivity(activityKeys.length ? { keys: activityKeys, label: `the ${activityKeys.length} ${activityKeys.length === 1 ? "row" : "rows"} still open` } : null);
+                }}>
+                <ListOrdered size={ICON} />Waiting work
+                {activityBadge > 0 && <span className="mic-badge">{activityBadge}</span>}
+              </button>
+              <button className="more-act" title="questions — sessions waiting for your answer"
+                onClick={() => { track("overlay:questions"); setNavMenu(false); setOverlay("questions"); }}>
+                <CircleDot size={ICON} />Questions{waitingTotal > 0 && <span className="mic-badge">{waitingTotal}</span>}
+              </button>
+              <button className="more-act" title="blocked — sessions stopped by a limit, a spend wall, the network or a sign-in"
+                onClick={() => { track("overlay:limits"); setNavMenu(false); setOverlay("limits"); }}>
+                <OctagonPause size={ICON} />Blocked{blockedTotal > 0 && <span className="mic-badge">{blockedTotal}</span>}
+              </button>
+            </MenuGroup>
+            <MenuGroup title="Sessions">
+              {/* The local/external switch: a view selector, so it lives with the
+                  other views; which view you are IN stays said by the list's own
+                  head and by the marker on the menu button. */}
+              <button className={`more-act${tab === "home" ? " on" : ""}`} title="sessions this app started"
+                onClick={() => { setNavMenu(false); setTab("home"); }}>
+                <ListTodo size={ICON} />On this desktop{visibleSessions.length ? ` · ${visibleSessions.length}` : ""}
+              </button>
+              <button className={`more-act${tab === "external" ? " on" : ""}`} title="`claude` processes started in a terminal by hand — resumable from here"
+                onClick={() => { setNavMenu(false); setTab("external"); }}>
+                <TerminalIcon size={ICON} />External{visibleExternal.length ? ` · ${visibleExternal.length}` : ""}
+              </button>
+              <button className="more-act" title="sent commands — everything this app typed into a session, including what it decided by itself"
+                onClick={() => { track("overlay:sentlog"); setNavMenu(false); openSentLog(null); }}>
+                <MessageSquare size={ICON} />Sent commands
+              </button>
+              <button className="more-act"
+                title="decision log — usage-limit auto-continues and what plugins suggested or answered"
+                onClick={() => { setNavMenu(false); openDecisions(null); }}>
+                <ScrollText size={ICON} />Decision log
+              </button>
+            </MenuGroup>
+            <MenuGroup title="This desktop">
+              {isNativeShell() && <HostMenuItem size={ICON} onOpen={() => setNavMenu(false)} />}
+              {/* What extensions put on the home menu (Setup & health, Desktop, Links, Vault, Halt). */}
+              <LauncherItems size={ICON} onOpen={() => setNavMenu(false)} />
+            </MenuGroup>
           </div>
         )}
         {face.kind === "windows" ? (
@@ -387,17 +390,25 @@ export function LauncherScreen(p: LauncherProps) {
                   with, so a tap shows exactly the sessions counted. The
                   questions sheet answers offline; the blocked sheet groups
                   sign-in, network, spend and the usage limit's resume queue. */}
-              <AttentionChip kind="wait" n={waitingTotal} replies={!!waitingRepliesTotal}
+              <AttentionChip kind="wait" n={waitingTotal} replies={!!waitingRepliesTotal} noun={questionsWords(waitingTotal).replace(/^\d+ /, "")}
                 onClick={() => { track("overlay:questions"); setOverlay("questions"); }} />
               <AttentionChip kind="blocked" n={blockedTotal} hint="limit.open"
                 onClick={() => { track("overlay:limits"); setOverlay("limits"); }} />
+              {activityKeys.length > 0 && (
+                // "4 waiting": the Waiting work rows still open (the ☰ line's own
+                // count), and the tap opens exactly those — a count is a filter.
+                <button className="repo-group-stat queued" title={`${activityKeys.length} still open in Waiting work — tap to see only those`}
+                  onClick={() => { track("overlay:activity"); openActivity({ keys: activityKeys, label: `the ${activityKeys.length} ${activityKeys.length === 1 ? "row" : "rows"} still open` }); }}>
+                  <Hourglass size={13} />{activityKeys.length} waiting
+                </button>
+              )}
               {codingTotal > 0 && (
                 // Same filter as the group chips, unscoped: this count is over
                 // every repo, so the rows it shows are too.
                 <button className={`repo-group-stat coding${statusFilterActive("coding") ? " on" : ""}`}
                   title={`${codingTotal} session${codingTotal > 1 ? "s" : ""} working — tap to show only those`}
                   onClick={() => toggleStatusFilter("coding")}>
-                  <Loader size={13} className="spin" />{codingTotal}
+                  <Loader size={13} className="spin" />{codingTotal} working
                 </button>
               )}
               {starredTotal > 0 && (
@@ -408,7 +419,7 @@ export function LauncherScreen(p: LauncherProps) {
                 <button className={`repo-group-stat starred${statusFilterActive("starred") ? " on" : ""}`}
                   title={`${starredTotal} starred session${starredTotal > 1 ? "s" : ""} — tap to show only those`}
                   onClick={() => toggleStatusFilter("starred")}>
-                  <Star size={13} fill="currentColor" />{starredTotal}
+                  <Star size={13} fill="currentColor" />{starredTotal} starred
                 </button>
               )}
               {flaggedTotal && (
@@ -418,7 +429,7 @@ export function LauncherScreen(p: LauncherProps) {
                 <button className={`repo-group-stat fu-${flaggedTotal.tone}${statusFilterActive("followup") ? " on" : ""}`}
                   data-hint="session.followup" title={flaggedChipTitle(flaggedTotal.n)}
                   onClick={() => toggleStatusFilter("followup")}>
-                  <Flag size={13} fill="currentColor" />{flaggedTotal.n}
+                  <Flag size={13} fill="currentColor" />{flaggedTotal.n} flagged
                 </button>
               )}
               {shellsTotal > 0 && (
@@ -429,7 +440,7 @@ export function LauncherScreen(p: LauncherProps) {
                 <button className={`repo-group-stat coding${statusFilterActive("shells") ? " on" : ""}`}
                   title={`${shellsTotal} session${shellsTotal > 1 ? "s" : ""} running background shells — tap to show only those`}
                   onClick={() => toggleStatusFilter("shells")}>
-                  <SquareTerminal size={13} />{shellsTotal}
+                  <SquareTerminal size={13} />{shellsTotal} with shells
                 </button>
               )}
               {sessionOrder.length > 0 && <button className="head-act" aria-label="reset order" title="reset order — drop the custom order and go back to creation order" onClick={() => { track("action:session.order.reset"); resetSessionOrder(); showToast("order reset to oldest-first"); }}><ListRestart size={ICON} /></button>}
@@ -448,7 +459,11 @@ export function LauncherScreen(p: LauncherProps) {
               {/* The three verbs that are about the SET of repos, not one of
                   them — they headed the repos section that this list absorbed,
                   and there is nowhere else for them to be. */}
-              <button className="head-act" aria-label="fan out" title="fan out — run one prompt in several repos at once (a fresh session each)" onClick={() => { track("overlay:fanout"); setOverlay("fanout"); }}><Split size={ICON} /></button>
+              {/* Worded keys (spec §1 head row 2): Fan out, Waiting work, Find repos,
+                  Close sessions, Search — each says the screen it opens. */}
+              <button className="head-act head-act-wide" title="fan out — run one prompt in several repos at once (a fresh session each)" onClick={() => { track("overlay:fanout"); setOverlay("fanout"); }}><Split size={ICON} />Fan out</button>
+              <button className="head-act head-act-wide" title="waiting work — what is running, queued, in a backlog or scheduled"
+                onClick={() => { track("overlay:activity"); openActivity(null); }}><ListOrdered size={ICON} />Waiting work</button>
               {/* The schedules button, and what it is holding.
                   A bare calendar icon says a schedule list exists; it never
                   said whether anything was about to happen. "7 scheduled"
@@ -457,23 +472,27 @@ export function LauncherScreen(p: LauncherProps) {
                   are opposite situations. So the chip carries the HORIZON
                   (`scheduleHorizon`, node-tested): the two nearest non-empty
                   buckets, disjoint, and nothing at all when nothing is armed. */}
-              <button className={`head-act${scheduleWords ? " head-act-wide" : ""}`} aria-label={SHEET.automation.toLowerCase()}
-                // The number is the filter: open the list already cut to the
-                // bucket the chip is counting. With nothing armed there is no
-                // number and no claim to check, so it opens whole.
-                title={scheduleTitle} onClick={() => { track("overlay:schedule"); openSchedules(scheduleWords ? scheduleLead : null); }}>
-                <CalendarClock size={ICON} />{scheduleWords && <span className="head-act-n">{scheduleWords}</span>}
-              </button>
-              <button className="head-act" aria-label="sync repos" title="sync repos — pull, push or sync every repo at once" onClick={() => { track("overlay:reposync"); setOverlay("reposync"); }}><ArrowDownUp size={ICON} /></button>
-              <button className="head-act" aria-label="rescan repos" title="rescan the host root for repos and worktrees" onClick={() => { refreshRepos(); void scanPlainFolders().then((n) => showToast(n ? `repos rescanned — ${n} folder${n === 1 ? "" : "s"} without git, see above the list` : "repos rescanned")); }}><RotateCw size={ICON} /></button>
-              {visibleSessions.some((s) => !s.running && !listedBlockOf(s)) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
-              {visibleSessions.length > 0 && (
-                <button className="head-act danger" data-hint="session.close.all" aria-label="close sessions"
-                  title={`close sessions — review the ${visibleSessions.length} listed, cut by state, idle time, what is still running underneath, or a repo`}
-                  onClick={() => setCloseAllPick("*")}>
-                  <X size={ICON} />
+              {scheduleWords && (
+                <button className="head-act head-act-wide"
+                  // The number is the filter: open the list already cut to the
+                  // bucket the chip is counting. With nothing scheduled there is no
+                  // chip: the Waiting work key above opens the whole list.
+                  title={scheduleTitle} onClick={() => { track("overlay:schedule"); openSchedules(scheduleLead); }}>
+                  <CalendarClock size={ICON} /><span className="head-act-n">{scheduleWords}</span>
                 </button>
               )}
+              <button className="head-act" aria-label="sync repos" title="sync repos — pull, push or sync every repo at once" onClick={() => { track("overlay:reposync"); setOverlay("reposync"); }}><ArrowDownUp size={ICON} /></button>
+              <button className="head-act head-act-wide" title="find repos — look again for repos and branch copies under the code folder" onClick={() => { refreshRepos(); void scanPlainFolders().then((n) => showToast(n ? `Looked for repos: ${n} folder${n === 1 ? "" : "s"} without git, see above the list` : "Looked for repos: the list is up to date")); }}><RotateCw size={ICON} />Find repos</button>
+              {visibleSessions.some((s) => !s.running && !listedBlockOf(s)) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
+              {visibleSessions.length > 0 && (
+                <button className="head-act head-act-wide danger" data-hint="session.close.all"
+                  title={`close sessions — review the ${visibleSessions.length} listed, cut by state, idle time, what is still running underneath, or a repo`}
+                  onClick={() => setCloseAllPick("*")}>
+                  <X size={ICON} />Close sessions
+                </button>
+              )}
+              <button className="head-act head-act-wide" title="search what the sessions said — every transcript, on the desktop"
+                onClick={() => { track("action:launcher.search.key"); openSearch(null); }}><Search size={ICON} />Search</button>
               </span>
             </div>
           )}
@@ -532,7 +551,7 @@ export function LauncherScreen(p: LauncherProps) {
         <div className="section section-head">
           <span>External claude processes</span>
           <button className="head-act" title="back to the sessions this app started"
-            onClick={() => setTab("home")}><ListTodo size={13} /> local</button>
+            onClick={() => setTab("home")}><House size={13} /> On this desktop</button>
         </div>
         {visibleExternal.length === 0 && <Empty>No `claude` running outside {BRAND.name}. Started one in a terminal? It shows here.</Empty>}
         {visibleExternal.map((e) => (

@@ -18,6 +18,7 @@ import { AtSign, BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPa
 import type { ComponentType } from "react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
+import { TITLE } from "./sheetNames";
 
 /** Customizable terminal-toolbar actions (order = display order). */
 // Leading dynamic chips (new-outbox/untracked counts, the installed plugins'
@@ -77,61 +78,71 @@ export interface ToolbarItem { id: string; name: string; Icon: LucideIcon | Comp
 export const TOOLBAR_ITEMS: ToolbarItem[] = [
   // id stays "inbox" — it is persisted in every device's toolbar order/hidden
   // config; only what it counts (the outbox) and how it reads changed.
-  { id: "inbox", name: "new files", Icon: Images },
+  { id: "inbox", name: "New files", Icon: Images },
   // id stays "untracked" — persisted in every device's toolbar order/hidden
   // config; only what it counts (every uncommitted change, not just the new
   // files) and how it reads changed.
-  { id: "untracked", name: "changed files", Icon: FileDiff },
+  { id: "untracked", name: "Changed files", Icon: FileDiff },
   // Every active plugin's per-session switches and actions (features/plugins).
-  { id: "plugins", name: "plugins", Icon: Puzzle },
-  { id: "limit", name: "auto-continue", Icon: Hourglass },
-  { id: "model", name: "model", Icon: Brain },
+  { id: "plugins", name: "Plugins", Icon: Puzzle },
+  { id: "limit", name: "Auto-continue", Icon: Hourglass },
+  { id: "model", name: "Switch model", Icon: Brain },
   // Shell sessions only (ToolbarMenu draws it for nothing else): the logins cheat sheet.
-  { id: "logins", name: "logins", Icon: BookKey },
-  { id: "cmd", name: "cmd", Icon: Slash },
-  { id: "image", name: "image", Icon: Camera },
-  { id: "file", name: "attach file", Icon: Paperclip },
+  { id: "logins", name: "Logins", Icon: BookKey },
+  { id: "cmd", name: "Slash commands", Icon: Slash },
+  { id: "image", name: "Take photo", Icon: Camera },
+  { id: "file", name: "Attach file", Icon: Paperclip },
   // "files" opens the artifact GALLERY and "browse" the repo TREE — two
   // different sheets, and while both wore `Images` the only thing telling them
   // apart in a row of icons was their position. The id stays "files" (it is
   // persisted in every device's order/hidden/pinned arrays); only the label and
   // the icon move.
-  { id: "files", name: "gallery", Icon: GalleryVerticalEnd },
-  { id: "browse", name: "browse files", Icon: FolderTree },
-  { id: "diff", name: "diff", Icon: GitBranch },
-  { id: "build", name: "build", Icon: Hammer },
-  { id: "ctx", name: "ctx", Icon: Gauge },
-  { id: "usage", name: "usage", Icon: CircleDollarSign },
-  { id: "cpu", name: "cpu", Icon: Cpu },
-  { id: "clip", name: "to host clip", Icon: ClipboardPaste },
-  { id: "select", name: "select", Icon: Copy },
+  { id: "files", name: "Images & documents", Icon: GalleryVerticalEnd },
+  { id: "browse", name: "Browse files", Icon: FolderTree },
+  { id: "diff", name: "Changes", Icon: GitBranch },
+  { id: "build", name: "Build", Icon: Hammer },
+  { id: "ctx", name: "Context window & cost", Icon: Gauge },
+  { id: "usage", name: "Run /usage", Icon: CircleDollarSign },
+  { id: "cpu", name: "Computer load", Icon: Cpu },
+  { id: "clip", name: "To desktop clipboard", Icon: ClipboardPaste },
+  { id: "select", name: "Select text", Icon: Copy },
   // This session's reference (peer name, folder, conversation id) to the
   // phone's clipboard — to point another session at this one. Picked text
   // goes with it from the pick bar and the text sheet (features/clipboard).
-  { id: "copyref", name: "copy reference", Icon: AtSign },
-  { id: "decide", name: "answer list", Icon: MessageSquareReply },
-  { id: "teleport", name: "teleport", Icon: Waypoints },
-  { id: "remote", name: "remote", Icon: Radio },
-  { id: "tasks", name: "tasks", Icon: ListChecks },
-  { id: "backlog", name: "backlog", Icon: ListTodo },
-  { id: "history", name: "history", Icon: History },
-  { id: "outline", name: "outline", Icon: List },
-  { id: "sent", name: "sent", Icon: MessageSquare },
-  { id: "find", name: "find", Icon: Search },
-  { id: "refresh", name: "refresh reader", Icon: RotateCw },
-  { id: "scrollback", name: "scrollback", Icon: ScrollText },
-  { id: "fork", name: "fork", Icon: GitFork },
+  { id: "copyref", name: "Copy reference", Icon: AtSign },
+  { id: "decide", name: "Answer the list", Icon: MessageSquareReply },
+  { id: "teleport", name: "Teleport", Icon: Waypoints },
+  { id: "remote", name: "Remote control", Icon: Radio },
+  { id: "tasks", name: "Tasks", Icon: ListChecks },
+  { id: "backlog", name: TITLE.waiting, Icon: ListTodo },
+  { id: "history", name: "History", Icon: History },
+  { id: "outline", name: "Outline", Icon: List },
+  { id: "sent", name: "Sent commands", Icon: MessageSquare },
+  { id: "find", name: "Search", Icon: Search },
+  { id: "refresh", name: "Refresh reader", Icon: RotateCw },
+  { id: "scrollback", name: "Scrollback", Icon: ScrollText },
+  { id: "fork", name: "Fork", Icon: GitFork },
   // A temporary shell in this session's folder, closed WITH the session (host
   // `companionOf`). Not drawn on a shell session, nor where the host has no shell.
-  { id: "companion", name: "companion shell", Icon: SquareTerminal },
-  { id: "star", name: "star", Icon: Star },
-  { id: "followup", name: "flag for follow up", Icon: Flag },
+  { id: "companion", name: "Companion shell", Icon: SquareTerminal },
+  { id: "star", name: "Star", Icon: Star },
+  { id: "followup", name: "Flag for follow up", Icon: Flag },
   // A bookmark on the CONVERSATION (R-conversations-007): the way back to it in
   // the archive after it is closed. In the menu, not pinned out of the box —
   // the header is full; pinning it is the person's call. Drawn by
   // `core/sessions/bookmark.tsx` (its own state, its note).
-  { id: "bookmark", name: "bookmark", Icon: Bookmark },
+  { id: "bookmark", name: "Bookmark", Icon: Bookmark },
 ];
+
+/** D9: the ☰ is a worded list under four headings. An id not listed falls under Session. */
+export const TOOLBAR_GROUPS = ["Read", "Send", "Files", "Session"] as const;
+export type ToolbarGroup = (typeof TOOLBAR_GROUPS)[number];
+const GROUP_OF: Record<string, ToolbarGroup> = {
+  outline: "Read", history: "Read", scrollback: "Read", find: "Read", refresh: "Read",
+  cmd: "Send", model: "Send", decide: "Send", image: "Send", file: "Send",
+  files: "Files", browse: "Files", diff: "Files", untracked: "Files", inbox: "Files", build: "Files", clip: "Files", select: "Files", copyref: "Files",
+};
+export const toolbarGroup = (id: string): ToolbarGroup => GROUP_OF[id] ?? "Session";
 
 let contributed: () => readonly ToolbarItem[] = () => [];
 /**

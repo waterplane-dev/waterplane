@@ -35,7 +35,7 @@ import { WHICH_MAX, queueFoldKey, sendingLabel, whichWords } from "./logic.ts";
 import type { QueueApi } from "./useQueue.ts";
 import type { Connection } from "../conn/useConnection";
 import { Button } from "../../kit/Button";
-import { SHEET } from "../../sheetNames";
+import { SHEET, TITLE } from "../../sheetNames";
 import { Stowable, StowButton } from "../../Stowable";
 
 /** Stop a tap from blurring the compose box (which would dismiss the keyboard). */
@@ -60,11 +60,18 @@ export interface QueueBarsProps {
    * *Send now*, so it steps aside.
    */
   stripSessionId?: string;
+  /**
+   * The create behind a PENDING screen (its ackId). That screen's line already says where the open
+   * is and when what is written goes in (`TermArea.tsx` `.term-pending`), so while every row this
+   * bar would count is that create or a prompt chained behind it, the bar keeps its buttons and
+   * drops its icon and sentence — the owner's 11-18 screenshot said the same fact five times.
+   */
+  cardAck?: string;
 }
 
 export function QueueBars(props: QueueBarsProps) {
   const {
-    q, status, reconnectAsk, setReconnectAsk, autoSend, confirmQueue, pullRecords, setOverlay, stripSessionId,
+    q, status, reconnectAsk, setReconnectAsk, autoSend, confirmQueue, pullRecords, setOverlay, stripSessionId, cardAck,
   } = props;
   const { entries: outbox, parkedSends, sendSettled, holdQueueRef, flushIdleReason, flushOutbox, idleReason,
     restoreOutbox, dismissOutbox, laneLabel } = q;
@@ -104,6 +111,9 @@ export function QueueBars(props: QueueBarsProps) {
   const queued = covered ? [] : queuedAll;
   const flying = outbox.filter((e) => e.status === "pending" || retrying(e));
   const inFlight = flying.length > 0;
+  const saidByCard = (e: OutboxEntry) => !!cardAck && (e.ackId === cardAck || e.createAck === cardAck);
+  const quiet = !!cardAck && !failed.length && !confirming.length && queued.length + flying.length > 0
+    && queued.every(saidByCard) && flying.every(saidByCard);
   const asking = reconnectAsk && parkedSends.length > 0;
   // The auto-download queue rides the same strip: it is the same kind of fact
   // ("work is in flight that you didn't have to watch"), just in the other
@@ -178,7 +188,7 @@ export function QueueBars(props: QueueBarsProps) {
       {(failed.length > 0 || confirming.length > 0 || queued.length > 0 || inFlight) && (
         <Stowable slot="queue" stowKey={queueFoldKey(standing.rows, failed.length > 0)} label={standing.label}
           detail={String(standing.rows.length)} icon={standing.icon}>
-        <div className={`outbox-recover ${failed.length ? "failed" : confirming.length ? "confirming" : queued.length ? "queued" : "sending"}`}>
+        <div className={`outbox-recover ${failed.length ? "failed" : confirming.length ? "confirming" : queued.length ? "queued" : "sending"}${quiet ? " quiet" : ""}`}>
           {failed.length > 0 ? (
             <>
               <AlertTriangle size={14} />
@@ -188,10 +198,10 @@ export function QueueBars(props: QueueBarsProps) {
                   "2 messages not delivered" would go on to give one of the two
                   a reason that did not apply to the other, and the count and
                   the sentence contradicted each other. Several rows have
-                  several reasons; that list is Manage. */}
+                  several reasons; that list is Waiting work (its Activity tab, cut to these rows). */}
               <span>{failed.length} message{failed.length > 1 ? "s" : ""} not delivered{failed.length === 1 && failed[0].reason ? ` — ${failed[0].reason}` : ""}</span>
               <Button onPointerDown={keepFocus} onClick={restoreOutbox}><RotateCw size={14} /> Restore</Button>
-              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(failed, "the messages that were not delivered"); }}><ListOrdered size={14} /> Manage</Button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(failed, "the messages that were not delivered"); }}><ListOrdered size={14} /> {TITLE.waiting}</Button>
               <Button onPointerDown={keepFocus} onClick={dismissOutbox}><X size={14} /> Dismiss</Button>
               <StowButton />
               {/* WHICH ones. A count with no names is the whole complaint
@@ -241,13 +251,14 @@ export function QueueBars(props: QueueBarsProps) {
               {/* The icon is the CAUSE, as the sentence beside it is. A cloud
                   with a slash read "no connection" over a queue that was only
                   waiting for a turn to end, on a phone that was online. */}
-              {status !== "open" ? <CloudOff size={14} /> : holdQueueRef.current ? <Pause size={14} /> : <Hourglass size={14} />}
+              {quiet ? null : status !== "open" ? <CloudOff size={14} /> : holdQueueRef.current ? <Pause size={14} /> : <Hourglass size={14} />}
               {/* With the link up, "going out one per session" was said
                   whether or not anything was actually going out — the same
                   lie the toast told. If the last flush refused to send, say
                   what refused it. */}
-              <span>{queued.length} queued{holdQueueRef.current ? " — held until you send them" : status !== "open" ? " — will send when the connection is back" : inFlight ? " — going out one per session" : flushIdleReason.current ? ` — ${flushIdleReason.current}` : " — going out one per session"}</span>
-              <Button onPointerDown={keepFocus} onClick={() => { track("action:outbox.retry"); const n = flushOutbox(true); if (!n) showToast(idleReason("nothing left to send")); }}><RotateCw size={14} /> Send now</Button>
+              {!quiet && <span>{queued.length} queued{holdQueueRef.current ? " — held until you send them" : status !== "open" ? " — will send when the connection is back" : inFlight ? " — going out one per session" : flushIdleReason.current ? ` — ${flushIdleReason.current}` : " — going out one per session"}</span>}
+              {/* Quiet and offline, Send now has nothing it could do — the line above says when it goes. */}
+              {!(quiet && status !== "open") && <Button onPointerDown={keepFocus} onClick={() => { track("action:outbox.retry"); const n = flushOutbox(true); if (!n) showToast(idleReason("nothing left to send")); }}><RotateCw size={14} /> Send now</Button>}
               {/* "Send it the moment the link is back" as ONE control, right
                   where the waiting is visible. It drives both switches that
                   decide it — auto-send, and the ask-on-reconnect confirmation
@@ -258,7 +269,7 @@ export function QueueBars(props: QueueBarsProps) {
                   Online with nothing held, the queue is already going out and
                   "auto on" beside "held until the turn ends" read as a switch
                   for that wait, which it is not. */}
-              {(status !== "open" || holdQueueRef.current || !(autoSend && !confirmQueue)) && <Button className={autoSend && !confirmQueue ? "active" : ""} onPointerDown={keepFocus}
+              {!cardAck && (status !== "open" || holdQueueRef.current || !(autoSend && !confirmQueue)) && <Button className={autoSend && !confirmQueue ? "active" : ""} onPointerDown={keepFocus}
                 title={autoSend && !confirmQueue
                   ? "queued messages go out by themselves as soon as the connection is back — tap to hold them instead"
                   : "send everything queued the moment the connection is back, without asking"}
@@ -270,12 +281,12 @@ export function QueueBars(props: QueueBarsProps) {
                   setPref("confirmQueue", !on);
                   if (on) { holdQueueRef.current = false; setReconnectAsk(false); flushOutbox(); }
                   showToast(on ? "auto-send on — the queue goes out as soon as the link is back" : "auto-send off — the queue waits for “Send now”");
-                }}><Zap size={14} /> auto {autoSend && !confirmQueue ? "on" : "off"}</Button>}
+                }}><Zap size={14} /> auto-send {autoSend && !confirmQueue ? "on" : "off"}</Button>}
               {/* A count is a filter: "2 queued" opens those two. Unfiltered it
                   opened all ~200 rows, ranked with the queued ones under every
                   failed and needs-you row — the words just sent were nowhere
                   on the first screen. */}
-              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> Manage</Button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> {TITLE.waiting}</Button>
               <StowButton />
             </>
           ) : (
@@ -286,9 +297,9 @@ export function QueueBars(props: QueueBarsProps) {
             // past the ack window it says what happens next rather than
             // leaving the spinner to imply forever.
             <>
-              <Loader size={14} className="spin" />
-              <span>{sendingLabel(flying)}</span>
-              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> Manage</Button>
+              {!quiet && <Loader size={14} className="spin" />}
+              {!quiet && <span>{sendingLabel(flying)}</span>}
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> {TITLE.waiting}</Button>
               <StowButton />
             </>
           )}

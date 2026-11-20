@@ -264,25 +264,6 @@ signing key), and send the person to the Android apps extension's screen: each a
 shows the three steps (build, download, install), which happen by themselves,
 and a button for the first one that does not.
 
-## Screenshots of what you built
-
-If \`${D}/capture.json\` has targets (\`{ "version": 1, "targets": [ … ] }\`, each
-with an \`id\`, a \`name\` and a \`backend\` such as a browser URL or an Android
-device), ${N} can screenshot the running app, wait for it to settle, and write
-the frame plus a JSON sidecar into \`.claude/outbox/capture-*\`. Trigger it
-without spending tokens on the image:
-
-\`\`\`sh
-curl -s -X POST ${base}/api/repos/<repoId>/capture/run \\
-  -H 'content-type: application/json' -d '{"target":"<targetId>","wait":true}'
-\`\`\`
-
-\`<repoId>\` comes from \`curl -s ${base}/api/repos\`. The answer is a sentence and
-a verdict, not a picture — read that first, and look at the image only when
-the words cannot settle it (each image you look at is re-sent on every
-remaining turn). Where capture is configured and the setup fix installed it, the
-\`visual-check\` skill in this repo has the full ladder.
-
 ## Work for later: a timed, chained or new-session prompt, or a backlog item
 
 When the person asks for work LATER — "run this 3 h before the weekly reset",
@@ -353,6 +334,19 @@ curl -s -X POST ${base}/api/agent/followup -H 'content-type: application/json' \
 \`\`\`
 
 Your own session id is in \`$${SESSION_ID_ENV}\`: when two sessions share the folder, add \`"session"\` set to it.
+
+## Usage and the weekly budget
+
+You CAN read the account's usage meter, the same reading the phone shows (read-only, starts no probe):
+
+\`\`\`sh
+curl -s ${base}/api/usagenow
+\`\`\`
+
+\`usage.weeklyPct\` / \`usage.sessionPct\` are percent used, \`weeklyResetAt\` / \`sessionResetAt\` epoch ms, and
+\`checkedAt\` when the host last read them. \`null\` means not known, never 0. \`budget.weeklyMax\` is the owner's own
+stop line, if set. When asked to stop at N% of the week, check this between work packages (never in a tight loop)
+and stop starting new ones once \`weeklyPct\` reaches N; if it stays \`null\`, say so instead of guessing.
 
 ## Crash and exposure findings
 

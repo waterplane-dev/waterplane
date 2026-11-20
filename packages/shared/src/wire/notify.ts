@@ -229,10 +229,10 @@ export function parseAttentionKey(key: string | null | undefined): AttentionKey 
   if (typeof key !== "string") return null;
   const m = /^(git|build|pr):(.+):([^:]+)$/.exec(key);
   if (!m) return null;
-  if (m[1] === "build") return { kind: "build", repoId: m[2], buildId: m[3] };
+  if (m[1] === "build") return { kind: "build", repoId: m[2]!, buildId: m[3]! };
   // A PR number is a positive integer written without a leading zero, so the key round-trips.
-  if (m[1] === "pr") return /^[1-9]\d*$/.test(m[3]) ? { kind: "pr", repoId: m[2], number: Number(m[3]) } : null;
-  return m[3] === "pull" || m[3] === "push" ? { kind: "git", repoId: m[2], verb: m[3] } : null;
+  if (m[1] === "pr") return /^[1-9]\d*$/.test(m[3]!) ? { kind: "pr", repoId: m[2]!, number: Number(m[3]!) } : null;
+  return m[3] === "pull" || m[3] === "push" ? { kind: "git", repoId: m[2]!, verb: m[3] } : null;
 }
 
 /** The `key` a failed pull or push of one repo/worktree is filed under —
@@ -376,6 +376,9 @@ export type NotifyOpen =
   | { to: "build"; repoId: string; buildId?: string }
   /** That repo's readings sheet, on the exposure watch region. */
   | { to: "setup"; repoId: string }
+  /** That repo's assessment sheet, on the run that just ended (`runId`, when the host names it) —
+   *  the proposal to approve, or the failure's detail. Opening it buys nothing: the sheet only reads. */
+  | { to: "assess"; repoId: string; runId?: string }
   /** The blocked-sessions sheet (`signin`: the account's sign-in episode). An older phone falls
    *  back to the alert's own row. */
   | { to: "blocked" };

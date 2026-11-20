@@ -13,7 +13,7 @@ import { cleanDraft } from "./keys.ts";
 import { cleanChoice, type QualityChoice } from "./quality.ts";
 import { SHOT_BUSY, SHOT_NO_REPO, SHOT_OFFLINE, entryAvailability, shotReceipt, type ProbeState } from "./words.ts";
 
-export const DESKTOP_SHEET = featureSheetId("desktop", "view");
+const DESKTOP_SHEET = featureSheetId("desktop", "view");
 /** `DesktopMethods` is an interface (no implicit index signature); its mapped copy satisfies `PluginMethods`. */
 type Methods = { [K in keyof DesktopMethods]: DesktopMethods[K] };
 export const client = pluginClient<Methods>(PLUGIN_ID);
@@ -139,7 +139,7 @@ export interface ShotState {
 }
 export const shot = createStore<ShotState>({ busy: false, line: null, file: null });
 /** How long a receipt stays: long enough to read and tap open, then the line gives its room back. */
-export const SHOT_LINE_MS = 15_000;
+const SHOT_LINE_MS = 15_000;
 let shotTimer: ReturnType<typeof setTimeout> | null = null;
 
 function shotLine(next: ShotState): void {

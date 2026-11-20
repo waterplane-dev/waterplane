@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 import {
   SETTING_GROUPS, SETTING_ROWS, addSettingRows, filterSummary, groupMatches, groupShown, rowMatches, rowShown, settingRow,
   nestedMatches, setRowWords, wordsMatch, PLUGIN_SCOPE, pluginScopeOf, scopeRowIds, setPluginName,
+  sectionOfFeatureRow, sectionOfGroup, FEATURE_ROW_SECTION, screenResults,
 } from "./settingsIndex.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -139,7 +140,7 @@ test("a group's own words never match its rows wholesale", () => {
 test("a group's TITLE does match its rows — searching a group name asks for the group", () => {
   const inGroup = (g) => SETTING_ROWS.filter((r) => r.group === g).map((r) => r.id);
   for (const id of inGroup("notifications")) assert.ok(rowMatches(id, "notifications"), id);
-  for (const id of inGroup("appearance")) assert.ok(rowMatches(id, "appearance"), id);
+  for (const id of inGroup("appearance")) assert.ok(rowMatches(id, "look and feel"), id);
 });
 
 test("settingRow answers with the row's own metadata", () => {
@@ -216,8 +217,11 @@ test("every feature settings row sits in the group its manifest declares", () =>
     const block = src.slice(at, src.indexOf("\n  ],", at));
     const from = Object.fromEntries([...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(\.\/[^"]+)"/g)]
       .flatMap((m) => m[1].split(",").map((s) => [s.trim(), m[2]])));
-    for (const [, group, comp] of block.matchAll(/\{\s*group:\s*"([\w-]+)"[^}]*?createElement\((\w+)\)/g)) {
+    let index = 0;
+    for (const [, declared, comp] of block.matchAll(/\{\s*group:\s*"([\w-]+)"[^}]*?createElement\((\w+)\)/g)) {
       decls++;
+      // The section the screen draws it in: the manifest group's, unless FEATURE_ROW_SECTION moves it.
+      const group = sectionOfFeatureRow(`${name}:${index++}`, declared);
       assert.ok(from[comp], `features/${name}/index.ts renders ${comp}, imported from nowhere this test can read`);
       const file = join(featDir, name, `${from[comp].replace(/^\.\//, "").replace(/\.tsx?$/, "")}.tsx`);
       const ids = idsDrawnBy(readFileSync(file, "utf8"), comp);
@@ -281,7 +285,9 @@ test("an extension's catalogued row is found, and keeps its group's heading up",
   addSettingRows([{ id: "test-ext-vault", group: "tools", label: "vault", keywords: "secret fingerprint" }]);
   assert.equal(rowMatches("test-ext-vault", "vaul"), true);
   assert.equal(rowMatches("test-ext-vault", "fingerprint"), true);
-  assert.equal(groupMatches("tools", "vaul"), true);
+  // A retired group ("tools") lands in its section (`sectionOfGroup`).
+  assert.equal(settingRow("test-ext-vault").group, "connection");
+  assert.equal(groupMatches("connection", "vaul"), true);
   assert.equal(groupMatches("sessions", "vaul"), false);
   // A core id is never overridden by an extension claiming it.
   addSettingRows([{ id: "theme", group: "tools", label: "not the theme" }]);
@@ -292,7 +298,7 @@ test("run-time words find the plugins row, and are replaced whole", () => {
   assert.equal(rowMatches("plugins", "sensors"), false);
   setRowWords("plugins", "Mac sensors CPU/GPU temperature");
   assert.equal(rowMatches("plugins", "sensors"), true);
-  assert.equal(groupMatches("tools", "mac sens"), true);
+  assert.equal(groupMatches("connection", "mac sens"), true);
   setRowWords("plugins", "");
   assert.equal(rowMatches("plugins", "sensors"), false);
 });
@@ -369,11 +375,54 @@ test("a plugin scope pins the plugins row plus the rows its extension contribute
   assert.equal(rowShown("token-stats", "", `${PLUGIN_SCOPE}token-stats`), true);
   for (const id of ["plugins", "scope-ext-a", "scope-ext-a2"]) assert.equal(rowShown(id, "", pin), true, id);
   for (const id of ["theme", "scope-ext-b"]) assert.equal(rowShown(id, "", pin), false, id);
-  assert.equal(groupShown("tools", "", pin), true);
+  assert.equal(groupShown("connection", "", pin), true);
   assert.equal(groupShown("appearance", "", pin), true);
   assert.equal(groupShown("sessions", "", pin), false);
   setPluginName("scopeext", "Scope Ext");
   assert.equal(filterSummary(3, 60, "", pin), "showing Scope Ext only — 3 of 60 settings");
   assert.match(filterSummary(0, 60, "", pin), /Scope Ext has no settings on this screen/);
   assert.equal(filterSummary(1, 60, "", "plugins"), "showing “plugins” only — 1 of 60 settings", "a row pin reads as before");
+});
+
+// ── six task sections and search over screens (whole-app journey spec D6, T21) ──
+
+test("Settings is six sections named after a task; the retired groups land in one of them", () => {
+  assert.deepEqual(SETTING_GROUPS.map((g) => g.title),
+    ["Start sessions", "Notifications", "Look and feel", "Phone and offline", "Desktops and connection", "Limits and cost"]);
+  assert.equal(sectionOfGroup("writing"), "appearance");
+  assert.equal(sectionOfGroup("tools"), "connection");
+  for (const [key, sec] of Object.entries(FEATURE_ROW_SECTION)) {
+    assert.match(key, /^[\w-]+:\d+$/, key);
+    assert.ok(SETTING_GROUPS.some((g) => g.id === sec), `${key} names section ${sec}`);
+  }
+  assert.equal(settingRow("theme").group, "appearance");
+  assert.equal(settingRow("token-stats").group, "limits");
+  assert.equal(settingRow("tool-repo-setup").group, "sessions");
+});
+
+test("the sheet opens with every section folded, and a query or a pin unfolds them", () => {
+  const sheet = readFileSync(SHEET, "utf8");
+  assert.match(sheet, /useState<ReadonlySet<SettingsSectionId>>\(\(\) => new Set\(\)\)/, "no section starts open");
+  const groups = [...sheet.matchAll(/<SetGroup\s+id="([^"]+)"[^>]*\{\.\.\.fold\("([^"]+)"\)\}/g)];
+  assert.equal(groups.length, 6, "every section folds");
+  for (const [, id, f] of groups) assert.equal(id, f, `section ${id} folds itself`);
+  const kit = readFileSync(join(here, "SettingsKit.tsx"), "utf8");
+  assert.match(kit, /const narrowed = !!ctx && \(!!ctx\.only \|\| ctx\.query\.trim\(\) !== ""\)/);
+  assert.match(kit, /data-set-id=\{id\}/, "a row carries its id, so a search result can jump to it");
+});
+
+test("search finds screens by title, tab and the words a person types, and says where else they live", async () => {
+  const { SEARCH_DOORS, SCREEN_WORDS } = await import("./doors/settings.ts");
+  const all = [{ label: "Images & documents", from: "home menu", to: "gallery", title: "Images & documents" }, ...SEARCH_DOORS];
+  const names = (q) => screenResults(q, SEARCH_DOORS, SCREEN_WORDS, all).map((r) => r.name);
+  assert.deepEqual(names(""), []);
+  assert.deepEqual(names("backlog"), ["Waiting work › Backlog"]);
+  assert.ok(names("waiting").length === 4, "every tab of Waiting work");
+  assert.deepEqual(names("token usage"), ["Token usage"]);
+  assert.deepEqual(names("photos"), ["Images & documents"]);
+  assert.deepEqual(names("speed"), ["Connection › Speed test"]);
+  assert.deepEqual(names("theme"), [], "a setting is not a screen");
+  const g = screenResults("photos", SEARCH_DOORS, SCREEN_WORDS, all)[0];
+  assert.equal(g.where, "Home menu");
+  assert.equal(screenResults("archive", SEARCH_DOORS, SCREEN_WORDS, all)[0].where, null);
 });

@@ -15,7 +15,6 @@ import { createServer } from "node:net";
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tailscaleBin, serveHttpsUrl, lanIps } from "./net.js";
-import { probeCaptureBackends } from "./capture.js";
 import { dictateStatusLive } from "./dictate.js";
 import { builtinDoctorChecks, externalDoctorChecks } from "./plugins/builtin.js";
 import { hostSecretDir } from "./secrets.js";
@@ -179,44 +178,10 @@ async function checkPtyCapacity(): Promise<Check> {
 }
 
 /**
- * Which capture backends this desktop can drive — informational, always `ok`.
- *
- * NEVER `warn` and never `fail`, and that is the whole design of this line. A
- * capture backend nobody has configured a target for is not a problem: no
- * Playwright on a machine that drives a watch simulator is the correct state,
- * and a report whose value rests on every line being actionable must not spend
- * one saying "something is missing" about something nobody asked for. The
- * refusal that DOES matter is the one at run time, in words naming the fix,
- * where a person has just tapped a target that cannot run
- * (`probeCaptureBackends` answers that sentence too).
- *
- * Host-scoped on purpose: no repo dir is passed, so `web` reports on the host's
- * own `node_modules`. Per-REPO availability is `capture.list`'s answer, because
- * Playwright lives in the target repo.
- */
-async function checkCapture(): Promise<Check> {
-  // The kill switch answers for all four at once, and it gets its own sentence:
-  // four rows of "not set up here" about backends that are installed and simply
-  // switched off would be four wrong answers rather than one right one.
-  if (env("CAPTURE") === "0") {
-    return { id: "capture", status: "ok", detail: `switched off on this host (${envName("CAPTURE")}=0) — no capture target can run` };
-  }
-  const info = await probeCaptureBackends();
-  return {
-    id: "capture",
-    status: "ok",
-    // An available backend says HOW (which Playwright, which device); an absent
-    // one says only that it is absent, because its full reason is a sentence
-    // aimed at somebody who just tapped a target, and it is printed there.
-    detail: info.map((b) => `${b.id}: ${b.available ? (b.reason ?? "ok") : "not set up here"}`).join(" · "),
-  };
-}
-
-/**
  * Whether dictation has an engine on this desktop — informational, never a
  * failure.
  *
- * `checkCapture`'s posture, for the same reason: a desktop with no whisper
+ * Informational posture: a desktop with no whisper
  * model is not broken, it simply has no local transcriber, and the phone falls
  * back to the browser's own recogniser (or draws no microphone at all) with no
  * intervention. The line exists because the ABSENCE is invisible otherwise —
@@ -583,21 +548,37 @@ async function checkSecureContext(i: DoctorInput): Promise<Check> {
   };
 }
 
-/** Our own host answering on the port — right after `service install` that is the normal case. */
-async function ourHostOn(port: number): Promise<boolean> {
+/** What answers `/api/health` on the port: a host (with the code root it reports, when it does), or null. */
+async function hostOn(port: number): Promise<{ root: string | null } | null> {
   try {
     const r = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(1500) });
-    return r.ok && typeof (await r.json()) === "object";
-  } catch { return false; }
+    if (!r.ok) return null;
+    const body: unknown = await r.json();
+    if (!body || typeof body !== "object") return null;
+    const root = (body as { root?: unknown }).root;
+    return { root: typeof root === "string" && root ? root : null };
+  } catch { return null; }
 }
 
-async function checkPort(port: number, tailscaleIp: string | null): Promise<Check> {
+/**
+ * The port row's words when a host answers. Another user's daemon on the same machine answers
+ * the same way, so "is running" is only claimed when the host reports OUR code root; any other
+ * answer (a different root, or none reported) says only that a host answers, never whose it is.
+ */
+export function portHostDetail(port: number, answer: { root: string | null }, ourRoot: string): string {
+  if (answer.root && resolve(answer.root) === resolve(ourRoot)) return `the ${BRAND.displayName} host is running on port ${port}`;
+  const where = answer.root ? ` (code root ${answer.root}, not ${ourRoot})` : "";
+  return `a ${BRAND.displayName} host answers on port ${port}${where}`;
+}
+
+async function checkPort(port: number, tailscaleIp: string | null, root: string): Promise<Check> {
   // The host binds the Tailscale address too: another listener held only there (a second user's
   // host on the same machine) leaves loopback free and still stops this one from starting.
   const free = (await portFree(port)) && (!tailscaleIp || (await portFree(port, tailscaleIp, true)));
   if (free) return { id: "port", status: "ok", detail: `port ${port} is free` };
   // Not a conflict when it is this host: the installer runs doctor just after starting the service.
-  if (await ourHostOn(port)) return { id: "port", status: "ok", detail: `the ${BRAND.displayName} host is running on port ${port}` };
+  const answer = await hostOn(port);
+  if (answer) return { id: "port", status: "ok", detail: portHostDetail(port, answer, root) };
   return {
         id: "port",
         status: "warn",
@@ -690,23 +671,15 @@ export function androidChecks(r: AndroidEnvReport = probeAndroidEnv()): Check[] 
 /**
  * Run every check. `skipPort` when called from a host that already bound it.
  *
- * `skipCapture` is the boot path's, and it is there for the same shape of
- * reason: the capture probe shells out to four binaries — `adb devices` among
- * them, which STARTS the adb daemon — and the line it produces is always `ok`,
- * so `printBootSummary` (which prints only what is wrong) would throw it away.
- * Spawning an adb server on every `npm run restart` to compute a sentence
- * nobody reads is not a preflight. Asked for by name (`npm run doctor`), it
- * runs and prints.
- *
  * `skipNetwork` is the boot path's too: the self-update row is a request to the
  * release host, and a restart is not a reason to phone home. Asked for by name
  * (`<slug> doctor`), it runs.
  */
-export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = false, skipNetwork = false): Promise<Check[]> {
+export async function runChecks(i: DoctorInput, skipPort = false, skipNetwork = false): Promise<Check[]> {
   const native = nativeWindowsCheck(process.platform);
   if (native) return [native];
   const mac = process.platform === "darwin" ? await probeMac() : null;
-  const [node, ptyc, ptycap, claude, builtins, curl, git, tmux, capture, dictate, tskey, secure, port, wsl, selfUpdate] = await Promise.all([
+  const [node, ptyc, ptycap, claude, builtins, curl, git, tmux, dictate, tskey, secure, port, wsl, selfUpdate] = await Promise.all([
     checkNode(),
     checkPty(),
     checkPtyCapacity(),
@@ -715,11 +688,10 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     checkCurl(),
     checkGit(mac),
     checkTmux(),
-    skipCapture ? Promise.resolve(null) : checkCapture(),
     checkDictate(),
     checkTailscaleKey(i),
     checkSecureContext(i),
-    skipPort ? Promise.resolve(null) : checkPort(i.port, i.tailscaleIp),
+    skipPort ? Promise.resolve(null) : checkPort(i.port, i.tailscaleIp, i.root),
     checkWsl(i),
     skipNetwork ? Promise.resolve(null) : checkSelfUpdate(),
   ]);
@@ -734,7 +706,6 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     ...tmux,
     ...[mac ? macAdminCheck(mac) : null].filter((c): c is Check => c !== null),
     curl,
-    ...(capture ? [capture] : []),
     dictate,
     checkRoot(i.root, i.rootDefaulted, i.rootPicked),
     checkState(i.root),

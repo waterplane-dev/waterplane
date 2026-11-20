@@ -50,7 +50,7 @@ export interface QualityChoice {
   mode: InputMode;
 }
 
-export const DEFAULT_CUSTOM: CustomKnobs = {
+const DEFAULT_CUSTOM: CustomKnobs = {
   codec: "h264", res: "fit", fps: 15, bitrateKbps: 800, jpegQuality: 50, grayscale: false, keyframeEverySec: 0, cursor: true,
 };
 

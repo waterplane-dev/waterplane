@@ -49,7 +49,7 @@ new host modules since (`plugins/`, `pair.ts`, `envfiles.ts`, …) are flat modu
 **`main.ts`'s floor is 700, not 650.** What remains is exactly what the plan keeps in the entry
 point: imports (`env.ts` first), the constructions in boot order with the singleton registrations
 beside them, every `.start()` and its `DOCTOR` gate, the `ctx` assignments, the linger sweep, the
-`builds.on`/`capture.on` broadcasts, `handleClientMessage` and `main()` (bind selection, the
+`builds.on` broadcasts, `handleClientMessage` and `main()` (bind selection, the
 public-bind refusal, `createServer`, `attachWs`'s `new WebSocketServer`). None of it is a
 function a factory could own without taking the boot order with it, so the ratchet stops here
 rather than chasing the sketch's guess.
@@ -121,7 +121,7 @@ packages/host/src/
   sessions/          its slices, each over SessionCore
   intents/manager.ts the IntentManager FACADE                    intents/adapters.ts (unchanged)
   intents/           its slices, each over IntentCore
-  backends/, capture/  leaves (unchanged)
+  backends/            leaf (unchanged)
 ```
 
 Import direction, top to bottom; a cycle is forbidden at every level:
@@ -129,15 +129,15 @@ Import direction, top to bottom; a cycle is forbidden at every level:
 | file in | may import | may not |
 | --- | --- | --- |
 | `main.ts` | anything | — |
-| `server/**` | `server/ctx`, `server/<sibling>`; `routes` (the index); every flat module; `sessions`, `intents/manager`, `intents/adapters`; `backends`, `capture/` | a file INSIDE `sessions/` or `intents/` other than the two facades and `adapters` |
+| `server/**` | `server/ctx`, `server/<sibling>`; `routes` (the index); every flat module; `sessions`, `intents/manager`, `intents/adapters`; `backends` | a file INSIDE `sessions/` or `intents/` other than the two facades and `adapters` |
 | `routes/**` | flat modules; `sessions`; `intents/manager`, `intents/adapters`; `backends` | `server/**`, `main`; inner files of `sessions/` / `intents/` |
-| a flat `src/*.ts` (not `main.ts`) | flat modules; `sessions` (the facade); `intents/manager`, `intents/adapters`; `backends`, `capture/` | `server/**`, `main`, `routes/**`; inner files of `sessions/` / `intents/` |
+| a flat `src/*.ts` (not `main.ts`) | flat modules; `sessions` (the facade); `intents/manager`, `intents/adapters`; `backends` | `server/**`, `main`, `routes/**`; inner files of `sessions/` / `intents/` |
 | `sessions.ts` (facade) | every `sessions/<slice>`; flat modules; `backends` | `server/**`, `routes/**`, `main`, `intents/**` |
-| `sessions/<slice>` | `sessions/core`, `sessions/knobs`; flat modules; `backends`; packages | `sessions` (the facade — a cycle), any OTHER `sessions/<slice>`, `server/**`, `routes/**`, `main`, `intents/**` |
+| `sessions/<slice>` | `sessions/core`, `sessions/knobs`, `sessions/timers`; flat modules; `backends`; packages | `sessions` (the facade — a cycle), any OTHER `sessions/<slice>`, `server/**`, `routes/**`, `main`, `intents/**` |
 | `intents/manager.ts` (facade) | every `intents/<slice>`; packages | any host module outside `intents/` (it is a leaf today: `deps` are injected, and stays one) |
 | `intents/adapters.ts` | `intents/manager` (today's `ORIGIN_*` import); packages | anything else in `intents/`; any other host module |
 | `intents/<slice>` | `intents/contract`; packages | `intents/manager`, `intents/adapters`, any other `intents/<slice>`, any host module outside `intents/` |
-| `backends/**`, `capture/**` | flat modules (as today: `backends/claude.ts` → `echo.ts`); packages | `sessions*`, `intents/**`, `routes/**`, `server/**`, `main` |
+| `backends/**` | flat modules (as today: `backends/claude.ts` → `echo.ts`); packages | `sessions*`, `intents/**`, `routes/**`, `server/**`, `main` |
 
 Two facts make this a real boundary rather than a folder convention. **A slice never imports
 another slice**: what it needs of another slice it asks of `core` (below), so the graph inside
@@ -170,7 +170,7 @@ is the bare resolved specifier (`sessions`, `sessions/wall`, `intents/manager`, 
   flat module is called BY a route"*).
 - `from` = `sessions.ts`: allow `sessions/<x>` for any `x`; refuse `server/**`, `routes/**`,
   `main`, `intents/**`.
-- `from` starts with `sessions/`: allow `sessions/core` and `sessions/knobs`; refuse `sessions`
+- `from` starts with `sessions/`: allow `sessions/core`, `sessions/knobs` and `sessions/timers`; refuse `sessions`
   and every other `sessions/<x>` (*"a slice reaches another slice through `core`, never by import"*,
   and for the facade: *"a slice never imports its facade — that is the cycle"*); refuse `server/**`,
   `routes/**`, `main`, `intents/**`. Allow flat modules and `backends`.
@@ -180,7 +180,7 @@ is the bare resolved specifier (`sessions`, `sessions/wall`, `intents/manager`, 
   package.
 - `from` starts with `intents/` (a slice): allow `intents/contract`; refuse everything else inside
   the package.
-- `from` starts with `backends/` or `capture/`: refuse `sessions`, `sessions/**`, `intents/**`,
+- `from` starts with `backends/`: refuse `sessions`, `sessions/**`, `intents/**`,
   `routes/**`, `server/**`, `main`. Allow flat modules.
 - `typeOnly` (an `import type`, or every specifier `type`) relaxes exactly ONE refusal: a flat
   module, a route or a server file may `import type` from an inner `sessions/` or `intents/` file
@@ -194,9 +194,7 @@ Every refusal message names the edge and the fix, as `feature-boundary`'s do.
 Two facts about the helper, so the rule is written against what it sees. `srcTarget` is anchored
 on `packages/web/src/` today (`WEB_SRC`); the host rule needs its own `HOST_SRC` anchor, and the
 `.js` NodeNext specifiers are already stripped by `bareSpec`. And `bareSpec` folds `x/index` into
-`x`: `../backends/index.js` resolves to `backends` and `./capture/index.js` to `capture` — the same
-bare name as the flat `capture.ts`. So "`backends`" in the tables means the index, and a slice that
-imports `capture/index` is seen importing a flat module (allowed), which is the intent. The fold
+`x`: `../backends/index.js` resolves to `backends`. So "`backends`" in the tables means the index. The fold
 applies to the TARGET only: the importing file is classified by its path with the extension
 stripped and NOT index-folded, or `routes/index.ts` reads as a flat module named `routes` and
 is refused its own `./types.js` (the first wiring of the rule did exactly that), and a
@@ -206,8 +204,7 @@ is refused its own `./types.js` (the first wiring of the rule did exactly that),
 (2026-09-25): eight flat modules `import type { SessionManager }` from the facade and only
 `main.ts` takes a value import of it; eight modules import types from `intents/manager`;
 `intents/manager.ts` imports only `node:*` and `@waterplane/shared`; `intents/adapters.ts` imports
-`./manager.js` and `@waterplane/shared`; `backends/claude.ts → ../echo.js` and
-`capture/window.ts → ../host.js` are flat-module edges; `routes/session.ts` and `routes/work.ts`
+`./manager.js` and `@waterplane/shared`; `backends/claude.ts → ../echo.js` is a flat-module edge; `routes/session.ts` and `routes/work.ts`
 import `../intents/adapters.js`; no flat module imports `routes/`, and nothing imports `main`. The
 rule refuses none of these, so wiring it is not a change to any file but `eslint.config.js`.
 
@@ -329,8 +326,8 @@ server/
 `main.ts` after the split reads as the boot order it already is: constants; `const ctx = {} as
 ServerCtx`; one line per construction assigning into `ctx` in today's order; `wireSessionEvents(ctx)`
 etc. at the positions the listener blocks hold today; `main()`. Under ~650 lines (it landed at 700 — see "Result"). Two listener
-blocks stay in `main.ts` on purpose: `builds.on("output")` (789) and `capture.on("output")` (800)
-are ten-line broadcasts beside the constructions they belong to, inside the range that stays;
+blocks stay in `main.ts` on purpose: `builds.on("output")` (789)
+is a ten-line broadcast beside the constructions they belong to, inside the range that stays;
 they are pinned (below) so they cannot be copied into a `server/` file as well.
 
 ## How a slice reaches shared state
@@ -626,7 +623,7 @@ exclusion method of two more (chain, durable ops) is corrected in place.
 | **intents emits** | `\b(?:this\|core)\.emit\(\s*"` scoped to `intents/**` | `intents/manager.ts: 9` (settled ×6, requeued ×1, skipped ×1, missed ×1) |
 | **sessions emits** | `\bthis\.emit\(\s*"` → after the split `\b(?:this\|core)\.emit\(\s*"`, scoped to `sessions.ts` + `sessions/**` | `sessions.ts: 71` (updated ×51, limit ×8, history ×2, and one each of data, exit, created, updateBanner, awaiting, prompt, idle, turnEnded, limitQueue, closed) |
 | **main's subscriptions** | `\bsessions\.on\(\s*"`, `\bintents\.on\(\s*"`, `\bprocess\.on\(` scoped to `main.ts` + `server/**` | `main.ts: 15` (842, 843, 1147, 1150, 1156, 1157, 1158, 1160, 1271, 1289, 1411, 1421, 1569, 1573, 1628), `main.ts: 4`, `main.ts: 3` |
-| **main's other subscriptions** † | `\b(?:autopull\|builds\|capture\|openDeliveries)\.on\(\s*"` scoped to `main.ts` + `server/**` — the first draft pinned only sessions/intents/process and would have let these four be copied | `main.ts: 4` (autopull 402 → `scan.ts`; builds 789 and capture 800 STAY; openDeliveries 1099 → `deliveries.ts`) |
+| **main's other subscriptions** † | `\b(?:autopull\|builds\|openDeliveries)\.on\(\s*"` scoped to `main.ts` + `server/**` — the first draft pinned only sessions/intents/process and would have let these be copied | `main.ts: 3` (autopull 402 → `scan.ts`; builds 789 STAYS; openDeliveries 1099 → `deliveries.ts`) |
 | **notifications** † | `(?<![.\w])notify\(` minus `function notify(` scoped to `main.ts` + `server/**` — not `notify\(\s*"`, which missed the push bridge `(kind, p) => notify(kind, p)` at 334 | `main.ts: 30` (29 with a literal kind + the bridge) |
 | **singleton registrations** | `\b(?:setCliHealth\|setOpenDeliveries\|setSentLog\|setContextLimitsStore\|installSessionModels)\(` minus definitions | `main.ts: 5` |
 | **env file loads** | `\bloadEnvFile\(` → since 2026-09-28 `\bloadEnvFiles?\(` minus its definition (`envfiles.ts`, a later file wins) | `main.ts: 1` → `env.ts: 1` |
@@ -717,10 +714,12 @@ delegations. Each commit's number is the measured count, not these estimates.
   broadcast, 1289 scan cleanup) in that registration order; the emit's position relative to
   `maybeScheduleResurrect` decides whether the intents store sees `diedAtLimit` before the
   resurrect timer exists. Do not reorder.
-- Every per-session timer (`idleTimer`, `promptTimer`, `agentTimer`, `stopVerifyTimer`,
-  `limitTimer`, `resurrectTimer`, `claudeIdTimer`, `ocIdTimer`) lives on the `Session` record, so it
-  moves with `core.ts` and the slice that arms it clears it through the same field — no slice
-  holds a timer for a session in a private map. Only `resumeGuards`/`resumeGapTimer` are
+- The four recovery lanes' timers (wall, net retry + its recheck, sign-in wait, resume) live in
+  ONE per-session registry, `sessions/timers.ts` (`arm` cancels the lane's previous timer first,
+  `cancelAll` on remove), on the `Clock` seam from `waitclock.ts`. Every other per-session timer
+  (`idleTimer`, `promptTimer`, `agentTimer`, `stopVerifyTimer`, `claudeIdTimer`, `ocIdTimer`) lives
+  on the `Session` record, so it moves with `core.ts` and the slice that arms it clears it through
+  the same field. Only `resumeGuards`/`resumeGapTimer` are
   manager-level and they belong to `ResumeSlice`.
 - `this` handed out: nothing hands a bound method to another module (inventory §1.5); every
   timer callback is an arrow. After the split an arrow inside a slice closes over the slice's
@@ -1286,7 +1285,7 @@ below; the rule above (no second implementation) is exactly what that section ke
   `main.ts: 2` + `server/http.ts: 1`.
 - Ratchet: `main.ts` 923 → 700, which is the floor (planned as 650; see "Result"). What remains is what the plan keeps:
   imports, env, every construction with its `ctx.` assignment, `.start()`s, singleton
-  registrations, the linger sweep, the `builds.on`/`capture.on` broadcasts, `handleClientMessage`,
+  registrations, the linger sweep, the `builds.on` broadcast, `handleClientMessage`,
   and `main()` (doctor path, bind selection and refusal, `attachWs`'s `new WebSocketServer`, the
   bind loop, preflight).
 
@@ -1328,7 +1327,7 @@ and `git.ts` already own the plain names; each ≤ 500 lines, `hostshape`):
 | `apistats.ts` | tokenstats (+ per backend), localusage, tokenwindows, usagelog |
 | `apihost.ts` | repos listing, storage, search, `/api/host/*`, scaffolding, secrets |
 | `apirepofiles.ts` | the repo scope and its file routes: archive, inbox, envfiles, artifacts, sweep, artifact, tree |
-| `apirepowork.ts` | capture/run, compliance, the repo's git routes |
+| `apirepowork.ts` | compliance, the repo's git routes |
 | `apirepohealth.ts` | repohealth (read, scopes, refresh, own-backfill), healthindex, agentreadings |
 
 **The import rule changes by one edge.** A flat module may not import `routes/**` ("a flat
@@ -1435,29 +1434,15 @@ wrong number", whole-log reads, per-record pricing) are unchanged and live in th
 Proof of no behaviour change: the golden in `ledgerpins.golden.json` (recorded before the move), and a
 scratch digest of every reader over 87 real conversation logs, before and after, identical.
 
-## The capture and backlog slices
+## The backlog slice
 
-`capture.ts` (1,143 lines) and `backlog.ts` (1,133) were cut by subject, 2026-10-04, behind their
-original paths: the old file stays as the facade (the class and `export … from` re-exports), so no
-importer changed. Caps: 500 lines per slice (`tools/hostshape.test.mjs`, `TIGHT_DIRS`), facade
-ratchets in `MAX_LINES`. The export surface and the public members of both classes are pinned off the
-type checker in `tools/hostsplitpins.test.mjs`; behaviour is held by the untouched
-`capture.test.mjs` and `backlog*.test.mjs` plus `e2e-capture`, `e2e-backlog*`. Basenames carry a
-`capture`/`backlog` prefix because `types.ts`, `web.ts` and the web package's `backlog/` already own
-the plain ones.
-
-**`capture/` (leaf — flat modules only, never `intents/`):** `capturekit.ts` (the knobs, `ENABLED`,
-the `BACKENDS` table, `sleep`), `captureverdict.ts` (the pure ladder: `verificationLevel`,
-`verdictLine`, `shouldEmit`, `diffRecord`), `captureconfig.ts` (`cleanTarget`, overlay
-classification, `probeCaptureBackends` and its TTL cache), `capturehelpers.ts` (anchors, the
-per-worktree lease, the sidecar reader, `intentToCaptureRun`, `weakest`), `capturesettle.ts`
-(`settleFrames` — the clock starts when the FIRST frame completes), `capturepass.ts` (one run's
-passes, the frame writer and the watch loop). `CaptureManager` keeps the stores of a run (`output`,
-`canceled`, `live`) and the verbs; `capturepass.ts` receives the `canceled` set by reference. A leaf
-cannot import `ExecutorResult`, so `capturepass.ts` declares the sub-shape it returns
-(`CapturePassResult`) and the manager's `execute` returning it as an `ExecutorResult` is the type
-checker's pin. The containment checks (`contained()` on a target's `dir`, `cleanTarget`'s refusal of
-an absolute or `..` dir) moved verbatim.
+`backlog.ts` (1,133 lines) was cut by subject, 2026-10-04, behind its original path: the old file
+stays as the facade (the class and `export … from` re-exports), so no importer changed. Caps: 500
+lines per slice (`tools/hostshape.test.mjs`, `TIGHT_DIRS`), facade ratchet in `MAX_LINES`. The export
+surface and the public members of the class are pinned off the type checker in
+`tools/hostsplitpins.test.mjs`; behaviour is held by the untouched `backlog*.test.mjs` plus
+`e2e-backlog*`. Basenames carry a `backlog` prefix because `types.ts` and the web package's
+`backlog/` already own the plain ones.
 
 **`backlog/`:** `BacklogManager` keeps the constructor, the reads (`rows`, `list`, `waiting`), the
 one-line verbs and a `core: BacklogCore` — one object holding the root, `sessions`, `intents`,
@@ -1481,7 +1466,7 @@ in `tools/hostrestpins.test.mjs`, 500-line cap in `hostshape`).
 **`routes/work/`:** `routes/work.ts` is the barrel — it spreads five tables back into `workRoutes`
 in the order the one table had (the router's `HANDLED` order is pinned). `workbacklog.ts` (fan-out
 and the backlog, including the in-flight add join and the `preLossRefusal` path), `workbuild.ts`
-(builds, artifacts policy, capture), `workassess.ts` (assess and pull), `workschedule.ts` (launch
+(builds, artifacts policy), `workassess.ts` (assess and pull), `workschedule.ts` (launch
 and schedule adapters) and `workintent.ts` (the intent verbs). Every ack-ledger write and
 `durableOp` stays on the same handler it was on; `hostpins` names the new files.
 

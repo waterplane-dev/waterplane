@@ -138,3 +138,12 @@ export function trackKeyboard(
   const opened = next.baseH - next.minH >= KEYBOARD_GONE_PX;
   return { next, closed: opened && h >= next.baseH - BASELINE_SLACK_PX };
 }
+
+/** The one line a screen shows when the header hid BY ITSELF (the caret went into the
+ *  compose box), naming the way back — decision D8: a mode that changes by itself says so.
+ *  "" when nothing hid on its own (the person's own full-screen switch needs no note). */
+export function chromeNote(m: ChromeMode, i: Pick<ChromeInput, "fullScreen">): string {
+  if (m.typingMode) return "Header hidden while you type. Tap outside the box to bring it back.";
+  if (m.fullMode && !i.fullScreen) return "Full screen while the keyboard is up. Close the keyboard to leave it.";
+  return "";
+}

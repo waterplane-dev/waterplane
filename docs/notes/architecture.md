@@ -55,7 +55,7 @@ Four packages, each with its own layering, each layering held by an ESLint rule 
   Built first; everything else imports it.
 - **`packages/host`** — `main.ts` → `server/` → `routes/` + `api.ts` → the two facades
   (`sessions.ts`, `intents/manager.ts`) whose slices meet only through a hub interface
-  (`SessionCore`, `IntentCore`) → ~200 flat modules → leaves (`backends/`, `plugins/`, `capture/`).
+  (`SessionCore`, `IntentCore`) → ~200 flat modules → leaves (`backends/`, `plugins/`).
   Rule: `local/host-boundary`. Detail: [host-architecture.md](host-architecture.md).
 - **`packages/web`** — `App.tsx` → `core/` (the runners and the one-of-each hooks: the socket, the
   send queue, the terminal) → `sdk/` (the only import a feature needs) → ~44 `features/<name>/` →

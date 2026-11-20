@@ -50,7 +50,7 @@ export function fanoutRuns(all: readonly Intent[], cap = FANOUT_MAX_RUNS): Fanou
       .sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
     if (!targets.length && !parent) continue;
     const text = (parent?.payload.kind === "prompt" ? parent.payload.steps[0] : undefined)
-      ?? (targets[0]?.payload.kind === "prompt" ? targets[0].payload.steps[0] : "");
+      ?? (targets[0]?.payload.kind === "prompt" ? targets[0].payload.steps[0] ?? "" : "");
     const startedAt = parent?.createdAt ?? Math.min(...targets.map((t) => t.createdAt));
     const settled = (r: Intent) => r.state === "done" || r.state === "failed" || r.state === "canceled";
     const open = rows.some((r) => !settled(r));
@@ -64,7 +64,7 @@ export function fanoutRuns(all: readonly Intent[], cap = FANOUT_MAX_RUNS): Fanou
     }
     const followUps = [...batches.values()]
       .map((b) => ({
-        text: b[0].payload.kind === "prompt" ? b[0].payload.steps[0] : "",
+        text: b[0]!.payload.kind === "prompt" ? b[0]!.payload.steps[0] ?? "" : "",
         at: Math.min(...b.map((r) => r.createdAt)),
         dirs: b.map((r) => r.cwd),
       }))

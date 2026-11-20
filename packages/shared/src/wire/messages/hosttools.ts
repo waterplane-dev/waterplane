@@ -14,7 +14,6 @@ import type { NotificationItem, NotifyPrefs } from "../notify.js";
 import type { BuildParamAnswer } from "../../buildparams.js";
 import type { BuildCandidate } from "../../buildscan.js";
 import type { BuildRecord } from "../../buildstamp.js";
-import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.js";
 import type { OnboardJob } from "../onboard.js";
 import type { SlowJob } from "../slowjob.js";
 import type { LimitResumeMode } from "../session.js";
@@ -158,26 +157,6 @@ export type HostToolsMsg =
    * form should offer a typed field instead.
    */
   | { t: "build.options"; repoDir: string; buildId: string; options: Record<string, BuildParamAnswer> }
-  // ── Verified capture ──
-  /**
-   * A repo's capture targets + recent runs (sent on request and on save).
-   *
-   * `backends` rides ALONG rather than being asked for separately, because the
-   * sheet's alternative to having the sentence in hand is guessing: it would
-   * draw a button, then learn Playwright is missing, then have to explain a
-   * failure it could have prevented. With availability on the list it says
-   * "web needs Playwright" where the button would be — words, never a greyed-out
-   * control (CLAUDE.md).
-   */
-  | { t: "capture.list"; repoDir: string; targets: CaptureTarget[]; runs: CaptureRun[]; backends: CaptureBackendInfo[] }
-  /** A run's state changed (started / done / failed / cancelled). The verdict,
-   *  the verification level and the frames ride the terminal states —
-   *  `build.run`'s shape exactly. */
-  | { t: "capture.run"; run: CaptureRun }
-  /** Streamed capture output. `full` (on a fresh list/reconnect) = the retained
-   *  tail, replacing the client's buffer; absent/false = a live delta to append.
-   *  `build.output`'s contract, deliberately identical. */
-  | { t: "capture.output"; runId: string; dataB64: string; full?: boolean }
   // ── Assessment ──
   /**
    * One repo's newest assessment run, pushed on every state change.

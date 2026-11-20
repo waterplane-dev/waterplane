@@ -6,8 +6,7 @@
  * counted in the badge. Most of what waterplane can do for a repo is not that —
  * a requirements list, a weekly security review, a pre-push hook are worth
  * having, and a repo without them is not BROKEN. Putting them on the checklist
- * would make a warn nobody can close (`compliance.ts`'s `visual-check` note
- * argues the same), so they live here instead: a list of offers, each with
+ * would make a warn nobody can close, so they live here instead: a list of offers, each with
  * three states the person controls — **on**, **off**, **not for me** — and
  * counted in nothing.
  *
@@ -60,7 +59,7 @@ export type OptInAction =
   /** Run the host's own setup fix with this id (`POST …/compliance/fix`). */
   | { kind: "fix"; fix: string }
   /** Open the screen that already does this job. */
-  | { kind: "open"; to: "series" | "capture" }
+  | { kind: "open"; to: "series" }
   /** Seed the Send sheet: these words, a new session in this repo. */
   | { kind: "agent" }
   /** Seed the Send sheet with a standing weekly rule and a model. */
@@ -244,14 +243,6 @@ Show me the file and the list before writing. \`npm ci\` from the lockfile is un
 Apply with \`--no-dry-run\` only after I agree. The size metric lags about 24h after a delete; say so.
 
 {marker}`,
-  },
-  {
-    id: "screenshots",
-    title: "Screenshots of your app",
-    pitch: "Let an agent (and you, from the phone) capture this app's screens on the desktop and check them, instead of describing what it probably looks like.",
-    cost: "Setting up a capture target spends nothing. Each screenshot an agent looks at costs tokens on every later turn, and the checklist then offers the skill that keeps that cheap.",
-    verb: "open captures",
-    action: { kind: "open", to: "capture" },
   },
   {
     id: "exposure-watch",

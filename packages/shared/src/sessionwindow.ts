@@ -26,13 +26,13 @@ export function sessionWindowGoneSince(samples: readonly UsageSample[]): number 
   let first: UsageSample | null = null;
   let n = 0;
   for (let i = samples.length - 1; i >= 0; i--) {
-    const r = samples[i];
+    const r = samples[i]!;
     if (r.s != null || r.sr != null || r.w == null) break;
     first = r;
     n++;
   }
   if (!first || n < SESSION_GONE_MIN_READINGS) return null;
-  const last = samples[samples.length - 1];
+  const last = samples[samples.length - 1]!;
   return last.t - first.t >= SESSION_GONE_MIN_MS ? first.t : null;
 }
 

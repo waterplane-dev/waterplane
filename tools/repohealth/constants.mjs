@@ -403,8 +403,8 @@ export const PREREG = Object.freeze({
   // lowers the first and cannot move the second, and only deleting prose moves
   // both. That is method, and `context.mjs` and `types.mjs` spell it out.
   /**
-   * `visual-check` is written at runtime by `packages/host/src/visualskill.ts`
-   * and is counted anyway. `claudemd.test.mjs` exempts it because that test
+   * A skill that declares `generated-by:` (a tool wrote it; history has one)
+   * is counted anyway. `claudemd.test.mjs` exempts it because that test
    * asks who authored a file; this metric asks what is loaded, and a generated
    * skill is loaded exactly like a written one. It is flagged `generated`.
    */

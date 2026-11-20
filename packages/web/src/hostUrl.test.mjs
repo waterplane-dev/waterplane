@@ -38,7 +38,7 @@ Object.defineProperty(globalThis, "navigator", {
 const {
   abs, dialBaseOf, hostBase, installHostRouting, invalidateSavedHostBase, pickSavedBase, plainDownloadRoute, plainHostRoute, plainShellRoute,
   routeContext, savedHostBase, savedRowPlain, seedRouteNet, setRouteBase,
-  baseOfDial, plainBaseNow, readTicketLeft, savedBasePinned, scrubTickets, setReadTicket, ticketedUrl, ticketless, tokenWithheld, tokenWithheldOf,
+  baseOfDial, pinnedRouteBase, plainBaseNow, readTicketLeft, savedBasePinned, scrubTickets, setReadTicket, ticketedUrl, ticketless, tokenWithheld, tokenWithheldOf,
 } = await import("./hostUrl.ts");
 const { onBearerRejected } = await import("./deviceToken.ts");
 installHostRouting();
@@ -335,6 +335,42 @@ test("abs() carries a ticket only for the address it was asked of: a tailnet pho
   assert.ok(readTicketLeft(SAVED, Date.now()) > 0);
   setReadTicket(null);
   assert.equal(abs("/api/repos/r/artifact?path=a.png"), `${SAVED}/api/repos/r/artifact?path=a.png`);
+});
+
+test("a pinned LAN route takes the opaque loads once a ticket for it is held; a plain one never does", (t) => {
+  const row = { id: "abcd1234", name: "d", base: SAVED, lan: { base: LAN, auto: true }, tls: PIN };
+  t.after(() => {
+    setRouteBase(null); setReadTicket(null);
+    store.delete(lsKey("hosts")); store.delete(lsKey("hostActive")); store.set(lsKey("hostBase"), SAVED);
+    delete globalThis.Capacitor.Plugins;
+    invalidateSavedHostBase();
+  });
+  store.set(lsKey("hosts"), JSON.stringify([row]));
+  store.set(lsKey("hostActive"), row.id);
+  globalThis.Capacitor.Plugins = { ShellTls: { setPin: async () => {} } };
+  invalidateSavedHostBase();
+  const img = "/api/repos/r/inbox/a.png";
+  assert.equal(savedHostBase(), SAVED, "a tailnet base is never rewritten");
+
+  assert.equal(setRouteBase(LAN_TLS), LAN_TLS);
+  assert.equal(pinnedRouteBase(), LAN_TLS);
+  assert.equal(abs(img), `${SAVED}${img}`, "no ticket yet: the saved address");
+  setReadTicket({ base: LAN_TLS, wt: "w", exp: Date.now() + 60_000 });
+  assert.equal(abs(img), `${LAN_TLS}${img}?wt=w`);
+  assert.equal(abs("/api/repos"), `${LAN_TLS}/api/repos`, "the base follows; the ticket only on an opaque route");
+  setReadTicket({ base: LAN_TLS, wt: "w", exp: Date.now() - 1 });
+  assert.equal(abs(img), `${SAVED}${img}`, "an expired ticket: back to the saved address");
+
+  setReadTicket({ base: LAN, wt: "w", exp: Date.now() + 60_000 });
+  setRouteBase(LAN);
+  assert.equal(pinnedRouteBase(), null, "a plain route is never followed");
+  assert.equal(abs(img), `${SAVED}${img}`);
+
+  store.set(lsKey("hosts"), JSON.stringify([{ ...row, tls: undefined }]));
+  setRouteBase(LAN_TLS);
+  assert.equal(pinnedRouteBase(), null, "no pin on the row: not a pinned route");
+  setRouteBase(null);
+  assert.equal(pinnedRouteBase(), null);
 });
 
 test("a ticket never leaves: copy scrubs this page's own values, a cache key drops any", () => {

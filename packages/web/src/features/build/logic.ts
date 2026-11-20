@@ -24,11 +24,11 @@ export function buildQueuedToast(offline: boolean, name: string): string {
   return offline ? "queued — the build starts when the link is back" : `starting “${name}”…`;
 }
 
-/** A `build.run` push's toast: only a run that SETTLED says anything, and
+/** A `build.run` push's receipt sentence (`onBuildRun` shows it with an `Open`): only a run that SETTLED says anything, and
  *  `null` means stay quiet (a `running` frame is not news). */
 export function buildRunToast(run: Pick<BuildRun, "status" | "name">): string | null {
-  if (run.status === "done") return `build “${run.name}” done`;
-  if (run.status === "failed") return `build “${run.name}” failed`;
+  if (run.status === "done") return `Built “${run.name}”.`;
+  if (run.status === "failed") return `Build “${run.name}” failed.`;
   return null;
 }
 

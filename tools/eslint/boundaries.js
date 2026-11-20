@@ -141,7 +141,7 @@ export const featureBoundaryRule = {
  *    file is the one relaxation, for flat modules, routes and server files);
  *  - `main` is imported by nobody; `server/` by nobody but `main` and itself;
  *    `routes/` not by a flat module; `intents/manager` is a leaf;
- *  - `backends/` and `capture/` are leaves over flat modules.
+ *  - `backends/` is a leaf over flat modules.
  */
 const HOST_SRC = /(^|\/)packages\/host\/src\//;
 const isUnder = (to, dir) => to === dir || to.startsWith(dir + "/");
@@ -180,7 +180,8 @@ export function hostBoundary(fromRel, to, typeOnly = false) {
     return null;
   }
   if (from.startsWith("sessions/")) {
-    if (to === "sessions/core" || to === "sessions/knobs") return null;
+    // `knobs` (constants) and `timers` (the recovery lanes' registry, imports only `waitclock`) are leaves every slice shares.
+    if (to === "sessions/core" || to === "sessions/knobs" || to === "sessions/timers") return null;
     if (to === "sessions") return `\`${from}\` imports \`sessions\`: ${WHY_H.sliceFacade}`;
     if (to.startsWith("sessions/")) return `\`${from}\` imports \`${to}\`: ${WHY_H.sliceSlice}`;
     if (to === "main") return WHY_H.main;
@@ -203,7 +204,7 @@ export function hostBoundary(fromRel, to, typeOnly = false) {
     if (to.startsWith("intents/")) return `\`${from}\` imports \`${to}\`: ${WHY_H.sliceSlice} (\`IntentCore\` in \`intents/contract\`)`;
     return `\`${from}\` imports \`${to}\`: an intents slice reaches only \`intents/contract\` — the store is a leaf; what it needs is injected`;
   }
-  if (from.startsWith("backends/") || from.startsWith("capture/")) {
+  if (from.startsWith("backends/")) {
     const leaf = from.split("/")[0];
     if (to === "main") return WHY_H.main;
     if (to === "sessions" || isUnder(to, "sessions") || isUnder(to, "intents") || isUnder(to, "routes") || isUnder(to, "server")) {

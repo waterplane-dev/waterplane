@@ -84,7 +84,7 @@ function sendLabelBase(i: SendIntent, n: SendNames, preview: number | null): str
     // closed: SendTarget is the phone's own composer state
     switch (i.target.kind) {
       case "session": return `Send to ${n.sessionTitle(i.target.sessionId)} ${a}`;
-      case "repo": return `Queue for ${n.repoName(i.target.cwd)} · a new session ${a}`;
+      case "repo": return `Start a new session in ${n.repoName(i.target.cwd)} ${a}`;
       // `Queue in N repos after …` was the sequential wording — one at a time —
       // on the one target that is never sequential: a `{kind:"repos"}` intent is
       // the fan-out, every repo starts together, and `sequential` is not read in
@@ -114,7 +114,7 @@ function sendLabelBase(i: SendIntent, n: SendNames, preview: number | null): str
     // spellings of one condition, met in that order by anybody using this once.
     case "repo":
       return later
-        ? `Queue for ${n.repoName(i.target.cwd)} · a new session when this repo is free`
+        ? `Start a new session in ${n.repoName(i.target.cwd)} when free`
         : `Start in ${n.repoName(i.target.cwd)}`;
     case "repos": {
       const many = i.target.dirs.length;
@@ -132,11 +132,11 @@ function sendLabelBase(i: SendIntent, n: SendNames, preview: number | null): str
  * Offline every send is a queued send and the button says so — except where the
  * label ALREADY opens with that verb, which is most of them now that it
  * restates the whole decision. Unconditionally prefixed, a repo send read
- * `Queue · Queue for myapp · a new session when this repo is free`: one decision
+ * `Queue · Start a new session in myapp when free`: one decision
  * announced twice, on the one control a person reads before committing.
  */
 export function offlineLabel(label: string): string {
-  return /^queue\b/i.test(label) ? label : `Queue · ${label}`;
+  return /^(queue|start a new session)\b/i.test(label) ? label : `Queue · ${label}`;
 }
 
 /**

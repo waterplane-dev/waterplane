@@ -315,7 +315,7 @@ export function skillDescription(yaml) {
 }
 
 /**
- * `visual-check` is written at runtime by `packages/host/src/visualskill.ts`.
+ * A skill a tool writes (an older `visual-check` was one) is not hand-authored.
  * `PREREG.COUNT_GENERATED_SKILLS` counts it anyway — this metric asks what is
  * loaded, and a generated skill loads exactly like a written one — but it is
  * flagged so a narrative can say which half of a jump nobody typed. The

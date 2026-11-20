@@ -291,9 +291,11 @@ test("no repo hue makes the tab you are IN unreadable", () => {
     const lit = parseFloat(vars.get("--repo-lit"));
     const veil = parseFloat(vars.get("--repo-veil-on")) / 100;
     const bg = rgbOf("--bg", vars), fg = rgbOf("--fg", vars);
+    // Dark draws the tint over a neutral card (`--repo-card-on`); light over the ground itself.
+    const ground = vars.get("--repo-card-on") === "transparent" ? bg : rgbOf("--repo-card-on", vars);
     let worst = Infinity, worstHue = 0;
     for (let h = 0; h < 360; h++) {
-      const fill = hsl(h, sat, lit).map((v, i) => Math.round(v * veil + bg[i] * (1 - veil)));
+      const fill = hsl(h, sat, lit).map((v, i) => Math.round(v * veil + ground[i] * (1 - veil)));
       const c = contrast(fg, fill);
       if (c < worst) { worst = c; worstHue = h; }
     }

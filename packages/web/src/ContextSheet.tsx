@@ -30,7 +30,7 @@
  *    above its chart, and the drag readout is a text line under it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Bot, Coins, ListChecks, Loader, RefreshCw, RotateCcw, Scissors, SearchCheck, Wallet } from "lucide-react";
+import { BarChart3, Bot, ChevronRight, Coins, ListChecks, Loader, RefreshCw, RotateCcw, Scissors, SearchCheck, Wallet } from "lucide-react";
 import type { AgentRun, ContextSample, ContextSeriesDoc } from "@waterplane/shared";
 import {
   coldStartText, sessionCostOfSeries, tokenTotal as tokenTot,
@@ -340,6 +340,35 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
         )}
       </div>;
 
+  /* The session's own budget and the large-agent line, right under the doors (owner, 2026-11-18:
+     the first thing to reach on this sheet, not a scroll past both charts). A readout and a door —
+     nothing here sets or clears. Unknown says why and holds nothing. "No budget" is the TITLE's to
+     say: the line under it is only what was spent, and absent when there is nothing to add. Drawn
+     with or without samples: a budget is worth setting before the first turn. */
+  /* Folded by default (owner, 2026-11-18: the card took a third of the screen above the charts).
+     The summary keeps the title, so the budget (or its absence) still reads at a glance; the spend
+     line, the door and the warn chips open in place. */
+  const budgetCard = (budget || agentWarn) && (
+    <details className="ctx-cost ctx-budget-fold">
+      <summary className="ctx-cost-head">
+        {budget ? <Wallet size={14} /> : <Bot size={14} />}
+        <span>{budget ? (budget.label ? `budget ${budget.label}` : "no budget on this session") : "large subagents"}</span>
+        <ChevronRight size={14} className="ctx-budget-chev" />
+      </summary>
+      {budget && <>
+        {budget.line ? <div className="ctx-cost-note">{budget.line}</div> : null}
+        <div className="sheet-actions">
+          <Button onClick={budget.onOpen}>
+            <Wallet size={14} /> {budget.label ? "change or clear the budget" : "set a budget"}
+          </Button>
+        </div>
+      </>}
+      {/* The second row: the line that calls a running agent large. The
+          summary names it only when no budget row stands above it. */}
+      {agentWarn && <AgentWarnLine value={agentWarn.value} onChange={agentWarn.onChange} lit={!budget || !!budget.label} />}
+    </details>
+  );
+
   if (unmeasured) {
     return (
       <div className="sheet">
@@ -401,6 +430,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
       <Hint className="ctx-name">{title}</Hint>
       {doorsRow}
       {!onOpenSetup && setupCant && <Unavailable cants={[{ label: "repo readings", reason: setupCant }]} />}
+      {budgetCard}
 
       <Empty res={res} empty={!samples.length} thing="the context history" noun="graph"
         note={res.state === "error" ? "A session that has not run a turn yet has no log to read." : undefined}>
@@ -557,34 +587,6 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
             </div>
           )}
           {cost && <NextTurnCost cost={cost} onFresh={onFresh} onCompact={onCompact} />}
-
-          {/* The session's own budget: spend against the cap with the agent split,
-              where it stands, and the door to the sheet. A readout and a door —
-              nothing here sets or clears. Unknown says why and holds nothing.
-              "No budget" is the TITLE's to say: the line under it is only what
-              was spent, and absent when there is nothing to add. */}
-          {(budget || agentWarn) && (
-            <div className="ctx-cost">
-              {budget && <>
-                <div className="ctx-cost-head">
-                  <Wallet size={14} />
-                  <span>{budget.label ? `budget ${budget.label}` : "no budget on this session"}</span>
-                </div>
-                {budget.line ? <div className="ctx-cost-note">{budget.line}</div> : null}
-                <div className="sheet-actions">
-                  <Button onClick={budget.onOpen}>
-                    <Wallet size={14} /> {budget.label ? "change or clear the budget" : "set a budget"}
-                  </Button>
-                </div>
-              </>}
-              {/* The second row: the line that calls a running agent large. Its
-                  own card heading only when no budget row stands above it. */}
-              {agentWarn && <>
-                {!budget && <div className="ctx-cost-head"><Bot size={14} /><span>large subagents</span></div>}
-                <AgentWarnLine value={agentWarn.value} onChange={agentWarn.onChange} />
-              </>}
-            </div>
-          )}
 
           {/* The third door, a question rather than a move: a new session reads
               this transcript and says what made it dear — then stops and asks. */}

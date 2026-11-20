@@ -58,6 +58,15 @@ export type { HintDef, HintMode };
 
 interface HintState { mode: HintMode; seen: Record<string, number> }
 
+/**
+ * Stored-state version. The default moved from "first" to "press", but every write
+ * (`markSeen`, `resetHints`) stored the old default as if chosen, so devices that ever
+ * dismissed a card kept "first" for good. State without `v: 2` is read once with a stored
+ * "first" as "press" (an "off" is always a choice and stays); the next write stamps `v: 2`,
+ * after which "first" is only ever what the person picked.
+ */
+const STATE_V = 2;
+
 /** Synced (see `shared/settings.ts`), so a dismissal follows the user. */
 const KEY = LS.hints;
 const LONG_PRESS_MS = 450;
@@ -66,16 +75,16 @@ const MOVE_TOL = 10;
 
 function read(): HintState {
   try {
-    const raw = JSON.parse(lsGet(KEY) || "{}") as Partial<HintState>;
-    const mode: HintMode = raw.mode === "press" || raw.mode === "off" ? raw.mode : "first";
+    const raw = JSON.parse(lsGet(KEY) || "{}") as Partial<HintState> & { v?: number };
+    const mode: HintMode = raw.mode === "off" || (raw.mode === "first" && raw.v === STATE_V) ? raw.mode : "press";
     const seen: Record<string, number> = {};
     for (const [k, v] of Object.entries(raw.seen ?? {})) if (typeof v === "number") seen[k] = v;
     return { mode, seen };
-  } catch { return { mode: "first", seen: {} }; }
+  } catch { return { mode: "press", seen: {} }; }
 }
 
 function write(st: HintState): void {
-  lsSetJson(KEY, st);
+  lsSetJson(KEY, { ...st, v: STATE_V });
 }
 
 export function hintMode(): HintMode { return read().mode; }

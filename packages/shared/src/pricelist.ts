@@ -88,12 +88,12 @@ function modelOf(cell: string): { id: string; overTokens?: number; upTo?: boolea
   const card = /\(for prompts (up to|over) ([\d,]+) tokens\)$/.exec(name);
   if (card) {
     name = name.slice(0, card.index).trim();
-    if (card[1] === "over") overTokens = Number(card[2].replace(/,/g, ""));
+    if (card[1] === "over") overTokens = Number(card[2]!.replace(/,/g, ""));
     else upTo = true;
   }
   const m = /^Claude ([A-Z][a-z]+) (\d+(?:\.\d+)?)$/.exec(name);
   if (!m) return null;
-  const id = `claude-${m[1].toLowerCase()}-${m[2].replace(".", "-")}`;
+  const id = `claude-${m[1]!.toLowerCase()}-${m[2]!.replace(".", "-")}`;
   return overTokens ? { id, overTokens } : { id, upTo };
 }
 
@@ -112,12 +112,12 @@ export function parsePriceList(md: string): PriceListParse {
   const longPrompt: Record<string, Rate & { overTokens: number }> = {};
   const skipped: string[] = [];
   for (let i = at + 2; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = lines[i]!.trim();
     if (!line.startsWith("|")) break;
     const c = cells(line);
     if (c.length !== HEADER.length) return { ok: false, why: "A row of the price table has the wrong number of columns." };
-    const model = modelOf(c[0]);
-    if (!model) { skipped.push(c[0]); continue; }
+    const model = modelOf(c[0]!);
+    if (!model) { skipped.push(c[0]!); continue; }
     const [input, w5m, w1h, read, output] = c.slice(1).map(dollars);
     if (input == null || w5m == null || w1h == null || read == null || output == null) {
       return { ok: false, why: `The price row for ${model.id} has a price this version cannot read.` };

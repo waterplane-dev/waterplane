@@ -43,6 +43,7 @@
  *    already bounded by whoever writes it, and saying so per row is the point:
  *    it is what identifies the one file that is not.
  */
+import { TITLE } from "./sheetNames";
 import { useEffect, useState } from "react";
 import { AlertTriangle, EyeOff, HardDrive, Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
 import {
@@ -184,7 +185,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
 
   return (
     <div className="sheet">
-      <SheetHead title="Storage on this device" onClose={onClose}>
+      <SheetHead title={TITLE.storage} onClose={onClose}>
         {(loading || survey.inflight || store.inflight) && <Loader2 size={13} className="spin" />}
       </SheetHead>
 

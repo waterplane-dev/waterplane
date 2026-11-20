@@ -18,6 +18,7 @@ import { pulls, type LocalPull, type PullRecord } from "./pull";
 import { useEffect, useState } from "react";
 import { track } from "./usage";
 import { Button } from "./kit/Button";
+import { Explain } from "./Explain";
 
 interface Props {
   /** The file, as a download target. */
@@ -34,6 +35,8 @@ interface Props {
   className?: string;
   /** Usage counter for this button's screen. */
   trackId?: string;
+  /** D8: one folded line under the button saying how a download behaves (never a card that opens by itself). */
+  explain?: boolean;
 }
 
 /** Subscribe to just this file's record. One listener per mounted button; the
@@ -48,7 +51,7 @@ export function useDownloadRecord(target: LocalPull | null): PullRecord | undefi
   return rec;
 }
 
-export function DownloadButton({ target, rec, onStart, compact, className, trackId }: Props) {
+export function DownloadButton({ target, rec, onStart, compact, className, trackId, explain }: Props) {
   const own = useDownloadRecord(rec === undefined ? target : null);
   const record = rec ?? own;
   const st = downloadStatus(record);
@@ -56,10 +59,12 @@ export function DownloadButton({ target, rec, onStart, compact, className, track
     : st.phase === "queued" ? <CloudDownload size={16} />
       : st.phase === "have" || st.phase === "saved" ? <Smartphone size={16} />
         : <Download size={16} />;
-  return (
+  const button = (
     <Button
       className={`${st.phase === "have" || st.phase === "saved" ? "ok" : ""} ${className ?? ""}`}
-      title={st.detail} data-hint="gallery.pull"
+      title={st.detail}
+      /* No `data-hint` here (D8): the first tap used to open an explainer card instead of downloading.
+         The explanation is one folded line under the button in the viewer (`GalleryViewer.tsx`). */
       onClick={() => {
         if (trackId) track(trackId);
         if (st.phase === "idle" || st.phase === "failed") onStart?.();
@@ -69,4 +74,7 @@ export function DownloadButton({ target, rec, onStart, compact, className, track
       {icon}{compact ? null : <> {st.label}</>}
     </Button>
   );
+  return explain ? (
+    <>{button}<Explain of="download" label="how a download works">Waits and resumes if the link drops; lands in Downloads.</Explain></>
+  ) : button;
 }

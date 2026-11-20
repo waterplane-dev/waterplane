@@ -151,8 +151,9 @@ export function ultraCommand(on: boolean): string {
 // ── fast mode ─────────────────────────────────────────────────────────────
 
 /** Fast mode as words. Absent is NOT off: the CLI never confirmed either way. */
-export function fastText(f: boolean | undefined): string {
+export function fastText(f: boolean | undefined, refused?: string): string {
   const st = ultraState(f);
+  if (st === "off" && refused) return `unavailable — the CLI says: ${refused}`;
   if (st === "on") return "on for this session — the CLI confirmed it";
   if (st === "off") return "off — the CLI confirmed it";
   return "not known — the CLI hasn’t confirmed it yet";

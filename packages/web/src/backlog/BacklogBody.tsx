@@ -7,11 +7,12 @@
  */
 import type { BacklogModel } from "./backlogTypes";
 import { RepoBar } from "./RepoBar";
-import { AutoOffNote, HereNotice, StrandedDraft } from "./Notices";
+import { HereNotice, StrandedDraft } from "./Notices";
 import { BacklogFilterBar, CutBar } from "./BacklogFilterBar";
 import { BulkBars } from "./BulkBars";
 import { PickBars } from "./PickBars";
 import { BacklogList } from "./BacklogList";
+import { Hint } from "../kit/Hint";
 
 /**
  * **Controls sit above the rows, in every cut.** An ids cut used to lead with
@@ -22,12 +23,12 @@ import { BacklogList } from "./BacklogList";
  * resets the scroll per cut.
  */
 export function BacklogBody({ m }: { m: BacklogModel }) {
-  const { filter } = m;
+  const { filter, clearedLine } = m;
   return (
     <div className="sheet-scroll" key={filter.ids ? filter.ids.join(",") : ""}>
       {filter.ids && <CutBar m={m} />}
       <RepoBar m={m} />
-      <AutoOffNote m={m} />
+      {clearedLine && <div className="form"><Hint>{clearedLine}</Hint></div>}
       <StrandedDraft m={m} />
       <HereNotice m={m} />
       <BacklogFilterBar m={m} />

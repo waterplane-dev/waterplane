@@ -34,6 +34,13 @@ export function scoreChip(v: ScoreView | null | undefined): ScoreChip | null {
   return { n, label: "failing", title: `OpenSSF Scorecard ${v.score}/10 — ${n} failing check${n === 1 ? "" : "s"}` };
 }
 
+/** The menu line's reading: "6/10, 3 failing", "6/10" with nothing open, or "not scored" (no read yet, no score, or a repo Scorecard cannot score). */
+export function scoreLine(v: ScoreView | null | undefined): string {
+  if (!v || v.score == null) return "not scored";
+  const n = openChecks(v).length;
+  return n > 0 ? `${v.score}/10, ${n} failing` : `${v.score}/10`;
+}
+
 /** "scored as" validation: null = fine, else the sentence that says why not (shown, never a greyed button). */
 /** The slug rule, worded ONCE: both refusals and the field's hint quote it. */
 export const SLUG_RULE = "owner/name: letters, digits, - . _ and one slash";

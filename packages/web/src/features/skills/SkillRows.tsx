@@ -74,7 +74,8 @@ export function SkillRowView({ row, d, level, fallback }: { row: SkillRow; d: Dr
           </div>
         )}
       {row.switchable && !row.locked && <ScopePair row={row} d={d} fallback={fallback} name={row.id} />}
-      {row.switchable && !row.locked && <Source row={row} level={level} d={d} />}
+      {/* a changed card's scope pair already says where the value goes; a "follows" line there only restated the tap */}
+      {row.switchable && !row.locked && !changed && <Source row={row} level={level} d={d} />}
     </Row></div>
   );
 }
@@ -86,8 +87,9 @@ export function PluginCard({ row, skills, d, level, fallback }: { row: PluginRow
   return (
     <div className={`sk-card sk-plugin${changed ? " sk-changed" : ""}`}><Row kind="grow">
       <RowTitle><Plug size={ICON} /> {row.name}{row.version ? <span className="sk-ver"> {row.version}</span> : null}</RowTitle>
+      {/* the skill count is said once, by the fold below (or here when there is no fold) */}
       <RowSub>
-        {[weightWords(row.listingChars), `${row.skills.length} skill${row.skills.length === 1 ? "" : "s"}`].join(" · ")}
+        {[weightWords(row.listingChars), skills.length > 0 ? null : `${row.skills.length} skill${row.skills.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
       </RowSub>
       {row.why && <Hint>{row.why}</Hint>}
       {locked ? <Hint>Locked by policy; this screen cannot change it.</Hint> : (
@@ -97,11 +99,11 @@ export function PluginCard({ row, skills, d, level, fallback }: { row: PluginRow
         </div>
       )}
       {!locked && <ScopePair row={row} d={d} fallback={fallback} name={row.name} />}
-      {!locked && <Source row={row} level={level} d={d} />}
+      {!locked && !changed && <Source row={row} level={level} d={d} />}
       {row.mcpServers ? <Hint>Off also removes its connector tools ({row.mcpServers} server{row.mcpServers === 1 ? "" : "s"}).</Hint> : null}
       {skills.length > 0 && (
         <details className="sk-fold">
-          <summary><ChevronRight size={ICON} className="sk-chev" aria-hidden /> details · {skills.length} skill{skills.length === 1 ? "" : "s"}</summary>
+          <summary><ChevronRight size={ICON} className="sk-chev" aria-hidden /> {skills.length} skill{skills.length === 1 ? "" : "s"}</summary>
           {skills.map((s) => (
             <div key={s.id} className="sk-sub">
               <span className="sk-sub-name">{s.id}</span>

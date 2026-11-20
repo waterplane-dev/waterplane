@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { scopedRepo } from "./scopedRepo.ts";
 import { NO_BACKLOG_FILTER, type BacklogFilter } from "../backlogFilter.ts";
+import { useClearOnNewRow } from "./useClearOnNewRow.ts";
 import { LS, lsDel, lsGet, lsSet } from "../storage.ts";
 import type { BacklogProps } from "./backlogTypes";
 
@@ -33,6 +34,7 @@ export function useBacklogFilters(p: BacklogProps) {
   useEffect(() => {
     if (derived) setCut((c) => (c.repoDir === repoDir ? c : { ...c, repoDir }));
   }, [derived, repoDir, setCut]);
+  const { clearedLine, dismissClearedLine } = useClearOnNewRow(p, repoDir, text, filter);
   const [showArchived, setShowArchived] = useState<boolean>(() => lsGet(ARCHIVED_KEY) === "1");
   /**
    * `idsLabel` is what the ids cut IS, in the words of the tap that opened it.
@@ -74,6 +76,8 @@ export function useBacklogFilters(p: BacklogProps) {
   return {
     text,
     setText,
+    clearedLine,
+    dismissClearedLine,
     repoDir,
     showArchived,
     filter,

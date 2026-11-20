@@ -22,6 +22,8 @@ export interface Reading<T> {
   value: T;
   /** Something was stored and could not be used. `value` is the fallback. */
   unreadable: boolean;
+  /** The storage key now holding the raw copy of an unreadable value; absent when keeping it failed. */
+  keptAt?: string;
 }
 
 export const UNREADABLE_SUFFIX = ".unreadable";
@@ -34,22 +36,28 @@ function fingerprint(raw: string): string {
 }
 
 /**
- * Keep `raw` beside `key`, never over anything. True = a copy of exactly `raw`
- * now exists; false = even that failed (quota, private mode).
+ * Keep `raw` beside `key`, never over anything. Returns the storage key now holding
+ * exactly `raw`, or null when even that failed (quota, private mode).
  */
-export function keepAside(st: StoreLike, key: string, raw: string, now = Date.now()): boolean {
+export function keepAsideAt(st: StoreLike, key: string, raw: string, now = Date.now()): string | null {
   try {
     const slot = key + UNREADABLE_SUFFIX;
     const held = st.getItem(slot);
-    if (held === raw) return true;
-    if (held === null) { st.setItem(slot, raw); return true; }
+    if (held === raw) return slot;
+    if (held === null) { st.setItem(slot, raw); return slot; }
     const own = `${slot}-${fingerprint(raw)}`;
     const ownHeld = st.getItem(own);
-    if (ownHeld === raw) return true;
+    if (ownHeld === raw) return own;
     // Same fingerprint, different value (a collision): never overwrite it.
-    st.setItem(ownHeld === null ? own : `${own}-${now}`, raw);
-    return true;
-  } catch { return false; }
+    const target = ownHeld === null ? own : `${own}-${now}`;
+    st.setItem(target, raw);
+    return target;
+  } catch { return null; }
+}
+
+/** True = a copy of exactly `raw` now exists. */
+export function keepAside(st: StoreLike, key: string, raw: string, now = Date.now()): boolean {
+  return keepAsideAt(st, key, raw, now) !== null;
 }
 
 export function readGuarded<T>(st: StoreLike, key: string, fallback: T, valid: (v: unknown) => boolean): Reading<T> {
@@ -60,8 +68,8 @@ export function readGuarded<T>(st: StoreLike, key: string, fallback: T, valid: (
     const v: unknown = JSON.parse(raw);
     if (valid(v)) return { value: v as T, unreadable: false };
   } catch { /* falls through: unreadable */ }
-  keepAside(st, key, raw);
-  return { value: fallback, unreadable: true };
+  const keptAt = keepAsideAt(st, key, raw);
+  return keptAt === null ? { value: fallback, unreadable: true } : { value: fallback, unreadable: true, keptAt };
 }
 
 /**

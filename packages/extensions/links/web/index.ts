@@ -22,7 +22,7 @@ export const manifest: FeatureManifest = {
   pushes: { [PUSH_CHANGED]: () => onChanged() },
   // A line in every session's ☰ menu, joining its catalog as `links:links` (orderable, hideable,
   // pinnable into the header), and a line in the launcher's ☰ menu.
-  menuItems: [{ id: "links", label: "links", icon: Link2, open: () => openLinks(null) }],
+  menuItems: [{ id: "links", label: "Links", icon: Link2, open: () => openLinks(null) }],
   launcherItems: [{ id: "links", label: "Links", icon: Link2, order: 20, open: () => openLinks(null) }],
   repoChips: [{
     id: "links",

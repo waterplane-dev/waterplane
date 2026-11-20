@@ -233,8 +233,20 @@
      one token be correct in both places. The three SHAPES the hue takes are
      built from these further down (`.repo-group, .stab, …`) and deliberately
      not here — see the note there. */
-  --repo-veil: 18%;
-  --repo-veil-on: 40%;
+  /* Dark: a REGISTER CARD, not a wash. The card is the neutral `--panel` and
+     the repo says itself with a solid edge (left on a row, a cap on a tab); the
+     card stays plain grey (owner, 2026-11-18: "simple standard gray"). 18%/40% of a hue over near-black was
+     the old wash, and for every warm hue it came out olive and read as dirty
+     (owner's screenshot, 2026-11-18). Light keeps its wash: `--repo-card` is
+     `transparent` there, which is exactly the old alpha-over-the-ground mix. */
+  --repo-card: var(--panel);
+  --repo-card-on: var(--raise);
+  --repo-veil: 0%;
+  --repo-veil-on: 0%;
+  /* The card's hairline is plain `--line` too: the edge carries the hue, alone. */
+  --repo-hair: var(--line);
+  --repo-edge-mix: 0%;
+  --repo-stripe-lit: var(--repo-lit);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -375,16 +387,17 @@
      name. */
   --repo-sat: 55%;
   --repo-lit: 28%;
-  /* The wash stays exactly where it shipped. It sits behind text of its OWN hue
-     on the group header — the one pairing in the app that is already close to
-     the floor (≈4.1:1 here) — and every point of wash spends some of that. The
-     FILL goes higher than dark instead: the light accent is a 28%-lightness colour
-     under white, so the fraction that reads as a solid tab on near-black
-     washes out to grey here (which is what "the tabs have no colour in light
-     mode" turned out to mean). 46% is the most it can take and still carry
-     `--fg` at 4.5:1 across all 360 hues — `theme.test.mjs` sweeps it. */
-  --repo-veil: 10%;
-  --repo-veil-on: 46%;
+  /* Register cards here too (owner, 2026-11-18): white `--panel` card, the open
+     one `--raise`, a `--line` hairline, no hue in any fill. The EDGE is drawn
+     lighter than the text accent — 28% is for a repo NAME on white; a stripe
+     carries no text, and at 28% every warm hue came out olive-brown. */
+  --repo-card: var(--panel);
+  --repo-card-on: var(--raise);
+  --repo-hair: var(--line);
+  --repo-edge-mix: 0%;
+  --repo-stripe-lit: 48%;
+  --repo-veil: 0%;
+  --repo-veil-on: 0%;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -426,6 +439,9 @@
      section, a row, an action bar); a child of those never adds its own side gutter. Inner padding of a
      card or chip is that component's own. Held by scripts/ui/gutters.mjs (npm run test:gutters). */
   --gutter: 14px;
+  /* A framed card's distance from the screen edge (the repo cards): less than the gutter, because the card
+     pads its own text inside the frame. */
+  --card-edge: var(--sp-6);
   --sp-20: 20px;
   --sp-24: 24px;
   --sp-28: 28px;

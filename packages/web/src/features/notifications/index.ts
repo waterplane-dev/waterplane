@@ -7,6 +7,8 @@ import type { FeatureManifest } from "../../sdk";
 import { NotificationsSheet } from "./NotificationsSheet";
 import { onNotification, onNotificationList, onNotifyPrefs, openBell, openNotifCut, openNotifs } from "./actions";
 import { setFeedSource } from "../../feedSlot";
+import { setToastWhere } from "../../toast";
+import { core } from "../../sdk";
 import { needsYouItems, repoChipItems } from "./logic";
 import { heard, notifs, pushInfo } from "./store";
 import { NotificationSettings } from "./NotificationSettings";
@@ -33,10 +35,17 @@ export const manifest: FeatureManifest = {
       failures: (items) => repoChipItems(items),
       openBell, openCut: openNotifCut, openFeed: openNotifs,
     });
-    return () => setFeedSource(null);
+    // A phone toast's row leads to the session on screen when it was said
+    // (`ToastEntry.go`) — not when the feed itself is up: those are about the feed.
+    setToastWhere(() => {
+      const c = core();
+      const id = c.nav.overlay === "notifications" ? null : c.world.active?.id;
+      return id ? { sessionId: id } : null;
+    });
+    return () => { setFeedSource(null); setToastWhere(null); };
   },
   settings: [
     // The head of Notifications: the feed, and which kinds may fire.
-    { group: "notifications", order: 10, render: () => createElement(NotificationSettings) },
+    { group: "notifications", order: 30, render: () => createElement(NotificationSettings) },
   ],
 };

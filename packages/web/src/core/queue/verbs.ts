@@ -7,6 +7,7 @@ import { canRetarget, isLocalCommand, moveInLane, retargetEntry, serialGroup } f
 import {
   clearDeadUpload, isCreateOp, isSerializable, loadDraft, newAckId, noteDeadUpload, saveDraft, type OutboxEntry,
 } from "../../outbox";
+import { isRelayedLive, isRelayedStuck, relayedRefusal } from "../../relayedRow";
 import { dropKept } from "../../attachments";
 import { idbDel } from "../../idb";
 import { showToast } from "../../toast";
@@ -83,7 +84,15 @@ export function verbFns(c: QueueCtx): VerbFns {
    *  back the agent may have done half of it — so editing in place beats
    *  discard-and-retype. Only `queued` entries: a `pending` one may already be
    *  on a live PTY, where an edit would change nothing but the record. */
-  function editQueued(ackId: string, text: string) {
+  function editQueued(ackId: string, text: string): boolean {
+    // A row the background link already put on the wire keeps its words: the
+    // desktop has the old text, so an edit here would only change the record.
+    // Returns false when refused, so no caller goes on to say "edited".
+    const relayed = outboxRef.current.find((e) => e.ackId === ackId && isRelayedLive(e));
+    if (relayed) {
+      showToast(relayedRefusal("edited", relayed));
+      return false;
+    }
     writeOutbox(outboxRef.current.map((e) => {
       if (e.ackId !== ackId || e.status !== "queued") return e;
       // An OP is a payload, not prose. Only the two whose whole point IS the
@@ -102,6 +111,7 @@ export function verbFns(c: QueueCtx): VerbFns {
       }
       return { ...e, text, label: e.mode === "backlog" ? text.slice(0, 40) : e.label };
     }));
+    return true;
   }
   /**
    * Point a queued message at a DIFFERENT session or repo — the fix for "I typed
@@ -240,7 +250,18 @@ export function verbFns(c: QueueCtx): VerbFns {
     writeOutbox(outboxRef.current.filter((e) => !ids.has(e.ackId)));
   }
 
-  function removeQueued(ackId: string) {
+  function removeQueued(ackId: string, opts?: { mayHaveRun?: boolean }): boolean {
+    // Same row, same rule: the prompt may already have run, so "discard" would
+    // claim a cancel that never happened. A live one leaves the queue with its
+    // receipt. A STUCK one (failed, no host word it never ran) gets no receipt,
+    // so `mayHaveRun` — "remove from the list", asked and worded by
+    // `removeRelayedStuck` — unlocks it, and only it. False = refused: the
+    // caller must not copy the words elsewhere or announce a discard.
+    const relayed = outboxRef.current.find((e) => e.ackId === ackId && isRelayedLive(e));
+    if (relayed && !(opts?.mayHaveRun && isRelayedStuck(relayed))) {
+      showToast(relayedRefusal("discarded", relayed));
+      return false;
+    }
     // An upload's bytes are parked in IndexedDB under the same key — dropping the
     // entry without them would leak a photo per discard. They are moved aside
     // rather than erased (`retainUploadBytes`): the text naming this path lives
@@ -262,6 +283,7 @@ export function verbFns(c: QueueCtx): VerbFns {
     // `pendingCreate` entry holds its lane rather than being delivered. Surface
     // them as failed (text kept, re-aimable) instead of leaving a silent park.
     if (gone && isCreateOp(gone)) failPendingCreates(gone.sessionId, "the session it was queued for was discarded", gone.ackId);
+    return true;
   }
   /**
    * "…and then do this" on a queued open: append one more prompt to the chain
@@ -409,17 +431,20 @@ export function verbFns(c: QueueCtx): VerbFns {
     const e = outboxRef.current.find((x) => x.ackId === ackId);
     if (!e) return;
     if (e.mode === "op") { showToast("that's an action — discard it instead"); return; }
+    // The row would stay (the desktop may be typing it) while its words sat in a box to be sent
+    // again: refuse BEFORE any copy is made.
+    if (isRelayedLive(e)) { showToast(relayedRefusal("put back in the message box", e)); return; }
     // A prompt still waiting for its session has no live target to hand the
     // text back to, so it always lands in the compose box below.
     if (e.pendingCreate) {
-      removeQueued(ackId);
+      if (!removeQueued(ackId)) return;
       setCompose((c) => (c ? `${c}\n${e.text}` : e.text));
       showToast("moved into the message box");
       return;
     }
     const target = sessions.find((s) => s.id === e.sessionId);
     if (!target) {
-      removeQueued(ackId);
+      if (!removeQueued(ackId)) return;
       setCompose((c) => (c ? `${c}\n${e.text}` : e.text));
       showToast("moved into the message box");
       return;
@@ -433,7 +458,7 @@ export function verbFns(c: QueueCtx): VerbFns {
       showToast(`couldn't save to ${target.title}'s message box — it stays in the queue`);
       return;
     }
-    removeQueued(ackId);
+    if (!removeQueued(ackId)) return;
     if (activeId === target.id) setCompose(merged);
     showToast(`moved into ${target.title}'s message box`);
   }

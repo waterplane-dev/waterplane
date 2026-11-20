@@ -23,7 +23,7 @@ export const REPO_HEALTH_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // nothing: opening the sheet must not move the series it is about to draw.
   //
   // The refresh is a POST because it spawns and writes (origin.ts: no /api
-  // GET may change state), and `capture/run`'s rule applies to its wait — the
+  // GET may change state), and the same rule applies to its wait — the
   // cap bounds how long the RESPONSE is held, never the run. Past it the run
   // carries on and the answer says `run.state: "running"` with the progress
   // line the tool last printed; a caller told "failed" would be wrong, and a

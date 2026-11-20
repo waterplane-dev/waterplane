@@ -25,6 +25,22 @@ import { Button } from "../../kit/Button";
 
 const noCount = () => null;
 
+/**
+ * One titled group of a Home menu (the ☰ and a repo's ⋯, whole-app journey spec D6): a small
+ * heading on a line of its own, then its lines. Nothing is drawn when every child is absent.
+ */
+export function MenuGroup({ title, children }: { title: string; children: ReactNode }): ReactNode {
+  const kids = (Array.isArray(children) ? children.flat(Infinity) : [children]).filter((c) => c !== null && c !== undefined && c !== false);
+  if (!kids.length) return null;
+  return (
+    <>
+      {/* `.plugin-menu-head` is the app's one small muted menu heading; the basis puts it on its own line in `.row-more`'s wrap. */}
+      <div className="plugin-menu-head menu-group-head" role="heading" aria-level={3} style={{ flexBasis: "100%" }}>{title}</div>
+      {children}
+    </>
+  );
+}
+
 /** A counted item's tap lands on exactly what the badge counts (`openCount`) — a count is a filter. */
 function tap(it: ContributedEntry, where: string, n: number, onOpen?: () => void) {
   track(`action:launcher.${where}${it.key}`);

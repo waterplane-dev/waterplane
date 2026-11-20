@@ -2,6 +2,7 @@
  * The logins cheat sheet: commands that log a CLI in from a phone. A row adds
  * its command to the compose box (never sends it); one count is a filter.
  */
+import { TITLE } from "../../sheetNames";
 import { useState } from "react";
 import { AlertTriangle, BookKey, Plus } from "lucide-react";
 import { Sheet } from "../../Sheet";
@@ -14,7 +15,7 @@ export function LoginsSheet() {
   const total = LOGIN_ROWS.length;
   const rows = cutRows(onlyLocal);
   return (
-    <Sheet title="logins" icon={<BookKey size={16} />} onClose={closeLogins}>
+    <Sheet title={TITLE.logins} icon={<BookKey size={16} />} onClose={closeLogins}>
       <Hint>{LOGINS_HEADER}</Hint>
       <CountChips className="annot-tools" keys={["local"] as const}
         bucket={() => ({ count: localhostCount() })} label={() => "redirect to localhost"}

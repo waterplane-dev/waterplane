@@ -206,11 +206,11 @@ export function skillDescChars(text: string): number {
   const start = lines.findIndex((l) => DESC_KEY.test(l));
   if (start < 0) return 0;
   // A `>` / `|` block-scalar indicator is YAML syntax, not words the model reads.
-  const first = lines[start].replace(DESC_KEY, "").trim();
+  const first = lines[start]!.replace(DESC_KEY, "").trim();
   const parts = /^[>|][+-]?\d*$/.test(first) ? [] : [first];
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^[A-Za-z_-]+:/.test(lines[i])) break;   // the next top-level key
-    parts.push(lines[i].trim());
+    if (/^[A-Za-z_-]+:/.test(lines[i]!)) break;   // the next top-level key
+    parts.push(lines[i]!.trim());
   }
   return parts.join(" ").trim().length;
 }

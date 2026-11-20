@@ -50,9 +50,9 @@ export function PickMenu({ at, onPick, onCancel }: { at: MenuAt; onPick: () => v
       left: Math.max(8, Math.min(at.x - 110, window.innerWidth - 236)),
       top: at.y + 220 > window.innerHeight ? Math.max(8, at.y - 220) : at.y + 28,
     }}>
-      <Button onClick={onPick}><ListChecks size={ICON} /> pick lines</Button>
-      <Button onClick={() => { onCancel(); void openDecisions(); }}><MessageSquareReply size={ICON} /> answer list</Button>
-      <Button onClick={onCancel}><TextSelect size={ICON} /> select text</Button>
+      <Button onClick={onPick}><ListChecks size={ICON} /> Pick lines</Button>
+      <Button onClick={() => { onCancel(); void openDecisions(); }}><MessageSquareReply size={ICON} /> Answer the list</Button>
+      <Button onClick={onCancel}><TextSelect size={ICON} /> Select text</Button>
       <Button onClick={() => { window.getSelection()?.removeAllRanges(); onCancel(); }}><X size={ICON} /> cancel</Button>
     </div>
   );

@@ -39,7 +39,7 @@ export function SendSheet(props: SendSheetProps) {
   const { retime, onDiscard, onClose } = m;
   return (
     <div className="sheet">
-      <SheetHead title={retime ? <><CalendarClock size={16} /> Re-time</> : <><SendHorizontal size={16} /> Send</>} onClose={onClose}>
+      <SheetHead title={retime ? <><CalendarClock size={16} /> Change time</> : <><SendHorizontal size={16} /> Send</>} onClose={onClose}>
         {onDiscard && !retime && (
           <Button variant="danger" title="throw this message away — the words go too"
             onClick={() => { track("action:send.discard"); onDiscard(); onClose(); }}>

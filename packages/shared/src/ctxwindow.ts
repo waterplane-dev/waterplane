@@ -46,7 +46,7 @@ export const WINDOW_LADDER = [200_000, 1_000_000] as const;
 /** Every Claude model, absent any evidence to the contrary. */
 export const DEFAULT_WINDOW_TOK = WINDOW_LADDER[0];
 /** What an explicit `[1m]` on a LAUNCH id means. */
-export const LONG_WINDOW_TOK = WINDOW_LADDER[WINDOW_LADDER.length - 1];
+export const LONG_WINDOW_TOK = WINDOW_LADDER[WINDOW_LADDER.length - 1]!;
 
 /** The `[1m]` variant marker, in the two spellings the CLI has used. Present on
  *  a launch id; usually absent from the id the log records. */

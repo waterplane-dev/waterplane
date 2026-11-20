@@ -43,6 +43,7 @@ import type { WebSocket } from "ws";
 import {
   firstSentOnHostClock,
   relayRefusal,
+  RELAY_STALE_REFUSAL,
   RELAY_LINK_FRAMES,
   RELAY_WAIT_MAX_MS,
   type ClientMessage,
@@ -53,9 +54,9 @@ import {
 } from "@waterplane/shared";
 import { ACK_TTL_MS } from "../acks.js";
 
-/** The sentence answering an unknown ackId first sent longer ago than the ledger remembers. */
-export const RELAY_STALE_REFUSAL =
-  "this was first sent too long ago for the desktop to say whether it already ran; check, then send it again as a new message";
+/** The sentence answering an unknown ackId first sent longer ago than the ledger remembers
+ *  (worded in shared, so the phone can tell it from a refusal that proves nothing ran). */
+export { RELAY_STALE_REFUSAL };
 
 /** The `waitMs` a request that names none gets. */
 export const RELAY_WAIT_DEFAULT_MS = 20_000;

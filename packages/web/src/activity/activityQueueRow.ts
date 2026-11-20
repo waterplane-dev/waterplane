@@ -9,6 +9,7 @@ import { CONFIRMING_WHY } from "../sendConfirm.ts";
 import { isFailedPhase, isUnconfirmed, rowPhase } from "../core/queue/phase.ts";
 import { laneStateOf, serialTextFor } from "../core/queue/serialStates.ts";
 import type { OutboxEntry } from "../outbox";
+import { isRelayedLive, isRelayedStuck, RELAYED_REMOVE_LABEL, relayedWhy } from "../relayedRow.ts";
 import {
   act,
   clip,
@@ -89,6 +90,9 @@ const STUCK_WHY: Record<NonNullable<OutboxEntry["failState"]>, string | undefine
   refused: "the desktop answered no and remembers it, so this exact message can only be refused again — rewrite it to send it as a new one.",
   other: undefined,
 };
+
+/** `STUCK_WHY` sentences saying "rewrite it": false on a stuck relayed row (`relayedWhy` instead). */
+const TELLS_REWRITE: Partial<Record<NonNullable<OutboxEntry["failState"]>, true>> = { unconfirmed: true, refused: true };
 
 function queueKind(e: OutboxEntry, deps: ActivityDeps): ActivityKind {
   if (e.answer) return "answer";
@@ -194,7 +198,8 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
   // fresh ackId (`retireSendSource`) — and without this every red prompt row
   // offered "rewrite it" refused with "this one is an action, not text", which
   // is both wrong and the sentence a person reads when they are already stuck.
-  const editable = deps.isEditableEntry(e) || (e.status === "failed" && kind === "prompt");
+  // Never a relayed row nobody said never ran, failed or not: a new ackId for words that may have run.
+  const editable = !isRelayedLive(e) && (deps.isEditableEntry(e) || (e.status === "failed" && kind === "prompt"));
   const parked = e.mode === "upload" || e.mode === "op" || !!e.answer;
   const locked = e.status === "pending";
   const prose = entryProse(e);
@@ -230,7 +235,7 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
     // While the host is still asking, the reason "try again" is not the move is
     // simpler than the settled one — and it does not end with a decision.
     : confirming ? CONFIRMING_WHY
-    : e.failState ? STUCK_WHY[e.failState]
+    : e.failState ? (isRelayedStuck(e) && TELLS_REWRITE[e.failState] ? relayedWhy(e) : STUCK_WHY[e.failState])
     : undefined;
   const actions: ActivityAction[] = [
     ...(needsAnswer ? [act("answer", "answer the question", { primary: true })] : []),
@@ -262,15 +267,16 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
       // row and queues a FRESH ackId (`retireSendSource`), which is a message
       // the ledger has never seen. Marked primary there so the row leads with
       // the one action that can still move it.
-      primary: !!stuckSend,
+      primary: !!stuckSend && !isRelayedLive(e),
       disabledReason: editable ? undefined
         : locked ? "already on its way"
+        : isRelayedLive(e) ? relayedWhy(e) // a rewrite would mint a new ackId for words the desktop holds
         : e.answer ? "an answer is the option you tapped, not text"
         : e.mode === "upload" ? "a file has no words to rewrite"
         : "this one is an action, not text",
     }),
     act("fix", "fix its files & send", {
-      disabledReason: e.answer || e.mode === "upload" ? "there are no words on this row to rewrite" : undefined,
+      disabledReason: e.answer || e.mode === "upload" ? "there are no words on this row to rewrite" : isRelayedLive(e) ? relayedWhy(e) : undefined,
     }),
     // Only the one verdict this is honestly an answer to: the desktop typed it
     // in and could not read the screen back to say whether it landed. The
@@ -280,7 +286,8 @@ export function queueRow(e: OutboxEntry, input: ActivityInput): ActivityRow {
     ...(isUnconfirmed(e) ? [act("confirmDone", "save as done", {
       disabledReason: confirming ? CONFIRMING_WHY : locked ? "already on its way" : undefined,
     })] : []),
-    act("discard", "discard", { danger: true, alwaysShown: true, disabledReason: locked ? "already on its way" : undefined }),
+    // A stuck relayed row gets no receipt: its discard is the way out, a removal asked first (`removeRelayedStuck`).
+    act("discard", isRelayedStuck(e) ? RELAYED_REMOVE_LABEL : "discard", { danger: true, alwaysShown: true, disabledReason: locked ? "already on its way" : isRelayedStuck(e) ? undefined : isRelayedLive(e) ? relayedWhy(e) : undefined }),
   ];
   if (e.sessionId && !e.sessionId.startsWith("create:")) {
     actions.push(act("open", "open the session", {

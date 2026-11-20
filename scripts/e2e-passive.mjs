@@ -150,6 +150,8 @@ bootWait(PORT, 900, async () => {
     check((await api("/api/devices/revoke", { method: "POST", tok: kid, body: { id: "d-0000000000" } })).status === 403, "unlocked or not, it never revokes a device");
     check((await api("/api/peers", { method: "POST", tok: kid, body: { name: "pc", addr: "http://127.0.0.1:1" } })).status === 403, "unlocked or not, it never pairs a peer");
     check((await api("/api/lan/identity", { tok: kid })).status === 403, "unlocked or not, it never reads the LAN identity secret");
+    // The code root persists and restarts the host: it outlives the unlock (R-connection-013). The body is never read.
+    check((await api("/api/host/root", { method: "POST", tok: kid, body: { root: "/" } })).status === 403, "unlocked or not, it never changes the code root");
     check((await api("/api/repos", { tok: kid })).status === 200, "…while the rest of full scope still answers");
     // Bounded: on a host without the refusal the answer is `auth.state`, never `error`, and a
     // regression must fail in words rather than hang the script.

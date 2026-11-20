@@ -82,7 +82,7 @@ test("automation and build clocks: no list is no claim; a build count cuts to ex
   assert.equal(b.text, "2 builds on a clock");
   assert.deepEqual(b.door, { kind: "automationCut", ids: ["b", "c"], label: "builds on a clock" });
   assert.equal(b.verb, "see those 2");
-  assert.deepEqual(view("build-clock", { clocks: [clocks[0]] }), { text: "none yet", door: { kind: "sheet", id: "schedule" }, verb: "open Automation" });
+  assert.deepEqual(view("build-clock", { clocks: [clocks[0]] }), { text: "none yet", door: { kind: "sheet", id: "schedule" }, verb: "open Scheduled" });
 });
 
 test("an APK-gated row says why in words and offers the APK; a browser says app only", () => {

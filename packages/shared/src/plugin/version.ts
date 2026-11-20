@@ -52,8 +52,10 @@
  * previous run left behind, keeping the tags still live; scoped to its own items. 2.6 plugins load as-is.
  * **2.8** (additive): `HostPluginApi.revokeDevice(id)` — an IN-REPO extension revokes one paired device's token
  * (the vault's `wp-secret devices rm`); an external plugin's call throws. 2.7 plugins load as-is.
+ * **2.9** (additive): `PluginCaller.scope` — `"passive"` when the calling device is a passive (kids')
+ * row, so a plugin can refuse an unlocked kid's phone (the vault does). 2.8 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "2.8.0";
+export const PLUGIN_API_VERSION = "2.9.0";
 
 /** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
 export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";

@@ -41,6 +41,8 @@ import { SYNCED_SETTING_KEYS, lsKey } from "@waterplane/shared";
 import { LS_PREFS } from "./storage/keysPrefs.ts";
 import { LS_VIEW } from "./storage/keysView.ts";
 import { LS_WORK } from "./storage/keysWork.ts";
+import { readGuarded, writeChecked } from "./storedGuard.ts";
+import { clearLoss, reportLoss } from "./lossNotice.ts";
 
 /**
  * The keys.
@@ -155,7 +157,7 @@ export const KEY_SCOPE = {
   pullState: "host", pullAuto: "host", pullBrowserAsk: "host", pullAutoSave: "host",
   // what that host last said, cached for an offline cold start
   snapSessions: "host", snapRepos: "host", snapReposAt: "host", snapRecent: "host", snapClosed: "host",
-  snapBacklog: "host", snapHistory: "host", snapBuilds: "host", snapCapture: "host", snapSchedules: "host",
+  snapBacklog: "host", snapHistory: "host", snapBuilds: "host", snapSchedules: "host",
   snapCliHealth: "host", snapAt: "host", themeOverlay: "host", themeOverlayCss: "host", slashCache: "host", fileMtimes: "host", artMarks: "host", fileRemarks: "host", filesDir: "host",
   newImages: "host", cmdHistory: "host", usage: "host", notifSeen: "host",
   costNoticed: "host", agentNoticed: "host", spendNoticed: "host",
@@ -238,6 +240,29 @@ export function lsJson<T>(key: string, fallback: T): T {
 
 export function lsSetJson(key: string, value: unknown): void {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
+}
+
+/**
+ * A user-authored key (drafts, presets, remarks, history, held dictations).
+ * Unlike `lsJson`, an unreadable value is a STATE: its raw text is kept aside
+ * (`storedGuard.keepAside`), the caller gets `fallback`, the composer's loss
+ * line says so, and `lsSetJsonUser` refuses to overwrite it unless a copy is held.
+ */
+export function lsJsonUser<T>(key: string, fallback: T, what: string, valid: (v: unknown) => boolean = () => true): T {
+  try {
+    const r = readGuarded(localStorage, key, fallback, (v) => v !== null && valid(v));
+    if (r.unreadable) reportLoss({ kind: "unreadable", what, keptSlot: r.keptAt });
+    else clearLoss(`unreadable:${what}`); // the store heals: a dismissal is forgotten, a later failure speaks anew
+    return r.value;
+  } catch { return fallback; }
+}
+
+/** `false` = nothing was written (quota, private mode, or an unreadable copy that could not be kept); the loss line says so. */
+export function lsSetJsonUser(key: string, value: unknown, what: string, valid: (v: unknown) => boolean = () => true): boolean {
+  let ok = false;
+  try { ok = writeChecked(localStorage, key, value, valid); } catch { ok = false; }
+  if (ok) clearLoss(`refused:${what}`); else reportLoss({ kind: "refused", what });
+  return ok;
 }
 
 /** `"1"`/`"0"` flags, with the default applied to an unset key. */

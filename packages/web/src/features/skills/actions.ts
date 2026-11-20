@@ -6,7 +6,9 @@
 import type { SkillChange, SkillInventoryDoc, SkillRecommendResponse, SwitchLevel } from "@waterplane/shared";
 import { api } from "../../api";
 import { core } from "../../sdk";
-import { initialSkills, skillsState } from "./store";
+import { initialSkills, skillsEmbedAim, skillsState } from "./store";
+import { CLAUDE } from "../../backendCaps";
+import { healthPlace, leaveHealth, switchHealth, type HealthPlace } from "../../setupHealth";
 import { changeCount, levelFor, moveDraft, parkKeyOf, reconcileSuggestions, scopeOf, suggestionChanges, receiptWords, withPin, withScope, withScopedChoice, withoutSent, type FilterKey, type Row, type SortKey, type Target, type Want } from "./logic";
 
 /** The sheet's own mount: a different repo starts with empty drafts, the same one keeps its unsaved ones. */
@@ -24,7 +26,16 @@ export function aimSkills(repoId: string, backend?: string, target?: Target): vo
 }
 
 export function closeSkills(): void {
+  leaveHealth("skills");
   core().nav.close("skills");
+}
+
+/** Setup & health's Skills section, brought on screen by a section tap: on the repo the last section was on. */
+export function enterSkills(repoId: string | null, _place: HealthPlace): void {
+  const w = core().world;
+  const id = repoId ?? skillsState.get().repoId ?? w.activeRepo?.id ?? w.repos.find((r) => r.isPrimary)?.id ?? null;
+  if (!id) { skillsEmbedAim.set(null); return; }
+  skillsEmbedAim.set({ repoId: id, backend: CLAUDE });
 }
 
 const patch = (p: Partial<ReturnType<typeof skillsState.get>>) => skillsState.set({ ...skillsState.get(), ...p });
@@ -67,9 +78,14 @@ export function pin(row: Row): void {
 }
 
 /** The door back to the readings: what every turn of this repo carries, skills included. */
-export function openCarried(repoId: string): void {
-  core().say.track("action:skills.carried");
-  core().nav.openSetup(repoId, { region: "agents" });
+export function openCarried(_repoId: string): void {
+  const c = core();
+  c.say.track("action:skills.carried");
+  // The same screen's Sessions section, never a second sheet: the readings body takes this repo.
+  const self = c.nav.overlay;
+  const at = healthPlace.get();
+  const from: HealthPlace = at && at.self === self ? at.place : { tab: "repo", section: "skills" };
+  switchHealth(self, from, { tab: "repo", section: "sessions" });
 }
 
 export type SaveResult = { ok: true; doc: SkillInventoryDoc } | { ok: false; error: string; stale: boolean };

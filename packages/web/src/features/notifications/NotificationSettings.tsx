@@ -7,7 +7,7 @@ import { NOTIFICATION_KINDS, notifyEnabled } from "@waterplane/shared";
 import { Bell, BellOff, Info } from "lucide-react";
 import { SetAction, SetCustom, SetSwitch } from "../../SettingsKit";
 import { openNotifs, setNotifyKind, setPushInfo } from "./actions";
-import { NOTIF_LABEL, levelWords } from "./logic";
+import { NOTIF_LABEL } from "./logic";
 import { NOTIF_ICON } from "./NotificationsSheet";
 import { pushInfo, useNotifyPrefs, useUnread } from "./store";
 import { useStore } from "../../sdk";
@@ -19,7 +19,7 @@ export function NotificationSettings() {
   return (
     <>
       <SetAction
-        id="notif-feed" label={`open the feed${unreadNotifs > 0 ? ` (${unreadNotifs})` : ""}`} icon={Bell} opens
+        id="notif-feed" label={`In-app feed${unreadNotifs > 0 ? ` (${unreadNotifs} new)` : ""}`} icon={Bell} opens
         onClick={() => { openNotifs(); }}
         note="Every alert you leave switched on below lands in the in-app feed — works even without HTTPS."
       />
@@ -28,8 +28,8 @@ export function NotificationSettings() {
           six times, and six full rows of prose was most of what made
           this screen unreadable. */}
       <SetCustom
-        id="notif-kinds" label="what may fire" icon={BellOff}
-        note="A kind switched off is dropped by the host — no feed row and no OS push, on every device."
+        id="notif-kinds" label="what may fire" icon={Bell}
+        note="Each kind lands as needs you or information. A kind switched off is dropped by the desktop: no feed row and no OS push, on every device."
         more={<p>The mute follows the account, not the browser, because the push is sent from the desktop.</p>}
       >
         <div className="set-kinds">
@@ -42,7 +42,7 @@ export function NotificationSettings() {
                 key={k} label={meta?.name ?? k} icon={on ? Icon : BellOff}
                 on={on}
                 onChange={() => setNotifyKind(k, !on, meta?.name ?? k)}
-                note={meta ? `${meta.note} Lands in: ${levelWords(k)}.` : undefined}
+                note={meta?.note}
               />
             );
           })}

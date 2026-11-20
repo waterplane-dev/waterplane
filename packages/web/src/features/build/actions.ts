@@ -9,6 +9,7 @@ import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
 import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildVersions, buildOpts, buildRepo, buildRunFocus, buildScheduleEdit, builds, type ParamOptions } from "./store";
 import { randId } from "../../randId";
+import { showReceipt } from "../../receipt";
 
 export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
   buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
@@ -30,13 +31,20 @@ export function onBuildCandidates(repoDir: string, list: BuildCandidate[], total
   buildCands.set((prev) => mapWith(prev, repoDir, { list, total }));
 }
 
-/** `build.run`: the run upserted, and a toast only when it SETTLED. */
+/** `build.run`: the run upserted, and a receipt only when it SETTLED. */
 export function onBuildRun(run: BuildRun, c: CoreApi): void {
   builds.onRun(run);
   const said = buildRunToast(run);
-  if (said) c.say.toast(said);
+  // A receipt only when the result is out of sight: with this repo's build sheet on top the settled run is its own row.
+  const onScreen = c.nav.overlay === "build" && buildRepo.get()?.worktreePath === run.repoDir;
+  if (said && !onScreen) {
+    // D5: the result is a receipt whose Open lands on the build sheet of that repo (its runs and files).
+    const repo = c.world.repos.find((r) => r.worktreePath === run.repoDir);
+    showReceipt({ text: said, ...(repo ? { open: { run: () => openBuildFor(repo) } } : {}) });
+  }
   // A settled run may have appended a build record: re-read the list so the
   // open sheet's "last build" line is this run's, not the one before it.
+  // eslint-disable-next-line local/no-silent-send -- a re-read after a settled run: nobody tapped, and the receipt above is what the person sees
   if (said && buildRepo.get()?.worktreePath === run.repoDir) c.conn.send({ t: "build.list", repoDir: run.repoDir });
 }
 

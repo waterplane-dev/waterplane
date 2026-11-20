@@ -1,10 +1,10 @@
 /**
- * Pins for splitting `capture.ts`, `backlog.ts` and `deliver.ts` (docs/notes/host-architecture.md,
- * "The capture and backlog slices", "The deliver slices"). The two files stay as barrels/facades over
- * `capture/` and `backlog/`; what must not change in a move is the EXPORT SURFACE,
+ * Pins for splitting `backlog.ts` and `deliver.ts` (docs/notes/host-architecture.md,
+ * "The backlog slice", "The deliver slices"). The files stay as barrels/facades over
+ * `backlog/`; what must not change in a move is the EXPORT SURFACE,
  * read off the type checker (values and types alike), and the class's public
  * method list. Behaviour is held by the existing host tests
- * (`capture.test.mjs`, `backlog*.test.mjs`), run untouched before and after.
+ * (`backlog*.test.mjs`), run untouched before and after.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -31,24 +31,15 @@ function members(file, className) {
     .map((s) => s.name).sort();
 }
 
-const CAPTURE_SURFACE = ["CaptureEvents:type","CaptureManager:value","CleanTargetResult:type","EmitInput:type","VerdictInput:type","VerificationInput:type","classifyOverlay:value","cleanTarget:value","diffRecord:value","intentToCaptureRun:value","probeCaptureBackends:value","shouldEmit:value","verdictLine:value","verificationLevel:value"];
 const BACKLOG_SURFACE = ["BACKLOG_LINGER_MS:value","BACKLOG_SESSIONS_MAX:value","BacklogManager:value","REAP_CEILING_MS:value","backlogTitle:value","chainDeliveryError:value","deliveryError:value","isBacklogTitle:value","retryableStep:value","withoutBacklogMark:value"];
 const BACKLOG_MEMBERS = ["add","archive","autoSessionCount","autoSlotFacts","closesWhenDone","deliver","ensureRepoSession","fire","getAuto","idleMs","init","lingerSweep","list","markDone","openItemSession","remove","reorder","resolveRepoSession","rows","setAuto","setCloseWhenDoneDefault","swap","update","waiting"];
-const CAPTURE_MEMBERS = ["cancel","execute","getOutput","list","run","runsFor","save"];
 
-test("capture.ts exports exactly its pinned surface", () => {
-  assertSurface(here("../packages/host/src/capture.ts"), CAPTURE_SURFACE);
-});
 test("backlog.ts exports exactly its pinned surface", () => {
   assertSurface(here("../packages/host/src/backlog.ts"), BACKLOG_SURFACE);
 });
 test("BacklogManager keeps every public member it had", () => {
   const have = members(here("../packages/host/src/backlog.ts"), "BacklogManager");
   assert.deepEqual(BACKLOG_MEMBERS.filter((n) => !have.includes(n)), []);
-});
-test("CaptureManager keeps every public member it had", () => {
-  const have = members(here("../packages/host/src/capture.ts"), "CaptureManager");
-  assert.deepEqual(CAPTURE_MEMBERS.filter((n) => !have.includes(n)), []);
 });
 
 /**

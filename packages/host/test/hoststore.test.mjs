@@ -18,7 +18,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, existsSync, readdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, existsSync, readdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BRAND } from "@waterplane/shared";
@@ -215,4 +215,22 @@ test("the LAN identity, LAN TLS key and update key are live state, not 'not in t
   const rep = hostStoreReport(dir);
   assert.equal(rowOf(rep, "unknown").count, 0);
   assert.equal(rowOf(rep, "live").count, 3);
+});
+
+test("agent readings: the shard directory is live, the pre-shard file is live until migrated, then a clearable leftover", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hoststore-"));
+  const store = join(dir, BRAND.stateDirName);
+  mkdirSync(join(store, "agentreadings"), { recursive: true });
+  writeFileSync(join(store, "agentreadings", "-r-app.json"), "x".repeat(11));
+  writeFileSync(join(store, "agentreadings", "-r-other.json"), "x".repeat(13));
+  writeFileSync(join(store, "agentreadings.json"), "x".repeat(17));
+  let rep = hostStoreReport(dir, 1_000);
+  assert.equal(rowOf(rep, "live").count, 3);
+  assert.equal(rowOf(rep, "live").bytes, 41);
+  assert.equal(rowOf(rep, "unknown").count, 0);
+  renameSync(join(store, "agentreadings.json"), join(store, "agentreadings.json.migrated"));
+  rep = hostStoreReport(dir, 1_000);
+  assert.equal(rowOf(rep, "rollback").count, 1);
+  assert.equal(rowOf(rep, "rollback").bytes, 17);
+  assert.equal(rowOf(rep, "live").count, 2);
 });

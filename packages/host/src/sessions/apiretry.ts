@@ -80,6 +80,8 @@ import type { Session, SessionCore } from "./core.js";
 import { NET_RETRY_LADDER_MS, NET_RETRY_MAX, NET_RETRY_PARK_MS, NET_RETRY_STALL_MS } from "./knobs.js";
 import { netRetryOn } from "../netretrycfg.js";
 import { WaveGate, type WavePolicy, type WaveVerdict } from "../recover/wavegate.js";
+import type { Clock } from "../waitclock.js";
+import { arm, cancel as cancelTimer, clockOf } from "./timers.js";
 
 /** How long a busy session is parked before the retry looks again. */
 const PARK_MS = NET_RETRY_PARK_MS;
@@ -112,7 +114,20 @@ const WAVE_SETTLE_MAX_MS = 10 * 60_000;
 /** A held session's line (`SessionNetRetry.why`): it waits for another session's probe. */
 export const NET_WAVE_WHY = NET_HELD_WHY;
 
+/**
+ * Does a write of `data` call off a pending net retry? Owner decision
+ * 2026-11-18: a person's typed prompt, a usage-limit continue and a sign-in
+ * continue do (all are text or a Return); Esc, Ctrl-U, shift-tab and every
+ * other escape sequence (arrows, bookkeeping) do not. A bracketed paste
+ * (`\x1b[200~`, how `deliverrun.ts` types a prompt) is words, so it cancels.
+ */
+export function cancelsNetRetry(data: string): boolean {
+  if (data.startsWith("\x1b[200~")) return true;
+  return !(data === "\x15" || data.startsWith("\x1b"));
+}
+
 export class NetRetrySlice {
+  private get clock(): Clock { return clockOf(this.core); }
   /**
    * The HOST-scope wave gate (`recover/wavegate.ts`): a network outage is one
    * fact about this desktop, so when several sessions' rungs come due together
@@ -171,13 +186,18 @@ export class NetRetrySlice {
   turnStarted(s: Session): void {
     const n = s.info.netRetry;
     if (!n) return;
-    if (n.state === "sent" && Date.now() - (s.netSentAt ?? 0) < OURS_MS) return;
+    if (n.state === "sent" && this.clock.now() - (s.netSentAt ?? 0) < OURS_MS) return;
     this.cancel(s, "a turn started");
   }
 
-  /** Someone typed into the session — our own `continue` excepted. */
-  typed(s: Session): void {
+  /**
+   * Something wrote into the session — our own `continue` excepted. Only words
+   * cancel (a person's prompt, the wall's or the sign-in's `continue`); a key
+   * sequence is not words: see `cancelsNetRetry`.
+   */
+  typed(s: Session, data?: string): void {
     if (s.netWriting || !s.info.netRetry) return;
+    if (data !== undefined && !cancelsNetRetry(data)) return;
     this.cancel(s, "typed into the session");
   }
 
@@ -241,8 +261,8 @@ export class NetRetrySlice {
     if (s && n?.state === "gaveup") holdGiveUp(s, "net"); // announced before the restart
     if (!s || !n || n.state !== "gaveup" || n.nextAt == null) return;
     if (!netRetryOn() || NET_RETRY_STALL_MS <= 0) { this.set(s, { ...n, nextAt: null }); return; }
-    const at = Math.max(n.nextAt, Date.now() + PARK_MS);
-    this.arm(s, at - Date.now(), () => this.probe(s));
+    const at = Math.max(n.nextAt, this.clock.now() + PARK_MS);
+    this.arm(s, at - this.clock.now(), () => this.probe(s));
     if (at !== n.nextAt) this.set(s, { ...n, nextAt: at });
   }
 
@@ -262,7 +282,7 @@ export class NetRetrySlice {
     const v = readStandingGiveUp(transcriptPath(s.info.cwd, s.info.claudeSessionId));
     if (v.state !== "transient" || v.at == null || !v.error) return;
     const wait = Math.min(PARK_MS, NET_RETRY_STALL_MS);
-    const g: SessionNetRetry = { state: "gaveup", attempt: 0, max: NET_RETRY_MAX, nextAt: Date.now() + wait, error: v.error, at: v.at, why: "found stuck when the host started" };
+    const g: SessionNetRetry = { state: "gaveup", attempt: 0, max: NET_RETRY_MAX, nextAt: this.clock.now() + wait, error: v.error, at: v.at, why: "found stuck when the host started" };
     this.arm(s, wait, () => this.probe(s));
     this.set(s, g);
     console.log(`${logTag} net retry adopted a standing give-up · ${s.info.title} (${s.info.id}) · ${v.error} · trying in ${netStallWait(wait)}`);
@@ -285,7 +305,7 @@ export class NetRetrySlice {
     this.clearTimers(s);
     endGiveUp(s, "net"); // a person's tap is a new start: its own give-up is owed its own word
     const attempt = n.state === "gaveup" ? 0 : n.attempt;
-    this.set(s, { ...n, state: "waiting", attempt, nextAt: Date.now(), why: undefined, heldBy: undefined, probe: undefined, dismissed: undefined });
+    this.set(s, { ...n, state: "waiting", attempt, nextAt: this.clock.now(), why: undefined, heldBy: undefined, probe: undefined, dismissed: undefined });
     console.log(`${logTag} net retry now (from the phone) · ${s.info.title} (${s.info.id})`);
     // Forced, like the account wall's resume-now: the gap and the hold are
     // overruled, the first-alone rule is not — another session's probe in
@@ -307,8 +327,8 @@ export class NetRetrySlice {
   }
 
   private clearTimers(s: Session): void {
-    if (s.netTimer) { clearTimeout(s.netTimer); s.netTimer = null; }
-    if (s.netRecheck) { clearTimeout(s.netRecheck); s.netRecheck = null; }
+    cancelTimer(s, "net");
+    cancelTimer(s, "netRecheck");
   }
 
   private cancel(s: Session, why: string): void {
@@ -348,7 +368,7 @@ export class NetRetrySlice {
   private armProbe(s: Session, n: SessionNetRetry): SessionNetRetry {
     if (!netRetryOn() || NET_RETRY_STALL_MS <= 0 || hostHalt()) return { ...n, nextAt: null };
     this.arm(s, NET_RETRY_STALL_MS, () => this.probe(s));
-    const next = { ...n, nextAt: Date.now() + NET_RETRY_STALL_MS };
+    const next = { ...n, nextAt: this.clock.now() + NET_RETRY_STALL_MS };
     if (s.info.netRetry?.state === "gaveup") this.set(s, next);
     return next;
   }
@@ -361,7 +381,7 @@ export class NetRetrySlice {
     if (!netRetryOn() || NET_RETRY_STALL_MS <= 0) { this.stopProbing(s, "automatic retry is off"); return; }
     console.log(`${logTag} net retry stall probe (try ${n.attempt + 1}) · ${s.info.title} (${s.info.id}) · ${n.error}`);
     this.borrowed.delete(s.info.id); // its own probe from here
-    this.set(s, { ...n, state: "waiting", probe: true, nextAt: Date.now(), why: undefined, heldBy: undefined });
+    this.set(s, { ...n, state: "waiting", probe: true, nextAt: this.clock.now(), why: undefined, heldBy: undefined });
     this.gate.request(s.info.id);
   }
 
@@ -391,30 +411,26 @@ export class NetRetrySlice {
       const g = this.armProbe(s, { state: "gaveup", attempt, max: NET_RETRY_MAX, nextAt: null, error, at, why, ...(prev?.dismissed ? { dismissed: true } : {}) });
       this.set(s, g);
       this.verdict(s, "blocked");
-      console.log(`${logTag} net retry gave up · ${s.info.title} (${s.info.id}) · ${error}${g.nextAt != null ? ` · next try in ${netStallWait(g.nextAt - Date.now())}` : ""}`);
+      console.log(`${logTag} net retry gave up · ${s.info.title} (${s.info.id}) · ${error}${g.nextAt != null ? ` · next try in ${netStallWait(g.nextAt - this.clock.now())}` : ""}`);
       this.stalled(s, why);
       return { net: "gaveup", detail: netGaveUpDetail(error, why) };
     }
-    const n: SessionNetRetry = { state: "waiting", attempt, max: NET_RETRY_MAX, nextAt: Date.now() + delay, error, at };
+    const n: SessionNetRetry = { state: "waiting", attempt, max: NET_RETRY_MAX, nextAt: this.clock.now() + delay, error, at };
     this.arm(s, delay);
     this.set(s, n);
     this.verdict(s, "blocked");
-    console.log(`${logTag} ${netRetryLine(n, Date.now())} · ${s.info.title} (${s.info.id}) · ${error}`);
+    console.log(`${logTag} ${netRetryLine(n, this.clock.now())} · ${s.info.title} (${s.info.id}) · ${error}`);
     return { net: "retrying" };
   }
 
   /** A rung (or a park) is due: ask the wave gate, which types through `fire()` when it is this session's turn. */
   private arm(s: Session, ms: number, run: () => void = () => this.gate.request(s.info.id)): void {
-    if (s.netTimer) clearTimeout(s.netTimer);
-    s.netTimer = setTimeout(() => { s.netTimer = null; run(); }, ms);
-    s.netTimer.unref?.();
+    arm(s, "net", ms, run, clockOf(this.core));
   }
 
   private recheckLater(s: Session): void {
-    if (s.netRecheck) clearTimeout(s.netRecheck);
     const stops = s.stopCount;
-    s.netRecheck = setTimeout(() => {
-      s.netRecheck = null;
+    arm(s, "netRecheck", RECHECK_MS, () => {
       // Only if nothing moved since: same turn end, no turn running, nothing scheduled.
       if (s.stopCount !== stops || s.turnActive || s.info.netRetry?.state === "waiting") return;
       if (this.core.sessions.get(s.info.id) !== s || !s.info.running || !s.info.claudeSessionId) return;
@@ -425,15 +441,14 @@ export class NetRetrySlice {
       // The answer to a `checking` turn end (and harmless after a plain one: the
       // work waiting on it already settled, so there is nothing to apply it to).
       this.core.emit("netTurnSettled", s.info.id, stops, end);
-    }, RECHECK_MS);
-    s.netRecheck.unref?.();
+    }, clockOf(this.core));
   }
 
   /** Busy: look again in `ms`. The slot is freed with no hold — a box says nothing about the network. */
   private park(s: Session, why: string, ms = PARK_MS): void {
     const n = s.info.netRetry!;
     this.arm(s, ms);
-    this.set(s, { ...n, nextAt: Date.now() + ms, why, heldBy: undefined });
+    this.set(s, { ...n, nextAt: this.clock.now() + ms, why, heldBy: undefined });
     this.gate.release(s.info.id, "gone");
   }
 
@@ -487,7 +502,7 @@ export class NetRetrySlice {
       return;
     }
     const attempt = n.attempt + 1;
-    s.netSentAt = Date.now();
+    s.netSentAt = this.clock.now();
     // Before the first byte: a person typing between the two writes cancels, and the Return is skipped.
     // A `probe` lent by a stalled holder stays behind: this is the session's own rung.
     this.set(s, { ...n, state: "sent", attempt, nextAt: null, why: undefined, heldBy: undefined, probe: this.ownProbe(s) || undefined });

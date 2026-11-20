@@ -33,8 +33,9 @@ function sessionAt(cols, rows) {
   return { s, feed, resize, core };
 }
 
-// xterm's write is asynchronous; an empty write's callback is not exposed by
-// the recorder, so give the parser a turn before reading.
+// xterm's write is asynchronous. `screenText`/`screenCells` wait for the parser
+// themselves (`parsed()`, pinned below); these tests also read the recorder
+// directly (`alternate()`, `gridText()`), so give the parser a turn first.
 const settle = () => new Promise((r) => setTimeout(r, 50));
 
 test("alternate screen: the grid follows a resize the ring never recorded", async () => {
@@ -81,4 +82,32 @@ test("alternate screen: a narrowed grid reads no cell past the pane's edge", asy
   // The 80-column frame really was on screen, so the log may keep it; what it
   // must never hold is a row that was never drawn, the new words on the old tail.
   assert.equal(s.screenLog.lines().some((l) => /recap .*(stale tail|exit)/.test(l)), false);
+});
+
+// xterm parses on a timer, so the grid TRAILS the bytes received — by one timer
+// turn idle, by however long the loop is held on a loaded machine. The strict
+// prompt pass read a grid cut at `printf 'Delete the worktree` while the whole
+// box was in the ring, published no box, and nothing re-armed it (the box was
+// the last output): `e2e-answer.mjs` step 5, a load flake that later failed
+// alone. A reader asked right after the bytes arrive must see all of them.
+test("alternate screen: a read right after a write sees every byte written", async () => {
+  const { feed, core } = sessionAt(40, 12);
+  feed(`${ESC}[?1049h${ESC}[H$ `);
+  await settle();
+  // No settle from here on: the read follows the write in the same turn.
+  feed(`printf\r\nDelete the worktree?\r\n1. Yes\r\n2. No\r\nEsc to cancel\r\n$ `);
+  const text = (await screenText(core, "x", 40)).split("\n");
+  assert.deepEqual(text.slice(-5), ["Delete the worktree?", "1. Yes", "2. No", "Esc to cancel", "$"]);
+  feed(`${ESC}[2J${ESC}[H$ clear`);
+  const cells = await screenCells(core, "x", 12);
+  assert.equal(cells[0].text.trimEnd(), "$ clear", "screenCells waits for the parser too");
+});
+
+test("parsed() never hangs on a recorder that is gone", async () => {
+  const log = new SessionScreenLog(40, 12);
+  log.write("x".repeat(200_000)); // more than one 12 ms parse slice
+  const waiting = log.parsed();
+  log.dispose();
+  await waiting;
+  await log.parsed(); // and a disposed one answers at once
 });

@@ -3,6 +3,7 @@ import { Gauge, Download, Upload, Wifi, AlertTriangle, CheckCircle2, Copy, Activ
 import { api, copyText, type SpeedDebug, type SpeedResult } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { TITLE } from "./sheetNames";
 import { Button } from "./kit/Button";
 import { SetNote, SetLine } from "./SettingsKit";
 import { Hint } from "./kit/Hint";
@@ -12,6 +13,8 @@ import { latencyVerdict, summarizeLatency, throughputBasis, type LatencySummary 
 
 interface Props {
   onClose: () => void;
+  /** Drawn inside the Connection screen (`ConnectionSheet.tsx`): no frame and no head of its own. */
+  embedded?: boolean;
 }
 
 /** MB size presets for a run. Bigger = more accurate, more data burned. */
@@ -37,7 +40,7 @@ function ms(v: number | null): string {
  * CONNECTION TEST: twenty 1-byte HTTP round trips — how long a tap waits for an
  * answer, how much that wobbles, and how many get none. HTTP, not the socket the
  * strip pings over, so it is the path a file or a page load takes; the strip's
- * history is on Connection health, one tap away.
+ * history is on this screen's Health tab.
  *
  * SPEED TEST: host→phone and phone→host throughput over whatever origin the
  * app was loaded from (so the numbers reflect the real path), and — when
@@ -47,7 +50,7 @@ function ms(v: number | null): string {
  * A door (`connTest.ts`) may open this sheet with one of the two already
  * running: that tap was the ask.
  */
-export function SpeedTestSheet({ onClose }: Props) {
+export function SpeedTestSheet({ onClose, embedded }: Props) {
   const [sizeMB, setSizeMB] = useState(DEFAULT_SPEED_MB);
   const [withDebug, setWithDebug] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -133,10 +136,12 @@ export function SpeedTestSheet({ onClose }: Props) {
     : null;
 
   return (
-    <div className="sheet">
-      <SheetHead title={<><Gauge size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />Connection & speed test</>} onClose={onClose}>
-        <Button title="the link's history: ping, losses, what is not on the desktop yet" onClick={openNetHealth}><Activity size={16} /> health</Button>
-      </SheetHead>
+    <div className={embedded ? undefined : "sheet"} style={embedded ? { display: "contents" } : undefined}>
+      {embedded ? null : (
+        <SheetHead title={TITLE.connection} icon={<Gauge size={18} />} onClose={onClose}>
+          <Button title="the link's history: ping, losses, what is not on the desktop yet" onClick={openNetHealth}><Activity size={16} /> health</Button>
+        </SheetHead>
+      )}
 
       <div className="form">
         <section className="set-group">

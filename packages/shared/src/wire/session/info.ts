@@ -80,6 +80,12 @@ export interface SessionInfo {
    * known", never as off. Fast mode bills at twice the standard rate.
    */
   fastMode?: boolean;
+  /**
+   * The CLI's reason when its newest fast-mode row is a refusal ("Fast mode
+   * unavailable: Fast mode requires usage credits"); `fastMode` is then false.
+   * Absent whenever the newest row is ON/OFF or none was seen.
+   */
+  fastRefused?: string;
   /** True if launched with --remote-control (mirrored to claude.ai). */
   remoteControlled?: boolean;
   /** claude.ai/code session URL, parsed from the Remote Control banner. */

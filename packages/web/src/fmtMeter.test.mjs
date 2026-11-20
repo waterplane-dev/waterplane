@@ -12,9 +12,10 @@ test("fmtTok keeps one decimal at k and M", () => {
   assert.equal(fmtTok(1_250_000), "1.3M");
 });
 
-test("fmtUsd: cents from $1 up, four places below, $0 for nothing", () => {
+test("fmtUsd is shared's: cents from a cent up, two significant digits below, $0 for nothing", () => {
   assert.equal(fmtUsd(0), "$0");
-  assert.equal(fmtUsd(-1), "$0");
-  assert.equal(fmtUsd(0.01234), "$0.0123");
+  assert.equal(fmtUsd(0.5), "$0.50");
+  assert.equal(fmtUsd(0.01234), "$0.01");
+  assert.equal(fmtUsd(0.0042), "$0.0042");
   assert.equal(fmtUsd(12.345), "$12.35");
 });

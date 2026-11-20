@@ -184,7 +184,7 @@ export function BlockedSheet(p: Props) {
         {head(s, "limit.session", l.queuePos != null && <Tag className="limit-auto"><Hourglass size={12} /> {l.queuePos}</Tag>)}
         <div className="approve-hint">
           {state(s)}
-          {l.resetAt ? ` · ${l.spend ? "spend limit resumes" : "limit resets"} ~${hhmm(l.resetAt)}` : ""}
+          {l.resetAt ? ` · ${l.spend ? "Spend limit resumes at" : "Continues at"} ${hhmm(l.resetAt)}` : ""}
           {l.blockedSince ? ` · blocked ${ago(l.blockedSince)}` : ""}
           {!s.running ? " · reopens with its conversation" : ""}
         </div>

@@ -124,6 +124,10 @@ final class ShellRelay {
     private final Map<String, Integer> retries = new HashMap<>();
     /** ackIds the host holds ({@code pending}): counted as sent. */
     private final Set<String> heldByHost = new HashSet<>();
+    /** ackIds whose ONLY attempt so far is the one in flight (first write by this process). A refusal
+     *  takes an ackId out of {@code written} only while it is in here: an earlier attempt that got
+     *  no answer, or a pending, may have run, and a later refusal says nothing about it. */
+    private final Set<String> firstAttempt = new HashSet<>();
     private long gen = 0;
 
     ShellRelay(File file) {
@@ -175,6 +179,7 @@ final class ShellRelay {
         retryAt.clear();
         retries.clear();
         heldByHost.clear();
+        firstAttempt.clear();
         persist();
         return out;
     }
@@ -240,6 +245,7 @@ final class ShellRelay {
                 Object had = frame.get("firstSentAt");
                 first = had instanceof Number ? ((Number) had).longValue() : now;
                 written.put(it.ackId, first);
+                firstAttempt.add(it.ackId);
                 dirty = true;
             }
             frame.put("firstSentAt", first);
@@ -270,6 +276,7 @@ final class ShellRelay {
     /** The host's answer: {@code {ack}}. Returns false when the send was claimed meanwhile. */
     synchronized boolean onAck(Send s, Map<String, Object> ack, long now) {
         if (!settle(s)) return false;
+        firstAttempt.remove(s.ackId);
         if (Boolean.TRUE.equals(ack.get("retryable"))) {
             int n = retries.containsKey(s.ackId) ? retries.get(s.ackId) : 0;
             if (n < MAX_RETRIES) {
@@ -288,6 +295,7 @@ final class ShellRelay {
     /** {@code {pending:true}}: the host holds it. Written; the lane waits for the next connect. */
     synchronized boolean onPending(Send s) {
         if (!settle(s)) return false;
+        firstAttempt.remove(s.ackId);
         heldByHost.add(s.ackId);
         waitConnect.add(s.lane);
         return true;
@@ -296,6 +304,7 @@ final class ShellRelay {
     /** No answer (network, timeout, a 5xx): it may have run. Same as pending, minus the count. */
     synchronized boolean onNoAnswer(Send s) {
         if (!settle(s)) return false;
+        firstAttempt.remove(s.ackId);
         waitConnect.add(s.lane);
         return true;
     }
@@ -303,6 +312,10 @@ final class ShellRelay {
     /** 422 {@code {refused}}: nothing ran. The lane is the page's. */
     synchronized boolean onRefused(Send s) {
         if (!settle(s)) return false;
+        // Nothing ran (422, or a host with no relay route: 404/403), so the row is not "written":
+        // the page must not mark it as sent by the relay, or it could never be re-aimed. Only when
+        // this was the ackId's first attempt: an earlier one that went unanswered may have run.
+        if (firstAttempt.remove(s.ackId) && written.remove(s.ackId) != null) persist();
         stopped.add(s.lane);
         return true;
     }

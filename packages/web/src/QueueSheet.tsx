@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCheck, ChevronLeft, CircleCheck, CloudOff, CornerDownLeft, Ellipsis, FilePenLine, Hourglass, Image as ImageIcon, ListOrdered, Loader, MessageCircleQuestion, Pencil, Play, Plus, SendHorizontal, RotateCw, Shuffle, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCheck, CircleCheck, CloudOff, CornerDownLeft, Ellipsis, FilePenLine, Hourglass, Image as ImageIcon, ListOrdered, Loader, MessageCircleQuestion, Play, Plus, SendHorizontal, RotateCw, Shuffle, Trash2, X } from "lucide-react";
 import { describeLaunch, type LaunchIntent, type RepoTarget, type SessionInfo } from "@waterplane/shared";
 import { AttachStrip } from "./AttachStrip";
 import { PromptComposer } from "./PromptComposer";
 import { RepoPicker } from "./RepoPicker";
 import { isCreateOp, isEditableEntry, isSerializable, type OutboxEntry } from "./outbox";
-import { PHASE_LABEL, PHASE_NOT_QUEUED, nextConfirmBoundary, phaseNotes, revivable, rowPhase, type RowPhase } from "./core/queue/phase.ts";
+import { isRelayedLive, isRelayedStuck, RELAYED_REMOVE_LABEL } from "./relayedRow";
+import { PHASE_LABEL, PHASE_NOT_QUEUED, notQueuedCants, nextConfirmBoundary, phaseNotes, revivable, rowPhase, type RowPhase } from "./core/queue/phase.ts";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { TITLE } from "./sheetNames";
+import { WaitingTabs } from "./WaitingFrame";
 import { Empty } from "./Empty";
 import { SessionName } from "./SessionName";
 import { useLink } from "./link";
@@ -15,7 +18,6 @@ import { Button } from "./kit/Button";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { Unavailable, type Cant } from "./Unavailable";
-import { SetNote } from "./SettingsKit";
 
 interface Props {
   /** The whole send queue, in send order (queued + in-flight + failed). */
@@ -35,8 +37,9 @@ interface Props {
    * sheet open across a reconnect has no way to know that.
    */
   goneLanes: string[];
-  onEdit: (ackId: string, text: string) => void;
-  onRemove: (ackId: string) => void;
+  /** False when refused (a row the background link already sent): the editor stays open. */
+  onEdit: (ackId: string, text: string) => boolean | void;
+  onRemove: (ackId: string) => boolean | void;
   onMove: (ackId: string, dir: -1 | 1) => void;
   /** Point one queued message at a different session (`input`) or repo (`backlog`). */
   onRetarget: (ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog" }) => void;
@@ -237,9 +240,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
   function startEdit(e: OutboxEntry) { setEditing(e.ackId); setDraft(e.text); }
   function commitEdit(ackId: string) {
     const text = draft.trim();
-    setEditing(null);
-    if (!text) { onRemove(ackId); return; } // emptied = deleted, the obvious reading
-    onEdit(ackId, text);
+    if (!text) { setEditing(null); onRemove(ackId); return; } // emptied = deleted, the obvious reading
+    // A refused edit keeps the editor and its words: the draft is the only copy.
+    if (onEdit(ackId, text) !== false) setEditing(null);
   }
 
   /**
@@ -297,17 +300,29 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
       // thing behind it can be pressed.
       const hasMore = (!locked && (i > 0 || i < arr.length - 1))
         || e.status === "queued"
-        || (!locked && !isOp && !isUpload && !isAnswer)
-        || (!locked && !isAnswer && !!resendTarget);
+        || (!locked && !isOp && !isUpload && !isAnswer && !isRelayedLive(e))
+        || (!locked && !isAnswer && !!resendTarget && !(isRelayedLive(resendTarget)));
       // What the "⋯" strip leaves out for good (not for the second a send is on
       // the wire), said as a sentence instead of a dimmed button.
+      // The background link already wrote this one: its words stay as they are, so the two verbs
+      // that would move them (back to the box, rewrite) are said, not drawn.
+      const relayedHere = isRelayedLive(e);
+      const relayedOwner = !!resendTarget && isRelayedLive(resendTarget);
       const noText = isOp ? "this is an action, not text" : isUpload ? "this is a file, not text" : isAnswer ? "this is a tapped answer, not text" : "";
       const moreCants: Cant[] = [
         ...(i === 0 ? [{ label: "move earlier", reason: "already first" }] : []),
         ...(i === arr.length - 1 ? [{ label: "move later", reason: "already last" }] : []),
         ...(noText ? [{ label: "put it back in the message box", reason: noText }] : []),
         ...(isAnswer ? [{ label: "send again", reason: "an answer only fits the question it was tapped on" }] : []),
+        ...(relayedHere && !noText ? [{ label: "put it back in the message box", reason: "the background link already sent it" }] : []),
+        ...(relayedOwner ? [{ label: "rewrite it and send again", reason: isRelayedStuck(resendTarget) ? "the background link sent it and the desktop never said whether it ran — it may have" : "the background link already sent it — the desktop may be running it" }] : []),
       ];
+      // The four verbs that only mean something on a QUEUED row are absent
+      // otherwise, and the sentence says why (a title is invisible on a phone).
+      const isQueued = e.status === "queued";
+      moreCants.push(...notQueuedCants(
+        [["when it's free", true], ["start in order", isSerializable(e)], ["send it somewhere else", canAim], ["add a prompt", isCreateOp(e)]],
+        isQueued, notQueued));
       if (editing === e.ackId) {
         return (
           <div key={e.ackId} className="queue-edit">
@@ -331,6 +346,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         <div className={`queue-row ${phase === "confirming" ? "confirming" : e.status}`}>
           <button className="queue-text" disabled={!editable} onClick={() => startEdit(e)}
             title={locked ? "already on its way"
+              : isRelayedLive(e) ? "the background link already sent it — its words can't be rewritten"
               : isCreateOp(e) ? "tap to write what this session should do first"
               : isAnswer ? "an answer to a question — the option you tapped, not text to rewrite"
               : editable ? "tap to edit"
@@ -340,10 +356,10 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
               <StIcon size={12} className={e.status === "pending" ? "spin" : undefined} />
               {st.label}
               {e.mode === "backlog" ? " · backlog item" : ""}
-              {isOp ? (isCreateOp(e) ? " · opens a session" : " · action") : ""}
+              {isOp ? (isCreateOp(e) ? " · opens a session" : " · action — nothing to rewrite") : ""}
               {e.pendingCreate ? " · runs once that session is open" : ""}
               {isUpload ? ` · file${e.upload ? ` · ${Math.max(1, Math.round(e.upload.size / 1024))} kB` : ""} · uploads before the prompt that names it` : ""}
-              {isAnswer ? " · answer · only sent while that question is still open" : ""}
+              {isAnswer ? " · answer — the option you tapped, not text to rewrite · only sent while that question is still open" : ""}
               {isStranded(e) ? " · that session is gone — aim it somewhere else, or rewrite it" : ""}
               {e.holdUntilIdle ? " · waiting until the session can take it" : ""}
               {e.serial ? " · runs after this repo's other sessions" : isSerializable(e) ? " · starts even if this repo is busy" : ""}
@@ -391,7 +407,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
               {e.status === "failed" ? <RotateCw size={16} /> : <SendHorizontal size={16} />}
             </Button>
             )}
-            <Button variant="danger" data-hint="queue.remove" title="discard" disabled={locked}
+            {/* A stuck relayed row's trash is its way out (`removeRelayedStuck`): asked first,
+                a removal from the list, never a discard. */}
+            <Button variant="danger" data-hint="queue.remove" title={isRelayedStuck(e) ? RELAYED_REMOVE_LABEL : "discard"} disabled={locked}
               onClick={() => { track("action:queue.remove"); onRemove(e.ackId); }}><Trash2 size={16} /></Button>
             {hasMore && (
               <Button className={moreFor === e.ackId ? "on" : ""} data-hint="queue.more"
@@ -416,44 +434,44 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
           <div className="queue-row-acts queue-more">
             {i > 0 && <Button data-hint="queue.moveup" title="move earlier" disabled={locked} onClick={() => onMove(e.ackId, -1)}><ArrowUp size={16} /></Button>}
             {i < arr.length - 1 && <Button data-hint="queue.movedown" title="move later" disabled={locked} onClick={() => onMove(e.ackId, 1)}><ArrowDown size={16} /></Button>}
-            <Button className={e.holdUntilIdle ? "on" : ""} data-hint="queue.hold" disabled={e.status !== "queued"}
+            {isQueued && (
+            <Button className={e.holdUntilIdle ? "on" : ""} data-hint="queue.hold"
               // The composer's words for this WHEN, not a fifth spelling of it:
               // *when it's free* on the split button, on the Backlog row and on
               // the next-prompt strip, and the same sentence here.
-              title={e.status !== "queued" ? notQueued
-                : e.holdUntilIdle
+              title={e.holdUntilIdle
                 ? "when it's free — the turn has ended, no question box is up and it isn't blocked on a usage limit. Tap to send at the next opportunity instead"
                 : "when it's free: the turn ended, no question is on screen, no usage-limit block (exact for sessions that report turn boundaries; a guess from silence otherwise)"}
               onClick={() => onToggleHold(e.ackId)}><Hourglass size={16} /></Button>
+            )}
             {/* Only an open that RUNS something can pile up: a bare terminal
                 costs nothing and edits nothing, so there is nothing to
                 serialize. */}
-            {isSerializable(e) && (
-              <Button className={e.serial ? "on" : ""} data-hint="queue.serial" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? notQueued
-                  : e.serial
+            {isQueued && isSerializable(e) && (
+              <Button className={e.serial ? "on" : ""} data-hint="queue.serial"
+                title={e.serial
                   ? "waiting until this repo's other sessions have finished — one agent at a time, so they don't spend the usage limit in parallel or edit the same files. Tap to let it start straight away"
                   : "start it straight away, even if another session in this repo is working. Tap to make it wait its turn instead"}
                 onClick={() => onToggleSerial(e.ackId)}><ListOrdered size={16} /></Button>
             )}
-            {canAim && (
-              <Button className={retargeting === e.ackId ? "on" : ""} data-hint="queue.retarget" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? notQueued : "send it somewhere else"}
+            {isQueued && canAim && (
+              <Button className={retargeting === e.ackId ? "on" : ""} data-hint="queue.retarget"
+                title="send it somewhere else"
                 onClick={() => setRetargeting(retargeting === e.ackId ? null : e.ackId)}><Shuffle size={16} /></Button>
             )}
             {/* A queued open is worth queuing only for what runs in it.
                 This adds another prompt to its chain — delivered after
                 the one before it has finished its turn. */}
-            {isCreateOp(e) && (
-              <Button className={adding === e.ackId ? "on" : ""} data-hint="queue.addprompt" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? notQueued : "add a prompt to run after this session opens"}
+            {isQueued && isCreateOp(e) && (
+              <Button className={adding === e.ackId ? "on" : ""} data-hint="queue.addprompt"
+                title="add a prompt to run after this session opens"
                 onClick={() => { setAdding(adding === e.ackId ? null : e.ackId); setAddDraft(""); }}><Plus size={16} /></Button>
             )}
             {/* An op has no text to hand back to a compose box — its
                 label is a description, not something you'd retype. Nor
                 does an answer: pasting "2" into the composer would type
                 a stray digit at whatever the session is doing now. */}
-            {!isOp && !isUpload && !isAnswer && (
+            {!isOp && !isUpload && !isAnswer && !relayedHere && (
               <Button data-hint="queue.restore" title="put the text back in the message box" disabled={locked}
                 onClick={() => { track("action:queue.restore"); onRestore(e.ackId); }}><CornerDownLeft size={16} /></Button>
             )}
@@ -464,7 +482,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 names the file — the editor's whole job there is picking the
                 file again or dropping the mention, and this row IS where the
                 failure is printed. */}
-            {!isAnswer && !!resendTarget && (
+            {!isAnswer && !!resendTarget && !relayedOwner && (
               <Button data-hint="queue.resend"
                 title={isUpload
                   ? "rewrite the message that names this file — re-attach it, swap it, or drop the mention"
@@ -521,7 +539,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
 
   return (
     <div className="sheet">
-      <SheetHead title={"Queued messages"} onClose={onClose}>
+      <SheetHead title={TITLE.waiting} onClose={onClose}>
         {queuedCount > 0 && (
           <Button data-hint="queue.sendall" title={online ? "send everything queued now" : "no connection — this stays queued"}
             onClick={() => { track("action:queue.sendall"); onSendAll(); }}>
@@ -529,6 +547,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
           </Button>
         )}
       </SheetHead>
+      <WaitingTabs />
       {/* Four sentences of standing explanation above every list is the wall a
           phone screen can least afford. The state sentence stays; the manual
           moves behind a disclosure. */}
@@ -665,12 +684,6 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
             })}
           </div>
         ))}
-      </div>
-      <div className="sheet-actions">
-        <Button onClick={onClose}><ChevronLeft size={16} /> back</Button>
-        <span className="spacer" />
-        <SetNote as="span" style={{ padding: 0 }}>{queuedCount} waiting</SetNote>
-        <Pencil size={14} style={{ opacity: 0.35 }} />
       </div>
     </div>
   );

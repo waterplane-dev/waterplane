@@ -17,7 +17,7 @@ export function serverCtxKeys() {
   return [
   "acks", "announceBuild", "attention", "assess", "assessExecutor", "assessSnapshot", "attached", "auth", "authStateFor",
   "autopull", "backlog", "backlogSnapshot", "billing", "BOOT_ID", "broadcast", "broadcastAuthState", "budget", "builds",
-  "capture", "clearNotifications", "clients", "cliHealthStore", "closeDevice", "containRepoDir", "decisionLog", "deliverChain",
+  "clearNotifications", "clients", "cliHealthStore", "closeDevice", "containRepoDir", "decisionLog", "deliverChain",
   "deliverInput", "deliverySnapshot", "DOCTOR", "durableOp", "enforceAuth", "fanout", "fmtSize",
   "handleClientMessage", "handleNotification", "healthWatch", "imgSeen", "inputsInFlight", "intents", "intentSnapshot",
   "isAttachedToSomeone", "launchSnapshot", "linkLog", "meter", "naming", "netstats", "notificationFeed", "notifications", "notify",

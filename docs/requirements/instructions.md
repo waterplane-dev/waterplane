@@ -30,7 +30,7 @@ Skills, instructions and CLAUDE.md views show both token count and character cou
 - shipped: bdbf97ce
 
 ### R-instructions-007 · shipped
-The repo readings sheet keeps what the outside world reports about a repo (exposure watch, Scorecard) in a region of its own, watch, separate from the Setup check (Repo readings has four regions: series, agents, opt-ins, watch).
+The Setup & health screen keeps what the outside world reports about a repo (exposure watch, Scorecard) in a region of its own, watch, separate from the Setup check (Repo readings has four regions: series, agents, opt-ins, watch).
 - asked: 2026-10-26
 - shipped: fcf473d4
 

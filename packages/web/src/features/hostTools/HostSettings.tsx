@@ -58,7 +58,7 @@ function PhoneSetupChecklist() {
   );
 }
 
-/** Notifications group: OS push, the background link, and its battery ask. */
+/** Notifications group: the device switch, the background link, and its battery ask. */
 export function HostNotifySettings() {
   // The only screen that draws the link's state polls it, for exactly as long
   // as it is drawn (Settings unmounts under every other sheet).
@@ -70,7 +70,7 @@ export function HostNotifySettings() {
     <>
       {shellLink && <PhoneSetupChecklist />}
       {push === "insecure" ? (
-        <SetCustom id="notif-push" label="OS push" icon={BellOff}>
+        <SetCustom id="notif-push" label="Notifications on this phone" icon={BellOff}>
           <SetWarn>
             OS-level push is off: you're on {location.protocol}//{location.host} — plain HTTP over Tailscale
             is not a secure context, so service workers &amp; Web Push are disabled. The in-app feed above still works.
@@ -87,7 +87,7 @@ export function HostNotifySettings() {
         /* A shell with no background link — the iOS shell. No push either
            (that needs a paid Apple account and APNs), so alerts exist only
            while the app is on screen, and the row says exactly that. */
-        <SetCustom id="notif-push" label="OS push" icon={BellOff} note={NO_BACKGROUND_ALERTS} />
+        <SetCustom id="notif-push" label="Notifications on this phone" icon={BellOff} note={NO_BACKGROUND_ALERTS} />
       ) : push === "native" ? (
         /* The shell has no Web Push (no service worker in the APK, by
            design — see `push.ts`). What matters is not that the switch
@@ -99,7 +99,7 @@ export function HostNotifySettings() {
            service over ordinary internet, no tailnet involved — so the
            honest fix is the installed PWA, and it is named. */
         <SetCustom
-          id="notif-push" label="OS push" icon={BellOff}
+          id="notif-push" label="Notifications on this phone" icon={BellOff}
           note="This app has no OS push of its own — alerts reach it through the background link below."
           more={<>
             <p>The link speaks to the desktop over Tailscale, so when the tunnel is down this phone goes quiet — and quiet here does not mean nothing happened. Anything sent while it was down arrives when the link comes back.</p>
@@ -107,14 +107,14 @@ export function HostNotifySettings() {
           </>}
         />
       ) : push === "demo" ? (
-        <SetCustom id="notif-push" label="OS push" icon={BellOff}
+        <SetCustom id="notif-push" label="Notifications on this phone" icon={BellOff}
           note="The demo sends no alerts — it never leaves this device. With your own desktop connected, alerts reach this device." />
       ) : push === "unsupported" ? (
-        <SetCustom id="notif-push" label="OS push" icon={BellOff}
+        <SetCustom id="notif-push" label="Notifications on this phone" icon={BellOff}
           note="This browser has no Web Push support — use the in-app feed." />
       ) : (
         <SetSwitch
-          id="notif-push" label="OS push" icon={push === "denied" ? BellOff : Bell}
+          id="notif-push" label="Notifications on this phone" icon={push === "denied" ? BellOff : Bell}
           on={push === "on"}
           state={push === "on" ? "on" : push === "denied" ? "blocked in browser" : "off"}
           tone={push === "denied" ? "danger" : undefined}

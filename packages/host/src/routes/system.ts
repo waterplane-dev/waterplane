@@ -299,10 +299,13 @@ const onPluginAction: Route<"plugin.action"> = (a) => {
 };
 
 // NOT durable, not contained: a live question, answered to the asking socket only (`pluginrpc.ts`).
-/** Who sent a `plugin.call`: the socket's tier, and the paired device's name when its token named one. */
-export function callerOf(kind: PeerKind | undefined, deviceId: string | undefined | null, ledger: { get(id: string): { name: string } | null }): PluginCaller {
+/** Who sent a `plugin.call`: the socket's tier, and the paired device's name when its token named one.
+ *  A passive (kids') row says so (`scope`, plugin API 2.9): only an UNLOCKED one has a socket at all, and
+ *  a plugin holding credentials refuses it — the vault does (`viewgate.mts`'s `gatedHandle`). */
+export function callerOf(kind: PeerKind | undefined, deviceId: string | undefined | null, ledger: { get(id: string): { name: string; scope?: string } | null }): PluginCaller {
   const id = deviceId ?? null;
-  return { kind: kind ?? "unknown", deviceId: id, deviceName: id ? ledger.get(id)?.name ?? null : null };
+  const row = id ? ledger.get(id) : null;
+  return { kind: kind ?? "unknown", deviceId: id, deviceName: row?.name ?? null, ...(row?.scope === "passive" ? { scope: "passive" as const } : {}) };
 }
 
 const onPluginCall: Route<"plugin.call"> = (a) => {

@@ -2,6 +2,7 @@
  * The `text` sheet: the terminal's — or the conversation's — text, to copy,
  * quote or follow a link out of.
  */
+import { TITLE } from "../../sheetNames";
 import { useRef } from "react";
 import { AtSign, Copy, ExternalLink, Quote, RotateCw } from "lucide-react";
 import { findUrlsInText } from "@waterplane/shared";
@@ -19,7 +20,7 @@ const ICON = 16;
 
 export function TextSheet() {
   const core = useCore();
-  const { text: textDump, source } = useStore(dump);
+  const { text: textDump } = useStore(dump);
   const textRef = useRef<TextDumpHandle>(null);
   const getSel = (): string => textRef.current?.pick().text ?? textDump;
   const copy = async () => {
@@ -41,7 +42,7 @@ export function TextSheet() {
   const links = findUrlsInText(textDump);
   return (
     <div className="sheet">
-      <SheetHead title={source === "grid" ? "Terminal text" : "Conversation text"} onClose={() => core.nav.close("text")}>
+      <SheetHead title={TITLE.text} onClose={() => core.nav.close("text")}>
         <Button onClick={() => void openTextDump()} title="re-pull"><RotateCw size={ICON} /></Button>
       </SheetHead>
       <Hint>Tick lines (or select text), then copy or quote. Nothing ticked or selected ⇒ acts on the entire dump.</Hint>

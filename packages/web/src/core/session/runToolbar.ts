@@ -4,6 +4,7 @@ import { track } from "../../usage";
 import { openSearch } from "../../features/search";
 import { openScrollback } from "../../features/scrollback";
 import { openBacklogIn } from "../../features/backlog";
+import { openContext } from "../../features/context";
 import { runFeatureCommand } from "../dispatch";
 import { openToolbarGit } from "../../gitLanding";
 import type { Connection } from "../conn/useConnection";
@@ -40,7 +41,9 @@ export function runToolbarCommand(id: string, ctx: ToolbarCtx) {
     case "cmd": setOverlay("slash"); break;
     // An ASK on the session's repo, never a bare open (`openToolbarGit`, review R2-2 b).
     case "diff": if (!openToolbarGit(activeRepoId, setOverlay)) showToast("not a known repo"); break;
-    case "ctx": runSlash("/context"); break;
+    // The screen the line is named for (`Context window & cost`), not the CLI's own /context typed
+    // into the terminal; the slash command stays on the Slash commands list.
+    case "ctx": openContext(); break;
     // The CLI's canonical name. It answers to `/cost` too — that is a
     // registered alias, not a leftover — but sending the alias meant the
     // toolbar's button and the CLI's own menu entry ("/usage (cost)") named

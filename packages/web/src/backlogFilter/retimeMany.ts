@@ -28,7 +28,7 @@ export function retimeEligible(it: BacklogItem): boolean {
   return true;
 }
 /** The toggle that turns the list into a pick list. */
-export const RETIME_PICK_LABEL = "pick to re-time";
+export const RETIME_PICK_LABEL = "pick to change time";
 /**
  * What the bar says above the button. Counted against the rows that COULD be
  * picked, and the ones that could not are said in TEXT with the reason — a row
@@ -100,5 +100,5 @@ export function clockPicks(groups: readonly { key: string; items: readonly Backl
 }
 /** The button: what it ticks, by the clock's own words (`describeRule`). */
 export function clockPickLabel(c: ClockPick): string {
-  return `re-time the ${c.ids.length} on “${c.rule}”`;
+  return `change time of the ${c.ids.length} on “${c.rule}”`;
 }

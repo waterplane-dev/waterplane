@@ -31,7 +31,7 @@ import { gitRootOf } from "./health/healthsource.js";
 import { InstructionLens } from "./codelens.js";
 import { Panel } from "./panel.js";
 import { NavTree, PICK, PICK_FOLDER, QUOTA, SHOW } from "./navtree.js";
-import { CopilotQuota } from "./copilotquota.js";
+import { CopilotQuota, quotaView } from "./copilotquota.js";
 import { CopilotLocalReader, userDirOf } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
@@ -151,7 +151,7 @@ class Ext implements vscode.Disposable {
     this.panel = new Panel(ctx.extensionUri, (m) => void this.onMessage(m, "panel"), (v) => this.onVisible(v), () => this.cancelScan());
     // The tree on screen reads the cheap state and the cached health reading — never a corpus scan.
     // Before the tree, which reads its state; off until the person turns it on (its one network call).
-    this.quota = new CopilotQuota(ctx.globalState, new CopilotLocalReader(userDirOf(ctx.globalStorageUri.fsPath)), () => this.tree?.refresh());
+    this.quota = new CopilotQuota(ctx.globalState, new CopilotLocalReader(userDirOf(ctx.globalStorageUri.fsPath)), () => { if (this.panel?.open) this.panel.post(this.quotaMsg()); });
     this.tree = new NavTree(() => this.navState(), (v) => {
       if (!v) return;
       void this.refreshSession();
@@ -622,6 +622,10 @@ class Ext implements vscode.Disposable {
     this.tree.refresh();
   }
 
+  private quotaMsg(): ToWebview {
+    return { t: "copilotQuota", quota: quotaView(this.quota.state) };
+  }
+
   /** What the tree prints, from the same state the panel is sent. */
   private navState(): NavState {
     const folder = this.activeFolder;
@@ -643,7 +647,6 @@ class Ext implements vscode.Disposable {
       findingsWhy: this.findings.doc?.folder === folder ? null : this.findings.why ? { text: this.findings.why, reading: !!this.findings.reading } : null,
       health: h?.doc ?? null,
       healthRunning: !!h?.run,
-      quota: this.quota.state,
       summary: this.summary,
       live: anyLive(mine ? this.rows.rows : [], Date.now()),
       folderKeys: this.folderKeys(),
@@ -779,6 +782,7 @@ class Ext implements vscode.Disposable {
     void this.loadCachedCorpus();
     if (this.live) this.post({ t: "live", live: this.live }, to);
     else void this.readLive();
+    this.post(this.quotaMsg(), to);
     this.sendPrompts(to);
     if (this.activeFolder) this.postHealth(this.activeFolder, to);
     if (to === "panel" && this.wantTab) {
@@ -807,6 +811,7 @@ class Ext implements vscode.Disposable {
         }
         case "rescan": this.rescanShown(); void this.readLive(); break;
         case "liveRead": void this.readLive(); break;
+        case "copilotQuota": void (m.on ? this.quota.click() : this.quota.turnOff()); break;
         case "desktop":
           await vscode.workspace.getConfiguration(BRAND.slug).update("desktopUrl", m.on ? DEFAULT_DESKTOP_URL : "", vscode.ConfigurationTarget.Global);
           break;

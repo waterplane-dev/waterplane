@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { TITLE } from "./sheetNames";
 import { CalendarClock, ChevronDown, ChevronUp, CircleAlert, CircleCheck, CornerDownRight, Flag, Loader, Pencil, Play, Send, Split, Square, SquareCheck, Trash2, Undo2 } from "lucide-react";
 import type { BackendInfo, FanoutRun, FanoutTarget, LaunchOpts, RepoTarget } from "@waterplane/shared";
 import { track } from "./usage";
@@ -221,8 +222,8 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
       onSave={writePresets}
       onReset={() => setPresets(resetPresets())}
       onClose={() => setEditPresets(false)}
-      heading="Fan-out presets"
-      hint={<>The one-tap chips over the fan-out prompt. Anything the CLI accepts works — slash commands included.</>}
+      heading={`${TITLE.fanout} presets`}
+      hint={<>The one-tap chips over the fan out prompt. Anything the CLI accepts works — slash commands included.</>}
       emptyText="No presets. Tap “new” to add one, or “defaults” to restore the shipped list."
       textPlaceholder="What should every selected repo do?"
       trackId="action:fanout.presets.save"
@@ -230,7 +231,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
 
   return (
     <div className="sheet">
-      <SheetHead title={<><Split size={16} /> Fan-out</>} onClose={onClose} />
+      <SheetHead title={<><Split size={16} /> {TITLE.fanout}</>} onClose={onClose} />
       {/* The saved repo sets are synced; a run is not. This line is about the
           presets only, which is why it names them. */}
       <SyncMark keys={[LS.fanoutPresets]} thing="your saved sets" />

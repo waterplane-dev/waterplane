@@ -106,9 +106,10 @@ The README shows a film of the whole setup, from the first install step to the f
 
 
 ### R-onboarding-017 · shipped
-Beside the Setup check, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy, app screenshots). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
+Beside the Setup check, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
 - asked: 2026-10-16
 - shipped: 1b62447
+- progress 2026-11-19: the app-screenshots opt-in was removed with verified capture (owner: no use).
 
 ### R-onboarding-018 · shipped
 Every opt-in is the person's choice: a tap seeds the Send sheet (or runs the existing no-cost setup fix, or opens the screen that does the job), and nothing is sent or scheduled until the person sends it there. "Not for me" hides an offer in that repo until they offer it again. An offer the desktop cannot check can be marked done by the person and is shown as their word, not as a check that passed. Offers that do not fit the repo sit behind a count.
@@ -139,10 +140,11 @@ The setup checklist (the Setup check's install group) mentions low disk space wi
 The Opt-ins list remembers what the person already started in that repo: an offer whose words were sent there (or that is half done, such as readings written but not committed) moves to its own "Started here" list above the fresh offers, saying when it was sent and what became of it (waiting, running, still open, finished, failed, session closed). Sending it again asks once more first, the walk-through only counts offers never started, and any open offer can be marked done by the person.
 - asked: 2026-10-26
 - shipped: 57889170
-### R-onboarding-024 · shipped
+### R-onboarding-024 · dropped
 The capture sheet has a "set up with AI" button that opens a seeded prompt for a new session to find how the repo runs and write and verify the capture targets.
 - asked: 2026-10-27
 - shipped: 8e70c751
+- removed: 2026-11-19 — owner: no use (14 runs, none since 09-24), no agent ever called it
 
 ### R-onboarding-025 · shipped
 Any repo waterplane drives can be made ready for Copilot and local models by a setup check and documented instructions: which context files to create and which model suits which task.

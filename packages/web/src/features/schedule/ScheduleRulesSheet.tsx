@@ -15,8 +15,9 @@ import { usePullRules } from "../../automationSlot";
 import { api } from "../../api";
 import { useRemoteResource } from "../../useRemoteResource";
 import { pendingSchedulesOf, spentLabel } from "./logic";
-import { scheduleFocus, scheduleFocusIds, schedules, schedulesAt as schedulesAtStore } from "./store";
+import { scheduleClearedNote, scheduleFocus, scheduleFocusIds, schedules, schedulesAt as schedulesAtStore } from "./store";
 import { clearScheduleFocus, removeSchedule, runScheduleNow } from "./actions";
+import { closeWaiting, openWaitingId } from "../../waitingWork";
 
 export function ScheduleRulesSheet() {
   const core = useCore();
@@ -32,6 +33,7 @@ export function ScheduleRulesSheet() {
   const schedulesAt = useStore(schedulesAtStore);
   const focus = useStore(scheduleFocus);
   const focusIds = useStore(scheduleFocusIds);
+  const clearedNote = useStore(scheduleClearedNote);
   const outbox = useQueueEntries();
   // The saves still in the send queue. Arming one offline always worked —
   // `schedule.save` is a durable op — but the LIST is host state, so the row
@@ -64,7 +66,7 @@ export function ScheduleRulesSheet() {
     if (d.kind === "pull") pull?.open(d.repoDir);
     else if (d.kind === "weekburn") core.nav.open("weekburn");
     else if (d.repoDir) core.nav.openBacklogCut(d.repoDir, d.ids, d.label);
-    else core.nav.open("backlog");
+    else openWaitingId("backlog");
   }} />;
   return <ScheduleSheet
     foot={foot}
@@ -78,6 +80,8 @@ export function ScheduleRulesSheet() {
     // from the reader's side they are one thing: a short list, said.
     focusIds={focusIds}
     onClearFocus={clearScheduleFocus}
+    clearedNote={clearedNote}
+    onDismissNote={() => scheduleClearedNote.set(null)}
     // Where the one-offs that have already run went. They are Activity's
     // rows now (one row for a thing's whole life), so the hand-off is the
     // same focus the queue bar's Manage uses: these ids, named, with the
@@ -94,7 +98,7 @@ export function ScheduleRulesSheet() {
     // offline, for `intent.cancel`'s reason: a skip delivered an hour late
     // spends an occurrence that has already run.
     onSkipNext={(id) => { liveSend({ t: "schedule.skipNext", id }, "skipping the next run…", "no connection — a skip has to reach the desktop before the run does"); }}
-    onOpenSession={(sid) => { const s = sessions.find((x) => x.id === sid); if (s) { core.nav.close("schedule"); core.nav.attach(s); } else core.say.toast("that session is no longer open"); }}
+    onOpenSession={(sid) => { const s = sessions.find((x) => x.id === sid); if (s) { closeWaiting(); core.nav.attach(s); } else core.say.toast("that session is no longer open"); }}
     // Where a rule's work lands: the door to the backlog rows it wrote,
     // filtered to the one it wrote when the phone knows which.
     onOpenBacklog={(repoDir, ids, label) => core.nav.openBacklogCut(repoDir, ids, label)}
@@ -121,6 +125,6 @@ export function ScheduleRulesSheet() {
     onSetEnabled={(id, enabled) => liveSend({ t: "schedule.setEnabled", id, enabled }, enabled ? "armed" : "switched off",
       "no connection — this one is armed on the desktop and can only be changed there")}
     onRemove={removeSchedule}
-    onClose={() => core.nav.close("schedule")}
+    onClose={closeWaiting}
   />;
 }

@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `2.8.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.9.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -181,9 +181,11 @@ waiting; scoped to the calling plugin's own tags. 2.5 plugins load as-is.
 previous run left behind, keeping the tags still live; scoped to its own items. 2.6 plugins load as-is.
 **2.8** (additive): `HostPluginApi.revokeDevice(id)` — an IN-REPO extension revokes one paired device's token
 (the vault's `wp-secret devices rm`); an external plugin's call throws. 2.7 plugins load as-is.
+**2.9** (additive): `PluginCaller.scope` — `"passive"` when the calling device is a passive (kids')
+row, so a plugin can refuse an unlocked kid's phone (the vault does). 2.8 plugins load as-is.
 
 ```ts
-export const PLUGIN_API_VERSION = "2.8.0";
+export const PLUGIN_API_VERSION = "2.9.0";
 ```
 
 ## PLUGIN_API_V2_DOC
@@ -607,6 +609,8 @@ export function pluginValues(m: PluginManifest, stored: Record<string, unknown>)
 
 Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
  device's id/name (null: no token, or an in-process call). Never a proof beyond pairing.
+ `scope` (2.9): `"passive"` when that device is a passive (kids') row, which reaches a plugin only
+ while unlocked; absent for every other caller. A plugin holding credentials refuses it.
 
 ```ts
 export interface PluginCaller { … }
@@ -617,6 +621,7 @@ export interface PluginCaller { … }
 | `kind` | `kind: PeerKind` |  |
 | `deviceId` | `deviceId: string \| null` |  |
 | `deviceName` | `deviceName: string \| null` |  |
+| `scope` | `scope?: "passive"` |  |
 
 ## AnswerSuggestion
 

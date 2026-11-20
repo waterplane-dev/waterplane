@@ -115,7 +115,7 @@ export function attachmentsReady(states: AttachStatus[]): boolean {
  */
 export function attachBlockers(states: AttachStatus[]): AttachStatus[] {
   const rank: Record<string, number> = { kept: 0, dead: 1, missing: 2, unknown: 3 };
-  return states.filter((s) => s.state in rank).sort((a, b) => rank[a.state] - rank[b.state]);
+  return states.filter((s) => s.state in rank).sort((a, b) => rank[a.state]! - rank[b.state]!);
 }
 
 /** The queue facts `sending` is read from — structurally a web `OutboxEntry`. */

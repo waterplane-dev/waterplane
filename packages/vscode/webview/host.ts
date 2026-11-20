@@ -1,7 +1,7 @@
 /** The one door to the extension host: `acquireVsCodeApi()` may be called ONCE per webview. */
 import { useEffect, useRef, useState } from "react";
 import type {
-  CorpusDoc, FindingsDoc, HealthDoc, HealthRunState, LiveState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
+  CopilotQuotaView, CorpusDoc, FindingsDoc, HealthDoc, HealthRunState, LiveState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
 } from "../src/protocol";
 
 interface VsCodeApi {
@@ -66,6 +66,8 @@ export interface ExtensionState {
   corpus: { doc: CorpusDoc | null; why?: string; scanning?: { done: number; total: number } } | null;
   /** The waterplane desktop's live account facts, or why there are none; null before the first answer. */
   live: LiveState | null;
+  /** Copilot's plan, this month's local count and GitHub's quota when switched on; null before the first. */
+  copilot: CopilotQuotaView | null;
   weight: { doc: WeightDoc | null; why?: string } | null;
   prompts: { list: PromptDef[]; terminal: string | null };
   findings: { doc: FindingsDoc | null; why?: string } | null;
@@ -80,6 +82,7 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
   const [sessions, setSessions] = useState<ExtensionState["sessions"]>(null);
   const [corpus, setCorpus] = useState<ExtensionState["corpus"]>(null);
   const [live, setLive] = useState<ExtensionState["live"]>(null);
+  const [copilot, setCopilot] = useState<ExtensionState["copilot"]>(null);
   const [weight, setWeight] = useState<ExtensionState["weight"]>(null);
   const [prompts, setPrompts] = useState<ExtensionState["prompts"]>({ list: [], terminal: null });
   const [findings, setFindings] = useState<ExtensionState["findings"]>(null);
@@ -97,6 +100,7 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
         case "sessions": setSessions({ folder: m.folder, rows: m.rows, selected: m.selected, older: m.older, capped: m.capped, automated: m.automated, following: m.following }); break;
         case "corpus": setCorpus({ doc: m.doc, why: m.why, scanning: m.scanning }); break;
         case "live": setLive(m.live); break;
+        case "copilotQuota": setCopilot(m.quota); break;
         case "weight": setWeight({ doc: m.doc, why: m.why }); break;
         case "prompts": setPrompts({ list: m.list, terminal: m.terminal }); break;
         case "findings": setFindings({ doc: m.doc, why: m.why }); break;
@@ -110,5 +114,5 @@ export function useExtension(onTab?: (id: TabId, ledger?: string) => void): Exte
     return () => window.removeEventListener("message", on);
   }, []);
 
-  return { session, sessions, corpus, live, weight, prompts, findings, folders, health };
+  return { session, sessions, corpus, live, copilot, weight, prompts, findings, folders, health };
 }

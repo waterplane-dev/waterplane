@@ -4,7 +4,7 @@
  * the same `HostPluginApi` an external plugin gets.
  *
  * Spends nothing; no poller. The transport is the generic plugin channel with its caps in mind
- * (architecture section 4): `report` arrives in idempotent chunks and answers `{ n, at, kept }` (`kept: false` while the store is read-only); the only
+ * (architecture section 4): `report` arrives in idempotent chunks and answers `{ n, at, kept }` (`kept: false` while the store is read-only or its file is unreadable); the only
  * push is the `changed` ping `{ n, at }` after a chunk changed the log (phones then call `log` — a
  * pull); `log` is the one large reply and is trimmed oldest-first under 480 KB.
  */
@@ -30,7 +30,7 @@ export function serve(api: Pick<HostPluginApi, "handle" | "push" | "repoApps">, 
       const args = (a ?? {}) as { device?: unknown; entries?: unknown };
       const rows = Array.isArray(args.entries) ? args.entries : [];
       const changed = store.report(deviceOf(args.device), rows);
-      const kept = store.writes;
+      const kept = store.saves;
       const n = store.count();
       if (changed.added || changed.updated) {
         const ping: ChangedPush = { n, at: now() };

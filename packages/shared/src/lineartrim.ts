@@ -9,13 +9,13 @@
 /** `s` with every trailing character that is in `chars` removed — `s.replace(/[<chars>]+$/, "")`. */
 export function trimEndChars(s: string, chars: string): string {
   let e = s.length;
-  while (e > 0 && chars.includes(s[e - 1])) e--;
+  while (e > 0 && chars.includes(s[e - 1]!)) e--;
   return e === s.length ? s : s.slice(0, e);
 }
 
 /** `s` with every leading character that is in `chars` removed — `s.replace(/^[<chars>]+/, "")`. */
 export function trimStartChars(s: string, chars: string): string {
   let b = 0;
-  while (b < s.length && chars.includes(s[b])) b++;
+  while (b < s.length && chars.includes(s[b]!)) b++;
   return b === 0 ? s : s.slice(b);
 }

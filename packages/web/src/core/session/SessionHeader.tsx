@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 import {
-  BarChart3, Bot, Check, ChevronLeft, ChevronsDownUp, Clock, Gauge, Hourglass, List, Loader, Menu, Pencil, Plus,
+  BarChart3, Bot, Check, ChevronLeft, ChevronsDownUp, Clock, Gauge, Hourglass, List, Menu, Pencil, Plus,
   Sigma, Sparkles, SquareTerminal, Unplug, X,
 } from "lucide-react";
 import { repoBranchLabel, shownTitleOf, withShownName, trimDefaultBranch, usageChip, usageText, weekShareText } from "@waterplane/shared";
@@ -33,6 +33,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { pinnedToolbarItems } from "../../toolbar";
 import type { Launch } from "../launch/useLaunch";
+import { chromeNote } from "../../chromeMode";
 import { keepFocus } from "../compose/ComposeBar";
 import { renameSession } from "./rename";
 import { menuItems, sessionViews } from "../extensionPoints";
@@ -94,7 +95,7 @@ export interface SessionHeaderProps {
   repoForCwd(cwd: string): RepoTarget | null;
   setActiveId(id: string | null): void;
   setOverlay(o: Overlay): void;
-  removeQueued(ackId: string): void;
+  removeQueued(ackId: string): boolean;
   closeSession(s: SessionInfo): void;
   chrome: SessionChrome;
   /** The chips this backend can take (`splitHeaderCmds`'s `shown`), and the whole list for the manage chip. */
@@ -107,7 +108,7 @@ export interface SessionHeaderProps {
 
 export function SessionHeader(p: SessionHeaderProps): ReactNode {
   const {
-    active, sessions, pending, pendingEntry, status, liveSend, backends, sessionCan, sessionRepoName, repoForCwd,
+    active, sessions, pending, pendingEntry, liveSend, backends, sessionCan, sessionRepoName, repoForCwd,
     setActiveId, setOverlay, removeQueued, closeSession, chrome, hdrShown, headerCmds, runHeaderCmd, refreshTerminal,
     toolbar,
   } = p;
@@ -142,8 +143,8 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
           a title that takes the row. One extra token rather than a second
           header component, because everything else about the two is the same
           bar. */}
-      <header className="topbar sess-top" style={repoAccentStyle(sessionRepoName(active))}>
-        <button className="back" onClick={() => setActiveId(null)}><ChevronLeft size={24} /></button>
+      <header className={`topbar sess-top${pending ? " pending" : ""}`} style={repoAccentStyle(sessionRepoName(active))}>
+        <button className="back" aria-label="Home" onClick={() => setActiveId(null)}><ChevronLeft size={24} aria-hidden="true" /></button>
         <div className="brand">{shownTitleOf(repoForCwd(active.cwd), trimDefaultBranch(active.title) || active.title)}<RowSub className={backendMark(backends, active.backend) ? "row-foreign" : undefined}> {launchLabel(liveLaunch(active), backendMark(backends, active.backend), backends)}</RowSub><HostNameTag /><ToldNotice key={active.id} active={active} backends={backends} /><AskRulesNotice key={`ar:${active.id}`} active={active} backends={backends} />
           {/* The name the desktop derived for this session, IN FULL and on its
               own line — the tab strip has ~85 px for it and clips, and this is
@@ -165,7 +166,11 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             into a 120px column, six lines tall. */}
         <div className="hdr-view">
         <PairTabsSeg active={active} sessions={sessions} pending={pending} backends={backends} />
-        {pinnedToolbarItems(toolbar.toolbarCfg).filter((t) => TITLE_PINS.has(t.id)).map((t) => (
+        {/* A pending screen (no session yet) draws none of the pins, chips or the menu: each acts on a
+            live session, and the owner's 11-18 screenshot showed Images & documents and Run /usage over a
+            session that did not exist. What stays works before it does: Home, the title, the bell, the
+            `?`, and the × that drops the queued open. */}
+        {!pending && pinnedToolbarItems(toolbar.toolbarCfg).filter((t) => TITLE_PINS.has(t.id)).map((t) => (
           <span key={t.id} className="hdr-pin">{renderToolbarItem(toolbar, t, true)}</span>
         ))}
         {/* Name this conversation, now.
@@ -214,7 +219,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             over the output — title, derived name, chips, and the five icon
             buttons that could not fit beside the chips. */}
         <div className="hdr-row2">
-        <div className="hdr-cmds">
+        {!pending && <div className="hdr-cmds">
           {/* The reader's own three (outline, find, refresh) are pins like any
               other now, and read as the READER's verbs while it is up — see
               `runToolbar`. They used to be a fixed strip of `TranscriptView`'s
@@ -238,7 +243,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             onClick={() => { track("action:hdrcmd.manage"); setOverlay("hdrcmd"); }}>
             {headerCmds.length ? <Pencil size={12} /> : <><Plus size={12} /> command</>}
           </Button>
-        </div>
+        </div>}
         {/* The reader/CLI toggle USED TO BE HERE, and is now in the corner group
             on the surface it switches (`ScreenCorner`). It was in the
             header because that row survives a collapse — but full screen hides
@@ -262,12 +267,15 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             the group it was nested in. */}
         <div className="hdr-ctl">
         <>
-        <HintToggle compact />
+        {/* Explain mode and the bell are the app's, not this session's: on a queued open they wait on
+            Home (one tap back), so the one control left — the × that drops the open — sits on the
+            title row and the line below keeps its room with the keyboard up. */}
+        {!pending && <HintToggle compact />}
         {/* A ☰ line with something this session waits on (the vault's asks it made), lifted
             beside the bell while counted — the launcher's key, cut to this session. A pinned
             line already shows its own badge above. */}
         {!pending && <CountedKeys items={menuItems(active).filter((e) => !(toolbar.toolbarCfg.pinned ?? []).includes(e.key))} size={ICON} where="session.key." />}
-        <BellButton size={ICON} />
+        {!pending && <BellButton size={ICON} />}
         {/* Nothing to close on the host yet: what exists is the queued create,
             so the destructive verb here drops THAT — and the prompts written
             behind it are surfaced as failed rows rather than silently binned
@@ -275,7 +283,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         {pending ? (
           <Button variant="danger" title={isLaterId(active.id) ? "close — nothing was queued; a draft stays here for next time"
             : `drop this open — the prompts written for it stay in ${SHEET.activity}`}
-            onClick={() => { const id = pendingEntry?.ackId; setActiveId(null); if (id) { removeQueued(id); showToast("open dropped"); } }}>
+            onClick={() => { const id = pendingEntry?.ackId; if (id) { if (removeQueued(id)) { setActiveId(null); showToast("open dropped"); } } else setActiveId(null); }}>
             <X size={ICON} />
           </Button>
         ) : (
@@ -286,12 +294,12 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         {/* The menu's own switch. It sits HERE, in the header, and not in the
             menu it opens, which would be a button you can only reach when you
             no longer need it. */}
-        <Button className={`burger-btn${toolbarOpen ? " active" : ""}`}
+        {!pending && <Button className={`burger-btn${toolbarOpen ? " active" : ""}`}
           title={toolbarOpen ? "close the menu" : "menu — refresh, slash commands, files, and the rest"}
           aria-label="toolbar" aria-expanded={toolbarOpen}
           onClick={() => setToolbarOpen(!toolbarOpen)}>
           <Menu size={ICON} />
-        </Button>
+        </Button>}
         </>
         </div>
         </div>
@@ -306,6 +314,9 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             typing mode. It used to clear `composeFocused` on the way, which
             brought the whole chrome back with it: a button that says outline and
             un-hides the header is doing the other button's job. */}
+        {chromeHidden && chromeNote(chrome, chrome.chromeIn) && (
+          <span className="hdr-typing-keep hdr-typing-note" role="status">{chromeNote(chrome, chrome.chromeIn)}</span>
+        )}
         {chromeHidden && !pending && !(toolbar.toolbarCfg.pinned ?? []).includes("outline") && (
           <Button className="hdr-typing-keep hdr-typing-outline" onPointerDown={keepFocus}
             title={`outline — where you are in this session${tallyTitle(turnTally(active))}`}
@@ -362,21 +373,18 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             A tap is a menu CHOICE, so it closes the menu (`closeToolbarMenu`) —
             all but the few that mutate in place and are meant to be repeated,
             see `MENU_KEEP_OPEN`. */}
-        {toolbarOpen && (
+        {toolbarOpen && !pending && (
           <ToolbarMenu c={toolbar} usedOrder={usedOrder} refreshTerminal={refreshTerminal} />
         )}
       </header>
-      {pending && (
+      {/* A queued open has NO status line: where it is is said once, on the line at the top of the
+          session area (`TermArea.tsx` `.term-pending`), and the repo is the title above. Two more
+          rows of chrome cost the line its room with the keyboard up (owner's 11-18 screenshot).
+          `+ later` has no such line, so it keeps this one. */}
+      {pending && isLaterId(active.id) && (
       <div className="sess-status">
         <RowSub>{repoForCwd(active.cwd) ? repoBranchLabel(withShownName(repoForCwd(active.cwd)!)) : active.cwd}</RowSub>
-        <RowSub>
-          {isLaterId(active.id) ? <><Hourglass size={11} /> starts when its backlog item runs</> : <>
-          <Loader size={11} className={pendingEntry?.status === "failed" ? "" : "spin"} />{" "}
-          {pendingEntry?.status === "failed" ? "not started"
-            : !pendingEntry || pendingEntry.status === "pending" ? "opening…"
-            : status === "open" ? "queued" : "queued — waiting for the link"}
-          </>}
-        </RowSub>
+        <RowSub><Hourglass size={11} /> starts when its backlog item runs</RowSub>
       </div>
       )}
       {!pending && (

@@ -17,7 +17,6 @@ import { AckLedger, ackWriteNotice, lostLedgerNotice } from "./acks.js";
 import { BacklogManager, BACKLOG_LINGER_MS } from "./backlog.js";
 import { BuildManager } from "./builds.js";
 import { createFirstApp } from "./server/firstapp.js";
-import { CaptureManager } from "./capture.js";
 import { AssessStore, makeAssessExecutor } from "./assess.js";
 import { AutoPullManager } from "./autopull.js";
 import { FanoutManager } from "./fanout.js";
@@ -262,18 +261,6 @@ builds.on("output", (runId: string, chunk: string) =>
   broadcast({ t: "build.output", runId, dataB64: Buffer.from(chunk, "utf8").toString("base64") }));
 
 /**
- * The verified capture loop — a build with a picture and a claim on the end.
- *
- * Constructed here beside `builds`, holding the same store, and streaming over
- * the same one socket: `capture.output` is `build.output`'s shape on purpose,
- * so nothing about a picture needs a second connection to arrive.
- */
-const capture = new CaptureManager(intents);
-ctx.capture = capture;
-capture.on("output", (runId: string, chunk: string) =>
-  broadcast({ t: "capture.output", runId, dataB64: Buffer.from(chunk, "utf8").toString("base64") }));
-
-/**
  * "What is left in this repo, and what is already done" — the store, and the
  * executor the intent manager calls.
  *
@@ -286,6 +273,7 @@ const assessExecutor = makeAssessExecutor({
   store: assess,
   intents: () => intents.list(),
   notes: (cwd) => ctx.padNotesFor(cwd),
+  notify: (k, p) => ctx.notify(k, p),
 });
 ctx.assess = assess; ctx.assessExecutor = assessExecutor;
 
@@ -670,10 +658,8 @@ async function main(): Promise<void> {
   // WATERPLANE_PREFLIGHT=0 turns it off — the e2e scripts set that, since they drive a
   // stub binary and assert on host output.
   if (env("PREFLIGHT") !== "0") {
-    // Port skipped (we just bound it) and the capture probe skipped: it is an
-    // always-`ok` line this summary would drop anyway, and computing it shells
-    // out to four binaries — see `runChecks`. So is the self-update request.
-    void runChecks(doctorInput, true, true, true).then(printBootSummary).catch(() => { /* preflight must never break boot */ });
+    // Port skipped (we just bound it), and so is the self-update request.
+    void runChecks(doctorInput, true, true).then(printBootSummary).catch(() => { /* preflight must never break boot */ });
   }
 }
 

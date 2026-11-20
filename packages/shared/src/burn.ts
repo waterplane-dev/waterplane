@@ -170,8 +170,8 @@ export function burnStretch(
   if (!last) return null;
   const pts = last.pts.filter((p) => p.t >= now - lookbackMs && p.t <= now);
   if (pts.length < 2) return null;
-  const a = pts[0];
-  const b = pts[pts.length - 1];
+  const a = pts[0]!;
+  const b = pts[pts.length - 1]!;
   const span = b.t - a.t;
   if (!(span >= minSpanMs) || span <= 0) return null;
   const dPts = b.v - a.v;

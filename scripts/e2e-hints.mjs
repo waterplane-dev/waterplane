@@ -121,9 +121,10 @@ check(unknown.length === 0,
 // unused entries are fine — except the toolbar ones, which exist precisely
 // because `renderToolbarItem` looks them up by id.
 // The catalog lives in `toolbar.ts` (extracted from App.tsx, which is where a
-// scrape like this one used to have to look).
+// scrape like this one used to have to look). A name is a literal or a shared
+// constant (`TITLE.waiting`): a constant name is still an item.
 const app = readFileSync(join(SRC, "toolbar.ts"), "utf8");
-const toolbarIds = [...app.matchAll(/\{ id: "([a-z]+)", name: "[^"]*", Icon:/g)].map((m) => m[1]);
+const toolbarIds = [...app.matchAll(/\{ id: "([a-z]+)", name: (?:"[^"]*"|[A-Za-z_.]+), Icon:/g)].map((m) => m[1]);
 check(toolbarIds.length > 10, `read the toolbar catalog (${toolbarIds.length} items)`);
 const strayToolbarHints = Object.keys(HINTS).filter((k) => k.startsWith("toolbar:") && !toolbarIds.includes(k.slice(8)));
 check(strayToolbarHints.length === 0,

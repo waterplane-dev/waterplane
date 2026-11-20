@@ -16,6 +16,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { SEND_DRAFT } from "../../sendIntent";
 import type { SendApi } from "./useSend";
+import { seedDiscard, SEED_ROW_GONE_DISCARD } from "../../relayedRow";
 import { isLaterId } from "../queue/logic.ts";
 
 export interface SendSheetEntryProps {
@@ -32,7 +33,7 @@ export interface SendSheetEntryProps {
   backends: BackendInfo[] | null;
   launch: LaunchOpts;
   /** The queue core's verb — a discarded row goes the way every discard goes. */
-  removeQueued(ackId: string): void;
+  removeQueued(ackId: string): boolean;
   /** `closeSheet` — never a bare `setOverlay(null)` (see below). */
   closeSheet(self: SheetId): void;
   onAttach(files: File[], repo: RepoTarget): Promise<string[]>;
@@ -90,10 +91,14 @@ export function SendSheetEntry(p: SendSheetEntryProps) {
       onDiscard={sendSeed.ackId || sendSeed.padId
         ? () => {
             track("action:send.discard");
-            if (sendSeed.ackId) removeQueued(sendSeed.ackId);
+            // Refused (the background link already sent it): the sheet stays, nothing is "discarded".
+            // Gone from the queue (confirmed while the sheet sat open): nothing to discard, and
+            // "discarded" would claim a cancel of a prompt that ran. The sheet's own words go.
+            const row = seedDiscard(sendSeed.ackId, p.outbox, removeQueued);
+            if (row === "refused") return;
             if (sendSeed.padId) removePadNotes([sendSeed.padId]);
             clearSheetDraft(SEND_DRAFT);
-            showToast("discarded");
+            showToast(row === "gone" ? SEED_ROW_GONE_DISCARD : "discarded");
           }
         : undefined}
       // `closeSheet`, never a bare `setOverlay(null)`: the send this sheet

@@ -24,16 +24,21 @@
  * this file back for both.
  */
 import {
-  Bell, Bot, CloudUpload, CornerDownLeft, Cpu, ExternalLink, Gauge, HardDrive, HelpCircle, KeyRound,
-  ListChecks, Lock, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon, Waypoints,
+  Bell, Bot, CloudUpload, Cpu, ExternalLink, Gauge, HardDrive, HelpCircle, KeyRound,
+  ListChecks, Lock, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon,
   Activity, BarChart3, CalendarClock, DoorClosed, DoorOpen, Puzzle,
 } from "lucide-react";
 import { BRAND, SYNCED_SETTING_KEYS, envName, type Effort, type PermissionMode } from "@waterplane/shared";
-import { useEffect } from "react";
+import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import { createStore, useStore } from "../../sdk/store.ts";
 import { pluginScope, settingsOnly, useSettingsOnly } from "../../settingsFocus.ts";
 import { core } from "../api.ts";
-import { SHEET } from "../../sheetNames.ts";
+import { TITLE } from "../../sheetNames.ts";
+import { DOORS } from "../../doors/index.ts";
+import { SCREEN_WORDS, SEARCH_DOORS } from "../../doors/settings.ts";
+import { screenResults, sectionOfFeatureRow, sectionTitle, settingRow, type SettingsGroupId, type SettingsSectionId } from "../../settingsIndex.ts";
+import { Row, RowSub, RowTitle } from "../../kit/Row";
+import type { SheetId } from "../../sdk/types.ts";
 import { openSchedules } from "../../features/schedule";
 import { UpdatesTopDoor } from "../../features/plugins";
 import { featureSettingsRows } from "../settingsRows.ts";
@@ -107,6 +112,8 @@ export function SettingsSheet(props: SettingsSheetProps & { pluginView?: boolean
      draw, and `SetFilterBar` — last in the markup, first on the screen —
      reads the finished counts. See `SettingsKit.tsx`. */
   const tally = newSettingsTally(settingsQ, only);
+  const { fold, openSection } = useFolds();
+  const jumpTo = useJump(openSection);
   return (
     <div className="sheet">
       <SheetHead title={<><Settings size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} /> Settings</>} onClose={() => c.nav.close(route)}>
@@ -129,75 +136,162 @@ export function SettingsSheet(props: SettingsSheetProps & { pluginView?: boolean
       <SettingsScope value={tally}>
       <div className="settings">
 
-        {/* ── Sessions ──────────────────────────────────────────────────
-            First, because what brings anybody to this screen is a session
-            doing something they did not ask for. The three sections this
-            replaces — "New session defaults", "Usage limit", "Usage budget"
-            — were one subject filed under three heads. */}
-        <SetGroup id="sessions" title="Sessions" icon={Bot}>
-          {featureSettingsRows("sessions", { to: 0 })}
+        {/* Six sections named after a task (spec D6), all folded when Settings opens: the headings
+            are the table of contents. A query or a door's pin unfolds what it shows. The two
+            retired groups' rows ("Writing & reading", "Tools & diagnostics") went to the task each
+            serves; `settingsIndex.ts` says which, and `rowsIn` places a feature's rows by it. */}
+        <SetGroup id="sessions" title="Start sessions" icon={Bot} {...fold("sessions")}>
+          {rowsIn("sessions", ["sessions"], { to: 0 })}
           <SessionRows pickBackend={props.pickBackend} />
-          {featureSettingsRows("sessions", { from: 0 })}
-        </SetGroup>
-
-        {/* ── Notifications ─────────────────────────────────────────── */}
-        <SetGroup id="notifications" title="Notifications" icon={Bell}>
-          {featureSettingsRows("notifications")}
-        </SetGroup>
-
-        {/* ── Appearance ────────────────────────────────────────────────
-            Everything that decides what this screen looks like, including
-            the three always-on strips whose switches used to live under
-            "Tools" — a strip costs a line of THIS screen, which is the same
-            question as the text size, not a diagnostic. All per device: the
-            phone in a dark room and the desktop under a window want
-            different answers. */}
-        <SetGroup id="appearance" title="Appearance" icon={SunMoon}>
-          {featureSettingsRows("appearance", { to: 0 })}
-          <AppearanceRows />
-          {featureSettingsRows("appearance", { from: 0 })}
-        </SetGroup>
-
-        {/* ── Writing & reading ─────────────────────────────────────── */}
-        <SetGroup id="writing" title="Writing &amp; reading" icon={CornerDownLeft}>
-          {featureSettingsRows("writing", { to: 0 })}
-          <WritingRows voice={props.voice} />
-          {featureSettingsRows("writing", { from: 0 })}
-        </SetGroup>
-
-        {/* ── Offline & data ────────────────────────────────────────── */}
-        <SetGroup id="offline" title="Offline &amp; data" icon={Smartphone}>
-          {featureSettingsRows("offline", { to: 0 })}
-          <OfflineRows install={props.install} reconnect={props.reconnect} />
-          {featureSettingsRows("offline", { from: 0 })}
-        </SetGroup>
-
-        {/* ── Connection ────────────────────────────────────────────── */}
-        <SetGroup id="connection" title="Connection" icon={ExternalLink}>
-          {featureSettingsRows("connection", { to: 0 })}
-          <ConnectionRows redial={props.redial} />
-          {featureSettingsRows("connection", { from: 0 })}
-        </SetGroup>
-
-        {/* ── Tools & diagnostics ───────────────────────────────────────
-            Things you OPEN and read, not things you set. Nine doors in a
-            rack rather than nine full-width rows with a paragraph each —
-            the labels are what tells them apart, so the labels are all the
-            row needs to be. */}
-        <SetGroup id="tools" title="Tools &amp; diagnostics" icon={Waypoints}>
-          {featureSettingsRows("tools", { to: -10 })}
+          {rowsIn("sessions", ["sessions"], { from: 0 })}
           <div className="set-doors">
-            {featureSettingsRows("tools", { from: -10, to: 0 })}
+            {rowsIn("sessions", ["tools"])}
+            <SetAction id="tool-repo-setup" compact label={TITLE.health} icon={ListChecks}
+              title="this repo's checks, health score and skills"
+              onClick={() => c.nav.open("setup")} />
+          </div>
+        </SetGroup>
+
+        <SetGroup id="notifications" title="Notifications" icon={Bell} {...fold("notifications")}>
+          {rowsIn("notifications", ["notifications"])}
+        </SetGroup>
+
+        {/* What this screen looks like and how typing and reading behave on it. All per device:
+            the phone in a dark room and the desktop under a window want different answers. */}
+        <SetGroup id="appearance" title="Look and feel" icon={SunMoon} {...fold("appearance")}>
+          {rowsIn("appearance", ["appearance"], { to: 0 })}
+          <AppearanceRows />
+          {rowsIn("appearance", ["appearance"], { from: 0 })}
+          {rowsIn("appearance", ["writing"], { to: 0 })}
+          <WritingRows voice={props.voice} />
+          {rowsIn("appearance", ["writing"], { from: 0 })}
+          <div className="set-doors">
+            <SetAction id="tool-features" compact label="feature usage" icon={BarChart3}
+              title="which features you actually use (and which you never do)"
+              onClick={() => c.nav.open("features")} />
+          </div>
+        </SetGroup>
+
+        <SetGroup id="offline" title="Phone and offline" icon={Smartphone} {...fold("offline")}>
+          {rowsIn("offline", ["offline"], { to: 0 })}
+          <OfflineRows install={props.install} reconnect={props.reconnect} />
+          {rowsIn("offline", ["offline"], { from: 0 })}
+          <div className="set-doors">
+            {rowsIn("offline", ["tools"])}
+            <SetAction id="tool-storage" compact label="Storage" icon={HardDrive}
+              title="what this device is holding, and what clearing any of it would cost"
+              onClick={() => { track("overlay:storage"); c.nav.open("storage"); }} />
+          </div>
+        </SetGroup>
+
+        <SetGroup id="connection" title="Desktops and connection" icon={ExternalLink} {...fold("connection")}>
+          {rowsIn("connection", ["connection"], { to: 0 })}
+          <ConnectionRows redial={props.redial} />
+          {rowsIn("connection", ["connection"], { from: 0 })}
+          {rowsIn("connection", ["tools"], { to: -10 })}
+          <div className="set-doors">
+            {rowsIn("connection", ["tools"], { from: -10, to: 0 })}
             <ToolDoors />
           </div>
-          {featureSettingsRows("tools", { from: 0 })}
+          {rowsIn("connection", ["tools"], { from: 0 })}
+        </SetGroup>
+
+        <SetGroup id="limits" title="Limits and cost" icon={Gauge} {...fold("limits")}>
+          {rowsIn("limits", ["tools"])}
+          {/* Orange/red marks on a session's spend — the person's thresholds. */}
+          <SpendWarnRow />
+          {rowsIn("limits", ["sessions"])}
         </SetGroup>
 
         {/* Drawn last, floated to the top by `order: -1` — it reads the
             tally the rows above filled in during this same render. */}
         <SetFilterBar tally={tally} onClear={() => { if (scoped) { c.nav.close(route); return; } settingsOnly.set(null); query.set(""); }} />
+        {/* After the bar in the markup, so with the same `order` it sits under it: what the query
+            found, screens first, then each setting with the section it lives in (T21). */}
+        <SearchResults tally={tally} query={settingsQ} onJump={jumpTo} />
       </div>
       </SettingsScope>
+    </div>
+  );
+}
+
+/** A feature's settings rows that are drawn in `section`, out of the manifest `groups` given and the
+ *  band of `order` (the key says which feature row it is; `sectionOfFeatureRow` says where it goes). */
+function rowsIn(section: SettingsSectionId, groups: SettingsGroupId[], band?: { from?: number; to?: number }): ReactNode[] {
+  return groups.flatMap((g) => featureSettingsRows(g, band).filter((el) => {
+    const key = isValidElement(el) && el.key != null ? String(el.key) : "";
+    return sectionOfFeatureRow(key, g) === section;
+  }));
+}
+
+/** Which sections are open this visit: none when Settings opens (spec D6). Not a setting. */
+function useFolds(): { fold: (id: SettingsSectionId) => { folded: boolean; onToggle: () => void }; openSection: (id: SettingsSectionId) => void } {
+  const [open, setOpen] = useState<ReadonlySet<SettingsSectionId>>(() => new Set());
+  return {
+    fold: (id) => ({ folded: !open.has(id), onToggle: () => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; }) }),
+    openSection: (id) => setOpen((o) => (o.has(id) ? o : new Set([...o, id]))),
+  };
+}
+
+/** How long a row a search result jumped to stays marked. */
+const MARK_MS = 2000;
+
+/**
+ * Jump to one row in the full page: the query is cleared, the row's section opens, the row is
+ * scrolled to and marked for two seconds (`data-marked`, an outline). The row may not exist on
+ * this device (a conditional row): then nothing scrolls and nothing is marked.
+ */
+function useJump(openSection: (id: SettingsSectionId) => void): (rowId: string) => void {
+  const [target, setTarget] = useState<{ id: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!target) return;
+    const el = document.querySelector<HTMLElement>(`.settings [data-set-id="${CSS.escape(target.id)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.setAttribute("data-marked", "");
+    const was = el.style.outline;
+    el.style.outline = "2px solid var(--accent)";
+    el.style.outlineOffset = "4px";
+    const t = setTimeout(() => { el.removeAttribute("data-marked"); el.style.outline = was; }, MARK_MS);
+    return () => { clearTimeout(t); el.removeAttribute("data-marked"); el.style.outline = was; };
+  }, [target]);
+  return (rowId) => {
+    const sec = settingRow(rowId)?.group;
+    settingsOnly.set(null);
+    pluginScope.set(null);
+    query.set("");
+    if (sec) openSection(sec);
+    setTarget((t) => ({ id: rowId, n: (t?.n ?? 0) + 1 }));
+  };
+}
+
+/**
+ * The search's results, above the filtered page: screens (from the door registry) a tap opens,
+ * then each setting row the query matched with its section, a tap jumping to it in the full page.
+ * Reads the tally, so it is drawn after the rows and floated up (`order: -1`).
+ */
+function SearchResults({ tally, query: q, onJump }: { tally: { shown: string[]; only: string | null }; query: string; onJump(id: string): void }) {
+  const c = core();
+  if (tally.only || !q.trim()) return null;
+  const screens = screenResults(q, SEARCH_DOORS, SCREEN_WORDS, DOORS);
+  const rows = [...new Set(tally.shown)].map((id) => settingRow(id)).filter((r) => !!r);
+  if (!screens.length && !rows.length) return null;
+  return (
+    <div className="set-group set-results" style={{ order: -1 }}>
+      {screens.length > 0 && <h3 className="set-title">Screens</h3>}
+      {screens.map((r) => (
+        <Row as="button" type="button" key={`s:${r.to}:${r.name}`} data-screen={r.to} onClick={() => { track(`search:screen:${r.to}`); c.nav.open(r.to as SheetId); }}>
+          <RowTitle>{r.name}</RowTitle>
+          <RowSub>{r.where ? `Also on ${r.where}` : "Opens from here"}</RowSub>
+        </Row>
+      ))}
+      {rows.length > 0 && <h3 className="set-title">Go to a setting</h3>}
+      {rows.map((r) => (
+        <Row as="button" type="button" key={`r:${r.id}`} data-row={r.id} onClick={() => onJump(r.id)}>
+          <RowTitle>{r.label}</RowTitle>
+          <RowSub>in {sectionTitle(r.group)}</RowSub>
+        </Row>
+      ))}
     </div>
   );
 }
@@ -352,9 +446,6 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
         more={<p>The answer applies to that session only — these defaults stay as they are. Resuming a conversation never asks: it keeps the launch it was recorded with.</p>}
       />
 
-      {/* Orange/red marks on a session's spend — the person's thresholds. */}
-      <SpendWarnRow />
-
       {/* The close confirm's "don't ask again" turns this off; this is the
           way back its toast names. */}
       <SetSwitch
@@ -370,7 +461,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
       />
 
       <SetAction
-        id="automation" label={SHEET.automation} icon={CalendarClock} opens
+        id="automation" label={TITLE.waiting} icon={CalendarClock} opens
         onClick={() => { track("overlay:schedule"); openSchedules(null); }}
         note="Prompts that run on their own: on a clock, every week, or around a usage window."
       />
@@ -516,34 +607,25 @@ function ConnectionRows({ redial }: { redial(): void }) {
   );
 }
 
-// ── Tools: the door rack (after the features' doors at its head) ────────────
+// ── Desktops and connection: the door rack (after the features' doors at its head) ──
 
 function ToolDoors() {
   const c = core();
   const open = c.nav.open;
   return (
     <>
-      <SetAction id="tool-net-health" compact label="connection health" icon={Activity}
+      <SetAction id="tool-net-health" compact label={TITLE.connection} icon={Activity}
         title="what the link has been doing to your prompts"
         onClick={() => { track("overlay:nethealth"); open("nethealth"); }} />
-      <SetAction id="tool-storage" compact label="storage" icon={HardDrive}
-        title="what this device is holding, and what clearing any of it would cost"
-        onClick={() => { track("overlay:storage"); open("storage"); }} />
-      <SetAction id="tool-speedtest" compact label="speed test" icon={Gauge}
+      <SetAction id="tool-speedtest" compact label={TITLE.connection} icon={Gauge}
         title="connection speed test + diagnostics"
         onClick={() => open("speedtest")} />
       <SetAction id="tool-host-stat" compact label="host stat" icon={Cpu}
         title="host CPU / memory load"
         onClick={() => void showHostStat()} />
-      <SetAction id="tool-repo-setup" compact label="repo setup" icon={ListChecks}
-        title="repo setup checklist"
-        onClick={() => open("setup")} />
-      <SetAction id="tool-secret" compact label="secret" icon={KeyRound}
+      <SetAction id="tool-secret" compact label={TITLE.secret} icon={KeyRound}
         title="set a secret (write-only)"
         onClick={() => open("secret")} />
-      <SetAction id="tool-features" compact label="feature usage" icon={BarChart3}
-        title="which features you actually use (and which you never do)"
-        onClick={() => open("features")} />
     </>
   );
 }

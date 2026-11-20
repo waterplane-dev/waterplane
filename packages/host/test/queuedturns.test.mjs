@@ -46,6 +46,17 @@ test("the log taking the prompt is what retires the row", () => {
   assert.deepEqual(queuedTurns([entry("h2", "and now do the release notes", T0 + 300_000)], doc), []);
 });
 
+test("a long prompt the log WRAPPED as pasted content still retires the row", () => {
+  // Measured 2026-11-19 (a dictated prompt, CLI 2.1.x): the log's copy starts
+  // `\n\n<pasted_content id="73ce">\n` and is cut into chunks. Matched raw, the
+  // head never met what waterplane typed, so the reader drew a "waiting for the
+  // CLI" row under the turn that had already answered it — the prompt looked
+  // sent twice. The entry's clock may sit after the log's, as it did there.
+  const words = "We do have now built this feature where we can switch between bordering and planning, and this adds";
+  const doc = [logged(1, `\n\n<pasted_content id="73ce">\n${words.slice(0, 60)}\n</pasted_content id="73ce">\n\n${words.slice(60)}`, T0)];
+  assert.deepEqual(queuedTurns([entry("h3", words, T0 + 2_000)], doc), []);
+});
+
 test("an entry the log has moved past is never resurrected", () => {
   // A delivery that echoed and was then cleared (an Esc, a ctrl-U, a person
   // deleting it) leaves a history row behind. The next logged turn is what ends

@@ -161,6 +161,30 @@ public class ShellRelayTest {
     }
 
     @Test
+    public void aFirstAttemptTheHostRefusedIsNotWritten() {
+        ShellRelay r = twoLanes();
+        r.onRefused(r.next(1).get(0));
+        for (Object o : (List<?>) read(r.claim()).get("written")) {
+            assertFalse("nothing ran, so the page is not told it was sent", "a1".equals(ShellRelay.asMap(o).get("ackId")));
+        }
+    }
+
+    @Test
+    public void aRefusalAfterAnUnansweredAttemptKeepsTheRowWritten() {
+        ShellRelay r = twoLanes();
+        ShellRelay.Send a1 = r.next(1).get(0);
+        r.onNoAnswer(a1);
+        r.onConnect();
+        ShellRelay.Send again = r.next(2).get(0);
+        assertEquals("a1", again.ackId);
+        r.onRefused(again);
+        List<?> w = (List<?>) read(r.claim()).get("written");
+        boolean has = false;
+        for (Object o : w) if ("a1".equals(ShellRelay.asMap(o).get("ackId"))) has = true;
+        assertTrue("the first attempt may have run", has);
+    }
+
+    @Test
     public void aFrameTheRowAlreadySentKeepsItsFirstSentAt() {
         ShellRelay r = new ShellRelay(file);
         r.setPlan(plan("h", lane("A", "{\"ackId\":\"x\",\"frame\":{\"t\":\"backlog.add\",\"ackId\":\"x\",\"firstSentAt\":42}}")));

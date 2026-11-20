@@ -20,6 +20,7 @@
  * The socket's receipts arrive as methods (`onOpAck`, `onInputAck`, …) so the
  * cases in App's switch are one line each.
  */
+import { isWaitingId, tabOf } from "../../waitingWork";
 import { useEffect, useRef, useState } from "react";
 import {
   BRAND, MIN_TRY_MS, answerInsertAt, busySerialGroups, laneBusy, padMigratedToast, relayPlan, sessionWall, SYNCED_SETTING_KEYS,
@@ -42,16 +43,18 @@ import type { UploadApi } from "../../sdk/types.ts";
 import { blockedStore, outboxStore, persistFailedAtStore, relaySentStore, seedOutbox } from "./store.ts";
 import { onRelayClaim, onRelayOpen, relayOpenFlushes, publishRelayPlan, relayHeldStore, relayOwnerHostId } from "./relayOwner.ts";
 import {
-  FLUSH_SWEEP_MS, PENDING_PREFIX, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates, laneStateOf,
+  FLUSH_SWEEP_MS, parsePendingId, QUEUE_BAR_LINGER_MS, isPendingId, laneFor, laneLabelOf, pendingLaneId, serialStates, laneStateOf,
   budgetHeldLaneSet, budgetReleased,
 } from "./logic.ts";
 import { usePendingState, pendingFns } from "./pending.ts";
+import { reconcileOrphans } from "./orphans.ts";
 import { sendFns } from "./send.ts";
 import { verbFns } from "./verbs.ts";
 import { useUploadState, uploadFns } from "./uploads.ts";
 import { failToast } from "./phase.ts";
 import { wireFns, type WireFns } from "./wire.ts";
 import { migrateGiveUps, migratePadRescue } from "./migrate.ts";
+import { noteReceiptRemoval } from "../../relayedRow";
 import type {
   BudgetState, CoreFns, PendingFns, QueueCtx, QueueDeps, QueueEnv, QueueRefs, SendFns, UploadFns, VerbFns,
 } from "./types.ts";
@@ -81,7 +84,6 @@ export interface QueueApi extends CoreFns, SendFns, PendingFns, VerbFns, WireFns
   /** The one-line description of a queued entry, as the strip words it. */
   laneLabel(e: OutboxEntry): string;
   // ── the pending session ──
-  PENDING_PREFIX: string;
   isPendingId(id: string | null | undefined): boolean;
   pendingLaneId(ackId: string): string;
   laneFor(id: string, cwd: string): string;
@@ -96,6 +98,9 @@ export interface QueueApi extends CoreFns, SendFns, PendingFns, VerbFns, WireFns
     uploadRowLinger: boolean;
   };
 }
+
+/** The recovery bar is on screen: the Queued tab, under whichever Waiting work id draws it. */
+const onQueuedTab = (o: string | null): boolean => o === "queue" || (isWaitingId(o) && tabOf(o) === "queued");
 
 export function useQueue(input: QueueDeps): QueueApi {
   seedOutbox(loadOutbox);
@@ -282,7 +287,17 @@ export function useQueue(input: QueueDeps): QueueApi {
    * every message sat idle until the next 5 s sweep. Every mutation therefore
    * derives from `outboxRef.current`, which this keeps current immediately.
    */
-  function writeOutboxImpl(list: OutboxEntry[]): OutboxEntry[] {
+  function writeOutboxImpl(incoming: OutboxEntry[]): OutboxEntry[] {
+    // Reconcile first, on EVERY write: a row chained behind a create that is gone (never
+    // materialised, evicted, dropped) is failed at once, text kept, not at the next reload.
+    // A launch the desktop is holding counts as its create being somewhere (`orphans.ts`).
+    const heldLaunches = new Set([
+      ...deps.launchesRef.current.filter((l) => l.state !== "failed" && l.state !== "canceled").map((l) => l.id),
+      // `holdForLaunch` marks the chain it parks `noTtl`; the create's row is retired by then.
+      ...incoming.filter((e) => e.pendingCreate && (e as { noTtl?: boolean }).noTtl && e.createAck).map((e) => e.createAck!),
+    ]);
+    const { keep: list, orphaned } = reconcileOrphans(incoming, new Set(sessionsRef.current.map((s) => s.id)), heldLaunches);
+    for (let i = 0; i < orphaned.length; i++) noteSendFailed();
     // A refused write changes nothing below: the in-memory queue is the truth.
     persistFailedAtStore.set(saveOutbox(list) ? null : Date.now());
     outboxRef.current = list;
@@ -320,7 +335,9 @@ export function useQueue(input: QueueDeps): QueueApi {
       running: sessionsRef.current.filter((x) => x.running).map((x) => x.id),
       goneLanes: c.goneLanes?.() ?? [],
       budgetBlocked: budgetRef.current?.verdict.blocked ?? false,
-      budgetHeldLanes: [...budgetHeldLanesRef.current],
+      // Derived from the session list itself: the ref is refreshed by an effect that runs AFTER the
+      // plan re-hand effect, so on a session-list change it would hand one stale plan.
+      budgetHeldLanes: [...budgetHeldLaneSet(sessionsRef.current)],
       maxAttempts: MAX_SEND_ATTEMPTS, minTryMs: MIN_TRY_MS,
     });
   }
@@ -419,7 +436,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     // times), so it is not announced as a failure: "not delivered" seven
     // seconds after Send was the bug. `unsubmitted` is known and waits on a
     // person's Return. Words in `failToast` (core/queue/phase.ts).
-    showToast(failToast(state, reason, deps.overlayRef.current === "queue"));
+    showToast(failToast(state, reason, onQueuedTab(deps.overlayRef.current)));
     writeOutbox(cur.map((x) => x.ackId === ackId
       ? { ...x, status: "failed" as const, reason, failState: state ?? "other", failedAt: Date.now() }
       : x));
@@ -493,6 +510,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     const e = outboxRef.current.find((x) => x.ackId === q.ackId && x.status === "failed");
     if (!e) return;
     if (q.verdict === "landed") {
+      noteReceiptRemoval(e.ackId);
       writeOutbox(outboxRef.current.filter((x) => x.ackId !== e.ackId));
       showToast(`“${e.text.slice(0, 40)}${e.text.length > 40 ? "…" : ""}” did run after all — cleared from the queue`);
       return;
@@ -803,23 +821,12 @@ export function useQueue(input: QueueDeps): QueueApi {
   // the ledger existed this had to be surfaced as `failed` and re-typed by hand.
   useEffect(() => {
     let next = outboxRef.current.map((e) => e.status === "pending" ? { ...e, status: "queued" as const, retryAt: undefined, waitReason: undefined } : e);
-    // An ORPHANED chained prompt: it waits for a `session.create` that is no
-    // longer in the queue (the cap evicts oldest-first, and the create is the
-    // oldest entry in its own lane). Nothing will ever bind it and it holds its
-    // lane, so surface it as failed — the text is kept and can be re-aimed.
-    // Keyed by the create's ackId as well as its lane: the lane is per repo and
-    // may still hold ANOTHER create, which is not the one this prompt was
-    // written for and must not adopt it.
-    const createLanes = new Set(next.filter(isCreateOp).map((e) => e.sessionId));
-    const createAcks = new Set(next.filter(isCreateOp).map((e) => e.ackId));
-    const orphaned = (e: OutboxEntry) =>
-      e.pendingCreate && (e.createAck ? !createAcks.has(e.createAck) : !createLanes.has(e.sessionId));
-    next = next.map((e) => {
-      if (!orphaned(e)) return e;
-      const reason = "the session it was queued for is gone";
-      noteSendFailed();
-      return { ...e, pendingCreate: undefined, status: "failed" as const, reason, failedAt: Date.now() };
-    });
+    // An ORPHANED chained prompt (`orphans.ts`): its create is gone, so it fails here, text kept.
+    // Strict on mount (no launch is known yet, a parked chain is not spared); every later write
+    // reconciles again inside `writeOutboxImpl`.
+    const swept = reconcileOrphans(next, new Set(), new Set());
+    for (let i = 0; i < swept.orphaned.length; i++) noteSendFailed();
+    next = swept.keep;
     writeOutbox(migrateGiveUps(next));
     const back = migratePadRescue();
     if (back) showToast(padMigratedToast(back));
@@ -833,7 +840,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     const live = new Set(outbox.filter(isCreateOp).map((e) => pendingLaneId(e.ackId)));
     const r = rescueStrandedPendingDrafts(
       (id) => id === given.activeId || live.has(id),
-      (id) => pendingKept.current.get(id.slice(PENDING_PREFIX.length))?.cwd,
+      (id) => pendingKept.current.get(parsePendingId(id) ?? "")?.cwd,
     );
     if (r.moved) showToast(`the words written for a session that never opened are on the pad (${r.moved})`);
     else if (r.refused) showToast("words written for a session that never opened are kept on this device — the pad is full");
@@ -856,7 +863,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     entries: outbox, outboxRef, blocked: queueBlocked, holdQueueRef, flushIdleReason, parkedSends, sendSettled,
     budget, launches,
     laneLabel: (e: OutboxEntry) => laneLabelOf(e, sessions),
-    PENDING_PREFIX, isPendingId, pendingLaneId, laneFor, pendingEntry, pendingSession,
+    isPendingId,pendingLaneId, laneFor, pendingEntry, pendingSession,
     uploads: {
       uploading: up.uploading, parking: up.parking, upProg: up.upProg, current: () => up.uploadBufRef.current,
       ensureUploadBuf: fns.ensureUploadBuf, queueUpload: fns.queueUpload, settleUploads: fns.settleUploads,

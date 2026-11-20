@@ -10,7 +10,7 @@
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "../wire/session.js";
-import type { AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload, CapturePayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
+import type { AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
 
 /**
  * One durable intent.
@@ -26,7 +26,7 @@ export interface Intent {
   /** The repo. Known at post time, so the user is never asked twice which repo
    *  their own words were for. */
   cwd: string;
-  payload: IntentPayload | BuildPayload | AssessPayload | CapturePayload;
+  payload: IntentPayload | BuildPayload | AssessPayload;
   target: IntentTarget;
   trigger: IntentTrigger;
   /** One at a time within this cwd. The group is `serialGroup(cwd)` — the

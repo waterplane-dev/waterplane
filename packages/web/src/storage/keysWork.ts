@@ -148,16 +148,6 @@ export const LS_WORK = {
    * decision that needs the host is RUNNING one, and that already queues.
    */
   snapBuilds: lsKey("snap.builds"),
-  /**
-   * Per-repo CAPTURE targets, keyed by worktree path, each with the moment the
-   * host last confirmed them — `snapBuilds`' argument, unchanged.
-   *
-   * Its own key rather than a corner of the builds snapshot because the two
-   * lists are confirmed at different moments: opening the capture sheet re-asks
-   * `capture.list` and nothing else, so one age stamp covering both would be
-   * wrong about whichever list was not the one that just landed.
-   */
-  snapCapture: lsKey("snap.capture"),
   /** The schedule list, with the moment it landed. Same argument as the builds
    *  snapshot: reading which runs are armed needs no link, arming one does. */
   snapSchedules: lsKey("snap.schedules"),

@@ -97,6 +97,16 @@ test("no file at all is a fresh host: no notice, nothing moved", () => {
   assert.deepEqual(readdirSync(dir), []);
 });
 
+test("a row of a retired kind (verified capture) is skipped on load; every other row survives and the store stays usable", () => {
+  const good = { ...draft("keep-me"), state: "queued", createdAt: Date.now() - 1000 };
+  const capture = { ...draft("old-capture"), payload: { kind: "capture", targetId: "t_home" }, state: "done", createdAt: Date.now() - 2000 };
+  const { store, dir } = storeOver(JSON.stringify({ schema: STORE_SCHEMA, intents: [capture, good] }));
+  assert.deepEqual(store.list().map((r) => r.id), ["keep-me"]);
+  assert.equal(store.storeNotice(), null, "a retired kind is not a corrupt store");
+  assert.equal(readdirSync(dir).some((f) => f.includes(".corrupt-")), false, "nothing is moved aside");
+  assert.equal(store.post(draft("new-one")).ok, true);
+});
+
 test("a NEWER schema is read but never written, posted to or fired — and the notice says so", async () => {
   const row = { ...draft("from-the-future"), state: "queued", createdAt: Date.now() - 1000 };
   const body = JSON.stringify({ schema: STORE_SCHEMA + 1, intents: [row], futureField: true });

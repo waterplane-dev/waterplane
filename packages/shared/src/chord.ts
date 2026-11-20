@@ -64,7 +64,7 @@ export function chordBytes(m: ChordMods, key: ChordKey): ChordResult {
 
   // Cursor keys carry every modifier in the xterm parameter.
   if (key in CURSOR_FINAL || key in TILDE_CODE) {
-    if (!hasMods(m)) return { bytes: PLAIN[key] };
+    if (!hasMods(m)) return { bytes: PLAIN[key]! };
     const p = 1 + (m.shift ? 1 : 0) + (m.alt ? 2 : 0) + (m.ctrl ? 4 : 0);
     return { bytes: key in CURSOR_FINAL ? `\x1b[1;${p}${CURSOR_FINAL[key]}` : `\x1b[${TILDE_CODE[key]};${p}~` };
   }
@@ -90,7 +90,7 @@ export function chordBytes(m: ChordMods, key: ChordKey): ChordResult {
     if (ch.length === 1) {
       const lower = ch.toLowerCase();
       if (/^[a-z]$/.test(lower)) return { bytes: String.fromCharCode(lower.charCodeAt(0) - 96) };
-      if (ch in CTRL_PUNCT) return { bytes: CTRL_PUNCT[ch] };
+      if (ch in CTRL_PUNCT) return { bytes: CTRL_PUNCT[ch]! };
       if (ch === "-") return { bytes: "\x1f" }; // ctrl+- is how most keyboards type ctrl+_
     }
     return no("ctrl combines only with a letter or [ \\ ] ^ _ ? @ space");
@@ -100,12 +100,12 @@ export function chordBytes(m: ChordMods, key: ChordKey): ChordResult {
     if (key === "tab") return { bytes: "\x1b[Z" };
     if (key === "enter") return no("terminals send Return for it; Alt+Return is claude's newline");
     if (key === "space") return { bytes: " " };
-    if (key in PLAIN) return { bytes: PLAIN[key] };
+    if (key in PLAIN) return { bytes: PLAIN[key]! };
     if (ch.length === 1) return { bytes: ch.toUpperCase() };
     return no("unknown key");
   }
 
-  if (key in PLAIN) return { bytes: PLAIN[key] };
+  if (key in PLAIN) return { bytes: PLAIN[key]! };
   if (ch.length === 1) return { bytes: ch };
   return no("unknown key");
 }

@@ -127,3 +127,30 @@ test("dismissToastIf retires only the toast that still says those words", () => 
   clearToastLog();
   off();
 });
+
+// ── A phone row leads somewhere ───────────────────────────────────────────
+//
+// Reported: "I need to be able to click notifications and land in the
+// respective UI" — "2 new images" and "reading the repo to judge these 11"
+// were rows with nowhere to go.
+
+test("a toast row keeps where it was said, and an explicit target beats it", async () => {
+  const { setToastWhere, toastLeadsTo, cleanGo } = await import("./toast.ts");
+  clearToastLog();
+  setToastWhere(() => ({ sessionId: "s1" }));
+  showToast("queued");
+  assert.deepEqual(toastLog()[0].go, { sessionId: "s1" });
+  showToast("2 new images", undefined, undefined, { image: { repoId: "r", relPath: "a.png" }, sessionId: "s2" });
+  assert.deepEqual(toastLog()[0].go, { image: { repoId: "r", relPath: "a.png" }, sessionId: "s2" });
+  showToast("reading the repo");
+  toastLeadsTo("reading the repo", { assessRepoId: "r" });
+  assert.deepEqual(toastLog()[0].go, { assessRepoId: "r" });
+  toastLeadsTo("other words", { sessionId: "x" });
+  assert.deepEqual(toastLog()[0].go, { assessRepoId: "r" });
+  setToastWhere(() => null);
+  showToast("copied");
+  assert.equal(toastLog()[0].go, undefined);
+  assert.equal(cleanGo({ sessionId: 3, junk: 1 }), undefined);
+  setToastWhere(null);
+  dismissToast();
+});

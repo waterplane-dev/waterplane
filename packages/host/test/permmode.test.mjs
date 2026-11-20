@@ -150,4 +150,10 @@ test("fast mode reads the newest confirmation and refuses prose", async () => {
   assert.equal(readFastMode("  ⎿  claude-sonnet-5-5 doesn't have fast mode"), false);
   assert.equal(readFastMode("Fast mode bills at a premium; see /fast"), null, "prose is not a confirmation");
   assert.equal(readFastMode("nothing here"), null);
+  const refused = ["❯ /fast on", "  ⎿  Fast mode unavailable: Fast mode requires usage credits · /usage-credits", "     to turn them on"].join("\n");
+  assert.equal(readFastMode(refused), false, "the credits refusal is off, not unknown");
+  const { readFastRefusal } = await import("../dist/permmode.js");
+  assert.equal(readFastRefusal(refused), "Fast mode requires usage credits");
+  assert.equal(readFastRefusal(refused + "\n❯ /fast off\n  ⎿  Fast mode OFF"), null, "a newer OFF drops the reason");
+  assert.equal(readFastRefusal("  ⎿  Fast mode ON"), null);
 });

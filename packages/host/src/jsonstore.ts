@@ -22,8 +22,8 @@
  * A `.corrupt-*` copy is `unknown` to `hoststore.ts`: counted, shown, never
  * cleared by it.
  */
-import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { StoreLoss, StoreLossKind } from "@waterplane/shared";
 import { boundHostStateDir } from "./branddirs.js";
@@ -98,6 +98,75 @@ export function writeTextAtomicKeepMode(path: string, body: string, within?: str
 export function keepLastLines(path: string, keep: number): void {
   const lines = readFileSync(path, "utf8").trimEnd().split("\n");
   writeTextAtomic(path, lines.slice(-keep).join("\n") + "\n");
+}
+
+// ── One file per key ────────────────────────────────────────────────────────
+//
+// A store that is a map of independent parts (a repo slug → its summaries) and
+// saved whole costs a `JSON.stringify` of EVERYTHING on every flush, on the one
+// event loop that pumps every PTY: 9.3 MB of agent readings took ~160 ms, all
+// sessions frozen for it, every 5 s while logs moved. `JsonShards` keeps one
+// file per key in its own directory and writes only the keys marked dirty, each
+// through `writeJsonAtomic`. The key rides INSIDE the file (`{k, b}`), so a key
+// that is not a plain file name is hashed into one and still read back exactly.
+// A shard that does not parse goes through `readJsonGuardedDetail` like any
+// store: moved to `<name>.corrupt-<ts>` and absent from the load, never an
+// empty part that a later write would quietly make true.
+
+const SAFE_SHARD = /^[A-Za-z0-9-][A-Za-z0-9._-]{0,159}$/;
+
+/** The file a shard key is kept in: the key itself when it is a plain name, else `_<hash>` (never a plain name: those cannot start with `_`). */
+export function shardFileName(key: string): string {
+  return SAFE_SHARD.test(key) ? `${key}.json` : `_${createHash("sha256").update(key).digest("hex").slice(0, 32)}.json`;
+}
+
+const isShard = (v: unknown): boolean => isPlainObject(v) && typeof (v as { k?: unknown }).k === "string" && "b" in (v as object);
+
+export interface ShardFlush { written: number; removed: number; failed: number }
+
+export class JsonShards {
+  private dirty = new Set<string>();
+  constructor(readonly dir: string) {}
+
+  /** Every readable shard, key → body. A corrupt one is moved aside (and recorded as a loss) and is ABSENT here. */
+  load(): Map<string, unknown> {
+    const out = new Map<string, unknown>();
+    let names: string[];
+    try { names = readdirSync(this.dir); } catch { return out; }
+    for (const n of names) {
+      if (n.startsWith(".") || !n.endsWith(".json")) continue; // tmp files, `.corrupt-*` copies
+      const r = readJsonGuardedDetail<{ k: string; b: unknown } | null>(join(this.dir, n), null, isShard);
+      // A file whose name is not its key's was put there by hand: left alone, never adopted.
+      if (r.value && shardFileName(r.value.k) === n) out.set(r.value.k, r.value.b);
+    }
+    return out;
+  }
+
+  /** This key changed: the next `flush` writes (or removes) its file. */
+  mark(key: string): void { this.dirty.add(key); }
+
+  get pending(): number { return this.dirty.size; }
+
+  /** Write every dirty key's body, or remove its file when `bodyOf` answers `undefined`. A key that fails stays dirty for the next flush; whether a failure matters is the caller's call. */
+  flush(bodyOf: (key: string) => unknown): ShardFlush {
+    const out: ShardFlush = { written: 0, removed: 0, failed: 0 };
+    for (const key of [...this.dirty]) {
+      const path = join(this.dir, shardFileName(key));
+      const body = bodyOf(key);
+      try {
+        if (body === undefined) {
+          try { unlinkSync(path); out.removed++; } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; }
+        } else {
+          writeJsonAtomic(path, { k: key, b: body });
+          out.written++;
+        }
+        this.dirty.delete(key);
+      } catch {
+        out.failed++;
+      }
+    }
+    return out;
+  }
 }
 
 /** What `readJsonGuarded` found, for a caller that must act on a loss (acks.ts). */

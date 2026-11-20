@@ -178,7 +178,7 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
           <span className="mode-ico"><Rabbit size={16} aria-hidden /></span>
           <span className="mode-txt">
             <span className="mode-title">Fast mode</span>
-            <span className="mode-desc muted">{fastText(cur.fastMode)}</span>
+            <span className="mode-desc muted">{fastText(cur.fastMode, cur.fastRefused)}</span>
           </span>
           <span className="mode-acts">
             {/* Unknown gets both verbs, as ultracode's do. */}

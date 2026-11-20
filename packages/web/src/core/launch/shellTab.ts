@@ -23,7 +23,7 @@ import type { ReturnTo } from "../../sdk/types.ts";
 
 export type { ReturnTo };
 
-const PENDING = "pending:";
+import { isPendingId, makePendingId, parsePendingId } from "../queue/pendingId.ts";
 
 /** A session as far as picking a shell needs it. */
 export type ShellCandidate = Pick<SessionInfo, "id" | "cwd" | "running" | "backend" | "companionOf">;
@@ -45,9 +45,9 @@ export function pickShell(i: {
   pendingAlive(ack: string): boolean;
 }): ShellPick {
   const r = i.remembered;
-  if (r?.startsWith(PENDING)) {
-    const ack = r.slice(PENDING.length);
-    if (i.pendingAlive(ack)) return { do: "enter", ack };
+  const ack = parsePendingId(r);
+  if (isPendingId(r)) {
+    if (ack && i.pendingAlive(ack)) return { do: "enter", ack };
   } else if (r) {
     const s = i.sessions.find((x) => x.id === r);
     if (s && s.running) return { do: "attach", id: s.id };
@@ -59,7 +59,7 @@ export function pickShell(i: {
 /** The remembered id after the host named pending `pending:<createAck>` as `sessionId`: moved
  *  when it was that open, unchanged otherwise. */
 export function adoptedShell(remembered: string | null, createAck: string, sessionId: string): string | null {
-  return remembered === `${PENDING}${createAck}` ? sessionId : remembered;
+  return remembered === makePendingId(createAck) ? sessionId : remembered;
 }
 
 /** Re-key every remembered id at once (the per-key map and the return target share one rule). */

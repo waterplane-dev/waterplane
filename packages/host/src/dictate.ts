@@ -52,6 +52,17 @@
  * before. Only "that is not audio" (a 400) is final, because the CLI would
  * refuse the same bytes. `WATERPLANE_WHISPERD_URL=off` turns it off.
  *
+ * ── A clip past one 30 s window decodes differently ───────────────────────────
+ *
+ * whisper reads 30 s at a time and, by default, primes each window with the
+ * text it decoded so far. On a long dictation that is what turns one misheard
+ * stretch into a loop — the same sentence fifteen times, measured on the phone
+ * 2026-11-18 after about two minutes of speech. With timestamps off (`-nt`) it
+ * also loses where a window ended: ~2 min of TTS lost 15% of its words (50 of
+ * 408) that the same clip kept with timestamps on. So past `LONG_CLIP_S` both
+ * paths decode with timestamps on and no carried context (`longClip`). A short
+ * clip never reaches a second window and is sent exactly as before.
+ *
  * ── Keeping dictations is opt-in, and off by default ────────────────────────
  *
  * `WATERPLANE_DICTATE_KEEP=1` saves each successful clip and the text returned for
@@ -234,6 +245,10 @@ export function whisperdModel(): string {
   return (env("WHISPERD_MODEL") || "").trim() || "turbo";
 }
 
+/** Past this, a clip spans more than one whisper window (see the header). */
+export const LONG_CLIP_S = 30;
+export function longClip(seconds: number): boolean { return seconds > LONG_CLIP_S; }
+
 /** What whisperd said, reduced to what this module needs — or null when the
  *  clip should go to `whisper-cli` instead (unreachable, busy, failing). */
 type DaemonAnswer = { text: string; model: string; noSpeech: boolean } | { error: string };
@@ -245,6 +260,7 @@ export async function viaWhisperd(
   if (!base) return null;
   const q = new URLSearchParams({ model: whisperdModel(), lang: opts.lang });
   if (opts.prompt) q.set("prompt", opts.prompt);
+  if (longClip(opts.seconds)) { q.set("timestamps", "1"); q.set("context", "0"); }
   let res: Response;
   try {
     res = await fetch(`${base}/v1/transcribe?${q}`, {
@@ -285,7 +301,7 @@ export function keepDir(): string {
 
 /** Save one clip and what it was heard as, when the person opted in. Never
  *  fatal: a disk that is full must not turn a transcript into an error. */
-export async function keepDictation(wav: Buffer, answer: { text: string; ms: number; model?: string; via: string; lang: string }): Promise<string | null> {
+export async function keepDictation(wav: Buffer, answer: { text: string; ms: number; model?: string; via: string; lang: string; long?: boolean }): Promise<string | null> {
   if (env("DICTATE_KEEP") !== "1") return null;
   try {
     const dir = keepDir();
@@ -359,7 +375,7 @@ export async function transcribe(wav: Buffer, opts: { lang?: string; terms?: str
     if (!text) return { error: "nothing was said" };
     if (daemon.noSpeech || isArtifact(text) || isPromptEcho(text, terms)) return { error: "no speech in that recording" };
     const answer = { text: applyDictateTerms(text, terms), seconds: Math.round(seconds * 10) / 10, ms: Date.now() - t0, engine: "whisper.cpp", model: daemon.model };
-    await keepDictation(wav, { text: answer.text, ms: answer.ms, model: answer.model, via: "whisperd", lang });
+    await keepDictation(wav, { text: answer.text, ms: answer.ms, model: answer.model, via: "whisperd", lang, long: longClip(seconds) });
     return answer;
   }
 
@@ -387,7 +403,8 @@ export async function transcribe(wav: Buffer, opts: { lang?: string; terms?: str
         "-l", lang,
         "-t", String(threads()),
         "-oj", "-of", stem,
-        "-np", "-nt",
+        "-np",
+        ...(longClip(seconds) ? ["-mc", "0"] : ["-nt"]),
         ...(prompt ? ["--prompt", prompt] : []),
         input,
       ], { timeout, killSignal: "SIGKILL", maxBuffer: 4 << 20 },
@@ -414,7 +431,7 @@ export async function transcribe(wav: Buffer, opts: { lang?: string; terms?: str
     if (!text) return { error: "nothing was said" };
     if (isArtifact(text) || isPromptEcho(text, terms)) return { error: "no speech in that recording" };
     const answer = { text: applyDictateTerms(text, terms), seconds: Math.round(seconds * 10) / 10, ms: Date.now() - t0, engine: "whisper.cpp", model: model.split("/").pop() };
-    await keepDictation(wav, { text: answer.text, ms: answer.ms, model: answer.model, via: "whisper-cli", lang });
+    await keepDictation(wav, { text: answer.text, ms: answer.ms, model: answer.model, via: "whisper-cli", lang, long: longClip(seconds) });
     return answer;
   } catch (e: any) {
     const why = String(e?.killed ? `it took longer than ${Math.round((20_000 + seconds * 4_000) / 1000)}s` : (e?.message || e));

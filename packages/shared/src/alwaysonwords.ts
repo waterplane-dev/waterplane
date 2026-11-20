@@ -262,10 +262,10 @@ export function carriedWords(c: SessionCarried, fmt: Fmt = fmtCount, opts: { unp
     });
     out.push(`${documented.length ? "an" : "An"} undocumented record puts ${andList(said)};`);
   }
-  const lead = out[out.length - 1].endsWith(";");
+  const lead = out[out.length - 1]!.endsWith(";");
   if (carriedRemainder(c) == null) {
     if (!opts.unplacedShown) out.push(lead ? CARRIED_REMAINDER_UNPLACED.replace(/^The/, "the") : CARRIED_REMAINDER_UNPLACED);
-    else if (lead) out[out.length - 1] = out[out.length - 1].replace(/;$/, ".");
+    else if (lead) out[out.length - 1] = out[out.length - 1]!.replace(/;$/, ".");
   }
   else out.push(`${lead ? "the" : "The"} rest is ${andList([...unknown, "your prompt with what the harness added to it"])}.`);
   return out.join(" ") + later;

@@ -102,7 +102,7 @@ export const DEFAULT_PALETTE = "spectrum";
 /** Palette by id, falling back to the default — an unknown id is an older or a
  *  newer client's, never a reason to draw nothing. */
 export function paletteById(id: string | undefined): RepoPalette {
-  return REPO_PALETTES.find((p) => p.id === id) ?? REPO_PALETTES[0];
+  return REPO_PALETTES.find((p) => p.id === id) ?? REPO_PALETTES[0]!;
 }
 
 /**
@@ -161,7 +161,7 @@ export function repoNameHash(name: string): number {
 
 /** The hue this ring gives that name with nobody having said otherwise. */
 export function autoHue(name: string, palette: RepoPalette): number {
-  return palette.hues[repoNameHash(name) % palette.hues.length];
+  return palette.hues[repoNameHash(name) % palette.hues.length]!;
 }
 
 /** The hue a repo is drawn in: what a person pinned, else what the ring says. */
@@ -241,7 +241,7 @@ export function freeHue(names: readonly string[], cfg: RepoColors, except?: stri
     const h = repoHueIn(n, cfg);
     used.set(h, (used.get(h) ?? 0) + 1);
   }
-  let best = ring[0], bestN = Infinity;
+  let best = ring[0]!, bestN = Infinity;
   for (const h of ring) {
     const n = used.get(h) ?? 0;
     if (n < bestN) { best = h; bestN = n; }

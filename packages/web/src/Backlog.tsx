@@ -9,6 +9,7 @@ import { useBacklogSort } from "./backlog/useBacklogSort";
 import { useBacklogUi } from "./backlog/useBacklogUi";
 import { BacklogHead } from "./backlog/RepoBar";
 import { BacklogBody } from "./backlog/BacklogBody";
+import { WaitingTabs } from "./WaitingFrame";
 
 /**
  * **A repo's waiting work — the list, never a place words are "sent to".**
@@ -52,6 +53,7 @@ export function Backlog(p: BacklogProps) {
   return (
     <div className="sheet">
       <BacklogHead m={m} />
+      <WaitingTabs />
 
       <BacklogBody m={m} />
     </div>

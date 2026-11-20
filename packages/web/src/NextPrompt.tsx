@@ -35,7 +35,7 @@ import { Hint } from "./kit/Hint";
 
 const ICON = 14;
 
-export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue, onOpenBacklog, keepFocus, editableText, onEdit, onCancel }: {
+export function NextPrompt({ view, onSendNow, onPastBudget, onRaiseBudget, onHold, onOpenQueue, onOpenBacklog, keepFocus, editableText, onEdit, onCancel }: {
   view: NextPromptView | null;
   /** The full words of a row that can still be rewritten, or null — no pencil
    *  is drawn for a row that cannot be (a sent one, an answer keystroke, a
@@ -54,6 +54,8 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
   /** *let it past the budget* on a desktop-held row the budget holds
    *  (`view.budgetHeld`): `intent.waive` for that row id. */
   onPastBudget: (id: string) => void;
+  /** *Raise budget*: opens this session's Budget sheet. */
+  onRaiseBudget?: () => void;
   /**
    * *when it's free* on a phone-held entry. App decides which machine ends up
    * holding it: a live session's entry is re-aimed into the DESKTOP's queue
@@ -130,6 +132,11 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
                 <Button onPointerDown={keepFocus}
                   title="lifts the usage budget for this prompt only — it still goes in when this session is free"
                   onClick={() => onPastBudget(view.id)}><Gauge size={ICON} /> {pastBudgetLabel(1)}</Button>
+              )}
+              {view.budgetHeld && onRaiseBudget && (
+                <Button onPointerDown={keepFocus}
+                  title="opens this session's budget so you can raise or clear it"
+                  onClick={onRaiseBudget}>Raise budget</Button>
               )}
             </>
       ) : (

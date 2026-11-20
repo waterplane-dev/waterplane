@@ -97,7 +97,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     else p.nav.onOpenSession(holder.sessionId);
                   }}><ArrowRight size={14} /> {holder.label}</Button>}
                 {/* Absent offline rather than dimmed — the banner at the top says why once. */}
-                {it.status === "queued" && p.online && <Button className={it.manual ? "primary" : undefined} data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>fire</Button>}
+                {it.status === "queued" && p.online && <Button className={it.manual ? "primary" : undefined} data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>Start</Button>}
                 {/* A proposal's SECOND answer, beside fire: give it a time. The send sheet, seeded
                     from this row, as for a clocked row's *when*; saving re-writes it as the
                     person's row with that clock, so it leaves the proposals strip. */}
@@ -145,7 +145,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     <RotateCcw size={14} /> {RUN_AGAIN_LABEL}
                   </Button>
                 )}
-                {refireOffered(it) && p.online && <Button data-hint="backlog.refire" title={fireTitle} onClick={() => { track("action:backlog.refire"); p.verbs.onFire(it.id); }}>re-fire</Button>}
+                {refireOffered(it) && p.online && <Button data-hint="backlog.refire" title={fireTitle} onClick={() => { track("action:backlog.refire"); p.verbs.onFire(it.id); }}>Start again</Button>}
                 {it.sessionId && <Button title="go to the session it ran in" onClick={() => p.nav.onOpenSession(it.sessionId!)}><ArrowRight size={14} /> open</Button>}
                 {(it.status === "done" || isFailedRow(it) || it.status === "running") && p.online && (
                   it.checkStatus === "checking"

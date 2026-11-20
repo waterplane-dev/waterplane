@@ -165,6 +165,14 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   const formNow = JSON.stringify([name, text, lanText, ssids, auto]);
   const [formAtOpen] = useState(formNow);
   const [needLocation, setNeedLocation] = useState(false);
+  /**
+   * **Welcome** (journey spec T1, decision 3): a fresh install's first screen
+   * says what this app is and offers exactly two ways on — `Try the demo` and
+   * `Connect my computer` — before any form. A pairing link or code skips it:
+   * that person has a desktop already. `Connect my computer` opens the pairing
+   * form below, which says the desktop has to run waterplane first.
+   */
+  const [welcome, setWelcome] = useState(mode === "first" && !pair);
   const [pairing, setPairing] = useState(mode !== "edit" && (mode === "first" || !!pair));
   // A desktop found on the tailnet that has a password: the pair form, on its address.
   const [found, setFound] = useState<{ target: PairTarget; note: string } | null>(null);
@@ -191,7 +199,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   const tailTag = mode === "edit" ? routeCardTag("tailnet", tagFacts) : null;
   const lanTag = routeCardTag("lan", tagFacts);
 
-  useEffect(() => { if (pair && mode !== "edit") setPairing(true); }, [pair, mode]);
+  useEffect(() => { if (pair && mode !== "edit") { setPairing(true); setWelcome(false); } }, [pair, mode]);
 
   // Typing invalidates a previous verdict — a green tick next to an edited
   // address is worse than no tick.
@@ -338,18 +346,33 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
   return (
     <div className={mode === "first" ? "auth-gate" : undefined}>
       <div className={mode === "first" ? "auth-card" : "form host-form"}>
-        {mode === "first" && !fromPairLink && (
-          // The first thing a fresh install shows: what this app is, and that it does nothing until
-          // the desktop half exists. A pairing link skips it, because that person has a desktop.
+        {mode === "first" && welcome && (
+          // The first thing a fresh install shows: what this app is, and the two ways on. Nothing
+          // else on this step — the form and its choices come after `Connect my computer`.
           <>
             <div className="auth-title pair-title"><span className="pair-title-icon"><Smartphone size={18} /></span> Welcome to {BRAND.name}</div>
             <div className="pair-welcome">
-              <SetNote>A remote control for Claude Code on your own computer. The coding happens on the desktop; this app lets you steer it from anywhere.</SetNote>
-              <SetNote><b>Set up the desktop first.</b> Install {BRAND.name} there (macOS, Linux, or Windows with WSL2), then come back and connect this device.</SetNote>
-              <Button title={`opens ${DESKTOP_GUIDE} in your browser`} onClick={() => { if (!openExternal(DESKTOP_GUIDE)) showToast("could not open the link"); }}><ExternalLink size={13} /> desktop setup guide</Button>
+              <SetNote>Drive Claude Code on your own computer from this phone. Your computer runs it; this phone steers.</SetNote>
+              <SetLine style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+                <Button variant="primary" onClick={() => tryDemo()}><FlaskConical size={13} /> Try the demo</Button>
+                <Button onClick={() => setWelcome(false)}><Plug size={13} /> Connect my computer</Button>
+              </SetLine>
+              <SetNote>No desktop to hand? The demo is a pretend one inside this app: nothing connects and nothing runs.</SetNote>
             </div>
           </>
         )}
+        {mode === "first" && !welcome && !fromPairLink && (
+          // The desktop half has to exist before a pairing can work: said once, with the one place
+          // that installs it (the installer does the rest, so no step of its own is listed here).
+          <div className="pair-welcome">
+            <SetNote><b>Your computer runs {BRAND.name} first.</b> Install it there (macOS, Linux, or Windows with WSL2), then pair this phone below.</SetNote>
+            <SetLine style={{ flexWrap: "wrap", gap: 8 }}>
+              <Button title={`opens ${DESKTOP_GUIDE} in your browser`} onClick={() => { if (!openExternal(DESKTOP_GUIDE)) showToast("could not open the link"); }}><ExternalLink size={13} /> desktop setup guide</Button>
+              <Button onClick={() => setWelcome(true)}>Back to Welcome</Button>
+            </SetLine>
+          </div>
+        )}
+        {mode === "first" && welcome ? null : (<>
         {mode === "first" && <div className={fromPairLink ? "auth-title pair-title" : "pair-subtitle"}>{fromPairLink && <span className="pair-title-icon"><Plug size={18} /></span>} {title}</div>}
         {mode === "add" && !pair && (
           <FoundDesktops onPassword={(b, n) => { setFound({ target: { base: b, code: "" }, note: passwordSentence(n) }); setPairing(true); }} />
@@ -562,7 +585,9 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         </SetLine>
         </>)}
 
-        {mode === "first" && (
+        </>)}
+
+        {mode === "first" && !welcome && (
           // Beside host setup, not instead of it: someone with no desktop to
           // hand (a store reviewer, a first look) can still see what this is.
           <div className="pair-demo">
@@ -571,7 +596,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           </div>
         )}
 
-        {mode === "first" && (
+        {mode === "first" && !welcome && (
           <SetNote style={{ marginTop: 14, opacity: 0.65 }}>
             Once connected, your queue, drafts and cached transcripts stay usable here
             even when the desktop is unreachable.

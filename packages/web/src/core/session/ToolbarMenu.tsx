@@ -18,7 +18,7 @@ import { SessionBookmark } from "../sessions/bookmark";
 import { HINTS } from "../../hints";
 import { shortModel } from "../../sessionFacts";
 import { isShellBackend, shellBackend, type BackendList } from "../../backendCaps";
-import { orderedToolbarItems, type ToolbarCfg, type ToolbarItem } from "../../toolbar";
+import { orderedToolbarItems, toolbarGroup, TOOLBAR_GROUPS, type ToolbarCfg, type ToolbarItem } from "../../toolbar";
 import { Unavailable } from "../../Unavailable";
 import { featureToolbarItem } from "../toolbarItems";
 import { menuItems, sessionViews } from "../extensionPoints";
@@ -97,12 +97,12 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       const waiting = active.id in pendingStars;
       return (
         <Button key="star" className={`star-btn${active.starred ? " starred" : ""}${waiting ? " star-pending" : ""}`}
-          data-hint="session.star"
+          data-hint="session.star" aria-label={compact ? (active.starred ? "Unstar" : "Star") : undefined}
           title={waiting
             ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this device until the link is back")
             : active.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"}
           onClick={() => { dismiss(); toggleStar(active.id, !active.starred); }}>
-          <Star size={ICON} fill={active.starred ? "currentColor" : "none"} />{label && <> {active.starred ? "starred" : "star"}</>}
+          <Star size={ICON} fill={active.starred ? "currentColor" : "none"} />{label && <> {active.starred ? "Starred" : "Star"}</>}
         </Button>
       );
     }
@@ -113,7 +113,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       const on = !!active.followUp;
       return (
         <Button key="followup" className={`fu-btn${followUpClass(active.followUp)}${active.id in pendingFollowUps ? " star-pending" : ""}`}
-          data-hint="session.followup" aria-pressed={on}
+          data-hint="session.followup" aria-pressed={on} aria-label={compact ? "Flag for follow up" : undefined}
           title={followUpButtonTitle(active, active.id in pendingFollowUps, status === "open")}
           onClick={() => { dismiss(); toggleFollowUp(active.id, !on); }}>
           <FlagIcon on={on} size={ICON} />{label && <> {on ? FOLLOWUP_CLEAR : FOLLOWUP_SET}</>}
@@ -156,10 +156,10 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       // button, so the two can never say different things about one session.
       const tally = t.id === "outline" ? turnTally(active) : null;
       return (
-        <Button key={t.id} data-hint={`toolbar:${t.id}`}
+        <Button key={t.id} data-hint={`toolbar:${t.id}`} aria-label={compact ? t.name : undefined}
           title={`${hint ? `${hint.title} — ${hint.what}` : t.name}${tallyTitle(tally)}`}
           onClick={() => { dismiss(); runToolbar(t.id); }}>
-          <t.Icon size={ICON} />{label && <> {t.id === "model" ? (shortModel(active?.model) || "model") : t.name}</>}{tally == null ? null : <> {tally}</>}
+          <t.Icon size={ICON} />{label && <> {t.id === "model" ? (shortModel(active?.model) || t.name) : t.name}</>}{tally == null ? null : <> {tally}</>}
         </Button>
       );
     }
@@ -211,9 +211,12 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
   );
   return (
     <div className="toolbar" role="menu" aria-label="toolbar">
-      <Button title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> refresh</Button>
-      {active.remoteUrl && <Button onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> open in app</Button>}
-      {orderedToolbarItems(toolbarCfg, usedOrder).map((t) => renderToolbarItem(c, t))}
+      <Button title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> Refresh terminal</Button>
+      {active.remoteUrl && <Button onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> Open in app</Button>}
+      {TOOLBAR_GROUPS.map((g) => {
+        const rows = orderedToolbarItems(toolbarCfg, usedOrder).filter((t) => toolbarGroup(t.id) === g).map((t) => renderToolbarItem(c, t)).filter((n) => n != null && n !== false);
+        return rows.length ? <div key={g} className="toolbar-group" role="group" aria-label={g}><div className="toolbar-group-head">{g}</div>{rows}</div> : null;
+      })}
       {/* Contributed session views (the live desktop): opening one here is what
           gives it a tab in the header (`headerViews.ts`); the tab's × takes it
           down. Unavailable is the sentence on the tap, never a grey line. */}
@@ -229,7 +232,7 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
           <v.icon size={ICON} /> {v.label}
         </Button>
       ))}
-      <Button title="customize toolbar" onClick={() => { closeToolbarMenu(); setOverlay("toolbar"); }}><Settings size={ICON} /> customize</Button>
+      <Button title="customize toolbar" onClick={() => { closeToolbarMenu(); setOverlay("toolbar"); }}><Settings size={ICON} /> Customize toolbar</Button>
     </div>
   );
 }

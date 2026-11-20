@@ -38,6 +38,11 @@ list its target needs, so a cold start never reads "not loaded" as "gone". The A
 alert with no session or plugin whole, as `notif:<json>` (`shared/wire/notify.ts` `notifFromShell`),
 so a new target kind never needs a new APK; `sw.js` posts `open-notif` or puts `notif=` in the hash.
 
+**This phone's own rows lead somewhere too**: a toast row carries `ToastEntry.go` (`toast.ts`) — the
+session on screen when it was said (`setToastWhere`, set in `boot`), or what its words name (new files →
+the first picture in its strip; an assessment run → `openAssess`, the RESULT, via `toastLeadsTo`).
+`openToastGo` walks it; a gone target says so and the feed stays up.
+
 **Rules that apply**: a readable file gets two verbs — the row reads it (`openArtifact`, the one
 viewer), the arrow downloads it (`downloadArtifact`, the one download path, never `<a download>`).
 A *Backlog* alert with no `backlog` field lands on a repo only when exactly ONE worktree basename

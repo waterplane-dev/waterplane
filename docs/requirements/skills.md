@@ -83,7 +83,7 @@ In This repo, a row follows the All repos setting (an unsaved All-repos choice i
 - asked: 2026-11-13 (owner)
 
 ### R-skills-017 · shipped
-The skills screen and Repo readings open each other: the readings' agents region opens the skills screen, and the skills screen opens what every turn of the repo carries.
+Skills is a section of Setup & health, and the Sessions section links to it: the Sessions section switches to Skills, and Skills switches to what every turn of the repo carries.
 - asked: 2026-11-13 (owner)
 
 ### R-skills-018 · shipped

@@ -19,15 +19,15 @@
  * session) where a bitrate alone is the cheap `{"t":"bitrate"}`.
  */
 
-export const AUTO_FLOOR_KBPS = 100;
+const AUTO_FLOOR_KBPS = 100;
 export const AUTO_START_KBPS = 1000;
-export const AUTO_LOW_KBPS = 400;
-export const AUTO_MIN_FPS = 5;
-export const AUTO_DOWN = 0.7;
-export const AUTO_UP = 1.15;
-export const AUTO_CLEAN_MS = 5000;
-export const AUTO_GAP_MS = 1000;
-export const AUTO_INFLIGHT_SEC = 0.5;
+const AUTO_LOW_KBPS = 400;
+const AUTO_MIN_FPS = 5;
+const AUTO_DOWN = 0.7;
+const AUTO_UP = 1.15;
+const AUTO_CLEAN_MS = 5000;
+const AUTO_GAP_MS = 1000;
+const AUTO_INFLIGHT_SEC = 0.5;
 /** How long in flight must stay over the line, tick after tick, before it is congestion: three
  *  ack intervals, so a keyframe's bytes have been acked before they are read as a slow link. */
 export const AUTO_PERSIST_MS = 750;

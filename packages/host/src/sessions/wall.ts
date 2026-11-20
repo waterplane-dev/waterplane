@@ -21,6 +21,8 @@ import { continueBlockerNow, draftReader, ownMenuOption, writeContinue } from ".
 import { haltRefusal } from "../halt.js";
 import { endGiveUp, giveUpOnce } from "../recover/giveuplatch.js";
 import type { Provider } from "@waterplane/shared";
+import type { Clock } from "../waitclock.js";
+import { arm, cancel as cancelTimer, clockOf, pending } from "./timers.js";
 
 /** The gate for a `SessionLimit` existing at all; in `usagesources.ts` because `tmux.ts` asks it
  *  too and a slice never imports a slice. */
@@ -56,6 +58,7 @@ const screenName = (p: Provider): string | null => {
  * reached through `core`, never held here.
  */
 export class WallSlice {
+  private get clock(): Clock { return clockOf(this.core); }
   /** Global auto-continue-on-usage-limit switch (persisted; per-session overridable). */
   private autoContinueOn = true;
   private readonly limitCfgPath: string;
@@ -155,7 +158,7 @@ export class WallSlice {
     // into a `clear`), and a session sitting at a wall writes nothing, so the
     // mtime never moves across its own reset. Re-read once the instant is past.
     const cached = s.limitLog && s.limitLog.mtime === mtime && s.limitLog.path === path ? s.limitLog.verdict : null;
-    if (cached && !(cached.state === "blocked" && cached.resetAt != null && cached.resetAt <= Date.now())) return cached;
+    if (cached && !(cached.state === "blocked" && cached.resetAt != null && cached.resetAt <= this.clock.now())) return cached;
     const verdict = readLimitLog(path);
     s.limitLog = { path, mtime, verdict };
     return verdict;
@@ -283,7 +286,7 @@ export class WallSlice {
     const servingNow = !!lim?.blocked
       && s.info.turnActive
       && (s.info.turnStartedAt ?? 0) > lim.blockedSince
-      && Date.now() - (s.info.turnStartedAt ?? 0) > SERVING_TURN_MS
+      && this.clock.now() - (s.info.turnStartedAt ?? 0) > SERVING_TURN_MS
       && !this.core.isResuming(s.info.id);
     // WHY a `clear` is clear decides what it may outrank (`limitlog.ts`).
     //
@@ -299,7 +302,7 @@ export class WallSlice {
     // `reset` is the weakest of the three: the rejection still stands, nothing
     // has been served, and only the CLOCK has moved past the instant. That says
     // the wall SHOULD be gone — not that anything ran. Clearing on it cancels
-    // the pending auto-continue (`clearLimitBlock` kills `limitTimer`), which is
+    // the pending auto-continue (`clearLimitBlock` cancels the "wall" timer), which is
     // exactly what happened the same night: reset at 00:00, the sweep cleared
     // two sessions at 00:00:38, their attempts were due at 00:02, no "continue"
     // was ever typed and the prompts that hit the wall never ran. So a
@@ -313,7 +316,7 @@ export class WallSlice {
     // badge with nothing left to lift it.
     const attemptOwed = !!lim?.blocked && log.clearedBy === "reset" && lim.attempts === 0
       && this.limitAuto(s)
-      && (!!s.limitTimer || this.core.isResuming(s.info.id) || this.core.resumeQueue().includes(s.info.id));
+      && (pending(s, "wall") || this.core.isResuming(s.info.id) || this.core.resumeQueue().includes(s.info.id));
     if (log.state === "blocked") {
       // Its `resetAt` is an INSTANT off the CLI's own record: no zone, no date
       // guessed from a bare clock time.
@@ -390,7 +393,7 @@ export class WallSlice {
       // it moments ago (`Session.limitCarried`) — the count and the clock carry
       // over, or every reopen resets both and neither bound is ever reached
       // (`adoptCarriedBlock`, where that rule and its staleness are pinned).
-      const adopted = adoptCarriedBlock(s.limitCarried, Date.now(), LIMIT_CARRY_MS);
+      const adopted = adoptCarriedBlock(s.limitCarried, this.clock.now(), LIMIT_CARRY_MS);
       s.limitCarried = undefined;
       lim.blockedSince = adopted.blockedSince;
       lim.attempts = adopted.attempts;
@@ -415,7 +418,7 @@ export class WallSlice {
     }
     // A spend wall lifts at the dollar period's reset if one is configured -
     // never at a time anybody invented. No period: resetAt stays null.
-    if (spend && resetAt == null) resetAt = spendRetry(Date.now()).resetAt;
+    if (spend && resetAt == null) resetAt = spendRetry(this.clock.now()).resetAt;
     if (resetAt != null && resetAt !== lim.resetAt) { lim.resetAt = resetAt; if (was) this.core.emit("updated", s.info); }
     this.refreshLimit(s);
     if (!was) {
@@ -430,7 +433,7 @@ export class WallSlice {
       // queue doesn't spend an attempt each rediscovering the same wall.
       this.core.releaseResume(s.info.id, "blocked");
       this.scheduleLimitAttempt(s);
-    } else if (!s.limitTimer) {
+    } else if (!pending(s, "wall")) {
       // An attempt just failed (or auto was off): line up the next one.
       this.scheduleLimitAttempt(s);
     }
@@ -531,7 +534,7 @@ export class WallSlice {
     // publish a countdown that lapses without producing an attempt — the exact
     // "auto 12:03 that silently doesn't" this feature exists to remove.
     if (this.core.isResuming(s.info.id) || this.core.resumeQueue().includes(s.info.id)) return;
-    const now = Date.now();
+    const now = this.clock.now();
     let at: number;
     if (atOverride != null && !lim.spend) {
       at = Math.max(atOverride, this.core.resumeHoldUntil());
@@ -558,14 +561,13 @@ export class WallSlice {
       at = lim.spend ? Math.max(next.at, atOverride ?? 0, this.core.resumeHoldUntil()) : next.at;
     }
     lim.nextAttemptAt = at;
-    s.limitTimer = setTimeout(() => { this.onLimitDue(s); }, Math.max(50, at - now));
+    arm(s, "wall", Math.max(50, at - now), () => this.onLimitDue(s), clockOf(this.core));
     this.core.emit("updated", s.info);
     this.core.emit("limit", s.info.id, s.info, "scheduled"); // log-only phase (no notification)
   }
 
   /** The scheduled moment arrived — get in line rather than typing straight away. */
   private onLimitDue(s: Session): void {
-    s.limitTimer = null;
     const lim = s.info.limit;
     if (!lim || !lim.blocked || !s.info.running || this.core.sessions.get(s.info.id) !== s) return;
     if (!this.limitAuto(s)) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); return; }
@@ -600,7 +602,7 @@ export class WallSlice {
       if (blocker === "draft") console.log(`${logTag} limit continue parked: words in the composer · ${s.info.title} (${id})`);
       this.core.releaseResume(id, "gone");
       // Halted: no countdown (`scheduleLimitAttempt` clears it while the latch stands).
-      this.scheduleLimitAttempt(s, blocker === "halted" ? undefined : Date.now() + 60_000);
+      this.scheduleLimitAttempt(s, blocker === "halted" ? undefined : this.clock.now() + 60_000);
       return;
     }
     if (lim.attempts >= LIMIT_MAX_ATTEMPTS) {
@@ -641,11 +643,11 @@ export class WallSlice {
       lim.attempts = Math.max(0, lim.attempts - 1);
       lim.held = LIMIT_HELD_DRAFT;
       this.core.releaseResume(id, "gone");
-      this.scheduleLimitAttempt(s, Date.now() + 60_000);
+      this.scheduleLimitAttempt(s, this.clock.now() + 60_000);
     }
   }
 
   clearLimitTimer(s: Session): void {
-    if (s.limitTimer) { clearTimeout(s.limitTimer); s.limitTimer = null; }
+    cancelTimer(s, "wall");
   }
 }

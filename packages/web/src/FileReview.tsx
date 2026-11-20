@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, MessageSquarePlus, Pencil, Send, Trash2, X }
 import { ConfirmButton } from "./Confirm";
 import { Markdown, type FileRefCtx } from "./Markdown";
 import { DictateButton, PromptComposer } from "./PromptComposer";
-import { LS, lsJson, lsSetJson } from "./storage";
+import { LS, lsJsonUser, lsSetJsonUser } from "./storage";
 import { track } from "./usage";
 import {
   lineSpanText, nextSel, orderRemarks, relocate, remarksAt, remarksBlock, sliceLines,
@@ -39,20 +39,21 @@ interface Stored {
   draft?: { from: number; to: number; text: string; editId?: string };
 }
 
+const isRec = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
 const storeKey = (repoId: string, path: string) => `${repoId}\n${path}`;
 
 function readStored(repoId: string, path: string): Stored {
-  const all = lsJson<Record<string, Stored>>(LS.fileRemarks, {});
+  const all = lsJsonUser<Record<string, Stored>>(LS.fileRemarks, {}, "file remarks", isRec);
   const s = all[storeKey(repoId, path)];
   return s && Array.isArray(s.remarks) ? s : { remarks: [] };
 }
 
 function writeStored(repoId: string, path: string, s: Stored): void {
-  const all = lsJson<Record<string, Stored>>(LS.fileRemarks, {});
+  const all = lsJsonUser<Record<string, Stored>>(LS.fileRemarks, {}, "file remarks", isRec);
   const k = storeKey(repoId, path);
   if (!s.remarks.length && !s.draft?.text.trim()) delete all[k];
   else all[k] = s;
-  lsSetJson(LS.fileRemarks, all);
+  lsSetJsonUser(LS.fileRemarks, all, "file remarks", isRec);
 }
 
 /** How many remarks wait on this file — the review button's count. */

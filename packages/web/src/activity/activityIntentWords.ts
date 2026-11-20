@@ -51,24 +51,14 @@ import type { ActivityKind, ActivitySource } from "./activityTypes.ts";
 /** The five old vocabularies survive as a LABEL, because the sheet groups by
  *  them and a person thinks in them ("my schedules", "that sweep"). They are no
  *  longer five code paths. */
-/* `capture` is filed under `build` on BOTH axes, and that is a statement about
-   what it is rather than a shortcut. A capture is a shell run in a repo with no
-   session and no tokens, posted the same way, cancelled the same way, and
-   finishing with files under `.claude/outbox/` that the same `download` action
-   fetches — `builds.ts`'s class of work with a picture at the end. Giving it a
-   label of its own would put a seventh word in front of a person for a row that
-   behaves identically to the sixth, and would need a new `ActivityKind` member,
-   which is an icon `ActivitySheet`'s `KIND_ICON` does not have. What separates a
-   capture row from a build row is its TITLE (the target's name) and its verdict
-   sentence, which is where the difference is actually legible. */
 export const KIND_SOURCE: Record<IntentKind, ActivitySource> = {
   launch: "launch", schedule: "schedule", fanout: "fanout",
-  build: "build", assess: "assess", capture: "build", work: "backlog", other: "backlog",
+  build: "build", assess: "assess", work: "backlog", other: "backlog",
 };
 
 export const KIND_ACTIVITY: Record<IntentKind, ActivityKind> = {
   launch: "prompt", schedule: "prompt", fanout: "sweep",
-  build: "build", assess: "action", capture: "build", work: "prompt", other: "prompt",
+  build: "build", assess: "action", work: "prompt", other: "prompt",
 };
 
 /** The prose a person actually wrote, whole. `null` when the row never had any
@@ -121,10 +111,7 @@ export function intentVerdictText(i: Intent, kind: IntentKind, now: number, run:
       : `all ${total} repos finished`;
   }
   switch (i.state) {
-    // A capture is a shell run like a build — there is no session to be running
-    // "in", and saying there is sends a reader looking for one.
     case "running": return kind === "build" ? "running the command now"
-      : kind === "capture" ? "taking the picture now"
       : "running in the session now";
     case "starting": return "starting it now";
     case "canceled": return "stopped";
@@ -169,14 +156,6 @@ export function intentVerdictText(i: Intent, kind: IntentKind, now: number, run:
  * renames every work item to whatever short label happened to be attached —
  * `file · 1000074690-mtmw…jpg` in place of the sentence somebody typed.
  *
- * A CAPTURE is named for the same reason a build is: "droplet · home" is the
- * identity of the button somebody tapped, and it is the only string that tells
- * two capture rows in one repo apart. There is no prose anywhere on the row to
- * fall back to — a capture is a target id, not words — so the name is not a
- * convenience here, it is the whole title. `name` is snapshotted on the payload
- * at fire time (the config is edited between runs); when an older host wrote
- * the row without one the id is shown, never a re-derived guess.
- *
  * **A SCHEDULE's `title` is only a name when somebody typed one.** The host
  * fills it in otherwise, with `action.text.split("\n")[0].slice(0, 120)`
  * (`scheduleToIntent`) — so "titled by its name" quietly meant "titled by a
@@ -185,7 +164,7 @@ export function intentVerdictText(i: Intent, kind: IntentKind, now: number, run:
  * is the one test for that (the backlog's `realLabel` and the schedule sheet's
  * card ask it too), and when it answers null the prose is the title, which is
  * what the row had all along. `label` still wins where it exists — that one is
- * never derived. Build, assess and capture keep their chains: their names are
+ * never derived. Build and assess keep their chains: their names are
  * snapshots of a configured thing, never a slice of anything.
  *
  * ── …and a title a MACHINE wrote goes IN FRONT of the prose ────────────────
@@ -220,11 +199,10 @@ export function intentTitle(i: Intent): string {
   const kind = intentKind(i);
   const prose = intentProse(i);
   const build = i.payload.kind === "build" ? i.payload : null;
-  const capture = i.payload.kind === "capture" ? i.payload : null;
-  const named = kind === "schedule" || kind === "build" || kind === "assess" || kind === "capture";
+  const named = kind === "schedule" || kind === "build" || kind === "assess";
   return (kind === "schedule"
     ? (i.label || typedName(i.title, prose ?? "") || prose || i.id)
     : named
-      ? (i.label || i.title || build?.name || capture?.name || build?.cmd || prose || i.id)
+      ? (i.label || i.title || build?.name || build?.cmd || prose || i.id)
       : (i.headline || prose || i.label || i.title || i.id)).trim();
 }

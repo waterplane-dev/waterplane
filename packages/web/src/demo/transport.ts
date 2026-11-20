@@ -36,7 +36,7 @@ import { decode, encode } from "@waterplane/shared";
 import type { ClientMessage } from "@waterplane/shared";
 import { assertShippable, createDemoHost, restoreDemoHost } from "./host/index.ts";
 import type { DemoClock, DemoConnection, DemoFaultRule, DemoHost, DemoHttpRequest, DemoHttpResponse, DemoOut, DemoScenario } from "./host/index.ts";
-import { demoSnapKey } from "../storage.ts";
+import { LS, demoSnapKey } from "../storage.ts";
 import { DEMO_SCENARIOS } from "./scenarios/index.ts";
 import { demoScenarioId, setDemoActive } from "./mode.ts";
 import { rememberDemoUpload } from "./media.ts";
@@ -48,7 +48,7 @@ export { DEMO_WS_URL } from "./mode.ts";
 const ADVANCE_MS = 200;
 
 /** What every refusal says. The URL is named so a dev console points at it. */
-export const OFF_DEVICE = "Not in the demo — the demo makes no request off this device";
+export const OFF_DEVICE = "Not in the demo: on your desktop this would reach another server, and the demo makes no request off this device";
 
 /** The slice of the browser the transport patches and reads. */
 export interface DemoTarget {
@@ -307,6 +307,11 @@ export function createDemoTransport(cfg: DemoTransportConfig): DemoTransport {
   const href = () => cfg.href;
   const id = scenario.meta.id;
   const saved = readSaved(store, id);
+  // A fresh entry (no snapshot of this scenario in the tab) starts with an empty send queue: a refused
+  // send left by the scenario before it would otherwise show as "1 send stuck" in this one.
+  if (saved === undefined) {
+    for (const k of [LS.outbox, LS.composeOutbox]) { try { globalThis.localStorage?.removeItem(k); } catch { /* storage off */ } }
+  }
   // A scenario naming no plugins lists the builtins the demo fixtures ask for (android-apps: on).
   const defaults = { plugins: demoPluginViews() };
   const host = saved === undefined ? createDemoHost(scenario, clock, defaults) : restoreDemoHost(scenario, clock, saved, defaults);

@@ -42,7 +42,9 @@ The rest of the detail:
 - **tmux:** any recent version; 3.3 or newer. Every session runs inside it so it survives a host
   restart; without it the host refuses to start sessions. `brew install tmux` on macOS,
   `sudo apt-get install -y tmux` on Debian/Ubuntu/WSL (or your distribution's package manager). The
-  installer offers to install it for you.
+  installer offers to install it for you, but only offers `sudo` when the account has it (root, a
+  sudo/wheel/admin group member, or passwordless sudo). Without sudo it says so and names the
+  no-admin route ([below](#on-a-mac-without-admin-rights)).
 - **Local dictation (optional):** whisper.cpp's `whisper-cli` and one speech model, so the phone's
   microphone is transcribed on the desktop; without it the phone uses its own, less accurate, cloud
   recogniser. The installer asks on the terminal (default no); `--dictation[=turbo-q8|turbo|small]`
@@ -66,8 +68,11 @@ up by another account refuses its `brew install`. The installer and `waterplane 
 which of the three are missing and that an administrator has to install them, so: ask whoever
 administers the Mac for exactly that list.
 
-Without an administrator, tmux can come from conda-forge into your home folder:
-`pixi global install tmux` ([pixi](https://pixi.sh) installs without admin) — not yet tested here.
+Without an administrator, tmux can come from conda-forge into your home folder, on Linux and macOS
+alike: `curl -fsSL https://pixi.sh/install.sh | bash`, open a new terminal (pixi's installer adds
+`~/.pixi/bin` to your shell profile, and the waterplane installer only finds tmux there), then
+`pixi global install tmux`. Tried on a fresh Ubuntu account with no sudo: it installed tmux 3.8
+into `~/.pixi/bin` and a tmux server ran from it. On the Mac itself this is still untried.
 There is no supported way around the Command Line Tools or Tailscale. On a company-managed Mac,
 check the policy too: this daemon runs `claude` on that machine for whoever reaches it.
 
@@ -253,6 +258,12 @@ Home-screen install needs the HTTPS address (`tailscale serve`, above). The app 
 Tailscale is the recommended way for the phone to reach the desktop, not a requirement. If you only
 drive the desktop from the next room, or already run another VPN, use the LAN mode instead:
 
+> **Strongly discouraged.** This swaps Tailscale's network identity for one shared password in front
+> of a process that runs arbitrary code, on a network you share with other devices. Use it only on a
+> home network you control, with a long random password. Wrong passwords are slowed (a doubling
+> wait) and then locked out per source for 15 minutes; loopback and ungated Tailscale callers are never affected.
+> See [SECURITY.md](../SECURITY.md).
+
 1. Set `WATERPLANE_ALLOW_PUBLIC=1` (in `.env` or the service's env) and restart. The daemon then also
    binds the desktop's other network interfaces, a VPN's included.
 2. On the desktop, open `http://127.0.0.1:8770` and set **Settings → LAN password**. Until one is set,
@@ -322,7 +333,7 @@ variables. The most useful ones:
 | `WATERPLANE_PORT` | `8770` | HTTP + WebSocket port. |
 | `WATERPLANE_HOST` | Tailscale IP, then loopback | Bind address override. |
 | `WATERPLANE_CLAUDE_BIN` | `claude` | Path to the Claude Code binary. |
-| `WATERPLANE_ALLOW_PUBLIC` | off | Also bind LAN interfaces. **Requires a password for LAN devices.** |
+| `WATERPLANE_ALLOW_PUBLIC` | off | Also bind LAN interfaces. **Strongly discouraged; requires a password for LAN devices.** |
 | `GEMINI_API_KEY` | unset | Core makes no Gemini call. Read only by a plugin whose manifest declares it. |
 | `WATERPLANE_LOCAL_OCR` | on | `0` turns off reading a photo's text on this desktop. The picture is not sent to any cloud model. |
 

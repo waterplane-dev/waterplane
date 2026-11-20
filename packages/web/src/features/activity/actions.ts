@@ -15,11 +15,14 @@ import { markRowsDone } from "../../activityDone";
 import { saveNow, startDownload } from "../../download";
 import { baseName } from "../../format";
 import type { OutboxEntry } from "../../outbox";
+import { isRelayedLive, isRelayedStuck, relayedRefusal, removeRelayedStuck } from "../../relayedRow";
+import { askConfirm } from "../../Confirm";
 import { pulls } from "../../pull";
 import { core, type CoreApi } from "../../sdk";
 import { BL_OFFLINE, HELD_OFFLINE, refireSummary, runLane, runNowToast } from "./logic";
 import { confirmedDone, filed, focus, pullList, type ActivityFocus } from "./store";
 import { SHEET } from "../../sheetNames";
+import { closeWaiting, openWaitingId } from "../../waitingWork";
 
 const repoNameOf = (c: CoreApi, cwd: string) => { const r = c.world.repoForCwd(cwd); return r ? repoShown(r) : baseName(cwd); };
 
@@ -34,7 +37,7 @@ export function openActivity(cut?: ActivityCut | null): void {
   focus.set(!cut ? null
     : "keys" in cut ? { keys: cut.keys, label: cut.label }
     : { keys: cut.entries.map((e) => queueRowKey(e.ackId)), label: cut.label });
-  core().nav.open("activity");
+  openWaitingId("activity");
 }
 
 /** The sheet, on exactly these queue rows — what a strip's number counted. */
@@ -42,10 +45,16 @@ export function openActivityOn(entries: readonly OutboxEntry[], label: string): 
   openActivity({ entries, label });
 }
 
-/** The sheet's own close: the focus was the tap, not a setting. */
+/** The sheet's own close: the focus was the tap, not a setting. The tab is drawn under any of
+ *  Waiting work's ids (journey spec D4), so it closes whichever of them is on top. */
 export function closeActivity(): void {
   focus.set(null);
-  core().nav.close("activity");
+  closeWaiting();
+}
+
+/** Leaving the tab or the screen: the cut was the tap, not a setting. */
+export function clearActivityFocus(): void {
+  focus.set(null);
 }
 
 /** Mirror `pull.ts`'s transfers for the Downloads rows. */
@@ -121,9 +130,16 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
       if (id === "answer") { c.nav.open("questions"); c.say.toast("answer it here — the queued reply is bound to this question"); return; }
       if (id === "sendNow") { v.sendQueuedNow(e.ackId); return; }
       if (id === "hold") { v.toggleHoldQueued(e.ackId); return; }
-      if (id === "discard") { v.removeQueued(e.ackId); c.say.toast("discarded"); return; }
+      // A stuck relayed row's discard is its way out: asked, then removed locally, never "discarded".
+      if (id === "discard" && isRelayedStuck(e)) {
+        void removeRelayedStuck(e, { ask: askConfirm, remove: (a) => v.removeQueued(a, { mayHaveRun: true }), toast: c.say.toast });
+        return;
+      }
+      if (id === "discard") { if (v.removeQueued(e.ackId)) c.say.toast("discarded"); return; }
       if (id === "open") { openIt(); return; }
-      // Both rewrite the words; `fix` additionally checks the files it names.
+      // Both rewrite the words; `fix` additionally checks the files it names. Never for a row the
+      // background link already wrote: a fresh ackId would run it a second time.
+      if (isRelayedLive(e)) { c.say.toast(relayedRefusal("rewritten", e)); return; }
       c.nav.openSend({
         prompts: [e.op?.t === "session.create" ? ((e.op as { prompt?: string }).prompt || e.text) : e.text],
         target: c.send.targetFor(e.sessionId, e.cwd),
@@ -169,12 +185,6 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
             "no connection — the build is running on the desktop and can't be stopped from here");
           return;
         }
-        // Same fact about a live capture.
-        if (kind === "capture" && (i.state === "running" || i.state === "starting")) {
-          liveSend({ t: "capture.cancel", runId: i.id }, "stopping the capture…",
-            "no connection — the capture is running on the desktop and can't be stopped from here");
-          return;
-        }
         // A schedule's "delete" removes the row; cancelling would only settle
         // it, leaving a dead rule in the list for ever.
         if (kind === "schedule") {
@@ -201,7 +211,7 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
         }
         // A work item's own auto-fire is `Intent.pinned`, which no patch
         // carries — the per-item switch lives in the BACKLOG.
-        c.nav.open("backlog");
+        openWaitingId("backlog");
         c.say.toast("this one is a per-item switch — it is on the row, in the backlog");
         return;
       }
@@ -238,7 +248,7 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
         return;
       }
       if (kind === "schedule" || isTimedWorkRow(i)) { c.nav.openSend(c.send.seedFromIntent(i)); return; }
-      c.nav.open("backlog");
+      openWaitingId("backlog");
       c.say.toast("rewrite it on its row, in the backlog");
       return;
     }

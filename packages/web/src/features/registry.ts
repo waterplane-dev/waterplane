@@ -24,7 +24,6 @@ import { manifest as pull } from "./pull";
 import { manifest as clipboard } from "./clipboard";
 import { manifest as notifications } from "./notifications";
 import { manifest as build } from "./build";
-import { manifest as capture } from "./capture";
 import { manifest as limits } from "./limits";
 import { manifest as weekburn } from "./weekburn";
 import { manifest as questions } from "./questions";
@@ -78,7 +77,6 @@ export const FEATURES: readonly FeatureManifest[] = [
   clipboard,
   notifications,
   build,
-  capture,
   limits,
   weekburn,
   questions,

@@ -7,7 +7,6 @@ import type { IntentDraft, IntentPatch } from "../intent.js";
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
 import type { ScheduleEntry } from "../../schedule.js";
-import type { CaptureTarget } from "../capture.js";
 import type { LaunchOpts } from "../session.js";
 import type { AutoPullConfig, BuildConfig } from "../work.js";
 
@@ -81,47 +80,6 @@ export type ClientWorkMsg =
    * Additive, no PROTOCOL_VERSION change; an approve without `cmd` approves nothing.
    */
   | { t: "build.options"; repoDir: string; buildId: string; approve?: boolean; paramId?: string; cmd?: string }
-  // ── Verified capture (take a picture of a running screen, and say how much
-  //    the picture can be trusted) ──
-  //
-  // Additive, `PROTOCOL_VERSION` did not move for it — the `intent.*` / `schedule.skipNext`
-  // precedent. A host that never heard of these ignores them (an unknown `t` is
-  // a no-op by design), and an OLD phone bundle classifies a capture intent as
-  // `intentKind` "other", which ActivitySheet already renders. That is the
-  // designed degradation in both directions, and it is what lets the APK pin a
-  // bundle either side of this change.
-  /** Fetch a repo's configured capture targets, its recent runs, and which
-   *  backends this desktop can actually drive (host replies `capture.list`).
-   *
-   *  Contained, not durable: it reads and writes nothing, so a frame that
-   *  arrived twice costs a second file read and produces the same list. */
-  | { t: "capture.list"; repoDir: string }
-  /** Persist a repo's whole target list (add/edit/delete/reorder), `build.save`'s
-   *  contract: the client owns the list and saves it whole. CONTAINED, because
-   *  the directory is the client's word. */
-  | { t: "capture.save"; repoDir: string; targets: CaptureTarget[] }
-  /**
-   * Take the picture now.
-   *
-   * Durable and CONTAINED, for the two reasons `build.run` is both: it runs a
-   * command in a directory the CLIENT named, and a replay that ran twice would
-   * put two runs in a fight over one lease (one simulator, one device, one
-   * browser on one port). `ackId` (optional) is the durable-op receipt — see
-   * `op.ack`.
-   *
-   * `watch` keeps capturing until cancelled, emitting a frame only when the
-   * screen has changed past the target's `diffPct`.
-   */
-  | ({ t: "capture.run"; repoDir: string; targetId: string; watch?: boolean; ackId?: string } & SendStamp)
-  /**
-   * Stop a running capture.
-   *
-   * Deliberately NOT durable and never queued offline, for `intent.cancel`'s
-   * reason: a cancel delivered an hour late calls off work that has since run.
-   * That is why it carries no `ackId` — there is no at-most-once story for a
-   * message that must never be replayed at all.
-   */
-  | { t: "capture.cancel"; runId: string }
   // ── Assessment (one repo, everything still open, judged with evidence) ──
   //
   // Additive, `PROTOCOL_VERSION` did not move for it. A host that has never heard of these

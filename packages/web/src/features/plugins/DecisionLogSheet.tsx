@@ -9,6 +9,8 @@
  * A source chip is a FILTER, and the cut says what it hides: "n of N" with a
  * clear button, never a shorter list that does not say why.
  */
+import { scopedTitle } from "../../sheetScope";
+import { TITLE } from "../../sheetNames";
 import { useState, type ReactNode } from "react";
 import {
   AlertTriangle, Archive, Bot, Check, CircleSlash, Hand, Hourglass, Puzzle, RefreshCw, ScrollText, Send, ShieldAlert, ThumbsUp, Trash2,
@@ -75,7 +77,7 @@ export function DecisionLogSheet() {
 
   return (
     <div className="sheet">
-      <SheetHead title={<><ScrollText size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Decision log{session ? ` · ${session.title}` : ""}</>}
+      <SheetHead title={<><ScrollText size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />{scopedTitle(TITLE.decisions, session?.title)}</>}
         onClose={() => { decisionScope.set(null); c.nav.close("decisions"); }}>
         <ConfirmButton className="key" title="archive every entry in the log — every session and source, not just this cut"
           confirmTitle="tap again to archive every unarchived entry, in every session"

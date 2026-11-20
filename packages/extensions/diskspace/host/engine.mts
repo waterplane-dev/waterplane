@@ -39,7 +39,7 @@ async function rmCounted(p: string, done: { n: number }): Promise<void> {
 
 const RESULTS_MAX = 20;
 /** How many node_modules folders are listed (the biggest). */
-export const NODE_MODULES_TOP = 15;
+const NODE_MODULES_TOP = 15;
 
 export interface Engine {
   state(): DiskState;

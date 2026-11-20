@@ -21,6 +21,7 @@ import { ago } from "./format";
 import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./uiScale";
 import { Button } from "./kit/Button";
 import { Row, RowTitle } from "./kit/Row";
+import { TITLE } from "./sheetNames";
 import { Hint } from "./kit/Hint";
 import { offlineSentence } from "./kit/offlineGate";
 import { linkOnline } from "./link";
@@ -142,7 +143,7 @@ function PushProgressView({ p, fill }: { p: GitPushProgress; fill: boolean }) {
  */
 export function GitNoRepo({ focus, list, session, onClose }: { focus: string | null; list: ListRead; session: boolean; onClose: () => void }) {
   return (
-    <Sheet title="Review" onClose={onClose}>
+    <Sheet title={TITLE.git.replace(/ - repo$/, "")} onClose={onClose}>
       <Empty>{gitNoRepoWords(focus, list, session)}</Empty>
     </Sheet>
   );
@@ -275,6 +276,12 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
     return true;
   };
   const status = statusRes.data;
+  // A step is already running: say so in the note line, in words, instead of a greyed button (T8).
+  const waiting = (): boolean => {
+    if (!busy) return false;
+    setNote("Still working on the last step. Wait for it to finish.");
+    return true;
+  };
   // Keyed on the disclosure too, so opening it reads and closing it stops.
   const branchRes = useRemoteResource<GitBranch[]>(`git:branches:${repoId}`, () => api.gitBranches(repoId), { enabled: showBranches, cache: { shape: 1 } });
   const branches = branchRes.data;
@@ -586,14 +593,14 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   // the commit form whatever the tree's state.
   const remoteRow = (
     <div className="sheet-actions">
-      <Button onClick={() => { track("action:git.pull"); void pull(); }} disabled={busy}>{pullLabel}</Button>
-      <Button onClick={() => { void push(); }} disabled={busy}>{pushLabel}</Button>
-      <Button onClick={() => { void sync(); }} disabled={busy}
+      <Button onClick={() => { if (waiting()) return; track("action:git.pull"); void pull(); }}>{pullLabel}</Button>
+      <Button onClick={() => { if (waiting()) return; void push(); }}>{pushLabel}</Button>
+      <Button onClick={() => { if (waiting()) return; void sync(); }}
         title="pull, then push whatever is still ahead">
         <ArrowDownUp size={14} /> Sync
       </Button>
       {(status?.ahead ?? 0) > 0 && pushStart == null && (
-        <Button onClick={() => { void runChecks(); }} disabled={busy}
+        <Button onClick={() => { if (waiting()) return; void runChecks(); }}
           title="run this repo's pre-push checks on the newest commit — nothing is pushed; the history then shows the verdict on that commit">
           <ShieldCheck size={14} /> Run checks
         </Button>
@@ -607,7 +614,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
   );
   return (
     <div className="sheet">
-      <SheetHead title={<>Review · {status?.branch ?? "…"}</>} onClose={onClose}>
+      <SheetHead title={<>{TITLE.gitBranch.replace(/ - branch$/, "")} - {status?.branch ?? "…"}</>} onClose={onClose}>
         {onBrowse && <Button title="browse files" onClick={() => { track("action:git.browse"); onBrowse(); }}><FolderTree size={16} /></Button>}
         <Button title="history — incoming, not pushed, and what both have" onClick={() => { track("action:git.log"); setLogFocus("all"); }}><History size={16} /></Button>
         <Button className={showBranches ? "active" : ""} title="branches" onClick={toggleBranches}><GitBranchIcon size={16} /></Button>
@@ -644,7 +651,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
             <input className="search" placeholder="New branch name…" value={newBranch}
               onChange={(e) => setNewBranch(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") createBranch(); }} />
-            <button className="send" onClick={createBranch} disabled={busy || !newBranch.trim()}>
+            <button className="send" onClick={() => { if (waiting()) return; if (!newBranch.trim()) { setNote("Type a name for the new branch first."); return; } createBranch(); }}>
               <Plus size={16} /> Create &amp; switch
             </button>
           </div>
@@ -693,7 +700,11 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
           )}
           <textarea className="search" rows={2} placeholder="Commit message…" value={message} onChange={(e) => setMessage(e.target.value)} />
           <div className="sheet-actions">
-            <button className="send" onClick={commit} disabled={busy || !message.trim()}>Commit all</button>
+            <button className="send" onClick={() => {
+              if (waiting()) return;
+              if (!message.trim()) { setNote("Write a commit message first, or tap the message button to have one written."); return; }
+              void commit();
+            }}>{status?.files?.length ? `Commit ${status.files.length} file${status.files.length === 1 ? "" : "s"}` : "Commit all"}</button>
             {/* The desktop writes the message. Last in the row: it is the one
                 control here that spends, and the commit beside it is what
                 this sheet is for. */}

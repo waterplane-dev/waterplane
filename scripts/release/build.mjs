@@ -27,7 +27,7 @@ const { E, GITHUB_ORG, SLUG } = await import("../lib-brand.mjs");
 const { packagedStamp, verifyDevApk } = await import("./apk-lib.mjs");
 const { buildShrinkwrap } = await import("./shrinkwrap-lib.mjs");
 const { privateExtensions } = await import("./public-lib.mjs");
-const { copyExtFiles, extFilesProblem } = await import("./ext-files-lib.mjs");
+const { copyExtFiles, extFilesProblem, findReleaseJunk, keepInRelease } = await import("./ext-files-lib.mjs");
 const { PUBKEY_PATH, assertKeyMatches, defaultKeyPath, loadPrivateKey, signFile } = await import("./sign-lib.mjs");
 const OUT = join(ROOT, "dist-release");
 const args = new Set(process.argv.slice(2));
@@ -268,7 +268,7 @@ writeFileSync(join(stage, "package.json"), JSON.stringify({
 }, null, 2) + "\n");
 
 // Production deps only, exactly as the lockfile resolved them: npm lists the
-// installed prod tree; each package is copied whole (all node-pty prebuilds kept).
+// installed prod tree; each package is copied whole (all node-pty prebuilds kept, minus .pdb debug symbols).
 const listed = sh("npm", ["ls", "-w", hostPkg.name, "--omit=dev", "--all", "--parseable"], { maxBuffer: 64 << 20 }).split("\n").filter(Boolean);
 const nm = join(ROOT, "node_modules");
 const prod = new Set();
@@ -282,7 +282,7 @@ for (const p of listed) {
   if (rel.startsWith("@waterplane")) continue;      // the workspaces: copied below, as real directories
   prod.add(rel);
 }
-for (const rel of prod) cpSync(join(nm, rel), join(stage, "node_modules", rel), { recursive: true, dereference: false });
+for (const rel of prod) cpSync(join(nm, rel), join(stage, "node_modules", rel), { recursive: true, dereference: false, filter: keepInRelease });
 // @waterplane/shared as a REAL copy (the checkout's node_modules entry is a symlink).
 const sharedDest = join(stage, "node_modules", "@waterplane", "shared");
 mkdirSync(sharedDest, { recursive: true });
@@ -297,6 +297,8 @@ const tarball = join(OUT, `${dirName}.tar.gz`);
 // no --uid and spells it --owner/--group (the npm-publish run of v0.1.1 died on `--uid`).
 const gnuTar = execFileSync("tar", ["--version"], { encoding: "utf8" }).includes("GNU tar");
 const rootOwner = gnuTar ? ["--owner=0", "--group=0", "--numeric-owner"] : ["--uid", "0", "--gid", "0"];
+const junk = findReleaseJunk(join(OUT, "stage"));
+if (junk.length) { console.error(`release: the stage holds ${junk.length} file(s) that must not ship (debug symbols), e.g. ${junk[0]}`); process.exit(1); }
 execFileSync("tar", [...(process.platform === "darwin" ? ["--no-mac-metadata", "--no-xattrs"] : []), ...rootOwner, "-czf", tarball, "-C", join(OUT, "stage"), dirName], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
 const sha = createHash("sha256").update(readFileSync(tarball)).digest("hex");
 writeFileSync(`${tarball}.sha256`, `${sha}  ${dirName}.tar.gz\n`);

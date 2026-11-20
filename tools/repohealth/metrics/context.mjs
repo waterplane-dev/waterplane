@@ -125,8 +125,8 @@
  *
  * ── Why `visual-check` is counted here and exempt there ─────────────────────
  *
- * `packages/host/src/visualskill.ts` writes `.claude/skills/visual-check/` at
- * runtime, and `claudemd.test.mjs` skips it on its `generated-by:` frontmatter.
+ * A tool may write a skill (an older `visual-check` was one), and
+ * `claudemd.test.mjs` skips it on its `generated-by:` frontmatter.
  * That test asks *who authored this file* — a machine-written preset is not
  * something CLAUDE.md's routing table should have to name. This metric asks
  * *what is loaded*, and a generated skill's description is listed to the agent

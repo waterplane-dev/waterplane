@@ -23,7 +23,7 @@ export interface View {
   oy: number;
 }
 
-export const MAX_ZOOM = 8;
+const MAX_ZOOM = 8;
 /** The whole source as a region. */
 export const FULL: NormRect = { x: 0, y: 0, w: 1, h: 1 };
 
@@ -172,7 +172,7 @@ export function aspectOf(src: { srcWidth?: number; srcHeight?: number } | null, 
 /** The overview's longest side, phone px. */
 export const OVERVIEW_MAX = 160;
 /** At most this share of the box either way, so the map never hides what it maps. */
-export const OVERVIEW_SHARE = 0.32;
+const OVERVIEW_SHARE = 0.32;
 
 /** The overview's size for this box and source, or null when the box is too small to spare one. */
 export function overviewSize(box: Box, aspect: number): Box | null {

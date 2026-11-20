@@ -117,6 +117,11 @@ const KNOWN_DIRS: Record<string, "live"> = {
   live: "live",
   /** Each plugin's `settings.json` and its own `dataDir` (`plugins/pluginregistry.ts`). */
   plugins: "live",
+  /** `agentreadings.ts`: one summary file per project-dir slug (`JsonShards`), a cache the
+   *  conversation logs rebuild. Sharded so a flush writes only the slugs that moved. The
+   *  pre-shard single file is renamed `agentreadings.json.migrated` once seeded, so it shows
+   *  under the migration leftovers a person may clear. */
+  agentreadings: "live",
 };
 
 /** Bytes and files directly inside one flat directory. Files only, symlinks
@@ -160,6 +165,9 @@ const LIVE_FILES = new Set([
   "moved-from.json",
   // `oracle.json` is the retired in-core oracle's config: kept, because the
   // oracle PLUGIN reads it once to seed its own settings.
+  // `agentreadings.json`: the pre-shard agent readings, present only until the first boot
+  // that seeds `agentreadings/` from it renames it to `.json.migrated` (`agentreadings.ts`).
+  "agentreadings.json",
   "acks.json", "assess.json", "auth.json", "backend-catalogue.json", "backlog-config.json", "backlog.json",
   "budget.json", "burnwatch.json", "clihealth.json", "closed.json", "contextlimits.json", "ctxwindow.json", "explains.json",
   "installs.json", "intents-archive.jsonl", "intents.json", "lan-identity.json", "lan-tls.json", "launches.json", "limit.json",

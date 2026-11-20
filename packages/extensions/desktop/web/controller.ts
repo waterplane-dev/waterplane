@@ -58,9 +58,9 @@ export interface Ui {
 }
 
 /** After the last pinch or pan, how long before the crop is re-aimed. */
-export const CROP_SETTLE_MS = 300;
+const CROP_SETTLE_MS = 300;
 /** How often the overview's picture is refreshed from a picture of the whole source. */
-export const OVERVIEW_SNAP_MS = 1000;
+const OVERVIEW_SNAP_MS = 1000;
 /** The overview's kept picture, source-shaped, this wide in canvas px (a 160 px map at 2x). */
 const SNAP_W = 320;
 

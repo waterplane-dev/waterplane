@@ -91,6 +91,8 @@ export class SessionScreenLog {
   private lastReadAt = 0;
   private dirty = false;
   private disposed = false;
+  /** Callers of `parsed()` still waiting, released by `dispose()` too. */
+  private waiters = new Set<() => void>();
 
   constructor(cols: number, rows: number) {
     this.term = new Terminal({
@@ -114,6 +116,33 @@ export class SessionScreenLog {
     // must never push a pending one back, or constant output starves it.
     const ceiling = this.lastReadAt + MAX_STALE_MS - Date.now();
     this.arm(Math.max(0, Math.min(SETTLE_MS, ceiling)));
+  }
+
+  /**
+   * **Resolves once every byte handed to `write()` so far is IN the grid.**
+   *
+   * xterm parses asynchronously: `term.write` queues the bytes and a timer
+   * parses them in 12 ms slices, yielding to the event loop between slices. So
+   * the grid trails the bytes received, by one timer turn when the machine is
+   * idle and by however long the loop is held when it is not. A reader that
+   * decides something off the grid (`drive.ts`'s `screenText`/`screenCells`,
+   * the strict prompt pass) must wait for this first: the prompt check read a
+   * grid cut mid-line at `printf 'Delete the worktree` while the whole box was
+   * already in the byte ring, published no box, and, the box being the last
+   * thing printed, nothing re-armed the check (`e2e-answer.mjs`, a load flake
+   * on five days, then failing alone on a loaded machine).
+   *
+   * An empty write's callback runs after every write queued before it, in
+   * order. Resolves at once on a disposed recorder, and `dispose()` releases a
+   * waiter it strands, so a read never hangs on a session that ended.
+   */
+  parsed(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = (): void => { this.waiters.delete(done); resolve(); };
+      this.waiters.add(done);
+      try { this.term.write("", done); } catch { done(); }
+    });
   }
 
   /**
@@ -206,6 +235,7 @@ export class SessionScreenLog {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const done of [...this.waiters]) done();
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     try { this.term.dispose(); } catch { /* already gone */ }
   }

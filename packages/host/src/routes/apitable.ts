@@ -20,7 +20,6 @@ import type { PeerKind, RepoTarget } from "@waterplane/shared";
 import type { IntentManager } from "../intents/manager.js";
 import type { BacklogManager } from "../backlog.js";
 import type { PushManager } from "../push.js";
-import type { CaptureManager } from "../capture.js";
 import type { SessionManager } from "../sessions.js";
 import type { UiStats } from "../uistats.js";
 import type { NetStats } from "../netstats.js";
@@ -76,16 +75,6 @@ export interface ApiCtx {
   weekBurn?: import("../weekburn.js").WeekBurn;
   /** The account facts the socket pushes, as one read (`GET /api/usagenow`, `UsageNowDoc`). */
   usageNow?(): import("@waterplane/shared").UsageNowDoc;
-  /**
-   * The verified capture loop, so an AGENT can trigger one without a phone and
-   * without a session (`capture.ts`).
-   *
-   * This is the one caller that gets the verdict in a response body instead of
-   * over the socket, and it is why the whole loop prints a ~50-token line: an
-   * agent that asked for a picture and was handed the picture pays for that
-   * image on every later turn of the conversation it is in.
-   */
-  capture: CaptureManager;
   /** The intent store and the containment gate, for the agent's loopback
    *  route (`agentintents.ts`) — the same `post` the phone's `intent.post`
    *  reaches, through the same `postClientDraft`. */

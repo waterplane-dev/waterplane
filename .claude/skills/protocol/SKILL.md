@@ -66,8 +66,7 @@ Wire:
 - `op.ack`'s `ok` means *accepted and started*, not finished. Ops: `session.create` (optional
   `prompt`, optional `replaceSessionId` so relaunch is ONE atomic op), `fanout.run`,
   `fanout.followup`, `build.run`, `schedule.save` (upsert on a client-minted id, so a replay
-  overwrites instead of adding a second weekly sweep), `schedule.run` and more (`capture.run`,
-  `assess.*`, `backlog.name`, `updates.apply`, durable `intent.*`) — the source of truth is the route
+  overwrites instead of adding a second weekly sweep), `schedule.run` and more (`assess.*`, `backlog.name`, `updates.apply`, durable `intent.*`) — the source of truth is the route
   table's `durable: true` entries (`routes/types.ts`) and `durableOp` callers (`server/wsops.ts`). `session.reopen` is not a
   thing — reopen via `session.create` with `resumeSessionId`. **Forking is not a new message
   either**: `session.create` gains `forkAtTurn?` and `"fork"` joins `resumeMode`, so the file write

@@ -61,8 +61,7 @@ const MAX_LINES = {
   // they only re-export, so they only shrink.
   "ctxlog.ts":           60,
   "transcript.ts":       40,
-  // capture.ts / backlog.ts were 1,143 / 1,133 lines; now facades over capture/capture*.ts and backlog/.
-  "capture.ts":          300,
+  // backlog.ts was 1,133 lines; now a facade over backlog/.
   "backlog.ts":          250,
   // The HTTP router: its routes move into `routes/api*.ts` tables (C1, host-architecture.md,
   // "api.ts — the HTTP routes as tables"); it keeps the frame — CORS, preflight, dispatch.
@@ -93,7 +92,7 @@ const MAX_API_TABLE_LINES = 500;
 const MAX_SLICE_LINES = 900;
 /** …and the two newer folders hold the stricter line the split brief set: 500. */
 // deliver: 501 since 2026-11-12 — deliverrun.ts's one line binding the injected wait clock.
-const TIGHT_DIRS = { capture: 500, backlog: 500, "routes/work": 500, sidecar: 500, deliver: 501 };
+const TIGHT_DIRS = { backlog: 500, "routes/work": 500, sidecar: 500, deliver: 501 };
 
 /** Folder → the facade whose slices live there, and the files there that are
  *  NOT slices (they have their own numbers above, or none). */
@@ -103,8 +102,6 @@ const SLICE_DIRS = {
   server: { facade: "main.ts", notSlices: [] },
   ctxlog: { facade: "ctxlog.ts", notSlices: [] },
   transcript: { facade: "transcript.ts", notSlices: [] },
-  // The two leaf backends' siblings (`android.ts` … `window.ts`) predate the split and are not its slices.
-  capture: { facade: "capture.ts", notSlices: ["android.ts", "garmin.ts", "pixels.ts", "types.ts", "web.ts", "window.ts"] },
   backlog: { facade: "backlog.ts", notSlices: [] },
   "routes/work": { facade: "routes/work.ts", notSlices: [] },
   sidecar: { facade: "sidecar.ts", notSlices: [] },
@@ -131,8 +128,6 @@ function dirFiles(dir) {
     .map((f) => `${dir}/${f.split("\\").join("/")}`)
     .sort();
 }
-/** `capture/`'s older backend files keep their old, shared basenames; only its new slices are held to the naming rules. */
-const named = (dir) => (dir === "capture" ? slices(dir) : dirFiles(dir));
 const slices = (dir) => dirFiles(dir).filter((f) => !SLICE_DIRS[dir].notSlices.includes(f.slice(dir.length + 1)));
 
 test("the three big files do not grow", () => {
@@ -344,7 +339,7 @@ test("every file in sessions/, intents/, server/ has a basename unique across pa
   walk(PACKAGES);
   const bad = [];
   for (const dir of Object.keys(SLICE_DIRS)) {
-    for (const f of named(dir)) {
+    for (const f of dirFiles(dir)) {
       const all = seen.get(basename(f)) ?? [];
       if (all.length > 1) bad.push(`${basename(f)}: ${all.join(", ")}`);
     }
@@ -363,11 +358,11 @@ test("every file in sessions/, intents/, server/ is named by a sub-skill bullet 
     const p = join(SKILLS, skill, "SKILL.md");
     return existsSync(p) ? headModules(readFileSync(p, "utf8")) : new Set();
   };
-  const OWNER = { sessions: "host-core", intents: "host-work", server: "host", ctxlog: "host-ledgers", transcript: "host-ledgers", capture: "host-machine", backlog: "host-work", "routes/work": "host-work", sidecar: "host-spenders", deliver: "host-core" };
+  const OWNER = { sessions: "host-core", intents: "host-work", server: "host", ctxlog: "host-ledgers", transcript: "host-ledgers", backlog: "host-work", "routes/work": "host-work", sidecar: "host-spenders", deliver: "host-core" };
   const bad = [];
   for (const [dir, skill] of Object.entries(OWNER)) {
     const routed = heads(skill);
-    for (const f of named(dir)) if (!routed.has(basename(f))) bad.push(`${f}: no \`- \` bullet head in .claude/skills/${skill}/SKILL.md names \`${basename(f)}\``);
+    for (const f of dirFiles(dir)) if (!routed.has(basename(f))) bad.push(`${f}: no \`- \` bullet head in .claude/skills/${skill}/SKILL.md names \`${basename(f)}\``);
   }
   assert.deepEqual(
     bad, [],

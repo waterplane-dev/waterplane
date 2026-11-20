@@ -1,4 +1,4 @@
-// The Automation sheet's "Runs on its own, no clock" foot: every line one
+// The Scheduled tab's "Runs on its own, no clock" foot: every line one
 // sentence and one door, a count that IS the cut it opens (the backlog's own
 // `▶ next` predicate), and a source the phone has not read drawing nothing.
 import { test } from "node:test";

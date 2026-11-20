@@ -685,14 +685,6 @@ honest: an unreadable box IS a miss, prose that merely says the footer's words r
 `--fork-session` on top, which opens a third conversation), the source log untouched, a refusal that
 is a refusal rather than a session on the whole conversation, and a replayed ackId spawning nothing ·
 `assess` (in flight) the repo assessment: a proposal is a diff, and nothing applies itself ·
-`capture` the verified capture loop, driven through `scripts/capture-stub.mjs` (a fake ciqkit — the
-only backend of the four a build machine can run): the frame AND its sidecar under
-`.claude/outbox/`, both served by the artifact route; the verdict line asserted as a GRAMMAR rather
-than one frozen string; a backend this desktop cannot drive settling `failed` with a SENTENCE naming
-what is missing; a traversal-shaped working dir refused and never offered as a button; and ciqkit's
-exit 3 downgrading the claim from `verified:anchor` to `settled:stable` while KEEPING the frame as
-evidence — plus the one that is cheapest to get wrong, an unscored capture leaving `score` ABSENT
-instead of writing a 0 nobody measured ·
 `launchwait` a session the host holds until the files its prompt names arrive ·
 `intent` what "the host has it" is worth: the ack that outran the disk (read the file on the
 receipt, then `kill -9`), the replay past a WIPED ack ledger, and the crash between an occurrence
@@ -1110,7 +1102,7 @@ never published a prompt".
 LAN security (2026-11-03): `e2e-lantls.mjs` (real host, TLS listener only under `ALLOW_PUBLIC=1`, `/ws` over TLS with a token, no token refused, a self-signed `GET /` is not the app, `Host`/`Origin` on the TLS port) and `e2e-pake.mjs` (CPace pairing, a wrong code as a typed miss, a bad share) are on disk; the plain-socket burn is pinned in `packages/host/test/pairpake.test.mjs`, because a host bound on loopback has no plain peer to burn for. The Java suites (`gradlew testDevDebugUnitTest`: `ShellRouteTest`, `ShellTlsPinsTest`, `ShellTlsClientTest`, `ShellBundleVerifyTest`, `ShellUpdatePinsTest`) hold the route table and the signature vector shared with node. A phone-shaped run (an emulator script that pairs by code, checks the token never crosses the plain port, refuses a wrong certificate and a forged or rolled-back bundle) is produced separately and its results are not recorded here. No real phone, no current WebView and no real Wi-Fi relay has been used.
 
 The suite, so a name here is a name on disk: `ack` `agentintent` `answer` `api` `archive` `askbox` `askprose` `attach`
-`autopull` `backlog` `backlog-echo` `backlog-keepopen` `backlog-prompt` `backlog-slots` `backlog-wait` `budget` `build` `capture` `checkbox`
+`autopull` `backlog` `backlog-echo` `backlog-keepopen` `backlog-prompt` `backlog-slots` `backlog-wait` `budget` `build` `checkbox`
 `buildparams` `clihealth` `ctxgraph` `echo-stream` `docs` `fanout` `fork` `forkfrom` `gallery` `git` `hints` `hook` `hosturl` `images`
 `intent` `intentnodrop` `lantls` `launch` `launchwait` `livereclaim` `limit` `limitbusy` `limitparallel` `limitrepaint` `limitqueue` `limitreset` `limitstuck`
 `login` `manualfire` `netfuse` `netstats` `notifyprefs` `offlinelists` `onesession` `opqueue`

@@ -6,6 +6,7 @@
  */
 import { addLocalDays } from "@waterplane/shared";
 import type { ComplianceReport, SkillInventoryDoc, SkillRecommendResponse, SlowJob, SlowJobKind } from "@waterplane/shared";
+import { notInDemo } from "./verdict.ts";
 
 export function demoCompliance(repoId: string, repoName: string): ComplianceReport {
   return {
@@ -39,7 +40,7 @@ export function demoSkills(repoId: string, now: number): SkillInventoryDoc {
  * The suggestions are a model call on a real desktop, so the demo's run is a refusal in words.
  */
 export function demoSlowJob(kind: SlowJobKind, repoId: string, repoName: string, now: number): SlowJob {
-  const refused: SkillRecommendResponse = { ok: false, suggestions: [], dropped: 0, error: "Suggestions are one model call on a real desktop; the demo makes none." };
+  const refused: SkillRecommendResponse = { ok: false, suggestions: [], dropped: 0, error: notInDemo("ask the model for skill suggestions") };
   const result = kind === "setup.check" ? demoCompliance(repoId, repoName) : kind === "skills.recommend" ? refused : demoSkills(repoId, now);
   return { id: `demo-${kind}-${repoId}`, key: `${kind}:${repoId}`, kind, repoId, state: "done", startedAt: now, finishedAt: now, result, hasResult: true };
 }

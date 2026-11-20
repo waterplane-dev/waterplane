@@ -465,19 +465,24 @@ export function costOfRequest(t: Priceable, model: string | null | undefined, da
 }
 
 /**
- * `$1,284.40` / `$4.21` / `$0.0031` / `$0`.
+ * `$1,284` / `$4.21` / `$0.50` / `$0.0042` / `$0.00042` / `$0`.
  *
- * Cents for anything a person would recognise as an amount, and four decimals
- * below one cent — a per-day figure on a quiet day is genuinely fractions of a
- * cent, and "$0.00" beside a bar that is visibly there reads as "free".
+ * The one dollar formatter: two decimals from a cent up, two significant
+ * digits below a cent — a quiet day's figure is genuinely fractions of a cent,
+ * and "$0.00" beside a visible bar reads as "free". Zero is "$0"; from $1,000
+ * whole dollars with separators.
  */
 export function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
   if (n === 0) return "$0";
-  const a = Math.abs(n);
-  if (a < 0.01) return `$${n.toFixed(4)}`;
-  if (a < 1000) return `$${n.toFixed(2)}`;
-  return `$${Math.round(n).toLocaleString()}`;
+  const a = Math.abs(n), sign = n < 0 ? "-" : "";
+  if (a < 0.01) {
+    const out = a.toFixed(Math.min(12, 1 - Math.floor(Math.log10(a))));
+    // rounding up to a cent ("0.0100") is a cent amount: two decimals.
+    return Number(out) >= 0.01 ? `${sign}$${a.toFixed(2)}` : `${sign}$${out}`;
+  }
+  if (a < 1000) return `${sign}$${a.toFixed(2)}`;
+  return `${sign}$${Math.round(a).toLocaleString()}`;
 }
 
 /** The same, compact enough for a chart axis: `$1.2k` / `$421` / `$4.21`. */

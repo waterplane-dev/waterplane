@@ -5,8 +5,14 @@
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
 import { SendQueueSheet } from "./SendQueueSheet";
+import { registerWaitingBody } from "../../waitingWork";
+import { waitingSheet } from "../../WaitingFrame";
+
+// The Queued tab of Waiting work (journey spec D4).
+registerWaitingBody("queued", { render: () => createElement(SendQueueSheet) });
 
 export const manifest: FeatureManifest = {
   id: "queue",
-  sheets: [{ id: "queue", persisted: false, render: () => createElement(SendQueueSheet) }],
+  // An alias id: Waiting work on its Queued tab.
+  sheets: [{ id: "queue", persisted: false, ...waitingSheet("queue") }],
 };

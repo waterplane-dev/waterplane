@@ -534,6 +534,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlog/useBacklogFilters.ts": 125,
   "backlog/useBacklogSort.ts": 25,
   "backlog/useBacklogUi.ts": 70,
+  "backlog/useClearOnNewRow.ts": 40,
   "backlogFilter/rowBuckets.ts": 100,
   "backlogFilter/calledOff.ts": 50,
   "backlogFilter/clockGroups.ts": 200,
@@ -715,7 +716,7 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/activityLabels.ts": 95,
   "activity/activityPieces.ts": 145,
   "activity/activityPullRow.ts": 90,
-  "activity/activityQueueRow.ts": 321, // +1: the restored why-comment on `refused` (W3 review)
+  "activity/activityQueueRow.ts": 328, // +2: a relayed row says why it cannot be rewritten or discarded (`isRelayedLive`); +5: a stuck one is offered "remove from the list" and never told to rewrite (`isRelayedStuck`)
   "activity/activitySelect.ts": 150,
   "activity/activitySheetTypes.ts": 140,
   "activity/activityTriage.ts": 210,
@@ -1306,7 +1307,7 @@ test(`at most ${MAX_RAW_FORM_HINT} hand-written form-hint elements outside kit/ 
 });
 
 /** `tag` chips still hand-written outside kit/ (kit/Tag.tsx is the one). What is left: one <button> that is
- *  the chip (CaptureSheet's run filter; Tag is a span). Lower it, never raise it. */
+ *  the chip (a run filter; Tag is a span). Lower it, never raise it. */
 const MAX_RAW_TAG = 1;
 
 test(`at most ${MAX_RAW_TAG} hand-written tag chips outside kit/ (use kit Tag)`, () => {

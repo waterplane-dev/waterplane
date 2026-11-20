@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import {
   composeMenu, composeWhere, composeAimNote, sendButtonTitle, sendModeLabel, sendModeTitle,
   sendModeToast, sendWhereLabel, whereGoneToast, AIM_HERE_LABEL, PAD_EMPTY_TOAST, PAD_KEPT_TOAST,
-  WHERE_LEAD, WHERE_UNPICKED_TOAST,
+  WHERE_LEAD, WHERE_UNPICKED_TOAST, MORE_WAYS_LABEL, OPEN_WAITING_LABEL, newWhenFreeReceipt, backlogAddReceipt,
 } from "./composeSend.ts";
 
 test("there are exactly two modes, and they say which they are", () => {
@@ -43,7 +43,7 @@ test("`now` says nothing — the composer emptying is the receipt", () => {
 test("`when free` names the desktop, and says what a dead link changes", () => {
   assert.equal(
     sendModeToast("idle", { online: true, holder: "desktop" }),
-    "queued on the desktop — it goes in when this session is free");
+    "Queued. Runs when this session is free.");
   assert.match(sendModeToast("idle", { online: false, holder: "desktop" }), /link is back/);
 });
 
@@ -55,18 +55,30 @@ test("the one send the desktop cannot hold is worded as the phone's", () => {
   assert.doesNotMatch(t, /desktop/, "the desktop is not holding this one — do not claim it is");
 });
 
-test("the menu is two modes, the pad, and one errand", () => {
+test("the menu is the glossary's five ways to send, then the pad (journey spec T9)", () => {
   const m = composeMenu();
   assert.deepEqual(m.map((e) => e.label),
-    ["now", "when it's free", "keep it on the pad", "elsewhere or later…"]);
-  assert.deepEqual(m.map((e) => e.mode), ["now", "idle", null, null]);
-  // Still ONE errand. The pad row is not a third door into the send sheet —
-  // it is the answer that sends nothing — so it is told apart by its key, and
-  // a caller switching on `mode === null` alone would open the sheet for it.
-  assert.deepEqual(m.filter((e) => e.mode === null).map((e) => e.key), ["pad", "elsewhere"]);
-  // The two errands that went: a wall-clock time and "somewhere else entirely"
-  // were two doors into one sheet, differing only in which row they expanded.
-  assert.ok(!m.some((e) => /at a time…|somewhere else…/.test(e.label)));
+    ["Send now", "Send when free", "Send at a time...", "Add to backlog", "Start a new session when free", "Keep on the pad"]);
+  assert.deepEqual(m.map((e) => e.mode), ["now", "idle", null, null, null, null]);
+  // The rows a caller switches on by key: none of them sends to the aimed session.
+  assert.deepEqual(m.filter((e) => e.mode === null).map((e) => e.key), ["at", "backlog", "newIdle", "pad"]);
+  // Retired words (glossary row 9): no "later", no bare "now", no "elsewhere".
+  for (const e of m) assert.doesNotMatch(e.label, /\blater\b|^now$|elsewhere|when it's free/i, e.label);
+  assert.equal(MORE_WAYS_LABEL, "More ways to send");
+});
+
+test("the receipts say where the words went and what became of the empty session", () => {
+  assert.equal(newWhenFreeReceipt({ repo: "todo-garden", offline: false, closed: "closed" }),
+    "Held for a new session in todo-garden, when free. Closing the empty session; the desktop asks first if anything would be lost.");
+  // Offline the close is refused: the receipt must not claim it (2026-11-18 review).
+  assert.doesNotMatch(newWhenFreeReceipt({ repo: "r", offline: true, closed: "nolink" }), /closing the empty|was closed/i);
+  assert.match(newWhenFreeReceipt({ repo: "r", offline: true, closed: "nolink" }), /stays open: closing it needs the link/);
+  assert.doesNotMatch(newWhenFreeReceipt({ repo: "r", offline: false, closed: "kept" }), /closed/);
+  assert.match(newWhenFreeReceipt({ repo: "r", offline: false, closed: "opening" }), /still opening, so it stays/);
+  assert.match(newWhenFreeReceipt({ repo: "r", offline: true, closed: "kept" }), /link is back/);
+  assert.match(backlogAddReceipt({ repo: "r", offline: false }), /^Added to the backlog of r\. Nothing runs it/);
+  assert.match(backlogAddReceipt({ repo: "r", offline: true }), /link is back/);
+  assert.equal(OPEN_WAITING_LABEL, "Open Waiting work");
 });
 
 /**
@@ -127,7 +139,8 @@ test("every menu row carries a title that says something its label does not", ()
   const by = Object.fromEntries(composeMenu().map((e) => [e.key, e]));
   assert.match(by.now.title, /this session/);
   assert.match(by.idle.title, /desktop/, "the holder is the whole difference between the two modes");
-  assert.match(by.elsewhere.title, /at a time/, "the errand names the WHEN the two modes cannot reach");
+  assert.match(by.at.title, /clock time/, "the errand names the WHEN the two modes cannot reach");
+  assert.match(by.newIdle.title, /empty session on screen is closed/, "the close is said before the tap");
   assert.match(by.pad.title, /decide later/, "the pad row's fact is that the decision is postponed, not made");
   for (const e of composeMenu()) {
     assert.notEqual(e.title.trim().toLowerCase(), e.label.trim().toLowerCase(),

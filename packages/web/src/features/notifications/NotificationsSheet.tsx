@@ -14,7 +14,7 @@ import { ago } from "../../format";
 import { viewerHandles } from "../../docKind";
 import { levelOf } from "@waterplane/shared";
 import { notifCut, notifFocus, notifs as notifStore } from "./store";
-import { clearNotifFocus, dismissInfoNote, handleNotif, infoNoteSeen, openNotif, showAllNotifs } from "./actions";
+import { clearNotifFocus, dismissInfoNote, handleNotif, infoNoteSeen, openNotif, openToastGo, showAllNotifs } from "./actions";
 import { feedCut, feedCutWords, feedSections, handledWords, INFO_NOTE_TEXT } from "./logic";
 import { Button, RowSub } from "../../kit";
 import type { NotificationItem } from "@waterplane/shared";
@@ -107,7 +107,7 @@ export function NotificationsSheet() {
         {/* Two labelled halves, never one merged stream: what the DESKTOP
             raised while you were not looking, then what THIS PHONE said.
             See `ToastLog.tsx` for why they are kept apart. */}
-        {phoneFirst && <ToastLog rows={localMsgs} onOpen={openNotif} />}
+        {phoneFirst && <ToastLog rows={localMsgs} onOpen={openNotif} onGo={openToastGo} />}
         {notifs.length > 0 && localMsgs.length > 0 && (
           <div className="notif-sec"><span className="notif-sec-title"><Bell size={13} /> From the desktop · {all.length}</span></div>
         )}
@@ -161,7 +161,7 @@ export function NotificationsSheet() {
             </>
           );
         })()}
-        {!phoneFirst && <ToastLog rows={localMsgs} onOpen={openNotif} />}
+        {!phoneFirst && <ToastLog rows={localMsgs} onOpen={openNotif} onGo={openToastGo} />}
       </div>
     </div>
   );

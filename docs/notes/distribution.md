@@ -411,6 +411,13 @@ local `dist-release/` for testing — the public repo does not exist yet),
 `--node-mirror <url>`, `--bin-dir <dir>`, `--no-service`,
 `--skip-claude-check`, `--with <id>`, `--without <id>`, `--uninstall` (plugins: next section).
 
+Beyond the flags: a Node download that cannot reach nodejs.org says so and names `--node-mirror` (curl's
+exit code kept); with no `WATERPLANE_ROOT` and none of the usual code folders, the installer creates an empty
+`~/dev` (one line says so) so doctor's `root` row passes; a `service install` with no systemd user bus
+prints the `loginctl enable-linger` fix; and the installer's own follow-up lines use the full path when
+the bin dir is not on PATH. The release tarball drops node-pty's `.pdb` debug symbols (4 MB gzipped, build
+asserts none ships); the rest of the 0.1.x growth (12 to 22 MB) is the OCR extension's assets.
+
 The last lines name this desktop's address and port (`http://127.0.0.1:<port>`) and open it in
 the browser when the host was started, doctor passed and there is a screen (not over SSH);
 `--no-open` only prints it.

@@ -10,7 +10,6 @@
  */
 
 import type { BuildArtifact } from "../wire/work.js";
-import type { CaptureBackendId } from "../wire/capture.js";
 import type { ScheduleRule } from "../schedule.js";
 import type { AssessScope } from "../assess.js";
 
@@ -158,32 +157,6 @@ export interface AssessPayload {
    * every other run and every row written before the slot check.
    */
   scope?: AssessScope;
-}
-
-/**
- * A verified capture: take a picture of a running screen and say how much the
- * picture can be trusted. No agent, no session, no tokens — `builds.ts`'s class
- * of work, run by `capture.ts` against a per-repo target definition.
- *
- * `name` and `backend` are snapshotted at fire time for `BuildPayload`'s reason:
- * `.waterplane/capture.json` is edited between runs, and a row that renames itself —
- * or worse, re-labels itself with a different backend — weeks later is a lie
- * about what ran. Both are optional so a row written by an older host still
- * loads; the run degrades to showing the id, never to showing the wrong name.
- *
- * What the run PRODUCED (the verdict, the frames, the evidence) lives in a
- * sidecar JSON in `.claude/outbox/` keyed by this id, for `AssessPayload`'s
- * reason: evidence is not lifecycle, it outlives the run, and putting it here
- * would put capture fields on every intent that Activity renders.
- */
-export interface CapturePayload {
-  kind: "capture";
-  targetId: string;
-  name?: string;
-  backend?: CaptureBackendId;
-  /** Keep capturing until cancelled, emitting a frame only past the target's
-   *  diff threshold. */
-  watch?: boolean;
 }
 
 /** Where the work lands. */

@@ -174,7 +174,7 @@ function fromMakefile(f: ScannedFile): BuildCandidate[] {
     // assignment (`FOO := bar`) or a pattern/special target (`.PHONY`, `%.o`).
     const m = /^([A-Za-z0-9][A-Za-z0-9_.\-/]*)\s*:(?!=)/.exec(line);
     if (!m) continue;
-    const t = m[1];
+    const t = m[1]!;
     if (t.startsWith(".") || t.includes("%") || seen.has(t)) continue;
     seen.add(t);
     out.push({ name: label(dir, t), cmd: `make ${t}`, dir, source: f.path, note: publishNote(t) });
@@ -219,8 +219,8 @@ function fromCMake(f: ScannedFile): BuildCandidate[] {
   }];
 }
 
-const isSpace = (c: string): boolean => /\s/.test(c);
-const isLineEnd = (c: string): boolean => c === "\n" || c === "\r" || c === "\u2028" || c === "\u2029";
+const isSpace = (c: string | undefined): boolean => c !== undefined && /\s/.test(c);
+const isLineEnd = (c: string | undefined): boolean => c === "\n" || c === "\r" || c === "\u2028" || c === "\u2029";
 
 /**
  * What `/^\s*-?\s*run:\s*(?!\||>)(\S.*?)\s*$/.exec(line)?.[1]` captures, by a scan: that regex is

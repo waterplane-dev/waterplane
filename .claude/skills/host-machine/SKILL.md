@@ -1,6 +1,6 @@
 ---
 name: host-machine
-description: "waterplane host as the machine the phone drives (packages/host/src): `files.ts` (inbox, outbox, sweep), `tree.ts`, `builds.ts` + `artifacts.ts`, `capture.ts` (screenshots), `sysstat.ts` + `localrt.ts`, `dictate.ts`, `ocrlocal.ts`, `autopull.ts`, `repohealth.ts` + `healthwatch.ts`, the setup checklist (`compliance.ts`, `setupwatch.ts`, `contextlimits.ts`), the Android toolchain and signing key (`toolchain.ts`, `signkey.ts`), `worktreeleftover.ts`, `secrets.ts`, `git.ts` (push, and PR mode through `forge/`). Load BEFORE touching uploads, artifacts, file writes, builds, screenshots, machine telemetry, dictation, OCR, the repo-health series, a setup check or fix, the Android SDK or signing key, a push or PR, or a worktree's removal."
+description: "waterplane host as the machine the phone drives (packages/host/src): `files.ts` (inbox, outbox, sweep), `tree.ts`, `builds.ts` + `artifacts.ts`, `sysstat.ts` + `localrt.ts`, `dictate.ts`, `ocrlocal.ts`, `autopull.ts`, `repohealth.ts` + `healthwatch.ts`, the setup checklist (`compliance.ts`, `setupwatch.ts`, `contextlimits.ts`), the Android toolchain and signing key (`toolchain.ts`, `signkey.ts`), `worktreeleftover.ts`, `secrets.ts`, `git.ts` (push, and PR mode through `forge/`). Load BEFORE touching uploads, artifacts, file writes, builds, screenshots, machine telemetry, dictation, OCR, the repo-health series, a setup check or fix, the Android SDK or signing key, a push or PR, or a worktree's removal."
 ---
 
 # waterplane host — the machine
@@ -105,16 +105,6 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   (bounded: depth 3, 400 dirs, 256 KB/file, `SKIP_DIRS` pruned BEFORE descending ); every RULE is `@waterplane/shared`'s `buildscan.ts`, so
   it is pinned with no disk (what may be offered, flagged or marked: `shared` skill). A failed scan
   answers an EMPTY list, never silence.
-- `capture.ts` (a facade: the manager, over `capture/capturekit.ts` the knobs and backend table, `capture/captureverdict.ts` the pure ladder/verdict/emit gate, `capture/captureconfig.ts` target cleaning + overlay + probe, `capture/capturehelpers.ts` anchors/lease/sidecar/run rendering, `capture/capturesettle.ts` SETTLE, `capture/capturepass.ts` one run's passes + watch loop) — the verified screenshot loop: targets in `<repo>/.waterplane/capture.json` (`builds.ts`'
-  shape), a run IS an intent, and it goes **verify → settle → diff → emit**. **Settle is
-  frame-stability, `settleMs` a CAP not a sleep**; the diff gate is TOKEN hygiene, not disk — and with no tool it emits every
-  frame, capped, and SAYS so. **Default output is the ~50-token verdict line, not the image.**
-  **`verified:*` is the ANCHOR level only**: `capture/window.ts` has no oracle ⇒ ceiling
-  `settled:stable`. `capture/types.ts` is the seam; `capture/web.ts` resolves Playwright at RUNTIME
-  (`thumbs.ts`' model, never a root dep); `capture/android.ts` adb+uiautomator; `capture/garmin.ts`
-  SHELLS OUT to ciqkit, never imports/vendors it (exit 3 ⇒ downgrade, not fail); `capture/pixels.ts`
-  degrades to `null`. Overlay frames are KEPT. `visualskill.ts` writes the `visual-check` preset
-  where a target exists.
 - `reposkill.ts` + `reposkilltext.ts` — **making a driven repo waterplane-aware**: the `waterplane` skill,
   generated into `<config dir>/claude-plugin/` and passed to every spawned `claude` with
   `--plugin-dir` — never written into a repo, so never stale (the rule itself: CLAUDE.md).

@@ -83,6 +83,7 @@ holds your module's rules. Load the router, then that sub-skill — never the wh
 | writing or changing a test | `testing` |
 | a label, hint, toast or first-run aid | `ux` |
 | docs gifs, demo scenarios, diagrams | `docs-media` |
+| looking at a screenshot | `visual-check` |
 | splitting a big file | `refactoring` |
 
 ## Commands
@@ -116,8 +117,7 @@ npm test             # lint, test:unit, test:host, then run-e2e.mjs — needs `n
 
 Each has caused a real failure here and is invisible in review unless you know it.
 
-- **Never bind a public interface, and never reintroduce `access-control-allow-origin: *`.** The
-  daemon spawns `claude`; the security model below is never a skill.
+- **Never bind a public interface, and never reintroduce `access-control-allow-origin: *`.** See Security model.
 - **Never add a second WebSocket.** One socket per tab carries everything (`local/no-second-socket`).
 - **Never add a send path that bypasses the queue, and never retry without an ackId.**
 - **Never fork `deliver.ts`.** It is the one implementation of "type into a live session and

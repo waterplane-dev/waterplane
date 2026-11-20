@@ -139,7 +139,7 @@ function scoreWeek(r: HealthEntryReadings, row: HealthSeriesRow, disabled: reado
   const n = enabled.length + own.length;
   // A score of 0 cannot occur (good > 0, value finite), so ln is finite.
   const mean = Math.exp((enabled.reduce((s, e) => s + Math.log(scores[e] as number), 0) + own.reduce((s, o) => s + Math.log(o.score), 0)) / n);
-  let worst: HealthScoredId = enabled[0];
+  let worst: HealthScoredId = enabled[0]!;
   let worstScore = scores[worst] as number;
   for (const e of enabled) if ((scores[e] as number) < worstScore) { worst = e; worstScore = scores[e] as number; }
   for (const o of own) if (o.score < worstScore) { worst = o.id; worstScore = o.score; }
@@ -199,7 +199,7 @@ export function healthIndex(
     });
   }
   if (points.length === 0) return null;
-  return { baselineWeek: points[0].week, points };
+  return { baselineWeek: points[0]!.week, points };
 }
 
 /** One row by the SAME formula a week uses (`scoreWeek`); null when an enabled entry is absent. */

@@ -111,7 +111,7 @@ export function driveForm(p: string): string {
 /** The disk a PATH is on under wsl: a path under /mnt/<letter>/ is that Windows drive, anything else is inside WSL. */
 export const sideOfPath = (p: string): DiskSide => (/^\/mnt\/[a-z](\/|$)/.test(p) ? "windows" : "wsl");
 
-export function sided(r: Roots, group: string, side: DiskSide): { group: string; side?: DiskSide } {
+function sided(r: Roots, group: string, side: DiskSide): { group: string; side?: DiskSide } {
   if (profileOf(r) !== "wsl") return { group };
   return { group: `${group} ${side === "windows" ? "on Windows" : "in WSL"}`, side };
 }
@@ -121,7 +121,7 @@ export function sided(r: Roots, group: string, side: DiskSide): { group: string;
 export interface FixedCache { rel: string; group: string; regen: string }
 
 /** The Mac's list (`profile: "mac"`). */
-export const FIXED_CACHES: readonly FixedCache[] = [
+const FIXED_CACHES: readonly FixedCache[] = [
   { rel: ".gradle/caches", group: "Gradle", regen: "Gradle downloads dependencies again on the next build (a slow first build)." },
   { rel: ".gradle/wrapper/dists", group: "Gradle", regen: "Each project's gradlew downloads its Gradle version again on the next build." },
   { rel: ".gradle/daemon", group: "Gradle", regen: "Daemon logs and registry; recreated by the next build." },
@@ -147,7 +147,7 @@ async function exists(p: string): Promise<boolean> {
 }
 
 /** Linux's list, and the Linux side of wsl (XDG cache folders under ~/.cache). */
-export const LINUX_CACHES: readonly FixedCache[] = [
+const LINUX_CACHES: readonly FixedCache[] = [
   { rel: ".gradle/caches", group: "Gradle", regen: "Gradle downloads dependencies again on the next build (a slow first build)." },
   { rel: ".gradle/wrapper/dists", group: "Gradle", regen: "Each project's gradlew downloads its Gradle version again on the next build." },
   { rel: ".gradle/daemon", group: "Gradle", regen: "Daemon logs and registry; recreated by the next build." },
@@ -173,7 +173,7 @@ const BROWSER_WIN = (name: string): FixedCache[] => {
 };
 
 /** wsl's Windows side, relative to the Windows home. A `*` segment is one real folder per row. */
-export const WIN_CACHES: readonly FixedCache[] = [
+const WIN_CACHES: readonly FixedCache[] = [
   { rel: "AppData/Local/npm-cache", group: "npm", regen: "npm on Windows downloads packages again on the next install." },
   { rel: "AppData/Local/pip/cache", group: "Python", regen: "pip on Windows downloads wheels again on the next install." },
   { rel: "AppData/Local/ms-playwright", group: "browser engines", regen: "`npx playwright install` on Windows puts them back." },
@@ -185,7 +185,7 @@ export const WIN_CACHES: readonly FixedCache[] = [
 ];
 
 /** The home-side list for this desktop's profile. */
-export const cachesFor = (r: Roots): readonly FixedCache[] => (profileOf(r) === "mac" ? FIXED_CACHES : LINUX_CACHES);
+const cachesFor = (r: Roots): readonly FixedCache[] => (profileOf(r) === "mac" ? FIXED_CACHES : LINUX_CACHES);
 
 /** Whether `rel` (already split, no empty/`.`/`..` segment) is `pattern`, a `*` matching any one segment. */
 export function relMatches(pattern: string, rel: readonly string[]): boolean {
@@ -237,7 +237,7 @@ export async function resolveWinCaches(r: Roots): Promise<Candidate[]> {
 
 // ── build + node_modules: one walk of the code root ────────────────────────
 
-export const BUILD_NAMES: ReadonlySet<string> = new Set(["build", ".next", ".turbo", ".vite"]);
+const BUILD_NAMES: ReadonlySet<string> = new Set(["build", ".next", ".turbo", ".vite"]);
 const MANIFESTS = ["package.json", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"];
 const NEVER_DESCEND = new Set([".git", "node_modules", ".gradle", ".Trash"]);
 
@@ -337,7 +337,7 @@ export function onWindowsDrive(r: Roots, p: string): boolean {
  */
 export const codeOnTap = (r: Roots): boolean => onWindowsDrive(r, r.root);
 
-export const BUILD_REGEN = "The next build writes it again.";
+const BUILD_REGEN = "The next build writes it again.";
 
 export function buildCandidates(r: Roots, w: Walk): Candidate[] {
   return w.build.map((path) => ({ id: idOf("build", path), category: "build", kind: "temp", ...sided(r, "build output", sideOfPath(path)), label: sideOfPath(path) === "windows" ? driveForm(path) : tilde(path, r.home), path, regen: BUILD_REGEN }));
@@ -353,7 +353,7 @@ export function nodeModulesEntries(r: Roots, w: Walk): Candidate[] {
 // ── tmp: claude scratchpads untouched for a day ────────────────────────────
 
 /** The newest mtime anywhere under `dir`, or null when the folder has more than `budget` entries (then it is not "old"). */
-export async function newestMtime(dir: string, budget = 5000): Promise<number | null> {
+async function newestMtime(dir: string, budget = 5000): Promise<number | null> {
   let newest = 0, seen = 0;
   const stack = [dir];
   while (stack.length) {
@@ -375,7 +375,7 @@ export async function newestMtime(dir: string, budget = 5000): Promise<number | 
 }
 
 /** The session folders (`<tmpRoot>/<project>/<session>`) where nothing changed for `tmpMinAgeMs`. */
-export async function oldScratchpads(r: Roots): Promise<string[]> {
+async function oldScratchpads(r: Roots): Promise<string[]> {
   const out: string[] = [];
   let projects;
   try { projects = await readdir(r.tmpRoot, { withFileTypes: true }); } catch { return out; }
@@ -395,7 +395,7 @@ export async function oldScratchpads(r: Roots): Promise<string[]> {
   return out.sort();
 }
 
-export const TMP_KEY = "claude-scratchpads";
+const TMP_KEY = "claude-scratchpads";
 
 export async function resolveTmp(r: Roots): Promise<Candidate[]> {
   const members = await oldScratchpads(r);
@@ -409,13 +409,13 @@ export async function resolveTmp(r: Roots): Promise<Candidate[]> {
 
 // ── wtemp: the Windows %TEMP%, entries untouched for a week (wsl only) ─────
 
-export const winTempDir = (win: string): string => join(win, "AppData", "Local", "Temp");
+const winTempDir = (win: string): string => join(win, "AppData", "Local", "Temp");
 /** How many %TEMP% entries one scan looks at; past it the row says so. */
-export const WIN_TEMP_MAX = 3000;
-export const WIN_TEMP_KEY = "windows-temp";
+const WIN_TEMP_MAX = 3000;
+const WIN_TEMP_KEY = "windows-temp";
 
 /** Entries directly under %TEMP% (files and folders, never a symlink) where nothing changed for a week. */
-export async function oldWinTemp(r: Roots): Promise<{ members: string[]; capped: boolean }> {
+async function oldWinTemp(r: Roots): Promise<{ members: string[]; capped: boolean }> {
   const win = winHomeOf(r);
   if (!win) return { members: [], capped: false };
   const dir = winTempDir(win);
@@ -450,7 +450,7 @@ export async function resolveWinTemp(r: Roots): Promise<Candidate[]> {
 
 // ── hf: Hugging Face hub models ────────────────────────────────────────────
 
-export const hfHub = (r: Roots): string => join(r.home, ".cache", "huggingface", "hub");
+const hfHub = (r: Roots): string => join(r.home, ".cache", "huggingface", "hub");
 
 export async function resolveHf(r: Roots): Promise<Candidate[]> {
   const hub = hfHub(r);
@@ -526,7 +526,7 @@ export async function resolveOllama(r: Roots): Promise<{ list: Candidate[]; note
 // ── show-only ──────────────────────────────────────────────────────────────
 
 /** wsl: the distros' virtual disks (`ext4.vhdx`), found in the two places WSL keeps them, bounded. */
-export async function wslDisks(win: string): Promise<string[]> {
+async function wslDisks(win: string): Promise<string[]> {
   const out: string[] = [];
   const look = async (parent: string, tail: string[]) => {
     let ents;

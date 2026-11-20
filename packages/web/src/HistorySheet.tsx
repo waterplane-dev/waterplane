@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { scopedTitle } from "./sheetScope";
+import { TITLE } from "./sheetNames";
 import { Copy, CornerUpLeft, ListTodo, MessageSquare, Pin, Slash } from "lucide-react";
 import type { HistoryEntry } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
@@ -45,7 +47,7 @@ export function HistorySheet({ title, entries, pinnedEntryId, onClose, onResend,
 
   return (
     <div className="sheet">
-      <SheetHead title={<>History · {title}</>} onClose={onClose} />
+      <SheetHead title={scopedTitle(TITLE.history, title)} onClose={onClose} />
       <Hint>
         Every command and backlog item sent to this session, with the output captured for that turn.
         Output is the terminal's text, stripped of formatting — not a perfect transcript.

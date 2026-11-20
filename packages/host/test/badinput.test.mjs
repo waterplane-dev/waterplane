@@ -38,7 +38,6 @@ async function withApi(fn) {
     root: ROOT,
     sessions: { list: () => [], onHookEvent() {} },
     setup: { stateFor() { return undefined; }, record() {} },
-    capture: { run: () => ({ error: "stub capture" }), runsFor: () => [] },
     uiStats: { merge: () => 0 },
   };
   const server = createServer((req, res) => {
@@ -84,14 +83,11 @@ test("an empty body: refused where the route needs one, {} where every field is 
     const need = await call("POST", "/api/repos/R/sweep");
     assert.equal(need.status, 400);
     assert.match(need.json?.error ?? "", /needs a JSON body/);
-    // capture/run: `target` is optional — the stub's own answer proves the route ran.
-    const capture = await call("POST", "/api/repos/R/capture/run");
-    assert.deepEqual([capture.status, capture.json], [400, { ok: false, error: "stub capture" }]);
     // ui-usage is a fire-and-forget beacon: an empty one is still a 200.
     const usage = await call("POST", "/api/ui-usage");
     assert.deepEqual([usage.status, usage.json], [200, { ok: true, merged: 0 }]);
     // A malformed body to an OPTIONAL route is still malformed.
-    const bad = await call("POST", "/api/repos/R/capture/run", "{");
+    const bad = await call("POST", "/api/ui-usage", "{");
     assert.equal(bad.status, 400);
     assert.match(bad.json?.error ?? "", /malformed JSON body/);
   });

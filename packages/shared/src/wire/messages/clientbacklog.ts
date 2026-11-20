@@ -38,7 +38,7 @@ export type ClientBacklogMsg =
    *  `cleanLaunchOpts` on the way in; meaningless beside `targetSessionId`.
    *  Additive: an older desktop drops it and opens the session on its own
    *  new-session defaults, which is what absent means. */
-  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; ackId?: string } & SendStamp)
+  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; hold?: boolean; ackId?: string } & SendStamp)
   | { t: "backlog.remove"; id: string }
   | { t: "backlog.fire"; id: string }
   | { t: "backlog.done"; id: string }

@@ -23,6 +23,14 @@ test("callerOf names the paired device and is null for an untokened socket", () 
   assert.deepEqual(callerOf("lan", "revoked", ledger), { kind: "lan", deviceId: "revoked", deviceName: null });
 });
 
+test("callerOf says a passive (kids') row is passive (plugin API 2.9), and says nothing for a full row (R-connection-013)", () => {
+  const ledger = new DeviceLedger(mkdtempSync(join(tmpdir(), "wp-caller-")));
+  const kid = ledger.mint("Kids", "tailscale", Date.now(), "passive").row;
+  const full = ledger.mint("Pixel", "tailscale").row;
+  assert.deepEqual(callerOf("tailscale", kid.id, ledger), { kind: "tailscale", deviceId: kid.id, deviceName: "Kids", scope: "passive" });
+  assert.equal("scope" in callerOf("tailscale", full.id, ledger), false);
+});
+
 test("the registry hands the caller to the handler, and a bare call is an in-process caller of unknown route (never a local browser)", async () => {
   const seen = [];
   const reg = Object.create(PluginRegistry.prototype);

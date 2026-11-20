@@ -141,7 +141,7 @@ The repo-health engine counts .mts and .cts files as TypeScript source.
 - shipped: 7f7a22ba
 
 ### R-metrics-029 · shipped
-When a repo's own copy of the health engine fails, Repo readings offers a button that sends the agent a prompt to adopt the desktop's current engine.
+When a repo's own copy of the health engine fails, Setup & health offers a button that sends the agent a prompt to adopt the desktop's current engine.
 - asked: 2026-10-19
 - shipped: 6e2394a1
 - note: Owner first asked for start over, then refined to the adopt-engine prompt button.
@@ -313,7 +313,7 @@ The Agent readings region leads with three weekly readings that show whether an 
 - amended: 2026-11-14 — the part lines are grouped by whose they are: the repo's, yours, the CLI's, and "not split" where the log records one block without saying where each line came from, said in words (R-metrics-068)
 
 ### R-metrics-064 · shipped
-In Repo readings, the repo's own readings card sits right after the score, before waterplane's readings, and its jump-bar chip follows the score's.
+In Setup & health, the repo's own readings card sits right after the score, before waterplane's readings, and its jump-bar chip follows the score's.
 - asked: 2026-11-14 (owner)
 - shipped: web RepoHealthRegion.tsx, RepoHealthCards.tsx (shownSections order), healthIndexWords.ts (NAV_LABELS)
 

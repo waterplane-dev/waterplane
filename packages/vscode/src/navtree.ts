@@ -8,7 +8,6 @@
 import * as vscode from "vscode";
 import { BRAND, CHARS_PER_TOKEN, checkedCountWords, contextPct, findingCut, savingWords, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
 import type { Finding } from "@waterplane/shared";
-import { COPILOT_LEDGER } from "./protocol.js";
 import type { FindingsDoc, HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
 import { alwaysOnTipWords, firstShortWords, newestFirstTok } from "./data/firstwords.js";
@@ -17,9 +16,6 @@ import type { HeadlineSummary } from "./data/summary.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
 import { NOT_GIT, XCODE_LICENSE } from "./health/sourcewords.js";
-import { quotaTooltip, quotaWords } from "./copilotquota.js";
-import { localWords } from "../../extensions/copilot-usage/host/vscodelocal.mts";
-import type { QuotaState } from "./copilotquota.js";
 
 export interface NavState {
   folders: string[];
@@ -42,7 +38,6 @@ export interface NavState {
   findingsWhy: { text: string; reading: boolean } | null;
   health: HealthDoc | null;
   healthRunning: boolean;
-  quota: QuotaState;
   /** The last finished scan's seven days, kept across reloads; null before the first one. */
   summary: HeadlineSummary | null;
   /** Some listed session is running or was written to in the last half hour (`anyLive`). */
@@ -63,8 +58,7 @@ type Node =
   | { kind: "findings" }
   | { kind: "finding"; f: Finding }
   | { kind: "checked" }
-  | { kind: "view"; tab: NavTab }
-  | { kind: "quota" };
+  | { kind: "view"; tab: NavTab };
 
 const VIEWS: { tab: NavTab; label: string; icon: string }[] = [
   { tab: "all", label: "All sessions", icon: "graph" },
@@ -169,7 +163,7 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
       const top: Node[] = [{ kind: "findings" }, view("all")];
       if (s.folders.length > 1) top.push({ kind: "folder" });
       if (s.live) top.push(this.sessionsNode);
-      top.push(view("health"), view("always-on"), { kind: "quota" });
+      top.push(view("health"), view("always-on"));
       if (!s.live) top.push(this.sessionsNode);
       return top;
     }
@@ -289,22 +283,6 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         const it = new vscode.TreeItem(n.text, vscode.TreeItemCollapsibleState.None);
         it.iconPath = new vscode.ThemeIcon("info");
         if (n.tab) it.command = { command: SHOW, title: "Open", arguments: [n.tab] };
-        return it;
-      }
-      case "quota": {
-        const q = s.quota;
-        const it = new vscode.TreeItem("Copilot", vscode.TreeItemCollapsibleState.None);
-        it.id = "quota";
-        it.contextValue = q.on ? "copilotQuotaOn" : "copilotQuotaOff";
-        it.iconPath = new vscode.ThemeIcon(q.busy ? "loading~spin" : "copilot");
-        const words = q.reading ? quotaWords(q.reading) : null;
-        // GitHub's figure when read; otherwise the plan and local count, which need no sign-in.
-        const local = q.local ? localWords(q.local) : null;
-        it.description = words ?? local ?? (q.on && q.why ? "not read · hover for why" : q.busy ? "reading…" : "not read yet");
-        it.tooltip = quotaTooltip(q);
-        // A click stays local: it opens Copilot Chat's token ledger. GitHub's figure needs a sign-in,
-        // so it is its own action (the row's GitHub button, or right-click), never the row's click.
-        it.command = { command: SHOW, title: "Open Copilot Chat's token use", arguments: ["all", COPILOT_LEDGER.id] };
         return it;
       }
       case "view": {

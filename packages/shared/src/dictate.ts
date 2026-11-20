@@ -97,7 +97,7 @@ export function pcm16ToWav(samples: Int16Array, rate = DICTATE_RATE): Uint8Array
 export function floatToPcm16(input: Float32Array): Int16Array {
   const out = new Int16Array(input.length);
   for (let i = 0; i < input.length; i++) {
-    const s = Math.max(-1, Math.min(1, input[i]));
+    const s = Math.max(-1, Math.min(1, input[i]!));
     out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return out;
@@ -221,7 +221,7 @@ const LANG_ALIASES: Record<string, string> = {
 export function whisperLang(tag: string | undefined): string {
   const raw = (tag || "").trim().toLowerCase();
   if (!raw || raw === "auto") return "auto";
-  const primary = raw.split(/[-_]/)[0];
+  const primary = raw.split(/[-_]/)[0]!;
   const mapped = LANG_ALIASES[primary] || primary;
   return WHISPER_LANGS.has(mapped) ? mapped : "auto";
 }

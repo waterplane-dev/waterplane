@@ -11,6 +11,7 @@
  * every other slice reaches `input`/`write`/`screenText`/`screenCells` through
  * `SessionCore` by their public names.
  */
+import { cancelAll as cancelAllTimers } from "./timers.js";
 import { execFileSync } from "node:child_process";
 import { execFileP } from "../proc.js";
 import { rmSync } from "node:fs";
@@ -112,13 +113,13 @@ export async function killOneShell(core: SessionCore, id: string, pid: number, s
 /** One background shell's whole command and output tail (`GET /api/shell`) —
  *  read-only. `null` when the session, its CLI record or that pid among its
  *  shells is not there right now. */
-export function shellDetail(core: SessionCore, id: string, pid: number): SessionShellDetail | null {
+export async function shellDetail(core: SessionCore, id: string, pid: number): Promise<SessionShellDetail | null> {
   const s = core.sessions.get(id);
   if (!s) return null;
   let record: { status: string; pid: number } | null = null;
   try { record = readCliRecord(s.info.id, tmuxName(id), s.info.claudeSessionId); } catch { record = null; }
   if (!record) return null;
-  try { return readShellDetail(record.pid, s.info.cwd, s.info.claudeSessionId, pid); } catch { return null; }
+  try { return await readShellDetail(record.pid, s.info.cwd, s.info.claudeSessionId, pid); } catch { return null; }
 }
 
 // Terminal-emitted, non-typing input: SGR mouse (wheel/click), legacy X10 mouse,
@@ -158,7 +159,7 @@ export function input(core: SessionCore, id: string, data: string): boolean {
     core.setAsking(s, null); // the prose question just got its answer typed
     s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
     s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
-    core.netTyped(s); // a person typing calls off a network retry (`apiretry.ts`)
+    core.netTyped(s, data); // a person typing calls off a network retry (`apiretry.ts`)
     markSubmitted(core, s, data);
     // The box may have just been answered away. Nothing else clears it now, so
     // re-verify sooner than the ordinary cadence — a stale box is a tap that
@@ -241,7 +242,7 @@ export function write(core: SessionCore, id: string, data: string): boolean {
   core.setAsking(s, null); // the prose question just got its answer typed
     s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
   s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
-  core.netTyped(s); // …and calls off a network retry, unless it IS the retry (`apiretry.ts`)
+  core.netTyped(s, data); // …and calls off a network retry, unless it IS the retry (`apiretry.ts`)
   markSubmitted(core, s, data);
   core.armPromptCheck(s, 250); // same as input(): the write may have answered a box
   s.proc.write(tmuxLiteral(data));
@@ -483,6 +484,7 @@ export function remove(core: SessionCore, id: string, onShellsStopped?: (counts:
   if (s.idleTimer) clearTimeout(s.idleTimer);
   core.retireAgentPoll(s);
   core.clearLimitTimer(s);
+  cancelAllTimers(s); // every recovery lane (timers.ts): the row is going, nothing may type into it later
   core.stopClaudeIdWatch(s);
   s.screenLog?.dispose();  // the row is going; so is what it showed
   core.sessions.delete(id);
@@ -596,7 +598,10 @@ export async function screenText(core: SessionCore, id: string, lines = 40): Pro
   const s = core.sessions.get(id);
   if (!s) return "";
   // In the alternate screen the recorder's grid IS the screen, and the replay
-  // is not: the ring holds no resizes (`screenlog.ts`'s `gridCells`).
+  // is not: the ring holds no resizes (`screenlog.ts`'s `gridCells`). The grid
+  // is read only once it holds every byte received so far (`parsed()`): xterm
+  // parses on a timer, and a grid read ahead of it is a box cut mid-line.
+  await s.screenLog?.parsed();
   const text = s.screenLog?.alternate()
     ? screenTextOf(s.screenLog.gridText().split("\n"))
     : await renderCapture(s.scrollback, s.cols);
@@ -677,6 +682,7 @@ export async function screenLines(core: SessionCore, id: string, max = SCREENLOG
 export async function screenCells(core: SessionCore, id: string, lines = 60): Promise<RenderRow[]> {
   const s = core.sessions.get(id);
   if (!s) return [];
+  await s.screenLog?.parsed(); // `screenText`'s reason: the grid trails the bytes
   if (s.screenLog?.alternate()) return s.screenLog.gridCells(lines);
   return renderCells(s.scrollback, s.cols, lines);
 }

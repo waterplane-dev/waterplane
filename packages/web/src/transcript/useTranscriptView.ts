@@ -146,7 +146,10 @@ export function useTranscriptView(p: TranscriptViewProps) {
     if (pend) void putTranscript(pend);
   }, []);
 
+  const inflightRef = useRef(0); // a poll waits for the last read: on HTTP/1.1 stacked polls held the WebView's six sockets (2026-11-18)
   const load = useCallback(async (incremental: boolean) => {
+    if (incremental && inflightRef.current > 0) return;
+    inflightRef.current += 1;
     try {
       if (!incremental) setLoading(true);
       const want = wantedDetail(toolsMode);
@@ -157,25 +160,12 @@ export function useTranscriptView(p: TranscriptViewProps) {
       const held = docRef.current;
       const since = incremental && held && (held.detail ?? "full") === want ? held.updatedAt : undefined;
       const next = sourceRef.current ? await sourceRef.current.transcript(since, want) : await api.transcript(sessionId, since, want);
-      if (next) {
-        gotLiveRef.current = true;
-        setDoc(next);
-        setErr(null);
-        setOfflineAt(null); // a success clears any "showing cached" chip
-        setCachedAt(null);
-        scheduleCacheWrite(next);
-      } else {
-        // 204: the host answered and the log has NOT changed since `since`. That
-        // is stronger proof of freshness than a 200 — what is on screen is
-        // provably current — so it must clear the chip too. Clearing only inside
-        // the `next` branch left the "showing cached transcript" chip up forever
-        // on a reconnect to an idle session: every incremental poll answers 204,
-        // so nothing ever contradicted the one failed fetch that raised it.
-        gotLiveRef.current = true;
-        setErr(null);
-        setOfflineAt(null);
-        setCachedAt(null);
-      }
+      // A 200 or a 204 (the log has NOT changed since `since`) both clear the "showing cached" chip:
+      // a 204 is stronger proof of freshness than a 200. Clearing only on a 200 left the chip up
+      // forever on a reconnect to an idle session — every poll answers 204, so nothing contradicted
+      // the one failed fetch that raised it.
+      gotLiveRef.current = true; setErr(null); setOfflineAt(null); setCachedAt(null);
+      if (next) { setDoc(next); scheduleCacheWrite(next); }
     } catch (e) {
       // The host is unreachable (or errored). Keep serving whatever's already
       // on screen — live or cache-seeded — flagged as stale, instead of
@@ -197,6 +187,7 @@ export function useTranscriptView(p: TranscriptViewProps) {
           : String(e));
       }
     } finally {
+      inflightRef.current -= 1;
       setLoading(false);
     }
   }, [sessionId, toolsMode]);
@@ -253,6 +244,8 @@ export function useTranscriptView(p: TranscriptViewProps) {
   }, [sessionId]);
   useEffect(() => { if (refreshKey) void load(true); }, [refreshKey, load]);
   const busy = !!status?.busy;
+  const wasBusy = useRef(busy); // a turn just ended: read now, not a poll behind the terminal
+  useEffect(() => { if (wasBusy.current && !busy) void load(true); wasBusy.current = busy; }, [busy, load]);
   useEffect(() => {
     const every = (busy ? BUSY_POLL_MS : POLL_MS) * (dataSaver() ? SAVER_POLL_FACTOR : 1);
     const t = setInterval(() => { if (document.visibilityState === "visible") void load(true); }, every);

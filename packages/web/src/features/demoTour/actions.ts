@@ -10,7 +10,7 @@
  * transport already answers (R-demo-004).
  */
 import { core } from "../../sdk";
-import { DEMO_TOUR_EVENT, demoActiveId, isDemo, openRepoHealthFor } from "../../demoEntry";
+import { DEMO_TOUR_EVENT, demoActiveId, isDemo, openRepoHealthFor, tryDemo } from "../../demoEntry";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { HOOK_PROMPT, claimHook, claimsHook, markHook, markSeen, needsSession, parseTourState, shouldTypeHook, tourRowPath, tourSession, type TourRow, type TourState } from "./logic";
 import { tourStore } from "./store";
@@ -81,6 +81,11 @@ export function runTourRow(row: TourRow): void {
     // the repo-health screen opens over it and Back lands on the session.
     if (c.world.active?.id !== s!.id) c.nav.attach(s!);
     setTimeout(() => openRepoHealthFor(null), 0);
+    return;
+  }
+  if (t.kind === "scenario") {
+    if (demoActiveId() === t.id) { c.nav.open(t.overlay); return; }
+    tryDemo(t.id);
     return;
   }
   if (!s) { c.nav.open(t.overlay); return; }

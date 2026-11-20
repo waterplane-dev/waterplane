@@ -54,6 +54,7 @@ globalThis.dispatchEvent ??= () => true;
 globalThis.CustomEvent ??= class extends Event { constructor(t, o) { super(t); this.detail = o?.detail; } };
 
 const dl = await import("./download.ts");
+const { currentReceipt } = await import("./kit/receiptStore.ts");
 
 test.beforeEach(() => {
   Object.assign(fake, { records: {}, adds: [], saves: [], toasts: [], listeners: [], native: true, ls: {}, gate: null,
@@ -88,7 +89,9 @@ test("a tap on what is already here hands it over instead of fetching again", as
   dl.startDownload(target);
   await flush();
   assert.deepEqual(fake.saves, ["id:build/app-debug.apk"]);
-  assert.deepEqual(fake.toasts, ["saved to Downloads"]);
+  assert.deepEqual(fake.toasts, []);
+  assert.equal(currentReceipt()?.text, "Saved app-debug.apk to Downloads.");
+  assert.equal(typeof currentReceipt()?.open?.run, "function");
 });
 
 test("a tap while the same hand-off is crossing the bridge writes nothing twice", async () => {
@@ -102,7 +105,7 @@ test("a tap while the same hand-off is crossing the bridge writes nothing twice"
   assert.deepEqual(fake.toasts, ["saving app-debug.apk…"]);
   open();
   await Promise.all([first, second]);
-  assert.deepEqual(fake.toasts, ["saving app-debug.apk…", "saved to Downloads"]);
+  assert.deepEqual(fake.toasts, ["saving app-debug.apk…"]);
 });
 
 test("a failed hand-off says the file is still on the phone", async () => {
@@ -144,7 +147,8 @@ test("one tap, one file: a finished, promised download is handed over by itself,
   assert.equal(fake.marks.get("r1|c.apk|5"), undefined, "never marked before they are");
   open();
   await flush();
-  assert.deepEqual(fake.toasts, ["saved to Downloads"], "the automatic hand-off still says where the file went");
+  assert.deepEqual(fake.toasts, []);
+  assert.match(currentReceipt()?.text ?? "", /^Saved .* to Downloads\.$/, "the automatic hand-off still says where the file went");
 });
 
 test("with the per-phone switch off, a finished download nobody tapped stays in the app", async () => {

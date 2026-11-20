@@ -386,7 +386,7 @@ export class UpdateChecker {
       }
       // A second install over a running one races it for the same link and directory (an npm
       // typed in a shell, then this button): refused in words, the running one finishes alone.
-      const other = installerRunning(claudeBackend.bin());
+      const other = await installerRunning(claudeBackend.bin());
       if (other) {
         this.info = { ...this.info, running: false, lastResult: { ok: false, at: Date.now(), message: `${installingWords("Claude Code", other)}. Nothing was started; check again when it is done.` } };
         this.onChange(this.info);

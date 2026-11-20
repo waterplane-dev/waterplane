@@ -86,9 +86,10 @@ export function queueFoldKey(rows: readonly Pick<OutboxEntry, "ackId">[], failed
 
 // ── The pending session (`pending:<createAck>`) ────────────────────────────
 
-export const PENDING_PREFIX = "pending:";
-export const isPendingId = (id: string | null | undefined): boolean => !!id?.startsWith(PENDING_PREFIX);
-export const pendingLaneId = (ackId: string) => `${PENDING_PREFIX}${ackId}`;
+import { isPendingId, makePendingId } from "./pendingId.ts";
+export { PENDING_PREFIX, LATER_PREFIX, isPendingId, isLaterId, laterId, makePendingId, parsePendingId, parseLaterId } from "./pendingId.ts";
+/** The pending screen id of a create (alias of `makePendingId`). */
+export const pendingLaneId = makePendingId;
 /**
  * **The later screen** (`pending:later:<cwd>`) — the repo header's `+ later`.
  * The same session screen as `+ now`, for words whose session starts only when
@@ -99,9 +100,6 @@ export const pendingLaneId = (ackId: string) => `${PENDING_PREFIX}${ackId}`;
  * Per REPO, not per tap: the draft is keyed by session id, so reopening
  * `+ later` finds the words left there.
  */
-export const LATER_PREFIX = `${PENDING_PREFIX}later:`;
-export const isLaterId = (id: string | null | undefined): boolean => !!id?.startsWith(LATER_PREFIX);
-export const laterId = (cwd: string) => `${LATER_PREFIX}${cwd}`;
 /** The send-queue lane for a target: a pending session's screen id is not a
  *  lane, its create's is (`create:<cwd>`), which is where the prompts and the
  *  files behind that create already queue. */

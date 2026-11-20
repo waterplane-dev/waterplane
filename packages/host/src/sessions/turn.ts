@@ -193,11 +193,13 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
 
 /** Route a hook payload to its session and hand it to claude's source.
  *  Tolerant of an unknown event or an unmatched session (no-op). */
-export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void {
+export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void { handleHook(core, payload); }
+
+function handleHook(core: SessionCore, payload: ClaudeHookPayload): void {
   const ev = String(payload?.hook_event_name || "");
   if (!ev) return;
   const s = routeHook(core, payload);
-  if (!s) return;
+  if (!s) { if (isClearStart(payload)) stashClearStart(payload); return; }
   // A hook is a claim about a session that was LAUNCHED with a hook pipe. A
   // backend that has no such mechanism cannot have sent one, so an event that
   // routed to one of its sessions routed WRONG: believing it would mark an
@@ -215,6 +217,20 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   // pipe has its channel attached — the `caps.hooks === "none"` gate this
   // replaced, stated as the fact it stood for.
   if (!claudeHookWatched(s.info.id)) return;
+  // `/clear` moves the CLI onto a NEW conversation id in the same process
+  // (2.1.326, 2026-11-18: the next delivery's hooks routed to another session
+  // in the cwd, the log check read the old conversation, and the host's re-send
+  // ran the prompt a second time). The `SessionEnd` still carries the OLD id,
+  // so it routes exactly; it stamps the session, and the `SessionStart` that
+  // follows — matched by that stamp — hands over the new id.
+  let early: ClaudeHookPayload | null = null;
+  if (ev === "SessionEnd" && payload.reason === "clear") {
+    s.clearedAt = Date.now();
+    early = takeClearStart(s.info.cwd);
+  } else if (isClearStart(payload) && s.clearedAt !== undefined) {
+    s.clearedAt = undefined;
+    core.adoptClaudeId(s, String(payload.session_id), { replace: true });
+  }
   // A fact about the SINK rather than an edge: a turn-shaped hook arrived since
   // this process attached (`Session.turnHookSeen`). `SessionEnd` never counted.
   if (ev === "SessionStart" || ev === "UserPromptSubmit" || ev === "Stop" || ev === "StopFailure") s.turnHookSeen = true;
@@ -254,6 +270,7 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   // What the hook MEANS is the source's: the pipe going live (once), then the
   // edge — through the side channel slice into `sourceTurn` below.
   postClaudeHook(s.info.id, payload);
+  if (early) handleHook(core, early); // the clear's start, which arrived first
 }
 
 /**
@@ -482,13 +499,23 @@ export function clearStopVerify(s: Session): void {
  * was never `hooked` for its whole life, and every delivery into it was filed
  * as a `deliver.submit` fallback (2.1.306, 2026-10-21: 5 of 20, all `ok`).
  */
-function routeHook(core: SessionCore, payload: { session_id?: string; cwd?: string }): Session | null {
+function routeHook(core: SessionCore, payload: ClaudeHookPayload): Session | null {
   const sid = payload.session_id;
   if (sid) {
     for (const s of core.sessions.values()) if (s.info.claudeSessionId === sid && claudeHookWatched(s.info.id)) return s;
   }
   const cwd = payload.cwd;
   if (!cwd) return null;
+  // The start of a conversation `/clear` opened belongs to the ONE session whose
+  // CLI just announced the clear — never to the cwd's newest session, which
+  // would adopt a stranger's id. None or several: unrouted (stashed, in case the
+  // `SessionEnd` is still on its way).
+  if (isClearStart(payload)) {
+    const now = Date.now();
+    const cleared = [...core.sessions.values()].filter((s) => s.info.running && s.info.cwd === cwd && s.clearedAt !== undefined
+      && now - s.clearedAt <= CLEAR_FOLLOW_MS && claudeHookWatched(s.info.id));
+    return cleared.length === 1 ? cleared[0] : null;
+  }
   let best: Session | null = null;
   let bestNoId: Session | null = null;
   for (const s of core.sessions.values()) {
@@ -498,6 +525,26 @@ function routeHook(core: SessionCore, payload: { session_id?: string; cwd?: stri
     if (!s.info.claudeSessionId && (!bestNoId || s.spawnedAt > bestNoId.spawnedAt)) bestNoId = s;
   }
   return bestNoId ?? best;
+}
+
+/** How long a `/clear`'s `SessionEnd` and `SessionStart` may lie apart, either order. */
+export const CLEAR_FOLLOW_MS = 10_000;
+
+function isClearStart(p: ClaudeHookPayload): boolean {
+  return p.hook_event_name === "SessionStart" && p.source === "clear" && typeof p.session_id === "string" && !!p.session_id;
+}
+
+/** A clear's `SessionStart` that beat its `SessionEnd` (two curl processes race), per cwd. */
+const earlyClearStarts = new Map<string, { payload: ClaudeHookPayload; at: number }>();
+
+function stashClearStart(p: ClaudeHookPayload): void {
+  if (typeof p.cwd === "string") earlyClearStarts.set(p.cwd, { payload: p, at: Date.now() });
+}
+
+function takeClearStart(cwd: string): ClaudeHookPayload | null {
+  const e = earlyClearStarts.get(cwd);
+  earlyClearStarts.delete(cwd);
+  return e && Date.now() - e.at <= CLEAR_FOLLOW_MS ? e.payload : null;
 }
 
 /** True once the hook pipe is confirmed live for this session (turn boundaries

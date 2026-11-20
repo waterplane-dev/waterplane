@@ -8,8 +8,17 @@
  *
  * `tokenstats.ts`'s store pattern, cut to ONE repo at a time: the store is
  * per-LOG summaries keyed by project directory and relative path, persisted
- * through `jsonstore.ts` (`writeJsonAtomic`, debounced, flushed on demand;
- * `readJsonGuarded`, a corrupt file moved aside and rebuilt from the logs),
+ * ONE FILE PER SLUG under `<state>/agentreadings/` through `jsonstore.ts`'s
+ * `JsonShards` (each shard `writeJsonAtomic`, debounced, flushed on demand; a
+ * corrupt shard moved aside and that slug rebuilt from the logs). A flush
+ * writes only the slugs a sweep CHANGED: the whole store saved at once was
+ * 9.3 MB, ~160 ms of `JSON.stringify` on the loop every PTY shares.
+ *
+ * Migration: the old single `agentreadings.json` seeds every slug that has no
+ * shard yet, once, and is then RENAMED to `agentreadings.json.migrated` — kept,
+ * never deleted here; `hoststore.ts` lists it under the migration leftovers a
+ * person may clear. A later release may drop the seeding code (it is a cache:
+ * without it the slugs are simply re-read from the logs).
  * and the weekly readings are DERIVED on every answer — no running aggregate
  * to drift. A request walks only the project directories whose slug is the
  * repo's (or one of its worktrees'), `stat`s each log and re-reads only the
@@ -21,7 +30,7 @@
  * Every reading degrades to ABSENT with its sentence: an unreadable project
  * directory is an error answer, never a week of zeros.
  */
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, renameSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -34,7 +43,7 @@ import { hostStateDir } from "./branddirs.js";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { repoOfWorktree } from "./costwindow.js";
 import { exposureCrashMarks } from "./exposure.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { JsonShards, readJsonGuarded } from "./jsonstore.js";
 import { walkLogs } from "./tokenscan.js";
 
 /** Bump when a summary's shape or a classification rule changes: the store then rebuilds from the logs. */
@@ -51,6 +60,15 @@ type Entry = ConvSummary | (AgentLogSummary & { sub: 1 });
 /** slug → path relative to the slug's directory (without `.jsonl`) → summary. */
 type Store = Record<string, Record<string, Entry>>;
 
+/** One shard's body: the store VERSION it was written at, and that slug's summaries. */
+interface SlugShard { v: number; files: Record<string, Entry> }
+const isSlugShard = (b: unknown): b is SlugShard =>
+  typeof b === "object" && b !== null && (b as SlugShard).v === VERSION && typeof (b as SlugShard).files === "object" && (b as SlugShard).files !== null;
+
+/** The shard directory and the pre-shard single file, under the state dir. */
+export const AGENT_SHARD_DIR = "agentreadings";
+export const AGENT_LEGACY_FILE = "agentreadings.json";
+
 const isAgent = (e: Entry): e is AgentLogSummary & { sub: 1 } => (e as { sub?: 1 }).sub === 1;
 
 /** Whether a project directory slug can hold this repo's logs: the repo's own, or a worktree's under it. */
@@ -59,23 +77,42 @@ export function slugBelongs(slug: string, repoSlug: string): boolean {
 }
 
 export class AgentReadingsStore {
-  private path: string;
+  private shards: JsonShards;
   private store: Store = {};
   private timer: NodeJS.Timeout | null = null;
-  private dirty = false;
   private swept = new Map<string, { at: number; logs: number; reread: number }>();
   private inFlight = new Map<string, Promise<void>>();
 
   /** `birthOf` is the file's creation time for the fork test; a test with dated fixtures passes `() => undefined`. */
   constructor(stateDir: string, private birthOf: (st: { birthtimeMs: number }) => number | undefined = (st) => (st.birthtimeMs > 0 ? Math.round(st.birthtimeMs) : undefined)) {
     mkdirSync(stateDir, { recursive: true });
-    this.path = join(stateDir, "agentreadings.json");
+    this.shards = new JsonShards(join(stateDir, AGENT_SHARD_DIR));
+    // A shard of another VERSION is absent: that slug is re-read from the logs and its file rewritten.
+    for (const [slug, body] of this.shards.load()) if (isSlugShard(body)) this.store[slug] = body.files;
+    this.migrate(join(stateDir, AGENT_LEGACY_FILE));
+  }
+
+  /** Seed the slugs that have no shard yet from the pre-shard single file, write them, and set the file aside as `.migrated` (kept, never deleted). Once: a failed shard write leaves the file in place for the next boot. */
+  private migrate(legacy: string): void {
     try {
-      if (existsSync(this.path)) {
-        const raw = readJsonGuarded<{ v?: number; store?: Store } | null>(this.path, null);
-        if (raw?.v === VERSION && raw.store && typeof raw.store === "object") this.store = raw.store;
+      if (!existsSync(legacy)) return;
+      const raw = readJsonGuarded<{ v?: number; store?: Store } | null>(legacy, null);
+      if (raw?.v === VERSION && raw.store && typeof raw.store === "object") {
+        for (const [slug, files] of Object.entries(raw.store)) {
+          if (this.store[slug] || !files || typeof files !== "object") continue;
+          this.store[slug] = files;
+          this.shards.mark(slug);
+        }
       }
-    } catch { /* rebuilt from the logs, which are the source anyway */ }
+      if (this.shards.flush((slug) => this.bodyOf(slug)).failed) return;
+      // A corrupt file was already moved aside by `readJsonGuarded`; an old VERSION seeds nothing and is set aside all the same.
+      if (existsSync(legacy)) renameSync(legacy, `${legacy}.migrated`);
+    } catch { /* a cache: the logs rebuild whatever was not seeded */ }
+  }
+
+  private bodyOf(slug: string): SlugShard | undefined {
+    const files = this.store[slug];
+    return files ? { v: VERSION, files } : undefined;
   }
 
   /** Bring this repo's summaries up to date (unless swept within `maxAgeMs`). Throws only on an unreadable projects directory. */
@@ -106,8 +143,10 @@ export class AgentReadingsStore {
     let logs = 0;
     let reread = 0;
     for (const slug of mine) {
-      const prev = this.store[slug] ?? {};
+      const had = this.store[slug];
+      const prev = had ?? {};
       const next: Record<string, Entry> = {};
+      const rereadBefore = reread;
       const rels = await walkLogs(join(root, slug));
       const stats = await Promise.all(rels.map((rel) => stat(join(root, slug, rel)).catch(() => null)));
       for (let i = 0; i < rels.length; i++) {
@@ -132,13 +171,17 @@ export class AgentReadingsStore {
         if (sum) next[k] = sum;
       }
       this.store[slug] = next;
+      // Only a slug that CHANGED is written: something re-read, or a summary dropped (every kept one was reused as is).
+      if (!had || reread > rereadBefore || Object.keys(next).length !== Object.keys(prev).length) this.shards.mark(slug);
     }
-    // A slug of this repo that is gone from disk is gone from the fold.
+    // A slug of this repo that is gone from disk is gone from the fold, and its shard with it.
     for (const slug of Object.keys(this.store)) {
-      if (repoSlugs.some((r) => slugBelongs(slug, r)) && !mine.includes(slug)) delete this.store[slug];
+      if (repoSlugs.some((r) => slugBelongs(slug, r)) && !mine.includes(slug)) {
+        delete this.store[slug];
+        this.shards.mark(slug);
+      }
     }
     this.swept.set(key, { at: Date.now(), logs, reread });
-    this.dirty = true;
     this.schedule();
   }
 
@@ -198,18 +241,17 @@ export class AgentReadingsStore {
   }
 
   private schedule(): void {
-    if (this.timer || !this.dirty) return;
+    if (this.timer || !this.shards.pending) return;
     this.timer = setTimeout(() => { this.timer = null; this.flush(); }, FLUSH_MS);
     this.timer.unref?.();
   }
 
+  /** Write the slugs that changed since the last flush — never the whole store. A slug whose write failed stays pending and is retried on the next sweep's flush. */
   flush(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
-    if (!this.dirty) return;
-    try {
-      writeJsonAtomic(this.path, { v: VERSION, store: this.store });
-      this.dirty = false;
-    } catch { /* a readings cache is not worth taking the daemon down for */ }
+    if (!this.shards.pending) return;
+    // A readings cache is not worth taking the daemon down for: `JsonShards.flush` never throws.
+    this.shards.flush((slug) => this.bodyOf(slug));
   }
 }
 

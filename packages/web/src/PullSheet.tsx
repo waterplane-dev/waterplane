@@ -11,6 +11,7 @@ import { browserPullAsk, downloadAction, downloadStatus, pullGone, stripRows } f
 import { fmtSize } from "./format";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { TITLE } from "./sheetNames";
 import { RadioRows, Button, Row, RowTitle, RowSub, Hint } from "./kit";
 import { Empty } from "./Empty";
 import { hostBase, isNativeShell } from "./hostUrl";
@@ -204,7 +205,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
 
   return (
     <div className="sheet">
-      <SheetHead title={<><CloudDownload size={16} /> Downloads</>} onClose={onClose} />
+      <SheetHead title={<><CloudDownload size={16} /> {rulesFor ? TITLE.pull.replace(/ - repo$/, ` - ${repos.find((r) => r.worktreePath === rulesFor)?.repoName ?? "repo"}`) : TITLE.pull.replace(/ - repo$/, "")}</>} onClose={onClose} />
 
       {/* The two questions this sheet answers — "where is my file" and "what
           gets fetched at all" — as two panes rather than three stacked sections.

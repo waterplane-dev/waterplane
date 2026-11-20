@@ -52,6 +52,9 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
+/* The launcher's bar has one row of keys under the session tabs: at 6px it touched the tab
+   strip and the first repo card (owner, 2026-11-19). The session header keeps its tight bar. */
+.topbar.launcher-top { padding-top: var(--sp-12); padding-bottom: var(--sp-12); }
 .brand { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); flex: 0 0 auto; }
 /* The launcher menu's host row (features/hosts/HostMenuItem.tsx): a long
    desktop name ellipsizes instead of widening the row. */
@@ -144,7 +147,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    name and this `--ui-font` — it is `.hdr-row2`, one child holding both of the
    things that share the second row, with a 100% basis that can only ever start
    a line. */
-.sess-top { border-left: 3px solid var(--repo-accent, transparent); padding-left: var(--sp-6); }
+.sess-top { border-left: 3px solid var(--repo-stripe, var(--repo-accent, transparent)); padding-left: var(--sp-6); }
 /* The title takes the first row: it is the only thing up here worth a row, and
    it is the one thing that wraps. (The launcher's `.brand` is a 40px logo that
    must stay beside the menu, which is why this is `.sess-top` and not
@@ -184,6 +187,8 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    basis is what makes it a ROW rather than something that fits beside the title
    when the title is short and does not when it is long. */
 .hdr-row2 { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: var(--sp-6); }
+/* A queued open keeps one control (drop the open): it rides on the title row, not a row of its own. */
+.sess-top.pending .hdr-row2 { flex: 0 0 auto; margin-left: auto; }
 /* The icon buttons, as ONE flex child of that row, pushed to its end — grouped
    so the row can break between the chips and the controls and never between
    the controls themselves, which is what made the fourth row. */
@@ -544,6 +549,18 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    against `.screen` — and the cap is lifted in that mode anyway. */
 .sess-chrome { flex: 0 0 auto; min-height: 0; }
 .sess-chrome.capped { overflow: hidden; }
+/* The session screen's bottom stack is whole or absent (`useWholeBars.ts`):
+   only the terminal shrinks — a bar that scrolls sideways had a minimum height
+   of 0 and was squeezed into a clipped band with the keyboard up. A bar that
+   does not fit is taken away whole, then the header's status line; when it
+   still does not fit, the header frame clips from its bottom (as the grip's cap does). */
+.screen[data-whole-bars] > :not(.term-area) { flex-shrink: 0; }
+.screen[data-whole-bars] > [data-nofit],
+.screen[data-whole-bars] > .sess-chrome > [data-nofit] { display: none !important; }
+.screen[data-squeezed] > .sess-chrome { flex-shrink: 1; overflow: hidden; }
+/* A card that carries the screen's one action (an ended session's reopen) is never squeezed out of
+   existence: the terminal keeps room for it, so the bars above and below give way first. */
+.screen[data-whole-bars] > .term-area:has(.term-overlay.as-card .term-overlay-acts) { min-height: 64px; }
 /* The grip: a thin bar under the frame with a handle drawn in it, and a taller
    invisible hit area so a fingertip finds it without it costing a row. */
 .sess-chrome-grip {
@@ -559,3 +576,6 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .sess-chrome-grip:is(:focus-visible, :active)::after { background: var(--accent); }
 /* The launcher's grip says it in words: what it cuts can be a banner. */
 .sess-chrome-grip.worded { height: 20px; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+
+.toolbar-group-head { flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); opacity: .7; padding: var(--sp-6) var(--sp-8) 0; }
+.toolbar-group { display: contents; }

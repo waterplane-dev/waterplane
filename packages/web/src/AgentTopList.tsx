@@ -61,25 +61,28 @@ export function AgentTopList({ agents, models, picked, onPick }: {
 export const AGENT_WARN_CHOICES = [200_000, 300_000, 400_000, 500_000] as const;
 
 /**
- * "warn when an agent passes" - labelled chips, the current one lit. A value
+ * "warn when one subagent passes" - labelled chips, the current one lit. A value
  * synced from elsewhere that is none of the four is SAID rather than hidden.
  * It warns (chip, toast, push) and never stops an agent.
  */
-export function AgentWarnLine({ value, onChange }: { value: number; onChange: (tok: number) => void }) {
+export function AgentWarnLine({ value, onChange, lit = true }: { value: number; onChange: (tok: number) => void; lit?: boolean }) {
   const custom = !AGENT_WARN_CHOICES.some((t) => t === value);
   return (
     <div className="agent-warn">
-      <div className="ts-filter agent-warn-row" role="group" aria-label="warn when an agent passes">
-        <span className="ctx-stackpick-lab">warn when an agent passes</span>
-        {AGENT_WARN_CHOICES.map((t) => (
-          <Button className={t === value ? "active" : undefined} key={t} aria-pressed={t === value} onClick={() => onChange(t)}>
-            {fmtTokens(t)}
-          </Button>
-        ))}
+      <div className="agent-warn-row" role="group" aria-label="warn when one subagent passes">
+        <span className="ctx-stackpick-lab">warn when one subagent passes</span>
+        <div className="agent-warn-chips">
+          {AGENT_WARN_CHOICES.map((t) => (
+            <Button className={lit && t === value ? "active" : undefined} key={t} aria-pressed={lit && t === value} onClick={() => onChange(t)}>
+              {fmtTokens(t)}
+            </Button>
+          ))}
+        </div>
       </div>
       <div className="ctx-cost-note">
+        {lit ? "" : `Now ${fmtTokens(value)}. `}
         {custom ? `Set to ${fmtTokens(value)} elsewhere. ` : ""}
-        It warns you - a chip on the session, a toast and a push - and never stops an agent. Syncs to the desktop, which sends the push.
+        Warns only, never stops an agent.
       </div>
     </div>
   );

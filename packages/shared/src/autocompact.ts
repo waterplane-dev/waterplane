@@ -119,7 +119,7 @@ export function parseAutoCompactWindow(raw: unknown): AutoCompactValue {
   if (/^auto$/i.test(s)) return { kind: "auto" };
   const m = /^(\d+(?:\.\d+)?)\s*([kKmM]?)$/.exec(s);
   if (!m) return { kind: "unparseable", raw };
-  const mult = m[2] === "" ? 1 : /k/i.test(m[2]) ? 1_000 : 1_000_000;
+  const mult = m[2] === "" ? 1 : /k/i.test(m[2]!) ? 1_000 : 1_000_000;
   const tokens = Math.round(Number(m[1]) * mult);
   return tokens > 0 ? { kind: "size", tokens } : { kind: "unparseable", raw };
 }

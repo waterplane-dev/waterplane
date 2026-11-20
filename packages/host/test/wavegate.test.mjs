@@ -181,7 +181,7 @@ function limitRig(ids) {
   };
   ids.forEach((id, i) => core.sessions.set(id, {
     info: { id, cwd: `/r/${id}`, running: true, limit: { blocked: true, blockedSince: 100 + i, nextAttemptAt: 5, attempts: 1 } },
-    killed: false, resurrectTimer: null,
+    killed: false,
   }));
   const slice = new ResumeSlice(core);
   const done = () => { slice["gate"].dispose(); rmSync(core.root, { recursive: true, force: true }); };
@@ -237,7 +237,7 @@ function netRig(ids) {
   ids.forEach((id, i) => core.sessions.set(id, {
     info: { id, title: id, running: true, cwd: `/nowhere/${id}`, limit: null, prompt: null, awaitingInput: false,
       netRetry: { state: "waiting", attempt: 0, max: 3, nextAt: Date.now(), error: "Can't reach the API server (ENOTFOUND)", at: 100 + i } },
-    turnActive: false, lastDataAt: 0, stopCount: 0, netTimer: null, netRecheck: null,
+    turnActive: false, lastDataAt: 0, stopCount: 0,
   }));
   const done = () => { for (const s of core.sessions.values()) slice.clear(s); slice["gate"].dispose(); };
   return { slice, core, writes, done };

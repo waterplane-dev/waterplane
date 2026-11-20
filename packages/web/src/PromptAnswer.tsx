@@ -186,7 +186,7 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
       {p.freeText && (
         <TypedAnswer
           key={`free-${p.askId ?? p.question}`}
-          intro={p.options.length ? "or type your own answer" : "type your answer"}
+          intro={p.options.length ? "Type something else" : "Type your answer"}
           placeholder="your answer"
           send={(text) => { track(`action:${ev}.typed`); onAnswer("", `“${clip(text)}”`, undefined, undefined, text); }}
         />
@@ -208,8 +208,14 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
             onClick={() => { track(`action:${ev}.submit`); onAnswer("\r", submitWord, true); }}
           >{submitWord} ⏎</button>
         )}
-        <button className="approve-esc" onClick={() => { track(`action:${ev}.esc`); onAnswer("\x1b", "Esc"); }}>Esc</button>
       </div>
+      {/* Esc is a key, not a choice: it lives in the keys row below, never beside the choices (R-ui-121). */}
+      <details className="approve-more">
+        <summary>More keys</summary>
+        <div className="approve-commit">
+          <button className="approve-esc" onClick={() => { track(`action:${ev}.esc`); onAnswer("\x1b", "Esc"); }}>Esc</button>
+        </div>
+      </details>
     </>
   );
 }

@@ -26,22 +26,21 @@ const no = (from, to, re, typeOnly = false) => {
 
 test("today's edges are all allowed", () => {
   for (const f of ["api.ts", "backlog.ts", "deliver.ts", "fanout.ts", "opendeliveries.ts", "review.ts"]) ok(f, "sessions");
-  for (const f of ["assess.ts", "backlog.ts", "builds.ts", "capture.ts", "fanout.ts", "review.ts"]) ok(f, "intents/manager");
+  for (const f of ["assess.ts", "backlog.ts", "builds.ts", "fanout.ts", "review.ts"]) ok(f, "intents/manager");
   for (const f of ["assess.ts", "backlog.ts", "builds.ts", "fanout.ts", "review.ts"]) ok(f, "intents/adapters");
   ok("intents/adapters.ts", "intents/manager");
   ok("backends/claude.ts", "echo");
-  ok("capture/window.ts", "host");
   ok("routes/session.ts", "intents/adapters");
   ok("routes/session.ts", "backends");
   ok("routes/types.ts", "intents/manager");
   ok("routes/types.ts", "sessions");
   ok("routes/index.ts", "routes/types");
   ok("routes/index.ts", "routes/session");
-  for (const t of ["sessions", "intents/manager", "intents/adapters", "routes", "backends", "capture", "api"]) ok("main.ts", t);
+  for (const t of ["sessions", "intents/manager", "intents/adapters", "routes", "backends", "api"]) ok("main.ts", t);
 });
 
 test("main is imported by nobody, and imports anything", () => {
-  for (const f of ["api.ts", "routes/index.ts", "server/http.ts", "sessions.ts", "sessions/wall.ts", "backends/claude.ts", "capture/window.ts"]) {
+  for (const f of ["api.ts", "routes/index.ts", "server/http.ts", "sessions.ts", "sessions/wall.ts", "backends/claude.ts"]) {
     no(f, "main", /entry point is never a library/);
     no(f, "main", /entry point/, true);
   }
@@ -149,10 +148,10 @@ test("api.ts is the HTTP router: it imports the routes/api* tables, and no table
   no("routes/apisystem.ts", "server/http", /never reaches back/);
 });
 
-test("backends/ and capture/ are leaves over flat modules", () => {
+test("backends/ is a leaf over flat modules", () => {
   ok("backends/claude.ts", "echo");
   ok("backends/index.ts", "backends/claude");
-  for (const f of ["backends/claude.ts", "capture/window.ts"]) {
+  for (const f of ["backends/claude.ts"]) {
     for (const t of ["sessions", "sessions/core", "intents/manager", "routes", "server/ctx"]) {
       no(f, t, /leaf/);
       no(f, t, /leaf/, true);

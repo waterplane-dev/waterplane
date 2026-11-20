@@ -640,7 +640,7 @@ A card that would keep a secret open with no end or for a reboot says when that 
 - note: refusing until rated is an open owner decision. Not tried on a phone; the card journey fails at HEAD for other reasons, so the rendered cards are unchecked.
 
 ### R-vault-120 · shipped
-Many secrets can be rated from their estimates with one fingerprint, from the not-rated list on the phone only. Wide estimates that end nothing start ticked; narrow ones and any row that would lose a standing grant or a boot unlock start unticked and say what ends. The card lists every row, a row that changed since the card is refused in words while the others are rated, and each rating records that it came from an estimate in a batch. No program or agent can start it.
+Many secrets can be rated from their estimates with one fingerprint, from the not-rated list on the phone only. Wide estimates that end nothing start ticked; narrow ones and any row that would lose a standing grant or a boot unlock start unticked and say what ends. The card lists every row, a secret that was removed, stored again or whose policy changed since the card refuses the whole card in words (nothing is rated), a row whose ends moved or whose proposal is gone is refused in words while the others are rated, and each rating records that it came from an estimate in a batch. No program or agent can start it.
 - asked: 2026-11-07
 - shipped: 5e15707c, 516ca2e7, 90fa3707
 
@@ -886,3 +886,7 @@ A rating's basis is labelled: the person's own choice, AI's best guess accepted,
 Scheduled Garmin jobs run without a daily phone approval: the broad Garmin credential stays in GCP Secret Manager behind a cloud function, and only a narrow service account that can invoke it is a standing vault grant; whole-account secrets are never standing grants.
 - asked: 2026-11-14
 
+
+### R-vault-168 · requested
+An ask outlived by a newer one — a program's release card whose program stopped waiting, with a newer ask or an approval since for the same secrets, command and folder — is marked on the waiting list, moves to its foot, and all of them are dismissed together by one tap (one confirm; each denied and closed).
+- asked: 2026-11-19 (screenshot: six FRED_API_KEY cards from one program after one was approved)

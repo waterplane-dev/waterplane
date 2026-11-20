@@ -305,7 +305,7 @@ export function sessionCostOfSeries(
   live?: CacheAge | null,
 ): SessionCostReading | null {
   if (!samples.length) return null;
-  const tok = samples[samples.length - 1].tok;
+  const tok = samples[samples.length - 1]!.tok;
   if (!(tok > 0)) return null;
   const f = seriesCostFields(samples, truncated, turns);
   return sessionCost({

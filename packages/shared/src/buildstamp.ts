@@ -108,6 +108,6 @@ export function parseBuildRecords(text: string): BuildRecord[] {
 export function recordsByName(records: BuildRecord[], keep = 10): Record<string, BuildRecord[]> {
   const by: Record<string, BuildRecord[]> = {};
   for (const r of records) (by[r.name] ??= []).push(r);
-  for (const k of Object.keys(by)) by[k] = by[k].sort((a, b) => b.at - a.at).slice(0, keep);
+  for (const k of Object.keys(by)) by[k] = by[k]!.sort((a, b) => b.at - a.at).slice(0, keep);
   return by;
 }

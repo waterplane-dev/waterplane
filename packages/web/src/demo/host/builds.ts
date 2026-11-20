@@ -13,7 +13,7 @@
 import type { BuildConfig, BuildRun } from "@waterplane/shared";
 import { mint } from "./model.ts";
 import type { Desk } from "./model.ts";
-import type { DemoVerdict, Msg } from "./verdict.ts";
+import { notInDemo, type DemoVerdict, type Msg } from "./verdict.ts";
 
 export interface DemoBuilds {
   repoDir: string;
@@ -25,7 +25,7 @@ export interface DemoBuilds {
   refuse?: { [buildId: string]: string };
 }
 
-export const NO_DESKTOP = "Builds run commands on your desktop — the demo has no desktop to run them on. Connect your own to build.";
+export const NO_DESKTOP = notInDemo("run your build command and hand you the result");
 
 /** `build.run`: the row a fire started, answered by the run's id (the receipt the sheet selects by). */
 export function fireBuild(d: Desk, msg: Msg<"build.run">): DemoVerdict {

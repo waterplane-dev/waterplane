@@ -383,10 +383,10 @@ export function convoStart(s: SessionInfo): ConvoStart {
  * Compact token + cost formatting for the metering display (`metered … calls
  * · … tok · $…`) and the header's context-window chip.
  *
- * NOT `@waterplane/shared`'s `fmtTok`/`fmtUsd`, and deliberately not swapped for them
- * in this move: those round tokens to whole `k` (`1234` → `1k`, here `1.2k`)
- * and give cents from `$0.01` up (here from `$1`), so swapping would change
- * what these two screens say. Lifted from `App.tsx` unchanged.
+ * `fmtTok` is NOT shared's: that rounds tokens to whole `k` (`1234` → `1k`,
+ * here `1.2k`). `fmtUsd` IS shared's — one dollar formatter (2 decimals, 2
+ * significant digits under a cent); the old four-decimals-under-$1 copy that
+ * lived here is gone (owner decision 2026-11-18).
  */
 export const fmtTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
-export const fmtUsd = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toFixed(4)}` : "$0");
+export { fmtUsd } from "@waterplane/shared";

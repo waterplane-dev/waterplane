@@ -26,13 +26,18 @@
  * state they mutate lives.
  */
 
-/** The seven group ids — the `group` a feature's settings rows name
- *  (`SettingsRowsDef` in `sdk/types.ts`). */
-export type SettingsGroupId = "sessions" | "notifications" | "appearance" | "writing" | "offline" | "connection" | "tools";
+/** The six SECTIONS Settings draws, named after the task that brings a person
+ *  there (whole-app journey spec D6). A row's `group` below is its section. */
+export type SettingsSectionId = "sessions" | "notifications" | "appearance" | "offline" | "connection" | "limits";
 
-/** A group of rows, in the order Settings draws them. */
+/** The group a feature's settings rows name (`SettingsRowsDef` in `sdk/types.ts`): a section id, or one
+ *  of the two retired groups ("writing", "tools") a manifest may still name — `sectionOfGroup` says
+ *  where those land. Code ids are never renamed, only where they are drawn. */
+export type SettingsGroupId = SettingsSectionId | "writing" | "tools";
+
+/** A section of rows, in the order Settings draws them. */
 export interface SettingGroupMeta {
-  id: SettingsGroupId;
+  id: SettingsSectionId;
   /** The heading, exactly as it reads on screen. */
   title: string;
 }
@@ -40,8 +45,8 @@ export interface SettingGroupMeta {
 /** One row — a switch, a choice, an action, a stepper or a slider. */
 export interface SettingRowMeta {
   id: string;
-  /** Owning group id. */
-  group: SettingsGroupId;
+  /** Owning section id (an extension's row may name a retired group; `addSettingRows` maps it). */
+  group: SettingsSectionId;
   /** The label on the row, as it reads on screen. */
   label: string;
   /**
@@ -53,24 +58,37 @@ export interface SettingRowMeta {
 }
 
 /**
- * Seven groups, ordered by what brings a person here.
- *
- * The order is deliberate and is not the old one: the top of this screen used
- * to be a readout (token statistics) because it was the one thing that was not
- * a switch, which is a reason to give it a home, not a reason to make it the
- * first thing anybody scrolls past. What actually brings somebody to Settings
- * is a session behaving differently from how they want it to, so that is first;
- * diagnostics — the things you open once and read — are last.
+ * Six sections, each named after a task (spec D6, Q10). Settings opens with
+ * all six folded: the headings are the table of contents, and the 100-odd
+ * rows under them were past the point where scrolling finds anything. What
+ * brings somebody here is a session behaving differently from how they want
+ * it to, so that is first. "Tools & diagnostics" and "Writing & reading" are
+ * gone: their rows went to the task each one serves.
  */
 export const SETTING_GROUPS: SettingGroupMeta[] = [
-  { id: "sessions", title: "Sessions" },
+  { id: "sessions", title: "Start sessions" },
   { id: "notifications", title: "Notifications" },
-  { id: "appearance", title: "Appearance" },
-  { id: "writing", title: "Writing & reading" },
-  { id: "offline", title: "Offline & data" },
-  { id: "connection", title: "Connection" },
-  { id: "tools", title: "Tools & diagnostics" },
+  { id: "appearance", title: "Look and feel" },
+  { id: "offline", title: "Phone and offline" },
+  { id: "connection", title: "Desktops and connection" },
+  { id: "limits", title: "Limits and cost" },
 ];
+
+/** Where a manifest's group is drawn when the row itself does not say (an extension's row). */
+const GROUP_SECTION: Record<SettingsGroupId, SettingsSectionId> = {
+  sessions: "sessions", notifications: "notifications", appearance: "appearance", offline: "offline",
+  connection: "connection", limits: "limits", writing: "appearance", tools: "connection",
+};
+
+/** The section a manifest's group lands in. */
+export function sectionOfGroup(g: SettingsGroupId | string): SettingsSectionId {
+  return GROUP_SECTION[g as SettingsGroupId] ?? "connection";
+}
+
+/** A section's heading. */
+export function sectionTitle(id: string): string | undefined {
+  return SETTING_GROUPS.find((g) => g.id === id)?.title;
+}
 
 /*
  * A group carries no keywords of its own, deliberately.
@@ -101,36 +119,36 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "launch-permission", group: "sessions", label: "permission mode", keywords: "approvals dangerous skip ask tool calls yolo bypass" },
   { id: "launch-remote", group: "sessions", label: "remote control", keywords: "claude.ai steer remote-control" },
   { id: "launch-ask", group: "sessions", label: "ask before each launch", keywords: "prompt every time silently defaults pick" },
-  { id: "week-all-desktops", group: "sessions", label: "count every paired desktop", keywords: "week share percent calibration peer desktop spend weekly limit other machine sum" },
-  { id: "spend-warn", group: "sessions", label: "spend marks", keywords: "cost warning orange red triangle threshold dollars percent week alert expensive api" },
+  { id: "week-all-desktops", group: "limits", label: "count every paired desktop", keywords: "week share percent calibration peer desktop spend weekly limit other machine sum" },
+  { id: "spend-warn", group: "limits", label: "spend marks", keywords: "cost warning orange red triangle threshold dollars percent week alert expensive api" },
   { id: "confirm-close", group: "sessions", label: "ask before closing a session", keywords: "close confirm uncommitted unmerged warning don't ask again dialog" },
   { id: "close-when-done", group: "sessions", label: "close automatic sessions when done", keywords: "backlog scheduled linger keep open reap slot auto-close" },
   { id: "local-sessions", group: "sessions", label: "local model sessions at once", keywords: "ollama qwen gpu runner local model limit cap one at a time concurrent" },
   { id: "hosted-notice", group: "sessions", label: "hosted-model notice", keywords: "privacy disclaimer acknowledge server third party leaves machine" },
-  { id: "limit-auto", group: "sessions", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
+  { id: "limit-auto", group: "limits", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
   { id: "net-retry", group: "sessions", label: "retry on network errors", keywords: "network wifi offline dns outage api error continue retry automatic connection lost" },
-  { id: "budget", group: "sessions", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
-  { id: "budget-session", group: "sessions", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
-  { id: "automation", group: "sessions", label: "automation", keywords: "schedule schedules clock cron runs on its own backlog auto peer" },
-  { id: "weekburn", group: "sessions", label: "week-end burn", keywords: "this week's burn spend leftover unused budget subscription repos improve" },
-  { id: "budget-weekly", group: "sessions", label: "weekly ceiling", keywords: "week cap percent reserve" },
-  { id: "budget-leftover", group: "sessions", label: "leftovers in a new week", keywords: "leftover reset week spare budget before reset waiver" },
-  { id: "billing-profile", group: "sessions", label: "billing profile", keywords: "api key subscription bedrock vertex cloud account detect override console" },
-  { id: "billing-periods", group: "sessions", label: "dollar periods and caps", keywords: "month monthly week day spend cap budget dollars billing cycle anchor rolling span time zone limit" },
+  { id: "budget", group: "limits", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
+  { id: "budget-session", group: "limits", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
+  { id: "automation", group: "sessions", label: "Waiting work", keywords: "automation scheduled schedule schedules clock cron runs on its own backlog auto peer" }, // glossary-ignore: the old name, kept as a search word
+  { id: "weekburn", group: "limits", label: "Usage pace", keywords: "week-end burn usage pace this week's burn spend leftover unused budget subscription repos improve" }, // glossary-ignore: the old name, kept as a search word
+  { id: "budget-weekly", group: "limits", label: "weekly ceiling", keywords: "week cap percent reserve" },
+  { id: "budget-leftover", group: "limits", label: "leftovers in a new week", keywords: "leftover reset week spare budget before reset waiver" },
+  { id: "billing-profile", group: "limits", label: "billing profile", keywords: "api key subscription bedrock vertex cloud account detect override console" },
+  { id: "billing-periods", group: "limits", label: "dollar periods and caps", keywords: "month monthly week day spend cap budget dollars billing cycle anchor rolling span time zone limit" },
   { id: "ask-rules", group: "sessions", label: "ask before", keywords: "ask rules permission confirm git push force main master deploy publish dangerous irreversible guard tap prod release" },
   { id: "auto-compact-default", group: "sessions", label: "auto-compact window", keywords: "autoCompactWindow compact context 400k repo setup settings.json threshold" },
 
   // ── Notifications ──────────────────────────────────────────────────────
-  { id: "notif-feed", group: "notifications", label: "open the feed", keywords: "alerts unread inbox in-app list bell notification" },
+  { id: "notif-push", group: "notifications", label: "Notifications on this phone", keywords: "os push web push system notification https secure context service worker" },
+  { id: "notif-feed", group: "notifications", label: "In-app feed", keywords: "notifications alerts unread inbox in-app list bell notification" },
   { id: "notif-info-push", group: "notifications", label: "push information too", keywords: "receipts buzz quiet information pushes push" },
   { id: "notif-kinds", group: "notifications", label: "what may fire", keywords: "mute kinds needs you limit cli backlog prompt not delivered per type" },
   { id: "phone-setup", group: "notifications", label: "phone setup", keywords: "permission allow android background notifications install unknown apps checklist" },
-  { id: "notif-push", group: "notifications", label: "OS push", keywords: "web push system notification https secure context service worker" },
   { id: "notif-shell-link", group: "notifications", label: "background link", keywords: "android apk foreground service app closed freezer wake" },
   { id: "notif-shell-battery", group: "notifications", label: "allow background use", keywords: "battery doze exemption reboot android optimisation optimization" },
 
   // ── Appearance ─────────────────────────────────────────────────────────
-  { id: "theme", group: "appearance", label: "theme", keywords: "dark light mode night follow device colour color scheme" },
+  { id: "theme", group: "appearance", label: "Theme", keywords: "dark light mode night match phone follow device colour color scheme" },
   { id: "text-size", group: "appearance", label: "text size", keywords: "font bigger smaller larger zoom readable accessibility scale" },
   { id: "icon-size", group: "appearance", label: "icon size", keywords: "glyph bigger smaller tap target thumb scale" },
   { id: "terminal-zoom", group: "appearance", label: "terminal size", keywords: "console font columns rows grid pty wrap diff cli zoom" },
@@ -149,41 +167,41 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "ui-reset", group: "appearance", label: "reset UI settings to default", keywords: "restore defaults factory look layout hidden buttons theme size zoom tabs strips" },
 
   // ── Writing & reading ──────────────────────────────────────────────────
-  { id: "enter-sends", group: "writing", label: "what Return does", keywords: "enter key send newline keyboard compose submit" },
-  { id: "dictate-lang", group: "writing", label: "dictation is read as", keywords: "voice speech microphone mic whisper language german english translate transcribe auto detect" },
-  { id: "dictate-langs", group: "writing", label: "languages on the microphone", keywords: "voice speech dictation picker list offer languages mic which" },
-  { id: "dictate-local", group: "writing", label: "local dictation", keywords: "voice speech whisper microphone model install setup local desktop download brew" },
-  { id: "dictate-terms", group: "writing", label: "words dictation should know", keywords: "voice speech vocabulary glossary dictionary custom terms names jargon misheard recognise spelling whisper prompt" },
-  { id: "close-kb-on-send", group: "writing", label: "keyboard after Send", keywords: "keyboard close hide dismiss blur send focus" },
-  { id: "shortcut-card", group: "writing", label: "hold Ctrl to see shortcuts", keywords: "keyboard shortcut shortcuts chord hotkey cheat sheet ctrl cmd command alt option modifier hold card" },
-  { id: "busy-send", group: "writing", label: "Send while it works", keywords: "send busy working turn running queue when free ask now wait" },
-  { id: "btw-to-cli", group: "writing", label: "/btw from the reader", keywords: "btw aside overlay cli terminal switch ask reader" },
-  { id: "typing-room", group: "writing", label: "typing room", keywords: "hide chrome header keyboard space terminal rows full" },
-  { id: "reader-tools", group: "writing", label: "tool calls in the reader", keywords: "transcript fold list full download details offline" },
-  { id: "hints-mode", group: "writing", label: "button hints", keywords: "explain long press help tooltip first time" },
-  { id: "hints-explain", group: "writing", label: "explain mode", keywords: "help what does this button do tap" },
-  { id: "hints-chip", group: "writing", label: "? button in the headers", keywords: "help question mark explain chip hide remove space header launcher" },
-  { id: "hints-reset", group: "writing", label: "explain them again", keywords: "reset dismissed hints help" },
+  { id: "enter-sends", group: "appearance", label: "what Return does", keywords: "enter key send newline keyboard compose submit" },
+  { id: "dictate-lang", group: "appearance", label: "dictation is read as", keywords: "voice speech microphone mic whisper language german english translate transcribe auto detect" },
+  { id: "dictate-langs", group: "appearance", label: "languages on the microphone", keywords: "voice speech dictation picker list offer languages mic which" },
+  { id: "dictate-local", group: "appearance", label: "local dictation", keywords: "voice speech whisper microphone model install setup local desktop download brew" },
+  { id: "dictate-terms", group: "appearance", label: "words dictation should know", keywords: "voice speech vocabulary glossary dictionary custom terms names jargon misheard recognise spelling whisper prompt" },
+  { id: "close-kb-on-send", group: "appearance", label: "keyboard after Send", keywords: "keyboard close hide dismiss blur send focus" },
+  { id: "shortcut-card", group: "appearance", label: "hold Ctrl to see shortcuts", keywords: "keyboard shortcut shortcuts chord hotkey cheat sheet ctrl cmd command alt option modifier hold card" },
+  { id: "busy-send", group: "appearance", label: "Send while it works", keywords: "send busy working turn running queue when free ask now wait" },
+  { id: "btw-to-cli", group: "appearance", label: "/btw from the reader", keywords: "btw aside overlay cli terminal switch ask reader" },
+  { id: "typing-room", group: "appearance", label: "typing room", keywords: "hide chrome header keyboard space terminal rows full" },
+  { id: "reader-tools", group: "appearance", label: "tool calls in the reader", keywords: "transcript fold list full download details offline" },
+  { id: "hints-mode", group: "appearance", label: "button hints", keywords: "explain long press help tooltip first time" },
+  { id: "hints-explain", group: "appearance", label: "explain mode", keywords: "help what does this button do tap" },
+  { id: "hints-chip", group: "appearance", label: "? button in the headers", keywords: "help question mark explain chip hide remove space header launcher" },
+  { id: "hints-reset", group: "appearance", label: "explain them again", keywords: "reset dismissed hints help" },
 
   // ── Offline & data ─────────────────────────────────────────────────────
   { id: "install", group: "offline", label: "install this app", keywords: "pwa home screen add standalone chrome ios safari" },
   { id: "auto-send", group: "offline", label: "auto-send the queue", keywords: "offline queued messages reconnect deliver hold send now" },
   { id: "serial-sessions", group: "offline", label: "one session at a time per repo", keywords: "queue parallel serialize worktree agents limit" },
   { id: "confirm-queue", group: "offline", label: "ask on reconnect", keywords: "queue review before sending offline drafts stale" },
-  { id: "queue-manage", group: "offline", label: "manage the queue", keywords: "queued messages waiting outbox" },
+  { id: "queue-manage", group: "offline", label: "Waiting work", keywords: "manage the queue queued queued messages waiting outbox" }, // glossary-ignore: the old name, kept as a search word
   { id: "bg-fresh", group: "offline", label: "in the background", keywords: "battery drain power hidden background stream offline dead zone fresh latest screen catch up" },
   { id: "data-saver", group: "offline", label: "data saver", keywords: "roaming hotel bandwidth smaller images polling mobile" },
   { id: "downloads", group: "offline", label: "downloads", keywords: "pull files artifacts background fetch resume auto copy once duplicate space keep" },
   { id: "upload-scale", group: "offline", label: "upload size", keywords: "image width shrink annotator camera photo auto slow link" },
 
   // ── Connection ─────────────────────────────────────────────────────────
-  { id: "hosts", group: "connection", label: "hosts", keywords: "desktop address daemon apk android pair change ip switch add remove lan wifi peer desktops tailnet tailscale computer machine" },
+  { id: "hosts", group: "connection", label: "Desktops", keywords: "desktop address daemon apk android pair change ip switch add remove lan wifi peer desktops tailnet tailscale computer machine" },
   { id: "code-folder", group: "connection", label: "Code folder", keywords: "root repos folder scan dev projects directory path where desktop host workspace env variable" },
-  { id: "add-desktop", group: "connection", label: "add a desktop", keywords: "new desktop host computer machine pc mac linux windows tailnet tailscale found discover scan add pair peer" },
-  { id: "web-desktops", group: "connection", label: "another desktop, without the app", keywords: "browser web pwa no app without apk iphone ios pair second desktop another phone home screen address tailnet code" },
+  { id: "add-desktop", group: "connection", label: "Add a desktop", keywords: "new desktop host computer machine pc mac linux windows tailnet tailscale found discover scan add pair peer" },
+  { id: "web-desktops", group: "connection", label: "Another desktop, in a browser", keywords: "browser web pwa no app without apk iphone ios pair second desktop another phone home screen address tailnet code" },
   { id: "demo", group: "connection", label: "try the demo", keywords: "demo sample example pretend fake tour first look leave play store reviewer" },
-  { id: "pair-phone", group: "connection", label: "pair another phone", keywords: "qr code pairing new phone add device scan invite tailscale" },
-  { id: "paired-devices", group: "connection", label: "paired devices", keywords: "revoke sign in token phones ledger last seen remove device" },
+  { id: "pair-phone", group: "connection", label: "Add another phone", keywords: "qr code pairing new phone add device scan invite tailscale" },
+  { id: "paired-devices", group: "connection", label: "Phones signed in", keywords: "revoke sign in token phones ledger last seen remove device" },
   { id: "app-version", group: "connection", label: "app version", keywords: "apk update build install shell android" },
   { id: "endpoints", group: "connection", label: "how you reach this host", keywords: "url address lan tailscale https tunnel origin reopen connection" },
   { id: "lan-password", group: "connection", label: "LAN password", keywords: "auth gate local network secure token login public" },
@@ -194,21 +212,21 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "sync-push", group: "connection", label: "push this device's settings", keywords: "sync host copy conflict templates presets pad toolbar wins" },
 
   // ── Tools & diagnostics ────────────────────────────────────────────────
-  { id: "token-stats", group: "tools", label: "token statistics", keywords: "usage cost spend money per day model repo cache history tokens" },
-  { id: "tool-secret", group: "tools", label: "secret", keywords: "api key write only env credential" },
-  { id: "desktop-setup", group: "tools", label: "desktop setup", keywords: "checklist mac screen recording accessibility permission grant live desktop helper privacy security system settings" },
-  { id: "tool-repo-setup", group: "tools", label: "repo setup", keywords: "checklist gitignore claude.md context weight check fix" },
-  { id: "tool-speedtest", group: "tools", label: "speed test", keywords: "bandwidth latency diagnostics connection throughput" },
-  { id: "tool-net-health", group: "tools", label: "connection health", keywords: "link prompts delivery retries lost dropped" },
-  { id: "tool-storage", group: "tools", label: "storage", keywords: "space full disk bytes cache clear downloads thumbnails quota evicted free up" },
-  { id: "tool-cli-health", group: "tools", label: "CLI health", keywords: "heuristics detector hook echo probe conversation log broken degraded" },
-  { id: "tool-features", group: "tools", label: "feature usage", keywords: "which features used never analytics track" },
-  { id: "tool-host-stat", group: "tools", label: "host stat", keywords: "cpu memory load desktop mac pressure temperature" },
-  { id: "whats-new", group: "tools", label: "what's new", keywords: "release version changelog new features overview 0.1.8 automation burn downloads notifications" },
-  { id: "tool-updates", group: "tools", label: "updates", keywords: "update self plugin install available new version restart roll back" },
-  { id: "tool-decisions", group: "tools", label: "decision log", keywords: "activity auto-continue usage limit what a plugin answered suggested history archive" },
-  { id: "updates-auto", group: "tools", label: "check daily for updates", keywords: "update plugin automatic check github new version" },
-  { id: "plugins", group: "tools", label: "plugins", keywords: "plugin extension add-on installed oracle gemini enable disable" },
+  { id: "token-stats", group: "limits", label: "Token usage", keywords: "usage cost spend money per day model repo cache history tokens" },
+  { id: "tool-secret", group: "connection", label: "Add a secret", keywords: "api key write only env credential" },
+  { id: "desktop-setup", group: "connection", label: "desktop setup", keywords: "checklist mac screen recording accessibility permission grant live desktop helper privacy security system settings" },
+  { id: "tool-repo-setup", group: "sessions", label: "Setup & health", keywords: "repo setup readings checklist gitignore claude.md context weight check fix" }, // glossary-ignore: the old name, kept as a search word
+  { id: "tool-speedtest", group: "connection", label: "Speed test", keywords: "bandwidth latency diagnostics connection throughput" },
+  { id: "tool-net-health", group: "connection", label: "Connection", keywords: "connection health link prompts delivery retries lost dropped" }, // glossary-ignore: the old name, kept as a search word
+  { id: "tool-storage", group: "offline", label: "Storage", keywords: "space full disk bytes cache clear downloads thumbnails quota evicted free up" },
+  { id: "tool-cli-health", group: "connection", label: "CLI health", keywords: "heuristics detector hook echo probe conversation log broken degraded" },
+  { id: "tool-features", group: "appearance", label: "feature usage", keywords: "which features used never analytics track" },
+  { id: "tool-host-stat", group: "connection", label: "host stat", keywords: "cpu memory load desktop mac pressure temperature" },
+  { id: "whats-new", group: "offline", label: "what's new", keywords: "release version changelog new features overview 0.1.8 automation burn downloads notifications" },
+  { id: "tool-updates", group: "connection", label: "updates", keywords: "update self plugin install available new version restart roll back" },
+  { id: "tool-decisions", group: "sessions", label: "decision log", keywords: "activity auto-continue usage limit what a plugin answered suggested history archive" },
+  { id: "updates-auto", group: "connection", label: "check daily for updates", keywords: "update plugin automatic check github new version" },
+  { id: "plugins", group: "connection", label: "plugins", keywords: "plugin extension add-on installed oracle gemini enable disable" },
 ];
 
 /** Row lookup, built once — search runs on every keystroke. */
@@ -271,9 +289,10 @@ function pinIncludes(only: string, rowId: string): boolean {
   return p === null ? rowId === only : scopeRowIds(p).includes(rowId);
 }
 
-export function addSettingRows(rows: readonly SettingRowMeta[], owner?: string): void {
-  for (const r of rows) {
-    if (BY_ID.has(r.id)) continue;
+export function addSettingRows(rows: readonly (Omit<SettingRowMeta, "group"> & { group: SettingsGroupId })[], owner?: string): void {
+  for (const raw of rows) {
+    if (BY_ID.has(raw.id)) continue;
+    const r: SettingRowMeta = { ...raw, group: sectionOfGroup(raw.group) };
     if (owner) OWNED.set(r.id, owner);
     EXTRA.push(r);
     BY_ID.set(r.id, r);
@@ -402,4 +421,62 @@ export function filterSummary(shown: number, total: number, query: string, only?
   if (!q) return "";
   if (shown === 0) return `nothing matches “${q}” — ${total} settings on this screen`;
   return `${shown} of ${total} settings match “${q}”`;
+}
+
+// ── search over screens (whole-app journey spec D6, T21) ────────────────────
+
+/** Feature rows whose section is not their manifest group's default (`sectionOfGroup`), keyed by the
+ *  settings table's row key `<feature id>:<index in its settings list>` (`core/featureRun.ts`). The
+ *  screen places a feature's rows by this, and `settingsIndex.test.mjs` holds the catalogue to it. */
+export const FEATURE_ROW_SECTION: Readonly<Record<string, SettingsSectionId>> = {
+  "limits:0": "limits", // auto-continue after a usage limit, the usage budget and its ceilings
+  "tokens:0": "limits", // Token usage
+  "tokens:1": "limits", // billing profile, dollar periods and caps
+  "tokens:2": "limits", // count every paired desktop
+  "weekburn:0": "limits", // Usage pace
+  "plugins:1": "sessions", // decision log
+  "whatsnew:0": "offline", // what's new
+};
+
+/** The section a feature's settings row (by its table key and manifest group) is drawn in. */
+export function sectionOfFeatureRow(key: string, group: SettingsGroupId | string): SettingsSectionId {
+  return FEATURE_ROW_SECTION[key] ?? sectionOfGroup(group);
+}
+
+/** One screen the search box offers. */
+export interface ScreenResult {
+  /** The overlay it opens. */
+  to: string;
+  /** The words drawn: the title, and the tab of a merged screen ("Waiting work › Backlog"). */
+  name: string;
+  /** Where it lives elsewhere in the app ("Home menu"), or null when Settings is its only door. */
+  where: string | null;
+}
+
+/** A door's place, said as a person finds it. */
+const FROM_WORDS: Record<string, string> = {
+  "home": "Home", "home menu": "Home menu", "repo row": "a repo on Home", "repo menu": "a repo's menu on Home",
+  "status strip": "the status strip", "session header": "a session's header", "toolbar menu": "a session's toolbar menu",
+  "composer": "the prompt box", "send menu": "Send's menu", "settings": "Settings", "notification": "a notification",
+  "welcome": "the welcome card",
+};
+
+interface DoorLike { label: string; from: string; to: string | null; title: string; tab?: string }
+
+/**
+ * Screens whose title, tab or words answer `query` — `rowMatches`' rule (every term, a substring).
+ * `search` are the search doors (`doors/settings.ts` `SEARCH_DOORS`), `words` their extra words,
+ * `all` every door in the registry (where else each screen is reached from). Empty for an empty query.
+ */
+export function screenResults(query: string, search: readonly DoorLike[], words: Readonly<Record<string, string | undefined>>, all: readonly DoorLike[]): ScreenResult[] {
+  if (!query.trim()) return [];
+  const out: ScreenResult[] = [];
+  for (const d of search) {
+    if (!d.to) continue;
+    const hay = [d.label, d.title, d.tab, words[d.to]].filter(Boolean).join(" ");
+    if (!wordsMatch(hay, query)) continue;
+    const other = all.find((x) => x.to === d.to && x.from !== "search" && x.from !== "settings" && FROM_WORDS[x.from]);
+    out.push({ to: d.to, name: d.tab ? `${d.title} › ${d.tab}` : d.title, where: other ? FROM_WORDS[other.from]! : null });
+  }
+  return out;
 }

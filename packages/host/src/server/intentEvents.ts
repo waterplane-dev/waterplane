@@ -189,11 +189,11 @@ export function wireIntentEvents(ctx: ServerCtx): void {
     // false alarm this rework exists to stop.
     if (!isBacklogRow(i)) return;
     if (i.state === "done") {
-      ctx.notify("backlog", { title: "Backlog item done", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog", outcome: "ok" });
+      ctx.notify("backlog", { title: "Backlog item done", body: i.label || textOf(i), sessionId: i.sessionId, backlog: { cwd: i.cwd, ids: [i.id] }, tag: "backlog", outcome: "ok" });
       return;
     }
     if (i.state === "failed") {
-      ctx.notify("backlog", { title: "Backlog item not delivered", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog", outcome: "failed" });
+      ctx.notify("backlog", { title: "Backlog item not delivered", body: i.label || textOf(i), sessionId: i.sessionId, backlog: { cwd: i.cwd, ids: [i.id] }, tag: "backlog", outcome: "failed" });
     }
   });
 

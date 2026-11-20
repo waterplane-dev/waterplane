@@ -84,3 +84,14 @@ test("coderoot: the doctor says a found root was derived, and leads the missing 
   assert.equal(m.status, "fail");
   assert.match(m.fix, /^Create \/nowhere\/dev and clone .*mkdir \/nowhere\/dev.*service install --force/s);
 });
+
+test("doctor port row: only our own code root is called 'running'; anything else is just 'a host answers'", async () => {
+  const { portHostDetail } = await import("../dist/doctor.js");
+  assert.match(portHostDetail(8770, { root: "/h/dev" }, "/h/dev"), /host is running on port 8770/);
+  const other = portHostDetail(8770, { root: "/home/other/dev" }, "/h/dev");
+  assert.match(other, /host answers on port 8770 \(code root \/home\/other\/dev, not \/h\/dev\)/);
+  assert.doesNotMatch(other, /is running/);
+  const unknown = portHostDetail(8770, { root: null }, "/h/dev");
+  assert.match(unknown, /host answers on port 8770$/);
+  assert.doesNotMatch(unknown, /is running/);
+});

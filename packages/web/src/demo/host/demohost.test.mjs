@@ -114,11 +114,11 @@ test("every refused message ends its sender's wait with its own receipt, or a to
 
 test("a tier-B op re-sent with the same ackId is re-acked from the ledger, identically", () => {
   const { conn, frames, host } = harness();
-  conn.receive({ t: "capture.run", repoDir: "todo", ackId: "k1" });
-  conn.receive({ t: "capture.run", repoDir: "todo", ackId: "k1" });
+  conn.receive({ t: "assess.apply", repoDir: "todo", ackId: "k1" });
+  conn.receive({ t: "assess.apply", repoDir: "todo", ackId: "k1" });
   const acks = frames().filter((m) => m.t === "op.ack");
   assert.equal(acks.length, 2);
-  assert.deepEqual(acks[0], { t: "op.ack", ackId: "k1", ok: false, reason: HANDLERS["capture.run"].reason });
+  assert.deepEqual(acks[0], { t: "op.ack", ackId: "k1", ok: false, reason: HANDLERS["assess.apply"].reason });
   assert.deepEqual(acks[1], acks[0]);
   assert.deepEqual(Object.keys(host.snapshot().acks), ["k1"]);
 });
@@ -477,8 +477,8 @@ test("intent.post writes a row once per id; schedule.save upserts on its id", ()
 
 test("the sheet-open reads answer with empty lists, not toasts", () => {
   const h = harness(desk());
-  for (const t of ["build.list", "capture.list", "fanout.list", "launch.list"]) h.conn.receive({ t, repoDir: REPO });
-  assert.deepEqual(h.frames().map((m) => m.t), ["build.list", "capture.list", "fanout.list", "launch.list"]);
+  for (const t of ["build.list", "fanout.list", "launch.list"]) h.conn.receive({ t, repoDir: REPO });
+  assert.deepEqual(h.frames().map((m) => m.t), ["build.list", "fanout.list", "launch.list"]);
 });
 
 test("HTTP: repos, gallery, seen, scrollback, storage answer; the rest is 404 in words", () => {
@@ -498,7 +498,7 @@ test("HTTP: repos, gallery, seen, scrollback, storage answer; the rest is 404 in
   assert.equal(JSON.parse(get("/api/health").body).sessions, 1);
   const miss = h.host.request({ method: "POST", path: "/api/host/screenshot" });
   assert.equal(miss.status, 404);
-  assert.match(miss.body, /own desktop/);
+  assert.match(miss.body, /on your desktop this would/);
 });
 
 test("limit and prompt faults change the session the way the host's parsed state would", () => {

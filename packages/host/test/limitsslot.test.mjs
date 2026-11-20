@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { WallSlice, hasAccountLimit } = await import("../dist/sessions/wall.js");
+const { pending } = await import("../dist/sessions/timers.js");
 const { detectLimitText } = await import("../dist/limit.js");
 const { stripAnsi } = await import("../dist/prompt.js");
 const { resolveBackend } = await import("../dist/backends/index.js");
@@ -56,7 +57,7 @@ function harness(backend) {
   const wall = new WallSlice(core);
   const s = {
     info: { id: "s1", cwd: root, running: true, title: "demo", ...(hasAccountLimit(backend) ? { limit: wall.newLimitState() } : {}) },
-    backend, scrollback: "", limitTimer: null, spawnedAt: Date.now(),
+    backend, scrollback: "", spawnedAt: Date.now(),
   };
   sessions.set("s1", s);
   const done = () => { wall.clearLimitTimer(s); for (const t of timers) clearTimeout(t); };
@@ -155,14 +156,14 @@ test("source wall: blocked with no reset ⇒ blocked, undated, and NOTHING sched
   assert.equal(l.resetAt, null);
   assert.equal(l.weekly, false, "a source never arms the weekly special case");
   assert.equal(l.nextAttemptAt, null, "no probe, no ladder");
-  assert.equal(h.s.limitTimer, null, "no timer armed");
+  assert.equal(pending(h.s, "wall"), false, "no timer armed");
   assert.equal(l.needsYou, "no credit", "the backend's own words reach the phone");
   assert.deepEqual(h.events, ["updated", "limit:blocked"], "blocked is said; nothing is scheduled");
-  // The minute sweep re-asks (`markLimitBlocked`'s `!s.limitTimer` branch), and an attempt the
+  // The minute sweep re-asks (`markLimitBlocked`'s `!pending(s, "wall")` branch), and an attempt the
   // queue bounced passes an `atOverride`: neither arms anything.
   h.wall.checkLimit(h.s);
   h.wall.scheduleLimitAttempt(h.s, Date.now() + 60_000);
-  assert.equal(h.s.limitTimer, null);
+  assert.equal(pending(h.s, "wall"), false);
   assert.equal(l.nextAttemptAt, null);
   h.done();
 });
@@ -194,11 +195,11 @@ test("source wall: DATED then undated ⇒ the armed attempt is dropped, nothing 
   const h = harness(acme({ wall: () => ({ blocked: true, ...(resetAt ? { resetAt } : {}), why: "no credit" }) }));
   live(h);
   h.wall.checkLimit(h.s);
-  assert.ok(h.s.limitTimer, "dated: armed");
+  assert.ok(pending(h.s, "wall"), "dated: armed");
   resetAt = undefined;
   h.wall.checkLimit(h.s);
   assert.equal(h.s.info.limit.needsYou, "no credit");
-  assert.equal(h.s.limitTimer, null, "the dated timer is gone");
+  assert.equal(pending(h.s, "wall"), false, "the dated timer is gone");
   assert.equal(h.s.info.limit.nextAttemptAt, null);
   h.done();
 });

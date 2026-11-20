@@ -9,13 +9,15 @@ import { core } from "../../sdk";
 import type { NetHealthFocus } from "../../NetHealthSheet";
 import type { LocalRtFocus } from "../../LocalRtBar";
 import { localRtFocus, netFocus } from "./store";
+import { connectionTab } from "../../connTest";
 
 /** Open the connection-health sheet at one reading's section. */
 export function openNetHealth(focus: NetHealthFocus | undefined): void {
   const c = core();
   c.say.track("overlay:nethealth");
   netFocus.set(focus);
-  c.nav.open("nethealth");
+  connectionTab.set("health");
+  c.nav.open("connection");
 }
 
 /** Open the local-runtime sheet at one reading's section. */

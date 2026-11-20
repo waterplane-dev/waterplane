@@ -1,5 +1,5 @@
 /**
- * The one-line notices above the list: *auto is off*, the add field's
+ * The one-line notices above the list: the add field's
  * leftover draft (rescued, never dropped), why there is no wait verb, and
  * the offline line.
  *
@@ -9,45 +9,9 @@
  */
 import { SendHorizontal, X } from "lucide-react";
 import { ConfirmButton } from "../Confirm";
-import { Explain } from "../Explain";
 import type { BacklogModel } from "./backlogTypes";
 import { Button } from "../kit/Button";
 import { Hint } from "../kit/Hint";
-
-export function AutoOffNote({ m }: { m: BacklogModel }) {
-  const { focusWords, p } = m;
-  return (
-    <>
-      {/* What `auto off` actually stops, said where it is switched. Every
-          *when it's free* post in the app is now an `auto` row — the composer's,
-          the send sheet's, this sheet's — so this one-word switch pauses every
-          deferred send on the desktop, not just "the backlog". Off, it was a
-          chip reading `auto off` and nothing else, next to a list that had
-          simply stopped moving.
-
-          **ONE RULE, ONE COPY.** `focusRunWords` says the same thing about the
-          rows on screen, with the switch beside it, and an ids cut therefore
-          had *auto is off on this desktop* twice on one phone screen, six lines
-          apart. It is drawn here exactly when that sentence is NOT — the
-          condition is the sentence itself and not `filter.ids`, because the
-          sentence goes `null` whenever nothing in the cut was going to start,
-          and dropping the banner on the cut alone would take the fact off the
-          screen entirely. */}
-      {/* **…and the sheet's head already says it** (`auto off`, where the switch
-          is), so the fact is not drawn a second time: what is left of the
-          sentence is what the head cannot hold — how far the switch reaches —
-          and it sits behind a `?`, closed. */}
-      {!p.auto && !focusWords && (
-        <div className="form"><Hint>
-          <Explain of="auto off" label="what does auto off stop?">
-            <b>auto</b> is off on this desktop: nothing queued anywhere runs until you turn it back on or
-            fire an item by hand.
-          </Explain>
-        </Hint></div>
-      )}
-    </>
-  );
-}
 
 export function StrandedDraft({ m }: { m: BacklogModel }) {
   const { dropStrandedDraft, p, repoDir, strandedDraft } = m;

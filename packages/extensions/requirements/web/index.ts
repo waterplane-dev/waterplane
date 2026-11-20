@@ -20,12 +20,12 @@ import { REQUIREMENTS_ROW } from "./setupRow.ts";
 function menuLabel(repo: RepoTarget): string {
   void ensureSummary(repo);
   const r = summaries.get().get(repo.id)?.res;
-  if (!r?.ok) return "requirements";
-  if (!r.result.setUp) return "requirements — not set up";
-  return `requirements · ${r.result.requested} requested`;
+  if (!r?.ok) return "Requirements";
+  if (!r.result.setUp) return "Requirements · not set up";
+  return `Requirements · ${r.result.requested} requested`;
 }
 
-/** A count on the line is a filter: "131 requested" opens exactly those, the sheet says "n of N — clear". */
+/** A count on the line is a filter: "12 requested" opens exactly those, the sheet says "n of N — clear". */
 function requestedCut(repo: RepoTarget): ReqCut | undefined {
   const r = summaries.get().get(repo.id)?.res;
   return r?.ok && r.result.setUp && r.result.requested > 0 ? { status: "requested", area: null } : undefined;

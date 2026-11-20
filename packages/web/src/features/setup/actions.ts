@@ -7,18 +7,41 @@ import { core } from "../../sdk";
 import { REPO_HEALTH_EVENT } from "../../demoEntry";
 import { aimAfterFile, remedySeed } from "./logic";
 import { healthRepo, setupAim, setupRepo, type SetupAim } from "./store";
+import { healthPlace, leaveHealth, placeHealth, regionOfSection, sectionOfRegion, switchHealth, type HealthPlace } from "../../setupHealth";
 
-/** The checklist, on a repo (or the sheet's own choice with `null`), aimed. */
+/** Setup & health on a readings section (the region a door names), on a repo (or the sheet's own choice with `null`). */
 export function openSetup(repoId: string | null, aim: SetupAim = {}): void {
   setupRepo.set(repoId);
   setupAim.set(aim);
+  placeHealth("setup", { tab: "repo", section: sectionOfRegion(aim.region) });
   core().nav.open("setup");
 }
 
-/** Region 2 — the repo-health series — through its own alias key. */
+/** Setup & health on Health score — through the `repohealth` alias key (stored routes still name it). */
 export function openRepoHealth(repo: RepoTarget): void {
   healthRepo.set(repo);
+  setupRepo.set(repo.id);
+  setupAim.set({ region: "series" });
+  placeHealth("repohealth", { tab: "repo", section: "score" });
   core().nav.open("repohealth");
+}
+
+/** The frame's readings body: aimed at a repo and a section by a section tap (`setupHealth.ts`). */
+export function enterReadings(repoId: string | null, place: HealthPlace): void {
+  const w = core().world;
+  const id = repoId ?? setupRepo.get() ?? healthRepo.get()?.id ?? w.activeRepo?.id ?? w.repos.find((r) => r.isPrimary)?.id ?? null;
+  setupRepo.set(id);
+  setupAim.set({ region: regionOfSection(place.section) });
+}
+
+/** The Sessions section's skills door: the Skills section of the same screen, never a second sheet. */
+export function toSkillsSection(repoId: string): void {
+  const c = core();
+  setupRepo.set(repoId);
+  const self = c.nav.overlay;
+  const at = healthPlace.get();
+  const from: HealthPlace = at && at.self === self ? at.place : { tab: "repo", section: "sessions" };
+  switchHealth(self, from, { tab: "repo", section: "skills" });
 }
 
 /**
@@ -43,19 +66,13 @@ export function seedSend(seed: SendSeed): void {
   core().nav.openSend(seed);
 }
 
-/** Region 3's `open captures` — the capture sheet is another feature's, so it
- *  is reached through the core. */
-export function openCaptureFromReadings(repo: RepoTarget): void {
-  core().nav.openCapture(repo);
-}
-
 /** A file from the readings (the longest-files tape), whose close comes back
  *  here — to region 2, the region the tap came from. */
 export function openRepoFile(repoId: string, relPath: string): void {
   const c = core();
   c.say.track("action:files.fromReadings");
   const back = c.nav.overlay;
-  if (back === "setup") setupAim.set(aimAfterFile(setupAim.get()));
+  if (back === "setup" || back === "repohealth" || back === "health") setupAim.set(aimAfterFile(setupAim.get()));
   c.files.browseTo(repoId, relPath, back);
 }
 
@@ -63,6 +80,7 @@ export function closeSetup(): void {
   const c = core();
   setupRepo.set(null);
   setupAim.set({});
+  leaveHealth("setup");
   c.nav.close("setup");
   c.world.refreshRepos();
 }
@@ -81,8 +99,19 @@ export function bootRepoHealthEvent(): () => void {
   return () => window.removeEventListener(REPO_HEALTH_EVENT, on);
 }
 
+/** The `health` id's own close (a stored route or a door that named the merged screen). */
+export function closeHealth(): void {
+  setupRepo.set(null);
+  setupAim.set({});
+  leaveHealth("health");
+  core().nav.close("health");
+  core().world.refreshRepos();
+}
+
 export function closeRepoHealth(): void {
   healthRepo.set(null);
+  setupRepo.set(null);
+  leaveHealth("repohealth");
   core().nav.close("repohealth");
 }
 
@@ -94,7 +123,7 @@ export function openInstructionFile(repoId: string, relPath: string): void {
   const c = core();
   c.say.track("action:files.fromReadings");
   const back = c.nav.overlay;
-  if (back === "setup") setupAim.set({ ...setupAim.get(), region: "agents" });
+  if (back === "setup" || back === "repohealth" || back === "health") setupAim.set({ ...setupAim.get(), region: "agents" });
   c.files.browseTo(repoId, relPath, back);
 }
 

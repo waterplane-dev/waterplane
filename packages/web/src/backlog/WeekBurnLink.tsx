@@ -19,16 +19,16 @@ export function WeekBurnLink({ m, repoDir }: { m: BacklogModel; repoDir: string 
   const ids = p.items.filter((it) => it.repoDir === repoDir && isWeekBurnOrigin(it.origin)).map((it) => it.id);
   const text = p.nav.weekBurnText?.(repoDir) ?? null;
   return (
-    <div className="form bl-repobar">
-      {text && <Hint as="span"><Flame size={13} style={{ verticalAlign: "-2px" }} /> {text}</Hint>}
+    <>
       {ids.length > 0 && p.nav.onOpenCut && (
         <Button onClick={() => { track("action:backlog.weekburnrows"); p.nav.onOpenCut!(repoDir, ids, weekBurnRowsLabel(ids.length)); }}>
           {weekBurnRowsLabel(ids.length)}
         </Button>
       )}
       <Button onClick={() => { track("action:backlog.weekburn"); p.nav.onOpenWeekBurn!(); }}>
-        {!text && <Flame size={14} />} week-end burn…
+        {!text && <Flame size={14} />} usage pace…
       </Button>
-    </div>
+      {text && <Hint as="span"><Flame size={13} style={{ verticalAlign: "-2px" }} /> {text}</Hint>}
+    </>
   );
 }

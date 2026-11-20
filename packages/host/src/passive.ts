@@ -64,14 +64,17 @@ export function passiveAllows(
 }
 
 /** Writes a passive row may NEVER make, unlocked or not. */
-const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke"]);
+const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke", "/api/host/root"]);
 
 /**
  * Auth MATERIAL is out of a passive row's reach even while it is unlocked: a
  * pairing code (it mints a full token), a revoke, a peer pairing, the LAN
- * identity secret. The unlock lifts the device to full scope for 30 minutes;
- * each of these would outlive it as a credential or an auth change in its own
- * right. `/api/auth/token` and `/api/auth/pin` refuse a passive row the same
+ * identity secret — and the code root (`POST /api/host/root` persists it and
+ * restarts the host). The unlock lifts the device to full scope for 30 minutes;
+ * each of these would outlive it as a credential or a change in its own right.
+ * Every `/api/(auth|pair|devices|lan|peers|peer)` route literal in the host is
+ * classified in `packages/host/test/passiveroutes.test.mjs`, so a new one fails
+ * there until somebody decides. `/api/auth/token` and `/api/auth/pin` refuse a passive row the same
  * way in `server/http.ts`, and the WebSocket `auth.*` ops in `routes/system.ts`.
  * Pure: `passive.test.mjs` asks it.
  */

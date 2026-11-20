@@ -37,7 +37,7 @@ import { bgFetch, bgJson } from "./api";
 import { deviceToken, dropDeviceToken, onBearerRejected, pickDeviceName, setDeviceToken } from "./deviceToken";
 import { setHostRoute, type HostRouteView } from "./hostRoute";
 import { activeHost, browserKV, listHosts, realHosts, setHostPins } from "./hosts";
-import { baseOfDial, invalidateSavedHostBase, isNativeShell, netOwedNow, plainBaseNow, plainHostRoute, readTicketLeft, routeBase, savedBasePinned, savedHostBase, setReadTicket, setRouteBase, tokenWithheld, whenNetRead, wsUrl } from "./hostUrl";
+import { baseOfDial, invalidateSavedHostBase, isNativeShell, netOwedNow, pinnedRouteBase, plainBaseNow, plainHostRoute, readTicketLeft, routeBase, savedBasePinned, savedHostBase, setReadTicket, setRouteBase, tokenWithheld, whenNetRead, wsUrl } from "./hostUrl";
 import { isDemo } from "./demo/mode";
 import { deviceModel, deviceName } from "./deviceInfo";
 import { createLanRouter, fallbackGone, lanDialOf, lanDropOnSave, lanOnlyBase, lanOnlySentence, lanProbeAnswered, newNonce, parseLanIdentity, pinSyncPlan, refusalFits, troubleSentence, verifyLanAnswer, welcomePinPlan, type LanIdentity, type LanRouter, type LanVerdict, type RouteTrouble, type TokenState } from "./lanRoute";
@@ -166,13 +166,15 @@ const TICKET_RETRY_MS = 5 * 60_000;
 let ticketTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Hold a read ticket while the saved route is a pinned LAN address, and only then: on a tailnet base
+ * Hold a read ticket while `abs()` would build on a pinned LAN address, and only then: the route in
+ * force when it is one (`pinnedRouteBase`), else the saved route when IT is one. On a tailnet base
  * `abs()` needs none, and the desktop honours one only over TLS. Renewed quietly before it runs out;
- * a frozen page's timer is late, so every `welcome` asks too.
+ * a frozen page's timer is late, so every `welcome` asks too — which is also what moves the ticket
+ * when the route moves, since every route change redials.
  */
 async function renewTicket(): Promise<void> {
-  const base = savedHostBase();
-  if (!base || !savedBasePinned()) { setReadTicket(null); return; }
+  const base = pinnedRouteBase() ?? (savedBasePinned() ? savedHostBase() : null);
+  if (!base) { setReadTicket(null); return; }
   if (readTicketLeft(base, Date.now()) > TICKET_RENEW_MS) return;
   const got = await bgJson<{ ticket?: unknown; exp?: unknown }>("/api/auth/read-ticket", { method: "POST" }, 8000);
   const fresh = got && typeof got.ticket === "string" && typeof got.exp === "number" ? { wt: got.ticket, exp: got.exp } : null;

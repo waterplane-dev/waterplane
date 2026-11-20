@@ -93,7 +93,11 @@ export function createScan(ctx: ServerCtx) {
         ...(fail ?? { outcome: "ok" as const }),
       });
     } else {
-      ctx.notify("info", { title: `Build “${run.name}” ${verdict}`, body: run.cwd, tag: `build-${run.runId}`, ...(fail ?? { outcome: "ok" as const }) });
+      ctx.notify("info", {
+        title: `Build “${run.name}” ${verdict}`, body: run.cwd, tag: `build-${run.runId}`,
+        open: { to: "build", repoId, buildId: run.buildId },
+        ...(fail ?? { outcome: "ok" as const }),
+      });
     }
   }
 

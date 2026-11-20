@@ -42,7 +42,7 @@ import { DEFAULT_SPEED_MB, openConnTest } from "./connTest";
 import { Button } from "./kit/Button";
 import { SetLine, SetNote, SetWarn } from "./SettingsKit";
 import { plainHostRoute } from "./hostUrl";
-import { SHEET } from "./sheetNames";
+import { SHEET, TITLE } from "./sheetNames";
 
 const ICON = 16;
 
@@ -68,10 +68,12 @@ interface Props {
    * report on a problem that is being handled. So the count is a button.
    */
   notDelivered: number;
-  /** The sends still on their way, oldest first: what "1 unsaved" is. */
+  /** The sends still on their way, oldest first: what "1 not sent" is. */
   heldSends: readonly { ackId: string; text: string; cwd: string; ts: number }[];
   /** Section to scroll to and flash on open (see `NetHealthFocus`). */
   focus?: NetHealthFocus;
+  /** Drawn inside the Connection screen (`ConnectionSheet.tsx`): no sheet frame and no head of its own. */
+  embedded?: boolean;
   /**
    * Open Activity — where the sends that stopped now live, one row each.
    *
@@ -116,7 +118,7 @@ function Stat({ label, value, note, onClick, title }: { label: string; value: st
     : <div className="nh-stat" title={title}>{body}</div>;
 }
 
-export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOpenActivity, onOpenStorage, focus }: Props) {
+export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOpenActivity, onOpenStorage, focus, embedded }: Props) {
   const [host, setHost] = useState<HostLinkStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [armed, setArmed] = useState(false); // two-tap guard on reset
@@ -204,11 +206,18 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
   const codes = Object.entries(host?.sockets.closeCodes ?? {}).sort((a, b) => b[1] - a[1]);
   const meanLife = host && host.sockets.closed > 0 ? host.sockets.totalOpenMs / host.sockets.closed : null;
   return (
-    <div className="sheet">
-      <SheetHead title="Connection health" icon={<Activity size={ICON} />} onClose={onClose}>
-        <Button title="re-read the host's own counters" onClick={() => void load()}><RotateCcw size={ICON} /></Button>
-      </SheetHead>
+    <div className={embedded ? undefined : "sheet"} style={embedded ? { display: "contents" } : undefined}>
+      {embedded ? null : (
+        <SheetHead title={TITLE.connection} icon={<Activity size={ICON} />} onClose={onClose}>
+          <Button title="re-read the desktop's own counters" onClick={() => void load()}><RotateCcw size={ICON} /></Button>
+        </SheetHead>
+      )}
       <div className="sheet-body">
+        {embedded ? (
+          <SetLine>
+            <Button title="re-read the desktop's own counters" onClick={() => void load()}><RotateCcw size={ICON} /> read again</Button>
+          </SetLine>
+        ) : null}
         <RangeBar h={history} />
         <p className={`nh-verdict nh-${v.tone}`}>{v.text}</p>
         {stuck > 0 && (
@@ -241,7 +250,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, heldSends, onOp
           * actually there.
           */}
         <section className="set-group" ref={focus === "sends" && notDelivered === 0 ? focusRef : undefined}>
-          <h3 className="set-title">On this device only</h3>
+          <h3 className="set-title">Waiting to send</h3>
           {link.outstanding > 0 ? (
             <SetNote as="span" className="nh-unsaved">
               <CloudUpload size={ICON} style={{ verticalAlign: "-2px" }} />{" "}

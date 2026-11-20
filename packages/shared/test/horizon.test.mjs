@@ -63,7 +63,7 @@ test("nothing armed at all still gets a word — silence would read as 'nothing 
   const h = scheduleHorizon([{ nextAt: null }, { nextAt: null }], NOW);
   // The truth is "everything scheduled is stuck", which is the opposite of
   // "there is nothing scheduled" and is the state worth surfacing.
-  assert.equal(horizonWords(h), "2 not armed");
+  assert.equal(horizonWords(h), "2 waiting for the first usage reading");
 });
 
 test("an empty list says NOTHING — a '0 scheduled' badge trains people to ignore badges", () => {

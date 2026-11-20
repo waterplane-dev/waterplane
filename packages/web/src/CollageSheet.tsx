@@ -235,12 +235,16 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
                 <img src={thumbUrl(it)} alt={it.name} />
                 <span className="collage-chip-n">{i + 1}</span>
                 <div className="collage-chip-acts">
-                  <Button disabled={i === 0} title="earlier" onClick={() => move(i, -1)}>
-                    <MoveLeft size={14} />
-                  </Button>
-                  <Button disabled={i === items.length - 1} title="later" onClick={() => move(i, 1)}>
-                    <MoveRight size={14} />
-                  </Button>
+                  {i > 0 && (
+                    <Button title="earlier" onClick={() => move(i, -1)}>
+                      <MoveLeft size={14} />
+                    </Button>
+                  )}
+                  {i < items.length - 1 && (
+                    <Button title="later" onClick={() => move(i, 1)}>
+                      <MoveRight size={14} />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

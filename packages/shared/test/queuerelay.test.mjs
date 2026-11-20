@@ -162,3 +162,9 @@ test("relayRefusal: the one accept rule both ends ask", () => {
   assert.equal(relayRefusal(null), "not a frame");
   assert.equal(relayRefusal([]), "not a frame");
 });
+
+test("a held backlog add carries hold, and a plain one does not", () => {
+  const base = { ackId: "a1", sessionId: "/r", cwd: "/r", text: "park this", ts: 1, status: "queued", attempts: 0, mode: "backlog" };
+  assert.equal(entryFrame({ ...base, hold: true }).hold, true);
+  assert.equal("hold" in entryFrame(base), false);
+});

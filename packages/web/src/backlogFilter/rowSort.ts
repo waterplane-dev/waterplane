@@ -20,7 +20,7 @@ export type BacklogSort = "newest" | "run";
 
 export const SORT_LABEL: Record<BacklogSort, string> = {
   newest: "newest first",
-  run: "run order",
+  run: "start order",
 };
 
 /** What the switch says while the list is NOT in run order: why the move verbs are absent. */

@@ -35,7 +35,7 @@ function rig() {
   };
   const s = {
     info: { id: "s1", title: "backlog · r · x", running: true, cwd: root, netRetry: null },
-    turnActive: false, lastDataAt: 0, stopCount: 0, netTimer: null, netRecheck: null,
+    turnActive: false, lastDataAt: 0, stopCount: 0,
   };
   sessions.set("s1", s);
   return { slice: new NetRetrySlice(core), s, writes };

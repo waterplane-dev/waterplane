@@ -42,7 +42,7 @@ function tokensOf(selector) {
 
 test("THEME_TOKENS is every colour token on :root — no more, no fewer", () => {
   const root = tokensOf(':root, [data-theme="dark"]');
-  const NOT_COLOURS = new Set(["--term-bg", "--repo-sat", "--repo-lit"]);
+  const NOT_COLOURS = new Set(["--term-bg", "--repo-sat", "--repo-lit", "--repo-stripe-lit", "--repo-edge-mix"]);
   const expect = root.filter((t) => !t.endsWith("-rgb") && !NOT_COLOURS.has(t));
   assert.deepEqual([...THEME_TOKENS].sort(), [...new Set(expect)].sort());
   for (const t of THEME_RGB_TOKENS) assert.ok(root.includes(`${t}-rgb`), `${t}-rgb is declared, so ${t} is overridden through it`);

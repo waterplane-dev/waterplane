@@ -107,7 +107,7 @@ export function isStowed(slot: string, key: string): boolean {
 }
 
 /** First fold on this device says where the strip went; later ones are a receipt by sight. */
-export const STOW_TOLD = "folded away — the arrow button with a count in the terminal's corner brings it back";
+export const STOW_TOLD = "hidden — the arrow button with a count in the terminal's corner brings it back";
 
 export function stow(slot: string, key: string): void {
   marks = pruneStowed({ ...load(), [stowMark(slot, key)]: Date.now() }, Date.now());

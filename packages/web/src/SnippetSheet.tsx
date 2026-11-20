@@ -135,8 +135,8 @@ export function SnippetSheet({
             <button className="row-title snippet-title" title={s.text} onClick={() => setEditing(s)}>
               {s.title || autoTitle(s.text)}
             </button>
-            <Button title="move up" disabled={i === 0} onClick={() => move(s.id, -1)}><ArrowUp size={16} /></Button>
-            <Button title="move down" disabled={i === arr.length - 1} onClick={() => move(s.id, 1)}><ArrowDown size={16} /></Button>
+            {i > 0 && <Button title="move up" onClick={() => move(s.id, -1)}><ArrowUp size={16} /></Button>}
+            {i < arr.length - 1 && <Button title="move down" onClick={() => move(s.id, 1)}><ArrowDown size={16} /></Button>}
             <Button title="edit" onClick={() => setEditing(s)}><Pencil size={16} /></Button>
             <Button variant="danger" title="delete" onClick={() => remove(s.id)}><Trash2 size={16} /></Button>
           </div>

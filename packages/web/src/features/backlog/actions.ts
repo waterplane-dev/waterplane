@@ -8,8 +8,10 @@ import { assessFiledSplit, assessFiledWords } from "../../assessRows";
 import { saveSnap } from "../../localState";
 import { LS } from "../../storage";
 import { core, mapWith, mapWithout, type CoreApi } from "../../sdk";
+import { openWaitingId } from "../../waitingWork";
 import { onSlotAskList } from "../../slotAskStore";
 import { slotCheckStart, slotCheckStartToast, type SlotCheck } from "../../slotCheck";
+import { toastLeadsTo } from "../../toast";
 import { assessRunToast, cutForRepo, cutInRepo, cutLeft, cutOpenedOn, runAgainQueuedToast, type BacklogCut } from "./logic";
 import { assessBusy, assessRepo, assessRuns, assessScope, assessSlot, backlog, backlogCut } from "./store";
 
@@ -108,14 +110,14 @@ export function onAssessAck(ackId: string, ok: boolean, filed: string[] | undefi
  */
 export function openBacklogFor(repo: RepoTarget): void {
   backlogCut.set((c) => cutForRepo(c, repo.worktreePath));
-  core().nav.open("backlog");
+  openWaitingId("backlog");
 }
 
 /** The backlog on a repo (the session's, the compose badge's) without touching
  *  any cut — or on the sheet's own preference when `cwd` is null. */
 export function openBacklogIn(cwd: string | null | undefined): void {
   backlogCut.set((c) => cutInRepo(c, cwd));
-  core().nav.open("backlog");
+  openWaitingId("backlog");
 }
 
 /**
@@ -128,7 +130,7 @@ export function openBacklogIn(cwd: string | null | undefined): void {
  */
 export function openBacklogCut(cwd: string, ids?: string[], label?: string): void {
   backlogCut.set((c) => cutOpenedOn(c, cwd, ids, label));
-  core().nav.open("backlog");
+  openWaitingId("backlog");
 }
 
 /** Every tap and keystroke on the sheet's cut — the store is the one copy. */
@@ -162,6 +164,20 @@ export function openAssessFor(repo: RepoTarget, ids?: string[]): void {
 }
 
 /**
+ * The assessment sheet on whatever run the repo holds, spending nothing: a
+ * finished-run notification's tap. Unlike `openAssessFor` it never starts a
+ * run when the repo has none (a restarted host that lost the row).
+ */
+export function openAssessResult(repo: RepoTarget): void {
+  const c = core();
+  assessRepo.set(repo);
+  assessScope.set(null);
+  assessSlot.set(null);
+  c.conn.liveAsk({ t: "assess.state", repoDir: repo.worktreePath });
+  c.nav.open("assess");
+}
+
+/**
  * Start one. `assess.run` is durable on the wire (a retry that arrived twice
  * would pay twice for an agent reading a whole repo) but is sent LIVE rather
  * than queued: a tap with no link is refused with a sentence instead of being
@@ -179,6 +195,9 @@ export function runAssessment(repoDir: string, ids?: string[], scope?: AssessSco
   const slot = scoped && scope ? { scope } : {};
   if (!c.conn.liveSend({ t: "assess.run", repoDir, ids: scoped, ...slot, ackId, firstSentAt: Date.now() }, assessRunToast(scoped),
     "no connection — the assessment runs on the desktop")) return;
+  // "… the proposal lands here": its row in the feed opens the RESULT, not the run's empty screen.
+  const repoId = c.world.repos.find((r) => r.worktreePath === repoDir)?.id;
+  if (repoId) toastLeadsTo(assessRunToast(scoped), { assessRepoId: repoId });
   // A run owes the pad nothing: it only ever reads.
   noteAssessOp(ackId, []);
 }

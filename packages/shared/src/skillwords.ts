@@ -20,6 +20,6 @@ export const skillRevConflict = (path: string): string =>
 export const skillSavingsLine = (tokens: number, unmeasured: number): string => {
   const more = unmeasured > 0 ? `, plus ${unmeasured} unmeasured` : "";
   if (tokens === 0) return `No change in the skill listing${more}.`;
-  const n = Math.abs(tokens);
+  const n = Math.abs(tokens).toLocaleString("en-US");
   return tokens > 0 ? `Up to about ${n} tokens fewer per turn${more}.` : `Up to about ${n} tokens more per turn${more}.`;
 };

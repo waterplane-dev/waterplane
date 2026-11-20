@@ -1,5 +1,5 @@
 /**
- * The text-in-marks row in Settings › Tools & diagnostics: what the reader is doing on THIS phone —
+ * The text-in-marks row in Settings › Desktops and connection: what the reader is doing on THIS phone —
  * downloading (file n of N and the megabytes), ready (languages, size, offline), or the error with
  * a retry — and, once switched off, the offer to delete what is still downloaded (a two-tap
  * `ConfirmButton`, never `window.confirm`). The switch itself is the plugins row's.

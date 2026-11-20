@@ -55,6 +55,11 @@ const CLEARS = {
     // keepOnPad: addPadNote returned no refusal.
     /if \(why\) \{ showToast\(why\); return; \}/,
   ],
+  // Send's menu: `Add to backlog` / `Start a new session when free` — the words
+  // are a durable backlog row (`queueBacklog` non-null) before the box empties.
+  "core/compose/useSendMenu.ts": [
+    /if \(offline === null\) return;/,
+  ],
   // The annotator's round trip: the picture's message was queued (`null` is a
   // refusal) or submitted (`false` is one) before the box it came from empties.
   "core/queue/uploads.ts": [

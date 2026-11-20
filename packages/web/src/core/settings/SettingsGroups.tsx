@@ -34,6 +34,7 @@ import { askConfirm } from "../../Confirm.tsx";
 import { LS, lsDel } from "../../storage.ts";
 import { UI_RESET_KEYS } from "../../resetKeys.ts";
 import { track } from "../../usage.ts";
+import { TITLE } from "../../sheetNames.ts";
 import { useHostPush } from "../../features/hostTools";
 import { useHasKeyboard } from "../../ShortcutCard.tsx";
 import { Button } from "../../kit/Button";
@@ -69,18 +70,18 @@ export function AppearanceRows() {
   return (
     <>
       <SetChoice
-        id="theme" radio label="theme" icon={SunMoon}
+        id="theme" radio label="Theme" icon={SunMoon}
         value={theme}
         options={([
-          ["system", "follow device", SunMoon],
-          ["light", "light", Sun],
-          ["dark", "dark", Moon],
+          ["system", "Match phone", SunMoon],
+          ["light", "Light", Sun],
+          ["dark", "Dark", Moon],
         ] as [ThemeChoice, string, LucideIcon][]).map(([v, label, icon]) => ({ value: v, label, icon }))}
         onChange={(m) => { setPref("theme", m); showToast(`theme: ${m === "system" ? `following this device (${resolvedTheme()})` : m}`); }}
         note={theme === "system"
           ? `Following this device — it is ${resolvedTheme()} right now, and switches with it.`
           : `Always ${theme} on this device, whatever its OS says.`}
-        more={<p>Per device, not per account: the phone in a dark room and the desktop under a window want different answers, and “follow device” is how each one gets its own.</p>}
+        more={<p>Per device, not per account: the phone in a dark room and the desktop under a window want different answers, and “Match phone” is how each one gets its own.</p>}
       />
 
       <SetChoice
@@ -671,7 +672,8 @@ export function OfflineRows({ install, reconnect }: { install: InstallFacts; rec
 
       {queuedSends.length > 0 && (
         <SetAction
-          id="queue-manage" label={`manage ${queuedSends.length} queued`} icon={ListOrdered} opens
+          id="queue-manage" label={TITLE.waiting} icon={ListOrdered} opens
+          note={`${queuedSends.length} queued on this phone.`}
           onClick={() => { track("action:queue.manage"); core().nav.open("queue"); }}
         />
       )}

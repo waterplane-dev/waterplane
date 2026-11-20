@@ -21,7 +21,9 @@ import { queueSync, rowChipWord, type SyncPhase } from "./syncState";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
-import { SHEET } from "./sheetNames";
+import { SHEET, TITLE } from "./sheetNames";
+import { WaitingTabs } from "./WaitingFrame";
+import { useClearOnNewSchedule } from "./useClearOnNewSchedule";
 
 interface Props {
   repos: RepoTarget[];
@@ -128,6 +130,9 @@ interface Props {
   /** Drop the filter and show every schedule. Always offered while one is on —
    *  a filtered list with no way out is a list of lost rows. */
   onClearFocus?: () => void;
+  /** "Filter cleared to show your new schedule." when a path outside this sheet cleared the cut (the receipt's Open). */
+  clearedNote?: string | null;
+  onDismissNote?: () => void;
   /**
    * Open Activity on the one-offs that have already been and gone.
    *
@@ -212,7 +217,7 @@ function childState(i: Intent): string {
 export function ScheduleSheet({
   repos, entries, onRemove, onSetEnabled, onRunNow, onSkipNext, onEdit, onClose,
   intents = [], sessions = [], onOpenSession, onOpenBacklog, onOpenBuildRun, renderRetime,
-  online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, onOpenSpent, usage = null, foot,
+  online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, clearedNote = null, onDismissNote, onOpenSpent, usage = null, foot,
 }: Props) {
   const repoName = (dir: string) => { const r = repos.find((x) => x.worktreePath === dir); return r ? repoShown(r) : dir.split("/").pop() ?? dir; };
 
@@ -231,6 +236,11 @@ export function ScheduleSheet({
    *  persisted: it dies with the sheet, like the cut. */
   const [query, setQuery] = useState("");
   const searching = query.trim() !== "";
+  // A rule that appears under a cut or a search that hides it clears both and says so (decision 5).
+  const newSchedule = useClearOnNewSchedule(
+    entries.length + pending.length, !!focus || !!focusIds || searching,
+    () => { onClearFocus?.(); setQuery(""); }, clearedNote, onDismissNote,
+  );
 
   /**
    * ── Every clock on this desktop, cut ONCE ────────────────────────────────
@@ -440,7 +450,7 @@ export function ScheduleSheet({
         // says what is left to do with it.
         : spent
           ? <Tag>been and gone</Tag>
-          : <Tag>{e.enabled ? HORIZON_LABEL.unarmed : paused ? "paused" : "off"}</Tag>;
+          : <Tag>{e.enabled ? "waits for the first usage reading" : paused ? "paused" : "off"}</Tag>;
     const syncTagged = rowChipWord(syncPhase, true) != null;
     return (
       <div key={e.id} className={`q-card${e.running ? " resuming" : ""}`}>
@@ -626,16 +636,20 @@ export function ScheduleSheet({
 
   return (
     <div className="sheet">
-      <SheetHead title={<><CalendarClock size={16} /> {SHEET.automation}</>} onClose={onClose}>
-        {/* The count, only when there is a list to count and no cut on it: a
-            "0" over a body saying nothing is scheduled is the empty state said
-            twice, and under a filter the bar below carries "n of N" with its
-            clear button — the head saying it too was the same fact twice. */}
-        {standingTotal > 0 && !focus && !focusIds && !searching && <span className="muted">{standingTotal}</span>}
-        {/* Where every row on screen is, said once (`shownPhases`). Last, so the
-            count beside the title is not read as "on desktop 3". */}
+      <SheetHead title={<><CalendarClock size={16} /> {TITLE.waiting}</>} onClose={onClose}>
+        {/* No count here: the chip below (`SyncSummary`) and the filter bar carry the numbers; a bare
+            number beside it said the same fact twice. */}
+        {/* Where every row on screen is, said once (`shownPhases`). */}
         <SyncSummary phases={shownPhases} />
       </SheetHead>
+      <WaitingTabs />
+
+      {/* Above the list, never after its last row. */}
+      <div className="sheet-actions">
+        <button className="send" onClick={() => { track("action:schedule.new"); onEdit(null); }}>
+          <Plus size={16} /> New schedule
+        </button>
+      </div>
 
       <div className="sheet-scroll">
       {(focus || focusIds) && (
@@ -652,7 +666,7 @@ export function ScheduleSheet({
               // beside it on the card says why it is not one of the nine.
               ? focusIds.label
               : focus
-                ? `showing the ${HORIZON_LABEL[focus] === "not armed" ? "not armed" : `ones ${HORIZON_LABEL[focus]}`}`
+                ? `showing the ${focus === "unarmed" ? "ones that wait for the first usage reading" : `ones ${HORIZON_LABEL[focus]}`}`
                 : ""}
             {" · "}{clocks.cutTotal} of {standingTotal}
             {clocks.cutTotal === 0 && (focusIds
@@ -671,6 +685,7 @@ export function ScheduleSheet({
           )}
         </div>
       )}
+      {newSchedule.line && <div className="form"><Hint>{newSchedule.line}</Hint></div>}
       <ScheduleSearch query={query} setQuery={setQuery} cutTotal={clocks.cutTotal} shownTotal={shownTotal} />
       {/* The whole-sheet fact, said ONCE and in full.
           Every verb the dead link takes off the cards is named here, because
@@ -855,11 +870,6 @@ export function ScheduleSheet({
 
       </div>
 
-      <div className="sheet-actions">
-        <button className="send" onClick={() => { track("action:schedule.new"); onEdit(null); }}>
-          <Plus size={16} /> new schedule
-        </button>
-      </div>
     </div>
   );
 }

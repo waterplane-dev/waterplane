@@ -24,7 +24,7 @@ export function nodeMeetsMin(version: string, min: string = NODE_MIN): boolean {
   const a = parse(version);
   const b = parse(min);
   if (!a || !b) return false;
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i]! > b[i]!;
   return true;
 }
 

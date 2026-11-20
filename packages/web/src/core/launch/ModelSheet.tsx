@@ -6,6 +6,7 @@
  * `launch.relaunch`, the kill-and-create as one durable op, which lives in
  * `useLaunch` because it builds a `session.create` (`createOp.test.mjs`).
  */
+import { TITLE } from "../../sheetNames";
 import type { BackendInfo, LaunchOpts, SessionInfo } from "@waterplane/shared";
 import { SheetHead } from "../../Sheet.tsx";
 import { Unavailable } from "../../Unavailable.tsx";
@@ -59,7 +60,7 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
   };
   return (
     <div className="sheet">
-      <SheetHead title="Switch model" onClose={onClose} />
+      <SheetHead title={TITLE.model} onClose={onClose} />
       <Hint>
         Current: {shortModel(cur.model) || "default"}{cur.effort ? ` · ${cur.effort}` : ""}.{" "}
         {canSlash

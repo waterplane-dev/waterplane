@@ -49,7 +49,7 @@
  * same render pass without a second tally that could disagree with the screen.
  */
 import { createContext, createElement, useContext, type HTMLAttributes, type ReactNode } from "react";
-import { ChevronRight, Loader, Minus, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Loader, Minus, Plus, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { RadioRows } from "./kit/RadioRows";
@@ -202,21 +202,44 @@ export function SetWarn({ tone = "bad", icon: Icon, children }: {
  * case the catalogue cannot see — every row in the group conditional on the
  * host and absent right now.
  */
-export function SetGroup({ id, title, icon: Icon, children }: {
+export function SetGroup({ id, title, icon: Icon, children, folded, onToggle }: {
   id: string; title: string; icon?: LucideIcon; children: ReactNode;
+  /** Folded: the heading alone, a tap opens it (spec D6). The rows still RENDER, hidden, so they
+   *  count themselves in the tally; a query or a pin unfolds every section it shows. */
+  folded?: boolean;
+  onToggle?: () => void;
 }) {
   const ctx = useContext(Ctx);
   const gone = !!ctx && !groupShown(id, ctx.query, ctx.only);
+  const narrowed = !!ctx && (!!ctx.only || ctx.query.trim() !== "");
+  const foldable = !!onToggle && !narrowed;
+  const shut = foldable && !!folded;
   return (
-    <section className={`set-group${gone ? " gone" : ""}`} data-group={id}>
+    <section className={`set-group${gone ? " gone" : ""}`} data-group={id} data-folded={shut ? "" : undefined}>
       <h3 className="set-title">
-        {Icon && <Icon size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />}
-        {title}
+        {foldable ? (
+          // Raw button: a heading that folds is neither a kit Button (a key) nor a row.
+          <button type="button" className="set-fold" aria-expanded={!shut} onClick={onToggle} style={FOLD_STYLE}>
+            {Icon && <Icon size={14} />}
+            <span style={{ flex: 1 }}>{title}</span>
+            {shut ? <ChevronDown size={16} aria-hidden /> : <ChevronUp size={16} aria-hidden />}
+          </button>
+        ) : (<>
+          {Icon && <Icon size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />}
+          {title}
+        </>)}
       </h3>
-      {children}
+      {/* `contents` keeps the group's own column and gap for the rows; `none` folds them. */}
+      <div className="set-body" style={{ display: shut ? "none" : "contents" }}>{children}</div>
     </section>
   );
 }
+
+/** The fold heading: the whole line is the target, as tall as a row. No stylesheet rule of its own. */
+const FOLD_STYLE = {
+  display: "flex", alignItems: "center", gap: 6, width: "100%", minHeight: 40, padding: 0,
+  background: "none", border: 0, color: "inherit", font: "inherit", letterSpacing: "inherit", textAlign: "left", cursor: "pointer",
+} as const;
 
 /* ── the controls ────────────────────────────────────────────────────── */
 
@@ -255,7 +278,7 @@ export function SetSwitch({ id, label, icon: Icon, on, onChange, state, tone, no
 }) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <button
         className={`set-sw${on ? " on" : ""}${tone === "danger" ? " danger" : ""}`}
         aria-pressed={on}
@@ -297,7 +320,7 @@ export function SetChoice<T extends string | number>({ id, label, icon: Icon, va
 }) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <div className="set-lead">
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
@@ -349,7 +372,7 @@ export function SetMulti<T extends string>({ id, label, icon: Icon, value, optio
   if (!useRowVisible(id)) return null;
   const on = new Set(value);
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <div className="set-lead">
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
@@ -390,7 +413,7 @@ export function SetPick({ id, label, icon: Icon, control, note, more, children }
 }) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <div className="set-lead">
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
@@ -427,7 +450,7 @@ export function SetStepper({ id, label, icon: Icon, readout, onLess, onMore, les
 }) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <div className="set-lead">
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
@@ -462,7 +485,7 @@ export function SetSlider({ id, label, icon: Icon, value, min, max, step, readou
 }) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       <div className="set-lead">
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
@@ -523,7 +546,7 @@ export function SetAction({ id, label, icon: Icon, onClick, opens, cant, busy, t
     );
   }
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       {cant ? (
         <div className="set-lead set-cant">
           {Icon && <Icon size={ICON} className="set-ico" />}
@@ -560,7 +583,7 @@ export function SetAction({ id, label, icon: Icon, onClick, opens, cant, busy, t
 export function SetCustom({ id, label, icon: Icon, children, note, more }: RowBase) {
   if (!useRowVisible(id)) return null;
   return (
-    <div className="set-item">
+    <div className="set-item" data-set-id={id}>
       {label != null && label !== "" && (
         <div className="set-lead">
           {Icon && <Icon size={ICON} className="set-ico" />}
@@ -582,7 +605,8 @@ export function SetSearch({ value, onChange }: { value: string; onChange: (v: st
       <Search size={ICON} className="set-search-ico" />
       <input
         type="search"
-        placeholder="search settings"
+        placeholder="Search settings and screens"
+        aria-label="Search settings and screens"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}

@@ -1,6 +1,6 @@
 /**
  * The text-in-marks extension's web half (R-images-015): an `imageText` reader the annotator asks
- * when a highlight, box or circle is finished, and its row in Settings › Tools & diagnostics.
+ * when a highlight, box or circle is finished, and its row in Settings › Desktops and connection.
  * Imports only `@waterplane/sdk`, `@waterplane/kit`, react, lucide-react and its own folder
  * (`local/extension-boundary`).
  *
@@ -26,6 +26,6 @@ export const manifest: FeatureManifest = {
   }),
   settings: [{
     group: "tools", order: 31, render: () => createElement(OcrRow),
-    rows: [{ id: "ocr-reader", label: "text in marks", keywords: "ocr read words text recognition highlight box circle marks image picture tesseract english german offline download" }],
+    rows: [{ id: "ocr-reader", label: "Text in marks", keywords: "ocr read words text recognition highlight box circle marks image picture tesseract english german offline download" }],
   }],
 };

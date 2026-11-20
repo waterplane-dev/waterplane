@@ -12,7 +12,7 @@
 import { CalendarClock, CircleDot, OctagonPause } from "lucide-react";
 import { ATTENTION_NOUN, attentionTitle, type AttentionKind } from "../../attention";
 
-export function AttentionChip({ kind, n, onClick, repo, on, replies, hint, scope }: {
+export function AttentionChip({ kind, n, onClick, repo, on, replies, hint, scope, noun }: {
   kind: AttentionKind;
   n: number;
   onClick: () => void;
@@ -28,6 +28,8 @@ export function AttentionChip({ kind, n, onClick, repo, on, replies, hint, scope
   /** A filter twin outside a repo group (the open-tabs list): the filter's
    *  pill and `on` state, its title naming this place instead of a repo. */
   scope?: string;
+  /** The noun after the number when it is not `ATTENTION_NOUN`'s (Home's "2 questions"). */
+  noun?: string;
 }) {
   if (n <= 0) return null;
   const Icon = kind === "wait" ? CircleDot : OctagonPause;
@@ -38,7 +40,8 @@ export function AttentionChip({ kind, n, onClick, repo, on, replies, hint, scope
     // A BUTTON, not a label: a count on a control is the way to those rows.
     <button className={`${cls}${on ? " on" : ""}`} data-hint={hint}
       title={attentionTitle(kind, n, { repo, scope, replies })} onClick={onClick}>
-      <Icon size={13} />{repo ? "" : " "}{n}{repo && kind === "blocked" ? "" : ` ${ATTENTION_NOUN[kind]}`}
+      {/* Every number carries its noun (whole-app journey spec D2), the per-repo twin too. */}
+      <Icon size={13} />{repo ? "" : " "}{n} {noun ?? ATTENTION_NOUN[kind]}
       {replies && <CalendarClock size={11} className="wait-sched" />}
     </button>
   );

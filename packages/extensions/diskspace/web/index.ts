@@ -19,6 +19,6 @@ export const manifest: FeatureManifest = {
   pushes: { [PUSH_CHANGED]: () => onChanged() },
   settings: [{
     group: "tools", order: 30, render: () => createElement(DiskRow),
-    rows: [{ id: "disk-space", label: "disk space", keywords: "desktop free full volume scan large files folders delete clean" }],
+    rows: [{ id: "disk-space", label: "Disk space", keywords: "desktop free full volume scan large files folders delete clean" }],
   }],
 };

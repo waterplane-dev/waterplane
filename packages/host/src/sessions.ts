@@ -79,7 +79,7 @@ export class SessionManager extends EventEmitter {
    *  where every member is an arrow that delegates at CALL time. */
   private readonly core: SessionCore;
 
-  constructor(private readonly root: string, private readonly port = Number(env("PORT") || 8770)) {
+  constructor(private readonly root: string, private readonly port = Number(env("PORT") || 8770), clock?: Clock) {
     super();
     // The hub (`sessions/core.ts`). Every member delegates at CALL time to the
     // slice that owns the method, grouped below by owning slice; state a slice
@@ -87,7 +87,7 @@ export class SessionManager extends EventEmitter {
     // effect: nothing is called — which is why it is built FIRST, before the
     // slices that are handed it read their files.
     this.core = {
-      root: this.root, port: this.port, sessions: this.sessions,
+      root: this.root, port: this.port, sessions: this.sessions, clock,
       emit: (event, ...args) => this.emit(event, ...args),
       create: (cwd, opts) => this.create(cwd, opts),
       // A re-attach (restart) of a session that never got its own words heals
@@ -104,7 +104,7 @@ export class SessionManager extends EventEmitter {
       reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); this.signIn.restored(m.id, m.signInSince); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
       deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), supersede: (from, to, by) => drive.supersede(this.core, from, to, by), carryFor: (id, rid) => record.carryOf(this.core, id, rid), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
-      detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid) => adoptClaudeId(this.core, s, cid),
+      detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid, o) => adoptClaudeId(this.core, s, cid, o),
       watchClaudeId: (s) => watchClaudeId(this.core, s), stopClaudeIdWatch: (s) => stopClaudeIdWatch(s),
       detectBackendId: (s) => detectBackendId(this.core, s), adoptBackendId: (s, id) => adoptBackendId(this.core, s, id),
       watchBackendId: (s) => watchBackendId(this.core, s), refreshModel: (s, transcriptPath) => refreshModel(this.core, s, transcriptPath),
@@ -125,7 +125,7 @@ export class SessionManager extends EventEmitter {
       newLimitState: () => this.wall.newLimitState(), limitAuto: (s) => this.wall.limitAuto(s),
       limitRetry: (s, now, resetAt, daily) => this.wall.limitRetry(s, now, resetAt, daily), limitLog: (s) => this.wall.limitLog(s),
       checkLimit: (s) => this.wall.checkLimit(s),
-      netTurnEnded: (s) => this.net.turnEnded(s), netTurnStarted: (s) => this.net.turnStarted(s), netTyped: (s) => this.net.typed(s), // apiretry.ts
+      netTurnEnded: (s) => this.net.turnEnded(s), netTurnStarted: (s) => this.net.turnStarted(s), netTyped: (s, data) => this.net.typed(s, data), // apiretry.ts
       signInSignedOut: (s) => this.signIn.signedOut(s), signInTurnStarted: (s) => this.signIn.turnStarted(s), signInServed: (s) => this.signIn.served(s), signInLoginRetired: (s, ok) => this.signIn.loginRetired(s, ok), // signinwait.ts
       markLimitBlocked: (s, resetAt, weekly, sample, dated) => this.wall.markLimitBlocked(s, resetAt, weekly, sample, dated),
       scheduleLimitAttempt: (s, atOverride) => this.wall.scheduleLimitAttempt(s, atOverride),
@@ -315,9 +315,9 @@ export class SessionManager extends EventEmitter {
       naming: false,
       privateModes: new Set(), detaching: false, copyMode: false, scrollChain: Promise.resolve(),
       claudeIdTimer: null, storeIdTimer: null, createdRecord: createsRecord, spawnedAt: Date.now(),
-      limitTimer: null, gaveUp: {}, stopVerifyTimer: null, stopPending: false, turnFromScreen: false,
+      gaveUp: {}, stopVerifyTimer: null, stopPending: false, turnFromScreen: false,
       hooksActive: false, turnHookSeen: false, turnActive: false, stopCount: 0, submits: [],
-      resurrectTimer: null, killed: false,
+      killed: false,
     };
     // The tab name this session already had, from before the restart. It is
     // derived once and never again, so losing it across a restart would RENAME
@@ -589,7 +589,7 @@ export class SessionManager extends EventEmitter {
   remove(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): boolean { return drive.remove(this.core, id, onShellsStopped, by); } repointCompanions(from: string, to: string): void { drive.repointCompanions(this.core, from, to); } // a replaced session's companion shells follow it
   supersede(from: string, to: string, by?: ClosedBy): boolean { return drive.supersede(this.core, from, to, by); } // …and the replaced row leaves the list
   killShell(id: string, pid: number, startedAt: number): Promise<{ ok: boolean; reason?: string }> { return drive.killOneShell(this.core, id, pid, startedAt); }
-  shellDetail(id: string, pid: number): SessionShellDetail | null { return drive.shellDetail(this.core, id, pid); }
+  shellDetail(id: string, pid: number): Promise<SessionShellDetail | null> { return drive.shellDetail(this.core, id, pid); }
   scrollback(id: string): string { return drive.scrollback(this.core, id); }
   screenText(id: string, lines = 40): Promise<string> { return drive.screenText(this.core, id, lines); }
   screenLines(id: string, max = SCREENLOG_MAX_LINES): Promise<{ lines: string[]; cols: number; history: boolean; bounded: boolean } | null> { return drive.screenLines(this.core, id, max); }

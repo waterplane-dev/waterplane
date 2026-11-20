@@ -341,6 +341,26 @@ export function healFromPane(m: Pick<LiveMeta, "id" | "cwd" | "title">, realCwd:
   return { cwd: realCwd, title: (m.title === m.id || !m.title) ? basename(realCwd) : m.title };
 }
 
+/**
+ * What `idle` a session re-attached after a host restart STARTS at.
+ *
+ * It used to start `false` for every backend, and only a quiet PTY set it
+ * back — but the re-attach repaint IS output, so every pane waited out its own
+ * silence window, and for those seconds the phone counted every live session
+ * as mid-turn (measured: 84 of 91 "working" after one `npm run restart`, a
+ * red agent-count toast for work nobody was doing). For claude's TUI the
+ * evidence of work is already read: the repaint lands, `idlewatch.ts` reads the
+ * grid, and a working line on it ends idle within `IDLE_WATCH_MS`; a turn
+ * starting (hook, turn watch) ends it too. So start `true` there.
+ *
+ * `idleSince` stays ABSENT: when it went quiet is unknown, and a stamped
+ * restart instant is the wrong number. Another backend has no working-line
+ * reader, so it keeps `false` and the silence rule — any output ends idle.
+ */
+export function reattachIdle(backend: BackendDescriptor): boolean {
+  return derive(backend).screen("dialogs") === "claude-numbered";
+}
+
 /** Re-attach a client to a still-alive tmux session found on boot. */
 export function reattach(core: SessionCore, m: LiveMeta): void {
   if (core.sessions.has(m.id)) return;
@@ -372,7 +392,7 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
     id: m.id, cwd, title, remoteControl: true, running: true,
     ...core.backendField(backend),
     model: l.model, effort: l.effort, permissionMode: l.permissionMode, remoteControlled: l.remoteControlled,
-    prompt: null, idle: false,
+    prompt: null, idle: reattachIdle(backend), // a repaint is not a turn (`idlewatch.ts`)
     ...(hasAccountLimit(backend) ? { limit: core.newLimitState() } : {}),
     claudeSessionId: m.claudeSessionId,
     ...(m.backendSessionId ? { backendSessionId: m.backendSessionId } : {}),

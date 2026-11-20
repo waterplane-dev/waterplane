@@ -6,7 +6,7 @@
  */
 import type {
   BackendTokensDoc, ColdStarts, CompactionLedger, ContextEvent, ContextSample, ContextWindowSource, CostBreakdown,
-  CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals, UsageNowDoc,
+  CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals, UsageNowDoc, UsageReading,
 } from "@waterplane/shared";
 import type { SessionCarried } from "@waterplane/shared";
 import type { FindingsResult } from "@waterplane/shared";
@@ -19,6 +19,20 @@ import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcom
  * screen then draws only what the panel's own log scan can say.
  */
 export interface LiveState { doc: UsageNowDoc | null; host: string | null; why?: string; at: number }
+
+/**
+ * Copilot's plan and monthly use, drawn at the top of All sessions › Copilot Chat (`copilotquota.ts`).
+ * `local` needs no sign-in (this machine's files); `reading` is GitHub's own figure, read only after
+ * the person switched it on (`on`). Each degrades to null with `why`, never a guessed number.
+ */
+export interface CopilotQuotaView {
+  on: boolean;
+  busy: boolean;
+  reading: UsageReading | null;
+  why: string | null;
+  /** `words` = the one-line summary (`Copilot Free · 12.5 premium requests this month here`), `lines` = the detail. */
+  local: { words: string; lines: string[] } | null;
+}
 
 /** What the Findings view draws: the engine's ranked result with the checked-off list. */
 export interface FindingsDoc extends FindingsResult {
@@ -228,6 +242,7 @@ export type ToWebview =
   /** Which tab the panel should show (sent on `ready` after an openPanel request). */
   | { t: "tab"; id: TabId; ledger?: string }
   | { t: "live"; live: LiveState }
+  | { t: "copilotQuota"; quota: CopilotQuotaView }
   /** The answer to one `get`, by its id. `error` is a sentence; the card that asked draws it. */
   | { t: "ledgerAnswer"; id: number; ok: true; value: unknown }
   | { t: "ledgerAnswer"; id: number; ok: false; error: string };
@@ -261,4 +276,6 @@ export type ToExtension =
   /** All sessions came on screen, or its re-read was tapped: ask the host for `usagenow` again. */
   | { t: "liveRead" }
   /** The panel's own switch for reading the desktop: on sets `desktopUrl` to this machine's default, off clears it. */
-  | { t: "desktop"; on: boolean };
+  | { t: "desktop"; on: boolean }
+  /** Copilot Chat's GitHub button: on = read GitHub's quota (first time: VS Code asks to share the sign-in), off = stop. */
+  | { t: "copilotQuota"; on: boolean };

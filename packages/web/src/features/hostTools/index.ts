@@ -23,8 +23,8 @@ export const manifest: FeatureManifest = {
   // The launcher banner's tap: only the setup steps still missing.
   sheets: [{ id: "phonesetup", persisted: false, render: () => createElement(PhoneSetupSheet) }],
   settings: [
-    // After the feed and the mutes: how an alert REACHES this phone.
-    { group: "notifications", order: 20, render: () => createElement(HostNotifySettings) },
+    // First in Notifications: the switch for this phone, before the feed and the mutes.
+    { group: "notifications", order: -20, render: () => createElement(HostNotifySettings) },
     // The head of Connection, before the password rows.
     { group: "connection", order: -10, render: () => createElement(HostConnectionSettings) },
     // The head of Tools & diagnostics: what this desktop needs, whichever repo is open.

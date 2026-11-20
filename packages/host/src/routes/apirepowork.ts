@@ -23,20 +23,6 @@ import { MIME, json, readJson, serveRange, treeFileSecurityHeaders } from "./api
 import { route, type ApiCtx, type ApiEntry, type RepoReq } from "./apitable.js";
 import { joinAndWait, recordSetupWrite } from "./apijobs.js";
 
-/**
- * How long `POST /api/repos/:id/capture/run` with `{"wait":true}` holds the
- * response open. A settle loop may wait `settleMs` per pass across several
- * viewports, and a cold Playwright launch is seconds on its own.
- *
- * Five minutes is a real number rather than an aspiration: it fits inside
- * Node's default 300 s `requestTimeout` (which covers request RECEIPT, not the
- * response) and this host sets no `server.timeout`. Past it the caller is told
- * the run is STILL RUNNING — never that it failed.
- */
-const CAPTURE_WAIT_MS = 5 * 60_000;
-/** How often that wait re-reads the run row. Cheap: it is a filter over rows
- *  already in memory. */
-const CAPTURE_POLL_MS = 300;
 /** A whole side of a text diff is for reading on a phone; past this it is cut, and says so. */
 const TEXT_SIDE_MAX = 1024 * 1024;
 /** The `CONFIRM_GATED_FIXES` id the efficiency-rules write is confirmed under. */
@@ -66,81 +52,6 @@ function checkWrite<R extends { ok: boolean; report?: ComplianceReport }>(path: 
 }
 
 export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
-  // ── Verified capture: POST /api/repos/:id/capture/run ─────────────
-  //
-  // The agent's trigger, and the one path into `capture.ts` that costs no
-  // tokens on the way in: body `{ target, wait? }`, answer the VERDICT LINE.
-  // An agent working in this repo asks for the screen it just changed and is
-  // handed a sentence, not a PNG — the picture is in `.claude/outbox/` for a
-  // person to look at, and the sentence is what the agent reasons over.
-  //
-  // POST, for `/api/host/screenshot`'s reason exactly: it has a side effect,
-  // and a cross-origin GET carries no `Origin` header for the guard to see.
-  // Deliberately NOT in `origin.ts`'s `OPAQUE_READ_ROUTES` — that list is for
-  // reads the Android shell loads outside a transport (`<img src>`,
-  // `<a download>`), and nothing loads this one.
-  //
-  // `wait` is the only interesting part. Node's `server.requestTimeout`
-  // (300 s, the default this host never overrides) bounds receiving the
-  // REQUEST, not producing the response — measured, not assumed — and
-  // `server.timeout` is 0, so nothing here cuts a slow answer short. The wait
-  // is still capped, and `res.setTimeout` is set past that cap so a future
-  // global socket timeout could not silently shorten it. When the cap is hit
-  // the run is NOT called off and the answer says so, with the real number in
-  // it: a caller that concluded "the capture failed" would be wrong, and a
-  // promise of five minutes that delivered ninety seconds would be worse.
-  route<RepoReq>("POST", "capture/run/*", async ({ req, res, wt }, ctx) => {
-    const body = await readJson(req, { optional: true });
-    // No `watch` here, deliberately: watch mode runs for up to ten minutes
-    // and emits a frame per change, which is the phone's mode. An agent asks
-    // for ONE picture of the screen it just changed.
-    const started = ctx.capture.run(wt, String(body?.target ?? ""));
-    if ("error" in started) return json(res, { ok: false, error: started.error }, 400), true;
-    const runId = started.runId;
-    if (body?.wait !== true) {
-      return json(res, {
-        ok: true,
-        runId,
-        status: started.status,
-        waited: false,
-        note: `started — the frames and the verdict land in .claude/outbox/capture-*.png and .claude/outbox/capture-*.json. Pass {"wait":true} to be answered with the verdict instead.`,
-      }), true;
-    }
-
-    res.setTimeout(CAPTURE_WAIT_MS + 30_000);
-    let clientGone = false;
-    res.on("close", () => { clientGone = true; });
-    const deadline = Date.now() + CAPTURE_WAIT_MS;
-    let run = started;
-    while (Date.now() < deadline && !clientGone) {
-      await new Promise((r) => setTimeout(r, CAPTURE_POLL_MS));
-      const cur = ctx.capture.runsFor(wt).find((x) => x.runId === runId);
-      if (cur) run = cur;
-      if (run.status !== "running") break;
-    }
-    if (clientGone) return true;   // the run carries on; there is nobody to tell
-    if (run.status === "running") {
-      return json(res, {
-        ok: false,
-        runId,
-        status: "running",
-        timedOut: true,
-        waitedMs: CAPTURE_WAIT_MS,
-        note: `still running after ${Math.round(CAPTURE_WAIT_MS / 60_000)} minutes — it was NOT called off. Its verdict will be written to .claude/outbox/capture-*.json when it settles.`,
-      }, 200), true;
-    }
-    return json(res, {
-      ok: run.status === "done",
-      runId,
-      status: run.status,
-      verdict: run.verdict,
-      verification: run.verification,
-      score: run.score,
-      sidecarRelPath: run.sidecarRelPath,
-      files: run.files?.map((f) => f.relPath),
-    }), true;
-  }),
-
   // ── Setup compliance checklist ─────────────────────────────────────
   // Every route here feeds the sweep's store: opening the sheet or applying a fix
   // is the freshest fact anyone has about this repo, and the row badge must

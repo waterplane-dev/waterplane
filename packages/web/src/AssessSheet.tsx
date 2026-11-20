@@ -112,7 +112,7 @@
  * screen that produces silence is indistinguishable from one that lost the work.
  */
 import { ClipboardCheck } from "lucide-react";
-import { Sheet } from "./Sheet";
+import { Sheet } from "./Sheet"; import { TITLE } from "./sheetNames";
 import type { AssessSheetProps } from "./assess/asxTypes";
 import { useAssessSheet } from "./assess/useAssessSheet";
 import { AsxActions } from "./assess/AsxActions";
@@ -159,7 +159,7 @@ export function AssessSheet(p: AssessSheetProps) {
   return (
     <Sheet
       className="assess-sheet"
-      title={<span title={p.repoDir}>{p.repoName}</span>}
+      title={<span title={p.repoDir}>{TITLE.assess.replace(/ - repo$/, ` - ${p.repoName}`)}</span>}
       icon={<ClipboardCheck size={18} />}
       onClose={p.onClose}
       footer={proposal ? <AsxFooter m={m} /> : null}

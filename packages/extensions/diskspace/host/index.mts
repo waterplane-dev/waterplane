@@ -48,7 +48,7 @@ export function parseUserProfile(out: string): string | null {
 let winHomeCache: Promise<{ winHome: string | null; why?: string }> | null = null;
 
 /** wsl: the Windows user folder as a /mnt path, asked of Windows once (time-bounded) and cached. */
-export function resolveWinHome(): Promise<{ winHome: string | null; why?: string }> {
+function resolveWinHome(): Promise<{ winHome: string | null; why?: string }> {
   winHomeCache ??= (async () => {
     // cwd on the Windows drive: cmd.exe started from a Linux folder prints a UNC warning first.
     let cwd: string | undefined = "/mnt/c";

@@ -31,3 +31,19 @@ export function chipRows<K extends string | number>(
     return { key, text: chipText(label(key), b), count: b.count };
   });
 }
+
+/**
+ * D5, the other half of "every action ends on a visible result": a row the person just made must not
+ * land under a filter that hides it. Call after the action with the sheet's current cut `active`, the
+ * sheet's own rule `visibleUnder(cut)` (true when the new row passes that cut) and the thing's noun.
+ * `cut` is what the sheet should now hold; `line` is the sentence to show beside the list, or null when
+ * nothing was cleared. Pure: the sheet keeps its one bucketing function and passes it in.
+ */
+export function showNewRow<K extends string | number>(
+  active: K | null,
+  thing: string,
+  visibleUnder: (cut: K) => boolean = () => false,
+): { cut: K | null; line: string | null } {
+  if (active === null || visibleUnder(active)) return { cut: active, line: null };
+  return { cut: null, line: `Filter cleared to show your new ${thing}.` };
+}

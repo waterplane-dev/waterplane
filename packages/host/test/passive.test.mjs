@@ -51,10 +51,11 @@ test("passiveNeverAllows: auth material is refused to a passive row even while u
   for (const [m, p] of [
     ["POST", "/api/pair/mint"], ["POST", "/api/devices/revoke"], ["POST", "/api/peers"], ["DELETE", "/api/peers/pc"], ["PUT", "/api/peers/pc"],
     ["GET", "/api/lan/identity"], ["HEAD", "/api/lan/identity"],
+    ["POST", "/api/host/root"], // persists the code root and restarts the host: outlives the unlock (R-connection-013)
   ]) assert.equal(passiveNeverAllows(m, p), true, `${m} ${p}`);
   for (const [m, p] of [
     ["GET", "/api/peers"], ["GET", "/api/peers/pc/status"], ["GET", "/api/peerjobs"], ["GET", "/api/devices"], ["GET", "/api/pair/mint"],
-    ["POST", "/api/auth/lock"], ["POST", "/api/auth/unlock"], ["GET", "/api/repos"], ["POST", "/api/repos/r1/sweep"], ["GET", "/api/lan/verify"],
+    ["POST", "/api/auth/lock"], ["POST", "/api/auth/unlock"], ["GET", "/api/repos"], ["POST", "/api/repos/r1/sweep"], ["GET", "/api/lan/verify"], ["GET", "/api/host/root"],
   ]) assert.equal(passiveNeverAllows(m, p), false, `${m} ${p}`);
 });
 

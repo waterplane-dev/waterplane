@@ -45,7 +45,7 @@ as arbitrary without it.
 **B2. A stated vulnerability-reporting route.** [done] — a private advisory route in `SECURITY.md`. An email or a GitHub security advisory link. Without
 one, the first report arrives as a public issue.
 
-**B3. Decide the position on public exposure.** [partly] — `SECURITY.md` and the README say the LAN gate is an escape hatch and the password is deny-until-set; no rate-limit or lockout decision recorded. `WATERPLANE_ALLOW_PUBLIC=1` plus the password gate exists
+**B3. Decide the position on public exposure.** [done] — strongly discouraged (SECURITY.md, README, install.md, .env.example) AND hardened: per-source growing wait and 15 min lockout on wrong passwords (`loginguard.ts`), never applied to loopback or an ungated Tailscale caller (a gated one is guarded). `WATERPLANE_ALLOW_PUBLIC=1` plus the password gate exists
 and works. Publishing it means people will use it as the *primary* route rather than the escape
 hatch. Either document it as strongly discouraged, or harden it (rate limiting, lockout) before
 publishing. Right now it is a footgun with a safety catch and no sign.

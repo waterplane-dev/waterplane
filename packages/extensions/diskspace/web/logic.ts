@@ -64,7 +64,7 @@ export function wslVolumeLine(v: DiskVolume | null | undefined): string | null {
 }
 
 /** "12 s", "3 min", "2 h" — for a running scan's clock. */
-export function secondsText(ms: number): string {
+function secondsText(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 180) return `${s} s`;
   const m = Math.round(s / 60);
@@ -194,7 +194,7 @@ export function codeParts(text: string): [string, boolean][] {
 export interface VolumeBar { usedPct: number; freePct: number; tempPct: number; modelPct: number; low: boolean }
 
 /** Under this share free the volume is drawn as low. */
-export const LOW_FREE = 0.1;
+const LOW_FREE = 0.1;
 
 /**
  * The volume as bar widths: temporary and models as their own slices of the USED part. A slice is

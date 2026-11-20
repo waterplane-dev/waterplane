@@ -124,14 +124,14 @@
    *   fetch(url, init) — the worker's fetch
    *   now() — epoch ms
    *   pageVisible() — Promise<boolean>: a visible window of this app exists
-   * Returns a report: { ran, remaining (rows not yet taken by the host, at the wake's start), reason?, sent, pending, held:[{ackId,key}], stopped, waiting, more, transient, label, sealed }.
+   * Returns a report: { ran, depth (the plan's; null = no plan read), remaining (rows not yet taken by the host, at the wake's start), reason?, sent, pending, held:[{ackId,key}], stopped, waiting, more, transient, label, sealed }.
    *   reason: "empty" | "visible" | "page" | "sealed" | "auth" | "unsupported" | "foreign" | undefined
    *   transient: worth another wake soon (network down, the page still owning).
    */
   async function runRelay(env) {
     const now = env.now();
     const state = await env.store.update(ALL_KEYS, (v) => ({ result: v }));
-    const rep = { ran: false, remaining: 0, sent: 0, pending: 0, held: [], stopped: 0, waiting: 0, more: false, transient: false, label: null, sealed: false, reason: undefined };
+    const rep = { ran: false, depth: null, remaining: 0, sent: 0, pending: 0, held: [], stopped: 0, waiting: 0, more: false, transient: false, label: null, sealed: false, reason: undefined };
     if (!state) { rep.reason = "empty"; return rep; }
     const auth = state[KEYS.auth] || null;
     rep.label = (auth && auth.label) || null;
@@ -139,6 +139,9 @@
       plan: state[KEYS.plan], receipts: state[KEYS.receipts], tries: state[KEYS.tries],
       released: state[KEYS.released], written: state[KEYS.written],
     };
+    // The queue's depth as the page last handed it (null = unknown: no plan was read), counting rows
+    // the relay cannot carry too — `remaining` only counts the lanes.
+    if (view.plan && typeof view.plan.depth === "number") rep.depth = view.plan.depth;
     const wake = planWake(view, now);
     rep.held = wake.held; rep.stopped = wake.stopped; rep.waiting = wake.waiting; rep.remaining = wake.remaining;
     if (!wake.remaining) { rep.reason = "empty"; return rep; }
@@ -169,6 +172,24 @@
     return { plan: v[KEYS.plan], receipts: v[KEYS.receipts], tries: v[KEYS.tries], released: v[KEYS.released], written: v[KEYS.written] };
   }
 
+  /**
+   * The host answered "nothing ran" (refused, no relay route, no sign-in): the row is not
+   * "written", or the page's claim would mark it as sent by the relay and it could never be edited,
+   * discarded or re-aimed. Only a first attempt is taken back — an earlier unanswered one may have
+   * run — and only while the entry is still this attempt's own stamp. Returns `verdict`.
+   */
+  async function unwritten(env, ackId, stamp, verdict) {
+    if (stamp.fresh) {
+      await env.store.update([KEYS.written], (v) => {
+        const written = { ...(v[KEYS.written] || {}) };
+        if (written[ackId] !== stamp.first) return { result: false };
+        delete written[ackId];
+        return { put: { [KEYS.written]: written }, result: true };
+      }).catch(() => null);
+    }
+    return verdict;
+  }
+
   /** Send one row: claim the write in a transaction (ownership re-checked there), POST, keep the verdict. */
   async function sendOne(env, s, auth) {
     const ackId = s.item.ackId;
@@ -179,8 +200,10 @@
       if (!swOwns(v[KEYS.own], now)) return { result: null };
       const written = { ...(v[KEYS.written] || {}) };
       const first = typeof s.item.frame.firstSentAt === "number" ? s.item.frame.firstSentAt : (written[ackId] ?? now);
+      // Only a FIRST write may be rolled back below: an earlier attempt may have run.
+      const fresh = written[ackId] === undefined;
       written[ackId] = first;
-      return { put: { [KEYS.written]: written }, result: { first, now } };
+      return { put: { [KEYS.written]: written }, result: { first, now, fresh } };
     });
     if (!stamp) return "page";
     const frame = stampFrame(s.item.frame, stamp.first, stamp.now);
@@ -192,11 +215,11 @@
     } catch {
       return "net";
     }
-    if (res.status === 404 || res.status === 405) return "unsupported";
-    if (res.status === 401 || res.status === 403) return "auth";
+    if (res.status === 404 || res.status === 405) return unwritten(env, ackId, stamp, "unsupported");
+    if (res.status === 401 || res.status === 403) return unwritten(env, ackId, stamp, "auth");
     let body = null;
     try { body = await res.json(); } catch { /* not JSON */ }
-    if (res.status === 422 || (body && typeof body.refused === "string")) return "stop";
+    if (res.status === 422 || (body && typeof body.refused === "string")) return unwritten(env, ackId, stamp, "stop");
     if (!res.ok || !body) return "net";
     if (body.pending === true) return "pending";
     const ack = body.ack;
@@ -236,6 +259,18 @@
       return n ? { put: { [KEYS.released]: released }, result: n } : { result: 0 };
     });
     return r || 0;
+  }
+
+  /**
+   * Is a push with this report one the phone can show quietly? Only when the relay READ a plan that
+   * holds nothing (depth 0) and the wake left nothing sent, held, refused or waiting. An unreadable
+   * store, a missing plan or a plan with rows the relay cannot carry (uploads, "wait for the agent",
+   * auto-send off, a session not running) says nothing about the queue being empty: that phone has
+   * a queue and must be told the desktop is back.
+   */
+  function quietPush(rep) {
+    return !!rep && rep.depth === 0 && !rep.sent && !rep.pending && !(rep.held && rep.held.length) && !rep.stopped && !rep.remaining && !rep.waiting
+      && (rep.reason === undefined || rep.reason === "empty");
   }
 
   const plural = (n, one, many) => (n === 1 ? one : many);
@@ -332,5 +367,5 @@
     };
   }
 
-  g.WPRelay = { KEYS, OWN_STALE_MS, WAIT_MS, MAX_TRIES, BACKOFF_MS, swOwns, verdictOf, frameKey, planWake, stampFrame, runRelay, release, notice, idbStore };
+  g.WPRelay = { KEYS, OWN_STALE_MS, WAIT_MS, MAX_TRIES, BACKOFF_MS, swOwns, verdictOf, frameKey, planWake, stampFrame, runRelay, release, notice, quietPush, idbStore };
 })(globalThis);

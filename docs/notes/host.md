@@ -709,7 +709,7 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   `deploy/install-service.sh`) BAKE the resolved `ROOT` and `STATE_DIR` into the plist/unit — the
   precedence is `@waterplane/shared`'s `statedir.ts`, so the standalone CLI needs no host import —
   and the doctor's `state-service` row warns when the installed service's environment would resolve
-  a different state dir than the shell running it. PER-REPO state (`<repo>/.waterplane/`: `builds.json`, `capture.json`, `artifacts.json`,
+  a different state dir than the shell running it. PER-REPO state (`<repo>/.waterplane/`: `builds.json`, `artifacts.json`,
   `autopull.json`, `repohealth*`, `assess-*`, `peer-job.json`, a repo's own `backlog.json`) is the
   repo's and does not move. `STATE_DIR` and `ROOT` are read from the process environment, the repo
   `.env` and the per-user config `.env` — loaded into a scratch copy before either is resolved
@@ -3394,7 +3394,7 @@ Measured on the live host over one night (2026-09-10), that cost the feature bot
   and arming no resume in between.
 - **A `clear` that is only the CLOCK.** The rejection still stands, nothing has been served since,
   and its own `resetsAt` has merely passed. `checkLimit` called that positive proof and cleared the
-  block — and `clearLimitBlock` kills `limitTimer`, i.e. it cancels the auto-continue that was the
+  block — and `clearLimitBlock` cancels the wall lane's timer (`limitTimer` then), i.e. it cancels the auto-continue that was the
   entire point. The same night: reset at 00:00, the minute sweep cleared two sessions at 00:00:38,
   their attempts were due at 00:02, so no `continue` was ever typed and the prompts that hit the
   wall never ran. The third session survived only because its cached verdict happened not to be
@@ -5384,8 +5384,7 @@ checklist states which value a session waterplane spawns in the repo would see, 
 
 The agent that needs to know what waterplane does for a repo is the `claude` process running IN that
 repo. Before this, a driven repo learned only what the `## waterplane conventions` CLAUDE.md block said
-(inbox and outbox, written once, never updated) and, where capture was configured, the
-`visual-check` preset. Builds, the artifact collection, autopull, the capture trigger and the frame (a
+(inbox and outbox, written once, never updated). Builds, the artifact collection, autopull and the frame (a
 phone reader, often away, answers on the person's behalf, resumes at a limit reset, unattended
 prompts, no interactive programs, secrets set from the phone) were told to nobody.
 
@@ -9013,8 +9012,11 @@ repo-readings sheet's *agents* region, `AgentReadingsRegion.tsx`, every sentence
   (`exposure.ts` `exposureCrashMarks`, week of the mark's latest change) and backlog items whose
   category is `bug` (week added; a deleted item is gone).
 
-Cost is bounded the way `tokenstats.ts` bounds it: per-log summaries persisted in
-`agentreadings.json`, weeks derived on every answer, and a sweep that walks only the repo's own
+Cost is bounded the way `tokenstats.ts` bounds it: per-log summaries persisted one file per
+project-directory slug under `agentreadings/` (`jsonstore.ts`'s `JsonShards`: a flush writes only
+the slugs a sweep changed — the single 9.3 MB file it replaced cost ~160 ms of `JSON.stringify` on
+the loop every PTY shares, every 5 s while logs moved; the old file seeds the shards once and is kept
+as `agentreadings.json.migrated`, a migration leftover a person may clear), weeks derived on every answer, and a sweep that walks only the repo's own
 project-directory slugs and re-reads only logs whose size or mtime moved. Measured on the owner's
 desktop: the first sweep of this repo read 16,321 logs in 33 s (async, yielding); the next one was a
 325 ms stat sweep. Because the first sweep is that long, an answer waits `SWEEP_WAIT_MS` (8 s) and

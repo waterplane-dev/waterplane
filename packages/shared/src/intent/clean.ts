@@ -8,13 +8,11 @@
  */
 
 import { cleanParamValue } from "../buildparams.js";
-import type { CaptureBackendId } from "../wire/capture.js";
-import { CAPTURE_BACKEND_IDS } from "../wire/capture.js";
 import { DEFAULT_GRACE_MIN, INTENT_MAX_STEPS, cleanRule } from "../schedule.js";
 import { LAUNCH_WAIT_MS, cleanLaunchOpts, safeRel } from "../launch.js";
 import { cleanAuthor, cleanCategory, cleanHeadline } from "../naming.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
-import type { AssessPayload, BlockReason, BudgetPass, BuildPayload, CapturePayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
+import type { AssessPayload, BlockReason, BudgetPass, BuildPayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
 import { REQUEUE_KEEP } from "./types.js";
 import type { IntentPatch } from "../wire/intent.js";
 import type { Intent } from "./row.js";
@@ -276,26 +274,8 @@ function cleanRequeueCount(v: unknown): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-function cleanPayload(v: unknown): IntentPayload | BuildPayload | AssessPayload | CapturePayload | null {
+function cleanPayload(v: unknown): IntentPayload | BuildPayload | AssessPayload | null {
   const raw = (v && typeof v === "object" ? v : {}) as Record<string, any>;
-  if (raw.kind === "capture") {
-    const targetId = str(raw.targetId);
-    // Nothing to point at ⇒ a row that can only ever fail. `build`'s rule.
-    if (!targetId) return null;
-    // An unrecognised backend is DROPPED, not coerced: "window" is the whole
-    // desktop, so a bad value silently defaulting would hand back a
-    // real-looking picture of the wrong thing. Absent is the honest state —
-    // the run resolves the backend from the target's own config anyway, and a
-    // row that shows no backend is a row that claims nothing.
-    const backend = CAPTURE_BACKEND_IDS.includes(raw.backend) ? (raw.backend as CaptureBackendId) : undefined;
-    return {
-      kind: "capture",
-      targetId: targetId.slice(0, 64),
-      name: str(raw.name).slice(0, 120) || undefined,
-      backend,
-      watch: raw.watch === true ? true : undefined,
-    };
-  }
   if (raw.kind === "build") {
     const buildId = str(raw.buildId);
     if (!buildId) return null;

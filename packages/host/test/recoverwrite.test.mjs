@@ -235,7 +235,7 @@ function wallRig() {
     write() { throw new Error("nothing may be typed past the cap"); }, recordPrompt() {},
   };
   const wall = new WallSlice(core);
-  const s = { info: { id: "s1", title: "t", running: true, limit: wall.newLimitState() }, limitTimer: null, lastDataAt: 0 };
+  const s = { info: { id: "s1", title: "t", running: true, limit: wall.newLimitState() }, lastDataAt: 0 };
   core.sessions.set("s1", s);
   const done = () => { wall.clearLimitTimer(s); rmSync(core.root, { recursive: true, force: true }); };
   return { wall, s, core, emits, released, done };
@@ -274,7 +274,7 @@ test("net: the stall entry is held once per episode; a probe's give-up re-announ
   t.after(() => { console.log = orig; });
   const core = { sessions: new Map(), emit() {}, loadLive: () => null, persistLive() {}, write() {}, recordPrompt() {} };
   const slice = new NetRetrySlice(core);
-  const s = { info: { id: "s1", title: "t", running: true, cwd: "/nowhere", netRetry: null }, turnActive: false, lastDataAt: 0, stopCount: 0, netTimer: null, netRecheck: null };
+  const s = { info: { id: "s1", title: "t", running: true, cwd: "/nowhere", netRetry: null }, turnActive: false, lastDataAt: 0, stopCount: 0 };
   core.sessions.set("s1", s);
   t.after(() => slice.clear(s));
   const ERR = "Can't reach the API server (ENOTFOUND)";

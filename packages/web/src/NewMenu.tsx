@@ -114,7 +114,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
 
   return (
     <div className="sheet">
-      <SheetHead title={"New"} onClose={onClose} />
+      <SheetHead title={"New project"} onClose={onClose} />
       <div className="annot-tools">
         <Button className={tab === "repo" ? "active" : ""} onClick={() => setTab("repo")}>project</Button>
         <Button className={tab === "clone" ? "active" : ""} onClick={() => setTab("clone")}>clone</Button>

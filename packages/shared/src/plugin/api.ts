@@ -10,8 +10,10 @@ import type { PluginThermalReader, PluginUsageProbe } from "../pluginreadings.js
 import type { BindLook, BindVerdict } from "../bindconv.js";
 
 /** Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
- *  device's id/name (null: no token, or an in-process call). Never a proof beyond pairing. */
-export interface PluginCaller { kind: PeerKind; deviceId: string | null; deviceName: string | null }
+ *  device's id/name (null: no token, or an in-process call). Never a proof beyond pairing.
+ *  `scope` (2.9): `"passive"` when that device is a passive (kids') row, which reaches a plugin only
+ *  while unlocked; absent for every other caller. A plugin holding credentials refuses it. */
+export interface PluginCaller { kind: PeerKind; deviceId: string | null; deviceName: string | null; scope?: "passive" }
 
 /** A plugin's suggested answer for a session's current question. Rendered by
  *  the existing inline-suggestion UI; a person still taps unless the plugin

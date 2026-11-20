@@ -1,6 +1,6 @@
 /** Turns that are not in the log (screen commands, queued prompts), merged in; the history fallback. Moved from transcript.ts. */
 import type { HistoryEntry, TranscriptBlock, TranscriptDoc, TranscriptTurn } from "@waterplane/shared";
-import { squash } from "../echo.js";
+import { squash, unwrapPasted } from "../echo.js";
 import { TEXT_CAP, answeredOnlyInCli, oneLine } from "@waterplane/shared";
 import { localCommandOf, promptOf, queuedPromptOf } from "./transcriptlog.js";
 import { foldRepaints, scrollHintTrimmed, sliceToCommand, trimTuiChrome } from "./transcriptscreen.js";
@@ -113,6 +113,14 @@ export function screenCommandTurns(entries: HistoryEntry[], logged: TranscriptTu
  */
 /** How much of a prompt's head identifies it against the log's own copy. */
 export const QUEUED_HEAD = 40;
+/**
+ * The head two prompts are matched on. A long (dictated or pasted) prompt is
+ * LOGGED wrapped in `<pasted_content id=…>` tags (see `unwrapPasted`), so the
+ * raw head of the log's copy never matched what waterplane typed: the reader
+ * kept a "the CLI has not started it yet" row under the turn that had already
+ * answered it, and the prompt looked sent twice.
+ */
+const headOf = (s: string): string => squash(unwrapPasted(s)).slice(0, QUEUED_HEAD);
 /** Most queued rows a document will carry. */
 export const QUEUED_MAX = 5;
 
@@ -160,7 +168,7 @@ export function absorbedOpeners(lines: string[]): Set<string> {
     try { rec = JSON.parse(ln); } catch { continue; }
     const q = queuedPromptOf(rec);
     if (q != null) {
-      const head = squash(q).slice(0, QUEUED_HEAD);
+      const head = headOf(q);
       const uuid = String(rec.uuid ?? "");
       if (head && uuid) cand.push({ uuid, head });
       continue;
@@ -170,7 +178,7 @@ export function absorbedOpeners(lines: string[]): Set<string> {
     // opened twice for it is the same duplicate.
     const text = promptOf(rec) ?? localCommandOf(rec);
     if (text == null) continue;
-    const head = squash(text).slice(0, QUEUED_HEAD);
+    const head = headOf(text);
     if (head) logged.push(head);
   }
   for (const c of cand) {
@@ -248,13 +256,13 @@ export function noteQueueOp(rec: any, held: CliHeld[]): boolean {
 
 export function queuedTurns(entries: HistoryEntry[], logged: TranscriptTurn[], answers: BoxAnswer[] = []): TranscriptTurn[] {
   const newestLogged = logged.reduce((m, t) => Math.max(m, t.sentAt ?? 0), 0);
-  const heads = logged.map((t) => squash(t.prompt).slice(0, QUEUED_HEAD)).filter(Boolean);
+  const heads = logged.map((t) => headOf(t.prompt)).filter(Boolean);
   const out: TranscriptTurn[] = [];
   for (const e of entries) {
     const text = (e.text ?? "").trim();
     if (!text || text.startsWith("/")) continue;      // a command is the other function's
     if (!(e.sentAt > newestLogged)) continue;
-    const head = squash(text).slice(0, QUEUED_HEAD);
+    const head = headOf(text);
     if (!head || heads.some((h) => h.startsWith(head) || head.startsWith(h))) continue;
     // Typed into a box rather than the composer: the answer recorded after it
     // carries the words. Only a LATER answer — an older one with the same

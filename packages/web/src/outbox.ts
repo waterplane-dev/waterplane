@@ -36,8 +36,11 @@ import {
 } from "@waterplane/shared";
 import { LS, lsGet } from "./storage";
 import { readGuarded, writeChecked, type Reading } from "./storedGuard";
+import { clearLoss, reportLoss } from "./lossNotice";
 import { announceSetting, onAdopt } from "./settings";
 import { randId } from "./randId";
+import { parsePendingId } from "./core/queue/pendingId";
+import { isRelayedLive } from "./relayedRow";
 
 const DRAFTS_KEY = LS.composeDrafts;
 const OUTBOX_KEY = LS.composeOutbox;
@@ -286,6 +289,8 @@ export interface OutboxEntry {
   launch?: LaunchOpts;
   /** backlog mode: let this row past the usage budget as it is added. */
   pastBudget?: boolean;
+  /** backlog mode: the row waits for the person's tap (`Add to backlog`), never started by the auto switch. */
+  hold?: boolean;
   /**
    * This entry is an ANSWER to a question the CLI was showing — a one-tap
    * approve-bar choice, a checkbox toggle, a Submit, an Esc — rather than text
@@ -422,7 +427,7 @@ const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.i
 /** Which shape a key must hold; an unregistered key accepts any parsed JSON. */
 function shapeOf(key: string): (v: unknown) => boolean {
   if (key === OUTBOX_KEY || key === DEAD_UPLOADS_KEY) return isArray;
-  if (key === DRAFTS_KEY) return isRecord;
+  if (key === DRAFTS_KEY || key === LS.composeSheets) return isRecord;
   return () => true;
 }
 function readState<T>(key: string, fallback: T): Reading<T> {
@@ -432,8 +437,13 @@ function readState<T>(key: string, fallback: T): Reading<T> {
     return { value: fallback, unreadable: true }; // no storage at all (node, blocked)
   }
 }
+/** The keys that hold words a person typed and has not sent, and what to call them on the composer's loss line. */
+const USER_WORDS: Record<string, string> = { [DRAFTS_KEY]: "drafts", [LS.composeSheets]: "sheet drafts" };
 function read<T>(key: string, fallback: T): T {
-  return readState(key, fallback).value;
+  const r = readState(key, fallback);
+  const what = USER_WORDS[key];
+  if (what) { if (r.unreadable) reportLoss({ kind: "unreadable", what, keptSlot: r.keptAt }); else clearLoss(`unreadable:${what}`); }
+  return r.value;
 }
 /**
  * `false` = the store refused it, and the caller is the only one who now holds
@@ -441,7 +451,11 @@ function read<T>(key: string, fallback: T): T {
  * pad's contract, see `writePadDoc`.
  */
 function write(key: string, val: unknown): boolean {
-  try { return writeChecked(localStorage, key, val, shapeOf(key)); } catch { return false; } // `localStorage` itself absent
+  let ok = false;
+  try { ok = writeChecked(localStorage, key, val, shapeOf(key)); } catch { ok = false; } // `localStorage` itself absent
+  const what = USER_WORDS[key];
+  if (what) { if (ok) clearLoss(`refused:${what}`); else reportLoss({ kind: "refused", what }); }
+  return ok;
 }
 
 // ── Drafts (unsent, per session) ─────────────────────────────────────
@@ -475,7 +489,7 @@ export function rescueStrandedPendingDrafts(
   const all = read<Record<string, string>>(DRAFTS_KEY, {});
   let moved = 0, refused = 0;
   for (const [id, text] of Object.entries(all)) {
-    if (!id.startsWith("pending:") || id.startsWith("pending:later:") || isLive(id)) continue;
+    if (!parsePendingId(id) || isLive(id)) continue;
     const keep = draftToRescue(text, "");
     if (!keep) { saveDraft(id, ""); continue; }
     const cwd = cwdOf(id);
@@ -655,6 +669,8 @@ onAdopt(PAD_KEY, (incoming, current) => adoptPad(incoming, current, Date.now()).
  */
 export function isEditableEntry(e: OutboxEntry): boolean {
   if (e.status !== "queued") return false;
+  // The background link already wrote this one: the desktop holds the OLD words.
+  if (isRelayedLive(e)) return false;
   // An upload is bytes, not prose: its `text` is a label ("file · shot.jpg").
   if (e.mode === "upload") return false;
   // An answer is a KEYSTROKE ("2\r", "\x1b") bound to one question box by
@@ -725,7 +741,6 @@ export function plannedInboxPath(filename: string): { name: string; relPath: str
 // train was gone with no trace. Same store as the compose drafts, same
 // `waterplane.compose` prefix, so BootGuard's hard reset preserves it too.
 const SHEET_KEY = LS.composeSheets;
-const SHEET_CAP = 20;
 
 export function loadSheetDraft(key: string): string {
   return read<Record<string, string>>(SHEET_KEY, {})[key] ?? "";
@@ -791,8 +806,8 @@ export function saveSheetDraft(key: string, text: string): void {
   const all = read<Record<string, string>>(SHEET_KEY, {});
   if (text) all[key] = text;
   else delete all[key];
-  // Bound it: a repo-keyed draft per repo would otherwise grow without limit.
-  const keys = Object.keys(all);
-  if (keys.length > SHEET_CAP) for (const k of keys.slice(0, keys.length - SHEET_CAP)) delete all[k];
+  // Never evicts: a cap here once deleted the oldest unsent draft without a word.
+  // Drafts are sheet-keyed text and leave with their send; a person's last
+  // copy is not a cache.
   write(SHEET_KEY, all);
 }

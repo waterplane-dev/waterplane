@@ -21,6 +21,8 @@ import { ago, hhmm } from "../../format";
 import type { Overlay } from "../../routing";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
+import { sessionBudgetChip } from "@waterplane/shared";
+import { openSessionBudget } from "../../sessionBudgetDoor";
 import { openBacklogIn, useBacklog } from "../../features/backlog";
 import { keepFocus } from "./ComposeBar";
 import { BL_OFFLINE } from "../../backlogFilter";
@@ -35,8 +37,8 @@ export interface NextPromptStripProps {
   holdWall(sessionId: string): string | null;
   isPendingId(id: string | null | undefined): boolean;
   sendQueuedNow(ackId: string): void;
-  editQueued(ackId: string, text: string): void;
-  removeQueued(ackId: string): void;
+  editQueued(ackId: string, text: string): boolean;
+  removeQueued(ackId: string): boolean;
   toggleHoldQueued(ackId: string): void;
   handToDesktop(ackId: string): void;
   liveSend(frame: ClientMessage, done: string, blocked?: string): boolean;
@@ -72,6 +74,7 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // silence guess `idle` already makes.
         busy: active.hooked ? !!active.turnActive : !!active.running && !active.idle,
         online: p.online,
+        budgetAmount: active.budget?.verdict ? sessionBudgetChip(active.budget.verdict) : undefined,
         // `holdWall` and not a fourth copy of the ladder: a busy TURN is not a
         // wall (an explicit send types into one — that is the whole point of
         // "send now" beating the park), a dialog and a limit block are.
@@ -101,6 +104,7 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // to say how old the copy is rather than assert the desktop's state.
         asOf: p.online ? undefined : backlogSnapAt ? ago(backlogSnapAt) : undefined,
       })}
+      onRaiseBudget={() => openSessionBudget(active.id)}
       onSendNow={(id, holder) => {
         track("action:nextprompt.sendnow");
         if (holder === "phone") { sendQueuedNow(id); return; }
@@ -124,7 +128,7 @@ export function NextPromptStrip(p: NextPromptStripProps) {
           showToast("it already went in — your edit is kept on the pad");
           return true;
         }
-        if (holder === "phone") { editQueued(id, text); showToast("edited"); return true; }
+        if (holder === "phone") { if (!editQueued(id, text)) return false; showToast("edited"); return true; }
         return liveSend({ t: "backlog.update", id, text }, "edited", BL_OFFLINE);
       }}
       onCancel={(id, holder) => {
@@ -136,7 +140,7 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // the row only after; a full pad refuses the cancel and leaves the row.
         const why = addPadNote({ id: padNoteId(), text, ts: Date.now(), ...(active.cwd ? { cwd: active.cwd } : {}) });
         if (why) { showToast(why); return; }
-        if (holder === "phone") { p.removeQueued(id); showToast("canceled — the words are kept on the pad"); return; }
+        if (holder === "phone") { if (p.removeQueued(id)) showToast("canceled — the words are kept on the pad"); return; }
         liveSend({ t: "backlog.remove", id }, "canceled — the words are kept on the pad", BL_OFFLINE);
       }}
       onPastBudget={(id) => {

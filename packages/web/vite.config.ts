@@ -320,7 +320,7 @@ function webStamp(): { version?: string; sha?: string; dirty?: true; at: number 
  * PACKAGED.
  */
 // Every name vendorChunk returns, highest claim first (see `codeSplitting` below).
-const CHUNK_ORDER = ["react", "xterm", "icons", "noble", "vendor", "shared", "demo", "sheets"];
+const CHUNK_ORDER = ["react", "xterm", "icons", "noble", "vendor", "shared", "demo", "ext-vault", "ext-token-stats", "ext", "features", "sheets"];
 
 function vendorChunk(id: string): string | undefined {
   // The demo (demo-mode-plan.md §4): the fake desktop, its transport and the
@@ -357,9 +357,13 @@ function vendorChunk(id: string): string | undefined {
   if (/[\\/]src[\\/][A-Z][A-Za-z]*(Sheet|View|Menu|Swiper|Annotator|Setup|Update|Bar|Layer)\.tsx$/.test(id)) return "sheets";
   // A feature folder is a sheet and the state behind it, edited apart from App
   // for the same reason (docs/notes/web-architecture.md).
-  if (/[\\/]src[\\/]features[\\/]/.test(id)) return "sheets";
+  // Features, extensions and the root sheets were one 2.9 MB chunk, so any edit re-shipped all of it:
+  // the vault (the most-edited area) and token-stats get their own, the rest of the extensions share
+  // `ext`, `features/` is `features`. All still static imports on the modulepreload list.
+  if (/[\\/]src[\\/]features[\\/]/.test(id)) return "features";
   // …and so is an in-repo extension's web half.
-  if (/[\\/]extensions[\\/][^\\/]+[\\/](web|shared)[\\/]/.test(id)) return "sheets";
+  const ext = /[\\/]extensions[\\/]([^\\/]+)[\\/](web|shared)[\\/]/.exec(id);
+  if (ext) return ext[1] === "vault" ? "ext-vault" : ext[1] === "token-stats" ? "ext-token-stats" : "ext";
   return undefined;
 }
 
@@ -391,10 +395,9 @@ export default defineConfig({
         },
       },
     },
-    // The sheets chunk is one big static chunk on purpose (see vendorChunk); Vite's
-    // default 500 kB warning then fires on every build and reads like a fault to
-    // someone installing for the first time. The limit sits just above today's size,
-    // so real growth still warns.
+    // The app chunks are static on purpose (see vendorChunk); Vite's default 500 kB warning then
+    // fires on every build and reads like a fault to someone installing for the first time. The
+    // limit sits just above the largest chunk today (`features`, ~1.53 MB), so real growth still warns.
     chunkSizeWarningLimit: 1600,
   },
   server: {

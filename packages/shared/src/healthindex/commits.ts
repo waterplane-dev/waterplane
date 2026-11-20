@@ -34,13 +34,13 @@ export function thinCommitPoints(points: readonly HealthCommitPoint[], max: numb
     let lo = a, hi = a;
     const end = Math.min(points.length, a + run);
     for (let i = a; i < end; i++) {
-      if (points[i].index < points[lo].index) lo = i;
-      if (points[i].index > points[hi].index) hi = i;
+      if (points[i]!.index < points[lo]!.index) lo = i;
+      if (points[i]!.index > points[hi]!.index) hi = i;
     }
     keep.add(lo);
     keep.add(hi);
   }
-  return [...keep].sort((x, y) => x - y).map((i) => points[i]);
+  return [...keep].sort((x, y) => x - y).map((i) => points[i]!);
 }
 
 /** Every scorable row as a commit point, thinned to about `max`; `null` when no row scores. */

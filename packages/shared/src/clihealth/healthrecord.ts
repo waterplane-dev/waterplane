@@ -279,7 +279,7 @@ export function noteCliVersion(
   health.version = version;
   health.versionChangedAt = now;
   for (const id of Object.keys(health.signals)) {
-    health.signals[id] = rearmForVersion(health.signals[id], version, now);
+    health.signals[id] = rearmForVersion(health.signals[id]!, version, now);
   }
   // A first sighting on a fresh record is not a change anybody needs told
   // about: there is no history to have invalidated.
@@ -316,9 +316,9 @@ export function clearSeen(sig: SignalRecord, through: number): SignalRecord {
   } else if (missStreakSince != null && missStreakSince <= through) {
     // The streak runs on past the cleared instant: keep only its tail.
     let n = 0;
-    for (let i = window.length - 1; i >= 0 && !window[i].ok; i--) n++;
+    for (let i = window.length - 1; i >= 0 && !window[i]!.ok; i--) n++;
     misses = n;
-    missStreakSince = n ? window[window.length - n].at : null;
+    missStreakSince = n ? window[window.length - n]!.at : null;
   }
   const out: SignalRecord = {
     ...sig,
@@ -379,7 +379,7 @@ export function signalVerdict(sig: SignalRecord, now: number, override?: Partial
   const samples = inWindow.length;
   const failed = inWindow.reduce((n, o) => n + (o.ok ? 0 : 1), 0);
   const rate = samples >= th.rateMinSamples ? failed / samples : null;
-  const oldestInWindow = samples ? inWindow[0].at : null;
+  const oldestInWindow = samples ? inWindow[0]!.at : null;
 
   const base = { misses: sig.misses, samples, failed, rate };
 

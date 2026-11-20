@@ -160,8 +160,6 @@ interface Props {
   onOpenFile?: (repoId: string, relPath: string) => void;
   /** Region 3: open the Send sheet on a seed an opt-in built (nothing sent). */
   onSeed?: (seed: SendSeed) => void;
-  /** Region 3: open the capture sheet for this repo. */
-  onCapture?: (repo: RepoTarget) => void;
   /** The context-weight row's doors: this repo's live sessions, each opening what its own first
    *  request carried. A function because the repo is this sheet's own state. */
   sessionDoorsFor?: (repoId: string) => SessionDoor[];
@@ -175,11 +173,16 @@ interface Props {
    *  `onOpenFile`'s does). Falls back to `onOpenFile`. */
   onOpenInstructionFile?: (repoId: string, relPath: string) => void;
   onClose: () => void;
+  /** Drawn inside Setup & health (`SetupHealthSheet.tsx`): no sheet frame and no region row of its
+   *  own — the frame's section row picks the region (through `initialRegion`). */
+  embedded?: boolean;
+  /** The picker moved to another repo: the frame carries it to the next section. */
+  onRepoChange?: (repoId: string) => void;
 }
 
 export function SetupSheet({
-  repos, initialRepoId, initialRegion, focus, onRemedy, onOpenFile, onSeed, onCapture,
-  sessionDoorsFor, onAllSessions, onSkills, skillsCant, onOpenInstructionFile, onClose,
+  repos, initialRepoId, initialRegion, focus, onRemedy, onOpenFile, onSeed,
+  sessionDoorsFor, onAllSessions, onSkills, skillsCant, onOpenInstructionFile, onClose, embedded, onRepoChange,
 }: Props) {
   const primaryRepos = repos.filter((r) => r.isPrimary);
   // A worktree can be badged too, so the picker (primaries only) may not list
@@ -345,13 +348,7 @@ export function SetupSheet({
   }
 
 
-  return (
-    <Sheet
-      className="readings-sheet"
-      title="Repo readings"
-      icon={<Activity size={18} />}
-      onClose={onClose}
-    >
+  const content = (
       <div className="sheet-scroll">
         <div className="form">
           {/* The shared picker (`RepoPicker.tsx`), keyed by worktreePath like
@@ -364,7 +361,7 @@ export function SetupSheet({
           <RepoSelect
             repos={repos.filter((r) => r.isPrimary || r.id === repoId)}
             value={repos.find((r) => r.id === repoId)?.worktreePath ?? ""}
-            onChange={(dir) => { const r = repos.find((x) => x.worktreePath === dir); if (r) setRepoId(r.id); }}
+            onChange={(dir) => { const r = repos.find((x) => x.worktreePath === dir); if (r) { setRepoId(r.id); onRepoChange?.(r.id); } }}
             aria-label="repo"
           />
 
@@ -373,7 +370,10 @@ export function SetupSheet({
               above both its returns). The kit's FilterChips, like the repo-health
               scope row right under it: a solid `.key.active` here stacked two
               chip styles on one screen. One of the two is always lit, so no ×. */}
-          <div className="ts-filter" role="group" aria-label="reading">
+          {embedded ? (
+            <Explain of="what this section compares">{region === "optins" ? OPTINS_REGION_WORDS
+              : region === "watch" ? WATCH_REGION_WORDS : region === "agents" ? AGENT_REGION_WORDS : regionWords(region)}</Explain>
+          ) : <div className="ts-filter" role="group" aria-label="reading">
             <span className="ctx-stackpick-lab">reading</span>
             {/* Back to the repo's own reading with the region. A subtree's
                 CLAUDE.md series is a different claim about a different file —
@@ -396,7 +396,7 @@ export function SetupSheet({
             </FilterChip>
             <Explain of="what this region compares">{region === "optins" ? OPTINS_REGION_WORDS
               : region === "watch" ? WATCH_REGION_WORDS : region === "agents" ? AGENT_REGION_WORDS : regionWords(region)}</Explain>
-          </div>
+          </div>}
 
           {region === "watch" ? (<>
             <SetupRegion
@@ -426,7 +426,7 @@ export function SetupSheet({
               onRemedy={onRemedy}
             />
           </>) : region === "optins" ? (
-            <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
+            <OptInRegion repo={repo} onSeed={onSeed}
               onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
           ) : region === "agents" ? (
             <AgentReadingsRegion repo={repo} carried={report
@@ -451,6 +451,16 @@ export function SetupSheet({
           )}
         </div>
       </div>
+  );
+  if (embedded) return content;
+  return (
+    <Sheet
+      className="readings-sheet"
+      title="Repo readings"
+      icon={<Activity size={18} />}
+      onClose={onClose}
+    >
+      {content}
     </Sheet>
   );
 }

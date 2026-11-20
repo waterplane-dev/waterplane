@@ -304,7 +304,7 @@ export const HINTS: Record<string, HintDef> = {
   "toolbar:limit": { title: "Auto-continue", what: "Whether this session resumes by itself once a usage limit resets. Tapping cycles: inherit the global setting → on → off." },
   "toolbar:image": { title: "Attach a photo", what: "Picks an image, uploads it into this repo's inbox and puts its path in the message box, so the prompt can point at it." },
   "toolbar:file": { title: "Attach a file", what: "Any kind — PDF, zip, audio, source. Uploaded into this repo's inbox with its path put in the message box." },
-  "toolbar:backlog": { title: "Backlog", what: "This repo's waiting work: what is queued, what is running, and why anything queued has not started yet." },
+  "toolbar:backlog": { title: "Waiting work", what: "This repo's waiting work: what is queued, what is running, and why anything queued has not started yet." },
   "toolbar:history": { title: "History", what: "The prompts recorded for this session — resend one, pin it as the overview label, or copy it." },
   "toolbar:cmd": { title: "Slash commands", what: "The CLI's built-in commands plus this repo's own, in a list you can tap instead of typing." },
 
@@ -404,12 +404,6 @@ export const HINTS: Record<string, HintDef> = {
   },
 
   // ── Files / downloads ─────────────────────────────────────────────
-  "gallery.pull": {
-    title: "Download",
-    what: "Fetches the file to this phone through the resumable queue — the bytes survive a dead tunnel, a reload and the app being killed — and hands it to the phone's own Downloads by itself when it lands.",
-    when: "The same button everywhere: already fetching, a tap opens Downloads rather than starting a second copy; already here, it saves the file out again. Watch or pause it in Downloads.",
-    confirm: true,
-  },
   "gallery.fullres": { title: "Full resolution", what: "Re-fetches this image at its original size. The viewer shows a screen-sized copy by default, which is a fraction of the bytes." },
   "pull.supersede": {
     title: "Keep only the newest",

@@ -1,8 +1,8 @@
 /**
  * A host list per repo, seeded from the device cache and saying how old it is.
  *
- * The arrangement `buildCfgs`/`buildCfgsAt` and `captureTargets`/`captureTargetsAt`
- * each spelled out in App as two `Map` states, a snapshot seed and a save-then-
+ * The arrangement `buildCfgs`/`buildCfgsAt`
+ * spelled out in App as two `Map` states, a snapshot seed and a save-then-
  * stamp on every `*.list` push: **an empty list is a CLAIM** (`localState.ts`),
  * so the reading survives the link, and a cached reading always carries the
  * moment the host last confirmed it. Only the READING is cached — nothing a

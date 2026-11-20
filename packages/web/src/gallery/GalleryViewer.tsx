@@ -133,7 +133,7 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
                   pair that used to sit here — a raw `<a download>` and a
                   separate "to phone" — did different things in the browser and
                   in the APK, where the anchor silently did nothing at all. */}
-              <DownloadButton rec={pullOf(open!)} target={dlTarget(open!)} trackId="action:gallery.download"
+              <DownloadButton rec={pullOf(open!)} target={dlTarget(open!)} trackId="action:gallery.download" explain
                 /* Marked when the bytes are HERE, not when the tap happened: a
                  transfer that fails would otherwise leave the grid claiming the
                  file was downloaded. The pull record is what says "asked for",

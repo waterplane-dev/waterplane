@@ -10,8 +10,9 @@ import { api } from "../../api";
 import type { SendSeed } from "../../sendIntent";
 import { aimEvidence, armStep, core, featureSheetId, isExtensionEnabled } from "../../sdk";
 import { REMEDY_NEEDS_REPO } from "../../setupCheckWords";
-import { doorRepoId, landingScope, menuAim, waiveBody, type SetupCheckAim, type SetupCheckView } from "./logic";
+import { doorRepoId, landingScope, menuAim, tabOfScope, waiveBody, type SetupCheckAim, type SetupCheckView } from "./logic";
 import { setupCheckAim } from "./store";
+import { leaveHealth, placeHealth, type HealthPlace } from "../../setupHealth";
 
 const primaryIds = (): string[] => core().world.repos.filter((r) => r.isPrimary).map((r) => r.id);
 
@@ -41,19 +42,37 @@ export function openSetupCheck(repoId: string | null, aim: { scope?: FindingScop
   forgetSteps();
   const next: SetupCheckAim = { repoId, scope: landingScope(aim.scope, repoId, primaryIds().length, !!(aim.weight || aim.screen)), ...(aim.weight ? { weight: "finding" as const } : {}), ...(aim.screen ? { screen: aim.screen } : {}) };
   setupCheckAim.set(next);
+  placeHealth("setupcheck", { tab: tabOfScope(next.scope), section: "checks" });
   core().nav.open("setupcheck");
 }
 
 /** The main menu's `setup check` line: needs no repo. All repos with two or more, else this repo, else this machine. */
 export function openSetupCheckFromMenu(): void {
   forgetSteps();
-  setupCheckAim.set(menuAim(primaryIds()));
+  const aim = menuAim(primaryIds());
+  setupCheckAim.set(aim);
+  placeHealth("setupcheck", { tab: tabOfScope(aim.scope), section: "checks" });
   core().nav.open("setupcheck");
 }
 
 export function closeSetupCheck(): void {
   setupCheckAim.set({ repoId: null, scope: "repo" });
+  leaveHealth("setupcheck");
   core().nav.close("setupcheck");
+}
+
+/**
+ * Setup & health's checks body, aimed by a tab or section tap: This desktop opens on this machine,
+ * This repo › Checks on the repo the last section was on (else the active one, else the overview with
+ * two or more repos). A switch is a view, never a Back step: any drill-down step is retired first.
+ */
+export function enterChecks(repoId: string | null, place: HealthPlace): void {
+  disarm("card"); disarm("rule");
+  const cur = setupCheckAim.get();
+  if (place.tab === "desktop") { setupCheckAim.set({ repoId: repoId ?? cur.repoId, scope: cur.scope === "account" ? "account" : "machine" }); return; }
+  const w = core().world;
+  const id = repoId ?? cur.repoId ?? w.activeRepo?.id ?? null;
+  setupCheckAim.set(id ? { repoId: id, scope: "repo" } : { repoId: null, scope: primaryIds().length >= 2 ? "all" : "repo" });
 }
 
 const patch = (p: Partial<SetupCheckAim>) => setupCheckAim.set({ ...setupCheckAim.get(), ...p });

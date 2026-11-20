@@ -6,7 +6,7 @@
 // or a local scratch file never does), and a symlink is refused in words: a copied link points outside
 // the release tree.
 import { execFileSync } from "node:child_process";
-import { copyFileSync, lstatSync, mkdirSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const SEGMENT = /^[A-Za-z0-9._-]+$/;
@@ -67,4 +67,25 @@ export function copyExtFiles(srcRoot, id, files, destBase) {
     }
   }
   return missing;
+}
+
+/**
+ * Files that must never ride in the release: Windows debug symbols (`node-pty` ships ~21 MB of
+ * `.pdb` in its prebuilds, 4 MB gzipped, which no runtime ever loads — the 0.1.30 tarball grew
+ * from 12 to 22 MB with them and the OCR assets).
+ */
+export const releaseJunk = (path) => /\.pdb$/i.test(path);
+
+/** A copy filter for a prod dependency: everything but the junk. */
+export const keepInRelease = (src) => !releaseJunk(src);
+
+/** Every junk path under `dir` (relative), so the build can refuse a stage that holds one. */
+export function findReleaseJunk(dir, rel = "") {
+  const out = [];
+  for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...findReleaseJunk(dir, r));
+    else if (releaseJunk(e.name)) out.push(r);
+  }
+  return out;
 }

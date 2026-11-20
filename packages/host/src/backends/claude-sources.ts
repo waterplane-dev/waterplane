@@ -55,6 +55,10 @@ export interface ClaudeHookPayload {
   tool_use_id?: string;
   /** `StopFailure` only: the kind of API error that ended the turn. */
   error?: string;
+  /** `SessionStart` only: startup / resume / clear / compact. */
+  source?: string;
+  /** `SessionEnd` only: why the conversation ended (`clear` moves to a new id). */
+  reason?: string;
 }
 
 /**

@@ -39,7 +39,7 @@ import { api, type UploadError } from "./api";
 import { idbDel, idbGet, idbKeys, idbSet } from "./idb";
 import { subscribeLink } from "./link";
 import { addPadNote } from "./outbox";
-import { LS, lsJson, lsSetJson } from "./storage";
+import { LS, lsJsonUser, lsSetJsonUser } from "./storage";
 import { showToast } from "./toast";
 import {
   afterMiss,
@@ -91,7 +91,7 @@ const listeners = new Set<() => void>();
 function load(): HeldClip[] {
   if (loaded) return clips;
   loaded = true;
-  const raw = lsJson<unknown>(LS.dictations, []);
+  const raw = lsJsonUser<unknown>(LS.dictations, [], "held dictations");
   clips = Array.isArray(raw)
     ? raw.filter((c): c is HeldClip => !!c && typeof (c as { id?: unknown }).id === "string")
       .map((c) => ({ ...c, tries: Number(c.tries) || 0 }))
@@ -101,7 +101,7 @@ function load(): HeldClip[] {
 
 function save(next: HeldClip[]): void {
   clips = next;
-  lsSetJson(LS.dictations, next);
+  lsSetJsonUser(LS.dictations, next, "held dictations");
   emit();
 }
 

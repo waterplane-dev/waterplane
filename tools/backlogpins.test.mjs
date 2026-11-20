@@ -137,7 +137,7 @@ test("P5: the sheet's localStorage keys are the registry's, spelled as they alwa
   // is otherwise no effect at all: it is one store outside the sheet, read every
   // render, so nothing re-applies a cut from outside or mirrors one back (NAV-1).
   // A second copy of any of them runs twice per change.
-  assert.equal(s.split("useEffect(").length - 1, 2, "two effects");
+  assert.equal(s.split("useEffect(").length - 1, 3, "three effects: the drag binding, the repo pin, and the filter cleared for a new row (useClearOnNewRow)");
   assert.equal(s.split("useNow(").length - 1, 1, "one clock");
 });
 
@@ -150,7 +150,8 @@ test("P5: the sheet's localStorage keys are the registry's, spelled as they alwa
 test("the backlog sheet keeps the one store its onLeave clears", () => {
   const index = readFileSync(join(SRC, "features", "backlog", "index.ts"), "utf8");
   const actions = readFileSync(join(SRC, "features", "backlog", "actions.ts"), "utf8");
-  assert.match(index, /id: "backlog",[^\n]*onLeave: clearBacklogFocus, keep: keepStores\(backlogCut\) \}/);
+  // The sheet is Waiting work's Backlog tab (journey spec D4): the body registers its leave and keep.
+  assert.match(index, /registerWaitingBody\("backlog", \{[^\n]*leave: clearBacklogFocus, keep: keepStores\(backlogCut\) \}\)/);
   const leave = actions.slice(actions.indexOf("export function clearBacklogFocus("));
   assert.match(leave.slice(0, leave.indexOf("\n}\n")), /^\s*backlogCut\.set\(cutLeft\);$/m);
   const hook = readFileSync(join(SRC, "backlog", "useBacklogFilters.ts"), "utf8");
@@ -168,6 +169,6 @@ test("fire and re-fire are one tap — never a ConfirmButton", () => {
     assert.doesNotMatch(m[0], /backlog\.(fire|refire)|onFire\(/, "a fire verb wrapped in a confirm");
   }
   // A `manual` row (an agent handed it over) wears `primary`: its fire is the only way it runs.
-  assert.match(text, /<Button (?:className=\{it\.manual \? "primary" : undefined\} )?data-hint="backlog\.fire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.fire"\); p\.verbs\.onFire\(it\.id\); \}\}>fire<\/Button>/);
-  assert.match(text, /<Button data-hint="backlog\.refire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.refire"\); p\.verbs\.onFire\(it\.id\); \}\}>re-fire<\/Button>/);
+  assert.match(text, /<Button (?:className=\{it\.manual \? "primary" : undefined\} )?data-hint="backlog\.fire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.fire"\); p\.verbs\.onFire\(it\.id\); \}\}>Start<\/Button>/);
+  assert.match(text, /<Button data-hint="backlog\.refire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.refire"\); p\.verbs\.onFire\(it\.id\); \}\}>Start again<\/Button>/);
 });

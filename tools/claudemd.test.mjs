@@ -42,18 +42,11 @@ function frontMatter(text) {
 }
 
 /**
- * A skill nobody in this repo wrote.
- *
- * `packages/host/src/visualskill.ts` writes `.claude/skills/visual-check/SKILL.md`
- * into any repo that has capture targets configured — this one included, the
- * moment `.waterplane/capture.json` gains a target. Every rule below would then be
- * asserted against a file no human here authored, and the one about CLAUDE.md
- * naming each skill would fail outright: the "which skill to load" table routes
- * by AREA OF THIS CODEBASE, and a repo-local preset addressed to the agent
- * working here is not a route. So the artifact declares what it is in its own
- * frontmatter and this exempts it on that declaration. A list of names here
- * would be wrong the day a second preset exists — and would also have to be kept
- * in step with a file written by the host, which is the drift this avoids.
+ * A skill nobody in this repo wrote. A skill whose frontmatter declares
+ * `generated-by:` was written by a tool, not by hand, and is exempt from the
+ * rules below: the "which skill to load" table routes by AREA OF THIS CODEBASE,
+ * and a tool-written preset is not a route. The exemption is on that
+ * declaration, never on a list of names.
  */
 const GENERATED = /^generated-by:\s*\S/m;
 
@@ -204,24 +197,6 @@ test("CLAUDE.md points at every skill, and every skill is pointed at", () => {
     `These skills exist but CLAUDE.md never names them — add them to the "Which skill to load" table.`,
   );
   assert.ok(have.length > 0, "no skills found under .claude/skills — did the directory move?");
-});
-
-test("a preset the host writes into a repo declares itself machine-written", () => {
-  // The other half of the exemption above, pinned from the WRITER's side. Drop
-  // the marker there and nothing fails here — it fails later, in whatever repo
-  // has capture targets, as a `npm test` that broke because the host wrote a
-  // file into it. Read as text so this costs no build and no import.
-  const src = readFileSync(join(ROOT, "packages", "host", "src", "visualskill.ts"), "utf8");
-  // The block lives in a template literal, so its opening `---` shares a line
-  // with the `return`. Anchor on the `name:` line instead.
-  const block = /^name: visual-check\n[\s\S]*?\n---$/m.exec(src);
-  assert.ok(block, "`visualskill.ts` no longer writes a `name: visual-check` frontmatter block — find where the preset's text moved to.");
-  assert.match(
-    block[0], GENERATED,
-    "The `visual-check` preset must keep declaring `generated-by:` in its frontmatter.\n" +
-    "That marker is what exempts it from the skill rules in this file — without it,\n" +
-    "every repo with capture targets starts failing a check about a file it never wrote.",
-  );
 });
 
 test("the skills are tracked by git, not ignored", () => {

@@ -7,12 +7,13 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { classifyRework, foldAgentWeeks, lastWeeks, promptWords, weekOfMs, countByWeek, inRepairRun } from "../dist/agentclass.js";
 import { summarizeConv, summarizeAgentLog } from "../dist/agentscan.js";
-import { AgentReadingsStore, agentReadingsFor, bugsByWeek, slugBelongs } from "../dist/agentreadings.js";
+import { AGENT_LEGACY_FILE, AGENT_SHARD_DIR, AgentReadingsStore, agentReadingsFor, bugsByWeek, slugBelongs } from "../dist/agentreadings.js";
 import { setExposureDir } from "../dist/exposure.js";
 
 process.env.TZ = "UTC";
@@ -574,4 +575,121 @@ test("a session that switched model carries no model, never filed wholly under t
   const s = await summarizeConv(p, "S1", Buffer.byteLength(text), 1);
   assert.equal(s.sr.md, undefined);
   assert.ok(s.sr.st > 0, "the start reading itself still stands");
+});
+
+// ── the store on disk: one shard per slug ─────────────────────────────────
+
+/** Three slugs: the repo's own, its worktree's, and another repo's. */
+function shardHome() {
+  const home = mkdtempSync(join(tmpdir(), "wp-agentshard-"));
+  const projects = join(home, "projects");
+  writeLog(join(projects, "-r-app"), "S1.jsonl", convLog());
+  writeLog(join(projects, "-r-app--claude-worktrees-agent-1"), "S2.jsonl", convLog({ sid: "S2" }).replaceAll('"/r/app"', '"/r/app/.claude/worktrees/agent-1"'));
+  writeLog(join(projects, "-r-other"), "S3.jsonl", convLog({ sid: "S3" }).replaceAll('"/r/app"', '"/r/other"'));
+  return { home, projects, state: join(home, "state") };
+}
+const shardInodes = (state) => Object.fromEntries(readdirSync(join(state, AGENT_SHARD_DIR)).map((n) => [n, statSync(join(state, AGENT_SHARD_DIR, n)).ino]));
+const ALL_SHARDS = ["-r-app--claude-worktrees-agent-1.json", "-r-app.json", "-r-other.json"];
+/** A repo's conversations as a set (the weekly fold does not depend on their order, and a reload changes it). */
+const convSet = (store, repo) => store.conversations([repo]).map((c) => JSON.stringify(c)).sort();
+
+test("a change to one slug writes exactly that slug's shard; the others are not rewritten", async () => {
+  const { home, projects, state } = shardHome();
+  process.env.CLAUDE_CONFIG_DIR = home;
+  try {
+    const store = new AgentReadingsStore(state, () => undefined);
+    await store.sweep(["/r/app"], 0);
+    await store.sweep(["/r/other"], 0);
+    store.flush();
+    const before = shardInodes(state);
+    assert.deepEqual(Object.keys(before).sort(), ALL_SHARDS);
+    assert.equal(existsSync(join(state, AGENT_LEGACY_FILE)), false, "the single file is never written any more");
+
+    // A sweep that finds nothing new writes nothing.
+    await store.sweep(["/r/app"], 0);
+    store.flush();
+    assert.deepEqual(shardInodes(state), before);
+
+    appendFileSync(join(projects, "-r-app--claude-worktrees-agent-1", "S2.jsonl"), asst("m9", T(10), usage(1, 1, 1), [], "S2") + "\n");
+    assert.equal((await store.sweep(["/r/app"], 0)).reread, 1);
+    await store.sweep(["/r/other"], 0);
+    store.flush();
+    const after = shardInodes(state);
+    assert.deepEqual(Object.keys(after).filter((n) => after[n] !== before[n]), ["-r-app--claude-worktrees-agent-1.json"]);
+
+    // A fresh store reads the shards back: the same conversations, nothing re-read from the logs.
+    const again = new AgentReadingsStore(state, () => undefined);
+    assert.equal(again.conversations(["/r/app"]).length, 2);
+    assert.deepEqual(convSet(again, "/r/app"), convSet(store, "/r/app"));
+  } finally {
+    delete process.env.CLAUDE_CONFIG_DIR;
+  }
+});
+
+test("migration: the old single file seeds every slug's shard once and is kept as .migrated, never deleted", async () => {
+  const { home, state } = shardHome();
+  process.env.CLAUDE_CONFIG_DIR = home;
+  try {
+    // The old file as the pre-shard host wrote it: `{v, store}` holding every slug.
+    const src = new AgentReadingsStore(join(home, "src-state"), () => undefined);
+    await src.sweep(["/r/app"], 0);
+    await src.sweep(["/r/other"], 0);
+    src.flush();
+    const old = { v: 0, store: {} };
+    const sdir = join(home, "src-state", AGENT_SHARD_DIR);
+    for (const n of readdirSync(sdir)) {
+      const { k, b } = JSON.parse(readFileSync(join(sdir, n), "utf8"));
+      old.v = b.v;
+      old.store[k] = b.files;
+    }
+    assert.equal(Object.keys(old.store).length, 3);
+    mkdirSync(state, { recursive: true });
+    const legacy = join(state, AGENT_LEGACY_FILE);
+    writeFileSync(legacy, JSON.stringify(old));
+
+    // Point the logs away: every answer below must come from the migrated store alone.
+    process.env.CLAUDE_CONFIG_DIR = join(home, "nowhere");
+    const store = new AgentReadingsStore(state, () => undefined);
+    assert.deepEqual(convSet(store, "/r/app"), convSet(src, "/r/app"));
+    assert.deepEqual(convSet(store, "/r/other"), convSet(src, "/r/other"));
+    assert.deepEqual(Object.keys(shardInodes(state)).sort(), ALL_SHARDS);
+    assert.equal(existsSync(legacy), false);
+    assert.deepEqual(JSON.parse(readFileSync(`${legacy}.migrated`, "utf8")), old, "the old bytes are kept whole");
+
+    // Once: a second boot reads the shards and leaves both the shards and the .migrated copy alone.
+    const before = shardInodes(state);
+    const again = new AgentReadingsStore(state, () => undefined);
+    assert.deepEqual(convSet(again, "/r/app"), convSet(src, "/r/app"));
+    assert.deepEqual(shardInodes(state), before);
+    assert.ok(existsSync(`${legacy}.migrated`));
+  } finally {
+    delete process.env.CLAUDE_CONFIG_DIR;
+  }
+});
+
+test("a shard that does not parse is moved aside and its slug re-read from the logs, never answered as empty", async () => {
+  const { home, state } = shardHome();
+  process.env.CLAUDE_CONFIG_DIR = home;
+  try {
+    const store = new AgentReadingsStore(state, () => undefined);
+    await store.sweep(["/r/app"], 0);
+    store.flush();
+    writeFileSync(join(state, AGENT_SHARD_DIR, "-r-app.json"), "{ torn");
+    const orig = console.error;
+    console.error = () => {};
+    let fresh;
+    try { fresh = new AgentReadingsStore(state, () => undefined); } finally { console.error = orig; }
+    assert.ok(readdirSync(join(state, AGENT_SHARD_DIR)).some((n) => n.startsWith("-r-app.json.corrupt-")));
+    assert.equal((await fresh.sweep(["/r/app"], 0)).reread, 1, "only the lost slug is re-read");
+    assert.deepEqual(convSet(fresh, "/r/app"), convSet(store, "/r/app"));
+  } finally {
+    delete process.env.CLAUDE_CONFIG_DIR;
+  }
+});
+
+test("the agent readings store is never handed whole to writeJsonAtomic: a flush goes through JsonShards", () => {
+  const src = readFileSync(fileURLToPath(new URL("../src/agentreadings.ts", import.meta.url)), "utf8");
+  assert.doesNotMatch(src, /writeJsonAtomic\s*\(/);
+  assert.doesNotMatch(src, /\bwriteJsonAtomic\b[^;]*from\s*"\.\/jsonstore\.js"/);
+  assert.match(src, /new JsonShards\(/);
 });

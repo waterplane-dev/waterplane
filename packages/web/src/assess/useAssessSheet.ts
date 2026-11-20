@@ -133,7 +133,6 @@ export function useAssessSheet(p: AssessSheetProps) {
    * the next person not to be told.
    */
   const [guideOpen, setGuideOpen] = useState(false);
-  const applyBlocked = assessApplyBlocker({ run, picked, online: p.online, busy: p.busy });
   const runBlocked = assessRunBlocker({ run, online: p.online, busy: p.busy, budgetNote: p.budgetNote });
   /** How many rows the NEXT run would be scoped to; 0 is "the whole repo". */
   const scopeN = p.scope?.length ?? 0;
@@ -188,6 +187,9 @@ export function useAssessSheet(p: AssessSheetProps) {
    * what it does.
    */
   const [writeNames, setWriteNames] = useState(() => loadPicks(runId ?? "")?.writeNames ?? true);
+  /** Titles left to write count as something to apply, so an all-`still wanted`
+   * run with the switch on `write` is not stuck behind "nothing is ticked". */
+  const applyBlocked = assessApplyBlocker({ run, picked, names: writeNames ? nameCount : 0, online: p.online, busy: p.busy });
 
   /**
    * Every decision on this screen, written back as it is made.

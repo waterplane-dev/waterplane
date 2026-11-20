@@ -65,7 +65,7 @@ export function neverRanSession(f: { sessions: number; recent: number; closed: n
  */
 export function existingReposLine(repos: number): string | null {
   if (repos <= 0) return null;
-  return `Or tap + now on one of your ${repos} repo${repos === 1 ? "" : "s"} below to open a session in it.`;
+  return `Or tap New session on one of your ${repos} repo${repos === 1 ? "" : "s"} below to open a session in it.`;
 }
 
 // ── Question 1: the name ─────────────────────────────────────────────

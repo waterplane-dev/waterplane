@@ -18,7 +18,7 @@ export function TvTail({ m }: { m: TvModel }) {
           looking) and scrolled to once when it appears. */}
       {asking && (
         <div className="tr-ask" id="tr-ask">
-          <div className="tr-ask-head"><HelpCircle size={14} /> waiting for your answer</div>
+          <div className="tr-ask-head"><HelpCircle size={14} /> Claude is asking</div>
           {status?.prompt && onAnswer
             ? <PromptAnswer
                 prompt={status.prompt}
@@ -54,9 +54,9 @@ export function TvTail({ m }: { m: TvModel }) {
                 </Button>
               </>
             : <>
-                <div className="tr-ask-q">A dialog is open in the CLI that has no one-tap buttons here.</div>
+                <div className="tr-ask-q">Could not read the choices.</div>
                 <Button onClick={() => { track("action:read.toCli"); onShowCli?.(); }}>
-                  <TerminalIcon size={13} /> open the CLI
+                  <TerminalIcon size={13} /> Show terminal
                 </Button>
               </>}
         </div>

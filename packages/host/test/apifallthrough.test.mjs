@@ -64,8 +64,6 @@ const PROBES = [
   ["GET", "/api/repos/R/compliance/x"],
   ["POST", "/api/repos/R/compliance/bogus"],
   ["POST", "/api/repos/R/compliance"],
-  ["POST", "/api/repos/R/capture/run/extra", "{}"],
-  ["GET", "/api/repos/R/capture/run"],
   ["GET", "/api/repos/R/archive/extra"],
   ["PUT", "/api/repos/R/archive"],
   ["GET", "/api/repos/R/envfiles/x"],
@@ -113,8 +111,6 @@ const EXPECT = {
   "GET /api/repos/R/compliance/x": [404, "{\"error\":\"not found\"}"],
   "POST /api/repos/R/compliance/bogus": [404, "{\"error\":\"not found\"}"],
   "POST /api/repos/R/compliance": [404, "{\"error\":\"not found\"}"],
-  "POST /api/repos/R/capture/run/extra": [400, "{\"ok\":false,\"error\":\"stub capture\"}"],
-  "GET /api/repos/R/capture/run": [404, "{\"error\":\"not found\"}"],
   "GET /api/repos/R/archive/extra": [200, "{\"cwd\":\"<root>/edges\",\"total\":0,\"offset\":0,\"rows\":[],\"scanned\":0}"],
   "PUT /api/repos/R/archive": [404, "{\"error\":\"not found\"}"],
   "GET /api/repos/R/envfiles/x": [200, "{\"files\":[]}"],
@@ -129,7 +125,6 @@ async function run() {
     root: ROOT,
     sessions: { list: () => [], listClosed: () => [], onHookEvent() {} },
     setup: { stateFor() { return undefined; }, record() {} },
-    capture: { run: () => ({ error: "stub capture" }), runsFor: () => [] },
   };
   const server = createServer((req, res) => {
     handleApi(req, res, ctx).catch(() => { res.statusCode = 500; res.end("threw"); });

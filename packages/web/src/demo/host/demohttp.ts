@@ -15,11 +15,12 @@ import { demoRepoHealth } from "./repohealth.ts";
 import { demoCompliance, demoSkills, demoSlowJob } from "./skills.ts";
 import { demoHealthIndex } from "./healthindex.ts";
 import { findSession, screenLines, sessions } from "./desk.ts";
-import { NOT_IN_DEMO } from "./verdict.ts";
+import { NOT_IN_DEMO, notInDemo } from "./verdict.ts";
+import { demoGitTree } from "./gitstubs.ts";
 import type { DemoModel } from "./model.ts";
 import type { DemoHttpRequest, DemoHttpResponse } from "./types.ts";
 
-export const ONBOARD_NOT_IN_DEMO = "Not in the demo — this builds a real app on your desktop.";
+export const ONBOARD_NOT_IN_DEMO = notInDemo("build a real app");
 
 const json = (v: unknown, status = 200): DemoHttpResponse =>
   ({ status, contentType: "application/json", body: JSON.stringify(v) });
@@ -280,12 +281,14 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     return json({ ok: true, doc: { rules: [] }, suggested: SUGGESTED_ASK_RULES, honouredBy: ASK_RULE_BACKENDS, rev: "demo" });
   }
   if (path === "/api/askrules" && method === "PUT") {
-    return json({ ok: false, error: "The demo's desktop launches no claude, so it keeps no ask rules — nothing was changed." }, 400);
+    return json({ ok: false, error: notInDemo("save ask rules for the claude it launches") }, 400);
   }
 
   // The first-app journey (first-app plan WP7). Its card is not drawn in the demo, but "Build
   // another app" in the New sheet still reaches here: the plan refuses in words, there is never a
   // job, and a start is refused the same way — nothing is built on a desktop that is a scenario.
+  const gt = demoGitTree(req, now, (rid) => repoTargets(m).some((r) => r.id === rid));
+  if (gt) return gt;
   if (path === "/api/onboard/plan" && method === "GET") {
     return json({ ok: false, error: ONBOARD_NOT_IN_DEMO, path: q.path === "android" ? "android" : "web", name: q.name ?? "", folder: "", steps: [], consent: [], suggestedPrompt: "" });
   }

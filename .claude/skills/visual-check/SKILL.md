@@ -1,13 +1,11 @@
 ---
 name: visual-check
 description: How to look at a screenshot during a development loop without permanently polluting the conversation's context — what a frame actually costs on every remaining turn, and the five-rung ladder from a deterministic check, through a text verdict and the phone's gallery, to looking at the image yourself. Load BEFORE asking to see a screenshot, before assembling a contact sheet, and before handing frames to a subagent.
-generated-by: waterplane capture (packages/host/src/visualskill.ts) — a machine-written preset, not one of this repo's hand-authored skills. Edit it freely; nothing overwrites it.
 ---
 
 # Looking at a screen without paying for it on every turn
 
-This repo has capture targets configured, so frames are cheap to produce. Frames
-are not cheap to KEEP. This file is about the difference.
+Frames are cheap to produce and not cheap to KEEP. This file is about the difference.
 
 ## The cost, stated once
 
@@ -37,10 +35,10 @@ Most questions in a development loop are mechanical, not aesthetic, and this
 rung answers all of them:
 
 - **Pixel diff** — did anything change at all?
-- **Blank/variance floor and shot-score** — is this a real frame, or a white
+- **Blank/variance floor** — is this a real frame, or a white
   rectangle?
 - **DOM / uiautomator / OCR anchor** — is the expected text on the screen?
-- **Console and network sidecar** — did it error while rendering?
+- **Console and network log** — did it error while rendering?
 
 "Did my change take effect", "is the button there", "did it blow up" are all
 answered here, for nothing, by something that cannot be wrong in the confident
@@ -48,14 +46,9 @@ way a model can.
 
 ### 2. A text verdict into the conversation (~50 tokens)
 
-```
-verified:anchor · score 91 · 390x844 dark · console: clean · net: clean
-```
-
-That line is capture's DEFAULT output, and it is the rung to prefer. It carries
-the level of verification, whether the frame scored as a real screen, the
-geometry, and whether anything errored — at roughly one percent of the price of
-the frame it describes.
+Have the script that took the frame print one line: whether the expected text
+was found, the geometry, whether the console errored. That is the rung to
+prefer — at roughly one percent of the price of the frame it describes.
 
 ### 3. The human's eyes, through the phone gallery — zero model tokens
 
@@ -107,30 +100,10 @@ answered its question it goes on costing the same as it did when it was useful.
 ## Naming a file so it resolves
 
 Name any artifact by its FULL path every time you mention it —
-`.claude/outbox/capture-home-2026-09-13-a1b2.png`, never a bare filename and
+`.claude/outbox/home-2026-09-13-a1b2.png`, never a bare filename and
 never "the PNG in the outbox". That path is what the reader turns into the
 picture; a bare name only resolves when the listing holds exactly one media file
 by that name, and never in prose.
-
-## Triggering a capture without spending tokens on it
-
-Ask the host for the run and read the verdict out of the response body. Nothing
-here puts an image in the conversation:
-
-```bash
-curl -sS -X POST http://127.0.0.1:8770/api/repos/<repoId>/capture/run \
-  -H 'content-type: application/json' \
-  -d '{"target":"<targetId>","wait":true}'
-```
-
-8770 is waterplane's documented default port; `WATERPLANE_PORT` moves it.
-
-`<repoId>` comes from `GET http://127.0.0.1:8770/api/repos`; `<targetId>` is the `id` of an
-entry in this repo's `.waterplane/capture.json`.
-
-With `"wait":true` the response carries the verdict line, the sidecar path and
-the frame paths. That is rung 2 for the price of an HTTP round trip: you get the
-~50-token sentence, and the image stays on disk where rung 3 can reach it.
 
 ## Measure the baseline before trusting the arithmetic
 

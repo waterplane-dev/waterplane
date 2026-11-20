@@ -5,6 +5,7 @@ import { pickThumbWidth, viewerWidth } from "./media";
 import { useFileMtime } from "./fileMtime";
 import { cacheThumb } from "./thumbCache";
 import { useThumbSrc } from "./thumbSrc";
+import { useWide } from "./core/layout/layout";
 import { Button } from "./kit/Button";
 import { bangLine, shellBlock } from "./bangLine";
 import { MdTable } from "./MdTable";
@@ -72,9 +73,12 @@ export interface FileRefCtx {
   toShell?(line: string): void;
 }
 
-/** CSS width of an inline thumbnail. Small enough to sit in a paragraph,
- *  big enough that you can tell WHICH screenshot it is without opening it. */
+/** CSS width of a mentioned image: big enough that you can tell WHICH
+ *  screenshot it is without opening it. On the wide layout there is room to
+ *  read it in place — 132px of a 2624px screenshot on a desktop was a smudge.
+ *  Keep in step with `.fileref-img img` (07-reader.css, 16-wide-layout.css). */
 const THUMB_CSS = 132;
+const THUMB_CSS_WIDE = 420;
 
 /**
  * A mentioned inbox/outbox file, rendered as the file itself: a thumbnail for
@@ -92,10 +96,11 @@ const THUMB_CSS = 132;
 function FileRefNode({ fref: r, ctx, q, wide, opens }: { fref: FileRef; ctx: FileRefCtx; q: string; wide?: boolean; opens?: string }) {
   const [broken, setBroken] = useState(false);
   const mtime = useFileMtime(ctx.repoId, r.relPath);
+  const roomy = useWide();
   // `wide` is a document's own image link: drawn at reading width, not as a
   // thumbnail. A GIF is asked for whole — the host's thumbnail of one is a
   // still JPEG, and a GIF in a README is there to move.
-  const width = !wide ? pickThumbWidth(THUMB_CSS) : /\.gif$/i.test(r.relPath) ? undefined : viewerWidth();
+  const width = !wide ? pickThumbWidth(roomy ? THUMB_CSS_WIDE : THUMB_CSS) : /\.gif$/i.test(r.relPath) ? undefined : viewerWidth();
   const url = r.image && !broken ? ctx.url(r.relPath, width, mtime) : null;
   const { src, live } = useThumbSrc(url);
   // A thumbnail this device is still looking up draws as the chip rather than

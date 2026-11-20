@@ -22,7 +22,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { baseName } from "../../format";
 import type { DurableOp } from "../../sdk/types.ts";
-import { LATER_PREFIX, PENDING_PREFIX, isLaterId, isPendingId, laterId, pendingLaneId } from "./logic.ts";
+import { isLaterId, isPendingId, laterId, parseLaterId, parsePendingId, pendingLaneId } from "./logic.ts";
 import { noteShellAdopted } from "../launch/shellReturn.ts";
 import type { PendingFns, PendingKept, QueueCtx } from "./types.ts";
 
@@ -50,7 +50,7 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[], 
    *  dropped or evicted — the screen then says so rather than hanging. */
   const pendingEntry = useMemo(() => {
     if (!isPendingId(activeId)) return null;
-    const ackId = activeId!.slice(PENDING_PREFIX.length);
+    const ackId = parsePendingId(activeId) ?? "";
     return outbox.find((e) => e.ackId === ackId && isCreateOp(e)) ?? null;
   }, [outbox, activeId]);
   /**
@@ -77,7 +77,7 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[], 
     if (!isPendingId(activeId)) return null;
     // `+ later`: no create, no entry — the repo is in the id.
     if (isLaterId(activeId)) {
-      const cwd = activeId!.slice(LATER_PREFIX.length);
+      const cwd = parseLaterId(activeId) ?? "";
       return { id: activeId!, cwd, title: baseName(cwd) || "new session", remoteControl: false, running: true, createdAt: Date.now() };
     }
     const e = pendingEntry;
@@ -86,7 +86,7 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[], 
     // name is still minutes away. Without a fallback the screen would drop to
     // the launcher on the very ack that means it worked. So what was opened is
     // remembered separately, and the entry only ever adds detail.
-    const kept = adoptBridge(pendingKept.current.get(activeId!.slice(PENDING_PREFIX.length)));
+    const kept = adoptBridge(pendingKept.current.get(parsePendingId(activeId) ?? ""));
     if (!e && !kept) return null;
     const op = e?.op as (DurableOp & { t: "session.create" }) | undefined;
     const cwd = e?.cwd || kept?.cwd || "";

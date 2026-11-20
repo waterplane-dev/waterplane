@@ -168,7 +168,8 @@ export interface PendingFns {
 export interface VerbFns {
   restoreOutbox(): void;
   dismissOutbox(): void;
-  editQueued(ackId: string, text: string): void;
+  /** False when refused (a relayed row): the caller must not say "edited". */
+  editQueued(ackId: string, text: string): boolean;
   /** true = moved (false: gone, or refused in a toast). */
   retargetQueued(ackId: string, to: { sessionId: string; cwd: string; mode?: "input" | "backlog"; targetSessionId?: string }): boolean;
   handToDesktop(ackId: string): void;
@@ -176,7 +177,9 @@ export interface VerbFns {
   toggleSerialQueued(ackId: string): void;
   scheduleQueueRows(scheduleId: string): OutboxEntry[];
   dropScheduleQueue(rows: readonly OutboxEntry[]): void;
-  removeQueued(ackId: string): void;
+  /** False when refused (a relayed row): the caller must not copy the words elsewhere or say "discarded".
+   *  `mayHaveRun` unlocks a STUCK relayed row only (`relayedRow.ts`'s `removeRelayedStuck`). */
+  removeQueued(ackId: string, opts?: { mayHaveRun?: boolean }): boolean;
   addPromptToQueuedCreate(ackId: string, text: string): void;
   moveQueued(ackId: string, dir: -1 | 1): void;
   sendQueuedNow(ackId: string): void;

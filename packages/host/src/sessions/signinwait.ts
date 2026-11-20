@@ -51,6 +51,8 @@ import { claudeConfigDir } from "../claudeconfig.js";
 import { claudeSignInState } from "../doctorclaude.js";
 import type { Session, SessionCore } from "./core.js";
 import { SIGNIN_POLL_MS } from "./knobs.js";
+import type { Clock } from "../waitclock.js";
+import { arm, cancel as cancelTimer, clockOf } from "./timers.js";
 
 /** Sessions failing together are one count in the signed-out push. */
 const ANNOUNCE_DELAY_MS = 2000;
@@ -71,12 +73,12 @@ const PARK_MS = 5000;
 const MAX_PARKS = 12;
 
 export class SignInSlice {
+  private get clock(): Clock { return clockOf(this.core); }
   private episodes = new Map<string, AuthEpisode>();
   /** Per member in flight: when our continue was typed, and when its turn started. */
   private flight = new Map<string, { sentAt: number; startedAt?: number }>();
   private parks = new Map<string, number>();
   /** The pending re-ask per parked member (one at most), cleared with the member. */
-  private parkTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(private readonly core: SessionCore, private readonly read = claudeSignInState, private readonly parkMs = PARK_MS) {}
 
@@ -102,7 +104,7 @@ export class SignInSlice {
     const ep = this.episodeOf(s);
     if (!ep?.isMember(s.info.id)) return;
     const f = this.flight.get(s.info.id);
-    if (ep.isInFlight(s.info.id) && f) { f.startedAt ??= Date.now(); return; }
+    if (ep.isInFlight(s.info.id) && f) { f.startedAt ??= this.clock.now(); return; }
     console.log(`${logTag} sign-in episode: continued by hand · ${s.info.title} (${s.info.id})`);
     ep.leave(s.info.id);
   }
@@ -127,8 +129,8 @@ export class SignInSlice {
 
   private unpark(id: string): void {
     this.parks.delete(id);
-    const t = this.parkTimers.get(id);
-    if (t) { clearTimeout(t); this.parkTimers.delete(id); }
+    const s = this.core.sessions.get(id);
+    if (s) cancelTimer(s, "signin");
   }
 
   /** Re-attach after a restart: `id` was a member (`LiveMeta.signInSince`) — back in, silently. */
@@ -176,7 +178,7 @@ export class SignInSlice {
   private episodeFor(account: string, bin: string): AuthEpisode {
     const ep: AuthEpisode = new AuthEpisode({
       // Fresh every time: a five-minute "in" in the reader's cache is the stale answer.
-      read: () => this.read(bin, Date.now(), 0),
+      read: () => this.read(bin, this.clock.now(), 0),
       dispatch: (id) => { void this.fire(ep, id); },
       alive: (id) => !!this.core.sessions.get(id)?.info.running,
       publish: (id, w) => this.publish(id, w),
@@ -213,7 +215,7 @@ export class SignInSlice {
     const f = this.flight.get(id);
     if (!s || !s.info.running || !f) return "gone";
     if (f.startedAt != null) {
-      if (s.turnActive) return Date.now() - f.startedAt >= SERVED_RUNNING_MS ? "resumed" : "wait";
+      if (s.turnActive) return this.clock.now() - f.startedAt >= SERVED_RUNNING_MS ? "resumed" : "wait";
       // Ended with neither a served Stop nor a sign-in refusal (an API give-up): nothing learnt.
       return "gone";
     }
@@ -242,7 +244,7 @@ export class SignInSlice {
       return;
     }
     this.unpark(id);
-    this.flight.set(id, { sentAt: Date.now() });
+    this.flight.set(id, { sentAt: this.clock.now() });
     console.log(`${logTag} sign-in continue · ${s.info.title} (${id})`);
     const res = await writeContinue({
       sessionId: id,
@@ -264,20 +266,14 @@ export class SignInSlice {
   private park(ep: AuthEpisode, s: Session, why: string): void {
     const id = s.info.id;
     const n = (this.parks.get(id) ?? 0) + 1;
-    const old = this.parkTimers.get(id);
-    if (old) { clearTimeout(old); this.parkTimers.delete(id); }
-    if (n > MAX_PARKS) { this.parks.delete(id); console.log(`${logTag} sign-in continue gave up waiting for ${why} to clear · ${s.info.title} (${id})`); return; }
+    if (n > MAX_PARKS) { this.parks.delete(id); cancelTimer(s, "signin"); console.log(`${logTag} sign-in continue gave up waiting for ${why} to clear · ${s.info.title} (${id})`); return; }
     this.parks.set(id, n);
     if (n === 1) console.log(`${logTag} sign-in continue parked: ${why} · ${s.info.title} (${id})`);
     const gen = ep.generation();
-    const t = setTimeout(() => {
-      if (this.parkTimers.get(id) !== t) return;
-      this.parkTimers.delete(id);
+    arm(s, "signin", this.parkMs, () => {
       if (ep.generation() !== gen || !ep.isMember(id) || ep.isInFlight(id)) return;
       if (this.core.sessions.get(id) !== s || !s.info.running) return;
       ep.continueIds([id]);
-    }, this.parkMs);
-    t.unref?.();
-    this.parkTimers.set(id, t);
+    }, clockOf(this.core));
   }
 }

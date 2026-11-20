@@ -9,8 +9,8 @@
 export function queuedAnswerNote(queued: readonly { label: string }[], online: boolean): string {
   const state = online ? "sending" : "queued";
   const what = queued.length > 1
-    ? `${queued.length} answers ${state} (${queued.map((e) => e.label).join(", ")})`
-    : `“${queued[0].label}” ${state}`;
+    ? `You chose: ${queued.map((e) => e.label).join(", ")} (${queued.length} answers ${state})`
+    : `You chose: “${queued[0].label}” — ${state}`;
   return online
     ? `${what} — waiting for the desktop to confirm`
     : `${what} — sent, in order, as soon as the link is back`;

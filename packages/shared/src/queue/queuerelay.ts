@@ -23,7 +23,7 @@ import { sendEligible } from "./queueserial.js";
  * The durable ops a relay may carry: each is at-most-once by ackId on the host
  * (`durable: true` / `durableOp`) and is something a person queued to run
  * unattended. Deliberately NOT here: `updates.apply` (restarts the host),
- * `signin.continue`, `assess.*`, `capture.run`, `backlog.name` — a spender or
+ * `signin.continue`, `assess.*`, `backlog.name` — a spender or
  * a machine action nobody should get from a phone in a pocket.
  */
 export const RELAY_OPS: ReadonlySet<string> = new Set([
@@ -44,6 +44,8 @@ export type RelayReceipt = RelayAckFrame;
 export interface RelayClaim {
   receipts: RelayReceipt[];
   written: { ackId: string; firstSentAt: number }[];
+  /** The APK's relay file did not parse and was moved aside: what it sent is unknown. */
+  lost?: boolean;
 }
 
 /** A queue row as the relay reads it — the phone's `OutboxEntry` fits. */
@@ -196,7 +198,7 @@ export function relayRefusal(frame: unknown): string | null {
   if (typeof f.t !== "string") return "not a frame";
   if (typeof f.ackId !== "string" || !f.ackId) return `${f.t} without an ackId cannot be relayed — a retry could run it twice`;
   if (f.t === "session.input") {
-    if (f.submit === true || typeof f.expectPrompt === "string") return null;
+    if (f.submit === true || (typeof f.expectPrompt === "string" && f.expectPrompt !== "")) return null;
     return "raw keys are never relayed — only a prompt that submits or an answer naming its question";
   }
   if (f.t === "backlog.add" || RELAY_OPS.has(f.t)) return null;

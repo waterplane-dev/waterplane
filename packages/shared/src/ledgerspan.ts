@@ -103,7 +103,8 @@ export function undatedLogsOf(pairs: Iterable<readonly [number, number]>): Array
   const out = [...byM].sort((a, b) => a[0] - b[0]);
   while (out.length > UNDATED_LOGS_CAP) {
     const [, k] = out.shift()!;
-    out[0] = [out[0][0], out[0][1] + k];
+    const head = out[0];
+    if (head) out[0] = [head[0], head[1] + k];
   }
   return out;
 }

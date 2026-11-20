@@ -116,10 +116,6 @@ const CLIENT_T = [
   "build.run",
   "build.save",
   "build.scan",
-  "capture.cancel",
-  "capture.list",
-  "capture.run",
-  "capture.save",
   "clihealth.clear",
   "clihealth.get",
   "closed.clear",
@@ -244,9 +240,6 @@ const HOST_T = [
   "build.options",
   "build.output",
   "build.run",
-  "capture.list",
-  "capture.output",
-  "capture.run",
   "clihealth",
   "closed.list",
   "decisions.log",
@@ -348,11 +341,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 149, "a member was added or merged"); // 147 → 148: signin.continue (blocked sessions D1a); 148 → 149: session.netRetryNow (Retry now, R-connection-024); 149 → 147: install.get/report (android-apps P5); 148 → 149: link.log (the background link's own log)
+  assert.equal(members, 145, "a member was added or merged"); // 147 → 148: signin.continue (blocked sessions D1a); 148 → 149: session.netRetryNow (Retry now, R-connection-024); 149 → 147: install.get/report (android-apps P5); 148 → 149: link.log (the background link's own log)
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 83, "a member was added or merged"); // 83 → 82: install.log (android-apps P5); 82 → 83: slowjob.state (slow jobs, host package 3a)
+  assert.equal(members, 80, "a member was added or merged"); // 83 → 82: install.log (android-apps P5); 82 → 83: slowjob.state (slow jobs, host package 3a)
 });

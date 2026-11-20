@@ -6,10 +6,10 @@ It is off by default. Switching it on downloads the reader once from your deskto
 
 ## Where to find it
 - **Annotator** — after you finish a highlight, box or circle, the words under it are added to your note.
-- **Settings › Tools & diagnostics › text in marks** — shows whether the reader is downloading, ready or failed (with a try again button). After you switch it off, it offers to delete the download.
+- **Settings › Plugins › Text in marks** — shows whether the reader is downloading, ready or failed (with a try again button). After you switch it off, it offers to delete the download.
 
 ## Settings
-The on and off switch is in Settings › Tools & diagnostics › plugins.
+The on and off switch is in Settings › Plugins.
 
 
 ## For developers

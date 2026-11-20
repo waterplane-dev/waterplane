@@ -35,9 +35,7 @@ import {
   OPT_INS, REPOHEALTH_OWN_FILE, isStandingSchedule, optInMarkedIds, optInMarker, ruleRecurs,
   type BranchRules, type HistoryEntry, type Intent, type Lifecycle, type OptInRow, type OptInSent, type OptInSentStatus, type OptInState,
 } from "@waterplane/shared";
-import { isAndroidRepo } from "./androidenv.js";
 import { repoSharedDir } from "./branddirs.js";
-import { captureTargetCount } from "./compliance.js";
 import { seriesPathOf } from "./healthwatch.js";
 import { contributedFixIds } from "./plugins/setupcontrib.js";
 import { canReadRepoHealth } from "./repohealth.js";
@@ -196,27 +194,6 @@ function gcpCleanup(wt: string): Probe {
   return { relevant: true, state: "unknown", detail: `Deploys to Google Cloud (found in ${found.join(", ")}); this desktop cannot see the registry's cleanup policy, so say when it is done.` };
 }
 
-const WEB_DEPS = ["vite", "next", "react", "vue", "svelte", "@angular/core"];
-
-function screenshots(wt: string): Probe {
-  let web = false;
-  const pkg = read(join(wt, "package.json"));
-  if (pkg) {
-    try {
-      const o = JSON.parse(pkg) as { dependencies?: Record<string, unknown>; devDependencies?: Record<string, unknown> };
-      const names = Object.keys({ ...(o.dependencies ?? {}), ...(o.devDependencies ?? {}) });
-      web = names.some((n) => WEB_DEPS.includes(n) || n.startsWith("@capacitor/"));
-    } catch { /* unreadable package.json is not a web app */ }
-  }
-  let android = false;
-  try { android = isAndroidRepo(wt); } catch { /* not readable */ }
-  if (!web && !android) return unfit("Neither a web app dependency in package.json nor an Android project was found.");
-  const n = captureTargetCount(wt);
-  return n > 0
-    ? { relevant: true, state: "on", detail: `${n} capture target${n === 1 ? "" : "s"} configured.` }
-    : { relevant: true, state: "off", detail: "No capture targets are configured." };
-}
-
 /** Offered only where the remote's rules require `local-ci` unpinned (any token's status counts) and a hook exists.
  *  Rules not read yet ⇒ unfit, never a guess. State = the repo-local git switch. */
 function localCiStatus(wt: string, deps: OptInDeps): Probe {
@@ -250,7 +227,6 @@ export function inspectOptIns(worktree: string, deps: OptInDeps): OptInRow[] {
     "local-ci": () => localCi(worktree),
     "npm-supply-chain": () => npmSupplyChain(worktree),
     "gcp-cleanup": () => gcpCleanup(worktree),
-    "screenshots": () => screenshots(worktree),
     "exposure-watch": () => exposureWatch(worktree),
     "local-ci-status": () => localCiStatus(worktree, deps),
   };

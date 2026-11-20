@@ -181,7 +181,7 @@ export function ClockDirectory({ rows, pending, repoName, online, onOpen, render
     </div>
     {canPick && !open && eligible.length > 0 && (
       <div className="bl-bulk">
-        {/* The backlog's own "pick to re-time" is this same plain verb (BulkBars.tsx): a framed
+        {/* The backlog's own "pick to change time" is this same plain verb (BulkBars.tsx): a framed
             `.key` in its own panel here was a second look for one verb. */}
         <button className="link-btn" title="tick the lines you want — in any repo — and move them all to one new time"
           onClick={() => { track("action:schedule.retime.pick"); setPicking(true); }}>

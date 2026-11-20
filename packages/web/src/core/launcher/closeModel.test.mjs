@@ -154,9 +154,9 @@ test("the foot: N=0 is no label, shells ride the count that will actually stop",
   const send = closeSendList(cut, kept);
   assert.deepEqual(send.map((s) => s.id), ["a"]);
   assert.equal(closeShellsAtStake(send), 2);
-  assert.equal(closeFootLabel(1, 2), "close 1 · stops 2 background shells");
+  assert.equal(closeFootLabel(1, 2), "Close 1 session · stops 2 background shells");
   assert.equal(closeFootLabel(0, 0), "");
-  assert.equal(closeFootLabel(3, 0), "close 3");
+  assert.equal(closeFootLabel(3, 0), "Close 3 sessions");
 });
 
 test("keeping a row drops it from the send list even though it is in the cut", () => {
@@ -170,16 +170,16 @@ test("rows waiting on a box, among what is about to close", () => {
 });
 
 test("the toast names shells STOPPING (not stopped — nothing has been killed yet) and stars spared, once", () => {
-  assert.match(closeToast(3, 5, 0), /archived 3 sessions.*stopping 5 background shells/);
-  assert.doesNotMatch(closeToast(3, 5, 0), /stopped/);
-  assert.match(closeToast(1, 0, 2), /kept 2 starred/);
-  assert.match(closeToast(1, 0, "3 starred & flagged"), /kept 3 starred & flagged/);
-  assert.doesNotMatch(closeToast(1, 0, ""), /kept \d/);
-  assert.match(closeToast(1, 0, 0, "myapp"), /archived 1 session in myapp/);
+  assert.match(closeToast(3, 5, 0), /Closed 3 sessions.*Stopping 5 background shells/);
+  assert.doesNotMatch(closeToast(3, 5, 0), / stopped/);
+  assert.match(closeToast(1, 0, 2), /Kept 2 starred/);
+  assert.match(closeToast(1, 0, "3 starred & flagged"), /Kept 3 starred & flagged/);
+  assert.doesNotMatch(closeToast(1, 0, ""), /Kept \d/);
+  assert.match(closeToast(1, 0, 0, "myapp"), /Closed 1 session in myapp/);
   // Nothing was running underneath and nothing starred was spared — the
   // toast says only the standard "conversations are kept" line, never a
   // "stopping 0 shells"/"kept 0 starred" clause about a zero.
-  assert.doesNotMatch(closeToast(2, 0, 0), /stopping \d|kept \d+ starred/);
+  assert.doesNotMatch(closeToast(2, 0, 0), /Stopping \d|Kept \d+ starred/);
 });
 
 // A session a timed prompt is aimed at starts KEPT — the prompt was written

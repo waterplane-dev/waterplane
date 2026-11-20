@@ -47,7 +47,9 @@ export interface DemoVerdict {
 
 /** The sentence every tier-B refusal carries unless its entry names a better
  *  one. Says what would make it work, not just that it doesn't. */
-export const NOT_IN_DEMO = "Not in the demo — this needs your own desktop running the host.";
+/** THE refusal wording (spec D12): "Not in the demo: on your desktop this would <what>." */
+export const notInDemo = (what: string): string => `Not in the demo: on your desktop this would ${what}.`;
+export const NOT_IN_DEMO = notInDemo("do this for real");
 
 /**
  * Messages answered by `op.ack` when they carry an ackId — the real host's
@@ -61,7 +63,6 @@ export const DURABLE_OPS = [
   "fanout.followup",
   "backlog.name",
   "build.run",
-  "capture.run",
   "assess.run",
   "assess.apply",
   "schedule.run",

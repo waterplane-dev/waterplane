@@ -37,7 +37,7 @@ test("one armed rule: the card's rule line plus the countdown, and its one id", 
 
 test("a paused rule says paused in text; an armed-at-nothing one says not armed", () => {
   assert.equal(buildScheduleCue([rule("a", { enabled: false, nextAt: null })], "/r", APK, NOW).words, `${describeRule(weekly)} · paused`);
-  assert.equal(buildScheduleCue([rule("a", { nextAt: null })], "/r", APK, NOW).words, `${describeRule(weekly)} · not armed`);
+  assert.equal(buildScheduleCue([rule("a", { nextAt: null })], "/r", APK, NOW).words, `${describeRule(weekly)} · waiting for the first usage reading`);
 });
 
 test("several rules: the count, the soonest armed one — and the cut is exactly those ids", () => {

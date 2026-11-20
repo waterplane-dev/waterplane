@@ -20,7 +20,7 @@ export function retimeBlocker(w: SendWhen, preview: number | null, n: number): s
 }
 /** The button in re-time mode: the count, then the WHEN in the sheet's own words. */
 export function retimeWhenLabel(n: number, when: string): string {
-  return `Re-time ${n === 1 ? "it" : `these ${n}`} — ${when}`;
+  return `Change time of ${n === 1 ? "it" : `these ${n}`} — ${when}`;
 }
 
 /**

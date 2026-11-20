@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CLAUDE_MD_KEY, DESC_KEY } from "../../repoHealthPlot.ts";
-import { backendLabels, doorRepoId, notCheckedSentences, weightClocksOf, fixRoute, blockLines, chipCountOf, evidenceDoorOf, headCounts, landingScope, menuAim, scopeChips, viewOf, waiveBody } from "./logic.ts";
+import { backendLabels, doorRepoId, notCheckedSentences, weightClocksOf, fixRoute, blockLines, chipCountOf, evidenceDoorOf, headCounts, landingScope, menuAim, scopeChips, viewOf, waiveBody, checkAgainWords, scopesOfTab, tabOfScope } from "./logic.ts";
 
 const be = { understood: ["claude"], unread: [] };
 const f = (id, scope, over = {}) => ({
@@ -168,4 +168,22 @@ test("a backend a plugin added is named by the label the desktop sent, never by 
   const labels = backendLabels([{ id: "claude", label: "Claude Code" }, { id: "acme", label: "ACME Agent" }]);
   assert.deepEqual(labels, { claude: "Claude Code", acme: "ACME Agent" });
   assert.deepEqual(backendLabels(null), {});
+});
+
+test("Check again always ends on a line: the check's time, then no change or how many checks changed", () => {
+  const at = new Date(2026, 10, 18, 14, 2).getTime();
+  const f = (id, what) => ({ id, rule: id, scope: "repo", kind: "context", weight: "finding", what, backends: {}, evidence: null, remedy: { kind: "none" }, waive: { via: "none" } });
+  const before = { findings: [f("repo.a", "CLAUDE.md is 14 kB"), f("repo.b", "no tests")], passed: [], notChecked: [], absent: [], at: at - 60000 };
+  assert.equal(checkAgainWords(null, { ...before, at }, "repo"), "Checked 14:02.");
+  assert.equal(checkAgainWords(before, { ...before, at }, "repo"), "Checked 14:02. No change.");
+  const after = { ...before, at, findings: [f("repo.a", "CLAUDE.md is 11 kB")], passed: [{ id: "repo.b", rule: "b", scope: "repo", what: "tests", backends: {} }] };
+  assert.equal(checkAgainWords(before, after, "repo"), "Checked 14:02. 2 checks changed.");
+  // Another scope's change is not this scope's.
+  assert.equal(checkAgainWords(before, { ...before, at, findings: [...before.findings, { ...f("machine.x", "x"), scope: "machine" }] }, "repo"), "Checked 14:02. No change.");
+});
+
+test("Setup & health's tabs split the scopes: This repo has repo and all repos, This desktop machine and account", () => {
+  assert.deepEqual(scopesOfTab("repo"), ["repo", "all"]);
+  assert.deepEqual(scopesOfTab("desktop"), ["machine", "account"]);
+  for (const s of ["repo", "all", "machine", "account"]) assert.ok(scopesOfTab(tabOfScope(s)).includes(s));
 });

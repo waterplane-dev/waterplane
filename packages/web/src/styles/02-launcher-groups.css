@@ -15,14 +15,17 @@
    every tab. The symptom is a strip of colourless blocks and nothing in the
    stylesheet that looks wrong. */
 .repo-group, .row-wrap, .stab, .stab-row, .sess-top, .rc-row, .rc-swatch, .rc-dot {
-  --repo-fill: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil), transparent);
-  --repo-fill-on: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil-on), transparent);
-  --repo-edge: color-mix(in srgb, var(--repo-accent, transparent) 38%, transparent);
+  --repo-fill: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil), var(--repo-card, transparent));
+  --repo-fill-on: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil-on), var(--repo-card-on, transparent));
+  --repo-edge: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-edge-mix, 38%), var(--repo-hair, transparent));
+  /* The solid repo EDGE (stripe, tab cap). Built from the hue at the theme's
+     stripe lightness; with no `--repo-hue` it is invalid and falls back. */
+  --repo-stripe: hsl(var(--repo-hue) var(--repo-sat) var(--repo-stripe-lit, var(--repo-lit)));
 }
 
 /* Repo identity color: --repo-accent is set inline per header/row from a hash
-   of the repo name (App.tsx repoAccent). Header gets colored text + a tinted
-   fade-out band; every row of that repo carries a matching left stripe — so
+   of the repo name (App.tsx repoAccent). Header is a neutral card with a thick
+   left edge in that hue; every row of that repo carries a matching left stripe — so
    groups are telling apart mid-scroll, not only at the (easily missed) header. */
 .repo-group {
   /* Wraps because .repo-group-stats is a sibling of the toggle (its chips are
@@ -37,10 +40,25 @@
      one separates the toggle from the action strip and is load-bearing. */
   display: flex; align-items: center; justify-content: space-between;
   column-gap: var(--sp-8); row-gap: 0; flex-wrap: wrap;
-  text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); padding: var(--sp-12) var(--sp-10) var(--sp-8) calc(var(--gutter) - 3px);
+  text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); padding: var(--sp-12) var(--sp-10) var(--sp-8) var(--sp-8);
   font-size: calc(var(--fs-15) * var(--ui-font, 1));
-  color: var(--repo-accent, var(--fg));
-  border-left: 3px solid var(--repo-accent, transparent);
+  /* A REGISTER CARD (owner, 2026-11-18): plain `--fg` text on a neutral rounded
+     card, the repo said by one thick solid edge on the left — never repo-hued
+     words, which read as noise across a whole screen of headers. */
+  color: var(--fg);
+  /* Inset by the card margin, not the full page gutter: the card's rows pad their text again inside
+     the frame, and gutter + stripe + gutter left ~36px of blank on the left of every row (owner, 2026-11-19). */
+  margin: var(--sp-10) var(--card-edge) 0;
+  border-radius: var(--r-12);
+  border: 1px solid var(--repo-edge);
+  /* The edge is an inset BAND, never a thick border-left: a 7px border meets a
+     rounded corner and the 1px borders beside it on a slant, which cut notches
+     into the card at every corner and every row (owner's screenshots, 2026-11-18). */
+  /* The right side mirrors the band's 7px, so text sits the same distance from
+     each side of the frame (owner's screenshot, 2026-11-19: chips ran to within
+     10px of the right border while the left held 15px). */
+  padding-left: calc(var(--sp-8) + 7px); padding-right: calc(var(--sp-8) + 7px);
+  box-shadow: inset 7px 0 0 var(--repo-stripe, var(--repo-accent, transparent));
   /* DOCKED: a repo with twelve sessions is taller than the screen, so scrolling
      into its rows scrolled its name away — and the rows are titled by their own
      branch, so "main · done · 3h ago" three times over says nothing about WHICH
@@ -55,10 +73,15 @@
      The bottom line is the same 1px `--row` separator every row carries — with
      nothing under it the pinned header and the first row read as one block. */
   position: sticky; top: 0; z-index: 2;
-  border-bottom: 1px solid var(--line);
-  background:
-    linear-gradient(90deg, var(--repo-fill), transparent 70%),
-    var(--bg);
+  background: linear-gradient(var(--repo-fill), var(--repo-fill)), var(--bg);
+}
+/* Docked, the header's rounded top corners let the rows scrolling under it show
+   through (owner's screenshot, 2026-11-19). A page-coloured fill drawn OUTSIDE
+   the curve only: a ring shadow round a rounded box, clipped to that box's square. */
+.repo-group::before {
+  content: ""; position: absolute; top: -1px; left: -1px; right: -1px; height: var(--r-12);
+  border-radius: var(--r-12) var(--r-12) 0 0; box-shadow: 0 0 0 var(--r-12) var(--bg);
+  clip-path: inset(0); pointer-events: none;
 }
 /* Group header left half: tap target that collapses/expands the repo's session
    rows. Carries the name plus the live-session and worktree counts. */
@@ -134,7 +157,11 @@
    ~20px name, so the chips already sit ~10px clear of it. Anything added here is
    gap on top of gap. Row gap inside the cluster stays 5px — that one is between
    chips that DID wrap. */
-.repo-group-stats { order: 2; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-6) var(--sp-6); }
+/* Two columns: New session with what waits in the repo stacked under it on the
+   LEFT, the count chips wrapping in their own block on the right. One wrapping
+   row would have put every chip after the tall left column on a line BELOW it. */
+.repo-group-stats { order: 2; flex: 1 0 100%; display: flex; align-items: flex-start; gap: var(--sp-6); }
+.repo-group-chips { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-6) var(--sp-6); }
 /* Group-header buttons sit next to each other AND next to a destructive one, so
    they need real finger-sized boxes (44 px is the platform minimum) rather than
    the icon's own bounds — mis-taps here close sessions. */
@@ -150,17 +177,27 @@
 /* Header counts (new inbox images, untracked files) ride ON the header buttons
    rather than as separate full-height row cells: the files button is ALWAYS
    there, the number only appears when there is one. */
-.repo-group .focus-btn.count { min-width: 40px; padding: 0 var(--sp-8); gap: var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--repo-accent, var(--accent)); opacity: 1; }
+.repo-group .focus-btn.count { min-width: 40px; padding: 0 var(--sp-8); gap: var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); opacity: 1; }
 /* "+ now" / "+ later": the pair that starts work in a repo, first on the chip row
    so it sits right under the name, LEFT, while the counts stay right-aligned
    (`margin-right: auto` splits the row). Worded, not icons: it is the verb a
    person opens the launcher for. Outlined in the repo accent like the chips, so
    it reads as part of the header, not as a second toolbar. */
-.repo-start { display: flex; gap: var(--sp-6); margin-right: auto; }
+.repo-start { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); flex: none; }
+/* "8 modified files" / "17 to commit" / "86 to push": one fact per line under New
+   session, each a tap into its screen. Quiet text, not pills: they are what the
+   repo holds, the pills on the right are filters over the rows below. */
+.repo-pending { display: flex; flex-direction: column; align-items: flex-start; }
+.repo-pending-line {
+  display: flex; align-items: center; gap: var(--sp-6); min-height: 30px; padding: 0 var(--sp-8);
+  background: none; border: none; border-radius: var(--r-10); color: var(--fg); font: inherit;
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); cursor: pointer;
+}
+.repo-pending-line:active { background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
 .repo-start-btn {
   display: flex; align-items: center; gap: var(--sp-4); height: 34px; padding: 0 var(--sp-10) 0 var(--sp-8);
   border-radius: var(--r-10); border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-  background: none; color: var(--repo-accent, var(--accent)); font: inherit; font-weight: var(--fw-semibold);
+  background: none; color: var(--fg); font: inherit; font-weight: var(--fw-semibold);
   font-size: calc(var(--fs-14) * var(--ui-font, 1)); cursor: pointer;
 }
 .repo-start-btn:active { background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
@@ -189,7 +226,23 @@
   padding: var(--sp-12) var(--sp-12) var(--sp-12) var(--sp-32); color: var(--muted); font-size: calc(var(--fs-14) * var(--ui-font, 1));
   border-bottom: 1px solid var(--line); border-left: 3px solid var(--repo-accent, transparent);
 }
-.repo-group-empty svg { color: var(--repo-accent, var(--accent)); }
+.repo-group-empty svg { color: var(--muted); }
+/* A repo's rows hang under its card: the same inset and the same 7px edge, so the
+   edge reads as one register running from the card down its sessions. */
+.repo-group-block .row-wrap, .repo-group-block > .repo-group-empty {
+  /* The header's 1px frame continues down the sides, so the edge lines up with
+     the header's to the pixel and the card has sides all the way down. */
+  margin: 0 var(--card-edge); padding-left: 7px; padding-right: 7px; /* mirrors the band */
+  border-left: 1px solid var(--repo-edge); border-right: 1px solid var(--repo-edge);
+  box-shadow: inset 7px 0 0 var(--repo-stripe, var(--repo-accent, transparent));
+}
+/* Inside the card the frame already holds the text off the screen edge; a row's own
+   padding is the card's inner padding, not a second page gutter. */
+.repo-group-block .row-wrap .row { padding-left: var(--sp-10); padding-right: var(--sp-10); }
+/* Header and rows are ONE card: an open repo's header loses its lower corners and
+   its last row takes them, so the edge runs straight from the name to the end. */
+.repo-group-block:has(> .row-wrap, > .repo-group-empty) > .repo-group { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.repo-group-block > :is(.row-wrap, .repo-group-empty):nth-last-child(2) { border-bottom-left-radius: var(--r-12); border-bottom-right-radius: var(--r-12); border-bottom: 1px solid var(--repo-edge); }
 .repo-group-toggle:disabled { cursor: default; }
 /* The branch a sessionless repo is on: the one fact its old row carried under
    the name. Quiet — it is identification, not a count. */
@@ -380,6 +433,11 @@
   min-width: 0; min-height: 40px; padding: var(--sp-8) var(--sp-12);
   background: var(--panel); opacity: .92;
 }
+/* The one line that says why the header went (D8): text, not a control. */
+.screen.typing .hdr-typing-note {
+  flex: 1 1 auto; min-height: 0; max-width: calc(100vw - 120px); padding: var(--sp-4) var(--sp-8);
+  font-size: var(--fs-12); line-height: 1.3; border-radius: var(--r-6); text-align: left;
+}
 /* The reader's own two rows. `tr-bar` goes only when it is the unread jump —
    an open find field keeps its box (`.tr-bar-find`), because a query still
    narrowing the document with its own field hidden is a screen misrepresenting
@@ -479,6 +537,9 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
    amber and emphatically not the failure red: nothing has gone wrong yet, and
    for the first minute of a send's life that colour was the whole complaint. */
 .outbox-recover.confirming { color: var(--muted); }
+/* Under a pending screen's line (`QueueBars` `cardAck`): the line says the fact, so this bar is
+   only its buttons — no sentence, no amber, nothing that reads as a second alarm. */
+.outbox-recover.quiet { color: var(--muted); background: var(--panel); border-top-color: var(--line); min-height: 0; padding-block: var(--sp-6); }
 /* The sentence takes the room between the icon and "Which" on ONE line,
    ellipsised. Without this the span sized to its whole text, wrapped onto its
    own row, and the icon and the button each got a row too — three rows for one

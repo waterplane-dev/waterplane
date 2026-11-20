@@ -16,26 +16,26 @@ import { RESET_MATCH_MS } from "./intent.js";
 const HOUR = 3_600_000;
 const MIN = 60_000;
 
-export const WEEKBURN_DEFAULT_STOP_PCT = 95;
+const WEEKBURN_DEFAULT_STOP_PCT = 95;
 /** One 5-hour session window. */
-export const WEEKBURN_WINDOW_MS = 5 * HOUR;
+const WEEKBURN_WINDOW_MS = 5 * HOUR;
 /** A full window is a session stretch that reached this percent. */
-export const WEEKBURN_FULL_WINDOW_PCT = 80;
+const WEEKBURN_FULL_WINDOW_PCT = 80;
 /** How far back a measured window may be. */
 export const WEEKBURN_MEASURE_MS = 14 * 24 * HOUR;
 /** Nothing new is posted this close to the weekly reset. */
-export const WEEKBURN_STOP_BEFORE_RESET_MS = 20 * MIN;
+const WEEKBURN_STOP_BEFORE_RESET_MS = 20 * MIN;
 /** Margin before the computed windows, and the fallback lead when none is measured. */
-export const WEEKBURN_MARGIN_MS = HOUR;
-export const WEEKBURN_FALLBACK_LEAD_MS = 24 * HOUR;
+const WEEKBURN_MARGIN_MS = HOUR;
+const WEEKBURN_FALLBACK_LEAD_MS = 24 * HOUR;
 /** The nudge goes out this long before the planned start. */
-export const WEEKBURN_NUDGE_LEAD_MS = 24 * HOUR;
+const WEEKBURN_NUDGE_LEAD_MS = 24 * HOUR;
 /** On pace to leave at least this many points under the stop line ⇒ offer the burn. */
-export const WEEKBURN_NUDGE_GAP_PCT = 20;
+const WEEKBURN_NUDGE_GAP_PCT = 20;
 const MAX_REPOS = 50;
 /** The person's own words for what a burn session works on, and per repo; longer is cut. */
-export const WEEKBURN_TASK_MAX = 2000;
-export const WEEKBURN_NOTE_MAX = 1000;
+const WEEKBURN_TASK_MAX = 2000;
+const WEEKBURN_NOTE_MAX = 1000;
 const MIN_RATE_SPAN_MS = 6 * HOUR;
 
 export interface WeekBurnPrefs {
@@ -123,8 +123,8 @@ export function ptsPerWindow(samples: readonly UsageSample[], now: number): numb
   let best: number | null = null;
   for (const seg of usageStretches(samples, "session")) {
     if (seg.pts.length < 2) continue;
-    const from = seg.pts[0].t;
-    const to = seg.pts[seg.pts.length - 1].t;
+    const from = seg.pts[0]!.t;
+    const to = seg.pts[seg.pts.length - 1]!.t;
     if (to < now - WEEKBURN_MEASURE_MS || to > now) continue;
     if (!seg.pts.some((p) => p.v >= WEEKBURN_FULL_WINDOW_PCT)) continue;
     let first: number | null = null;
@@ -159,8 +159,8 @@ function projectedAtReset(samples: readonly UsageSample[], weeklyPct: number, we
   if (!last) return null;
   const pts = last.pts.filter((p) => p.t <= now);
   if (pts.length < 2) return null;
-  const a = pts[0];
-  const b = pts[pts.length - 1];
+  const a = pts[0]!;
+  const b = pts[pts.length - 1]!;
   const span = b.t - a.t;
   if (span < MIN_RATE_SPAN_MS) return null;
   const rate = Math.max(0, b.v - a.v) / span; // points per ms
@@ -253,7 +253,7 @@ export function weekBurnNudge(a: {
 export const WEEKBURN_DEFAULT_TASK = "Fix the repo's weakest health reading";
 
 /** The lines every package is told whatever the person wrote: the safety rails, never editable. */
-export const WEEKBURN_RULES: readonly string[] = [
+const WEEKBURN_RULES: readonly string[] = [
   "Make ONE focused improvement. Run the repo's tests. Commit on the current branch only if they pass: stage explicit paths, never `git add -A`, never push, never stash or reset.",
   "If nothing worth doing is left, change nothing and say so in one line.",
 ];

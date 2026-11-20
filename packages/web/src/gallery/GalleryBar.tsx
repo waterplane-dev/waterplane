@@ -35,7 +35,7 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
             offering it over "this repo" would be offering a verb that refuses.
             Not drawn at all rather than drawn dimmed — CLAUDE.md. */}
         {onSweep && singleRepo && (scope === "inbox" || scope === "outbox") && (
-          <Button className="gallery-head-btn" title={`clear out old ${scope} files`} aria-label={`clear out old ${scope} files`}
+          <Button className="gallery-head-btn" title={`clear out old files ${scope === "outbox" ? "from Claude" : "from my phone"}`} aria-label={`clear out old files ${scope === "outbox" ? "from Claude" : "from my phone"}`}
             onClick={() => onSweep(scope)}><Trash2 size={17} /></Button>
         )}
         {/* The same verb where it CAN'T be per-repo: ranked bytes across every

@@ -8,14 +8,20 @@ import { keepStores, type FeatureManifest } from "../../sdk";
 import { BacklogSheet } from "./BacklogSheet";
 import { AssessmentSheet } from "./AssessmentSheet";
 import { assessRepo, backlogCut } from "./store";
+import { registerWaitingBody } from "../../waitingWork";
+import { waitingSheet } from "../../WaitingFrame";
 import { setSlotCheckOpener } from "../../slotAskStore";
 import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList, openSlotCheck } from "./actions";
 
 export { useBacklog } from "./store";
 export { ProposalsStrip } from "./ProposalsStrip";
 export {
-  onAssessAck, openAssessFor, openBacklogCut, openBacklogFor, openBacklogIn, openSlotCheck,
+  onAssessAck, openAssessFor, openAssessResult, openBacklogCut, openBacklogFor, openBacklogIn, openSlotCheck,
 } from "./actions";
+
+// The Backlog tab of Waiting work (journey spec D4). The cut is the tap, not a setting: leaving the
+// screen (or the tab) drops it, and Back puts back the one store it lives in.
+registerWaitingBody("backlog", { render: () => createElement(BacklogSheet), leave: clearBacklogFocus, keep: keepStores(backlogCut) });
 
 export const manifest: FeatureManifest = {
   id: "backlog",
@@ -23,9 +29,8 @@ export const manifest: FeatureManifest = {
   // a feature, so its *check* is this feature's door, registered here.
   boot: () => { setSlotCheckOpener(openSlotCheck); return () => setSlotCheckOpener(null); },
   sheets: [
-    // The cut is the tap, not a setting: leaving the sheet drops it, and Back
-    // puts back the one store it lives in — so what returns is what was on screen.
-    { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus, keep: keepStores(backlogCut) },
+    // An alias id: Waiting work on its Backlog tab.
+    { id: "backlog", persisted: true, ...waitingSheet("backlog") },
     // Repo-scoped: with no repo in memory this returns null and falls through
     // to the screen underneath, rather than painting an empty sheet.
     { id: "assess", persisted: false, render: () => {

@@ -19,6 +19,7 @@ const idle = await import("../dist/sessions/idlewatch.js");
 const { IDLE_WATCH_MS } = await import("../dist/sessions/knobs.js");
 const { claudeBackend } = await import("../dist/backends/claude.js");
 const { shellBackend } = await import("../dist/backends/shell.js");
+const { reattachIdle } = await import("../dist/sessions/tmux.js");
 const { workingLine } = await import("@waterplane/shared");
 
 const IDLE = readFileSync(new URL("./fixtures/permmode/manual.txt", import.meta.url), "utf8");
@@ -101,4 +102,24 @@ test("a session that exited is not read", async () => {
   h.stop(); // the exit path clears the pending read
   await pastWatch();
   assert.equal(h.s.info.idle, true);
+});
+
+// A host restart re-attaches every tmux pane, and the re-attach repaint is
+// output. Starting those sessions `idle: false` made the phone count every one
+// as mid-turn until its own silence window passed (84 of 91 after one restart).
+test("a re-attached claude session starts idle, and its repaint decides from the grid", async () => {
+  assert.equal(reattachIdle(claudeBackend), true);
+  assert.equal(reattachIdle(shellBackend), false, "no working-line reader ⇒ the old start and the silence rule");
+  const quiet = harness();
+  const busy = harness();
+  for (const h of [quiet, busy]) { h.s.info.idle = reattachIdle(claudeBackend); delete h.s.info.idleSince; }
+  try {
+    quiet.output(IDLE, 4000); // the full-frame repaint tmux sends on attach
+    busy.output(WORKING, 4000);
+    await pastWatch();
+    assert.equal(quiet.s.info.idle, true, "an idle prompt repainted stays idle");
+    assert.equal(quiet.s.info.idleSince, undefined, "no stamped restart instant");
+    assert.equal(quiet.updates(), 0);
+    assert.equal(busy.s.info.idle, false, "a turn still running reads as working off its repaint");
+  } finally { quiet.stop(); busy.stop(); }
 });

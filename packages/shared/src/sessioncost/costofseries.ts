@@ -24,7 +24,7 @@ export function sessionCostOf(spark: {
   agentTok?: number;
 } | null | undefined, live?: CacheAge | null): SessionCostReading | null {
   if (!spark || !spark.pts.length) return null;
-  const tok = spark.pts[spark.pts.length - 1];
+  const tok = spark.pts[spark.pts.length - 1]!;
   if (!(tok > 0)) return null;
   return sessionCost({
     tok,

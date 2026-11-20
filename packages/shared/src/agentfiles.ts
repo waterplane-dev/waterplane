@@ -94,13 +94,13 @@ export function fmGlobs(text: string, key: string): string[] | null {
   const i = lines.findIndex((l) => new RegExp(`^${key}:`).test(l));
   if (i < 0) return null;
   const unq = (s: string) => s.trim().replace(/^['"]|['"]$/g, "").trim();
-  const rest = lines[i].slice(key.length + 1).trim();
+  const rest = lines[i]!.slice(key.length + 1).trim();
   if (rest) {
     const inner = rest.startsWith("[") ? rest.replace(/^\[|\]$/g, "") : unq(rest);
     return inner.split(",").map(unq).filter(Boolean);
   }
   const out: string[] = [];
-  for (let j = i + 1; j < lines.length && /^\s*-\s/.test(lines[j]); j++) out.push(unq(lines[j].replace(/^\s*-\s/, "")));
+  for (let j = i + 1; j < lines.length && /^\s*-\s/.test(lines[j]!); j++) out.push(unq(lines[j]!.replace(/^\s*-\s/, "")));
   return out;
 }
 
@@ -144,8 +144,9 @@ export function claudeImports(text: string): string[] {
   const out = new Set<string>();
   for (const m of body.matchAll(/(?:^|\s)@((?:\.{0,2}\/)?[\w.\-/]+\.[\w]+)/g)) {
     // Home and absolute paths are the person's own files, and `..` leaves the folder: neither is this folder's weight.
-    if (m[1].startsWith("~") || m[1].startsWith("/") || m[1].split("/").includes("..")) continue;
-    out.add(m[1].replace(/^\.\//, ""));
+    const p = m[1]!;
+    if (p.startsWith("~") || p.startsWith("/") || p.split("/").includes("..")) continue;
+    out.add(p.replace(/^\.\//, ""));
   }
   return [...out];
 }
@@ -302,12 +303,12 @@ const OVERLAP_MIN_CHARS = 200;
  * A fact to state, never a verdict: which file to keep is the person's call.
  */
 function overlapsOf(files: InstructionFile[], text: Map<string, string>): InstructionOverlap[] {
-  const whole = files.filter((f) => f.parts.length === 1 && f.parts[0].when.kind === "always" && f.parts[0].readers.length);
+  const whole = files.filter((f) => f.parts.length === 1 && f.parts[0]!.when.kind === "always" && f.parts[0]!.readers.length);
   const out: InstructionOverlap[] = [];
   for (let i = 0; i < whole.length; i++) {
     for (let j = i + 1; j < whole.length; j++) {
-      const a = whole[i], b = whole[j];
-      const both = a.parts[0].readers.filter((r) => b.parts[0].readers.includes(r));
+      const a = whole[i]!, b = whole[j]!;
+      const both = a.parts[0]!.readers.filter((r) => b.parts[0]!.readers.includes(r));
       const ta = text.get(a.path), tb = text.get(b.path);
       if (!both.length || ta == null || tb == null) continue;
       const chars = sharedChars(ta, tb);
@@ -343,7 +344,7 @@ export function claudeWeightInput(files: InstructionFile[]): ContextWeightInput 
     const mine = f.parts.filter((p) => p.readers.includes("claude"));
     if (!mine.length) continue;
     if (f.kind === "skill") {
-      skills.push({ name: f.path.split("/").slice(-2)[0], descChars: mine[0].chars, bodyChars: mine.reduce((n, p) => n + p.chars, 0) });
+      skills.push({ name: f.path.split("/").slice(-2)[0]!, descChars: mine[0]!.chars, bodyChars: mine.reduce((n, p) => n + p.chars, 0) });
     } else {
       for (const p of mine) if (p.when.kind === "always") claudeMdChars += p.chars;
     }

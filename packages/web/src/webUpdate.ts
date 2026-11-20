@@ -149,7 +149,7 @@ const APPLY_AWAY_MS = 2 * 60_000;
  *  this handles the one it cannot see. */
 const APPLY_MAX_TRIES = 2;
 /** What the update screen says in the demo, where there is no desktop to ask. */
-export const DEMO_NO_UPDATE = "Not in the demo — updates come from your own desktop's host.";
+export const DEMO_NO_UPDATE = "Not in the demo: on your desktop this would fetch a new version of the app from its host.";
 
 /** Base64 conversion chunk. Large enough to be fast, small enough that
  *  `String.fromCharCode(...)` never blows the argument limit on a ~900 KB file. */

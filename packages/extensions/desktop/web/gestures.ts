@@ -33,9 +33,9 @@ export const LONG_MS = 500;
 /** A second tap within this long is a double click (and in Trackpad, the start of a drag). */
 export const DOUBLE_MS = 350;
 /** …and within this many phone px of the first (Touch; the trackpad cursor does not move). */
-export const DOUBLE_DIST = 30;
+const DOUBLE_DIST = 30;
 /** Two fingers down and up within this long, without moving, is a two-finger tap. */
-export const TAP2_MS = 300;
+const TAP2_MS = 300;
 /** Change in the fingers' spread (phone px) that makes a two-finger gesture a pinch. */
 export const PINCH_SLOP = 24;
 

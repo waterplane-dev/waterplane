@@ -77,9 +77,9 @@ export function StowButton() {
     // raw: `onPointerDown` keeps the compose box focused (kit Button would too, but its
     // `.key` face is the header's 44px fingertip, too tall for a strip's head)
     <button className="stow-btn" onPointerDown={(e) => e.preventDefault()} onClick={fold}
-      title="fold this away — it waits behind the folded-strips button in the terminal's corner"
-      aria-label="fold away">
-      <ArrowDownToLine size={12} /> fold
+      title="hide this strip — it waits behind the hidden-strips button in the terminal's corner"
+      aria-label="hide strip">
+      <ArrowDownToLine size={14} /> hide
     </button>
   );
 }
@@ -95,7 +95,7 @@ export function StowCorner({ iconSize }: { iconSize: number }) {
   useEffect(() => { if (!rows.length) setOpen(false); }, [rows.length]);
   if (!rows.length) return null;
   const n = rows.length;
-  const label = `${n} folded strip${n > 1 ? "s" : ""} — tap to bring ${n > 1 ? "them" : "it"} back`;
+  const label = `${n} hidden strip${n > 1 ? "s" : ""} — tap to bring ${n > 1 ? "them" : "it"} back`;
   return (
     <span className="stow-corner">
       <Button className={open ? "active" : undefined} data-hint="term.folded"
@@ -106,7 +106,7 @@ export function StowCorner({ iconSize }: { iconSize: number }) {
       </Button>
       {open && (
         <div className="stow-pop" role="menu">
-          <div className="stow-pop-head">folded away</div>
+          <div className="stow-pop-head">hidden strips</div>
           {rows.map((r) => {
             const Icon = r.icon;
             return (

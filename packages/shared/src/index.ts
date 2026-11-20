@@ -38,6 +38,7 @@ export * from "./wire/backend.js";
 export * from "./wire/sent.js";
 export * from "./plugin.js";
 export * from "./pluginfile.js";
+export * from "./storefile.js";
 export * from "./pluginmaturity.js";
 export * from "./wire/updates.js";
 export * from "./stream.js";
@@ -65,7 +66,6 @@ export * from "./wire/install.js";
 /** A picture of a running screen, and the claim the run is ALLOWED to make
  *  about it — "verified" is reserved for an oracle reading, and everything that
  *  was not measured is absent rather than zero. */
-export * from "./wire/capture.js";
 
 /** The exposure watch: rows, accepts and the setup-checklist rows built from them — the CLI and
  *  the phone must agree on what is accepted. */

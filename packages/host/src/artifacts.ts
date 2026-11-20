@@ -24,7 +24,8 @@
  */
 import { createHash } from "node:crypto";
 import { closeSync, constants, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import {
   DEFAULT_ARTIFACT_POLICY, artifactName, cleanArtifactPolicy, familyKey, foldDuplicates, inOutbox, pruneVictims,
@@ -120,17 +121,19 @@ export function projectVersion(repoDir: string): string | undefined {
   return undefined;
 }
 
+const execFileP = promisify(execFile);
+
 /** The commit this was built from, short, `-dirty` when the tree was not clean.
  *  A repo that is not a git checkout simply has no sha to offer. */
-export function gitStamp(repoDir: string): string | undefined {
-  const git = (args: string[]): string | null => {
+export async function gitStamp(repoDir: string): Promise<string | undefined> {
+  const git = async (args: string[]): Promise<string | null> => {
     try {
-      return execFileSync("git", ["-C", repoDir, ...args], { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+      return (await execFileP("git", ["-C", repoDir, ...args], { encoding: "utf8", timeout: 2000 })).stdout.trim();
     } catch { return null; }
   };
-  const sha = git(["rev-parse", "--short=8", "HEAD"]);
+  const sha = await git(["rev-parse", "--short=8", "HEAD"]);
   if (!sha) return undefined;
-  const dirty = git(["status", "--porcelain", "--untracked-files=no"]);
+  const dirty = await git(["status", "--porcelain", "--untracked-files=no"]);
   return dirty ? `${sha}-dirty` : sha;
 }
 
@@ -206,7 +209,8 @@ function outboxFiles(repoDir: string): { relPath: string; mtime: number }[] {
 }
 
 /**
- * Collect, name, fold and prune what a run produced.
+ * Collect, name, fold and prune what a run produced. `sha` is `await gitStamp(repoDir)`,
+ * read by the caller so this stays free of a blocking git call.
  *
  * Returns the artifact list the run should REPORT — which is the point as much
  * as the disk changes are: after this, "the build produced this" and "this is
@@ -224,6 +228,7 @@ export function collectArtifacts(
   policy: ArtifactPolicy,
   say: (line: string) => void,
   now: Date = new Date(),
+  sha: string | undefined = undefined,
 ): BuildArtifact[] {
   if (!artifacts.length) return artifacts;
   const root = resolve(repoDir);
@@ -244,7 +249,6 @@ export function collectArtifacts(
   const outDir = join(root, ...OUTBOX.split("/"));
   try { mkdirSync(outDir, { recursive: true }); } catch { /* handled by the place() below failing */ }
   const version = projectVersion(repoDir);
-  const sha = gitStamp(repoDir);
   const repoName = basename(root);
   const out: BuildArtifact[] = [];
   const produced: string[] = [];

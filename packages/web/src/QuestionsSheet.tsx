@@ -156,6 +156,7 @@ export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer
           return (
             <div key={s.id} className="q-card">
               <QuestionHead s={s} onOpen={onOpen} />
+              <div className="approve-hint">Claude is asking</div>
               {/* Every word and every button from `PromptAnswer.tsx` — the one
                   card, shared with the reader's `tr-ask`. It used to be a second
                   copy of the approve bar's markup, and the two had already
@@ -181,10 +182,10 @@ export function QuestionsSheet({ sessions, cut, outbox, online, seenAt, onAnswer
                 keystroke into an unknown box is exactly what the fingerprint
                 guard exists to prevent — so say what is true and point at the
                 only thing that can resolve it. */}
-            <div className="approve-q">A dialog is open in the CLI that couldn’t be read into options.</div>
+            <div className="approve-q">Could not read the choices.</div>
             <div className="approve-opts">
               <button className="approve-btn" onClick={() => { track("action:questions.open"); onOpen(s.id); }}>
-                open the CLI
+                Show terminal
               </button>
             </div>
           </div>

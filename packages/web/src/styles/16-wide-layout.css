@@ -107,6 +107,19 @@ html[data-layout="wide"] .ws-panel > .sheet {
   overflow-y: auto; overscroll-behavior: contain;
 }
 
+/* The open-tabs list (SessionTabsBar.tsx) is its own fixed layer, not a
+   `.ws-panel` child, so in wide it takes the panel's shape here: the right-hand
+   side under the strips, the same (draggable) width — not a full-screen table
+   with a cost column two thousand pixels from its label. */
+html[data-layout="wide"] .stab-list-layer {
+  inset: auto 0 auto auto; top: calc(var(--app-top, 0px) + var(--ws-strips));
+  height: calc(var(--app-h, 100dvh) - var(--ws-strips));
+  width: clamp(440px, var(--ws-panel-w, min(40vw, 520px)), max(440px, 100vw - var(--ws-side) - 360px));
+  border-left: 1px solid var(--line);
+  box-shadow: -6px 0 24px var(--shadow-soft);
+}
+html[data-layout="wide"] .stab-list-layer > .sheet { padding-top: 0; min-height: 0; }
+
 /* BESIDE (Workspace.tsx): the annotator for the session on screen as a third
    grid column, so the session's compose box stays in reach while marking. It
    takes its width FROM the main pane — a panel over the session would cover
@@ -282,9 +295,9 @@ html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
    whose list drops below the group. */
 .stow-btn {
   flex: none; display: inline-flex; align-items: center; gap: var(--sp-4);
-  padding: var(--sp-6) var(--sp-10); border-radius: var(--r-10);
-  border: 1px solid var(--line); background: transparent; color: var(--muted);
-  font: inherit; font-size: var(--fs-12); cursor: pointer;
+  min-height: 44px; padding: var(--sp-6) var(--sp-12); border-radius: var(--r-10);
+  border: 1px solid var(--line); background: transparent; color: var(--fg);
+  font: inherit; font-size: var(--fs-13); cursor: pointer;
 }
 .stow-corner { position: relative; display: inline-flex; }
 .stow-pop {
@@ -428,3 +441,10 @@ html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
 }
 .shortcut-card-what { display: flex; flex-direction: column; }
 .shortcut-card-note { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+
+/* A mentioned image on the desktop: big enough to read in place (Markdown.tsx
+   THUMB_CSS_WIDE), its name as wide as the picture. A document's own image
+   (.fileref-wide) keeps its reading width. */
+html[data-layout="wide"] .fileref-img:not(.fileref-wide) img { max-width: min(420px, 100%); max-height: 320px; }
+html[data-layout="wide"] .fileref-img:not(.fileref-wide) .fileref-name { max-width: 420px; }
+html[data-layout="wide"] .fileref-img:hover { border-color: var(--accent); }

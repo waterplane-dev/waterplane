@@ -479,11 +479,11 @@ export function cleanShellOutput(raw: string): string {
  * among `shellsUnder(cliPid)`, never names an arbitrary process. The output
  * file's path is built from the transcript join, never from the request.
  */
-export function readShellDetail(
+export async function readShellDetail(
   cliPid: number, cwd: string, claudeSessionId: string | undefined, pid: number,
-): SessionShellDetail | null {
+): Promise<SessionShellDetail | null> {
   let rows: PsRow[];
-  try { rows = readPsTable(); } catch { return null; }
+  try { rows = await readPsTableAsync(); } catch { return null; }
   const group = shellsUnder(cliPid, rows).find((g) => g.wrapper.pid === pid);
   if (!group) return null;
   const command = evalTextFull(group.wrapper.command) ?? group.wrapper.command;

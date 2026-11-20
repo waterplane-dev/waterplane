@@ -16,7 +16,7 @@ shell's version and Downloads switch asked once (`useHubFacts`, `store.ts`). **A
 **Entry points**: a one-time launcher row (`WhatsNewLauncherRow.tsx`, mounted by
 `core/launcher/LauncherScreen.tsx`) while the desktop's version (`updates.status.self.current`,
 heard here too) has rows and differs from `LS.whatsNewSeen` (device scope); *see them* and *got it*
-both retire it, and so does opening the sheet. Durable: Settings › Tools & diagnostics › *what's new*
+both retire it, and so does opening the sheet. Durable: Settings › Desktops and connection › *what's new*
 (`whats-new`), and a *what's new* button on the Updates sheet's waterplane row.
 
 **Owns**: `logic.ts` (row view, APK gate, announce rule, launcher wording, failure parsing, the rows;

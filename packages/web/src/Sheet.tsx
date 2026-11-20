@@ -90,7 +90,7 @@ export function SheetHead({ title, icon, onClose, brandClass, children }: {
     <div className="sheet-head">
       <button className="back" onClick={onClose} aria-label="back"><ChevronLeft size={BACK_ICON} /></button>
       <span className={brandClass ? `brand ${brandClass}` : "brand"}>{icon}{icon ? " " : null}{title}</span>
-      {children ? <><span className="spacer" />{children}</> : null}
+      {children ? <><span className="spacer" />{children}</> : <span className="spacer" />}
     </div>
   );
 }

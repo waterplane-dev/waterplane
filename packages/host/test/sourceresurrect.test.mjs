@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { ResumeSlice } = await import("../dist/sessions/resume.js");
+const { pending } = await import("../dist/sessions/timers.js");
 
 const root = mkdtempSync(join(tmpdir(), "wp-sourceresurrect-"));
 after(() => rmSync(root, { recursive: true, force: true }));
@@ -49,7 +50,7 @@ function harness(backend, { limit, backendSessionId = UUID, auto = true, retry }
   const resume = new ResumeSlice(core);
   const s = {
     info: { id: "s1", cwd: root, running: false, title: "demo", ...(backendSessionId ? { backendSessionId } : {}), ...(limit ? { limit } : {}) },
-    backend, history: [], scrollback: "", limitTimer: null, resurrectTimer: null, spawnedAt: Date.now(), launch: { model: "m" },
+    backend, history: [], scrollback: "", spawnedAt: Date.now(), launch: { model: "m" },
   };
   sessions.set("s1", s);
   after(() => resume.clearResurrectTimer(s));
@@ -65,7 +66,7 @@ test("a dated source wall at exit ⇒ a resurrect armed for the reset, the row f
   assert.equal(h.resume.diedAtLimit("s1"), true, "the backlog requeues: a revival is coming");
   h.resume.maybeScheduleResurrect(h.s);
   assert.deepEqual(asked, [resetAt], "the source's instant is the one handed to the cadence");
-  assert.ok(h.s.resurrectTimer, "a resurrect is armed");
+  assert.ok(pending(h.s, "resume"), "a resurrect is armed");
   assert.equal(h.s.info.limit.nextAttemptAt, resetAt);
   assert.deepEqual(h.events, ["updated", "limit:scheduled"]);
 });
@@ -74,7 +75,7 @@ test("an UNDATED source wall at exit (needsYou) ⇒ nothing scheduled, and the w
   const h = harness(acme(), { limit: blocked({ needsYou: "Acme has no credit left" }) });
   assert.equal(h.resume.diedAtLimit("s1"), false);
   h.resume.maybeScheduleResurrect(h.s);
-  assert.equal(h.s.resurrectTimer, null);
+  assert.equal(pending(h.s, "resume"), false);
   assert.equal(h.s.info.limit.nextAttemptAt, null);
   assert.deepEqual(h.events, []);
 });
@@ -83,7 +84,7 @@ test("no conversation id known ⇒ nothing scheduled (a bare continue picks the 
   const h = harness(acme(), { limit: blocked({ resetAt: Date.now() + 60_000 }), backendSessionId: null });
   assert.equal(h.resume.diedAtLimit("s1"), false);
   h.resume.maybeScheduleResurrect(h.s);
-  assert.equal(h.s.resurrectTimer, null);
+  assert.equal(pending(h.s, "resume"), false);
   assert.deepEqual(h.events, []);
 });
 
@@ -96,7 +97,7 @@ test("not blocked when it went, auto-continue off, or a person's close ⇒ just 
     const h = harness(acme(), opts);
     mut?.(h.s);
     h.resume.maybeScheduleResurrect(h.s);
-    assert.equal(h.s.resurrectTimer, null, name);
+    assert.equal(pending(h.s, "resume"), false, name);
     assert.deepEqual(h.events, [], name);
   }
 });
@@ -105,13 +106,13 @@ test("a backend whose limits are not a source never resurrects, whatever its las
   const h = harness(acme({ limits: [] }), { limit: blocked({ resetAt: Date.now() + 60_000 }) });
   assert.equal(h.resume.diedAtLimit("s1"), false);
   h.resume.maybeScheduleResurrect(h.s);
-  assert.equal(h.s.resurrectTimer, null);
+  assert.equal(pending(h.s, "resume"), false);
 });
 
 test("the cadence giving up ⇒ said, nothing armed", () => {
   const h = harness(acme(), { limit: blocked({ resetAt: Date.now() + 60_000 }), retry: () => ({ kind: "giveup", why: "attempts spent" }) });
   h.resume.maybeScheduleResurrect(h.s);
-  assert.equal(h.s.resurrectTimer, null);
+  assert.equal(pending(h.s, "resume"), false);
   assert.deepEqual(h.gaveUp, ["attempts spent"]);
 });
 

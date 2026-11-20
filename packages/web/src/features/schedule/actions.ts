@@ -3,9 +3,11 @@
  */
 import type { HorizonBucket, ScheduleEntry } from "@waterplane/shared";
 import { core } from "../../sdk";
+import { openWaitingId } from "../../waitingWork";
 import { scheduleRemovedToast } from "../../clockCuts";
 import { saveSchedulesSnap } from "../../localState";
-import { scheduleFocus, scheduleFocusIds, schedules, schedulesAt } from "./store";
+import { scheduleClearedNote, scheduleFocus, scheduleFocusIds, schedules, schedulesAt } from "./store";
+import { SCHEDULE_CLEARED_LINE } from "../../useClearOnNewSchedule";
 
 /** `schedule.list`: the host's list, cached with the time it was confirmed. */
 export function onScheduleList(entries: ScheduleEntry[]): void {
@@ -18,7 +20,7 @@ export function onScheduleList(entries: ScheduleEntry[]): void {
  *  (null = whole — with nothing armed there is no number to check). */
 export function openSchedules(focus: HorizonBucket | null): void {
   scheduleFocus.set(focus);
-  core().nav.open("schedule");
+  openWaitingId("schedule");
 }
 
 /** Open Automation cut to exactly these rules, under `label` — with `repoDir`
@@ -27,13 +29,23 @@ export function openSchedules(focus: HorizonBucket | null): void {
 export function openScheduleCut(ids: string[], label: string, repoDir?: string): void {
   scheduleFocus.set(null);
   scheduleFocusIds.set(repoDir ? { ids, label, repoDir } : { ids, label });
-  core().nav.open("schedule");
+  openWaitingId("schedule");
 }
 
 /** The filter bar's *clear*, and the sheet leaving: both cuts go. */
 export function clearScheduleFocus(): void {
   scheduleFocus.set(null);
   scheduleFocusIds.set(null);
+  scheduleClearedNote.set(null);
+}
+
+/** The receipt's *Open* after a new schedule: the whole list, and a cut that was hiding it goes
+ *  with a sentence saying so (decision 5), never silently. */
+export function showNewSchedule(): void {
+  const cut = scheduleFocus.get() !== null || scheduleFocusIds.get() !== null;
+  clearScheduleFocus();
+  if (cut) scheduleClearedNote.set(SCHEDULE_CLEARED_LINE);
+  openSchedules(null);
 }
 
 /** Firing one by hand spawns real sessions, so it goes through the same

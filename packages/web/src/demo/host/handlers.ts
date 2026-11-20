@@ -16,7 +16,7 @@
  * (`pending`, WP2a's placeholder for "tier A not written yet", is gone; the
  * type keeps it so a future half-built entry still refuses instead of hanging.)
  *
- * Reads that a sheet sends on OPEN (`build.list`, `capture.list`,
+ * Reads that a sheet sends on OPEN (`build.list`,
  * `fanout.list`, `launch.list`, `assess.state`) are tier A with empty
  * answers: a refusal there would be a toast on every sheet open, and an empty
  * list is the truth about the demo's desktop.
@@ -34,7 +34,7 @@ import { addWaiting } from "./waiting.ts";
 import { inRepos, mint, NOT_A_DEMO_REPO } from "./model.ts";
 import type { DemoModel, Desk, Frame } from "./model.ts";
 import type { DemoState } from "./snapshot.ts";
-import type { DemoVerdict, Msg } from "./verdict.ts";
+import { notInDemo, type DemoVerdict, type Msg } from "./verdict.ts";
 
 export interface HandlerCtx<K extends ClientMessage["t"]> {
   msg: Msg<K>;
@@ -61,23 +61,23 @@ export type Handler<K extends ClientMessage["t"]> =
 export type HandlerTable = { [K in ClientMessage["t"]]: Handler<K> };
 
 const B = { tier: "B" } as const;
-const because = (reason: string) => ({ tier: "B", reason }) as const;
+/** Every tier-B refusal reads "Not in the demo: on your desktop this would <what>." (spec D12). */
+const because = (what: string) => ({ tier: "B", reason: notInDemo(what) }) as const;
 
 // ── the sentences tier B answers with — each says what would make it work ──
-const BUILDS = because(NO_DESKTOP);
-const CAPTURE = because("Screenshots are taken on your desktop's screen — connect your own desktop to capture one.");
-const ASSESS = because("An assessment spends model calls on your desktop — connect your own to run one.");
-const FANOUT = because("Fanning out opens sessions in several repos on your desktop — connect your own to try it.");
-const AUTH = because("The password gate guards a real desktop — the demo has nothing to lock.");
-const PLUGINS = because("Plugins run on your desktop, and the demo has none installed.");
-const LOCALRT = because("Local models run on your desktop — the demo has none loaded.");
-const UPDATE = because("Updating claude happens on your desktop — the demo's claude is not a real install.");
-const LIMITS = because("Usage-limit resumes need a real claude session — the demo never hits a limit of its own.");
-const NETRETRY = because("The network-error retry types into a real claude session on your desktop — the demo's sessions never lose the network.");
-const CONVO = because("This reads the real conversation log on your desktop — the demo keeps no logs.");
-const RUNS = because("The demo keeps your waiting work but does not start it — on your own desktop it would run here.");
-const DESKTOP = because("A live desktop streams your own screen, and the demo has no desktop to show.");
-const STORE = because("The demo keeps no records on disk to change — this needs your own desktop.");
+const BUILDS = { tier: "B", reason: NO_DESKTOP } as const;
+const ASSESS = because("run an assessment, which spends model calls");
+const FANOUT = because("open a session in each repo you ticked");
+const AUTH = because("change the password gate that guards it");
+const PLUGINS = because("run a plugin installed there");
+const LOCALRT = because("run a local model loaded there");
+const UPDATE = because("update claude on it");
+const LIMITS = because("resume a real claude session stopped at a usage limit");
+const NETRETRY = because("retry in a real claude session that lost the network");
+const CONVO = because("read the real conversation log");
+const RUNS = because("start this work");
+const DESKTOP = because("stream your own screen");
+const STORE = because("change the records it keeps on disk");
 
 /** The demo desktop's plugin list. A scenario naming none gets the rows the demo fixtures ask to be
  *  listed, filled in at build time (`index.ts` `defaults.plugins`); nothing plugin-specific lives here. */
@@ -177,7 +177,7 @@ export const HANDLERS = {
     run: (c) => {
       const { msg, desk } = c;
       if (!inRepos(desk.m, msg.cwd)) return { ok: false, reason: NOT_A_DEMO_REPO };
-      if (msg.forkAtTurn) return { ok: false, reason: "Forking cuts the real conversation log on your desktop — the demo keeps none." };
+      if (msg.forkAtTurn) return { ok: false, reason: notInDemo("cut the real conversation log to fork from that turn") };
       if (msg.replaceSessionId) killSession(desk, msg.replaceSessionId);
       // `needs` would park the create until files land; the demo's files
       // never land, so it opens now — a parked create the phone could never
@@ -398,7 +398,6 @@ export const HANDLERS = {
       c.reply({ t: "build.list", repoDir: c.msg.repoDir, builds: f?.list ?? [], runs: f?.runs ?? [] });
     },
   },
-  "capture.list": { tier: "A", run: (c) => { c.reply({ t: "capture.list", repoDir: c.msg.repoDir, targets: [], runs: [], backends: [] }); } },
   "fanout.list": { tier: "A", run: (c) => { c.reply({ t: "fanout.list", runs: [] }); } },
   "launch.list": { tier: "A", run: (c) => { c.reply({ t: "launch.list", launches: m(c).launches ?? [] }); } },
   "assess.state": { tier: "A", run: (c) => { c.reply({ t: "assess.state", repoDir: c.msg.repoDir ?? "", run: null }); } },
@@ -406,7 +405,7 @@ export const HANDLERS = {
   // ── tier B: needs a real desktop ─────────────────────────────────────
   "session.name": CONVO,
   "session.fork": CONVO,
-  "session.reopen": because("Reopening resumes a conversation from your desktop's log — open a new session in the demo instead."),
+  "session.reopen": because("resume that conversation from its log"),
   // The cap is judged against the scenario's fictional spend, the way the host
   // judges the real one; garbage and a closed session are refused in the host's
   // own words (a toast: the message has no receipt there either).
@@ -423,7 +422,7 @@ export const HANDLERS = {
   "session.followup": { tier: "A", run: (c) => setFollowUp(c.desk, c.msg.id, c.msg.on) },
   "session.pin": STORE,
   "session.background": B,
-  "session.closecheck": because("The close check reads git on your desktop — the demo has no working tree."),
+  "session.closecheck": because("check git for changes that are not committed"),
   "session.search": CONVO,
   "session.remoteControl": B,
   "session.ackAsking": B,
@@ -431,7 +430,7 @@ export const HANDLERS = {
   "session.netRetryNow": B,
   "signin.continue": B,
   "input.settle": B,
-  "shell.kill": because("The demo runs no background shells to stop."),
+  "shell.kill": because("stop that background shell"),
   "backlog.archive": STORE,
   "backlog.check": ASSESS,
   "backlog.continue": RUNS,
@@ -451,9 +450,6 @@ export const HANDLERS = {
   // alone left that spinner up for good); the real host answers a scan it cannot
   // do with an EMPTY list, and so does the demo: the repo describes nothing.
   "build.scan": { tier: "A", run: (c) => { c.reply({ t: "build.candidates", repoDir: c.msg.repoDir, candidates: [], total: 0 }); } },
-  "capture.cancel": CAPTURE,
-  "capture.run": CAPTURE,
-  "capture.save": CAPTURE,
   "assess.apply": ASSESS,
   "assess.discard": ASSESS,
   "assess.run": ASSESS,
@@ -482,7 +478,7 @@ export const HANDLERS = {
   "limit.first": LIMITS,
   "limit.resume": LIMITS,
   "limit.session": LIMITS,
-  "host.halt": because("The demo has no AI processes to stop — on a real desktop this halts every agent session and holds automatic work until lifted."),
+  "host.halt": because("halt every agent session and hold automatic work until lifted"),
   "limit.setAuto": LIMITS,
   "netretry.set": NETRETRY,
   "limit.setMode": LIMITS,

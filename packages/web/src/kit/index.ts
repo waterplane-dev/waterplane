@@ -35,3 +35,4 @@ export { SetLine } from "../SettingsKit";
  *  dictation, and owns only where they go (the composer never sends: its caller does). */
 export { PromptComposer } from "../PromptComposer";
 export * from "./chart";
+export { showReceipt, dismissReceipt, type ReceiptSpec } from "./receiptStore";

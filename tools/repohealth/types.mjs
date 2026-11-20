@@ -108,8 +108,8 @@
  * @property {number} descriptionChars  Frontmatter `description:` only — the
  *                                      always-on half.
  * @property {number} bodyChars         Everything after the frontmatter.
- * @property {boolean} generated        Written at runtime by
- *                                      `packages/host/src/visualskill.ts`.
+ * @property {boolean} generated        Declares `generated-by:` (written by
+ *                                      a tool, not by hand).
  *                                      Counted anyway; see PREREG.
  * @property {string[]} headModules     Sorted basenames this skill claims —
  *                                      the modules named in the FIRST line of

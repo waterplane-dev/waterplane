@@ -93,7 +93,7 @@ export function parseDictateTerms(text: string | null | undefined): DictateTerm[
  *  in silence. */
 export function dictateTermsDropped(text: string | null | undefined): number {
   const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
-  const distinct = new Set(lines.map((l) => clean(l.split(":")[0]).toLowerCase()).filter(Boolean));
+  const distinct = new Set(lines.map((l) => clean(l.split(":")[0]!).toLowerCase()).filter(Boolean));
   return Math.max(0, distinct.size - parseDictateTerms(text).length);
 }
 
@@ -116,8 +116,8 @@ export function serializeDictateTerms(terms: DictateTerm[]): string {
  * person's way, and neither changed a German clip in the same run.
  */
 export function dictatePrompt(terms: DictateTerm[]): string {
-  if (terms.length === 1 && terms[0].term.length * 2 + 3 <= DICTATE_PROMPT_MAX_CHARS) {
-    return `${terms[0].term}, ${terms[0].term}.`;
+  if (terms.length === 1 && terms[0]!.term.length * 2 + 3 <= DICTATE_PROMPT_MAX_CHARS) {
+    return `${terms[0]!.term}, ${terms[0]!.term}.`;
   }
   let out = "";
   for (const t of terms) {

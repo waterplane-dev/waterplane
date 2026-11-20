@@ -83,10 +83,10 @@ export const SESSION_ROUTES: readonly ApiEntry[] = [
   // `SessionInfo` copy is capped) and the tail of what it printed. Read-only,
   // asked for by a person → HTTP, never the socket. `pid` only selects among
   // this session's own wrapper shells (`readShellDetail`).
-  route("GET", "/api/shell", ({ res, url }, ctx) => {
+  route("GET", "/api/shell", async ({ res, url }, ctx) => {
     const id = url.searchParams.get("id") || "";
     const pid = Number(url.searchParams.get("pid") || 0);
-    const doc = id && Number.isInteger(pid) && pid > 0 ? ctx.sessions.shellDetail(id, pid) : null;
+    const doc = id && Number.isInteger(pid) && pid > 0 ? await ctx.sessions.shellDetail(id, pid) : null;
     if (!doc) { json(res, { error: "that shell is not running under this session any more" }, 404); return true; }
     json(res, { sessionId: id, ...doc, at: Date.now() });
     return true;

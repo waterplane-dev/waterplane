@@ -16,7 +16,7 @@ export const KIND_JPEG = 2;
 export const KIND_JSON = 4;
 
 /** A record past this is not a frame of ours (a 4K JPEG at q100 is ~5 MB). */
-export const RECORD_MAX = 32 * 1024 * 1024;
+const RECORD_MAX = 32 * 1024 * 1024;
 
 export interface HelperRecord {
   kind: number;

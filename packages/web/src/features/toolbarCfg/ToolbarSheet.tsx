@@ -2,6 +2,7 @@
  * The `toolbar` sheet: customize the burger's menu — order (by hand or by
  * use), show/hide, and which items are pinned into the session header.
  */
+import { TITLE } from "../../sheetNames";
 import { useState, type PointerEvent } from "react";
 import { ArrowDown, ArrowUp, BarChart3, Eye, EyeOff, GripVertical, Pin, Slash } from "lucide-react";
 import { useCore } from "../../sdk";
@@ -31,7 +32,7 @@ export function ToolbarSheet() {
   };
   return (
     <div className="sheet">
-      <SheetHead title={"Customize toolbar"} onClose={() => core.nav.close("toolbar")} />
+      <SheetHead title={TITLE.toolbar} onClose={() => core.nav.close("toolbar")} />
       <div className="form">
         {/* No "icons only" switch any more: the toolbar is a vertical menu,
             and a column of bare glyphs is a column of riddles. The labels

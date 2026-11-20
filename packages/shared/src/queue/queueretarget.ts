@@ -98,14 +98,14 @@ export function retargetEntry<T extends RetargetableEntry>(
 export function moveInLane<T extends SendQueueEntry>(entries: readonly T[], ackId: string, dir: -1 | 1): T[] {
   const idx = entries.findIndex((e) => e.ackId === ackId);
   if (idx < 0) return entries.slice();
-  const me = entries[idx];
+  const me = entries[idx]!;
   let other = -1;
   for (let i = idx + dir; i >= 0 && i < entries.length; i += dir) {
-    if (entries[i].sessionId === me.sessionId) { other = i; break; }
+    if (entries[i]!.sessionId === me.sessionId) { other = i; break; }
   }
   if (other < 0) return entries.slice();
   const out = entries.slice();
-  out[idx] = out[other];
+  out[idx] = out[other]!;
   out[other] = me;
   return out;
 }

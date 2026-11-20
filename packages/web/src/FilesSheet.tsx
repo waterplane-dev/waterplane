@@ -9,6 +9,7 @@ import { readFilesDir, writeFilesDir } from "./filesDir";
 import { getArtifactText, getTreeListing, putArtifactText, putTreeListing } from "./offlineCache";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { TITLE } from "./sheetNames";
 import { useBackStep } from "./backStep";
 import { stalenessNote, useRemoteResource } from "./useRemoteResource";
 import { Empty } from "./Empty";
@@ -216,7 +217,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
 
   return (
     <div className="sheet">
-      <SheetHead title={<>Files{repoName ? ` · ${repoName}` : ""}</>} onClose={onClose}>
+      <SheetHead title={repoName ? TITLE.browse.replace(/ - repo$/, ` - ${repoName}`) : TITLE.browse} onClose={onClose}>
         <Button title="refresh" onClick={() => load(dir)}><RotateCw size={16} /></Button>
       </SheetHead>
 

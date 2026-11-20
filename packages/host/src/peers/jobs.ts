@@ -454,7 +454,8 @@ export class PeerJobs {
     this.d.notify({
       title: `Report from ${r.peer}`,
       body: `${r.peer}'s job ${r.state === "done" ? "finished" : r.state}; ${why} — the report is in this repo's backlog.`,
-      ...(ok ? { backlog: { cwd: r.cwd, ids: [`${peerReportId(r.peer, r.key)}-backlog`] } } : {}),
+      // A report that could not be filed still has a place to land: the repo's backlog, uncut.
+      backlog: { cwd: r.cwd, ids: ok ? [`${peerReportId(r.peer, r.key)}-backlog`] : [] },
       outcome: r.state === "done" ? "ok" : "failed",
     });
   }

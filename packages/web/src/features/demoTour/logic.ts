@@ -20,7 +20,10 @@ export type TourTarget =
   | { kind: "reader"; seed?: string }
   /** The session's repo-health series (`features/setup`, asked by `REPO_HEALTH_EVENT`). */
   | { kind: "health" }
-  | { kind: "sheet"; overlay: Exclude<Overlay, null>; inSession?: boolean };
+  | { kind: "sheet"; overlay: Exclude<Overlay, null>; inSession?: boolean }
+  /** A screen only another scenario can fill: the demo is restarted in `id` (the wall comes by
+   *  itself there); already in it, `overlay` just opens. */
+  | { kind: "scenario"; id: string; overlay: Exclude<Overlay, null> };
 
 /** Icon names, mapped to lucide components in `DemoTourSheet.tsx`. */
 export type TourIcon =
@@ -77,8 +80,8 @@ export const TOUR: readonly TourGroup[] = [
       },
       {
         id: "limits", icon: "hourglass", headline: "Carries on after a usage limit",
-        sentence: "When the account hits its limit, blocked sessions are parked and continue by themselves when it resets.",
-        target: { kind: "sheet", overlay: "limits" },
+        sentence: "Restarts the demo in a session that hits the account's limit: it is parked, then continues by itself when the limit resets.",
+        target: { kind: "scenario", id: "limit-and-budget", overlay: "limits" },
       },
       {
         id: "activity", icon: "activity", headline: "Everything you posted",
@@ -287,5 +290,5 @@ export function tourRowPath(t: TourTarget, activeId: string | null | undefined, 
 
 /** Does tapping this row need the demo session on the list? */
 export function needsSession(t: TourTarget): boolean {
-  return t.kind !== "sheet" || t.inSession === true;
+  return t.kind === "scenario" ? false : t.kind !== "sheet" || t.inSession === true;
 }

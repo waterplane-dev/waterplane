@@ -35,7 +35,7 @@
  * (`App.createOp` → `wireLaunch`), so a backend this host never described is
  * still stripped on the way to the wire.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Play, RefreshCw, Wallet } from "lucide-react";
 import type { Effort, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
@@ -114,6 +114,14 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
   const blocked = backendUnavailable(backends, backend);
   // …and the agents that CAN start here, offered by name rather than left for the person to find in the picker.
   const instead = startableInstead(backends, backend);
+  // A refusal like "being installed right now" ends by itself a minute later, and the
+  // hint below promises Start comes back on its own: keep asking while the sheet is up
+  // and blocked. The host floors each probe at 2 s; the answer re-renders this sheet.
+  useEffect(() => {
+    if (!blocked || !onRecheck) return;
+    const t = setInterval(onRecheck, 5_000);
+    return () => clearInterval(t);
+  }, [blocked, onRecheck]);
   return (
     // One question, one verb: Ctrl/Cmd+Return presses Start (`primaryKey.ts`).
     <div className="sheet" data-primary-key="">
@@ -170,7 +178,7 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
               <RefreshCw size={14} /> Check again
             </button>
           )}
-          {asked && <Hint>Asked the desktop to look again — if the sentence above is still here, it is still not reachable. Start appears here by itself once it is.</Hint>}
+          {asked && <Hint>Asked the desktop to look again — if the sentence above is still here, it is still not reachable. This sheet keeps asking every few seconds; Start appears here by itself once it is.</Hint>}
         </>
       ) : (
       <button className="send" onClick={() => {

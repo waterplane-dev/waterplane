@@ -26,7 +26,7 @@ import { rememberMtime } from "../../fileMtime";
 import { noteUploadRate } from "../../uploadScale";
 import type { DurableOp, QueueBacklogOpts } from "../../sdk/types.ts";
 import {
-  ACK_TIMEOUT_MS, LANE_GAP_MS, PENDING_PREFIX, UPLOAD_STALL_MS, ackWindow, goneLanesOf, isLaterId, isPendingId, laneFor, requeue,
+  ACK_TIMEOUT_MS, LANE_GAP_MS, parsePendingId,UPLOAD_STALL_MS, ackWindow, goneLanesOf, isLaterId, isPendingId, laneFor, requeue,
   serialStates, serialTextFor, markAttempt, entryFrame, answerSendingToast,
 } from "./logic.ts";
 import type { QueueCtx, SendFns } from "./types.ts";
@@ -471,7 +471,7 @@ export function sendFns(c: QueueCtx): SendFns {
       return false;
     }
     if (isPendingId(id)) {
-      queueSessionPrompt(cwd, text, id.slice(PENDING_PREFIX.length), kind);
+      queueSessionPrompt(cwd, text, parsePendingId(id) ?? "", kind);
       flushOutbox();
       return true;
     }
@@ -754,6 +754,7 @@ export function sendFns(c: QueueCtx): SendFns {
       budget: opts.budget,
       launch: opts.launch,
       pastBudget: opts.pastBudget || undefined,
+      hold: opts.hold || undefined,
       offline, armed: !offline,
     });
     if (!offline) armLane(opts.targetSessionId ?? opts.repoDir);

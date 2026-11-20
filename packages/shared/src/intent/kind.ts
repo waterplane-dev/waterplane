@@ -322,23 +322,15 @@ export const isBacklogRow = (i: Intent): boolean =>
 /** An assessment run — `assess.ts`'s headless grader. */
 export const isAssessRow = (i: Intent): boolean => i.payload.kind === "assess";
 
-/** A verified capture run — `capture.ts`'s picture-with-a-verdict. Like
- *  `isBuildRow`, defined by the PAYLOAD: it is a shell-target run with no agent
- *  in it, and nothing else in the store has this payload kind. */
-export const isCaptureRow = (i: Intent): boolean => i.payload.kind === "capture";
-
 /**
  * The vocabularies, as one closed set.
  *
  * `other` is deliberate and is not a bucket for bugs: an intent kind added
  * later must render as *something* on a phone pinned to an older bundle, and a
  * row that silently disappears from the one screen that answers "did my work
- * run?" is the failure that screen exists to prevent. `capture` is the proof
- * that it works — an APK holding a bundle from before this line renders a
- * capture run as `other`, which is a row with a state and a time on it, rather
- * than nothing at all.
+ * run?" is the failure that screen exists to prevent.
  */
-export type IntentKind = "launch" | "schedule" | "fanout" | "build" | "assess" | "capture" | "work" | "other";
+export type IntentKind = "launch" | "schedule" | "fanout" | "build" | "assess" | "work" | "other";
 
 /** Order matters: the specific tests run before the shape test that would
  *  otherwise also match a fan-out child. The order is UNCHANGED by timed work —
@@ -350,7 +342,6 @@ export function intentKind(i: Intent): IntentKind {
   if (isFanoutRow(i)) return "fanout";
   if (isBuildRow(i)) return "build";
   if (isAssessRow(i)) return "assess";
-  if (isCaptureRow(i)) return "capture";
   if (isBacklogRow(i)) return "work";
   return "other";
 }

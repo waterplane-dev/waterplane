@@ -17,7 +17,7 @@ export const OVERLAY_IDS = [
   "slash", "image", "swipe", "gallery", "new", "backlog", "git", "model", "text", "toolbar", "history",
   "secret", "setup", "speedtest", "branches", "decisions", "settings", "notifications", "snippets",
   "build", "search", "features", "nethealth", "fanout", "pad", "send", "activity", "pull", "hdrcmd", "sentlog", "questions", "outline", "limits", "schedule", "scrollback", "browse", "collage", "archive",
-  "clihealth", "assess", "capture", "localrt", "hostedack",
+  "clihealth", "assess", "localrt", "hostedack",
   // `context`, `queue` and `tokens` are tracked at their call sites but were
   // never listed here, so the usage sheet could not show them at zero uses —
   // which is the one reading a usage sheet exists for. Listed with `sweep`.
@@ -29,7 +29,7 @@ export const ACTION_IDS = [
   // outline up, tracked apart from `session.attach` because "opened to LOOK" and
   // "opened to WORK" are different uses of the same list.
   "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.blocked", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
-  "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.clone", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.capture", "repo.hide", "repo.inbox", "repo.git",
+  "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.clone", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.hide", "repo.inbox", "repo.git",
   // A box answered by tapping, from the READER's card (`PromptAnswer.tsx`).
   // The approve bar's size counters (`prompt.mini`/`expand`/`hide`/`show`,
   // `prompt.detail`) are gone with the bar: they were measuring how often the
@@ -81,16 +81,6 @@ export const ACTION_IDS = [
   // that opened a parameterised build's form rather than starting a build.
   "build.run", "build.save", "build.artifact", "build.setup", "build.suggest.open", "build.suggest.use",
   "build.one", "build.ask",
-  // Verified capture. `capture.filter` vs `capture.filter.clear` is the usual
-  // pair, but `capture.run` against `capture.artifact` is the one worth having:
-  // a capture whose FRAMES are always downloaded is one whose verdict line is
-  // not doing its job, and the whole point of the sidecar is that an agent —
-  // and often a person — never needs the picture.
-  // `capture.watch` is counted apart from `capture.run` for the reason the two
-  // verbs exist apart: one is a snapshot, the other is a feedback loop somebody
-  // leaves running while they work, and only the second number says whether
-  // anybody actually codes against it.
-  "capture.run", "capture.watch", "capture.save", "capture.artifact", "capture.filter", "capture.filter.clear",
   "fanout.run", "fanout.followup", "fanout.followup.open", "fanout.preset", "fanout.presets.edit", "fanout.presets.save", "fanout.schedule",
   // Scheduled prompts: the counters say whether a schedule is set once and left
   // alone (the intent) or re-driven by hand every week (the feature failing).
@@ -100,7 +90,7 @@ export const ACTION_IDS = [
   // exists to surface, and one missing from it can never report zero.
   "schedule.new", "schedule.save", "schedule.edit", "schedule.runnow", "schedule.toggle", "schedule.remove",
   "schedule.skipnext", "schedule.session", "schedule.reposession", "schedule.spent",
-  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "pull.strip.remove", "gallery.pull", "gallery.pullsave",
+  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "pull.strip.remove", "gallery.pullsave",
   "search.recent", "search.history", "read.toggle", "read.find", "read.outline", "read.fileref", "outline.find", "outline.jump", "scrollback.find", "scrollback.reachback",
   // `setup.fix` patches; `setup.remedy` opens a prompt. Counted apart because a
   // checklist whose findings are mostly remedies is one whose checks have

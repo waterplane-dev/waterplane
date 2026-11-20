@@ -10,7 +10,8 @@
  * The parse is pure (`installerIn`); the `ps` read is synchronous because `prepare` is, and it
  * runs only on a miss — a binary that resolves costs one PATH scan and no child process.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathHas } from "./claudebin.js";
@@ -61,7 +62,17 @@ export function installerIn(psText: string, bin: string, selfPid = -1): Installe
 }
 
 /** An install of `bin` running on this machine right now, or null (also when `ps` cannot be read). */
-export function installerRunning(bin: string): InstallerProc | null {
+export async function installerRunning(bin: string): Promise<InstallerProc | null> {
+  if (process.platform === "win32") return null;
+  try {
+    const { stdout } = await promisify(execFile)("ps", ["-axo", "pid=,command="], { encoding: "utf8", timeout: 3000, maxBuffer: 8 * 1024 * 1024 });
+    return installerIn(stdout, bin, process.pid);
+  } catch { return null; }
+}
+
+/** The blocking twin, for `binMissingRefusal`'s sync callers (backend list, session start), and only
+ *  reached when the binary did NOT resolve. The update path uses `installerRunning`. */
+export function installerRunningSync(bin: string): InstallerProc | null {
   if (process.platform === "win32") return null;
   try {
     const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8", timeout: 3000, maxBuffer: 8 * 1024 * 1024 });
@@ -79,7 +90,7 @@ const short = (cmd: string): string => (cmd.length > 120 ? `${cmd.slice(0, 117)}
 
 /** The clause for an install in progress — shared by the session refusal and the update button. */
 export function installingWords(label: string, p: InstallerProc): string {
-  return `${label} is being installed or updated on this desktop right now (\`${short(p.cmd)}\`, pid ${p.pid}) — its command is missing until that finishes`;
+  return `${label} is being installed or updated on this desktop right now (“${short(p.cmd)}”, pid ${p.pid}) — its command is missing until that finishes`;
 }
 
 /**
@@ -89,7 +100,7 @@ export function installingWords(label: string, p: InstallerProc): string {
  */
 export function binMissingRefusal(
   label: string, bin: string,
-  facts: { resolves: (b: string) => boolean; installer: (b: string) => InstallerProc | null } = { resolves: binResolves, installer: installerRunning },
+  facts: { resolves: (b: string) => boolean; installer: (b: string) => InstallerProc | null } = { resolves: binResolves, installer: installerRunningSync },
   ownWords = false,
 ): string | null {
   if (facts.resolves(bin)) return null;

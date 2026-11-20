@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { ago } from "./format";
 import type { NotificationItem } from "@waterplane/shared";
-import { clearToastLog, onToastLog, type ToastEntry } from "./toast";
+import { clearToastLog, onToastLog, type ToastEntry, type ToastGo } from "./toast";
 import { ConfirmButton } from "./Confirm";
 import { RowSub } from "./kit/Row";
 
@@ -29,6 +29,11 @@ import { RowSub } from "./kit/Row";
  * its row opens it exactly as the desktop row does (`onOpen`). Reported as
  * "can not click the notifications": the host's feed is in memory, so after a
  * host restart these rows are the only copy of "Needs your decision" left.
+ *
+ * Every other row carries a `go` (`ToastEntry.go`): the session it was said
+ * in, or what its words name — the new pictures, the assessment's RESULT
+ * (reported: landing on the run's empty screen "as if I clicked nothing yet").
+ * A row with neither is a sentence and stays one.
  */
 export function useToastLog(): ToastEntry[] {
   const [rows, setRows] = useState<ToastEntry[]>([]);
@@ -36,7 +41,7 @@ export function useToastLog(): ToastEntry[] {
   return rows;
 }
 
-export function ToastLog({ rows, onOpen }: { rows: ToastEntry[]; onOpen: (n: NotificationItem) => void }) {
+export function ToastLog({ rows, onOpen, onGo }: { rows: ToastEntry[]; onOpen: (n: NotificationItem) => void; onGo: (g: ToastGo) => void }) {
   if (!rows.length) return null;
   return (
     <>
@@ -50,8 +55,8 @@ export function ToastLog({ rows, onOpen }: { rows: ToastEntry[]; onOpen: (n: Not
       </div>
       {rows.map((r) => (
         <div key={`${r.ts}:${r.text}`} className="notif-row">
-          {r.notif ? (
-            <button className="notif-open" onClick={() => onOpen(r.notif!)}>
+          {r.notif || r.go ? (
+            <button className="notif-open" onClick={() => (r.notif ? onOpen(r.notif) : onGo(r.go!))}>
               <span className="notif-icon"><MessageSquare size={16} /></span>
               <span className="notif-body">
                 <span className="notif-text">{r.text}</span>

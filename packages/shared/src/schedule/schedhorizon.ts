@@ -66,7 +66,7 @@ export const HORIZON_LABEL: Record<HorizonBucket, string> = {
   twoDay: "in 2d",
   week: "this week",
   later: "later",
-  unarmed: "not armed",
+  unarmed: "waiting for the first usage reading",
 };
 
 /** The bucket one armed instant falls in. The only place the edges live. */
@@ -131,7 +131,7 @@ export function horizonWords(h: ScheduleHorizon): string | null {
     // when the truth is "everything scheduled is stuck".
     return h.unarmed > 0 ? `${h.unarmed} ${HORIZON_LABEL.unarmed}` : null;
   }
-  const [a, b] = parts;
+  const a = parts[0]!, b = parts[1];
   // `more` is what makes the buckets legibly disjoint in the one place the
   // reader cannot see their definitions.
   return b ? `${a.n} ${a.label} · ${b.n} more ${b.label}` : `${a.n} ${a.label}`;

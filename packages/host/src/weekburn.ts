@@ -36,7 +36,7 @@ import type { Notify } from "./notifytypes.js";
 
 /** Origin prefix every row this module posts carries: `weekburn:<weekOf>` (shared, so the phone tells them apart). */
 export { WEEKBURN_ORIGIN };
-export const WEEKBURN_DEFAULT_MAX_PER_REPO = 6;
+const WEEKBURN_DEFAULT_MAX_PER_REPO = 6;
 const LIVE: ReadonlySet<Intent["state"]> = new Set(["queued", "blocked", "starting", "running"]);
 /** The plan's measurement looks back 14 days; a day of slack for the week's pace. */
 const SAMPLES_LOOKBACK_MS = WEEKBURN_MEASURE_MS + 24 * 3_600_000;
@@ -96,7 +96,7 @@ function envInt(name: string, fallback: number): number {
 }
 
 /** Hand-editable file: anything off-shape falls back field by field. */
-export function cleanWeekBurnStore(x: unknown): WeekBurnStore {
+function cleanWeekBurnStore(x: unknown): WeekBurnStore {
   const o = x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : {};
   const posted: WeekBurnStore["posted"] = {};
   if (o.posted && typeof o.posted === "object" && !Array.isArray(o.posted)) {

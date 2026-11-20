@@ -1,5 +1,5 @@
 import { DEFAULT_CONTEXT_LIMITS, remedyPrompt } from "@waterplane/shared";
-import { LS, lsDel, lsGet, lsSetJson } from "./storage";
+import { LS, lsDel, lsJsonUser, lsSetJsonUser } from "./storage";
 /**
  * Fan-out presets — the routine sweeps you run across every repo, as one-tap
  * chips over the fan-out composer.
@@ -159,6 +159,7 @@ export function remedyFor(checkId: string, list: Preset[]): Preset | null {
 }
 
 interface Stored { list: Preset[]; removed: string[] }
+const isStoredShape = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function clean(p: unknown): Preset | null {
   if (!p || typeof p !== "object") return null;
@@ -177,16 +178,14 @@ export function autoTitle(text: string): string {
 }
 
 export function loadPresets(): Preset[] {
-  let stored: Stored = { list: [], removed: [] };
-  try {
-    const raw = lsGet(KEY);
-    if (!raw) return [...DEFAULT_PRESETS];
-    const parsed = JSON.parse(raw) as Partial<Stored>;
-    stored = {
-      list: Array.isArray(parsed.list) ? parsed.list.map(clean).filter((p): p is Preset => !!p) : [],
-      removed: Array.isArray(parsed.removed) ? parsed.removed.filter((r) => typeof r === "string") : [],
-    };
-  } catch { return [...DEFAULT_PRESETS]; }
+  // An unreadable value shows the defaults, but its text is kept aside and the
+  // composer says so (`lsJsonUser`); the next save never takes the only copy.
+  const parsed = lsJsonUser<Partial<Stored> | null>(KEY, null, "presets", isStoredShape);
+  if (!parsed) return [...DEFAULT_PRESETS];
+  const stored: Stored = {
+    list: Array.isArray(parsed.list) ? parsed.list.map(clean).filter((p): p is Preset => !!p) : [],
+    removed: Array.isArray(parsed.removed) ? parsed.removed.filter((r) => typeof r === "string") : [],
+  };
   const have = new Set(stored.list.map((p) => p.id));
   const gone = new Set(stored.removed);
   // Defaults this build added since the list was saved — appended, never
@@ -199,7 +198,7 @@ export function savePresets(list: Preset[]): void {
   const kept = list.map(clean).filter((p): p is Preset => !!p).slice(0, MAX_ITEMS);
   const have = new Set(kept.map((p) => p.id));
   const removed = DEFAULT_PRESETS.filter((d) => !have.has(d.id)).map((d) => d.id);
-  lsSetJson(KEY, { list: kept, removed } satisfies Stored);
+  lsSetJsonUser(KEY, { list: kept, removed } satisfies Stored, "presets", isStoredShape);
 }
 
 /** Back to the shipped list — also forgets which defaults were deleted. */

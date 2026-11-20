@@ -11,9 +11,8 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, blockOf, budgetHoldText, isAutomaticOrigin, isCaptureRow, laneStateOf, needsSlot, netRetryStalls, pendingProposals, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, blockOf, budgetHoldText, isAutomaticOrigin, laneStateOf, needsSlot, netRetryStalls, pendingProposals, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
-import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
 import type { IntentDeps } from "../intents/manager.js";
 import {
@@ -353,10 +352,6 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
       // assessment is a `shell` target too, and routing on the target alone would
       // run it through the build pty.
       assess: (i) => ctx.assessExecutor(i),
-      // Same exception, same reason — see `capture.ts` for what it does with the
-      // time: verify → settle → diff → emit, and a verdict a person can read
-      // without opening the picture.
-      capture: (i) => ctx.capture.execute(i),
     },
     onChange: (intent) => {
       // Six views of one store, and every client gets whichever it speaks. Each
@@ -406,10 +401,6 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
       if (!intent || clocked || isScheduleRow(intent)) ctx.broadcast(ctx.scheduleSnapshot());
       if (!intent || clocked || isBacklogRow(intent)) ctx.broadcast(ctx.backlogSnapshot());
       if (intent && isBuildRow(intent)) ctx.broadcast({ t: "build.run", run: intentToBuildRun(intent) });
-      // A capture row is neither `isBacklogRow` nor `isBuildRow`, so without this
-      // it would appear in no list at all for the whole time it works — the
-      // failure `assessSnapshot` exists to prevent, one row at a time.
-      if (intent && isCaptureRow(intent)) ctx.broadcast({ t: "capture.run", run: intentToCaptureRun(intent) });
       if (intent && isFanoutRow(intent) && intent.groupId) {
         const run = fanoutRuns(ctx.intents.list(), Number.MAX_SAFE_INTEGER).find((r) => r.id === intent.groupId);
         if (run) ctx.broadcast({ t: "fanout.run", run });

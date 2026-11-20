@@ -159,13 +159,13 @@ export function unsafeParamIds(cmd: string, values: Record<string, string>): str
 export function unsafeParamsText(ids: string[]): string {
   if (!ids.length) return "";
   const list = ids.map((n) => `“${n}”`).join(", ");
-  return `the value for ${list} contains a shell character (; & | \` $ ( ) < > \\ quotes) and would be run as part of the command — change it, or have the command read $${paramEnvName(ids[0])} instead`;
+  return `the value for ${list} contains a shell character (; & | \` $ ( ) < > \\ quotes) and would be run as part of the command — change it, or have the command read $${paramEnvName(ids[0]!)} instead`;
 }
 
 /** Every `{{id}}` a string references, in order, deduped. */
 export function paramRefs(text: string): string[] {
   const out: string[] = [];
-  for (const m of str(text).matchAll(REF_RE)) if (!out.includes(m[1])) out.push(m[1]);
+  for (const m of str(text).matchAll(REF_RE)) if (!out.includes(m[1]!)) out.push(m[1]!);
   return out;
 }
 

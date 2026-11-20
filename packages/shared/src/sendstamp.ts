@@ -54,6 +54,12 @@ export const LOST_LEDGER_RAW_MARGIN_MS = 120_000;
 export const LOST_LEDGER_REFUSAL =
   "the desktop lost its delivery record; this may already have run — check, then send it again as a new message";
 
+/** What the background relay answers an unknown ackId first sent longer ago than the ack ledger
+ *  remembers (`host/server/bgrelay.ts`). Here, beside the other, because the phone must read both
+ *  as "may already have run", never as a refusal that proves nothing ran (`web/relayedRow.ts`). */
+export const RELAY_STALE_REFUSAL =
+  "this was first sent too long ago for the desktop to say whether it already ran; check, then send it again as a new message";
+
 const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 
 /**

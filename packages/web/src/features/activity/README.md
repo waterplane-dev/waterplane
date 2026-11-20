@@ -1,7 +1,7 @@
 # activity
 
 Every posted piece of work, **one row for its whole life** — the send queue (words still on this
-phone), the desktop's durable intents (launches, work items, schedules, sweeps, builds, captures)
+phone), the desktop's durable intents (launches, work items, schedules, sweeps, builds)
 and this phone's downloads. The sheet is the flat `ActivitySheet.tsx`; rows are `activityRows.ts`
 (pure, node-tested). Rules in the `web-work` skill: **a row never vanishes on a state change,
 it changes verdict**; it reads `Intent` DIRECTLY and infers no lifecycle; `disabledReason`, never
@@ -19,8 +19,8 @@ a greyed button.
 
 **What a row does** (`actions.ts`, `act`/`retarget`/`bulk`): `intent.run` is the ONE `run it now`
 for every host-held kind (`bulkverbs.test.mjs` pins it to this arm), DURABLE via `queue.queueOp` on
-the lane its kind already had (`logic.ts` `runLane`); `intent.cancel`, except `build.cancel`/
-`capture.cancel` (a live process) and `schedule.remove` (a delete); a filing tells the host
+the lane its kind already had (`logic.ts` `runLane`); `intent.cancel`, except `build.cancel`
+(a live process) and `schedule.remove` (a delete); a filing tells the host
 (`intent.dismiss`, live only); the bulk verbs confirm with a count AND a sample (`say.confirm`,
 never `window.confirm`) and end in one sentence.
 

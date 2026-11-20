@@ -29,7 +29,19 @@ const REFUSED = "that folder is outside the configured root";
 type AnyArgs = RouteArgs<ClientMessage["t"]>;
 type AnySpec = RouteSpec<ClientMessage["t"]>;
 
+/**
+ * Durable ops this host no longer has. A phone still on an older bundle may hold one queued; an unknown
+ * `t` is ignored, which would leave that row pending and re-sent for ever, so these are answered
+ * with a refusal `op.ack` (`ok:false`) and nothing runs. Not remembered in the ack ledger: nothing ran.
+ */
+const RETIRED_DURABLE_OPS: ReadonlySet<string> = new Set(["capture.run"]);
+
 export function dispatch(c: HostCtx, ws: WebSocket, msg: ClientMessage): void {
+  const retiredAck = (msg as { ackId?: unknown }).ackId;
+  if (RETIRED_DURABLE_OPS.has(msg.t) && typeof retiredAck === "string" && retiredAck) {
+    c.send(ws, { t: "op.ack", ackId: retiredAck, ok: false, reason: "verified capture was removed from this host" });
+    return;
+  }
   // Own keys only: `ROUTES` is a plain object, so `{"t":"__proto__"}` or
   // `"toString"` would otherwise resolve off its prototype and reach `spec.run`.
   if (!Object.hasOwn(ROUTES, msg.t)) return;

@@ -11,6 +11,7 @@
  * grouped by owning slice), so moving a method between slices retargets one
  * arrow.
  */
+import type { Clock } from "../waitclock.js";
 import type { IPty } from "node-pty";
 import type {
   ClosedBy, ClosedSession, CliSignalId, FollowUp, DetectedPrompt, HealthOutcome, HistoryEntry, LaunchOpts, LimitResumeMode,
@@ -328,13 +329,8 @@ export interface Session {
   createdRecord: boolean;
   /** Only conversation files modified after this instant can be ours. */
   spawnedAt: number;
-  /** Pending auto-continue attempt for a usage-limit block, if scheduled. */
-  limitTimer: NodeJS.Timeout | null;
-  /** The pending retry rung after a transient API give-up (`apiretry.ts`), and its one
-   *  log re-read after a Stop; `netWriting` marks our OWN `continue` so it does not cancel
-   *  itself; `netSentAt` is when it was typed. Absent = never armed. */
-  netTimer?: NodeJS.Timeout | null;
-  netRecheck?: NodeJS.Timeout | null;
+  /** `netWriting` marks our OWN `continue` so it does not cancel itself; `netSentAt` is when it was
+   *  typed. The pending rung and its log re-read are timers on lanes `net` / `netRecheck` (`timers.ts`). */
   netWriting?: boolean;
   netSentAt?: number;
   /** The tries of an episode a served row closed mid-turn, good for that `turn` only (`apiretry.ts`'s `served`). */
@@ -409,6 +405,11 @@ export interface Session {
    *  not waited on for a Stop that will never come (`sawTurnHook`). Nothing
    *  else reads it: `hooksActive` keeps its meaning everywhere it gates. */
   turnHookSeen: boolean;
+  /** When this session's CLI announced `/clear` (`SessionEnd` with `reason: "clear"`,
+   *  routed by its OLD conversation id). `/clear` mints a NEW conversation id, so the
+   *  `SessionStart` that follows matches no session by id; this stamp is what routes it
+   *  home (`turn.ts`'s `routeHook`). Memory only. */
+  clearedAt?: number;
   /** The newest hook payload, as it arrived — read only for its SHAPE, by the
    *  `hook.pipe` fixture capture (`clifixtures.ts`). Memory only. */
   lastHook?: unknown;
@@ -452,9 +453,6 @@ export interface Session {
    * screen could not be read for. See `claimSubmittedPrompt`.
    */
   submits: { prompt: string; at: number; claimed: boolean }[];
-  /** Pending resurrect timer for a session that exited while usage-limited —
-   *  reopens it (`--continue`) at the reset time. Null when none scheduled. */
-  resurrectTimer: NodeJS.Timeout | null;
   /** True once the user KILLED/removed this session — suppresses limit-resurrect
    *  (an intentional close must never be auto-reopened). */
   killed: boolean;
@@ -613,6 +611,8 @@ export interface SessionChannel {
 export interface SessionCarry { history: HistoryEntry[]; tabTitle?: string }
 
 export interface SessionCore {
+  /** The one time seam of the recovery lanes (`timers.ts`); absent = `realClock`. */
+  readonly clock?: Clock;
   // ── the facade: shared state and the class's own verbs ──
   readonly root: string;
   readonly port: number;
@@ -651,7 +651,8 @@ export interface SessionCore {
 
   // ── convid.ts (S3) ──
   detectClaudeId(s: Session): string | null;
-  adoptClaudeId(s: Session, cid: string | null): void;
+  /** `replace` only for a conversation the CLI itself moved to (`/clear`), proven by its hooks. */
+  adoptClaudeId(s: Session, cid: string | null, opts?: { replace?: boolean }): void;
   watchClaudeId(s: Session): void;
   stopClaudeIdWatch(s: Session): void;
   detectBackendId(s: Session): string | null;
@@ -706,7 +707,7 @@ export interface SessionCore {
   /** A turn started — anyone's but our own `continue` calls the retry off. */
   netTurnStarted(s: Session): void;
   /** Something was typed into the session — anything but our own `continue` calls the retry off. */
-  netTyped(s: Session): void;
+  netTyped(s: Session, data?: string): void;
   // ── signinwait.ts ──
   /** The hook router just marked `signedOut` (a turn ended `authentication_failed`): join the account's sign-in episode. */
   signInSignedOut(s: Session): void;

@@ -13,6 +13,7 @@
  * Pure and type-only on its imports so node tests it directly.
  */
 import type { OutboxEntry } from "../../outbox";   // type-only: erased before node sees it
+import { LOST_LEDGER_REFUSAL, RELAY_STALE_REFUSAL } from "@waterplane/shared";
 import { CONFIRM_WINDOW_MS, hostStillConfirming } from "../../sendConfirm.ts";
 
 export type RowPhase =
@@ -51,6 +52,24 @@ export function revivable(e: OutboxEntry): boolean {
  *  confirmed or not. Re-sending it is a person's decision, one at a time. */
 export function mayBeInSession(e: OutboxEntry): boolean {
   return e.status === "failed" && (e.failState === "unconfirmed" || e.failState === "unsubmitted");
+}
+
+/** Host refusals whose own words say the prompt MAY already have run: the ledger forgot, so the
+ *  "no" is about this attempt, not about the words. They arrive as `op.ack` `ok:false` and are
+ *  recorded `refused`, so the reason is the only thing that tells them apart. */
+const MAY_HAVE_RUN: ReadonlySet<string> = new Set([LOST_LEDGER_REFUSAL, RELAY_STALE_REFUSAL]);
+
+/**
+ * Did the HOST say this failed row never ran? Only `stale` (an answer refused, nothing written)
+ * and `refused` (`op.ack` `ok:false`, returned before anything started) — minus the two refusals
+ * that say it may have. Every other failure is a local give-up (timeout, cap, orphan, a cascade),
+ * an `unconfirmed`/`unsubmitted` verdict, or `other` (nobody recorded whether it ran): unknown,
+ * so false. What frees a row the background link wrote (`relayedRow.ts`'s `isRelayedLive`).
+ */
+export function hostSaidNotRun(e: Pick<OutboxEntry, "status" | "failState" | "reason">): boolean {
+  if (e.status !== "failed") return false;
+  if (e.failState === "stale") return true;
+  return e.failState === "refused" && !MAY_HAVE_RUN.has(e.reason ?? "");
 }
 
 export function rowPhase(e: OutboxEntry, now: number): RowPhase {
@@ -154,4 +173,17 @@ export function phaseNotes(confirming: number, maybeRan: number, refused: number
  *  "save as done" is honestly an answer to (Activity). */
 export function isUnconfirmed(e: OutboxEntry): boolean {
   return e.status === "failed" && e.failState === "unconfirmed";
+}
+
+/** The verbs of a row's ⋯ strip that only mean something while the row is
+ *  still `queued`, said as sentences when it is not (never a dimmed button:
+ *  a `title` is invisible on a phone). Only verbs that apply to this kind of
+ *  row are named. */
+export function notQueuedCants(
+  verbs: ReadonlyArray<readonly [label: string, applies: boolean]>,
+  queued: boolean,
+  reason: string,
+): { label: string; reason: string }[] {
+  if (queued || !reason) return [];
+  return verbs.filter(([, applies]) => applies).map(([label]) => ({ label, reason }));
 }

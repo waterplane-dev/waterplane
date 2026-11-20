@@ -121,14 +121,14 @@ export type UpdateDue =
 
 function ver(s: string | undefined): number[] | null {
   const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(s ?? "");
-  return m ? [+m[1], +m[2], +m[3]] : null;
+  return m ? [+m[1]!, +m[2]!, +m[3]!] : null;
 }
 
 /** True only when `b` is known to be newer than `a`; unparseable versions are never "newer". */
 export function newerVersion(a: string, b: string): boolean {
   const x = ver(a), y = ver(b);
   if (!x || !y) return false;
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] > x[i];
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i]! > x[i]!;
   return false;
 }
 

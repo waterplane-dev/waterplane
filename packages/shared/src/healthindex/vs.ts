@@ -38,9 +38,9 @@ export function healthIndexVs(
   const nowT = Date.parse(`${now.week}T00:00:00Z`);
   const target = nowT - weeks * 7 * DAY_MS;
   for (let i = at - 1; i >= 0; i--) {
-    const t = Date.parse(`${points[i].week}T00:00:00Z`);
+    const t = Date.parse(`${points[i]!.week}T00:00:00Z`);
     if (t > target) continue;
-    const then = points[i];
+    const then = points[i]!;
     if (!(then.index > 0)) return null;
     return {
       ratio: now.index / then.index,

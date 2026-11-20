@@ -40,7 +40,6 @@ import { isAndroidRepo, isAndroidRepoAsync, probeAndroidEnv } from "./androidenv
 import { startToolchainInstall } from "./toolchain.js";
 import { scanRepoBuilds, scanRepoBuildsAsync } from "./buildscan.js";
 import { contributedChecks, contributedFixes } from "./plugins/setupcontrib.js";
-import { VISUAL_SKILL_REL, writeVisualCheckSkill } from "./visualskill.js";
 import { writeTextAtomicKeepMode } from "./jsonstore.js";
 import { addExposureTarget } from "./exposurewatch.js";
 import { eraSeenWords, startEraSeen } from "./eraseen.js";
@@ -97,30 +96,6 @@ function readOrNull(path: string): string | null {
 
 /** Transport dirs that must be gitignored (phone↔repo plumbing, not source). */
 const TRANSPORT_DIRS = Array.from(new Set([INBOX_SUBDIR, OUTBOX_SUBDIR, ...OUTBOX_SUBDIRS]));
-
-/** Per-repo capture config — the same place `builds.ts` keeps `builds.json`. */
-const captureConfigPath = (worktree: string) => join(repoStateDir(worktree), "capture.json");
-
-/**
- * How many capture targets this repo has configured, read DEFENSIVELY.
- *
- * Parsed by shape rather than through a type, on purpose: this file is written
- * by a client that may be older or newer than this daemon, and the only question
- * asked here is "is there at least one target" — the narrowest fact that can be
- * true. Anything unreadable, half-written, or shaped differently answers 0,
- * which means the row below is simply not offered. A checklist that threw on a
- * malformed config would take the whole setup sheet down with it.
- */
-export function captureTargetCount(worktree: string): number {
-  let raw: string;
-  try { raw = readFileSync(captureConfigPath(worktree), "utf8"); } catch { return 0; }
-  try {
-    const obj = JSON.parse(raw) as { targets?: unknown };
-    return Array.isArray(obj?.targets) ? obj.targets.length : 0;
-  } catch {
-    return 0;
-  }
-}
 
 /** Marker so the CLAUDE.md guidance block is appended at most once — under the
  *  current name or any past one, so a repo fixed before a rename is not given
@@ -411,30 +386,6 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
         detail: "No tracked, un-ignored .env files.", fix: null }
     : { id: "env-gitignored", label: "Secrets (.env) gitignored", status: "warn",
         detail: `Tracked & not ignored: ${leaky.join(", ")} — a secret here would be committed.`, fix: null });
-
-  // 5b. Where this repo can take screenshots, does its agent know how to LOOK at
-  // one without leaving it in the conversation for every remaining turn?
-  //
-  // **Configuring a capture target IS the opt-in.** This row is not emitted at
-  // all for a repo with no targets: it would be advice about a loop that repo
-  // does not run, on every repo on the machine, which is a warn nobody can close
-  // and the exact failure `summarize()` keeps host-scope rows out of the badge
-  // for. Warn rather than fail — nothing is broken without it, an
-  // image is just paid for more times than it needed to be.
-  const captureTargets = captureTargetCount(worktree);
-  if (captureTargets > 0 && !existsSync(join(worktree, VISUAL_SKILL_REL))) {
-    checks.push({
-      id: "visual-check",
-      label: "Agent told how to look at captures",
-      status: "warn",
-      detail: `${captureTargets} capture target${captureTargets === 1 ? "" : "s"} configured, but no ` +
-        `${VISUAL_SKILL_REL}. Every turn re-sends the whole conversation, so a frame dropped into one is ` +
-        `paid for again on every remaining turn — a six-frame matrix at turn 10 of a 40-turn session costs ` +
-        `~180k tokens. The preset writes the ladder (deterministic check, text verdict, the phone's gallery, ` +
-        `a subagent, looking directly) into this repo.`,
-      fix: "visual-check",
-    });
-  }
 
   // 5c. Rows contributed by plugins and in-repo extensions (`api.setupCheck`),
   // in load order — today the requirements list (`packages/extensions/
@@ -727,16 +678,6 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
       } else {
         notes.push(`CLAUDE.md already has the ${BRAND.displayName} conventions section`);
       }
-    }
-
-    if (fixes.includes("visual-check")) {
-      // Never overwrite an existing one: the preset asks its reader to measure
-      // the subagent baseline on this machine and edit the number in, so a
-      // re-run that rewrote the file would delete the only part of it that was
-      // ever true here.
-      const r = writeVisualCheckSkill(wt);
-      if (r.written) { applied.push("visual-check"); notes.push(`wrote ${r.relPath}`); }
-      else notes.push(`${r.relPath} already present — left as it is`);
     }
 
     if (fixes.includes("state-dir")) {

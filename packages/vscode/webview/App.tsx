@@ -19,11 +19,11 @@ const IDS = TAB_IDS;
 export function App() {
   const [tab, setTab] = useState<TabId>(() => loadTab(IDS, "all"));
   const [turn, setTurn] = useState<number | null>(null);
-  // A ledger tab All sessions was asked to open on (the tree's Copilot row); every tree click sets it anew.
+  // A ledger tab All sessions was asked to open on; every tree click sets it anew.
   const [ledger, setLedger] = useState<string | null>(null);
   const choose = (id: TabId) => { setTab(id); saveTab(id); };
   // The tree asked for a view: it arrives after `ready`, so it wins over the remembered one.
-  const { session, sessions, corpus, live, weight, prompts, findings, folders, health } = useExtension((id, led) => { if (IDS.includes(id)) { choose(id); setLedger(led ?? null); } });
+  const { session, sessions, corpus, live, copilot, weight, prompts, findings, folders, health } = useExtension((id, led) => { if (IDS.includes(id)) { choose(id); setLedger(led ?? null); } });
 
   // A selected prompt belongs to one session; another session's numbers mean nothing.
   const sessionId = session?.doc?.id;
@@ -47,7 +47,7 @@ export function App() {
           <SessionView doc={session?.doc ?? null} why={session?.why}
             prompts={prompts.list} terminal={prompts.terminal} selectedTurn={turn} onSelectTurn={setTurn} post={post} />
         )}
-        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus?.why} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger}
+        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus?.why} scanning={corpus?.scanning} live={live} copilot={copilot} post={post} askedLedger={ledger}
           here={sessions && sessions.rows.length ? { folder: sessions.folder, ids: new Set(sessions.rows.map((r) => r.id)) } : null} />}
         {tab === "always-on" && (
           <WeightView doc={weight?.doc ?? null} why={weight?.why}

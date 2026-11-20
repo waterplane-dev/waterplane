@@ -10,7 +10,6 @@ import { BL_OFFLINE, HELD_OFFLINE, refireSummary, runLane, runNowToast } from ".
 test("run it now takes the lane its kind already had", () => {
   const i = { id: "i1", cwd: "/r/a" };
   assert.equal(runLane("build", i), "build:/r/a");
-  assert.equal(runLane("capture", i), "capture:/r/a");
   assert.equal(runLane("schedule", i), "fanout");
   assert.equal(runLane("work", i), "intent:i1");
   assert.equal(runLane("launch", i), "intent:i1");
@@ -20,7 +19,6 @@ test("the receipt says queued offline, and what starts online", () => {
   assert.equal(runNowToast("build", true), "queued — it runs when the link is back");
   assert.equal(runNowToast("launch", false), "opening it now, without the files it was waiting for");
   assert.equal(runNowToast("build", false), "starting the build…");
-  assert.equal(runNowToast("capture", false), "taking the capture…");
   assert.equal(runNowToast("work", false), "firing it into the session…");
 });
 

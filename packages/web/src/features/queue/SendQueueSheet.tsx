@@ -7,7 +7,8 @@ import type { OutboxEntry } from "../../outbox";
 import { QueueSheet } from "../../QueueSheet";
 import { useCore, useQueueEntries } from "../../sdk";
 import { LAUNCH_HELD_OFFLINE } from "./logic";
-import { resend, sendAll, toggleSerialAll } from "./actions";
+import { removeRow, resend, sendAll, toggleSerialAll } from "./actions";
+import { closeWaiting } from "../../waitingWork";
 
 export function SendQueueSheet() {
   const core = useCore();
@@ -25,14 +26,14 @@ export function SendQueueSheet() {
     // worst possible place for it.
     onCancelLaunch={(id) => liveSend({ t: "launch.cancel", id }, "called off — that session will not open", LAUNCH_HELD_OFFLINE)}
     onRunLaunch={(id) => liveSend({ t: "launch.run", id }, "opening it now, without the files it was waiting for", LAUNCH_HELD_OFFLINE)}
-    onEdit={v.editQueued} onRemove={v.removeQueued} onMove={v.moveQueued}
+    onEdit={v.editQueued} onRemove={(ackId) => removeRow((entries as OutboxEntry[]).find((e) => e.ackId === ackId), ackId)} onMove={v.moveQueued}
     // Moved onto a backlog: show it there, newest on top.
     onRetarget={(ackId, to) => { if (v.retargetQueued(ackId, to) && to.mode === "backlog") core.nav.openBacklogCut(to.cwd); }} onToggleHold={v.toggleHoldQueued}
     onToggleSerial={v.toggleSerialQueued}
     serialSessions={core.queue.serial.on}
     onToggleSerialAll={toggleSerialAll}
     onSendNow={v.sendQueuedNow} onRetryFailed={v.retryFailedQueued} onSendAll={sendAll}
-    onRestore={v.restoreQueued} onAddPrompt={v.addPromptToQueuedCreate} onClose={() => core.nav.close("queue")}
+    onRestore={v.restoreQueued} onAddPrompt={v.addPromptToQueuedCreate} onClose={closeWaiting}
     repoIdOf={core.queue.repoIdOf}
     onResend={resend}
   />;

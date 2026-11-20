@@ -6,20 +6,22 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { Circle, CircleDot, ClipboardCheck, SendHorizontal } from "lucide-react";
+import { Circle, CircleDot, ClipboardCheck, Plus } from "lucide-react";
 import { WeekBurnLink } from "./WeekBurnLink";
 import { ASSESS_NONE_IN_CUT, assessScopeLabel, assessScopeNote } from "../backlogFilter";
 import { track } from "../usage";
 import { RepoSelect } from "../RepoPicker";
 import { SheetHead } from "../Sheet";
+import { TITLE } from "../sheetNames";
 import type { BacklogModel } from "./backlogTypes";
 import { Button } from "../kit/Button";
 import { Hint } from "../kit/Hint";
+import { Explain } from "../Explain";
 
 export function BacklogHead({ m }: { m: BacklogModel }) {
   const { p, repoDir } = m;
   return (
-      <SheetHead title={"Backlog"} onClose={p.nav.onClose}>
+      <SheetHead title={TITLE.waiting} onClose={p.nav.onClose}>
         {/* The one way to add — the same sheet every other send in this app goes
             through, seeded to this repo and *when it's free*. With no repo it
             is ABSENT rather than dimmed: this sheet is scoped to one repo and
@@ -29,7 +31,7 @@ export function BacklogHead({ m }: { m: BacklogModel }) {
         {repoDir && (
           <button className="rc" title="write something for this repo — the send sheet, with the repo already chosen"
             onClick={() => { track("action:backlog.send"); p.nav.onOpenSend(repoDir); }}>
-            <SendHorizontal size={14} /> send…
+            <Plus size={14} /> Add to backlog
           </button>
         )}
         {/* The global machinery switch. Its label used to carry the idle
@@ -37,8 +39,15 @@ export function BacklogHead({ m }: { m: BacklogModel }) {
             waiting for a shared session to go quiet. Work opens its own session
             now and the ladder decides, so the number described nothing. */}
         <button className={`rc ${p.auto ? "on" : "off"}`} onClick={() => p.cutVerbs.onSetAuto(!p.auto)}>
-          {p.auto ? <><CircleDot size={14} /> auto</> : <><Circle size={14} /> auto off</>}
+          {p.auto ? <><CircleDot size={14} /> starts itself</> : <><Circle size={14} /> starts itself: off</>}
         </button>
+        {/* What is held while it is off: a `?` on the switch's own line, closed (it was a row of its own). */}
+        {!p.auto && !m.focusWords && (
+          <Explain of="auto off">
+            <b>starts itself</b> is off on this desktop: nothing queued anywhere runs until you turn it back on or
+            start an item by hand.
+          </Explain>
+        )}
       </SheetHead>
   );
 }
@@ -101,8 +110,10 @@ export function RepoBar({ m }: { m: BacklogModel }) {
         {p.cutVerbs.onAssess && repoDir && !assessWhyNot && filtering && assessIds.length > 0 && (
           <Hint as="span">{assessScopeNote(assessIds.length, cut.length)}</Hint>
         )}
+        {/* *usage pace…* shares the repo's row (it was a row of its own, 44px of chrome
+            before the first item); its sentence, when the burn has one, wraps below. */}
+        {repoDir && p.nav.onOpenWeekBurn && <WeekBurnLink m={m} repoDir={repoDir} />}
       </div>
-      {repoDir && p.nav.onOpenWeekBurn && <WeekBurnLink m={m} repoDir={repoDir} />}
     </>
   );
 }

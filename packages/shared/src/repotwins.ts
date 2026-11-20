@@ -38,9 +38,9 @@ export function twinWheres(clones: readonly RepoClone[]): Map<string, string> {
     parents.forEach((mine, i) => {
       for (let n = 1; n <= mine.length; n++) {
         const tail = mine.slice(-n).join("/");
-        if (parents.every((o, j) => j === i || o.slice(-n).join("/") !== tail)) { out.set(dirs[i], `${tail}/`); return; }
+        if (parents.every((o, j) => j === i || o.slice(-n).join("/") !== tail)) { out.set(dirs[i]!, `${tail}/`); return; }
       }
-      out.set(dirs[i], `/${mine.join("/")}${mine.length ? "/" : ""}`);
+      out.set(dirs[i]!, `/${mine.join("/")}${mine.length ? "/" : ""}`);
     });
   }
   return out;

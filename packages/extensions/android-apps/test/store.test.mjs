@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { InstallLogStore: Store } = await import("../../../host/dist/extensions/android-apps/host/installlog.mjs");
+const { installLogSummary } = await import("../../../host/dist/extensions/android-apps/shared/wire.mjs");
 
 /** The extension's store over `<root>/.waterplane/installs.json`, writing — what core's store did before P5. */
 class InstallLogStore extends Store {
@@ -130,4 +131,134 @@ test("a report past the per-report cap keeps the NEWEST, not the first listed", 
   const ats = entries.map((e) => e.at).sort((a, b) => a - b);
   assert.equal(ats.length, 300);
   assert.ok(ats[0] > many[19].at, "the twenty oldest are the ones that were dropped");
+});
+
+test("a log that cannot be read (EMFILE) is left alone, never renamed aside or saved over", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  const good = new InstallLogStore(dir);
+  good.report(PHONE, [row()]);
+  good.flush();
+  const file = join(dir, ".waterplane", "installs.json");
+  const before = readFileSync(file, "utf8");
+  let failing = true;
+  const flaky = {
+    ...fsMod,
+    readFileSync: (p, enc) => {
+      if (failing) throw Object.assign(new Error("too many open files"), { code: "EMFILE" });
+      return fsMod.readFileSync(p, enc);
+    },
+  };
+  const store = new Store(file, { write: true, fs: flaky });
+  store.report({ id: "cc33dd44" }, [row({ pullId: "l_9" })]);
+  store.flush();
+  assert.equal(readFileSync(file, "utf8"), before, "the good file is untouched");
+  assert.deepEqual(fsMod.readdirSync(join(dir, ".waterplane")), ["installs.json"], "nothing renamed aside");
+  failing = false;
+  store.report({ id: "cc33dd44" }, [row({ pullId: "l_10" })]);
+  store.flush();
+  assert.equal(new InstallLogStore(dir).doc().total, 3, "what was held merges with what was on disk");
+});
+
+test("a transient read error at start does not leave an empty log for the daemon's life", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  const good = new InstallLogStore(dir);
+  good.report(PHONE, [row(), row({ pullId: "l_2" })]);
+  good.flush();
+  const file = join(dir, ".waterplane", "installs.json");
+  let failing = true;
+  const flaky = { ...fsMod, readFileSync: (p, enc) => {
+    if (failing) { failing = false; throw Object.assign(new Error("too many open files"), { code: "EMFILE" }); }
+    return fsMod.readFileSync(p, enc);
+  } };
+  const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(" "));
+  let store;
+  try { store = new Store(file, { write: true, fs: flaky }); } finally { console.warn = warn; }
+  assert.equal(warned.length, 1, "the unreadable start is said once");
+  assert.equal(store.doc().total, 2, "the next read finds the file again");
+});
+
+test("a row reported while the file was unreadable is merged and saved once it reads, even if the phone re-states nothing new", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  const good = new InstallLogStore(dir);
+  good.report(PHONE, [row()]);
+  good.flush();
+  const file = join(dir, ".waterplane", "installs.json");
+  let failing = 2;
+  const flaky = { ...fsMod, readFileSync: (p, enc) => {
+    if (failing-- > 0) throw Object.assign(new Error("denied"), { code: "EACCES" });
+    return fsMod.readFileSync(p, enc);
+  } };
+  const warn = console.warn; console.warn = () => {};
+  try {
+    const store = new Store(file, { write: true, fs: flaky }); // read 1 fails
+    store.report({ id: "cc33dd44" }, [row({ pullId: "l_7" })]); // recover read 2 fails: row held
+    store.report(PHONE, [row()]); // read ok: merges, saves although this report adds nothing
+    store.flush();
+  } finally { console.warn = warn; }
+  assert.equal(new InstallLogStore(dir).doc().total, 2, "the held row reached the disk");
+});
+
+test("an install log that stays unreadable says so in the reply, warns once, and report is not kept", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  const good = new InstallLogStore(dir);
+  good.report(PHONE, [row()]);
+  good.flush();
+  const file = join(dir, ".waterplane", "installs.json");
+  const denied = { ...fsMod, readFileSync: () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); } };
+  const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(" "));
+  try {
+    const store = new Store(file, { write: true, fs: denied });
+    store.report(PHONE, [row({ pullId: "l_9" })]);
+    assert.equal(store.saves, false, "nothing can be saved while the file is unread");
+    assert.match(store.doc().unreadable ?? "", /denied|EACCES/);
+    store.doc(); store.doc();
+  } finally { console.warn = warn; }
+  assert.equal(warned.length, 1, "one warning for the outage, not one per call");
+  assert.equal(new InstallLogStore(dir).doc().unreadable, undefined, "a readable log carries no field");
+});
+
+test("a log that did not parse is moved aside, and the reply keeps saying so after the re-read finds nothing", () => {
+  const dir = root();
+  mkdirSync(join(dir, ".waterplane"), { recursive: true });
+  writeFileSync(join(dir, ".waterplane", "installs.json"), '{"entries": [');
+  const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(" "));
+  let doc;
+  try { const store = new InstallLogStore(dir); store.doc(); doc = store.doc(); } finally { console.warn = warn; }
+  assert.match(doc.movedAside ?? "", /installs\.json\.corrupt-/, "the set-aside file is named in the reply");
+  assert.equal(doc.unreadable, undefined, "saving works again");
+  assert.match(installLogSummary(doc), /set aside/);
+  assert.equal(warned.length, 1);
+});
+
+test("a file moved aside later in an outage still gets its own warning line", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  mkdirSync(join(dir, ".waterplane"), { recursive: true });
+  const file = join(dir, ".waterplane", "installs.json");
+  writeFileSync(file, '{"entries": [');
+  let phase = 0;
+  const flaky = { ...fsMod, readFileSync: (p, enc) => {
+    if (phase++ === 0) throw Object.assign(new Error("too many open files"), { code: "EMFILE" });
+    return fsMod.readFileSync(p, enc);
+  } };
+  const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(" "));
+  try { const store = new Store(file, { write: true, fs: flaky }); store.doc(); } finally { console.warn = warn; }
+  assert.equal(warned.length, 2, "the read error and the later move are two lines");
+  assert.match(warned[1], /moved aside to .*corrupt-/);
+});
+
+test("a corrupt log that cannot be moved aside warns once, not on every read", async () => {
+  const fsMod = await import("node:fs");
+  const dir = root();
+  mkdirSync(join(dir, ".waterplane"), { recursive: true });
+  const file = join(dir, ".waterplane", "installs.json");
+  writeFileSync(file, "{bad");
+  const stuck = { ...fsMod, renameSync: () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); } };
+  const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(" "));
+  try { const store = new Store(file, { write: true, fs: stuck }); for (let i = 0; i < 5; i++) store.doc(); } finally { console.warn = warn; }
+  assert.equal(warned.length, 1, "an outage with nothing moved is one line");
 });

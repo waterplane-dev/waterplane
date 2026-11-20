@@ -59,20 +59,63 @@
 .term-overlay.as-chip .term-overlay-box { padding: var(--sp-6) var(--sp-10); max-width: 92%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 /* Card: the terminal would otherwise be blank, so the explanation IS the view. */
 .term-overlay.as-card { top: 0; bottom: 0; align-items: center; }
+/* Never taller than the stage: with the keyboard up the stage shrinks to a strip, and a
+   centred box taller than it was clipped at both ends (owner's 11-18 screenshot: the pending
+   card's first line and its Back button cut off). Capped, it scrolls inside itself; `nowrap`
+   because a height-capped column flex box would otherwise wrap into a second column. */
 .term-overlay.as-card .term-overlay-box {
-  flex-direction: column; align-items: flex-start; text-align: left;
+  flex-direction: column; flex-wrap: nowrap; align-items: flex-start; text-align: left;
   padding: var(--sp-14) var(--sp-16); max-width: min(420px, 88%);
+  max-height: calc(100% - 16px); overflow-y: auto; box-sizing: border-box;
+}
+.term-overlay.as-card .term-overlay-box > * { flex-shrink: 0; }
+/* A short stage (the keyboard up leaves a strip of ~80 px): the card is its one line, left of
+   the corner buttons, which keep their place top right. The hint and the acts go: the header's
+   own line says the same, and Home is the way back. The overlay is absolutely sized, so size
+   containment on it never feeds back into the terminal's layout. */
+.term-overlay.as-card { container-type: size; }
+@container (max-height: 220px) {
+  .term-overlay.as-card .term-overlay-box {
+    flex-direction: row; align-items: center; margin: 0 auto 0 var(--sp-8);
+    max-width: calc(100% - 150px); padding: var(--sp-6) var(--sp-10);
+    font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  }
+  .term-overlay.as-card .term-overlay-box > * { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .term-overlay.as-card .term-overlay-box > svg { flex-shrink: 0; }
+  .term-overlay.as-card .term-overlay-hint { display: none; }
+  /* The card's one action (reopen, read it, ...) is never taken away: the hint goes first, then
+     the padding above, then the words shrink (ellipsis). A second action drops whole. */
+  .term-overlay.as-card .term-overlay-acts { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; gap: var(--sp-4); }
+  .term-overlay.as-card .term-overlay-acts > :not(:first-child) { display: none; }
+  .term-overlay.as-card .term-overlay-acts .key { min-height: 36px; padding-inline: var(--sp-8); }
 }
 .term-overlay-hint { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 .term-overlay-acts { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .term-overlay-acts .key { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
 .term-overlay-ended .term-overlay-box { border-color: var(--dead-edge-hi); }
 .term-overlay-offline .term-overlay-box { border-color: var(--star-edge-hi); }
-/* A session on its way. Accent, not a warning colour: nothing is wrong — the
-   CLI is starting, or the link is down and the create is queued. It goes red
-   only when the create was actually refused (`.failed`). */
-.term-overlay-pending .term-overlay-box { border-color: var(--accent); }
-.term-overlay-pending.failed .term-overlay-box { border-color: var(--dead-edge-hi); }
+/* A session on its way (`TermArea.tsx` `pendingLine`): ONE line docked at the top of the session
+   area, the full width, IN FLOW (no PTY behind it to refit, `session.resize` is not sent for a
+   pending id), nothing drawn over it (no banner, no corner group) — never a box floating in an
+   empty grid. Accent edge, not a warning colour: nothing is wrong, the CLI is starting or
+   the link is down and the create is queued. It goes red only when the create was refused. The empty
+   grid under it gives up its height first, so with the keyboard up the line stays whole. */
+.term-stage:has(> .term-pending) { display: flex; flex-direction: column; }
+.term-stage:has(> .term-pending) > .term-canvas { flex: 1 1 0; min-height: 0; height: auto; }
+.term-pending {
+  flex: 0 1 auto; min-height: 0; box-sizing: border-box; overflow-y: auto;
+  display: flex; align-items: flex-start; gap: var(--sp-10);
+  padding: var(--sp-6) var(--gutter); background: var(--bg);
+  border-bottom: 1px solid var(--line); border-left: 3px solid var(--accent); padding-left: calc(var(--gutter) - 3px);
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: 1.35;
+}
+.term-pending.failed { border-left-color: var(--dead-edge-hi); }
+.term-pending-icon { flex: 0 0 auto; display: inline-flex; padding-top: 2px; color: var(--muted); }
+.term-pending-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.term-pending-hint { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+@media (max-height: 520px) { .term-pending-more { display: none; } }
+.term-pending .term-overlay-acts { margin-top: var(--sp-4); }
+.term-pending > .key { flex: 0 0 auto; }
 /* Where the toolbar would be: the verbs that need a PTY, as prose. Same border
    as the toolbar so the row it replaces keeps its place in the column. */
 .toolbar-cants {
@@ -574,3 +617,23 @@
 .lc-s4 { --sw: var(--chart-4); fill: var(--chart-4); }
 .lc-part { --sw: var(--warn); fill: var(--warn); }
 .lc-down, .lc-fail { --sw: var(--dead); fill: var(--dead); }
+
+/* The storm (core/session/StormOverlay.tsx): the native shell's link-down view,
+   over the terminal stage. Absolute, so the PTY is never refitted by it. */
+.storm { position: absolute; inset: 0; z-index: 7; background: #0A1B28; overflow: hidden; }
+.storm-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transition: opacity var(--dur-fast) linear; }
+.storm-line {
+  position: absolute; left: 0; right: 0; bottom: var(--sp-12); text-align: center;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold);
+  color: #E9F4F2; text-shadow: 0 1px 3px rgba(0, 0, 0, .7); pointer-events: none;
+}
+.storm-landing .storm-line { color: #F5A93F; }
+/* The way out is the loudest thing on the picture: solid, worded, thumb-sized. */
+.storm .storm-hide {
+  position: absolute; top: var(--sp-12); right: var(--sp-12); z-index: 1;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  min-height: 44px; padding: var(--sp-8) var(--sp-16);
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold);
+  color: #0A1B28; background: #E9F4F2; border: none; border-radius: var(--r-pill);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .45);
+}

@@ -25,6 +25,7 @@ import { closeChoicePatch, closeChoiceToast } from "../../autoSessions";
 import { BL_OFFLINE, clockParentsOf, scheduleMaps } from "./logic";
 import { assessBusy, assessRuns, backlog, backlogCut } from "./store";
 import { editBacklogCut, openAssessFor, openBacklogCut, openSlotCheck, runAgain, runAgainMany } from "./actions";
+import { closeWaiting } from "../../waitingWork";
 
 export function BacklogSheet() {
   const core = useCore();
@@ -216,7 +217,7 @@ export function BacklogSheet() {
           repoName: (d) => { const r = visibleRepos.find((x) => x.worktreePath === d); return r ? repoShown(r) : d.split(/[/\\]/).filter(Boolean).pop() || d; },
         })?.text ?? null,
         renderRetime: core.send.renderRetime,
-        onClose: () => core.nav.close("backlog"),
+        onClose: closeWaiting,
         // The sheet's own add form is gone — a second prompt textarea. This is
         // the one send surface, seeded to the repo on screen and to *when it's
         // free*, which is what an item in a backlog IS; its post still goes
@@ -229,7 +230,7 @@ export function BacklogSheet() {
             when: { kind: "idle" },
             cwdHint: repoDir,
             repoId: repo?.id ?? null,
-            origin: words ? "Kept from the backlog's old add field" : "From the backlog",
+            origin: words ? "Kept from the backlog's old add field" : "Adding to the backlog",
           });
         },
         onOpenSession: (sid) => { const s = sessions.find((x) => x.id === sid); if (s) core.nav.attach(s); },

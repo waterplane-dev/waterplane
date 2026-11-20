@@ -23,7 +23,7 @@ function percentile(xs: readonly number[], p: number): number {
   const pos = (p / 100) * (s.length - 1);
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);
-  return s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  return s[lo]! + (s[hi]! - s[lo]!) * (pos - lo);
 }
 
 /**
@@ -53,7 +53,7 @@ export function assessHealthMove(points: readonly HealthIndexPoint[], opts: Heal
   // Week: only when the latest point IS a link — a carried week moved nothing.
   if (last.lnLink !== null) {
     const prior = links.slice(0, -1).map((p) => p.lnLink);
-    const prevIndex = points[points.length - 2].index;
+    const prevIndex = points[points.length - 2]!.index;
     const delta = last.index - prevIndex;
     if (last.lnLink < percentile(prior, lowPct) && -delta >= minPts) {
       return { kind: "drop", horizon: "week", delta, reason: `the latest week's link sits below the ${lowPct}th percentile of ${prior.length} earlier weeks` };
@@ -71,24 +71,24 @@ export function assessHealthMove(points: readonly HealthIndexPoint[], opts: Heal
   // different definitions: it is not a move. Skipped as history, and when the
   // current window is one, no month move is called at all.
   const spansGap = (j: number): boolean => {
-    for (let k = j - W + 1; k <= j; k++) if (points[k].gap) return true;
+    for (let k = j - W + 1; k <= j; k++) if (points[k]!.gap) return true;
     return false;
   };
   if (spansGap(t)) return none("the last four weeks span a change of definition, so there is no month move to compare");
   const windows: number[] = [];
-  for (let j = W; j < t; j++) if (!spansGap(j)) windows.push(Math.log(points[j].index / points[j - W].index));
-  const monthDelta = last.index - points[t - W].index;
+  for (let j = W; j < t; j++) if (!spansGap(j)) windows.push(Math.log(points[j]!.index / points[j - W]!.index));
+  const monthDelta = last.index - points[t - W]!.index;
   if (windows.length < minMonth) {
     return none(`${windows.length} earlier four-week window${windows.length === 1 ? "" : "s"}; a month move is called after ${minMonth}`);
   }
-  const ln = Math.log(last.index / points[t - W].index);
+  const ln = Math.log(last.index / points[t - W]!.index);
   if (ln < percentile(windows, lowPct) && -monthDelta >= minPts) {
     return { kind: "drop", horizon: "month", delta: monthDelta, reason: `the last four weeks sit below the ${lowPct}th percentile of ${windows.length} earlier four-week windows` };
   }
   if (ln > percentile(windows, highPct) && monthDelta >= minPts) {
     return { kind: "rise", horizon: "month", delta: monthDelta, reason: `the last four weeks sit above the ${highPct}th percentile of ${windows.length} earlier four-week windows` };
   }
-  return none("within this repo's usual range", null, last.lnLink !== null ? last.index - points[t - 1].index : null);
+  return none("within this repo's usual range", null, last.lnLink !== null ? last.index - points[t - 1]!.index : null);
 }
 
 /** Plain names for an entry's move: [0] when its metric rose (its score fell), [1] when it fell. */

@@ -19,7 +19,7 @@ import { BRAND } from "@waterplane/shared";
 const scratch = mkdtempSync(join(tmpdir(), "wp-jsonstore-"));
 process.env[`${BRAND.envPrefix}ROOT`] ??= scratch;
 
-const { readJsonGuarded, readJsonGuardedDetail, writeJsonAtomic } = await import("../dist/jsonstore.js");
+const { JsonShards, readJsonGuarded, readJsonGuardedDetail, shardFileName, writeJsonAtomic } = await import("../dist/jsonstore.js");
 const { PushManager } = await import("../dist/push.js");
 const { AckLedger } = await import("../dist/acks.js");
 
@@ -256,4 +256,48 @@ test("auth.json absent is a fresh host: no loss, nothing gated but LAN", async (
   assert.equal(a.lost, null);
   assert.equal(a.needsToken("tailscale"), false);
   assert.equal(a.needsToken("lan"), true);
+});
+
+test("JsonShards: a flush writes only the marked keys, a key that is no file name is hashed and read back, undefined removes", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "wp-shards-")), "s");
+  const data = { "-r-app": { n: 1 }, "-r-other": { n: 2 }, "a/b ../c": { n: 3 } };
+  const sh = new JsonShards(dir);
+  for (const k of Object.keys(data)) sh.mark(k);
+  assert.deepEqual(sh.flush((k) => data[k]), { written: 3, removed: 0, failed: 0 });
+  assert.equal(sh.pending, 0);
+  assert.equal(shardFileName("-r-app"), "-r-app.json");
+  assert.match(shardFileName("a/b ../c"), /^_[0-9a-f]{32}\.json$/);
+  assert.match(shardFileName(".hidden"), /^_/, "a dotfile name is never a key's file");
+  assert.deepEqual(Object.fromEntries(new JsonShards(dir).load()), data);
+
+  const ino = (k) => statSync(join(dir, shardFileName(k))).ino;
+  const before = Object.fromEntries(Object.keys(data).map((k) => [k, ino(k)]));
+  data["-r-app"] = { n: 9 };
+  sh.mark("-r-app");
+  assert.deepEqual(sh.flush((k) => data[k]), { written: 1, removed: 0, failed: 0 });
+  assert.notEqual(ino("-r-app"), before["-r-app"]);
+  assert.equal(ino("-r-other"), before["-r-other"], "an unmarked key's file is not rewritten");
+
+  delete data["-r-other"];
+  sh.mark("-r-other");
+  assert.deepEqual(sh.flush((k) => data[k]), { written: 0, removed: 1, failed: 0 });
+  assert.deepEqual(Object.fromEntries(new JsonShards(dir).load()), data);
+});
+
+test("JsonShards: a shard that does not parse is moved aside and ABSENT, never an empty part", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "wp-shards-")), "s");
+  const sh = new JsonShards(dir);
+  sh.mark("good");
+  sh.flush(() => ({ ok: true }));
+  writeFileSync(join(dir, "bad.json"), "{ torn");
+  writeFileSync(join(dir, "nokey.json"), JSON.stringify({ b: 1 }));
+  const { value, lines } = quietly(() => new JsonShards(dir).load());
+  assert.deepEqual([...value.keys()], ["good"]);
+  assert.equal(lines.length, 2);
+  const names = readdirSync(dir).sort();
+  assert.ok(names.some((n) => n.startsWith("bad.json.corrupt-")));
+  assert.ok(names.some((n) => n.startsWith("nokey.json.corrupt-")));
+  assert.ok(!names.includes("bad.json"));
+  // The copies stay where they are: a second load neither adopts nor moves them again.
+  assert.deepEqual([...new JsonShards(dir).load().keys()], ["good"]);
 });

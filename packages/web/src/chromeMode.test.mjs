@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { chromeMode, fullScreenTap, trackKeyboard } from "./chromeMode.ts";
+import { chromeMode, chromeNote, fullScreenTap, trackKeyboard } from "./chromeMode.ts";
 
 const base = {
   onSessionScreen: true, typingRoom: true, composeFocused: false,
@@ -129,4 +129,20 @@ test("the full-screen button is never a dead tap while typing room is in play", 
   // Plain full screen, caret elsewhere: toggles as before, peek untouched.
   assert.deepEqual(fullScreenTap(base), { fullScreen: true, typingPeek: false });
   assert.deepEqual(fullScreenTap({ ...base, fullScreen: true }), { fullScreen: false, typingPeek: false });
+});
+
+test("chromeNote speaks only when the header hid by itself", () => {
+  const inp = { ...base, composeFocused: true };
+  assert.match(chromeNote(chromeMode(inp), inp), /Header hidden while you type/);
+  const full = { ...base, fullScreen: true };
+  assert.equal(chromeNote(chromeMode(full), full), "");
+  assert.equal(chromeNote(chromeMode(base), base), "");
+});
+
+test("chromeNote speaks only when the header hid by itself", () => {
+  const inp = { ...base, composeFocused: true };
+  assert.match(chromeNote(chromeMode(inp), inp), /Header hidden while you type/);
+  const full = { ...base, fullScreen: true };
+  assert.equal(chromeNote(chromeMode(full), full), "");
+  assert.equal(chromeNote(chromeMode(base), base), "");
 });

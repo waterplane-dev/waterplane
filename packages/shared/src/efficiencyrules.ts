@@ -96,11 +96,11 @@ export function readEfficiencyBlock(text: string): EfficiencyBlockRead {
   if (looseStarts !== 1 || starts.length !== 1 || ends.length !== 1) {
     return { kind: "malformed", why: "it has more than one efficiency-rules marker, or one without its partner" };
   }
-  const s = starts[0];
+  const s = starts[0]!;
   const at = s.index ?? 0;
   const insideFrom = at + s[0].length;
-  if (ends[0] < insideFrom) return { kind: "malformed", why: "its efficiency-rules end marker comes before the start marker" };
-  return { kind: "block", version: Number(s[1]), inside: text.slice(insideFrom, ends[0]), start: at, end: ends[0] + EFFICIENCY_END.length };
+  if (ends[0]! < insideFrom) return { kind: "malformed", why: "its efficiency-rules end marker comes before the start marker" };
+  return { kind: "block", version: Number(s[1]), inside: text.slice(insideFrom, ends[0]!), start: at, end: ends[0]! + EFFICIENCY_END.length };
 }
 
 /** True when the file carries a block (ours or edited by hand: either way the rules are there). */

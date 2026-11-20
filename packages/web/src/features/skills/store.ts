@@ -35,3 +35,10 @@ export interface SkillsState {
 export const initialSkills = (): SkillsState => ({ repoId: null, target: "repo", shared: false, draft: {}, allDraft: {}, parked: {}, filter: null, sort: "heaviest", query: "", suggest: null, suggestRun: null, unticked: [] });
 
 export const skillsState = createStore<SkillsState>(initialSkills());
+
+/**
+ * Where Setup & health's Skills section is aimed when a section tap (not a skills door) brought it on
+ * screen: the repo the last section was on. A door's aim (`skillsDoor.ts`) wins when the door opened
+ * the screen. ONE writer: `actions.ts` `enterSkills`.
+ */
+export const skillsEmbedAim = createStore<{ repoId: string; backend?: string; target?: "repo" | "all" } | null>(null);

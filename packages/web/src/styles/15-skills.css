@@ -17,7 +17,10 @@ details[open] > summary > .sk-chev { transform: rotate(90deg); }
 .sk-fold > summary { list-style: none; }
 .sk-fold > summary::-webkit-details-marker { display: none; }
 .sk-card { overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: var(--r-8); margin: var(--sp-6) 0; padding: var(--sp-4) var(--sp-8); background: var(--panel); }
-.sk-card.sk-changed { border-color: var(--pick-edge); background: var(--pick-fill); }
+/* changed = the edge only: a green fill behind the green picked value hid which side was picked */
+.sk-card.sk-changed { border-color: var(--pick-edge); }
+/* The card is the box: the row inside draws no panel of its own (it showed as a second, inset box on a changed card) and is not a tap target. */
+.sk-card .row, .sk-card .row:active { background: none; cursor: default; }
 .sk-card .row { padding-left: 0; padding-right: 0; border: 0; flex-direction: column; align-items: stretch; gap: var(--sp-4); }
 .sk-ver { color: var(--muted); font-weight: normal; }
 .segmented.sk-sel { gap: var(--sp-4); padding: 0; background: none; border-bottom: 0; margin-top: var(--sp-4); }

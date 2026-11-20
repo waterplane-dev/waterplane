@@ -22,7 +22,7 @@ const BARREL = fileURLToPath(new URL("../src/intent.ts", import.meta.url));
 
 const SURFACE = [
   "AFTER_RESET_LEFTOVER_MS:value", "AGENT_POSTED_WORDS:value", "AGENT_WITHDREW_DETAIL:value", "AssessPayload:type", "AutoSlotFacts:type", "BUDGET_NOT_HOLDING:value", "BlockReason:type",
-  "BudgetPass:type", "BudgetWaiver:type", "BuildPayload:type", "CapturePayload:type",
+  "BudgetPass:type", "BudgetWaiver:type", "BuildPayload:type",
   "HELD_MAX_MS:value", "INTENT_BLOCK_ORDER:value", "INTENT_MAX_ATTEMPTS:value", "INTENT_MAX_DIRS:value",
   "INTENT_MAX_NEEDS:value", "INTENT_MAX_STEPS:value", "Intent:type", "IntentFacts:type",
   "IntentKind:type", "IntentPayload:type", "IntentRequeue:type", "IntentResult:type",
@@ -35,7 +35,7 @@ const SURFACE = [
   "INTENT_FIELD_WRITER:value", "IntentFieldWriter:type", "clientIntentFields:value",
   "cleanIntentRow:value", "clockKey:value", "closeWhenDoneOf:value", "intentKind:value", "intentPaused:value",
   "intentReasonText:value", "intentVerdict:value", "isAgentPosted:value", "isAgentWithdrawn:value", "isAssessRow:value",
-  "isBacklogRow:value", "isBuildRow:value", "isCaptureRow:value", "isFanoutRow:value",
+  "isBacklogRow:value", "isBuildRow:value", "isFanoutRow:value",
   "isLaunchRow:value", "isPeerPosted:value", "isScheduleRow:value", "isTimedWorkRow:value",
   "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "ORIGIN_PROPOSED_PREFIX:value", "PROPOSER_MAX:value", "isPendingProposal:value", "isProposed:value", "pendingProposals:value", "proposedWords:value", "proposerName:value", "proposerOf:value", "postsScheduledBuild:value", "queuesBacklogItem:value",
   "reopensConversation:value", "scheduleIdFromOrigin:value", "scheduleItemOrigin:value", "timedWorkKey:value",

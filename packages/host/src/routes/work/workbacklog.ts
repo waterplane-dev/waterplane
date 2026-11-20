@@ -110,6 +110,8 @@ const onBacklogAdd: Route<"backlog.add"> = (a) => {
     const run = addClientBacklogItem(a.c, {
       repoDir: a.msg.repoDir, text: a.msg.text, label: a.msg.label, targetSessionId: a.msg.targetSessionId,
       autoFire: a.msg.autoFire, steps: a.msg.steps, resume: a.msg.resume,
+      // Waits for the person's tap (`Intent.manual`): the phone's *Add to backlog*. Strictly true, never inferred.
+      manual: a.msg.hold === true ? true : undefined,
       // Strictly a boolean: absent follows the global close-when-done setting.
       closeWhenDone: typeof a.msg.closeWhenDone === "boolean" ? a.msg.closeWhenDone : undefined,
       flagWhenDone: a.msg.flagWhenDone === true ? true : undefined,

@@ -8,6 +8,7 @@
  * scrolling back up to see which number was which. Here the question is
  * above its own field.
  */
+import { TITLE } from "../../sheetNames";
 import { useMemo } from "react";
 import { MessageSquareReply, X } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
@@ -47,7 +48,7 @@ export function DecisionsSheet() {
   };
   return (
     <div className="sheet">
-      <SheetHead title="Answer the list" onClose={() => core.nav.close("answers")} />
+      <SheetHead title={TITLE.answers} onClose={() => core.nav.close("answers")} />
       <Hint>
         {items.length
           ? <>{items.length} item{items.length > 1 ? "s" : ""} from {FROM[from]}. Answer the ones you have a view on; blank ones are left out.</>

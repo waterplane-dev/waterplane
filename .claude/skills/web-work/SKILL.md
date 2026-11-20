@@ -166,7 +166,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   catalog, `optins.ts`, and its header are the design). **Counted in NOTHING** — no stripe, no status hue, never
   in the badge. **Every count and list is `optInCut`'s**; the folded `declined`/`unfit` heads are the
   lists they open. **A tap seeds, never sends**: `fix` is the host's `complianceFix`, `open` lands on
-  `series` or the capture sheet, `agent`/`schedule` seed the Send sheet (`optInSeed`: the phone's
+  `series`, `agent`/`schedule` seed the Send sheet (`optInSeed`: the phone's
   zone, the catalog's model, `waitUntilFree`). The repo menu's `OptInMenuItem` lands on `optins`.
 - `AssessSheet.tsx` + `assessRows.ts` + `assessPicks.ts` — the assessment as a diff a person approves
   (code: `assess/arows*.ts`, `assess/`). Words IN FULL, **never clipped**; a merge is ONE decision

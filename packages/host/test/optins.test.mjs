@@ -175,17 +175,6 @@ test("gcp-cleanup: unfit without deploy evidence, always unknown with it", () =>
   assert.equal(row(w2, "gcp-cleanup").state, "unknown");
 });
 
-test("screenshots: unfit, off for a web app, on with targets", () => {
-  const wt = repo("shot");
-  assert.equal(row(wt, "screenshots").relevant, false);
-  put(wt, "package.json", JSON.stringify({ devDependencies: { vite: "1" } }));
-  const off = row(wt, "screenshots");
-  assert.equal(off.relevant, true);
-  assert.equal(off.state, "off");
-  put(wt, ".waterplane/capture.json", JSON.stringify({ targets: [{ id: "a" }] }));
-  assert.equal(row(wt, "screenshots").state, "on");
-});
-
 test("prefs: round-trip, refusals, clearing, stamping, reload", () => {
   const root = tmp("prefs");
   const wt = repo("prefwt");

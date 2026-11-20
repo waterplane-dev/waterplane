@@ -108,6 +108,23 @@ few minutes; a missed real bug costs far more.
   scrypt-hashed in `<state dir>/auth.json`. With no password set, LAN callers are refused outright
   ("deny until set"). The optional `gateTailscale` toggle extends the requirement to Tailscale peers.
   Loopback is always trusted and can never be gated.
+- **`WATERPLANE_ALLOW_PUBLIC=1` is strongly discouraged.** Tailscale is the boundary this daemon is
+  built around; the LAN mode trades it for one shared password in front of a process that runs
+  arbitrary code, on a network full of other people's devices, over plain HTTP unless the pinned LAN
+  TLS is in use. Use it only on a home network you control, with a long random password, and prefer
+  Tailscale. It is an escape hatch, not a primary route.
+- LAN login is hardened, not made safe: `POST /api/auth/login` is rate-limited per source address and
+  across all sources of one kind that must present the password, and `packages/host/src/loginguard.ts` counts
+  wrong passwords per source: 3 free typos, then a doubling wait (2 s up to about a minute), and 10 wrong in a row lock that source
+  for 15 min. The verdict is re-read after the request body arrives, so parked requests cannot all
+  get a guess. It applies to LAN callers and to Tailscale callers whenever the gate demands a
+  password from them (the Tailscale gate toggle, or a paired passive device). Loopback, and
+  Tailscale while ungated, are never delayed or locked and never share the all-sources bucket. That
+  bucket is kept per kind: a LAN flood cannot spend a gated Tailscale sign-in, nor the reverse, and
+  neither can lock the owner out of the loopback path. Each wait and
+  lockout logs a line, and `GET /api/auth/status` shows a trusted caller the counts (locked, waiting,
+  failures in 12 h; no addresses). The state is in memory: a restart forgets it. A
+  passer-by who can guess the password still gets in; the guard only slows guessing.
 - An unreadable `auth.json` is moved aside and treated as "no password", still deny-until-set for LAN.
   If its bytes may have held `gateTailscale`, Tailscale stays gated until the password is set again
   from loopback. A corrupt file never opens the gate.
@@ -148,6 +165,23 @@ constant time. Tokens survive a host restart. No token is valid while no passwor
   because nobody is holding the phone when the service reconnects. It protects against a copied file,
   not against code running as this app. With *lock the desktop sign-ins* on (see The Android app) the
   link keeps no copy at rest.
+- **The background relay (`POST /api/relay`, `server/bgrelay.ts`)** lets a sender with no page (the
+  APK's link while the WebView is frozen, the PWA's service worker) hand the host one frame the
+  phone's send queue built. It is not a second send path: the frame runs through the same router,
+  ack ledger and `containRepoDir` as a socket's, on a stand-in socket that can receive nothing back
+  (`wsRole` `relay`). It is behind the same origin and token gate as every `/api/*` route, and
+  `relayRefusal` (shared) is the one accept rule: only a prompt that submits, an answer naming its
+  question, a `backlog.add` or an op in `RELAY_OPS`, always with an ackId; never raw keys. Accepted
+  ackIds are kept 24 h so a page re-send is re-acked, never retyped. A passive (kids') token and an
+  older host answer 403/404 and the relay stops for that link. **Service-worker token copy:** the
+  PWA's worker keeps a second copy of the device token in the app's own IndexedDB (`relay` store) so
+  it can send with no page; with *lock the desktop sign-ins* on it keeps none, and prompts wait for
+  the app. **Residual:** like the localStorage copy, it protects against nothing running as this
+  origin. **Send N:** prompts held by the "ask on reconnect" question are never sent by the relay on
+  its own; the notification's *Send N* action releases exactly the rows it named, only still-queued
+  rows with the same frames, and on Android asks for the phone's own unlock first (API 31+, not
+  offered below). The desktop's `link.back` push carries only the host's name and how long it was
+  down, and tells a phone with nothing queued only that the desktop is reachable.
 
 ### Pairing codes
 
@@ -222,11 +256,14 @@ restart end it, and its sockets are closed.
 **Auth material is the one part of full scope an unlock never grants**, because each piece would
 outlive the 30 minutes. An unlocked passive device cannot mint a pairing code (`POST /api/pair/mint`; a
 redeemed code is a permanent full token) or a device token, revoke a device, pair or unpair a peer
-(`/api/peers` writes), read the LAN identity secret, or set the password, the Tailscale gate or the
-PIN. Three places enforce it: `passiveNeverAllows` in `passive.ts` (checked in `server/http.ts` right
+(`/api/peers` writes), read the LAN identity secret, set the password, the Tailscale gate or the
+PIN, or change the code root (`POST /api/host/root`, which persists and restarts the host). Three places enforce it: `passiveNeverAllows` in `passive.ts` (checked in `server/http.ts` right
 after the allowlist), the `/api/auth/token` and `/api/auth/pin` handlers' own scope checks, and the
 WebSocket `auth.set`, `auth.clear` and `auth.gateTailscale` ops (`routes/system.ts`, by the socket's
-device row). Pairing never hands a passive device the LAN identity either (`redeemPair` in `pair.ts`,
+device row). `packages/host/test/passiveroutes.test.mjs` fails on any `/api/(auth|pair|devices|lan|peers|peer)`
+route literal in the host that nobody has classified for a passive device. A plugin call from a passive
+device carries `scope: "passive"` (`PluginCaller`, plugin API 2.9), and the vault refuses every method
+to it, unlocked or not (`gatedHandle` in its `host/viewgate.mts`). Pairing never hands a passive device the LAN identity either (`redeemPair` in `pair.ts`,
 the sealed reply in `pairpake.ts`), and the phone keeps none from a passive pairing (`storeSealed`). A
 passive caller who knows the PASSWORD can still log in like any browser; the PIN model does not cover
 that.

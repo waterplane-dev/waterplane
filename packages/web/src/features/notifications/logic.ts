@@ -177,6 +177,7 @@ export type NotifTarget =
   | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
   | { to: "setup"; repoId: string }
+  | { to: "assess"; repoId: string }
   /** The blocked-sessions sheet (`signin`'s `open: { to: "blocked" }`; overlay id `limits`). */
   | { to: "blocked" }
   | { to: "row" };
@@ -201,6 +202,7 @@ export function notifTarget(n: {
   }
   if (o?.to === "build" && o.repoId) return { to: "build", repoId: o.repoId, buildId: o.buildId };
   if (o?.to === "setup" && o.repoId) return { to: "setup", repoId: o.repoId };
+  if (o?.to === "assess" && o.repoId) return { to: "assess", repoId: o.repoId };
   if (n.kind === "weekburn") return { to: "weekburn" };
   if (o?.to === "plugin" && o.id) return { to: "plugin", id: o.id };
   if (n.kind === "backlog") return { to: "backlogByName" };

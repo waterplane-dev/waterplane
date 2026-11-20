@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { TITLE } from "./sheetNames";
 import { CircleAlert, CloudOff, Loader2 } from "lucide-react";
 import { api } from "./api";
 import type { SlashListDoc } from "@waterplane/shared";
@@ -68,7 +69,7 @@ export function SlashSheet({ cwd, backend, backends = null, onPick, unsupported,
   if (unsupported) {
     return (
       <div className="sheet">
-        <SheetHead title={"Slash commands"} onClose={onClose} />
+        <SheetHead title={TITLE.slash} onClose={onClose} />
         <Unavailable cants={[{ label: "slash commands", reason: unsupported }]} />
       </div>
     );
@@ -76,7 +77,7 @@ export function SlashSheet({ cwd, backend, backends = null, onPick, unsupported,
 
   return (
     <div className="sheet">
-      <SheetHead title={"Slash commands"} onClose={onClose}>
+      <SheetHead title={TITLE.slash} onClose={onClose}>
         {res.state === "loading" && <span className="gallery-meta"><Loader2 size={12} className="spin" /> loading…</span>}
         {/* Cached rows ALWAYS say how old they are — the one promise this
             palette used to make with the word "cached" and no number. */}

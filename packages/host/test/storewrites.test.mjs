@@ -30,7 +30,6 @@ const ALLOW = {
   "packages/host/src/branddirs.ts": "best-effort pointer note inside a moved state dir, written while the stores are being moved",
   "packages/host/src/compliance.ts": "creates the shared (committed) builds.json in a repo with `flag: \"wx\"` (never overwrites) — not atomic on purpose",
   "packages/host/src/dictate.ts": "a one-shot answer sidecar next to the recording, never read back as state",
-  "packages/host/src/capture/capturepass.ts": "an outbox artifact (verdict sidecar) for a person to look at, not state",
   "packages/host/src/peers/serve.ts": "a small job marker inside the job's worktree, removed with it",
 };
 

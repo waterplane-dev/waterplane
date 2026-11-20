@@ -26,7 +26,56 @@ export function featureSheetId(feature: string, sheet: string): FeatureSheetId {
 }
 export const isFeatureSheetId = (o: unknown): o is FeatureSheetId => typeof o === "string" && FEATURE_SHEET_RE.test(o);
 
-export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "pluginManager" | "pluginSettings" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "elsewhere" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | "skills" | "setupcheck" | FeatureSheetId;
+/** Every overlay id, as a runtime list: the door registry's guard (`tools/appdoors.test.mjs`) checks
+ *  each one has a door or a stated reason. `waiting`, `health` and `connection` are the three merged
+ *  screens of the whole-app journey spec (D4, D7); the ids they absorb stay, as `OVERLAY_ALIAS`. */
+export const OVERLAY_IDS = ["slash", "image", "swipe", "gallery", "new", "send", "backlog", "git", "model", "text", "toolbar", "history", "secret", "setup", "speedtest", "branches", "decisions", "updates", "pluginManager", "pluginSettings", "settings", "notifications", "snippets", "build", "search", "features", "nethealth", "fanout", "queue", "pad", "pull", "hdrcmd", "sentlog", "questions", "outline", "limits", "weekburn", "schedule", "clip", "scrollback", "browse", "collage", "archive", "activity", "clihealth", "assess", "context", "tokens", "launchask", "hostedack", "localrt", "sweep", "repocolor", "repohealth", "storage", "hosts", "pairqr", "devices", "elsewhere", "shells", "logins", "answers", "sessionBudget", "phonesetup", "codefolder", "reposync", "whatsnew", "onboard", "demotour", "share", "skills", "setupcheck", "waiting", "health", "connection"] as const satisfies readonly OverlayId[];
+export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "pluginManager" | "pluginSettings" | "settings" | "notifications" | "snippets" | "build" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "elsewhere" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "whatsnew" | "onboard" | "demotour" | "share" | "skills" | "setupcheck" | "waiting" | "health" | "connection" | FeatureSheetId;
+export type OverlayId = Exclude<Overlay, null | FeatureSheetId>;
+// Both ways: the list holds only ids of the union (`satisfies` below) and every id of the union is in the list.
+type MissingId = Exclude<OverlayId, typeof OVERLAY_IDS[number]>;
+const overlayIdsComplete: [MissingId] extends [never] ? true : MissingId = true;
+void overlayIdsComplete;
+
+/** The tabs of the merged screens, by code id (the words are `sheetNames.ts` `TAB`). */
+export type WaitingTab = "activity" | "queued" | "backlog" | "scheduled";
+export type HealthTab = "repo" | "desktop";
+export type HealthSection = "checks" | "score" | "watch" | "optins" | "skills" | "sessions";
+export type ConnectionTab = "health" | "speed";
+export type MergedTarget =
+  | { overlay: "waiting"; tab: WaitingTab }
+  | { overlay: "health"; tab: HealthTab; section?: HealthSection }
+  | { overlay: "connection"; tab: ConnectionTab };
+
+/**
+ * An old id that now opens a merged screen on one of its tabs (D4, D7). The old ids are NOT retired:
+ * persisted URL hashes, history keys and the ~22 `openBacklogCut` callers keep naming them, and each
+ * lands on the merged screen at its tab. Code ids are never renamed, only where they land.
+ */
+export const OVERLAY_ALIAS = {
+  activity: { overlay: "waiting", tab: "activity" },
+  queue: { overlay: "waiting", tab: "queued" },
+  backlog: { overlay: "waiting", tab: "backlog" },
+  schedule: { overlay: "waiting", tab: "scheduled" },
+  setup: { overlay: "health", tab: "repo", section: "checks" },
+  repohealth: { overlay: "health", tab: "repo", section: "score" },
+  setupcheck: { overlay: "health", tab: "repo", section: "checks" },
+  skills: { overlay: "health", tab: "repo", section: "skills" },
+  nethealth: { overlay: "connection", tab: "health" },
+  speedtest: { overlay: "connection", tab: "speed" },
+} as const satisfies Partial<Record<OverlayId, MergedTarget>>;
+export type AliasedOverlay = keyof typeof OVERLAY_ALIAS;
+
+/** Where an overlay id lands: a merged screen and its tab for an alias (or the merged id itself, on its
+ *  first tab), null for every other id. Pure; the merged sheets read it to pick their opening tab. */
+export function mergedTarget(o: Overlay): MergedTarget | null {
+  if (o === null) return null;
+  if (o in OVERLAY_ALIAS) return OVERLAY_ALIAS[o as AliasedOverlay];
+  if (o === "waiting") return { overlay: "waiting", tab: "activity" };
+  if (o === "health") return { overlay: "health", tab: "repo" };
+  if (o === "connection") return { overlay: "connection", tab: "health" };
+  return null;
+}
 
 // Overlays worth putting in the URL (reload-stable; the transient ones —
 // "image"/"collage"/"slash"/"text" — need in-memory state, so they're never
@@ -34,9 +83,6 @@ export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "
 // "clihealth" is in here because it paints from a HOST READ seeded off a
 // snapshot, so a reload lands on a board with rows in it rather than an empty
 // sheet — the same property that qualifies the archive and the gallery.
-// "capture" is deliberately NOT in here, for "build"'s reason: it is scoped to a
-// repo held in memory (`captureRepo`), and the hash carries the overlay name and
-// not the repo.
 // "assess" is deliberately NOT in here, for "build"'s reason: it is scoped to a
 // repo held in memory (`assessRepo`), and the hash carries the overlay name and
 // not the repo — so a restored route would paint a sheet with no repo, which is
@@ -84,7 +130,10 @@ export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "
 // session's budget under a chip that was tapped on another.
 // `feature:<id>/<sheet>` is never in here either, for "assess"'s reason: an extension's sheet is
 // scoped to state held in memory, and the hash carries the overlay name and not that state.
-export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "storage"]);
+// "waiting" is in here for "backlog"'s and "activity"'s reason: it is those two screens (and the queue and
+// the schedules) under one frame, each painted from a host read seeded off a cache. "health" is NOT, for
+// "repohealth"'s reason (a repo held in memory), and "connection" is NOT, for "nethealth"'s.
+export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "storage", "waiting"]);
 
 /**
  * On a wide window (`core/layout`), which sheets take the MAIN pane instead of
@@ -105,6 +154,8 @@ export function parseHash(): {
   activeId: string | null;
   overlay: Overlay;
   image?: { repoId: string; relPath: string };
+  /** The Waiting work tab the hash carried (`wt=`). */
+  waitingTab?: WaitingTab;
   file?: { repoId: string; relPath: string; name?: string; mtime?: number };
   /** A cold plugin-alert tap (`sw.js`): open this plugin's screen. */
   plugin?: string;
@@ -127,8 +178,15 @@ export function parseHash(): {
     ? { repoId: dlRepo, relPath: dlPath, name: p.get("dlName") || undefined, mtime: mtime || undefined }
     : undefined;
   const notif = notifFromShell(`notif:${p.get("notif") ?? ""}`) ?? undefined;
-  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, image, file, plugin: p.get("plugin") || undefined, notif };
+  const wt = p.get("wt");
+  const waitingTab = o === "waiting" && wt && WAITING_TAB_KEYS.includes(wt) ? (wt as WaitingTab) : undefined;
+  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, waitingTab, image, file, plugin: p.get("plugin") || undefined, notif };
 }
+
+/** The tab Waiting work is showing, when not its home tab: `waitingWork.ts` registers it so the hash carries it (a reload lands on the same tab). */
+let waitingTabCarrier: (() => WaitingTab | null) | null = null;
+export function setWaitingTabCarrier(f: () => WaitingTab | null): void { waitingTabCarrier = f; }
+const WAITING_TAB_KEYS: readonly string[] = ["activity", "queued", "backlog", "scheduled"];
 
 /** Serialize route → hash string ("" when at the session list root). */
 export function routeToHash(activeId: string | null, overlay: Overlay): string {
@@ -136,6 +194,8 @@ export function routeToHash(activeId: string | null, overlay: Overlay): string {
   const p = new URLSearchParams();
   if (activeId) p.set("a", activeId);
   if (persist) p.set("o", persist);
+  const wt = persist === "waiting" ? waitingTabCarrier?.() : null;
+  if (wt) p.set("wt", wt);
   const s = p.toString();
   return s ? `#${s}` : "";
 }

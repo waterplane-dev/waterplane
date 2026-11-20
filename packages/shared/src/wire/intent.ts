@@ -15,7 +15,7 @@
  * `Partial<Intent>`: `Partial` would have admitted every host-only field as
  * optional, which is exactly the hole this file exists to close.
  */
-import type { AssessPayload, BudgetPass, BudgetWaiver, BuildPayload, CapturePayload, IntentPayload, IntentTarget, IntentTrigger } from "../intent.js";
+import type { AssessPayload, BudgetPass, BudgetWaiver, BuildPayload, IntentPayload, IntentTarget, IntentTrigger } from "../intent.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "./session.js";
@@ -34,7 +34,7 @@ import type { LaunchOpts } from "./session.js";
 export interface IntentDraft {
   id: string;
   cwd: string;
-  payload: IntentPayload | BuildPayload | AssessPayload | CapturePayload;
+  payload: IntentPayload | BuildPayload | AssessPayload;
   target?: IntentTarget;
   trigger: IntentTrigger;
   serial?: boolean;
@@ -119,7 +119,7 @@ export interface IntentDraft {
  * ends up describing something that never happened.
  */
 export interface IntentPatch {
-  payload?: IntentPayload | BuildPayload | AssessPayload | CapturePayload;
+  payload?: IntentPayload | BuildPayload | AssessPayload;
   trigger?: IntentTrigger;
   label?: string;
   title?: string;

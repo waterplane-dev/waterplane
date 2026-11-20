@@ -1,28 +1,28 @@
 /**
- * The `setup` overlay and its `repohealth` alias: `SetupSheet.tsx` — `Repo
- * readings`, ONE sheet with two regions (against the conventions / against its
- * own past) — wired to this feature's aim and the core. Both doors get the
- * same verbs: `remedy` and `openRepoFile` are shared on purpose.
+ * The readings regions (`SetupSheet.tsx`: Health score, Watch, Opt-ins, Sessions) as sections of
+ * Setup & health (`SetupHealthSheet.tsx`), wired to this feature's aim and the core. The `setup`
+ * overlay, its `repohealth` alias and the `health` id all draw the one frame; this is the body it
+ * shows for those four sections. `remedy` and `openRepoFile` are shared on purpose: every door gets
+ * the same verbs.
  */
-import type { RepoTarget } from "@waterplane/shared";
 import { SetupSheet } from "../../SetupSheet";
 import { useCore, useStore } from "../../sdk";
 import { CLAUDE, skillSwitchGate } from "../../backendCaps";
-import { openSkillsFor } from "../../skillsDoor";
-import { setupAim, setupRepo } from "./store";
+import { regionOfSection, type HealthPlace } from "../../setupHealth";
+import { healthRepo, setupAim, setupRepo } from "./store";
 import {
-  closeRepoHealth, closeSetup, openAllSessions, openCaptureFromReadings, openInstructionFile, openRepoFile, remedy, seedSend, sessionDoorsFor,
+  closeSetup, openAllSessions, openInstructionFile, openRepoFile, remedy, seedSend, sessionDoorsFor, toSkillsSection,
 } from "./actions";
 
-/** The checklist door (and the settings door, with no repo). */
-export function RepoReadingsSheet() {
+export function ReadingsBody({ place }: { place: HealthPlace }) {
   const core = useCore();
   // Repos run claude unless a session says otherwise; this door is the repo's, so claude's fact decides.
   const skillsGate = skillSwitchGate(core.world.backends, CLAUDE);
   const repoId = useStore(setupRepo);
+  const alias = useStore(healthRepo);
   const aim = useStore(setupAim);
-  return <SetupSheet repos={core.world.repos} initialRepoId={repoId ?? undefined}
-    initialRegion={aim.region} focus={aim.focus}
+  return <SetupSheet embedded repos={core.world.repos} initialRepoId={repoId ?? alias?.id ?? undefined}
+    initialRegion={regionOfSection(place.section)} focus={aim.focus}
     // A finding whose answer is WORK, handed to the one send surface rather
     // than run from the checklist: the sheet states what it found, this opens
     // the prompt with the repo already chosen, and WHEN it runs is still a
@@ -30,41 +30,12 @@ export function RepoReadingsSheet() {
     onRemedy={remedy}
     onOpenFile={openRepoFile}
     onSeed={seedSend}
-    onCapture={openCaptureFromReadings}
     // The context-weight row's doors: what a live session of this repo carried, and every session.
     sessionDoorsFor={sessionDoorsFor}
     onAllSessions={openAllSessions}
-    onSkills={skillsGate ? undefined : (id) => openSkillsFor(id, CLAUDE)}
+    onSkills={skillsGate ? undefined : toSkillsSection}
     skillsCant={skillsGate}
     onOpenInstructionFile={openInstructionFile}
+    onRepoChange={(id) => setupRepo.set(id)}
     onClose={closeSetup} />;
-}
-
-/**
- * The repo-health series — region 2 of the same sheet, and this key kept as
- * its ALIAS: `resumeRoute.ts` restores a stored route and the viewer's
- * `returnTo` names an overlay, so a route written before the merge must still
- * land on the half it meant.
- */
-export function RepoHealthAliasSheet({ repo }: { repo: RepoTarget }) {
-  const core = useCore();
-  // Repos run claude unless a session says otherwise; this door is the repo's, so claude's fact decides.
-  const skillsGate = skillSwitchGate(core.world.backends, CLAUDE);
-  return <SetupSheet
-    repos={core.world.repos}
-    initialRepoId={repo.id}
-    initialRegion="series"
-    // The same send surface the checklist door gets: reached through this
-    // alias, region 2's `ask the agent about this…` was absent.
-    onRemedy={remedy}
-    onOpenFile={openRepoFile}
-    onSeed={seedSend}
-    onCapture={openCaptureFromReadings}
-    sessionDoorsFor={sessionDoorsFor}
-    onAllSessions={openAllSessions}
-    onSkills={skillsGate ? undefined : (id) => openSkillsFor(id, CLAUDE)}
-    skillsCant={skillsGate}
-    onOpenInstructionFile={openInstructionFile}
-    onClose={closeRepoHealth}
-  />;
 }

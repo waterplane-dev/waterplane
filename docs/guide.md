@@ -19,9 +19,9 @@ features, one plain sentence each.
 
 ## The first minute
 
-<a href="https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-1c14b89210.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-a706bf617d.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-1c14b89210.mp4), with pause and seek.*
 
 1. **A live session.** The real `claude` terminal in a fictional repo; the demo types a prompt
    into the compose box and sends it, then tool lines stream and the context meter ticks. It is the
@@ -47,18 +47,18 @@ Try it: `?demo=first-look`
 On a desktop that has never run a session from the phone, the first-run card builds a hello-world
 page: three questions, a list of what it will create, one Go.
 
-<a href="https://waterplane-dev.github.io/media/first-app-8bcd38617a.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-app-dbfe0b94df.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-8bcd38617a.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-dbfe0b94df.mp4), with pause and seek.*
 
 The page it builds lands in `.claude/outbox/` and opens on the phone; the session then opens with a
 suggested first prompt in the box. It needs a connected desktop, so there is no demo for it.
 
 ## What Claude made, on your phone
 
-<a href="https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/gallery-and-files-d979321824.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-e1ccd7049c.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-d979321824.mp4), with pause and seek.*
 
 Whatever Claude leaves in `.claude/outbox/` shows up on the phone as a picture or a file, with a
 badge on the repo that has something new. You can open it full size, mark it up and send the note
@@ -85,9 +85,9 @@ the build, the download and the install are the real ones.
 
 ## When the usage limit hits, it carries on
 
-<a href="https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4"><img src="media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
+<a href="https://waterplane-dev.github.io/media/limit-and-budget-46b258ce97.mp4"><img src="media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-228ef9996b.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-46b258ce97.mp4), with pause and seek.*
 
 Give a session a budget and, once it is reached, the next send is held before the usage wall: your
 words are kept and the reason is said. When a session does hit a Claude usage limit, the host waits
@@ -101,9 +101,9 @@ Try it: `?demo=limit-and-budget`
 
 ## Queue it now, or schedule it against the usage windows
 
-<a href="https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4"><img src="media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
+<a href="https://waterplane-dev.github.io/media/queue-and-schedule-ceb0da424f.mp4"><img src="media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-159fd268d2.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-ceb0da424f.mp4), with pause and seek.*
 
 A prompt sent while the session is busy is queued and says why it waits. When the turn ends it is
 typed into the same session, and its row in Activity goes from waiting to running to done. It never
@@ -118,9 +118,9 @@ Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-9ddb5abc9d.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and a ten-hour session whose subagents are most of its bill"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-8fcb01f5ef.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-9ddb5abc9d.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session
@@ -135,16 +135,16 @@ Try it: `?demo=numbers`
 
 ## Repo health
 
-<a href="https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-a722f285d6.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-c6dd35721b.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-a722f285d6.mp4), with pause and seek.*
 
 Each repo has one health score out of 100, against fixed good values for eleven readings: file length
 (the longest file and the file the average line sits in), files reworked right after an edit,
 unexplained escape hatches, untested modules, the weight of `CLAUDE.md` plus skill descriptions, and, where the engine could
 read them, duplicate code, dead exports, import cycles, files that change together, fixes after a
 change and how often a change brings a test (the one reading where more is better).
-The repo list wears it as a chip; a tap opens **Repo readings** on **over time**. The score stays
+The repo list wears it as a chip; a tap opens **Setup & health** on **Health score**. The score stays
 within 30 of its worst entry, so one reading on fire caps it, and every warning (severe or warn)
 names its offender. The trend against the first scored week comes second, then every entry's own
 score, then the readings themselves: the longest file, the longest files, the re-touch rate and the
@@ -164,9 +164,9 @@ servers; waterplane's own does not.
 
 ## The demo tour
 
-<a href="https://waterplane-dev.github.io/media/demo-tour-19be96877c.mp4"><img src="media/demo-tour.gif" width="270" alt="The More to try list, and three of its rows: token ledger, notifications, context window"></a>
+<a href="https://waterplane-dev.github.io/media/demo-tour-dd780806af.mp4"><img src="media/demo-tour.gif" width="270" alt="The More to try list, and three of its rows: token ledger, notifications, context window"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-19be96877c.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-dd780806af.mp4), with pause and seek.*
 
 The demo line has a **More to try** button, and the first minute's closing card links to it. It opens a list of the app's headline features, one
 plain sentence each, grouped by what you want to do: drive a session, leave work running, see what

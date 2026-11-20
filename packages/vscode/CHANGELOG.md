@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.12 - 2026-11-20
+
+### Fixed
+
+- **An unreadable install log is never written over.** If the extension's install log can't be read, it is set aside and the extension says so, instead of treating it as empty and starting a new one. A dismissed notice stays dismissed and names the copy that was kept.
+- **Dollar amounts read the same everywhere.** Amounts show two decimals, so $0.5000 is now $0.50 and $123 is $123.40. Amounts under a cent keep two significant digits, and the minus sign comes before the dollar sign.
+
 ## 0.9.11 - 2026-11-17
 
 ### New
@@ -9,6 +16,8 @@
 - **Efficiency rules can be written into your repo.** You see the exact text first, and nothing is written until you confirm. A file that changed since the screen was drawn is refused, as are links and a second instruction file. The write never commits.
 
 ### Fixed
+
+- **Copilot moved off the tree into All sessions.** The tree's Copilot row only opened All sessions on Copilot Chat, so it is gone. That tab now starts with your plan and this month's requests on this machine, and has the button that reads GitHub's limit and reset date (still the extension's only network call, still off until you press it).
 
 - **Back returns step by step.** A door onto a sheet that is already lower in the stack now opens it again over the screen you tapped it on. Usage, Setup check and Token stats unwind in order, and so do Repo readings, Setup check and the always-on list. Each drill-down level inside a Setup check card is one Back step.
 - **The This repo / All repos switch sits on each card in Skills & plugins.** A changed card shows its own scope pair, every card shows what this repo ends up with, and Save writes each file the cards name. A long scope label wraps inside its segment instead of crossing the pill.

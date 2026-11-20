@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
+  AlertTriangle, BookOpen, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Play, Rabbit, Radar, RotateCw, ScrollText, Sparkles, Terminal as TerminalIcon, X,
 } from "lucide-react";
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
@@ -51,6 +51,7 @@ import type { Connection } from "../conn/useConnection";
 import type { TermFeed } from "../term/useTermFeed";
 import type { QueueApi } from "../queue/useQueue";
 import { isLaterId } from "../queue/logic.ts";
+import { pendingCardHintParts, pendingCardLine, pendingLead, pendingOpenState, pendingSpins } from "./pendingWords.ts";
 import type { ComposeApi } from "../compose/useCompose";
 import type { Launch } from "../launch/useLaunch";
 import { keepFocus } from "../compose/ComposeBar";
@@ -70,6 +71,8 @@ import { useTermPick } from "./useTermPick";
 import { useReaderPick } from "./useReaderPick";
 import { useCachedTranscriptAt } from "./useCachedTranscript";
 import { useCornerDrag } from "./useCornerDrag";
+import { StormOverlay, useStorm, useStormRoom } from "./StormOverlay";
+import { stormShown } from "./stormPhase";
 import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
 import { Button } from "../../kit/Button";
 import { SHEET } from "../../sheetNames";
@@ -101,6 +104,8 @@ export interface TermAreaProps {
   closeSession(s: SessionInfo): void;
   /** Opens the outline — present only while the `outline` toolbar item is pinned. */
   openOutline?: () => void;
+  /** The repo as it is SHOWN (`repoShown`), for the pending line; else the session's title. */
+  repoName?: string;
 }
 
 /**
@@ -317,7 +322,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
 export function TermArea(p: TermAreaProps): ReactNode {
   const {
     active, pending, conn, term, q, compose, launch, chrome, backends, readerShown, hiddenSlash,
-    activeRepoId, transportKnown, setActiveId, closeSession, openOutline,
+    activeRepoId, transportKnown, setActiveId, closeSession, openOutline, repoName,
   } = p;
   const { pendingEntry } = q;
   const { status, connVisible, send } = conn;
@@ -348,9 +353,14 @@ export function TermArea(p: TermAreaProps): ReactNode {
         .map((e) => ({ label: e.answer!.label }))
     : [];
   const onAnswer = (data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => answerPrompt(active, data, label, submitBox, choice, text);
-  // Offline over an empty grid: is this session's conversation cached for the reader?
-  const cachedTranscriptAt = useCachedTranscriptAt(active.id, !readerShown && !pending && status !== "open" && connVisible
-    && !(buffers.current.get(active.id) ?? []).some((c) => c.length > 0));
+  // Offline: is this session's conversation cached on this phone? The terminal's
+  // empty-grid card offers the reader with it, and the storm never covers it.
+  const cachedTranscriptAt = useCachedTranscriptAt(active.id, !pending && status !== "open" && connVisible);
+  const termEmpty = !(buffers.current.get(active.id) ?? []).some((c) => c.length > 0) && !hasScrollback(active.id);
+  const storm = useStorm(status, connVisible, !pending && cachedTranscriptAt == null && (readerShown || termEmpty));
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const stormRoom = useStormRoom(wrapRef); // a keyboard-squashed stage gets the banner, not a sliver of storm
+  const stormUp = stormShown(storm.state) && stormRoom;
   const readerRef = useRef<HTMLDivElement>(null);
   const readerPick = useReaderPick(readerRef, active.id, readerShown);
   // The CLI's first-launch setup holds the terminal up over the reader preference (App's
@@ -381,6 +391,69 @@ export function TermArea(p: TermAreaProps): ReactNode {
       setView={setView} sessionCan={sessionCan} chrome={chrome} openOutline={openOutline}
       wheel={{ backends, submitInput, relaunch: launch.relaunch, liveAsk: conn.liveAsk }} />
   );
+  /**
+   * **A session that does not exist yet** (a queued `session.create`): ONE line at the top of the
+   * session area, in flow with nothing over it — no connection banner, no corner group, no floating
+   * card centred in an empty grid with a back button of its own beside the header's. The owner's
+   * 11-18 screenshots: that card under the banner, the corner buttons poking through, a spinner
+   * turning offline, and the same fact said by five strips. Where the open IS comes from ONE
+   * reading (`pendingWords.ts`); it spins only while something is on the wire.
+   */
+  const pendingLine = () => {
+    const failed = pendingEntry?.status === "failed";
+    const onWire = pendingEntry?.status === "pending";
+    // Online but not going out: say what holds it (the budget, auto-send off, …).
+    const held = !onWire && status === "open" && pendingEntry ? q.blocked.get(pendingEntry.ackId) : undefined;
+    const st = pendingOpenState({ entry: pendingEntry, linkOpen: status === "open", held: !!held, now: Date.now() });
+    const repo = repoName || active.title;
+    // A first prompt already rides inside the create (or is chained behind it): "write it now" would be stale.
+    const ack = pendingEntry?.ackId;
+    const hasPrompt = !!(pendingEntry?.op?.t === "session.create" && pendingEntry.op.prompt)
+      || (!!ack && q.entries.some((e) => e.createAck === ack));
+    // Refused because its program cannot start here (not installed): name the agents
+    // that can, one tap each. A NEW session only — a resume belongs to its own program.
+    const failedOp = failed && pendingEntry?.op?.t === "session.create" ? pendingEntry.op : null;
+    const instead = failedOp && !failedOp.resume ? startableInstead(backends, failedOp.launch?.backend) : [];
+    return (
+      <div className={`term-pending${failed ? " failed" : ""}`} role="status" data-state={failed ? "failed" : st}>
+        <span className="term-pending-icon">
+          {failed ? <AlertTriangle size={16} /> : pendingSpins(st) ? <Loader2 size={16} className="spin" />
+            : st === "silent" || st === "nolink" ? <CloudOff size={16} /> : <Hourglass size={16} />}
+        </span>
+        <div className="term-pending-body">
+          <div className="term-pending-line">
+            {failed
+              ? <>{pendingLead(repo)} was not started — {pendingEntry?.reason || "the desktop refused it"}</>
+              : held
+                ? <>{pendingLead(repo)} — not opened yet: {blockedReasonText(held)}</>
+                : pendingCardLine(st, repo)}
+          </div>
+          <div className="term-pending-hint">
+            {failed && instead.length > 0
+              ? "Start it with another program this desktop has instead? Anything typed here goes with it."
+              : failed
+              ? `Anything typed here is still in the queue and can be re-aimed from ${SHEET.activity}.`
+              : (() => { const [m, more] = pendingCardHintParts(st, hasPrompt); return <>{m}{more ? <span className="term-pending-more"> {more}</span> : null}</>; })()}
+          </div>
+          {failed && (
+            <div className="term-overlay-acts">
+              {instead.map((b) => (
+                <Button key={b.id} title={`open this session with ${b.label} instead`} onClick={() => retryPendingCreate(b.id)}>
+                  <Play size={14} /> use {b.label}
+                </Button>
+              ))}
+              <Button title="try this open again" onClick={() => retryPendingCreate()}>
+                <RotateCw size={14} /> try again
+              </Button>
+            </div>
+          )}
+        </div>
+        {/* A strip folded on this screen comes back from here, not from a corner group drawn over
+            the line (`Stowable.tsx`); absent while nothing is folded. */}
+        <StowCorner iconSize={ICON} />
+      </div>
+    );
+  };
   // `+ later` (`isLaterId`): there is no session and none is on its way, so
   // nothing here is a terminal — the one sentence is the view. The compose
   // bar under it is the real one (paste, drop, chain, dictation), aimed at a
@@ -423,7 +496,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
         </div>
       )}
 
-      <div className="term-wrap">
+      <div ref={wrapRef} className="term-wrap">
         {/* The connection banner FLOATS over the terminal rather than sitting
             above it in the flex column. In flow it took height from the
             terminal, and a terminal that changes height refits its grid and
@@ -432,7 +505,15 @@ export function TermArea(p: TermAreaProps): ReactNode {
             banner comes and goes, so the indicator for a bad link was itself
             repainting the screen twice per blip. Floating costs one row of
             output for as long as the link is down, and nothing else. */}
-        {connVisible && status !== "open" && (
+        {/* Native shell: the storm stands in for the banner while it runs
+            (`StormOverlay.tsx`); hidden or done, the banner is back. */}
+        {stormUp && (
+          <StormOverlay state={storm.state} tailscaleIp={tailscaleIp} onDismiss={storm.dismiss} />
+        )}
+        {/* Not over a pending session's card: the card already says "no connection to the
+            desktop" and when it opens — the owner's 11-18 screenshot had the banner, the card and
+            the corner buttons stacked on each other, the same fact said three times. */}
+        {!stormUp && connVisible && status !== "open" && !pending && (
           <div className={`conn-banner floating conn-${status}`}>
             {status === "closed" ? <><AlertTriangle size={12} /> connection lost — reconnecting…</> : "connecting…"}
             {tailscaleIp ? ` · ${tailscaleIp}` : ""}
@@ -563,6 +644,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
           const card = !hasOutput;
           return (
           <div className="term-stage">
+            {/* First in the column, so the empty grid under it gives up the height (`.term-pending`). */}
+            {kind === "pending" && pendingLine()}
             {/* Dimming is a CSS filter on the container, never injected ANSI: a
                 replayed TUI re-sets its own SGR attributes within bytes and would
                 paint straight over any dim code we wrote. */}
@@ -594,7 +677,10 @@ export function TermArea(p: TermAreaProps): ReactNode {
                 over the CARD explanations (a session that has not started, or
                 one with nothing cached): there is no grid to make bigger yet,
                 and the corner is where that card's own words are. */}
-            {corner(!card)}
+            {/* Not over a pending screen: its line at the top IS that corner's place, and the
+                corner's controls (zoom, full screen, grip) act on a grid that does not exist yet.
+                A folded strip's way back rides on the line itself (below). */}
+            {kind !== "pending" && corner(!card)}
             {pick.chrome}
             {/* The one box the terminal answers by tap (`termAnswers.ts`): the trust box a new
                 person meets first, before they know the key bar, drawn unnumbered with the
@@ -608,8 +694,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
                   onAnswer={onAnswer} ev="term.trust" />
               </div>
             )}
-            {kind && (
-              <div className={`term-overlay ${card ? "as-card" : "as-chip"} term-overlay-${kind}${kind === "pending" && pendingEntry?.status === "failed" ? " failed" : ""}`}>
+            {kind && kind !== "pending" && (
+              <div className={`term-overlay ${card ? "as-card" : "as-chip"} term-overlay-${kind}`}>
                 <div className="term-overlay-box">
                   {kind === "empty" && (
                     <><Loader2 size={16} className="spin" /> <span>no output yet — the session is running and hasn’t printed anything</span></>
@@ -645,60 +731,6 @@ export function TermArea(p: TermAreaProps): ReactNode {
                       )}
                     </>
                   )}
-                  {kind === "pending" && (() => {
-                    const failed = pendingEntry?.status === "failed";
-                    const onWire = pendingEntry?.status === "pending";
-                    // Online but not going out: say what holds it (the budget,
-                    // auto-send off, …). "warming up the CLI" over an open the
-                    // queue had not even sent read as a session that was running.
-                    const held = !onWire && status === "open" && pendingEntry ? q.blocked.get(pendingEntry.ackId) : undefined;
-                    // Refused because its program cannot start here (not installed): name the agents
-                    // that can, one tap each. A NEW session only — a resume belongs to its own program.
-                    const failedOp = failed && pendingEntry?.op?.t === "session.create" ? pendingEntry.op : null;
-                    const instead = failedOp && !failedOp.resume ? startableInstead(backends, failedOp.launch?.backend) : [];
-                    return (
-                    <>
-                      {failed ? <AlertTriangle size={16} /> : <Loader2 size={16} className="spin" />}
-                      <span>
-                        {failed
-                          ? <>the session was not started — {pendingEntry?.reason || "the desktop refused it"}</>
-                          : !pendingEntry
-                            // Accepted and off our books: either the CLI is
-                            // starting, or the host is holding the create until
-                            // the files it names have landed (`launch.opened`).
-                            ? <>the desktop has it — the session opens in a moment…</>
-                            : held
-                              ? <>not opened yet — {blockedReasonText(held)}</>
-                              : onWire || status === "open"
-                              ? <>warming up the CLI for you…</>
-                              : <>offline — the session will be created once you are back online</>}
-                      </span>
-                      <span className="term-overlay-hint">
-                        {failed && instead.length > 0
-                          ? `Start it with another program this desktop has instead? Anything typed here goes with it.`
-                          : failed
-                          ? `Anything typed here is still in the queue and can be re-aimed from ${SHEET.activity}.`
-                          : "Write, chain and attach now — it all goes into this session the moment it opens."}
-                      </span>
-                      <span className="term-overlay-acts">
-                        {instead.map((b) => (
-                          <Button key={b.id} title={`open this session with ${b.label} instead`} onClick={() => retryPendingCreate(b.id)}>
-                            <Play size={14} /> use {b.label}
-                          </Button>
-                        ))}
-                        {failed && (
-                          <Button title="try this open again" onClick={() => retryPendingCreate()}>
-                            <RotateCw size={14} /> try again
-                          </Button>
-                        )}
-                        <Button title={failed ? "back to the launcher" : `stop waiting — the open stays queued and can be dropped in ${SHEET.activity}`}
-                          onClick={() => setActiveId(null)}>
-                          <ChevronLeft size={14} /> back
-                        </Button>
-                      </span>
-                    </>
-                    );
-                  })()}
                   {kind === "ended" && (
                     <>
                       <X size={16} />

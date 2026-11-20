@@ -2,6 +2,7 @@
  * The `hdrcmd` sheet: the one-tap header chips, and — because "what is in my
  * header" is one question — the toolbar pins that share their row.
  */
+import { TITLE } from "../../sheetNames";
 import { Pin } from "lucide-react";
 import { useCore } from "../../sdk";
 import { backendMark } from "../../backendCaps";
@@ -23,7 +24,7 @@ export function HeaderCmdsSheet() {
       snippets={headerCmds}
       onSave={writeHeaderCmds}
       onClose={() => core.nav.close("hdrcmd")}
-      heading="Header commands"
+      heading={TITLE.hdrcmd}
       hint={<>
         <div>One-tap chips in the session header — tapping one sends its text to the session you are in (a slash command runs as a command). The header survives a collapse, so these stay reachable in reader view.</div>
         {/* The list here is ALWAYS the whole list: this sheet edits global,

@@ -13,11 +13,11 @@ import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
 import { CLAUDE, backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-import { openCaptureFor } from "./features/capture"; import { openRepoHealth, openSetup } from "./features/setup"; import { openSetupCheck } from "./features/setupCheck"; import { openSkillsFor } from "./skillsDoor"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
+import { openRepoHealth, openSetup } from "./features/setup"; import { openSetupCheck } from "./features/setupCheck"; import { openSkillsFor } from "./skillsDoor"; import { openContextById } from "./features/context"; import { openBuildFor } from "./features/build";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
-import { openBacklogCut, useBacklog } from "./features/backlog";
+import { openAssessResult, openBacklogCut, useBacklog } from "./features/backlog";
 import { openActivity, useActivityConfirmedDone, useActivityFiled } from "./features/activity";
 import { openPadAt } from "./features/pad";
 import {
@@ -330,7 +330,7 @@ export function App() {
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,
-      openActivity, openGit: openGitFor, openReader: term.openReader, openCapture: openCaptureFor, openBuild: openBuildFor,
+      openActivity, openGit: openGitFor, openReader: term.openReader, openBuild: openBuildFor, openAssess: openAssessResult,
     },
     launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch, focusShell: launchCore.focusShell, shellCant: launchCore.shellCant, openCompanionShell: launchCore.openCompanionShell },
     term: { snapshot: term.snapshot, geom: () => geomRef.current },

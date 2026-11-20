@@ -156,7 +156,7 @@ export function screenLogLines(state: ScreenLogState): string[] {
 
 function trimTrailingBlanks(lines: string[]): string[] {
   let end = lines.length;
-  while (end > 0 && isBlank(lines[end - 1])) end--;
+  while (end > 0 && isBlank(lines[end - 1]!)) end--;
   return end === lines.length ? lines : lines.slice(0, end);
 }
 

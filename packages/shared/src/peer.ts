@@ -231,16 +231,16 @@ export function remoteKey(url: string): string | null {
   let path: string;
   const m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^/@]*@)?(\[[^\]]+\]|[^/:@]+)(?::\d*)?\/(.+)$/i.exec(s);
   if (m) {
-    host = m[1];
-    path = m[2];
+    host = m[1]!;
+    path = m[2]!;
   } else {
     // scp-style `user@host:path`; a bare `host:path` too, but never a URL
     const sc = /^(?:[^/@:]+@)?([^/:@]+):(?!\/\/)\/?(.+)$/.exec(s);
-    if (!sc || sc[1].length === 1) return null; // a drive letter is no host
-    host = sc[1];
-    path = sc[2];
+    if (!sc || sc[1]!.length === 1) return null; // a drive letter is no host
+    host = sc[1]!;
+    path = sc[2]!;
   }
-  path = trimEndChars(trimEndChars(path.split(/[?#]/)[0], "/").replace(/\.git$/i, ""), "/").replace(/^\/+/, "");
+  path = trimEndChars(trimEndChars(path.split(/[?#]/)[0]!, "/").replace(/\.git$/i, ""), "/").replace(/^\/+/, "");
   host = host.toLowerCase();
   if (!host || !path || path.split("/").some((p) => !p || p === "." || p === "..")) return null;
   return `${host}/${path.toLowerCase()}`;
@@ -257,13 +257,13 @@ export function peerAddressOk(addr: string): string | null {
   if (!m) return "write the address as host:port";
   const port = Number(m[2]);
   if (port < 1 || port > 65535) return "the port must be 1-65535";
-  const host = m[1].toLowerCase();
+  const host = m[1]!.toLowerCase();
   const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (ip) {
     const o = ip.slice(1).map(Number);
     if (o.some((n) => n > 255) || ip.slice(1).some((p) => p.length > 1 && p.startsWith("0"))) return "not a valid IPv4 address";
     if (o[0] === 127 && o[1] === 0 && o[2] === 0 && o[3] === 1) return null;
-    if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return null;
+    if (o[0] === 100 && o[1]! >= 64 && o[1]! <= 127) return null;
     return "only a Tailscale address (100.64.0.0/10) or 127.0.0.1 may be a peer";
   }
   if (host.endsWith(".ts.net")) {

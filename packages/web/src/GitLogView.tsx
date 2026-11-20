@@ -5,6 +5,7 @@ import { api } from "./api";
 import { track } from "./usage";
 import { useRemoteResource } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
+import { TITLE } from "./sheetNames";
 import { Empty } from "./Empty";
 import { ago } from "./format";
 import { Button } from "./kit/Button";
@@ -138,7 +139,7 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
 
   return (
     <div className="sheet">
-      <SheetHead title={<>History · {log?.branch ?? "…"}</>} onClose={onClose}>
+      <SheetHead title={<>{TITLE.commits.replace(/ - branch$/, "")} - {log?.branch ?? "…"}</>} onClose={onClose}>
         {res.inflight && log && <Loader size={13} className="spin" aria-label="refreshing" />}
         {log?.upstream && (
           <Button onClick={() => { track("action:git.log.fetch"); void fetchRemote(); }}

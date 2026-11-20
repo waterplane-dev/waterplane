@@ -35,7 +35,7 @@ packages/web/src/
     store.ts     createStore() / useStore() — one value, one emit, one writer
     hooks.ts     useCore(), useLatest(), useQueueEntries(), useRepoMap() + the pure mapWith/mapWithout
     cached.ts    cachedList() — a host list per repo, seeded from the device cache, with its age
-    repoRun.ts   repoRunStore() — per-repo configs + capped runs + streamed output (build, capture)
+    repoRun.ts   repoRunStore() — per-repo configs + capped runs + streamed output (build)
   features/
     registry.ts  FEATURES: every feature's manifest, listed once
     <name>/      the prescribed layout below — index.ts, store.ts, actions.ts, logic.ts, …
@@ -71,7 +71,7 @@ two kinds of one-liner** that are not "logic": a `messages` handler that is a ba
 falls through to the screen beneath, while a component that returns null is still a mounted sheet
 and draws a blank one.
 
-**A feature's sheet takes a name of its own** (`BuildButtonsSheet`, `VerifiedCaptureSheet`,
+**A feature's sheet takes a name of its own** (`BuildButtonsSheet`,
 `HealthBoardSheet`, `DecisionLogSheet`, …), never the flat top-level file it replaces or wraps:
 `BuildSheet.tsx` and `features/build/BuildSheet.tsx` would be two modules of one name, one
 search hit apart, and the wrong one gets edited.
@@ -204,7 +204,7 @@ A feature declares what it adds; it does not patch App:
   swallowed as a "malformed frame", which hid App's own bugs and starved every listener after it;
   now each listener is isolated and logged loudly, so App's switch throwing cannot silence the
   feature dispatch listener registered after it.
-  A chatty push (`build.output`, `capture.output`) keeps its guard on `core().nav.overlay` — a
+  A chatty push (`build.output`) keeps its guard on `core().nav.overlay` — a
   20-minute run is ~800 frames, and re-rendering for one nobody is looking at is the bug.
 - `commands` — `CommandDef { id, run(core) }`, run by the toolbar switch's `default:` arm
   (`runFeatureCommand`). The toolbar item itself stays declared in `toolbar.ts`, which owns order
@@ -258,13 +258,12 @@ needs a feature's number (an unread badge, a health chip) it imports a hook from
 index (`useUnread()`), never the store. `set` with an equal value emits nothing, so a handler that
 returns `prev` re-renders nothing — the same rule App's chatty pushes follow.
 
-Two helpers exist because App already had the same code twice:
+Two helpers hold what would otherwise be copied per feature:
 
-- `cachedList` — `buildCfgs`/`buildCfgsAt` and `captureTargets`/`captureTargetsAt` were each two
-  `Map`s, a snapshot seed and a save-then-stamp. **An empty list is a claim** (`localState.ts`), so
+- `cachedList` — `buildCfgs`/`buildCfgsAt`: a `Map`, a snapshot seed and a save-then-stamp. **An empty list is a claim** (`localState.ts`), so
   the reading survives the link and says how old it is. The load/save pair stays in
   `localState.ts`, which owns the keys.
-- `repoRunStore` — build and capture are the same feature typed twice: that cached list, a list of
+- `repoRunStore` — that cached list, a list of
   runs upserted by id and capped at 60, and an output buffer per run kept to its 300k TAIL, pruned
   when its run falls off the list, re-rendering only while the sheet reading it is on top.
 

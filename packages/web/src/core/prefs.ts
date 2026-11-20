@@ -136,12 +136,10 @@ function flag(key: string, parse: (raw: string | null) => boolean, synced = fals
   };
 }
 
-/** Typing room's default splits on POINTER — a desktop keyboard costs no
- *  screen — and is read once, never re-derived on a resize. */
+/** Typing room is OFF until a person turns it on (journey D8: tapping the box must not hide
+ *  the header unasked). A stored choice, either way, is kept. */
 function loadTypingRoom(): boolean {
-  const v = lsGet(LS.typingRoom);
-  if (v != null) return v === "1";
-  try { return window.matchMedia?.("(pointer: coarse)").matches ?? false; } catch { return false; }
+  return lsGet(LS.typingRoom) === "1";
 }
 
 export const prefs = createPrefs<DevicePrefs>({

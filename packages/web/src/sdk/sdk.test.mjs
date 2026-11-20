@@ -1,6 +1,6 @@
 /**
  * The SDK's pure half: the store, the cached per-repo list, and the run/output
- * bookkeeping build and capture share.
+ * bookkeeping the build feature keeps.
  *
  * In a subfolder on purpose — `npm run test:unit` globs `packages/web/src/**`,
  * and a test here that never ran would be the proof that it does not.

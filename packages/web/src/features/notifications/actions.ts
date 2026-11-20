@@ -5,6 +5,7 @@
 import type { NotificationItem, NotificationKind, NotifyPrefs } from "@waterplane/shared";
 import { core, type CoreApi } from "../../sdk";
 import { viewerHandles } from "../../docKind";
+import type { ToastGo } from "../../toast";
 import { LS, lsBool, lsSetBool } from "../../storage";
 import { landOnGit } from "../../gitLanding";
 import { backlogRepoFor, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipKeys, resolvedWords } from "./logic";
@@ -167,6 +168,12 @@ export function openNotif(n: NotificationItem): void {
       else showRow(n, "that repo is not in the list on this desktop any more");
       return;
     }
+    case "assess": {
+      const repo = c.world.repos.find((r) => r.id === t.repoId);
+      if (repo) c.nav.openAssess(repo);
+      else showRow(n, "that repo is not in the list on this desktop any more");
+      return;
+    }
     case "build": {
       const repo = c.world.repos.find((r) => r.id === t.repoId);
       if (repo) c.nav.openBuild(repo);
@@ -179,6 +186,34 @@ export function openNotif(n: NotificationItem): void {
     case "blocked":
       c.nav.open("limits");
       return;
+  }
+}
+
+/**
+ * A tap on one of THIS PHONE's rows (`ToastLog.tsx`) that carries a target:
+ * the assessment's result (never a fresh run — `openAssess` reads the last
+ * one), the picture inside its session's strip, else the session the words
+ * were said in. A target that is gone says so and the feed stays up.
+ */
+export function openToastGo(g: ToastGo): void {
+  const c = core();
+  if (g.assessRepoId) {
+    const repo = c.world.repos.find((r) => r.id === g.assessRepoId);
+    if (!repo) { c.say.toast("that repo is not in the list on this desktop any more"); return; }
+    c.nav.close("notifications");
+    c.nav.openAssess(repo);
+    return;
+  }
+  if (g.image) {
+    c.nav.close("notifications");
+    c.files.viewImage(g.image, g.sessionId);
+    return;
+  }
+  if (g.sessionId) {
+    const s = c.world.sessions.find((x) => x.id === g.sessionId);
+    if (!s) { c.say.toast("that session is closed — reopen it from Recently closed or Archive"); return; }
+    c.nav.close("notifications");
+    c.nav.attach(s);
   }
 }
 

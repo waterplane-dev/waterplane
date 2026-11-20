@@ -60,6 +60,7 @@ import { readHealthAxis, writeHealthAxis } from "./storage";
 import type { HealthAxisMode } from "./healthIndexWords";
 import { AxisRow, HealthNav, RefreshKey, SectionCard, navKeysOf, shownSections } from "./RepoHealthCards";
 import { DailyNotes } from "./RepoHealthNotes";
+import { HEALTH_SECTION } from "./sheetNames";
 import "./repohealth.css";
 
 /** The size every button in the repo's action row uses. `ICON` is App-local
@@ -705,15 +706,13 @@ export function RepoHealthMenuItem({ repo, onOpen }: { repo: RepoTarget; onOpen:
     // `.row-more`, which is a wrapping flex row of controls.
     return <div className="act-cants"><CantInline>{repoHealthUnavailableText(avail)}</CantInline></div>;
   }
-  // `over time`, not `repo readings`: the checklist entry beside this one is
-  // now ALSO called repo readings, because they open the same sheet. Two
-  // controls with one name is a menu that cannot be aimed. This one is the
-  // direct door to the second region, so it is named after the region — and
-  // the region switch at the top of the sheet uses the same two words, which
-  // is what makes the door and the destination recognisably the same place.
+  // Named after the section it lands on (Setup & health › Health score), not the screen: the
+  // Setup & health line beside it opens the same screen on its checks. Two controls with one
+  // name is a menu that cannot be aimed; the section row at the top of the screen uses the
+  // same two words, which is what makes the door and the destination recognisably one place.
   return (
     <button className="more-act" onClick={onOpen}>
-      <Activity size={ICON} />over time
+      <Activity size={ICON} />{HEALTH_SECTION.score}
     </button>
   );
 }

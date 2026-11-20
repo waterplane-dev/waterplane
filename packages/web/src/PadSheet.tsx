@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { TITLE } from "./sheetNames";
 import { ChevronLeft, Files, ListPlus, NotebookPen, Plus, SendHorizontal, Trash2, X } from "lucide-react";
 import { FILE_WORDS, PAD_HINT, type RepoTarget } from "@waterplane/shared";
 import { AttachStrip } from "./AttachStrip";
@@ -299,7 +300,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
   if (editing !== null) {
     return (
       <div className="sheet">
-        <SheetHead title={<><NotebookPen size={16} /> {editing === "new" ? "New note" : "Edit note"}</>} onClose={closeEditor} />
+        <SheetHead title={<><NotebookPen size={16} /> {TITLE.padNote}</>} onClose={closeEditor} />
         <Hint>
           Just the text. You pick where it goes when you get there.
           {attachRepo && <> Files go to <strong>{attachRepo.repoName}</strong>&apos;s inbox — that much the note has decided.</>}
@@ -354,7 +355,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
 
   return (
     <div className="sheet">
-      <SheetHead title={<><NotebookPen size={16} /> Prompt pad</>} onClose={onClose}>
+      <SheetHead title={<><NotebookPen size={16} /> {TITLE.pad}</>} onClose={onClose}>
         <Button onClick={startNew}><Plus size={16} /> new</Button>
       </SheetHead>
       {/* The pad is synced, and it is by design the last copy of words nobody

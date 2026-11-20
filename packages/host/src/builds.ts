@@ -57,7 +57,7 @@ import { targetId } from "./repos.js";
 import type { ExecutorResult, IntentManager } from "./intents/manager.js";
 import { intentToBuildRun, isBuildRow } from "./intents/adapters.js";
 import { contained } from "./paths.js";
-import { artifactPolicy, collectArtifacts } from "./artifacts.js";
+import { artifactPolicy, collectArtifacts, gitStamp } from "./artifacts.js";
 import { execFileP } from "./proc.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -594,7 +594,7 @@ export class BuildManager extends EventEmitter {
     this.procs.set(runId, proc);
     proc.onData((chunk) => { this.append(runId, chunk); this.emit("output", runId, chunk); });
     return new Promise<ExecutorResult>((done) => {
-      proc.onExit(({ exitCode, signal }) => {
+      proc.onExit(async ({ exitCode, signal }) => {
         this.procs.delete(runId);
         if (this.cancelled.delete(runId)) {
           done({ ok: false, canceled: true, detail: "cancelled from the phone", exitCode });
@@ -613,7 +613,7 @@ export class BuildManager extends EventEmitter {
           // (`artifacts.ts`, both halves). Every line of it goes into this
           // run's own output — a file appearing in the outbox and an older one
           // ceasing to exist must both be sentences somebody can read.
-          artifacts: this.finishArtifacts(runId, i.cwd, root, startedAt, cwd),
+          artifacts: await this.finishArtifacts(runId, i.cwd, root, startedAt, cwd),
         });
       });
     });
@@ -627,13 +627,14 @@ export class BuildManager extends EventEmitter {
    * vanished between the walk and the link is a build that still succeeded and
    * still has an artifact to offer.
    */
-  private finishArtifacts(runId: string, repoDir: string, root: string, startedAt: number, buildDir: string): BuildArtifact[] {
+  private async finishArtifacts(runId: string, repoDir: string, root: string, startedAt: number, buildDir: string): Promise<BuildArtifact[]> {
     const found = detectArtifacts(repoDir, root, startedAt, buildDir);
     try {
+      const sha = await gitStamp(repoDir);
       return collectArtifacts(repoDir, found, artifactPolicy(repoDir), (line) => {
         this.append(runId, line);
         this.emit("output", runId, line);
-      });
+      }, new Date(), sha);
     } catch {
       return found;
     }

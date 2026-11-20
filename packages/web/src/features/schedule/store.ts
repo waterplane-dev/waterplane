@@ -32,6 +32,9 @@ export const scheduleFocus = createStore<HorizonBucket | null>(null);
  *  *from the schedule “x”*, a repo row's clock chip). Same lifetime. */
 export const scheduleFocusIds = createStore<{ ids: string[]; label: string; repoDir?: string } | null>(null);
 
+/** "Filter cleared to show your new schedule." when the receipt's Open dropped a cut (decision 5); gone when the sheet leaves. */
+export const scheduleClearedNote = createStore<string | null>(null);
+
 /** The rule list as the host last said it (or as the cache remembers it). */
 export function useSchedules(): ScheduleEntry[] {
   return useStore(schedules);

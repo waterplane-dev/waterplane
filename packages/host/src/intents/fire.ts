@@ -341,11 +341,6 @@ export class FireSlice {
     if (row.payload.kind === "assess") {
       return ex.assess?.(row) ?? Promise.resolve({ ok: false, detail: "this host cannot run assessments yet" });
     }
-    // And before it for the same reason: a capture is a `shell` target that
-    // runs no shell command.
-    if (row.payload.kind === "capture") {
-      return ex.capture?.(row) ?? Promise.resolve({ ok: false, detail: "this host cannot take captures yet" });
-    }
     if (row.payload.kind === "build" || row.target.kind === "shell") {
       return ex.build?.(row) ?? Promise.resolve({ ok: false, detail: "this host cannot run build intents yet" });
     }

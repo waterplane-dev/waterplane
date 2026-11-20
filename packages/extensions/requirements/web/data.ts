@@ -13,7 +13,7 @@ import type { RepoTarget } from "@waterplane/shared";
 import { core, createStore, featureSheetId, pluginClient } from "@waterplane/sdk";
 import type { PluginCallResult, Store } from "@waterplane/sdk";
 import type { ReqList, ReqMethods, ReqSummary } from "../shared/methods.mts";
-import { NO_CUT, type ReqCut } from "./cut.ts";
+import { NO_CUT, matches, type ReqCut } from "./cut.ts";
 
 export const REQ_SHEET = featureSheetId("requirements", "list");
 const client = pluginClient<ReqMethods>("requirements");
@@ -49,7 +49,7 @@ export async function readList(repo: RepoTarget): Promise<void> {
   if (res.ok) {
     const l = res.result;
     put(summaries, repo.id, { at, res: { ok: true, result: {
-      setUp: l.setUp, built: !!l.lastRun, total: l.items.length, requested: l.items.filter((i) => i.status === "requested").length,
+      setUp: l.setUp, built: !!l.lastRun, total: l.items.length, requested: l.items.filter((i) => matches(i, { status: "requested", area: null }, "")).length,
     } } });
   }
 }

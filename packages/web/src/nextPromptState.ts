@@ -156,6 +156,8 @@ export function nextPromptView(o: {
     /** `isBudgetHeld` on its intent, already answered — the host's verdict. */
     budgetHeld?: boolean;
   }[];
+  /** The session's own cap, already worded ("$20 / $20"), shown beside the hold. */
+  budgetAmount?: string;
   /**
    * How old the backlog snapshot `pinned` came out of is, in words, and read
    * ONLY while offline.
@@ -220,7 +222,8 @@ export function nextPromptView(o: {
      * turn to wait for and the whole row is a copy — a claim about right now,
      * made from a snapshot, about a machine this phone cannot reach.
      */
-    const why = o.wall ?? head.why
+    // A budget hold says so: "runs when this session is free" is false while the budget holds it.
+    const why = o.wall ?? (head.budgetHeld && o.online ? `Held by this session's budget${o.budgetAmount ? ` (${o.budgetAmount})` : ""}.` : null) ?? head.why
       ?? (o.busy ? "waits for this turn to end" : "the desktop runs it when this session is free");
     return {
       holder: "desktop",

@@ -412,14 +412,6 @@ export class WatchSlice {
       fail("the host restarted while this assessment was running — nothing was applied, run it again if you still want it");
       return;
     }
-    // A capture dies with the daemon too, and it gets its own sentence because
-    // its evidence half-survives: frames already copied into `.claude/outbox/`
-    // are still there, and the sidecar that says what they are is not — so the
-    // honest reading is "there is no verdict", not "there is nothing".
-    if (row.payload.kind === "capture") {
-      fail("the host restarted while this capture was running — any frames it had already written are in .claude/outbox/, but no verdict was, so run it again");
-      return;
-    }
     // A build RULE runs nothing itself — it posts a run, synchronously — so a
     // restart caught it between `starting` and that post. Whether the run was
     // written is the build list's to say; it is NOT posted again.

@@ -87,7 +87,7 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, hostSpend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors, afterOverTime, findingsLine, focus = null }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, hostSpend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, ledgerLead, liveWindows = true, doors, afterOverTime, findingsLine, focus = null }: {
   /** A Setup check door's aim: the span, the box to scroll to, the conversations to cut the costliest list to. */
   focus?: TokenFocus | null;
   /** Doors to what every turn carries (always-on context); drawn first in the scroll region. */
@@ -97,6 +97,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, ho
   afterOverTime?: ReactNode; // drawn after the Over time box: the phone's agent readings, none in VS Code
   /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
   lead?: ReactNode;
+  /** Drawn above one ledger tab's own view, by its id (VS Code: Copilot's plan and GitHub quota on Copilot Chat). */
+  ledgerLead?: (id: string) => ReactNode;
   /**
    * Whether this render has the desktop's live account readings at all. False draws no limit
    * windows, no week-since-reset card and no dollar period — the VS Code panel with no waterplane
@@ -776,10 +778,11 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, ho
           <LocalRunnerView res={runnerRes} />
         ) : readingChip ? (
           <SourceWindows reading={readingNow} online={online} />
-        ) : extra ? (
+        ) : extra ? (<>
+          {ledgerLead?.(extra.id)}
           <BackendLedgerView id={extra.id} label={extra.label} online={online || localLedgers.includes(extra.id)} fresh={fresh} table={table} onTable={setTable}
             reading={(() => { const r = readingForLedger(readings, extra.id); return r ? readingAfterResets(r, Date.now()) : null; })()} />
-        ) : view === "claude" ? <>
+        </>) : view === "claude" ? <>
           {/* ── NOW: the one exception to the span filter ──────────────────
               The two limit windows and the week's hours, compact, because they are what the
               launcher chip that leads here is about and only they have a clock on them. Rendered

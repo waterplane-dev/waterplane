@@ -67,7 +67,7 @@ export const THEME_TOKENS: readonly string[] = [
   "--media-bg", "--paper",
   "--chart-1", "--chart-2", "--chart-3", "--chart-4",
   "--ctx-series", "--ctx-compact", "--ctx-limit",
-  "--repo-veil", "--repo-veil-on",
+  "--repo-veil", "--repo-veil-on", "--repo-card", "--repo-card-on", "--repo-hair",
 ];
 
 /** Tokens declared as `rgb(var(<token>-rgb))`: an override is written to the triple. */
@@ -125,17 +125,17 @@ export function parseThemeColour(v: unknown): Rgba | null {
   const s = v.trim();
   let m = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(s);
   if (m) {
-    let h = m[1];
+    let h = m[1]!;
     if (h.length <= 4) h = [...h].map((c) => c + c).join("");
     const n = (i: number) => parseInt(h.slice(i, i + 2), 16);
     return { r: n(0), g: n(2), b: n(4), a: h.length === 8 ? Math.round((n(6) / 255) * 1000) / 1000 : 1 };
   }
   m = FUNC_RE.exec(s);
   if (!m) return null;
-  const fn = m[1].toLowerCase();
+  const fn = m[1]!.toLowerCase();
   const alpha = m[8] === undefined ? 1 : clamp(Number(m[8]) / (m[9] ? 100 : 1), 0, 1);
   if (fn.startsWith("rgb")) {
-    const ch = (x: string, pct: string) => Math.round(clamp(pct ? (Number(x) * 255) / 100 : Number(x), 0, 255));
+    const ch = (x: string | undefined, pct: string | undefined) => Math.round(clamp(pct ? (Number(x) * 255) / 100 : Number(x), 0, 255));
     return { r: ch(m[2], m[3]), g: ch(m[4], m[5]), b: ch(m[6], m[7]), a: alpha };
   }
   if (m[3] || !m[5] || !m[7]) return null; // hsl: a bare hue, two percentages

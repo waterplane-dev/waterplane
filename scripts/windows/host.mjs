@@ -17,6 +17,13 @@ if (process.platform !== "win32") {
   console.error("[host] this launcher is for Windows; elsewhere use `npm run restart`.");
   process.exit(1);
 }
+// node_modules installed from WSL (`npm ci` in /mnt/<drive>/…) holds Linux binaries and no `.cmd`
+// shims, so every build here then dies with cmd.exe's "tsc not found" in the system language.
+if (existsSync(join(REPO, "node_modules")) && !existsSync(join(REPO, "node_modules/.bin/tsc.cmd"))) {
+  console.error("[host] node_modules was installed from WSL (Linux binaries, no tsc.cmd) — this checkout builds on Windows.\n" +
+    "       Reinstall from Windows, then retry:  cmd.exe /d /c \"npm ci && npm run restart\"  (from WSL), or  npm ci; npm run restart  (PowerShell).");
+  process.exit(1);
+}
 const launcher = join(REPO, "packages/host/dist/cli/windows.js");
 // The build just run IS the one `restart` would run next: ~100 s each on the first Windows box, so
 // the launcher is told (`justBuilt`) and skips its own.

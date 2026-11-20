@@ -18,6 +18,8 @@ import type { AssessStep, AssessRun } from "@waterplane/shared";
 export function assessApplyBlocker(o: {
   run: AssessRun | null;
   picked: number;
+  /** Run-written titles the apply would put on rows (0 when the switch says leave them). */
+  names?: number;
   online: boolean;
   /** An apply this device has already asked for and not seen answered. */
   busy?: boolean;
@@ -30,7 +32,7 @@ export function assessApplyBlocker(o: {
   if (!p || !(p.rows.length + p.merges.length + p.news.length + (p.splits?.length ?? 0) + (p.conflicts?.length ?? 0))) return "this run came back with nothing to decide";
   if (run.status === "applied") return "this proposal has already been applied — run a new assessment to judge what is left now";
   if (o.busy) return "the decisions have been sent — waiting for the desktop";
-  if (!o.picked) return "nothing is ticked yet — tap retire it or keep it on the rows you agree with, or retire all on a strip";
+  if (!o.picked && !o.names) return "nothing is ticked yet — tap retire it or keep it on the rows you agree with, or retire all on a strip";
   if (!o.online) return "no connection — applying starts work on the desktop, so it cannot be queued from here";
   return null;
 }
@@ -50,7 +52,7 @@ export function assessRunBlocker(o: {
   /** The host's own sentence when the usage budget is closed. */
   budgetNote?: string | null;
 }): string | null {
-  if (o.run?.status === "running") return "an assessment is already running for this repo — two of them would propose different verdicts on one list";
+  if (o.run?.status === "running") return "an assessment is already running for this repo — wait for it to finish, then run again";
   if (o.busy) return "the run has been asked for — waiting for the desktop";
   if (o.budgetNote) return o.budgetNote;
   if (!o.online) return "no connection — the run happens on the desktop";

@@ -4,7 +4,7 @@ Keeps a list of what a repo is expected to do, written the way you asked for it.
 
 ## Where to find it
 - **Repo menu** — the repo's ⋯ menu has a "requirements" line with the count of requested items, or "not set up" for a repo that has no list yet. It opens the list, which you can cut by status and by area. The update button there adds a waiting row to the repo's backlog; nothing runs until you tap it.
-- **Repo readings** — the "Requirements list" row says whether the list is set up, never built, current, or behind by many prompts. Its button hands the update to the agent, again as a waiting backlog row.
+- **Setup & health › Watch** — the "Requirements list" row says whether the list is set up, never built, current, or behind by many prompts. Its button hands the update to the agent, again as a waiting backlog row.
 
 ## For developers
 

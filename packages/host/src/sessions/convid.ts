@@ -141,8 +141,8 @@ export function detectClaudeId(core: SessionCore, s: Session): string | null {
 }
 
 /** Record a detected conversation id: SessionInfo, LiveMeta, recent list. */
-export function adoptClaudeId(core: SessionCore, s: Session, cid: string | null): void {
-  if (!cid || s.info.claudeSessionId) return;
+export function adoptClaudeId(core: SessionCore, s: Session, cid: string | null, opts?: { replace?: boolean }): void {
+  if (!cid || cid === s.info.claudeSessionId || (s.info.claudeSessionId && !opts?.replace)) return;
   s.info.claudeSessionId = cid;
   core.persistLive({ id: s.info.id, cwd: s.info.cwd, title: s.info.title, launch: s.launch, createdAt: s.info.createdAt, claudeSessionId: cid, ...(s.origin ? { origin: s.origin } : {}) });
   core.rememberRecent(s);

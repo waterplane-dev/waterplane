@@ -54,7 +54,7 @@
  */
 
 export type {
-  AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload, CapturePayload,
+  AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload,
   IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle,
 } from "./intent/types.js";
 export { REQUEUE_KEEP } from "./intent/types.js";
@@ -84,7 +84,7 @@ export {
   AGENT_POSTED_WORDS, AGENT_WITHDREW_DETAIL, MANUAL_HOLD_TEXT,
   ORIGIN_AGENT, ORIGIN_FANOUT_FOLLOWUP, ORIGIN_FANOUT_RUN, ORIGIN_FANOUT_TARGET, ORIGIN_PEER_PREFIX,
   ORIGIN_SCHEDULE_BUILD, ORIGIN_SCHEDULE_PREFIX, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK,
-  clockKey, intentKind, intentPaused, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow, isCaptureRow,
+  clockKey, intentKind, intentPaused, isAgentPosted, isAgentWithdrawn, isAssessRow, isBacklogRow, isBuildRow,
   isFanoutRow, isLaunchRow, isPeerPosted, isScheduleRow, isTimedWorkRow, peerOfOrigin, ORIGIN_PROPOSED_PREFIX, PROPOSER_MAX, isPendingProposal, isProposed, pendingProposals, proposedWords, proposerName, proposerOf,
   postsScheduledBuild, queuesBacklogItem, scheduleIdFromOrigin, scheduleItemOrigin, timedWorkKey,
 } from "./intent/kind.js";

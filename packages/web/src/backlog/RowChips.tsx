@@ -258,7 +258,7 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         said on the row, and a tap opens the burn where it is
                         picked. Unattended work must be recognisable as such. */}
                     {isWeekBurnOrigin(it.origin) && (p.nav.onOpenWeekBurn ? (
-                      <button className="bl-chip bl-merged" title="open the week-end burn — what picked this repo and wrote this row"
+                      <button className="bl-chip bl-merged" title="open usage pace — what picked this repo and wrote this row"
                         onClick={() => { track("action:backlog.fromweekburn"); p.nav.onOpenWeekBurn!(); }}>
                         <Flame size={11} style={{ verticalAlign: "-1px" }} /> {FROM_WEEKBURN_WORDS}
                       </button>

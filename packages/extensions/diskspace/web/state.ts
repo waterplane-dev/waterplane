@@ -11,7 +11,7 @@ import { askConfirm, ago } from "@waterplane/kit";
 import type { DiskEntry, DiskMethods, DiskState } from "../shared/wire.mts";
 import { cleanAllAsk, deleteAsk } from "./logic.ts";
 
-export const DISK_SHEET = featureSheetId("diskspace", "main");
+const DISK_SHEET = featureSheetId("diskspace", "main");
 const client = pluginClient<DiskMethods>("diskspace");
 
 export interface DiskView { res: PluginCallResult<DiskState> | null; at: number | null }

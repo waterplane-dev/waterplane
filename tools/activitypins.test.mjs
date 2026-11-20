@@ -103,7 +103,6 @@ function matrix() {
   const payloads = [
     { kind: "prompt", steps: ["add the export button", "then test it"] },
     { kind: "build", buildId: "b", name: "Release APK", cmd: "gradle", cwd: "/dev/r1" },
-    { kind: "capture", targetId: "t", name: "home", backend: "web" },
     { kind: "assess", name: "assess r1" },
   ];
   const targets = [{ kind: "repo" }, { kind: "repo", fresh: true }, { kind: "session", sessionId: "s1" }, { kind: "shell" }, { kind: "repos", dirs: ["/a", "/b"] }];

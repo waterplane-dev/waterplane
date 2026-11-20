@@ -22,8 +22,11 @@ import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { derive } from "../backends/derive.js";
 import { WaveGate, type WavePolicy, type WaveVerdict } from "../recover/wavegate.js";
+import type { Clock } from "../waitclock.js";
+import { arm, cancel as cancelTimer, clockOf, pending } from "./timers.js";
 
 export class ResumeSlice {
+  private get clock(): Clock { return clockOf(this.core); }
   /**
    * The session that REPLACED each one that exited at the usage limit — dead id
    * → the id `doResurrect` opened for it, in insertion order.
@@ -126,8 +129,8 @@ export class ResumeSlice {
       // Out of line when there is no next attempt to make — the same verdict
       // the scheduler acts on, asked once so a session cannot be in the queue
       // for a resume nothing will ever arm.
-      if (!this.core.limitAuto(s) || this.core.limitRetry(s, Date.now()).kind === "giveup") return false;
-      return s.info.running || s.resurrectTimer != null || requested;
+      if (!this.core.limitAuto(s) || this.core.limitRetry(s, this.clock.now()).kind === "giveup") return false;
+      return s.info.running || pending(s, "resume") || requested;
     });
     // Explicit "go first" (oldest tap first) → starred → longest blocked. Id last
     // so the order is total, hence stable across calls: the position published to
@@ -162,7 +165,7 @@ export class ResumeSlice {
     // scan of a blocked session, and a socket message per scan would be noise
     // that hides the transitions that matter.
     const hold = this.gate.holdUntil();
-    const sig = `${[...this.gate.inFlight()].sort().join(",")}|${this.core.resumeMode()}|${hold > Date.now() ? hold : 0}`;
+    const sig = `${[...this.gate.inFlight()].sort().join(",")}|${this.core.resumeMode()}|${hold > this.clock.now() ? hold : 0}`;
     if (sig !== this.lastQueueSig) { this.lastQueueSig = sig; this.core.emit("limitQueue"); }
   }
 
@@ -175,7 +178,7 @@ export class ResumeSlice {
     return {
       resumingId: ids[0] ?? null,
       resumingIds: ids,
-      holdUntil: hold > Date.now() ? hold : null,
+      holdUntil: hold > this.clock.now() ? hold : null,
       mode: this.core.resumeMode(),
     };
   }
@@ -203,7 +206,7 @@ export class ResumeSlice {
   /** Push a session to the front of the queue (`on: false` clears it). */
   setResumeFirst(id: string, on: boolean): void {
     if (!this.core.sessions.has(id)) return;
-    if (on) { if (!this.resumeFirst.has(id)) this.resumeFirst.set(id, Date.now()); }
+    if (on) { if (!this.resumeFirst.has(id)) this.resumeFirst.set(id, this.clock.now()); }
     else this.resumeFirst.delete(id);
     this.publishQueue();
     this.gate.pump();
@@ -267,7 +270,7 @@ export class ResumeSlice {
         if (next.info.running) void this.core.doLimitContinue(next);
         else void this.doResurrect(next).catch((e) => console.error(`[resume] could not reopen ${id}: ${(e as Error)?.message ?? e}`)); // the settle guard releases the slot
       },
-      holdFor: () => ({ until: Date.now() + LIMIT_RETRY_MS }),
+      holdFor: () => ({ until: this.clock.now() + LIMIT_RETRY_MS }),
       afterHold: () => {
         const hold = this.gate.holdUntil();
         for (const s of this.core.sessions.values()) {
@@ -341,7 +344,7 @@ export class ResumeSlice {
    */
   private noteRevived(deadId: string, newId: string): void {
     this.revivedBy.set(deadId, newId);
-    this.revivedAt.set(deadId, Date.now());
+    this.revivedAt.set(deadId, this.clock.now());
     while (this.revivedBy.size > ResumeSlice.REVIVED_MAX) {
       let oldest: string | null = null;
       let oldestAt = Number.MAX_SAFE_INTEGER;
@@ -362,7 +365,7 @@ export class ResumeSlice {
   }
 
   clearResurrectTimer(s: Session): void {
-    if (s.resurrectTimer) { clearTimeout(s.resurrectTimer); s.resurrectTimer = null; }
+    cancelTimer(s, "resume");
   }
 
   /**
@@ -417,7 +420,7 @@ export class ResumeSlice {
       ? false
       : log.state === "blocked" || log.clearedBy === "reset" || s.info.limit?.blocked || det.blocked;
     if (!limited || !this.core.limitAuto(s)) return;
-    const now = Date.now();
+    const now = this.clock.now();
     // ── WHICH reset instant, and whether there is one at all ─────────────────
     //
     // The log's is an instant the CLI recorded and is trusted whatever the
@@ -449,9 +452,7 @@ export class ResumeSlice {
   /** Book the reopen at `at`: the row says when, the queue takes it from there. */
   private armResurrect(s: Session, at: number, now: number): void {
     if (s.info.limit) { s.info.limit.nextAttemptAt = at; this.core.emit("updated", s.info); }
-    this.clearResurrectTimer(s);
-    s.resurrectTimer = setTimeout(() => { s.resurrectTimer = null; this.requestResume(s); }, Math.max(50, at - now));
-    s.resurrectTimer.unref?.();
+    arm(s, "resume", Math.max(50, at - now), () => this.requestResume(s), clockOf(this.core));
     this.core.emit("limit", s.info.id, s.info, "scheduled");
   }
 
@@ -465,7 +466,7 @@ export class ResumeSlice {
     if (s.killed || s.detaching) return;
     const exit = this.sourceWallExit(s);
     if (!exit || !this.core.limitAuto(s)) return;
-    const now = Date.now();
+    const now = this.clock.now();
     const next = this.core.limitRetry(s, now, exit.resetAt);
     if (next.kind === "giveup") { this.core.noteGaveUp(s, next.why); return; }
     this.armResurrect(s, next.at, now);
@@ -475,7 +476,7 @@ export class ResumeSlice {
    *  its attempt count AND when it started — forward, so the backoff and the
    *  patience clock go on counting instead of restarting per reopen. */
   private async doResurrect(old: Session): Promise<void> {
-    old.resurrectTimer = null;
+    cancelTimer(old, "resume");
     const id = old.info.id;
     if (old.killed || !this.core.limitAuto(old)) { this.releaseResume(id, "gone"); return; }
     // Someone already reopened this id (manual resume) → nothing to do.
@@ -506,7 +507,7 @@ export class ResumeSlice {
       // Carried on the SESSION as well as written into its limit state: the
       // reopened conversation re-marks itself blocked a moment from now, and
       // that path is where the count and the clock were being reset.
-      ns.limitCarried = { attempts, blockedSince: old.info.limit?.blockedSince || Date.now(), at: Date.now() };
+      ns.limitCarried = { attempts, blockedSince: old.info.limit?.blockedSince || this.clock.now(), at: this.clock.now() };
       if (ns.info.limit) {
         ns.info.limit.attempts = attempts;
         ns.info.limit.blockedSince = ns.limitCarried.blockedSince;
@@ -518,7 +519,7 @@ export class ResumeSlice {
     // releasing, so the next session waits for THIS conversation's verdict (it
     // re-blocks, or starts a turn) instead of piling on behind a dead id.
     if (this.gate.isInFlight(id)) {
-      if (this.resumeFirst.delete(id)) this.resumeFirst.set(created.id, Date.now() - 1);
+      if (this.resumeFirst.delete(id)) this.resumeFirst.set(created.id, this.clock.now() - 1);
       this.gate.handOver(id, created.id);
     }
     // Last, after the hand-over: its companions follow it and the exited row

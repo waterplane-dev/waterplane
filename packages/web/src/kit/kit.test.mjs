@@ -126,3 +126,26 @@ test("ConfirmButton renders a `key…` class through Button, anything else raw",
   assert.match(src, /<Button\b[^>]*\{\.\.\.props\}/); // the key branch
   assert.match(src, /<button\b[^>]*\{\.\.\.props\}/); // the raw branch exists too
 });
+
+import { showNewRow } from "./chips.ts";
+import { showReceipt, dismissReceipt, currentReceipt, onReceipt, openLabel, RECEIPT_MS } from "./receiptStore.ts";
+
+test("a filter that hides the new row is cleared, and the line says so", () => {
+  assert.deepEqual(showNewRow("done", "schedule", () => false), { cut: null, line: "Filter cleared to show your new schedule." });
+  assert.deepEqual(showNewRow("open", "backlog item", (c) => c === "open"), { cut: "open", line: null });
+  assert.deepEqual(showNewRow(null, "schedule"), { cut: null, line: null });
+});
+
+test("a receipt carries Open and Undo, is replaced by the next, and goes after its clock", () => {
+  assert.equal(RECEIPT_MS, 6000);
+  const seen = [];
+  const off = onReceipt((r) => seen.push(r?.text ?? null));
+  showReceipt({ text: "Saved a.png to Downloads.", open: { run() {} }, ms: 20 });
+  assert.equal(openLabel(currentReceipt()), "Open");
+  showReceipt({ text: "Closed 7 sessions.", open: { run() {}, label: "Open Archive" }, ms: 20 });
+  assert.equal(openLabel(currentReceipt()), "Open Archive");
+  dismissReceipt();
+  assert.equal(currentReceipt(), null);
+  off();
+  assert.deepEqual(seen, [null, "Saved a.png to Downloads.", "Closed 7 sessions.", null]);
+});

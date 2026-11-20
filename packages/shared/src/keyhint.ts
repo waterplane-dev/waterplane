@@ -36,7 +36,7 @@ export function keyHintBytes(key: string): string | null {
   // back out of except CLI mode and `:q!` — not a one-tap key.
   if (key === "ctrl+g") return null;
   const ctrl = /^ctrl\+([a-z])$/.exec(key);
-  if (ctrl) return String.fromCharCode(ctrl[1].charCodeAt(0) - 96);
+  if (ctrl) return String.fromCharCode(ctrl[1]!.charCodeAt(0) - 96);
   if (/^[a-z0-9]$/.test(key)) return key;
   return null;
 }
@@ -45,12 +45,12 @@ export function keyHintBytes(key: string): string | null {
 export function keyHintLabel(key: string): string {
   if (key === "shift+tab") return "⇧Tab";
   const ctrl = /^ctrl\+([a-z])$/.exec(key);
-  if (ctrl) return `^${ctrl[1].toUpperCase()}`;
+  if (ctrl) return `^${ctrl[1]!.toUpperCase()}`;
   return key;
 }
 
 /** Same hints, same order — the host publishes only on a change. */
 export function sameKeyHints(a: readonly KeyHint[] | undefined, b: readonly KeyHint[] | undefined): boolean {
   const x = a ?? [], y = b ?? [];
-  return x.length === y.length && x.every((h, i) => h.key === y[i].key && h.verb === y[i].verb);
+  return x.length === y.length && x.every((h, i) => h.key === y[i]!.key && h.verb === y[i]!.verb);
 }

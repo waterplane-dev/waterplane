@@ -119,7 +119,9 @@ export function InstallLogPane({ log, live, cut, onCut, naming, draft, onNaming,
           <Empty>
             {filtered
               ? "Nothing under this filter yet."
-              : toldAt === undefined
+              : doc.unreadable || doc.movedAside
+                ? "The desktop's install log could not be read, so an empty list here does not mean nothing was installed."
+                : toldAt === undefined
                 ? "The desktop has not told this phone what it holds. It sends the log the moment the link is up."
                 : "No install has been reported yet. A build that installs itself on any phone paired with this desktop is logged here."}
           </Empty>

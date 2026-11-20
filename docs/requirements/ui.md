@@ -629,3 +629,7 @@ When Ultracode is on, an icon on the model wheel button shows it is active.
 - asked: 2026-11-12
 - shipped: 0ede8e2f5
 
+### R-ui-141 · shipped
+With the on-screen keyboard up, every bar between the terminal and the prompt box is drawn at its full height or not at all (never squeezed or cut), none overlaps another, the prompt box's key row stays wholly above the keyboard, and the bars come back when the keyboard goes down.
+- asked: 2026-11-18
+- shipped: aed7a3436

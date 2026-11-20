@@ -27,7 +27,6 @@ import type { BacklogManager } from "../backlog.js";
 import type { ReviewManager } from "../review.js";
 import type { FanoutManager } from "../fanout.js";
 import type { BuildManager } from "../builds.js";
-import type { CaptureManager } from "../capture.js";
 import type { AssessStore } from "../assess.js";
 import type { NamingManager } from "../naming.js";
 import type { AutoPullManager } from "../autopull.js";
@@ -103,10 +102,6 @@ export interface HostCtx {
   readonly review: ReviewManager;
   readonly fanout: FanoutManager;
   readonly builds: BuildManager;
-  /** The verified capture loop — targets per repo, and a run that IS an intent.
-   *  Its own manager beside `builds` because a capture is a build with a claim
-   *  on the end of it, and the claim is the part nothing else here makes. */
-  readonly capture: CaptureManager;
   /** The assessment proposals, keyed by run (intent) id — `reviews.json`'s
    *  sidecar shape, for its reason: a proposal is not lifecycle. */
   readonly assess: AssessStore;

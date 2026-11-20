@@ -328,7 +328,7 @@ export function cumulative(days: { day: string; total: number }[]): { day: strin
  *  host's local zone (see `TokenDay`), so they must be read back in one. */
 export function dayToMs(day: string): number {
   const [y, m, d] = day.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, d || 1).getTime();
+  return new Date(y!, (m || 1) - 1, d || 1).getTime();
 }
 
 /** The day an hour key belongs to. A prefix, never a re-derivation — that is

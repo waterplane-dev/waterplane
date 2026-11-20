@@ -561,7 +561,7 @@ test("the verb's promise is ONE string, and it says all four things a tap needs"
   // What is NOT wiped.
   assert.match(note, /The failure it had stays on the row/);
   // …and what the other button does instead, because they sit side by side.
-  assert.match(note, /“re-fire” beside it runs it this second instead/);
+  assert.match(note, /“Start again” beside it runs it this second instead/);
 });
 
 test("a row aimed at a session is NOT promised a session of its own", () => {
@@ -576,7 +576,7 @@ test("a row aimed at a session is NOT promised a session of its own", () => {
   // The clauses that are true of both rows survive on both.
   assert.match(aimed, /put it back in the queue/);
   assert.match(aimed, /The failure it had stays on the row/);
-  assert.match(aimed, /“re-fire” beside it runs it this second instead/);
+  assert.match(aimed, /“Start again” beside it runs it this second instead/);
 });
 
 test("a failed row aimed at a session that CLOSED gets a sentence, not a button", () => {
@@ -1262,7 +1262,7 @@ test("re-time a whole clock: the count is the ids the tap ticks", async () => {
   const picks = clockPicks(clockGroups(all), shown.filter(retimeEligible));
   assert.equal(picks.length, 1, "a clock with one movable row on screen is not offered");
   assert.deepEqual(picks[0].ids, ["a", "b"], "on screen and eligible only — never the hidden or the running row");
-  assert.match(clockPickLabel(picks[0]), /^re-time the 2 on “.+”$/);
+  assert.match(clockPickLabel(picks[0]), /^change time of the 2 on “.+”$/);
 });
 
 test("re-time off the clock: the receipt says where the rows went", async () => {

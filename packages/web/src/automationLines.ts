@@ -127,13 +127,13 @@ export function weekBurnLine(o: Pick<AutomationInput, "repoDir" | "weekburn" | "
   const start = w.plan ? `, from ${o.when(w.plan.startAt)}` : "";
   if (o.repoDir) {
     const name = o.repoName(o.repoDir);
-    if (w.running.some((r) => r.repoDir === o.repoDir)) return line(`The week-end burn is posting small one-commit items in ${name} now.`);
+    if (w.running.some((r) => r.repoDir === o.repoDir)) return line(`Usage pace is posting small one-commit items in ${name} now.`);
     if (!picked.includes(o.repoDir)) return null;
-    return line(`The week-end burn picked ${name} this week: small one-commit items post there by themselves${start}.`);
+    return line(`Usage pace picked ${name} this week: small one-commit items post there by themselves${start}.`);
   }
-  if (w.running.length) return line(`The week-end burn is posting small one-commit items in ${w.running.length === 1 ? o.repoName(w.running[0].repoDir) : `${w.running.length} repos`} now.`);
-  if (!picked.length) return line("No repo is picked for this week's week-end burn.");
-  return line(`The week-end burn picked ${picked.length === 1 ? o.repoName(picked[0]) : `${picked.length} repos`} this week${start}.`);
+  if (w.running.length) return line(`Usage pace is posting small one-commit items in ${w.running.length === 1 ? o.repoName(w.running[0].repoDir) : `${w.running.length} repos`} now.`);
+  if (!picked.length) return line("No repo is picked for this week's usage pace.");
+  return line(`Usage pace picked ${picked.length === 1 ? o.repoName(picked[0]) : `${picked.length} repos`} this week${start}.`);
 }
 
 /** Jobs a peer desktop posted here that have not started, one line per repo. */

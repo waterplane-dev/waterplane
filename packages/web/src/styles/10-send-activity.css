@@ -215,6 +215,9 @@
 /* "Runs on its own, no clock": standing facts drawn above the cards. Its lines are
    sentences, so it is not a `.section` (that uppercases); a gap keeps it off the first card. */
 .auto-foot { margin-bottom: var(--sp-10); }
+/* The door sits under its sentence, inside the gutter, so it never touches the edge at 360. */
+.auto-foot .row-wrap { flex-direction: column; align-items: flex-start; gap: var(--sp-6); padding: var(--sp-8) var(--gutter); }
+.auto-foot .row-wrap > .row-sub { white-space: normal; }
 
 /* **The directory of clocks.** A one-off aimed at one place is a BACKLOG row —
    recurrence decides the list — so these are not cards and must not look like
@@ -503,6 +506,13 @@ button.sched-clock:active { background: var(--raise); }
    for both (a wrapping flex line breaks on BASE sizes before it shrinks), and
    the pill may wrap its own words at a large `--ui-font` rather than run off a
    320px screen. Never inside `.section`: its uppercase shouted the zeros. */
+.close-narrow > summary {
+  list-style: none; cursor: pointer; padding: var(--sp-6) var(--gutter); min-height: 44px;
+  display: flex; align-items: center; gap: var(--sp-4);
+}
+.close-narrow > summary::-webkit-details-marker { display: none; }
+.close-narrow-chev { flex: none; color: var(--accent); }
+.close-narrow[open] .close-narrow-chev { transform: rotate(180deg); }
 .close-facets { padding: var(--sp-6) 0 var(--sp-4); }
 .close-facet { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: var(--sp-6); padding: 0 var(--sp-10) 0 var(--gutter); }
 .close-facet-label {

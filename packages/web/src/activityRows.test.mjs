@@ -101,17 +101,6 @@ const buildRun = (over = {}) => intent({
   result: { at: NOW, ok: true, detail: "finished", exitCode: 0, artifacts: [] }, ...over,
 });
 
-/** A verified capture: a shell run with a picture at the end. Like `buildRun`,
- *  it carries no prose at all — the target's snapshotted `name` is the only
- *  string on the row that can tell two of them in one repo apart. */
-const captureRun = (over = {}) => intent({
-  id: "cr1", target: { kind: "shell" }, trigger: { kind: "now" },
-  payload: { kind: "capture", targetId: "t_home", name: "droplet · home", backend: "web" },
-  state: "done", settledAt: NOW,
-  result: { at: NOW, ok: true, detail: "verified:anchor · score 91 · 390x844 dark · console: clean · net: clean", exitCode: 0, artifacts: [] },
-  ...over,
-});
-
 /** A sweep: the parent, plus one child per repo sharing its `groupId`. */
 const sweep = (targets, over = {}) => [
   intent({ id: "f1", groupId: "f1", origin: "fanout:run", target: { kind: "repos", dirs: targets.map((t) => t.cwd) },
@@ -631,14 +620,6 @@ test("a row is titled the way its OWN kind was titled — prose for work, name f
   assert.equal(both.title, "the overlap on the launcher", "a real title beats a filename nobody typed");
   // A row nobody has named reads exactly as it always did.
   assert.match(work.title, /look at this screenshot/);
-
-  // A capture is named for a build's reason, and harder: there is no prose
-  // ANYWHERE on the row to fall back to — the payload is a target id — so if the
-  // name is not used the row is titled `cr1`. The name is snapshotted on the
-  // payload at fire time, because `.myapp/capture.json` is edited between runs
-  // and a row that renames itself weeks later is a lie about what ran.
-  const cap = only(activityRows(input({ intents: [captureRun()] })));
-  assert.equal(cap.title, "droplet · home");
 });
 
 test("the chain picker titles a row the way the Activity sheet does — one rule, not two", () => {
@@ -652,7 +633,6 @@ test("the chain picker titles a row the way the Activity sheet does — one rule
     item({ label: "file · shot.jpg", payload: { kind: "prompt", steps: ["fix the overlap"] } }),
     schedule({ label: "weekly sweep" }),
     buildRun(),
-    captureRun(),
   ];
   for (const i of rows) {
     assert.equal(intentTitle(i), only(activityRows(input({ intents: [i] }))).title);
@@ -662,44 +642,6 @@ test("the chain picker titles a row the way the Activity sheet does — one rule
   const long = item({ payload: { kind: "prompt", steps: ["x".repeat(400)] } });
   assert.equal(intentTitle(long).length, 400);
   assert.ok(only(activityRows(input({ intents: [long] }))).title.length < 400);
-});
-
-test("a capture row carries the host's verdict whole, and is never re-worded here", () => {
-  // The verdict grammar is the HOST's, written by one function there. The phone
-  // prints it; it does not split it on its separator and it does not re-derive
-  // any part of it, or there are two wordings of one rule.
-  const verdict = "settled:stable · score n/a · 390x844 dark · console: clean · net: n/a";
-  const r = only(activityRows(input({
-    intents: [captureRun({ result: { at: NOW, ok: true, detail: verdict, exitCode: 0, artifacts: [] } })],
-  })));
-  assert.equal(r.verdict, verdict);
-});
-
-test("a running capture is not described as running in a session — it has none", () => {
-  // A capture's target is `shell`: no agent, no session. The generic sentence
-  // ("running in the session now") sends a reader looking for one that was never
-  // opened, which on the screen you check when something is stuck is a dead end.
-  const r = only(activityRows(input({
-    intents: [captureRun({ state: "running", settledAt: undefined, result: undefined })],
-  })));
-  assert.doesNotMatch(r.verdict, /session/);
-});
-
-test("a capture offers a build's three verbs, not a work item's six", () => {
-  // Filed under `build` on both axes because that is what it IS — a shell run in
-  // a repo that finishes with files. The verbs that follow from that are
-  // download / stop / run again; `check whether it is already done` and `aim it
-  // at another session` are questions about a PROMPT and mean nothing here.
-  const r = only(activityRows(input({ intents: [captureRun()] })));
-  assert.equal(r.source, "build");
-  assert.equal(r.kind, "build");
-  // `dismiss` rides along on every row (`activityRows()` stamps it centrally,
-  // not per builder) — it is the same "not now, still here" the bulk button
-  // already offers regardless of kind, so it is not one of the kind-specific
-  // three this test is actually about.
-  assert.deepEqual(r.actions.map((a) => a.id).sort(), ["cancel", "dismiss", "download", "runNow"]);
-  // …and the download says why it cannot run rather than being a grey button.
-  assert.match(r.actions.find((a) => a.id === "download").disabledReason, /no file/);
 });
 
 test("a sweep is ONE row — its per-repo children and its follow-ups are folded into it", () => {
