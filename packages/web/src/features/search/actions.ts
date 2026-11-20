@@ -8,8 +8,8 @@ import { search } from "./store";
 
 /** Open the search sheet scoped to a session (null = all sessions). The
  *  toolbar's `find` (terminal view) and the launcher menu's search call this. */
-export function openSearch(sessionId: string | null): void {
-  search.set({ scope: sessionId, results: null, loading: false, archive: null });
+export function openSearch(sessionId: string | null, query?: string): void {
+  search.set({ scope: sessionId, query: query?.trim() || undefined, results: null, loading: false, archive: null });
   core().nav.open("search");
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.13 - 2026-11-20
+
+### Fixed
+
+- **A setup check that no patch can close offers "ask the agent" again.** The button uses the row's own wording, such as "update the list in this repo", instead of a how-to that repeated the row's sentence, so the card no longer says it twice.
+
 ## 0.9.12 - 2026-11-20
 
 ### Fixed

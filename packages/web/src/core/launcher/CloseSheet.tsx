@@ -129,7 +129,7 @@ function CloseRow({ s, repoLabel, ticked, onToggleTick, statusOf, now, timedAt, 
         {drafted && <RowSub className="warn"><CircleDot size={11} /> words typed here, not sent{!ticked ? " — kept open" : " — closing loses them"}</RowSub>}
         {waiting && <RowSub className="warn"><CircleDot size={11} /> waiting on a box — closing answers nothing, it just ends the process</RowSub>}
       </Row>
-      <label className="row-act on" style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+      <label className="row-act on close-tick">
         <input type="checkbox" checked={ticked} onChange={onToggleTick}
           aria-label={`Close ${s.title || s.id}`} />
         <span>{ticked ? "Close" : "Keep"}</span>

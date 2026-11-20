@@ -509,7 +509,7 @@ const BACKLOG_FACADES = {
  *  cap. None may exceed 900 (`MAX_FEATURE_FILE_LINES`); aim ≤ 500. */
 const BACKLOG_SPLIT_FILES = {
   "backlog/BacklogBody.tsx": 60,
-  "backlog/BacklogSortBar.tsx": 45, // newest first / run order (`rowSort.ts`)
+  "backlog/BacklogSortBar.tsx": 45, // newest first / run order / most value / cheapest (`rowSort.ts`)
   "backlog/BacklogFilterBar.tsx": 160, // +one kit FilterChip row per axis, and the archived chip
   "backlog/BacklogList.tsx": 75,
   "backlog/BacklogRow.tsx": 205,
@@ -521,6 +521,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlog/RowChips.tsx": 300, // +a set cap is a tap to edit (R-automation-044)
   "backlog/RowEditor.tsx": 95,
   "backlog/WeekBurnLink.tsx": 45, // the week-end burn from the repo bar: its sentence, its rows as a cut, its sheet
+  "backlog/WorthChips.tsx": 50, // the value and cost filter chips
   "backlog/RowBudgetEdit.tsx": 40,
   "backlog/RowFlagChoice.tsx": 25,
   "backlog/RowNotes.tsx": 310, // +the flag-when-done tick under the close choice, +the budget… chip and its editor
@@ -547,6 +548,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlogFilter/rowSearch.ts": 20,
   "backlogFilter/sortDefault.ts": 15,
   "backlogFilter/titleWords.ts": 175,
+  "backlogFilter/worthBuckets.ts": 45, // value + cost buckets
   "backlogFilter/retimeMany.ts": 110, // +clockPicks: one clock's movable rows as one tap
   "backlogFilter/rowWords.ts": 120, // +holderOffer (the serial row's way to the session it waits behind)
   "backlogFilter/runAgain.ts": 355,

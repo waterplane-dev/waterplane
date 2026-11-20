@@ -269,6 +269,7 @@ export const HANDLERS = {
       const patch = {
         text: msg.text, label: msg.label, repoDir: msg.repoDir, targetSessionId: msg.targetSessionId,
         autoFire: msg.autoFire, resume: msg.resume, headline: msg.headline, category: msg.category,
+        estimate: msg.estimate === "" ? undefined : msg.estimate, value: msg.value === "" ? undefined : msg.value,
       };
       for (const [k, v] of Object.entries(patch)) if (v !== undefined) (it as unknown as Record<string, unknown>)[k] = v;
       if (msg.closeWhenDone === null) delete it.closeWhenDone;

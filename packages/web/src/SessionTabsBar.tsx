@@ -10,7 +10,7 @@ import { FilterBar, SearchBox } from "./kit";
 import { useHasKeyboard } from "./ShortcutCard";
 import { registerShortcut } from "./shortcuts";
 import {
-  askTabAttach, askTabClose, askTabFile, filterStrip, isTabsListPress, fileTabKey, fileTabLabel, setFilePinned, shownRepo, tabCloseAsk, tabStripHeight, useSessionTabs,
+  askTabAttach, askTabClose, askTabFile, filterStrip, tabsListInBar, isTabsListPress, fileTabKey, fileTabLabel, setFilePinned, shownRepo, tabCloseAsk, tabStripHeight, useSessionTabs,
   type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
@@ -19,6 +19,7 @@ import { ExtBoundary } from "./core/ExtBoundary";
 import { tabMarks } from "./core/extensionPoints";
 import type { TabMarkDef } from "./sdk/types";
 import { showToast } from "./toast";
+import { createStore, useStore } from "./sdk/store";
 
 /**
  * **The session-tab strip** — the third always-on bar, under the connection
@@ -134,11 +135,15 @@ export function SessionTabsBar() {
     return () => { document.documentElement.style.removeProperty("--ui-tabs-h"); };
   }, [h]);
 
-  const [listOpen, setListOpen] = useState(false);
+  // A module store, not local state: the list button may sit in the machine
+  // strip (`LocalRtBar`, `TabsListButton`) while this strip is switched off.
+  const listOpen = useStore(listOpenStore);
+  const setListOpen = (v: boolean | ((o: boolean) => boolean)) => listOpenStore.set(v);
   useBackStep(listOpen, () => setListOpen(false));
   // How the list was opened (a keyboard press focuses its filter even where no
   // keyboard was known yet).
-  const [viaKey, setViaKey] = useState(false);
+  const viaKey = useStore(viaKeyStore);
+  const setViaKey = (v: boolean) => viaKeyStore.set(v);
   const anyRef = useRef(any);
   anyRef.current = any;
   // The last tab closed under the open list: shut it, or its Back step stays.
@@ -174,10 +179,38 @@ export function SessionTabsBar() {
 
   return (
     <>
-      {show && <Strip listOpen={listOpen} onList={() => { setViaKey(false); setListOpen((o) => !o); }} />}
+      {show && <Strip listOpen={listOpen} onList={toggleTabsList} />}
       {listOpen && <ListLayer viaKey={viaKey} onClose={() => setListOpen(false)} />}
     </>
   );
+}
+
+const listOpenStore = createStore(false);
+const viaKeyStore = createStore(false);
+function toggleTabsList(): void { viaKeyStore.set(false); listOpenStore.set((o) => !o); }
+
+/**
+ * The "all open tabs" button, drawn by the machine strip (`LocalRtBar`) while
+ * the tab strip is switched off — the default at phone width. The SAME list,
+ * the same count as the strip's own button; absent with nothing open.
+ */
+export function TabsListButton() {
+  const enabled = useSessionTabs((s) => s.enabled);
+  const n = useSessionTabs((s) => s.all.length);
+  const open = useStore(listOpenStore);
+  if (!tabsListInBar(enabled, n > 0)) return null;
+  return (
+    <button className="lrt-tabs" aria-label="list all open tabs" title="all open tabs as a list"
+      aria-expanded={open} onClick={(e) => { e.stopPropagation(); toggleTabsList(); }}>
+      <Layers size={11} aria-hidden="true" />
+      <span className="lrt-tabs-n">{n}</span>
+    </button>
+  );
+}
+
+/** True while the machine strip must stay up to hold the list button. */
+export function useTabsButtonInBar(): boolean {
+  return useSessionTabs((s) => tabsListInBar(s.enabled, s.all.length > 0));
 }
 
 /** What already owns the keyboard: an in-app dialog (`primaryKey.ts`'s set). */

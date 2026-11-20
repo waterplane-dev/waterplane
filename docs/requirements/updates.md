@@ -75,3 +75,7 @@ The Android shell and the web bundle each show their own build identifier inside
 - asked: 2026-10-27, 2026-10-27
 - shipped: d902a098
 
+### R-updates-016 · shipped
+On Windows, where the checkout sits on the Windows drive and the host runs in WSL, updating a checkout ends with the new version running and the new web UI, from wherever it is started: the update button, the command it shows, and the install guide's steps typed into a session. Packages installed from the WSL shell no longer leave `npm run restart` refusing; it reinstalls them on Windows and carries on.
+- asked: 2026-11-20 — "the update instructions for wp on the zenbook dont lead to an updated web ui"
+- shipped: 518564401

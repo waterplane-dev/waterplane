@@ -223,7 +223,7 @@ test("a desktop row with a fix becomes a machine finding whose remedy is that fi
 test("every fix id a desktop row names reaches the phone as a fix remedy", async () => {
   const { hostChecks } = await import("../dist/plugins/setupcontrib.js");
   const wt = fixtureRepo();
-  const rows = hostChecks(wt).filter((c) => c.fix);
+  const rows = (await hostChecks(wt)).filter((c) => c.fix);
   const doc = await runSetupCheck(deps(wt, { hostChecks: () => rows.map((c) => ({ ...c, status: "warn" })) }), wt);
   for (const c of rows) assert.ok(doc.findings.some((f) => f.remedy.kind === "fix" && f.remedy.fixId === c.fix), `${c.id} keeps its fix`);
 });

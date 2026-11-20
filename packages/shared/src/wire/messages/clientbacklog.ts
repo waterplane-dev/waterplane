@@ -1,6 +1,7 @@
 // Client → host: the backlog. A member list of `ClientMessage` (`../messages.ts`).
 
 import type { ItemCategory } from "../../naming.js";
+import type { ItemValue } from "../../estimate.js";
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
 import type { LaunchOpts } from "../session.js";
@@ -38,7 +39,7 @@ export type ClientBacklogMsg =
    *  `cleanLaunchOpts` on the way in; meaningless beside `targetSessionId`.
    *  Additive: an older desktop drops it and opens the session on its own
    *  new-session defaults, which is what absent means. */
-  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; hold?: boolean; ackId?: string } & SendStamp)
+  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; hold?: boolean; estimate?: string; value?: ItemValue; ackId?: string } & SendStamp)
   | { t: "backlog.remove"; id: string }
   | { t: "backlog.fire"; id: string }
   | { t: "backlog.done"; id: string }
@@ -80,8 +81,12 @@ export type ClientBacklogMsg =
    * a later pass may name it again. The client never sends an author: a claim
    * about who wrote a name is the host's to make, exactly as `handOrdered` is.
    * Additive, v1.
+   *
+   * `estimate` and `value` (`shared/estimate.ts`): a string sets, `""` clears,
+   * absent leaves it alone. Any state — what a row costs or is worth says
+   * nothing about whether it runs. Additive, v1.
    */
-  | { t: "backlog.update"; id: string; text?: string; label?: string; repoDir?: string; targetSessionId?: string; autoFire?: boolean; resume?: boolean; closeWhenDone?: boolean | null; flagWhenDone?: boolean | null; budget?: SessionBudget | null; headline?: string; category?: ItemCategory | "" }
+  | { t: "backlog.update"; id: string; text?: string; label?: string; repoDir?: string; targetSessionId?: string; autoFire?: boolean; resume?: boolean; closeWhenDone?: boolean | null; flagWhenDone?: boolean | null; budget?: SessionBudget | null; headline?: string; category?: ItemCategory | ""; estimate?: string; value?: ItemValue | "" }
   /**
    * **Name these items** — the optional half of titles and kinds.
    *

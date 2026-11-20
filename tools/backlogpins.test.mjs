@@ -41,18 +41,18 @@ function tally(re) {
 }
 
 // ── P1: the barrel exports exactly what the one file did ───────────────────
-test("P1: backlogFilter.ts exports the same 110 runtime names and 10 types", async () => {
+test("P1: backlogFilter.ts exports the same 116 runtime names and 12 types", async () => {
   const m = await import(join(SRC, "backlogFilter.ts"));
   assert.deepEqual(Object.keys(m).sort(), [
     "AGE_LABEL", "ASSESS_NONE_IN_CUT", "BACKLOG_AGES", "BACKLOG_STATUSES", "BL_OFFLINE", "CATEGORY_BUCKETS",
-    "CATEGORY_CHIP_LABEL", "CLOCK_MOVE_NOTE", "CLOSED_TARGET_OPTION", "DROP_CLOCK_TOAST", "FOCUS_AUTO_ON_LABEL",
+    "CATEGORY_CHIP_LABEL", "CLOCK_MOVE_NOTE", "CLOSED_TARGET_OPTION", "COST_BUCKETS", "COST_CHIP_LABEL", "DROP_CLOCK_TOAST", "FOCUS_AUTO_ON_LABEL",
     "FOCUS_AUTO_ON_TITLE", "HEADLINE_BY_WORDS", "HELD_OFFLINE", "HOLD_FOR_HOST_TEXT", "HOLD_FOR_HOST_TITLE",
     "NAME_COST_NOTE", "NAME_RUNNING_NOTE", "NEW_SESSION_OPTION", "NO_BACKLOG_FILTER", "PAST_BUDGET_CHIP",
     "PAST_BUDGET_TITLE", "PAST_BUDGET_UNDONE_TOAST", "RETIME_NONE_PICKED",
-    "RETIME_PICK_LABEL", "RUN_AGAIN_LABEL", "RUN_AGAIN_TOAST", "SORT_CLOCK_NOTE", "SORT_LABEL", "SORT_NEWEST_NOTE", "ageBucket", "archiveDoneLabel", "archiveDoneNote",
+    "RETIME_PICK_LABEL", "RUN_AGAIN_LABEL", "RUN_AGAIN_TOAST", "SORT_CLOCK_NOTE", "SORT_LABEL", "SORT_NEWEST_NOTE", "VALUE_BUCKETS", "VALUE_CHIP_LABEL", "ageBucket", "archiveDoneLabel", "archiveDoneNote",
     "archiveDoneToast", "assessScopeLabel", "assessScopeNote", "assessableInCut", "backlogBadgeCut", "backlogCountWords",
     "backlogCounts", "backlogFilterSentence", "badgeCutLabel", "badgeCutWords", "categoryBucket", "categoryChipTitle", "clockGroupWords",
-    "clockGroups", "clockPickLabel", "clockPicks", "clockSeat", "clockSeatWords", "clockWords", "drawnChips", "dropClockNote", "dropClockTitle",
+    "clockGroups", "clockPickLabel", "clockPicks", "clockSeat", "clockSeatWords", "clockWords", "costBucket", "drawnChips", "dropClockNote", "dropClockTitle",
     "dropClocksLabel", "dropClocksNote", "dropClocksToast", "editTargetOptions", "effectiveSort", "fmtSpan", "focusRunWords",
     "fromScheduleWords", "goneOnClockLabel", "hasBacklogFilter", "headlineEditHint", "hiddenByArchive",
     "holdChipWords", "holderOffer", "isFailedRow", "itemClockKey", "matchesBacklogFilter", "nameLabel", "nameNote", "nameableInCut",
@@ -60,14 +60,14 @@ test("P1: backlogFilter.ts exports the same 110 runtime names and 10 types", asy
     "requeuedWords", "retimeEligible", "retimeNote", "retimeOffClockNote", "retimeQueuedToast", "retimeToast", "rowStatusKey", "rowStatusWord",
     "runAgainAimedCount", "runAgainClosedNote", "runAgainEligible", "runAgainIds", "runAgainLabel",
     "runAgainNote", "runAgainRowNote", "runAgainState", "runAgainToast", "runSeats", "scheduleItemsLabel",
-    "scheduleParentLabel", "scheduleRuleLabel", "sortRows", "statusBucket", "withinAge",
+    "scheduleParentLabel", "scheduleRuleLabel", "sortRows", "statusBucket", "valueBucket", "withinAge",
   ]);
   // Types are erased, so read them as text: each declared exported exactly once
   // across the barrel and its folder.
   const dir = join(SRC, "backlogFilter");
   const texts = [readFileSync(join(SRC, "backlogFilter.ts"), "utf8"),
     ...(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".ts")).map((f) => readFileSync(join(dir, f), "utf8")) : [])].join("\n");
-  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption", "BadgeCut", "BacklogSort"]) {
+  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption", "BadgeCut", "BacklogSort", "ValueBucket", "CostBucket"]) {
     assert.equal([...texts.matchAll(new RegExp(`^export (?:type|interface) ${t}\\b`, "gm"))].length, 1, t);
   }
 });
@@ -110,11 +110,11 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
     "backlog.archive.done": 1, "backlog.assess": 1, "backlog.auto.focus": 1, "backlog.clock.down": 1,
     "backlog.clock.up": 1, "backlog.done": 1, "backlog.dropclock": 1, "backlog.dropclock.all": 1,
     "backlog.editwhen": 1, "backlog.filter.age": 1, "backlog.filter.category": 1, "backlog.filter.clear": 1,
-    "backlog.filter.clock": 1, "backlog.filter.status": 1, "backlog.fire": 1, "backlog.fromschedule": 1, "backlog.fromweekburn": 1,
+    "backlog.filter.clock": 1, "backlog.filter.cost": 1, "backlog.filter.status": 1, "backlog.filter.value": 1, "backlog.fire": 1, "backlog.fromschedule": 1, "backlog.fromweekburn": 1,
     "backlog.holdforbudget": 1, "backlog.name": 1, "backlog.openholder": 1, "backlog.proposalwhen": 1,
     "backlog.queuehere": 1, "backlog.refire": 1, "backlog.remove": 1, "backlog.retime.clock": 1, "backlog.retime.pick": 1,
     "backlog.runagain": 1, "backlog.runagain.all": 1, "backlog.send": 1, "backlog.slotClose": 1, "backlog.slotask.on": 1, "backlog.slotcheck": 1,
-    "backlog.sort.newest": 1, "backlog.sort.run": 1, "backlog.unqueuehere": 1,
+    "backlog.sort.cost": 1, "backlog.sort.newest": 1, "backlog.sort.run": 1, "backlog.sort.value": 1, "backlog.unqueuehere": 1,
     "backlog.weekburn": 1, "backlog.weekburnrows": 1,
   });
   assert.deepEqual(tally(/data-hint="(backlog\.[^"]+)"/g), {

@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const { checkoutUpdate, checkoutBehind, npmPrefix, npmUpdate } = await import("../dist/updates/selfother.js");
+const { checkoutUpdate, checkoutBehind, checkoutCommand, npmPrefix, npmUpdate, windowsBuilt } = await import("../dist/updates/selfother.js");
 
 const tmps = [];
 after(() => { for (const d of tmps) rmSync(d, { recursive: true, force: true }); });
@@ -46,6 +46,20 @@ test("checkout: up to date, behind, the fast-forward with npm ci + build, and be
   assert.match(res.message, /^pulled 2 commits from origin\/main \(\w+ → \w+\) and rebuilt$/);
   assert.deepEqual(log, ["ci", "run build"]);
   assert.equal(sh(r.co, "rev-parse", "HEAD"), sh(r.pub, "rev-parse", "HEAD"));
+});
+
+test("R-updates-016 checkout on the Windows drive, run from WSL: npm ci and the build go through cmd.exe, and the hand command says so", async () => {
+  assert.equal(windowsBuilt("/mnt/c/dev/app", true), true);
+  assert.equal(windowsBuilt("/mnt/c/dev/app", false), false, "not WSL: a Linux box may mount anything at /mnt/c");
+  assert.equal(windowsBuilt("/home/me/app", true), false, "a clone inside the distro installs where it runs");
+  assert.equal(windowsBuilt("/mnt/wsl/app", true), false);
+  const r = repos(), log = [];
+  r.commit(r.pub, "b.txt", "2"); r.push();
+  const res = await checkoutUpdate(r.co, git, async (cmd, args, cwd) => { log.push([cmd, ...args, cwd].join(" ")); return ""; }, true);
+  assert.equal(res.ok, true);
+  assert.deepEqual(log, [`cmd.exe /d /c npm ci ${r.co}`, `cmd.exe /d /c npm run build ${r.co}`], "an npm ci inside WSL would swap in Linux binaries the Windows build cannot use");
+  assert.equal(checkoutCommand(true), 'git pull --ff-only && cmd.exe /d /c "npm ci && npm run restart"');
+  assert.equal(checkoutCommand(false), "git pull --ff-only && npm ci && npm run restart");
 });
 
 test("checkout refusals change nothing: uncommitted changes, own commits, a detached HEAD, no upstream", async () => {

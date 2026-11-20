@@ -14,6 +14,7 @@ export function useBacklogSort() {
   const setSort = (next: BacklogSort) => {
     setSortState(next);
     if (next === "run") lsSet(SORT_KEY, "1");
+    else if (next === "value" || next === "cost") lsSet(SORT_KEY, next);
     else lsDel(SORT_KEY);
   };
   return { sort, setSort };

@@ -102,7 +102,10 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "packages/extensions/vault/shared/downscope/plan.mts",
   // The release train (private, kept out of the public snapshot): a shell script and a script
   // run before anything is built, naming the public repo, the sibling clones and the state file.
-  (p) => p === "scripts/release/train.sh" || p === "scripts/release/train-bump.mjs",
+  // publish-demo.sh is its demo step, a shell script naming the demo repo and site path.
+  (p) => p === "scripts/release/train.sh" || p === "scripts/release/train-bump.mjs" || p === "scripts/release/publish-demo.sh",
+  // A journey step that seeds a localStorage key inside page.evaluate (runs in the browser, cannot import BRAND).
+  (p) => p === "scripts/ui/journey-phone-tabs-button.mjs",
   (p) => p.startsWith("packages/host/templates/"), // copied verbatim into a person's new repo; cannot import BRAND        // diagrams: prose drawn as a picture, cannot import BRAND
   // Test fixtures: a test pins a name as a person would type it or find it on
   // disk; one that derived its expectation from BRAND could not catch BRAND

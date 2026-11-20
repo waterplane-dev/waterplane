@@ -10,7 +10,7 @@
 import { Fragment } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, GripVertical, Sparkles } from "lucide-react";
 import type { BacklogItem } from "@waterplane/shared";
-import { isAgentPosted, imagePaths, itemHeadline } from "@waterplane/shared";
+import { estimatePrefix, isAgentPosted, imagePaths, itemHeadline } from "@waterplane/shared";
 import { clockGroupWords, itemClockKey, realLabel, retimeEligible, rowStatusKey } from "../backlogFilter";
 import { PickBox, toggled } from "../RetimeBar";
 import type { BacklogModel } from "./backlogTypes";
@@ -99,10 +99,15 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
                 be able to tell at a glance is whose words are at the top
                 of their own list. */}
             {(() => {
+              // **Cost and worth come FIRST** (`estimatePrefix`): a list is
+              // triaged by them. Their own span, so they never read as part
+              // of the title somebody typed.
+              const est = estimatePrefix(it);
+              const pre = est ? <span className="bl-est">{est}</span> : null;
               const typed = realLabel(it);
-              if (typed) return <span className="bl-label">{typed}</span>;
+              if (typed) return <span className="bl-label">{pre}{pre ? " · " : ""}{typed}</span>;
               const machine = itemHeadline(it);
-              if (!machine) return null;
+              if (!machine) return pre ? <span className="bl-label">{pre}</span> : null;
               // **The mark is the AUTHOR's, not the field's.** A row can
               // carry a `headline` somebody typed into the edit form — the
               // host stamps it `hand` and no pass will touch it again — and
@@ -112,7 +117,7 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
               const derived = it.headlineBy !== "hand";
               return (
                 <span className={`bl-label${derived ? " bl-headline" : ""}`}>
-                  {derived ? <Sparkles size={11} /> : null}{derived ? " " : ""}{machine}
+                  {pre}{pre ? " · " : ""}{derived ? <Sparkles size={11} /> : null}{derived ? " " : ""}{machine}
                 </span>
               );
             })()}

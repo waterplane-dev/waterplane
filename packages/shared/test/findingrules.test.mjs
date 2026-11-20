@@ -166,3 +166,10 @@ test("a rule that reads only files carries no backends line; one that reads conv
   const m = machineRules({ now, backends, skills: [{ id: "s", level: "user", usesEverywhere: { d30: 0 }, listingChars: 100 }] });
   assert.deepEqual(m.findings.find((f) => f.id === "machine.skills-unused").backends, backends);
 });
+
+test("repo: a checklist row no patch closes goes to the repo's agent, never a howto repeating its own sentence", () => {
+  const r = repoRules({ now, repo: "r", checks: [chk("requirements", "warn"), chk("protect-main", "warn", { fix: "protect-main" })], instructions: { overlaps: [], warnChars: 16000 } });
+  const reqs = r.findings.find((f) => f.id.endsWith(".requirements"));
+  assert.deepEqual(reqs.remedy, { kind: "agent", checkId: "requirements", label: "requirements", detail: "requirements detail" });
+  assert.equal(r.findings.find((f) => f.id.endsWith(".protect-main")).remedy.kind, "fix");
+});

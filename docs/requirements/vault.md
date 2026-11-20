@@ -810,10 +810,11 @@ Describe for vault secrets is one tap that does the whole list, not a choice of 
 - asked: 2026-11-07
 - shipped: 516ca2e7
 
-### R-vault-152 · shipped
+### R-vault-152 · superseded
 One fingerprint covers the whole release train: a single grant card covers every secret the train asks for and ends when the train exits.
 - asked: 2026-11-08
 - shipped: 68a590ac
+- superseded-by: R-vault-169
 
 ### R-vault-153 · shipped
 Azure is available as a downscope provider: an Azure login's card offers a narrower key, stored as an azure-app secret.
@@ -890,3 +891,7 @@ Scheduled Garmin jobs run without a daily phone approval: the broad Garmin crede
 ### R-vault-168 · requested
 An ask outlived by a newer one — a program's release card whose program stopped waiting, with a newer ask or an approval since for the same secrets, command and folder — is marked on the waiting list, moves to its foot, and all of them are dismissed together by one tap (one confirm; each denied and closed).
 - asked: 2026-11-19 (screenshot: six FRED_API_KEY cards from one program after one was approved)
+
+### R-vault-169 · requested
+One fingerprint covers the whole release train, and a fix-and-rerun asks no new card: the grant card offers "If the run stops: keep it for retries for [180] min", a number the person may change (0 ends it with the run) before the fingerprint. A train that finishes ends the grant; one that fails keeps it only for the window the person approved (never past the grant's own end), and the rerun reuses it while it still covers exactly the train's secrets.
+- asked: 2026-11-20

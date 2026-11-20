@@ -138,7 +138,7 @@ export function repoRules(f: FindingFacts): FindingsResult {
       weight: isSetupFinding(c) || c.ignored || c.accepted ? "finding" : "consider",
       what: `${c.label}: ${c.detail}`,
       evidence: kind === "watch" ? { screen: "readings", repoId, region: "watch", rowId: c.id } : null,
-      remedy: c.fix ? { kind: "fix", fixId: c.fix } : { kind: "howto", text: c.detail },
+      remedy: c.fix ? { kind: "fix", fixId: c.fix } : { kind: "agent", checkId: c.id, label: c.label, detail: c.detail },
       waveVia: kind === "watch" ? "accept" : c.advisory ? "ignore" : "none", ...(w ? { waiveHint: w } : {}),
     });
   }

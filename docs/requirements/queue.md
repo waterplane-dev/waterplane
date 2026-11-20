@@ -121,3 +121,8 @@ Prompts written offline are never lost: send-now while offline, including on a '
 - asked: 2026-11-12, 2026-11-14, 2026-11-15
 - shipped: 0a0c641f3, a2e0fbf07
 
+### R-queue-026 · shipped
+Every backlog row may carry an estimate (agent cost and time, e.g. "~$3 · 20 min") and a value (high, medium or low), shown in front of its title; agents that file rows fill both, and the backlog sorts by value or cheapest and filters by value and cost bucket.
+- asked: 2026-11-20
+- shipped: 518564401
+

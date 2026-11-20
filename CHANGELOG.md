@@ -5,6 +5,31 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.32
+
+### New
+
+- **Backlog rows carry an estimate and a value.** Each row can show a cost and time guess (for example "~$3 · 20 min") and a high, medium or low value before its title. Agents are told to fill both.
+- **Backlog sorts and filters by value or cost.** Sort by value or cheapest, and filter by value and cost bucket. Chips show the counts for each.
+- **A new session waiting for the desktop shows its prompts on the page.** The prompt written for it and anything chained behind it appear as the same rows as Activity, with rewrite and discard.
+- **The tab strip is hidden by default on a phone.** The open-tabs button moves to the desktop strip while the tab strip is off, and returns to the strip when you switch it back on.
+- **The launcher head row is tidier.** Fan out, Waiting work and Close sessions are icon keys, and Find repos moves into the Find group in the menu. The Search key folds into the quick filter line, and its transcript search opens already searching the words you typed.
+- **A lone leftover worktree keeps its explainer and remove button inside its card.**
+- **The static demo at waterplane.dev/demo/ is rebuilt with each release.**
+
+### Security
+
+- **An unlocked kids' phone no longer receives plugin pushes or offered files.** The security notes now say plainly that an unlock is not a sandbox: an unlocked device can start a session, which keeps running after the phone relocks.
+
+### Fixed
+
+- **The Android app's background link gives up a dial that never answers** after 30 seconds and tries again, instead of staying "connecting" for hours. This needs a new APK.
+- **The Close sessions per-row Close/Keep toggle no longer spills past the screen edge.**
+- **The confirm dialog now appears above the open-tabs list.**
+- **A setup check no patch can close offers "ask the agent" again,** with the row's own wording, instead of repeating its sentence twice.
+- **Updating a Windows checkout from a session ends with the new version running.** The update button installs and builds through Windows, and the command it shows is the one that works.
+- **The desktop host stalls less.** Seven checks that blocked every session while they ran (opt-ins, secrets listing, skill writes, the Tailscale check, dictation lookup, backend list, session sweep) no longer do.
+
 ## 0.1.31
 
 ### New

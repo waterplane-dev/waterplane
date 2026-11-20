@@ -28,6 +28,6 @@ test("the plist runs the script every minute and at load", () => {
   assert.match(p, /<key>StartInterval<\/key><integer>60<\/integer>/);
 });
 
-test("no row off macOS", () => {
-  assert.equal(tailscaleWatchdogRow("linux"), null);
+test("no row off macOS", async () => {
+  assert.equal(await tailscaleWatchdogRow("linux"), null);
 });

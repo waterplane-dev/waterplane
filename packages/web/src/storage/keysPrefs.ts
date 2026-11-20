@@ -184,6 +184,10 @@ export const LS_PREFS = {
    * can only half configure from the device you are looking at.
    */
   sessionTabs: lsKey("sessionTabs"),
+  /** The same switch at PHONE width (`layout.ts`), default OFF: on a phone the
+   *  list button sits in the machine strip instead (owner, 2026-11-20). Its own
+   *  key so a phone that once stored "on" still gets the new default. */
+  sessionTabsPhone: lsKey("sessionTabs.phone"),
   sessionTabsCount: lsKey("sessionTabs.count"),
   sessionTabsOrder: lsKey("sessionTabs.order"), sessionTabsLimit: lsKey("sessionTabs.limit"),
   /**

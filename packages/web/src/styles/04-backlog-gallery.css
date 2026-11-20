@@ -286,6 +286,8 @@
    see at a glance: whose words are at the top of their own list. Muted like its
    twin, because it is still the quiet line above the words that matter. */
 .bl-headline { display: inline-flex; align-items: center; gap: var(--sp-4); text-transform: none; letter-spacing: 0; }
+/* Cost and worth in front of a title (`estimatePrefix`): never uppercased — "~$3 · 20 min" is a figure, not a heading. */
+.bl-est { text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--fg, inherit); }
 /* What a spender costs, under the button that spends it. `bl-pass-cost`'s
    weight, because it is the same fact about the same kind of call. */
 .bl-cost { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-4); }

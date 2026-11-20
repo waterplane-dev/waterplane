@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import {
   TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
-  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, filterStrip, isTabsListPress, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabFacts, tabLabel,
+  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, filterStrip, isTabsListPress, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabFacts, tabLabel, tabsDefaultOn, tabsListInBar, tabsSwitchKey,
 } from "./sessionTabs.ts";
 
 const tab = (id, createdAt, over = {}) => ({
@@ -189,6 +189,18 @@ test("the strip is 34px on a phone with tabs, and 0 in every other case (O3: non
   assert.equal(tabStripHeight(true, true), TAB_STRIP_H, "drawn on a phone and on a wide window alike");
   assert.equal(tabStripHeight(false, true), 0);
   assert.equal(tabStripHeight(true, false), 0);
+});
+
+test("the strip is off by default at phone width, on at wide, and each width keeps its own switch", () => {
+  assert.equal(tabsDefaultOn("phone"), false);
+  assert.equal(tabsDefaultOn("wide"), true);
+  assert.notEqual(tabsSwitchKey("phone"), tabsSwitchKey("wide"), "a phone that once stored 'on' still gets the new default");
+});
+
+test("the open-tabs button lives in exactly one place: the strip while it is on, the desktop strip while it is off", () => {
+  assert.equal(tabsListInBar(false, true), true);
+  assert.equal(tabsListInBar(true, true), false, "strip on: the button stays on the strip, where it was");
+  assert.equal(tabsListInBar(false, false), false, "nothing open: no button anywhere");
 });
 
 test("a pinned file is keyed by repo AND path, appended on pin, removed on unpin", () => {

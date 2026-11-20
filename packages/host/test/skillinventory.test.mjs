@@ -104,7 +104,7 @@ test("the plugin list is dropped after a write, so inherit shows the default at 
   const rev = gdoc.layers.find((l) => l.level === "global").rev;
   // Flip the CLI's own default, then inherit: without a cache drop the card would still read off.
   writeFileSync(stub, `#!/bin/sh\necho '${JSON.stringify([{ id: "sales@synced", scope: "synced", enabled: true, installPath: plug }])}'\n`);
-  const r = applySkillWrite({ level: "global", revs: { global: rev }, changes: [{ kind: "plugin", id: "sales@synced", to: "inherit" }], allowed: ["global"], doc: gdoc });
+  const r = await applySkillWrite({ level: "global", revs: { global: rev }, changes: [{ kind: "plugin", id: "sales@synced", to: "inherit" }], allowed: ["global"], doc: gdoc });
   assert.equal(r.ok, true);
   const p = (await buildInventory()).doc.rows.find((x) => x.kind === "plugin");
   assert.equal(p.enabled, true);

@@ -8,6 +8,7 @@
 import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
 import { statusBucket } from "./calledOff.ts";
 import { AGE_LABEL, categoryBucket, type BacklogAge, type CategoryBucket, withinAge } from "./rowBuckets.ts";
+import { COST_CHIP_LABEL, VALUE_CHIP_LABEL, costBucket, valueBucket, type CostBucket, type ValueBucket } from "./worthBuckets.ts";
 
 /**
  * Every backlog mutation's refusal with the link down. The backlog lives on
@@ -25,12 +26,13 @@ export interface BacklogFilter {
   status: BacklogStatus | null;
   age: BacklogAge | null;
   /**
-   * The KIND cut — one of the four, or `none` for the rows nobody has said a
-   * kind for. `null` is "no kind filter", which is a different statement from
-   * `"none"`: the first shows everything, the second shows exactly the rows
-   * with nothing said about them.
+   * The KIND, VALUE and COST cuts (`categoryBucket`, `valueBucket`,
+   * `costBucket`). `null` is "no filter", a different statement from `"none"`:
+   * the first shows everything, the second exactly the rows nobody said it for.
    */
   category: CategoryBucket | null;
+  value: ValueBucket | null;
+  cost: CostBucket | null;
   /**
    * An explicit set of ids — the cut a COUNT ON A CONTROL opens.
    *
@@ -67,14 +69,15 @@ export interface BacklogFilter {
    */
   clock: boolean | null;
 }
-export const NO_BACKLOG_FILTER: BacklogFilter = { status: null, age: null, category: null, ids: null, clock: null };
-export const hasBacklogFilter = (f: BacklogFilter): boolean => !!(f.status || f.age || f.category || f.ids || f.clock);
+export const NO_BACKLOG_FILTER: BacklogFilter = { status: null, age: null, category: null, value: null, cost: null, ids: null, clock: null };
+export const hasBacklogFilter = (f: BacklogFilter): boolean => !!(f.status || f.age || f.category || f.value || f.cost || f.ids || f.clock);
 
 export function matchesBacklogFilter(it: BacklogItem, f: BacklogFilter, now: number): boolean {
   if (f.ids && !f.ids.includes(it.id)) return false;
   if (f.status && statusBucket(it) !== f.status) return false;
   if (f.age && !withinAge(it.createdAt, f.age, now)) return false;
   if (f.category && categoryBucket(it) !== f.category) return false;
+  if ((f.value && valueBucket(it) !== f.value) || (f.cost && costBucket(it) !== f.cost)) return false;
   if (f.clock && !it.at) return false;
   return true;
 }
@@ -89,18 +92,17 @@ export function matchesBacklogFilter(it: BacklogItem, f: BacklogFilter, now: num
  * merged row's chip says one thing, an original's chip says the other — and a
  * label this file invented would be the same sentence for both.
  *
- * Without one it falls back to `made from these`, which is true of every ids cut
- * this app opens and claims nothing it cannot back up.
+ * Without one it falls back to `made from these` — true of every ids cut.
  */
 export function backlogFilterSentence(f: BacklogFilter, idsLabel?: string): string {
   const parts: string[] = [];
   if (f.status) parts.push(f.status);
-  // The kind reads as a NOUN here and as a bare word on the chip, because the
-  // bar is a sentence and the chip is a label: "showing failed · bugs" is what
-  // the screen is showing, where "showing failed · bug" describes one row. The
-  // `none` bucket says what it is rather than naming a kind — `with no kind`,
-  // never "showing no kind", which reads as a list with nothing in it.
+  // The kind reads as a NOUN here (the bar is a sentence, the chip a label):
+  // "showing failed · bugs". `none` says what it is — `with no kind`, never
+  // "showing no kind", which reads as a list with nothing in it.
   if (f.category) parts.push(f.category === "none" ? "with no kind" : `${f.category === "bug" ? "bug" : f.category}s`);
+  if (f.value) parts.push(f.value === "none" ? "with no value" : `${VALUE_CHIP_LABEL[f.value]} value`);
+  if (f.cost) parts.push(f.cost === "none" ? "with no estimate" : `costing ${COST_CHIP_LABEL[f.cost]}`);
   if (f.clock) parts.push("on a clock");
   if (f.age) parts.push(f.age === "older" ? "added over a week ago" : `added in the ${AGE_LABEL[f.age]}`);
   if (f.ids) {

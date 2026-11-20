@@ -94,11 +94,28 @@ test("setupwatch.ts: what it runs unasked never blocks on git or the three tree 
   assert.match(events, /setupWatch\.checkInBackground\(/, "a session create re-checks in the background");
 });
 
+test("per-request and per-tick probes converted 2026-11-20 stay async", () => {
+  // Each answered a GET or a timer by blocking the loop: opt-ins (up to 7 git calls per GET), the
+  // env-file listing and secret write, the skill write, the desktop checklist's Tailscale row (pgrep,
+  // launchctl), dictation's `which` (now a PATH scan), the backend list's `ps` per missing binary.
+  for (const f of ["optins.ts", "secrets.ts", "skills/skillwrite.ts", "tailscaleguard.ts", "dictate.ts", "binguard.ts"]) {
+    assert.equal(syncCalls(read(f)), 0, `${f} has no blocking child process`);
+  }
+  // A session start waits for `ps` only on a MISS: a binary that resolves still spawns before any await.
+  assert.match(read("binguard.ts"), /if \(binResolves\(bin\)\) return null;\n  return installerRunning\(bin\)/);
+  // The seat sweep (a timer) lists tmux once, async, instead of a `has-session` per id.
+  const side = read("sessions/sidechannel.ts");
+  const at = side.indexOf("  sweep(): void {");
+  const body = side.slice(at, side.indexOf("\n  }\n", at));
+  assert.match(body, /liveTmuxIds\(\)/, "the sweep reads one async listing");
+  assert.doesNotMatch(body, /hasLiveTmux\(/, "no blocking has-session per id on the timer");
+});
+
 // The whole host, as a ratchet. The named pins above hold the paths that were converted; this one holds
 // the rest at a count that may only go down, so a blocking child process added to a request or tick path
 // anywhere else is a visible decision (raise it here and say why in the code), not a silent one.
 // `cli/` is the command line (it runs once and exits, no PTYs to stall) and is not counted.
-const HOST_SYNC_CALLS = 31;
+const HOST_SYNC_CALLS = 24;
 const syncCalls = (text) => (text.match(/\b(?:execSync|execFileSync|spawnSync)\(/g) ?? []).length;
 const walk = (dir, rel = "") => readdirSync(join(dir, rel), { withFileTypes: true }).flatMap((e) => {
   const r = rel ? `${rel}/${e.name}` : e.name;

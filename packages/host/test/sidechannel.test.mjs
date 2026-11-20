@@ -33,6 +33,7 @@ function harness({ sources, promptBoxes = "fakeplug-highlight", plugin = "fakepl
     applyPrompt: (s, p) => boxread.applyPrompt(core, s, p),
     armPromptCheck: (s, ms) => { armed.push(ms); },
     input: (id, data) => { typed.push([id, data]); return true; },
+    liveTmuxIds: async () => new Set(["parked"]),
   };
   // Every other hub member is a no-op returning undefined: those paths
   // (limits, context, agents, capture) are not what is under test here.
@@ -419,12 +420,13 @@ test("sweep: every backend with sources.sweep is asked, with alive = a held sess
   registerBackend(pluginDescriptor({
     id: "sweepy", label: "S", bin: () => "/bin/true", prepare: async () => ({ args: [], instructionsVia: "none", askRulesVia: "none" }), models: async () => ({ aliases: [], ids: [] }),
     caps: {}, facts: {}, measured: { versions: [], version: async () => null },
-    sources: { attach: async () => ({ close: async () => {}, health: () => ({ state: "up", since: 1 }) }), sweep: (alive) => asked.push([alive("s1"), alive("gone")]) },
+    sources: { attach: async () => ({ close: async () => {}, health: () => ({ state: "up", since: 1 }) }), sweep: (alive) => asked.push([alive("s1"), alive("gone"), alive("parked")]) },
   }, "P"));
   try {
     const h = harness();
     h.slice.sweep();
-    assert.deepEqual(asked, [[true, false]]);
+    await flush(); // one async `tmux ls` per pass (`liveTmuxIds`), never a blocking has-session per id
+    assert.deepEqual(asked, [[true, false, true]]);
   } finally { unregisterBackend("sweepy"); }
 });
 

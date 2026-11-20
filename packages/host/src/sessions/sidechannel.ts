@@ -190,13 +190,15 @@ export class ChannelSlice {
    * pane still running under that id (detached, parked); never anything else.
    */
   sweep(): void {
-    const alive = (id: string): boolean => this.core.sessions.has(id) || !!this.core.hasLiveTmux(id);
-    for (const b of BACKENDS) {
-      let sources;
-      try { sources = b.sources; } catch { continue; }
-      if (!sources?.sweep) continue;
-      try { sources.sweep(alive); } catch { /* a backend's own reaper; the next pass asks again */ }
-    }
+    const sweepers = BACKENDS.flatMap((b) => { try { const src = b.sources; return src?.sweep ? [src] : []; } catch { return []; } });
+    // ONE async `tmux ls` per pass, never a blocking `has-session` per id: this is a timer on the
+    // loop that pumps every PTY (`tools/hostsyncpins.test.mjs`). Membership is read when the backend asks.
+    if (sweepers.length) void this.core.liveTmuxIds().then((panes) => {
+      const alive = (id: string): boolean => this.core.sessions.has(id) || panes.has(id);
+      for (const sources of sweepers) {
+        try { sources.sweep?.(alive); } catch { /* a backend's own reaper; the next pass asks again */ }
+      }
+    });
     if (!this.sweepTimer) {
       this.sweepTimer = setInterval(() => this.sweep(), SEAT_SWEEP_MS);
       this.sweepTimer.unref?.();

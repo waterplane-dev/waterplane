@@ -7,6 +7,9 @@
  * - checkout: refuse in words unless it is on a branch with an upstream, has no tracked changes and no
  *   commits of its own; then `git fetch`, `git merge --ff-only @{u}`, `npm ci`, `npm run build`. A
  *   failure after the merge leaves the old code running (nothing restarts) and says how to go back.
+ *   A checkout on the Windows drive run from WSL (`windowsBuilt`) installs and builds through
+ *   `cmd.exe`: its node_modules are Windows', and an `npm ci` from in here swaps in Linux binaries
+ *   that the next `npm run restart` (built on Windows) cannot use.
  *
  * Every command is `execFile` (no shell) with a timeout; the words returned are what the phone shows.
  * Restarting is the caller's (`apply.ts`, under the supervisor rule).
@@ -15,6 +18,8 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND } from "@waterplane/shared";
+import { RUNNING_IN_WSL } from "../branddirs.js";
+import { onWindowsDrive } from "../doctorwsl.js";
 import { realGit } from "./gitops.js";
 import type { Git } from "./gitops.js";
 
@@ -41,6 +46,16 @@ export function npmPrefix(root: string): string {
   const up = dirname(nm);
   return basename(up) === "lib" ? dirname(up) : up; // unix `<prefix>/lib/node_modules`, windows `<prefix>/node_modules`
 }
+
+/**
+ * WSL running a checkout on the Windows drive (`/mnt/<drive>/…`): that checkout is built on Windows
+ * (`scripts/windows/host.mjs`, which `npm run restart` hands over to), so its packages are installed there.
+ */
+export const windowsBuilt = (root: string, inWsl: boolean = RUNNING_IN_WSL): boolean => inWsl && onWindowsDrive(root);
+
+/** The line that updates a checkout by hand, from a shell where the host runs. */
+export const checkoutCommand = (onWindows: boolean): string =>
+  onWindows ? 'git pull --ff-only && cmd.exe /d /c "npm ci && npm run restart"' : "git pull --ff-only && npm ci && npm run restart";
 
 const INSTALL_MS = 10 * 60_000;
 const BUILD_MS = 15 * 60_000;
@@ -71,7 +86,9 @@ export async function checkoutBehind(root: string, git: Git = realGit): Promise<
   return { behind: Number.isFinite(behind) ? behind : 0, upstream };
 }
 
-export async function checkoutUpdate(root: string, git: Git = realGit, run: Run = realRun): Promise<OtherResult> {
+export async function checkoutUpdate(root: string, git: Git = realGit, run: Run = realRun, onWindows: boolean = windowsBuilt(root)): Promise<OtherResult> {
+  // cmd.exe started from WSL takes the cwd across as its `C:\…` path, as scripts/restart.sh relies on.
+  const npm = (args: string[], ms: number): Promise<string> => onWindows ? run("cmd.exe", ["/d", "/c", `npm ${args.join(" ")}`], root, ms) : run(npmBin(), args, root, ms);
   const no = (message: string): OtherResult => ({ ok: false, changed: false, message: `${message} Nothing was changed.` });
   let branch: string, upstream: string;
   try { branch = (await git(["symbolic-ref", "--short", "-q", "HEAD"], root)).trim(); } catch { branch = ""; }
@@ -91,7 +108,7 @@ export async function checkoutUpdate(root: string, git: Git = realGit, run: Run 
   try { await git(["merge", "--ff-only", "@{u}"], root); } catch (e) { return no(`git could not move ${branch} forward: ${msg(e)}.`); }
   const to = (await git(["rev-parse", "--short", "HEAD"], root)).trim();
   const back = ` The desktop keeps running the old code and was not restarted; the checkout is now at ${to} (it was ${from}).`;
-  try { await run(npmBin(), ["ci"], root, INSTALL_MS); } catch (e) { return { ok: false, changed: true, message: `Pulled ${behind} commit${behind === 1 ? "" : "s"}, but npm ci failed: ${msg(e)}.${back}` }; }
-  try { await run(npmBin(), ["run", "build"], root, BUILD_MS); } catch (e) { return { ok: false, changed: true, message: `Pulled ${behind} commit${behind === 1 ? "" : "s"}, but the build failed: ${msg(e)}.${back}` }; }
+  try { await npm(["ci"], INSTALL_MS); } catch (e) { return { ok: false, changed: true, message: `Pulled ${behind} commit${behind === 1 ? "" : "s"}, but npm ci failed: ${msg(e)}.${back}` }; }
+  try { await npm(["run", "build"], BUILD_MS); } catch (e) { return { ok: false, changed: true, message: `Pulled ${behind} commit${behind === 1 ? "" : "s"}, but the build failed: ${msg(e)}.${back}` }; }
   return { ok: true, changed: true, message: `pulled ${behind} commit${behind === 1 ? "" : "s"} from ${upstream} (${from} → ${to}) and rebuilt` };
 }

@@ -153,12 +153,18 @@
 .localrt-bar .lrt-mem.lrt-tight { color: var(--warn); }
 /* The parallel-agent count (agentCount.ts): centred in the gap between the
    lead's graph and the right-hand numbers; amber/red past the person's marks. */
-.localrt-bar .lrt-agents { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); white-space: nowrap; flex: 0 0 auto; }
+.localrt-bar .lrt-agents { display: flex; align-items: center; gap: var(--sp-4); white-space: nowrap; flex: 0 0 auto; }
 .localrt-bar .lrt-agents svg { opacity: .65; flex: 0 0 auto; }
-.localrt-bar .lrt-agents + .lrt-right { margin-left: auto; }
 .localrt-bar .lrt-agents-warn { color: var(--warn); font-weight: var(--fw-semibold); }
 .localrt-bar .lrt-agents-alarm { color: var(--dead); font-weight: var(--fw-bold); }
 .localrt-bar.lrt-agents-only .lrt-agents { margin-left: 0; }
+/* The open-tabs button, here while the tab strip is off (the phone default):
+   far right, the same Layers + count as the strip's own button. */
+.localrt-bar .lrt-tabs { display: flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto; white-space: nowrap;
+  padding: var(--sp-4) var(--sp-6); margin: -4px -6px -4px 0; border: 0; border-radius: var(--r-4); background: none; color: inherit;
+  font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.localrt-bar .lrt-tabs svg { opacity: .65; flex: 0 0 auto; }
+.localrt-bar .lrt-tabs:active, .localrt-bar .lrt-tabs[aria-expanded="true"] { color: var(--accent); }
 .localrt-bar .lrt-agents-words { margin-right: auto; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .localrt-bar .lrt-close { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-width: 28px; height: 18px; margin: 0 -6px 0 var(--sp-2); padding: 0; background: none; border: 0; color: var(--muted); }
 .localrt-bar .lrt-agents-warn svg, .localrt-bar .lrt-agents-alarm svg { opacity: 1; }

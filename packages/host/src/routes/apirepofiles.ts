@@ -241,8 +241,8 @@ const REPO_FILE_ROUTES: readonly ApiEntry<RepoReq>[] = [
   }),
 
   // Candidate dotenv files for the set-secret picker (names + git flags, NO contents).
-  route<RepoReq>("GET", "envfiles/*", ({ res, wt }) => {
-    json(res, { files: listEnvFiles(wt) });
+  route<RepoReq>("GET", "envfiles/*", async ({ res, wt }) => {
+    json(res, { files: await listEnvFiles(wt) });
     return true;
   }),
 

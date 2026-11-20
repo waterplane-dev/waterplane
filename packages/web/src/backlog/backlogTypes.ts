@@ -4,7 +4,7 @@
  * hooks' results spread together, built once per render by `Backlog.tsx`.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
+import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, ItemValue, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
 import type { BackendList } from "../backendCaps";
 import type { BacklogFilter } from "../backlogFilter";
 import type { CloseChoice } from "../autoSessions";
@@ -148,7 +148,7 @@ export interface BacklogRowVerbs {
    * name the row again. The client never sends an author: who wrote a name is
    * the host's claim to make, exactly as `handOrdered` is.
    */
-  onUpdate: (id: string, patch: { text?: string; label?: string; repoDir?: string; targetSessionId?: string; headline?: string; category?: ItemCategory | "" }) => void;
+  onUpdate: (id: string, patch: { text?: string; label?: string; repoDir?: string; targetSessionId?: string; headline?: string; category?: ItemCategory | ""; estimate?: string; value?: ItemValue | "" }) => void;
   /**
    * **"When that session is free."** Aim an existing item at the session the
    * user is actually looking at, with the per-item auto-fire flag set, appended

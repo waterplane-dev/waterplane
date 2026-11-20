@@ -408,8 +408,8 @@ The sessions list has separate expand-all and collapse-all buttons for the repo 
 - asked: 2026-10-10
 
 ### R-ui-094 · shipped
-The sessions list has an always-visible quick filter that narrows the rows to those whose shown text (title, prompts, repo, branch) contains every typed word, saying "n of N"; the full transcript search sits at the end of the same line.
-- asked: 2026-10-10
+The sessions list has an always-visible quick filter that narrows the rows to those whose shown text (title, prompts, repo, branch) contains every typed word, saying "n of N"; the full transcript search sits at the end of the same line, is the launcher's only search key, and opens already searching the typed words.
+- asked: 2026-10-10; 2026-11-20: the head row's separate search key folded into the filter line
 
 ### R-ui-095 · shipped
 With a picture open on the annotator beside the session, Send in the session's prompt box asks whether the picture goes too; yes sends it with the message (its marks included), no sends the words alone and leaves the picture open.

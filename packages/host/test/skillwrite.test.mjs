@@ -57,7 +57,7 @@ test("a stale rev is a 409 and nothing is written", async () => {
   const before = readFileSync(glob, "utf8");
   resetPluginListCache();
   const { doc } = await buildInventory({ worktree: wt });
-  const r = applySkillWrite({ level: "global", revs: { global: "0".repeat(40) }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["global"], doc });
+  const r = await applySkillWrite({ level: "global", revs: { global: "0".repeat(40) }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["global"], doc });
   assert.equal(r.ok, false); assert.equal(r.status, 409);
   assert.equal(readFileSync(glob, "utf8"), before);
 });
@@ -116,7 +116,7 @@ test("a repo settings file linked out of the repo is refused and the target unto
   symlinkSync(t, f);
   resetPluginListCache();
   const { doc } = await buildInventory({ worktree: wt });
-  const r = applySkillWrite({ level: "repo-shared", revs: { "repo-shared": revOf("{}\n") }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["repo-shared"], worktree: wt, doc });
+  const r = await applySkillWrite({ level: "repo-shared", revs: { "repo-shared": revOf("{}\n") }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["repo-shared"], worktree: wt, doc });
   assert.equal(r.ok, false);
   assert.equal(readFileSync(t, "utf8"), "{}\n");
 });
@@ -124,7 +124,7 @@ test("a repo settings file linked out of the repo is refused and the target unto
 test("global with no config dir is 422 and creates nothing", async () => {
   const { doc } = await buildInventory({ worktree: wt });
   process.env.CLAUDE_CONFIG_DIR = join(root, "nonexistent");
-  const r = applySkillWrite({ level: "global", revs: { global: "absent" }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["global"], doc });
+  const r = await applySkillWrite({ level: "global", revs: { global: "absent" }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["global"], doc });
   process.env.CLAUDE_CONFIG_DIR = cfg;
   assert.equal(r.ok, false); assert.equal(r.status, 422);
   assert.equal(existsSync(join(root, "nonexistent")), false);
@@ -135,10 +135,10 @@ test("the save record: one JSON line per successful write, append-only; a refusa
   const logFile = join(root, "state", "skillswitch-log.jsonl");
   const { doc } = await buildInventory({ worktree: wt });
   const layer = doc.layers.find((l) => l.level === "repo-local");
-  const ok = applySkillWrite({ level: "repo-local", revs: { "repo-local": layer.rev }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["repo-local"], worktree: wt, doc, logFile, repoId: "r1" });
+  const ok = await applySkillWrite({ level: "repo-local", revs: { "repo-local": layer.rev }, changes: [{ kind: "skill", id: "mine", to: "off" }], allowed: ["repo-local"], worktree: wt, doc, logFile, repoId: "r1" });
   assert.equal(ok.ok, true);
   // a stale write is refused and records nothing
-  const stale = applySkillWrite({ level: "repo-local", revs: { "repo-local": "nope" }, changes: [{ kind: "skill", id: "mine", to: "on" }], allowed: ["repo-local"], worktree: wt, doc, logFile, repoId: "r1" });
+  const stale = await applySkillWrite({ level: "repo-local", revs: { "repo-local": "nope" }, changes: [{ kind: "skill", id: "mine", to: "on" }], allowed: ["repo-local"], worktree: wt, doc, logFile, repoId: "r1" });
   assert.equal(stale.ok, false);
   let lines = rf(logFile, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(lines.length, 1);
@@ -154,7 +154,7 @@ test("the save record: one JSON line per successful write, append-only; a refusa
   resetPluginListCache();
   const d2 = (await buildInventory({ worktree: wt })).doc;
   const l2 = d2.layers.find((x) => x.level === "repo-local");
-  applySkillWrite({ level: "repo-local", revs: { "repo-local": l2.rev }, changes: [{ kind: "skill", id: "mine", to: "on" }], allowed: ["repo-local"], worktree: wt, doc: d2, logFile });
+  await applySkillWrite({ level: "repo-local", revs: { "repo-local": l2.rev }, changes: [{ kind: "skill", id: "mine", to: "on" }], allowed: ["repo-local"], worktree: wt, doc: d2, logFile });
   lines = rf(logFile, "utf8").trim().split("\n").map((x) => JSON.parse(x));
   assert.equal(lines.length, 2);
   assert.deepEqual(lines[0], l);
@@ -165,7 +165,7 @@ test("the save record: one JSON line per successful write, append-only; a refusa
   resetPluginListCache();
   const d3 = (await buildInventory({ worktree: wt })).doc;
   const l3 = d3.layers.find((x) => x.level === "repo-local");
-  const r3 = applySkillWrite({ level: "repo-local", revs: { "repo-local": l3.rev }, changes: [{ kind: "skill", id: "mine", to: "name-only" }], allowed: ["repo-local"], worktree: wt, doc: d3, logFile });
+  const r3 = await applySkillWrite({ level: "repo-local", revs: { "repo-local": l3.rev }, changes: [{ kind: "skill", id: "mine", to: "name-only" }], allowed: ["repo-local"], worktree: wt, doc: d3, logFile });
   assert.equal(r3.ok, true);
 });
 

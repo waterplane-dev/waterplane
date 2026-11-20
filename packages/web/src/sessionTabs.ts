@@ -39,6 +39,7 @@ import { costChip, glueCompanions, repoLabel, repoShown, trimDefaultBranch, usag
 // a second opinion held here.
 import type { SessionStatus } from "./sessionFacts";
 import { LS, lsBool, lsGet, lsJson, lsNum, lsSet, lsSetBool, lsSetJson } from "./storage.ts";
+import { layoutStore, type Layout } from "./core/layout/layout.ts";
 
 // ── What a tab is ────────────────────────────────────────────────────────────
 
@@ -522,7 +523,19 @@ export function isTabsListPress(e: { key: string; ctrlKey: boolean; metaKey: boo
 
 // ── The settings, per device ─────────────────────────────────────────────────
 
-export const tabsEnabled = (): boolean => lsBool(LS.sessionTabs, true);
+/**
+ * **The strip's switch is one per LAYOUT**: off at phone width, on at wide, until
+ * a person flips the one for the width they are at. On a phone the list button
+ * moves into the machine strip (`tabsListInBar`) and the vertical list is the
+ * way between sessions; a wide window has the room for the row of tabs.
+ */
+export function tabsSwitchKey(layout: Layout): string { return layout === "phone" ? LS.sessionTabsPhone : LS.sessionTabs; }
+export function tabsDefaultOn(layout: Layout): boolean { return layout !== "phone"; }
+export const tabsEnabled = (): boolean => { const l = layoutStore.get(); return lsBool(tabsSwitchKey(l), tabsDefaultOn(l)); };
+/** Where the "all open tabs" button lives: on the strip while the strip is
+ *  drawn (where it always was), in the machine strip while it is switched off —
+ *  never both, and never neither while a tab exists. */
+export function tabsListInBar(enabled: boolean, anyTabs: boolean): boolean { return !enabled && anyTabs; }
 export const tabsCount = (): number => clampTabCount(lsNum(LS.sessionTabsCount, TAB_COUNT_DEFAULT));
 /** This device follows the shared order — absent is ON (the default). */
 export const tabsSynced = (): boolean => lsGet(LS.sessionTabsSync) !== "0";
@@ -531,7 +544,7 @@ export const tabsOrder = (): TabOrder =>
   cleanTabOrder(tabsSynced() ? lsGet(LS.tabOrderShared) ?? lsGet(LS.sessionTabsOrder) : lsGet(LS.sessionTabsOrder));
 export const tabsLimit = (): number => clampTabLimit(lsNum(LS.sessionTabsLimit, TAB_LIMIT_DEFAULT));
 
-export function setTabsEnabled(on: boolean): void { lsSetBool(LS.sessionTabs, on); emit(); }
+export function setTabsEnabled(on: boolean): void { lsSetBool(tabsSwitchKey(layoutStore.get()), on); emit(); }
 export function setTabsCount(n: number): void { lsSet(LS.sessionTabsCount, String(clampTabCount(n))); emit(); }
 export function setTabsOrder(o: TabOrder): void { lsSet(tabsSynced() ? LS.tabOrderShared : LS.sessionTabsOrder, o); emit(); }
 export function setTabsSynced(on: boolean): void { lsSet(LS.sessionTabsSync, on ? "1" : "0"); emit(); }
@@ -682,6 +695,8 @@ function emit(): void {
   rebuild();
   for (const fn of listeners) fn(snap);
 }
+// A crossing between phone and wide reads the other switch.
+layoutStore.subscribe(() => emit());
 
 /**
  * **The one writer.** `App` publishes the sessions it is already rendering and

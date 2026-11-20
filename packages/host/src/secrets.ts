@@ -19,7 +19,7 @@
  *            secret for commit) and auto-adds the file to .gitignore when it is
  *            neither ignored nor tracked, so a secret can never land in history.
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { BRAND } from "@waterplane/shared";
@@ -157,20 +157,17 @@ export function maskSecret(v: string): string {
 /** Resolve `file` inside `dir`, refusing traversal. Returns abs path or null. */
 const inDir = (dir: string, file: string): string | null => contained(dir, file);
 
-/** git check-ignore / ls-files probes (both return false outside a repo). */
-function gitChecks(wt: string, relFile: string): { ignored: boolean; tracked: boolean } {
-  const run = (args: string[]): boolean => {
-    try {
-      execFileSync("git", args, { cwd: wt, stdio: "ignore" });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  return {
-    ignored: run(["check-ignore", "-q", "--", relFile]),
-    tracked: run(["ls-files", "--error-unmatch", "--", relFile]),
-  };
+/** git check-ignore / ls-files probes (both return false outside a repo). Async: the env-file
+ *  listing is a GET on the loop that pumps every PTY (`tools/hostsyncpins.test.mjs`). */
+async function gitChecks(wt: string, relFile: string): Promise<{ ignored: boolean; tracked: boolean }> {
+  const run = (args: string[]): Promise<boolean> => new Promise((done) => {
+    execFile("git", args, { cwd: wt }, (err) => done(!err));
+  });
+  const [ignored, tracked] = await Promise.all([
+    run(["check-ignore", "-q", "--", relFile]),
+    run(["ls-files", "--error-unmatch", "--", relFile]),
+  ]);
+  return { ignored, tracked };
 }
 
 /** Splice KEY=value into `full` (replace any existing KEY= lines, else append). */
@@ -196,7 +193,7 @@ export interface SetSecretOpts {
   targetId?: string;
 }
 
-export function setSecret(opts: SetSecretOpts): SecretResult {
+export async function setSecret(opts: SetSecretOpts): Promise<SecretResult> {
   if (!opts.value) return { ok: false, error: "empty value" };
 
   // ── host scope: a write-only target (dotenv or whole-file json) ─────────
@@ -245,7 +242,9 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
   // A committed `.env -> ~/.ssh/config` would be read AND rewritten through the link.
   try { if (lstatSync(full).isSymbolicLink()) return { ok: false, error: `${file} is a link, not a file` }; } catch { /* absent — created below */ }
 
-  const { ignored, tracked } = gitChecks(opts.worktree, file);
+  // Everything after this await is synchronous, so two writes never interleave their
+  // .gitignore read-modify-write or their splice.
+  const { ignored, tracked } = await gitChecks(opts.worktree, file);
   if (!ignored && tracked) {
     // Committed file → writing here would stage the secret for commit. Refuse.
     return {
@@ -286,7 +285,7 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
 }
 
 /** List dotenv files in the worktree root (names + git flags only — NO contents). */
-export function listEnvFiles(worktree: string): EnvFileInfo[] {
+export async function listEnvFiles(worktree: string): Promise<EnvFileInfo[]> {
   let names: string[];
   try {
     names = readdirSync(worktree).filter((n) => {
@@ -300,10 +299,9 @@ export function listEnvFiles(worktree: string): EnvFileInfo[] {
   } catch {
     return [];
   }
-  return names
-    .map((name) => {
-      const { ignored, tracked } = gitChecks(worktree, name);
-      return { name, gitignored: ignored, tracked, template: ENV_TEMPLATE_RE.test(name) };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const rows = await Promise.all(names.map(async (name) => {
+    const { ignored, tracked } = await gitChecks(worktree, name);
+    return { name, gitignored: ignored, tracked, template: ENV_TEMPLATE_RE.test(name) };
+  }));
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

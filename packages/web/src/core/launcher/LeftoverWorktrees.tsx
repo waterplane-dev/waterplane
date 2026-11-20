@@ -61,11 +61,14 @@ async function removeAll(ts: RepoTarget[], done: () => void): Promise<void> {
   done();
 }
 
-/** The line above a repo's session-less worktrees: what they are and the one-tap cleanup. */
-export function LeftoverHead({ wts, readings, onChanged, style }: {
+/** What a repo's session-less worktrees are, and the one-tap cleanup. With one
+ *  it sits INSIDE that worktree's card (`inRow`), under its verdict line — a
+ *  band between cards read as belonging to neither; with several it heads them. */
+export function LeftoverHead({ wts, readings, onChanged, style, inRow }: {
   wts: RepoTarget[]; readings: Map<string, Reading>; onChanged: () => void;
   /** The repo's accent (`repoAccentStyle`), so the line carries the rows' stripe and wash. */
   style?: CSSProperties;
+  inRow?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   if (!wts.length) return null;
@@ -74,7 +77,7 @@ export function LeftoverHead({ wts, readings, onChanged, style }: {
   const pending = wts.some((t) => readings.get(t.id)?.state === "loading");
   const kept = n - ok.length;
   return (
-    <div className="wt-leftover-head" style={style}>
+    <div className={inRow ? "wt-leftover-note" : "wt-leftover-head"} style={style}>
       <RowSub as="div">
         No session is using {n === 1 ? "this worktree" : `these ${n} worktrees`}. A worktree is a second checkout
         of the repo, usually made for an agent; {n === 1 ? "it" : "they"} outlived the session that made {n === 1 ? "it" : "them"}.
@@ -82,15 +85,17 @@ export function LeftoverHead({ wts, readings, onChanged, style }: {
           ? ` Every commit in ${n === 1 ? "it" : "them"} is already on ${firstBase(ok, readings)}, and nothing is uncommitted — removing loses nothing.`
           : ok.length
             ? ` ${ok.length} hold nothing that is not on ${firstBase(ok, readings)}; ${kept} hold work, said on ${kept === 1 ? "its" : "their"} row.`
-            : ` ${n === 1 ? "It holds" : "Each holds"} work that is not anywhere else, said on the row — open it to commit or keep it.`}
+            : n === 1 ? " It holds work that is not anywhere else, said above — open it to commit or keep it."
+              : " Each holds work that is not anywhere else, said on its row — open it to commit or keep it."}
       </RowSub>
       {ok.length > 0 && (
-        busy
+        // In a card the row opens on a tap; the remove must not open it too.
+        <span onClick={(e) => e.stopPropagation()}>{busy
           ? <RowSub>removing…</RowSub>
           : <ConfirmButton className="key wt-leftover-go" confirm={`remove ${ok.length} for good?`}
               onConfirm={() => { track("action:repo.worktree.removeLeftovers"); setBusy(true); void removeAll(ok, () => { setBusy(false); onChanged(); }); }}>
               <Trash2 size={14} />remove {ok.length === n ? (n === 1 ? "it" : `all ${n}`) : `the ${ok.length} safe`}
-            </ConfirmButton>
+            </ConfirmButton>}</span>
       )}
     </div>
   );

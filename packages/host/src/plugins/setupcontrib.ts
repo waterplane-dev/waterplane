@@ -50,9 +50,9 @@ export async function contributedFindings(worktree: string): Promise<{ findings:
  * The desktop's checklist: core's own desktop rows, then every contributed `scope: "host"` row. No repo is the subject, so the
  * subject is the root the repos are found under.
  */
-export function hostChecks(root: string): ComplianceCheck[] {
+export async function hostChecks(root: string): Promise<ComplianceCheck[]> {
   // Core's own desktop rows first (`tailscaleguard.ts`, the price list, the backends' version drift), then the contributed ones.
-  const core = [tailscaleWatchdogRow(), livePriceListRow(), ...backendCliRows(), ...backendDriftRows()].filter((c): c is ComplianceCheck => c !== null);
+  const core = [await tailscaleWatchdogRow(), livePriceListRow(), ...backendCliRows(), ...backendDriftRows()].filter((c): c is ComplianceCheck => c !== null);
   return [...core, ...(source ? source.setupChecks({ worktree: root }).filter((c) => c.scope === "host") : [])];
 }
 
@@ -105,10 +105,10 @@ export function backendDriftRows(infos: readonly BackendInfo[] = backendInfos())
  * Run the fixes among `fixes` that a desktop row names right now — never a repo row's fix, which
  * needs that repo as its subject.
  */
-export function hostFixes(fixes: readonly string[], root: string): { id: string; outcome: SetupFixOutcome }[] {
-  const named = new Set(hostChecks(root).map((c) => c.fix).filter((f): f is string => !!f));
+export async function hostFixes(fixes: readonly string[], root: string): Promise<{ id: string; outcome: SetupFixOutcome }[]> {
+  const named = new Set((await hostChecks(root)).map((c) => c.fix).filter((f): f is string => !!f));
   const core = named.has(TAILSCALE_WATCHDOG_FIX) && fixes.includes(TAILSCALE_WATCHDOG_FIX)
-    ? [{ id: TAILSCALE_WATCHDOG_FIX, outcome: installTailscaleWatchdog() }] : [];
+    ? [{ id: TAILSCALE_WATCHDOG_FIX, outcome: await installTailscaleWatchdog() }] : [];
   return [...core, ...contributedFixes(fixes.filter((f) => named.has(f) && f !== TAILSCALE_WATCHDOG_FIX), root)];
 }
 

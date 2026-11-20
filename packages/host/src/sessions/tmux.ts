@@ -11,7 +11,7 @@
  * facade re-exports `tmuxEnvPrefix`, `sweepSessionStores` and `staleLiveIds` from here. The
  * tmux server and session-name constants live in `knobs.ts`, beside the other env-derived knobs so every slice may import them.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, delimiter, join } from "node:path";
 import * as pty from "node-pty";
@@ -26,7 +26,7 @@ import { inCopyModeSync } from "../tmuxscroll.js";
 import { derive, knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
 import { hasAccountLimit } from "../usagesources.js";
 import type { LiveMeta, SessionCore } from "./core.js";
-import { ORPHAN_MAX_AGE_MS, ORPHAN_SWEEP_DELAY_MS, STALE_LIVE_MIN_AGE_MS, STORE_FILE_RE, TMUX_SERVER, TMUX_SOCKET_DEFAULT, TMUX_SOCKET_ID, tmuxName } from "./knobs.js";
+import { ORPHAN_MAX_AGE_MS, ORPHAN_SWEEP_DELAY_MS, STALE_LIVE_MIN_AGE_MS, STORE_FILE_RE, TMUX_PREFIX, TMUX_SERVER, TMUX_SOCKET_DEFAULT, TMUX_SOCKET_ID, tmuxName } from "./knobs.js";
 import { tmuxRefusal } from "../tmuxreq.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { heldAskRules, holdAskRules } from "../answergate.js";
@@ -616,6 +616,18 @@ function binChangedAt(bin: string): number | null {
 export function hasLiveTmux(id: string): boolean {
   try { execFileSync("tmux", ["-L", TMUX_SERVER, "has-session", "-t", tmuxName(id)], { stdio: "ignore" }); return true; }
   catch { return false; }
+}
+
+/** `hasLiveTmux` for many ids at once, without blocking: the ids of every pane on our server, from ONE
+ *  async `tmux ls`. For a TIMER (`sidechannel.ts`' seat sweep), on the loop that pumps every PTY.
+ *  A failed listing (no server) is the empty set — what `hasLiveTmux` answers for each id then. */
+export function liveTmuxIds(): Promise<Set<string>> {
+  return new Promise((done) => {
+    execFile("tmux", ["-L", TMUX_SERVER, "ls", "-F", "#{session_name}"], { encoding: "utf8" }, (err, out) => {
+      if (err) { done(new Set()); return; }
+      done(new Set(String(out).split("\n").map((n) => n.trim()).filter((n) => n.startsWith(TMUX_PREFIX)).map((n) => n.slice(TMUX_PREFIX.length))));
+    });
+  });
 }
 
 // ── Parking: a live pane whose backend is not registered (yet) ────────────────

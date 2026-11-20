@@ -157,7 +157,7 @@ export function AppearanceRows() {
             ? `session tabs on — ${tabsN} fit this screen, the rest scroll sideways`
             : "session tabs off");
         }}
-        note="A row of the sessions you have open, above every screen, each one coloured by its repo."
+        note="A row of the sessions you have open, above every screen, each one coloured by its repo. Off by default at phone width — the open-tabs button then sits at the right end of the desktop strip; on by default on a wide screen. Each width remembers its own choice."
         more={<p>It answers the question the launcher makes you work for: what else is open, and can I get back to it without leaving this screen. Each tab is named in four words or fewer by the desktop, once, off the summary it already writes — until then it wears the repo and branch it has everywhere else. The × closes that session and asks first; the conversation is kept either way.</p>}
       />
 

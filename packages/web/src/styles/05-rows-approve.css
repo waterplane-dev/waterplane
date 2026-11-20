@@ -27,6 +27,7 @@
 .row-wrap.row-wt .wt-leftover.warn svg { color: var(--warn); }
 .wt-leftover-head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-10) var(--sp-14) var(--sp-10) var(--sp-28); background: var(--repo-fill);
   border-left: 3px solid var(--repo-stripe, var(--repo-accent, transparent)); border-bottom: 1px solid var(--line); }
+.row-wrap.row-wt .wt-leftover-note { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-6); margin-top: var(--sp-4); }
 .wt-leftover-go { display: inline-flex; align-items: center; gap: var(--sp-6); }
 .row.grow {
   flex: 1; border-bottom: none;

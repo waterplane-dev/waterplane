@@ -17,7 +17,7 @@
  *    overwrites only its own files and never touches Tailscale's settings.
  *  - macOS with the Tailscale app only; absent everywhere else.
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
@@ -75,28 +75,33 @@ const plistPath = (label: string) => join(os.homedir(), "Library", "LaunchAgents
 const scriptPath = () => join(configDir(), "tailscale-watchdog.sh");
 const domain = () => `gui/${os.userInfo().uid}`;
 
-function launchctl(args: string[]): boolean {
-  try { execFileSync("launchctl", args, { stdio: "ignore", timeout: 5000 }); return true; } catch { return false; }
+// Async: the row is read per checklist GET and per setup-check sweep, on the loop that pumps every
+// PTY (`tools/hostsyncpins.test.mjs`). Same timeouts and the same false on any failure.
+const ok = (cmd: string, args: string[], timeout: number): Promise<boolean> =>
+  new Promise((done) => { execFile(cmd, args, { timeout }, (err) => done(!err)); });
+
+function launchctl(args: string[]): Promise<boolean> {
+  return ok("launchctl", args, 5000);
 }
 
 /** The standalone daemon (Homebrew's `tailscaled`) is running: no app container to purge. */
-function standaloneDaemon(): boolean {
-  try { execFileSync("pgrep", ["-xq", "tailscaled"], { stdio: "ignore", timeout: 3000 }); return true; } catch { return false; }
+function standaloneDaemon(): Promise<boolean> {
+  return ok("pgrep", ["-xq", "tailscaled"], 3000);
 }
 
 const LASTING = "The lasting fix is the standalone `tailscaled` (Homebrew, a system daemon with no app for macOS to end) — " +
   "it joins the tailnet as a new device, so pairing and `tailscale serve` are set up again.";
 
 /** The row, or null where it is not a question (not macOS, no Tailscale app). */
-export function tailscaleWatchdogRow(platform = process.platform): ComplianceCheck | null {
+export async function tailscaleWatchdogRow(platform = process.platform): Promise<ComplianceCheck | null> {
   if (platform !== "darwin") return null;
-  if (standaloneDaemon()) {
+  if (await standaloneDaemon()) {
     return { id: ID, label: LABEL_TEXT, status: "pass", scope: "host", fix: null,
       detail: "Tailscale runs as the standalone `tailscaled` daemon, which macOS's disk cleanup does not end." };
   }
   if (!existsSync(APP)) return null;
   const label = watchdogLabel();
-  if (existsSync(plistPath(label)) && launchctl(["print", `${domain()}/${label}`])) {
+  if (existsSync(plistPath(label)) && await launchctl(["print", `${domain()}/${label}`])) {
     return { id: ID, label: LABEL_TEXT, status: "pass", scope: "host", fix: null,
       detail: `A watchdog (${label}) checks every minute and reopens Tailscale when macOS ended it. ${LASTING}` };
   }
@@ -107,7 +112,7 @@ export function tailscaleWatchdogRow(platform = process.platform): ComplianceChe
 }
 
 /** Install (or re-install) the watchdog: its script, its LaunchAgent, loaded now. */
-export function installTailscaleWatchdog(): SetupFixOutcome {
+export async function installTailscaleWatchdog(): Promise<SetupFixOutcome> {
   const label = watchdogLabel();
   const script = scriptPath();
   const plist = plistPath(label);
@@ -119,8 +124,8 @@ export function installTailscaleWatchdog(): SetupFixOutcome {
   } catch (e) {
     return { applied: false, note: `Could not write the watchdog: ${(e as Error).message}` };
   }
-  launchctl(["bootout", `${domain()}/${label}`]);
-  if (!launchctl(["bootstrap", domain(), plist])) {
+  await launchctl(["bootout", `${domain()}/${label}`]);
+  if (!(await launchctl(["bootstrap", domain(), plist]))) {
     return { applied: false, note: `Wrote ${plist} but launchd did not load it; \`launchctl bootstrap ${domain()} ${plist}\` on the desktop retries.` };
   }
   return { applied: true, note: `Tailscale watchdog installed (${label}); it checks every minute and logs what it did to ~/Library/Logs/${BRAND.name}-tailscale-watchdog.log.` };

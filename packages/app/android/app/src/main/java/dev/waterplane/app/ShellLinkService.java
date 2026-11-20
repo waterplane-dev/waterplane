@@ -230,6 +230,17 @@ public class ShellLinkService extends Service {
      *  upgrade: long enough for one dial to finish, and the lock is let go on either answer. */
     private static final long DIAL_WAKE_MS = 20_000;
 
+    /**
+     * <b>A dial that never answers is abandoned, or the link waits on it forever.</b> The client
+     * has {@code readTimeout(0)} (an open socket is idle by design) and no call timeout, so a dial
+     * whose TCP connected but whose TLS handshake or upgrade never came back had no failure to
+     * report: no {@code onFailure}, so no retry, and {@link #ensureSocket} saw a socket and did
+     * nothing. Seen 2026-11-19/20: the row said "connecting" for 17 hours, no dial reached the
+     * desktop, and every vault approval in that time raised no notification. Only a network
+     * change replaced it. After this long a dial is cancelled and retried like a failed one.
+     */
+    private static final long DIAL_TIMEOUT_MS = 30_000;
+
     private static final long BACKOFF_MIN_MS = 2_000;
     private static final long BACKOFF_MAX_MS = 60_000;
 
@@ -881,6 +892,8 @@ public class ShellLinkService extends Service {
          *  token): no relay here for this link's life; the old notice instead. */
         volatile boolean relayUnsupported = false;
         final Runnable connectRunnable = this::connect;
+        /** {@link #DIAL_TIMEOUT_MS} after a dial: still not open, so give it up and retry. */
+        final Runnable dialWatchdog = this::dialStuck;
         /** The retry's wake-up ({@link #WAKE_FAST_FOR_MS}); delivered on {@link #handler}. */
         final AlarmManager.OnAlarmListener wakeAlarm = this::onWakeAlarm;
         /** When this link lost its socket ({@code elapsedRealtime}, which runs through
@@ -1043,6 +1056,18 @@ public class ShellLinkService extends Service {
             String protocols = ShellLinkSet.subprotocols(prefs(ShellLinkService.this).getString(KEY_WS_PROTOCOL, null), spec.token);
             if (protocols != null) rb.header("Sec-WebSocket-Protocol", protocols);
             socket = linkClient().newWebSocket(rb.build(), listener);
+            handler.removeCallbacks(dialWatchdog);
+            handler.postDelayed(dialWatchdog, DIAL_TIMEOUT_MS);
+        }
+
+        /** The dial in flight never answered (see {@link #DIAL_TIMEOUT_MS}): drop it, retry. */
+        private void dialStuck() {
+            if (closed || socket == null || "connected".equals(status)) return;
+            Log.w(TAG, spec.label + ": no answer to the dial in " + (DIAL_TIMEOUT_MS / 1000) + " s");
+            lastError = "no answer within " + (DIAL_TIMEOUT_MS / 1000) + " s — retrying";
+            log("fail", "no answer in " + (DIAL_TIMEOUT_MS / 1000) + " s");
+            dropSocket();
+            scheduleRetry();
         }
 
         final WebSocketListener listener = new WebSocketListener() {
@@ -1050,6 +1075,7 @@ public class ShellLinkService extends Service {
             public void onOpen(WebSocket ws, Response response) {
                 handler.post(() -> {
                     if (ws != socket) { ws.cancel(); return; } // an abandoned attempt
+                    handler.removeCallbacks(dialWatchdog);
                     status = "connected";
                     lastError = null;
                     tlsWord = null;
@@ -1184,6 +1210,7 @@ public class ShellLinkService extends Service {
         void dropSocket() {
             WebSocket ws = socket;
             socket = null;
+            handler.removeCallbacks(dialWatchdog);
             letSleep(); // a dial that failed, closed or was abandoned is answered
             if (ws != null) {
                 try { ws.cancel(); } catch (RuntimeException e) { Log.d(TAG, "cancel: " + e); }

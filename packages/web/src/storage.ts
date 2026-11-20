@@ -143,7 +143,7 @@ export const KEY_SCOPE = {
   dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",
   // the session tab strip: its SHAPE is this screen's, its open counts are that host's sessions
-  sessionTabs: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
+  sessionTabs: "device", sessionTabsPhone: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
   sessionTabsSync: "device", tabsSaverAsked: "device", tabOrderShared: "host", tabOpensShared: "host",
   // work in flight: that host's words, that host's queue
   outbox: "host", compose: "host", composeDrafts: "host", composeOutbox: "host", composeSheets: "host",

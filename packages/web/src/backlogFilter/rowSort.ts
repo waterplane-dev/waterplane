@@ -15,12 +15,15 @@
  * imports carry `.ts` because `node --test` loads it straight off the source.
  */
 import type { BacklogItem } from "@waterplane/shared";
+import { estimateDollars, valueRank } from "@waterplane/shared";
 
-export type BacklogSort = "newest" | "run";
+export type BacklogSort = "newest" | "run" | "value" | "cost";
 
 export const SORT_LABEL: Record<BacklogSort, string> = {
-  newest: "newest first",
+  newest: "newest",
   run: "start order",
+  value: "value",
+  cost: "cheapest",
 };
 
 /** What the switch says while the list is NOT in run order: why the move verbs are absent. */
@@ -40,10 +43,18 @@ export function effectiveSort(sort: BacklogSort, clockCut: boolean): BacklogSort
  */
 export function sortRows(items: BacklogItem[], sort: BacklogSort): BacklogItem[] {
   if (sort === "run") return items;
+  if (sort === "value") return [...items].sort((a, b) => valueRank(a.value) - valueRank(b.value) || dollars(a) - dollars(b));
+  if (sort === "cost") return [...items].sort((a, b) => dollars(a) - dollars(b) || valueRank(a.value) - valueRank(b.value));
   return [...items].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** Each row's 1-based seat in its group's RUN order — the number drawn on it in either view. */
 export function runSeats(items: BacklogItem[]): Map<string, number> {
   return new Map(items.map((it, i) => [it.id, i + 1]));
+}
+
+/** *Most value* breaks ties cheapest first and *cheapest* breaks them by value;
+ *  a row with no dollar figure sorts after every row with one, never as free. */
+function dollars(it: BacklogItem): number {
+  return estimateDollars(it.estimate) ?? Number.POSITIVE_INFINITY;
 }

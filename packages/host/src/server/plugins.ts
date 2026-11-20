@@ -13,7 +13,7 @@
  * auto-download rules — `api.repoApps()` asks it (the android-apps extension's `readiness`).
  */
 import type { WebSocket } from "ws";
-import type { AppReadinessReport } from "@waterplane/shared";
+import type { AppReadinessReport, HostMessage } from "@waterplane/shared";
 import { PluginRegistry } from "../plugins/pluginregistry.js";
 import { hostAutoProbes } from "../plugins/pluginauto.js";
 import { appReadinessReport } from "../appready.js";
@@ -51,6 +51,19 @@ export function settlePluginNotices(deps: Pick<ServerCtx, "attention" | "broadca
   return n;
 }
 
+/**
+ * `api.push` reaches every phone EXCEPT a passive (kids') device that a PIN has unlocked: a plugin push carries no caller, so
+ * the plugin cannot filter it, and what a plugin pushes (the vault's asks, its export file path and token) is not for the
+ * kid's screen (R-connection-013; `gatedHandle` refuses the same device's calls). The core holds the filter, once.
+ */
+export function pushToFullDevices(ctx: Pick<ServerCtx, "clients" | "wsDevice" | "auth" | "send">, msg: HostMessage): void {
+  for (const ws of ctx.clients) {
+    const id = ctx.wsDevice.get(ws);
+    if (id && ctx.auth.devices.get(id)?.scope === "passive") continue;
+    ctx.send(ws, msg);
+  }
+}
+
 export function createPlugins(ctx: ServerCtx, ptyHeld: (ws: WebSocket) => boolean): PluginRegistry {
   const plugins: PluginRegistry = new PluginRegistry({
     root: ctx.ROOT, configDir: hostSecretDir(), sessions: ctx.sessions,
@@ -65,7 +78,7 @@ export function createPlugins(ctx: ServerCtx, ptyHeld: (ws: WebSocket) => boolea
     notifyDone: (plugin, tag) => { settlePluginNotice(ctx, plugin, tag); }, // `api.notifyDone`
     notifyDoneExcept: (plugin, keep) => { settlePluginNoticesExcept(ctx, plugin, keep); }, // `api.notifyDoneExcept`
     usage: () => ctx.usage.get(),
-    push: (plugin, event, data) => ctx.broadcast({ t: "plugin.push", plugin, event, data }),
+    push: (plugin, event, data) => pushToFullDevices(ctx, { t: "plugin.push", plugin, event, data }),
     changed: () => ctx.broadcast({ t: "plugin.list", plugins: plugins.views() }),
     hookPort: ctx.PORT,
     // `api.stream`, `api.usageProbe`

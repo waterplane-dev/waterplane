@@ -13,6 +13,7 @@ import { waitingSheet } from "../../WaitingFrame";
 
 export { useActivityConfirmedDone, useActivityFiled, type ActivityFocus } from "./store";
 export { openActivity, openActivityOn, type ActivityCut } from "./actions";
+export { PendingPrompts } from "./PendingPrompts";
 export { openWaiting } from "../../waitingWork";
 
 registerWaitingBody("activity", { render: () => createElement(ActivityLogSheet), leave: clearActivityFocus, keep: keepStores(focus) });

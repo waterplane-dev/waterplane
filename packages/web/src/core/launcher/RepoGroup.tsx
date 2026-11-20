@@ -573,6 +573,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           )}
         </RowSub>
         {!t.ownerSessionId && <LeftoverLine r={leftovers.get(t.id)} />}
+        {!t.ownerSessionId && orphans.length === 1 && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} inRow />}
       </div>
       <button className="row-act" title="send image to this worktree" onClick={() => pickImageFor(t.id)}><Camera size={ICON} /></button>
       {/* The same verb as the repo header's, and the same icon: this
@@ -610,7 +611,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             : "No active session."}
         </div>
       )}
-      {!collapsed && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} style={repoAccentStyle(repoName)} />}
+      {!collapsed && orphans.length > 1 && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} style={repoAccentStyle(repoName)} />}
       {!collapsed && loose.map(wtRow)}
       {!collapsed && groupSessions.map((s) => (
         <Fragment key={s.id}>

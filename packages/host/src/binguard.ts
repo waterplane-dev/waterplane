@@ -10,7 +10,7 @@
  * The parse is pure (`installerIn`); the `ps` read is synchronous because `prepare` is, and it
  * runs only on a miss — a binary that resolves costs one PATH scan and no child process.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -70,14 +70,28 @@ export async function installerRunning(bin: string): Promise<InstallerProc | nul
   } catch { return null; }
 }
 
-/** The blocking twin, for `binMissingRefusal`'s sync callers (backend list, session start), and only
- *  reached when the binary did NOT resolve. The update path uses `installerRunning`. */
-export function installerRunningSync(bin: string): InstallerProc | null {
+// The backend LIST (`backendInfos`, read per setup check and per broadcast) must not block the loop
+// that pumps every PTY on `ps` (~50 ms) once per missing binary (`tools/hostsyncpins.test.mjs`).
+// It answers from the last async reading instead: one no older than `PS_FRESH_MS`, else none — and
+// none starts one, so the list after it can say "being installed".
+const PS_FRESH_MS = 10_000;
+let psSeen: { at: number; text: string | null } | null = null;
+let psReading: Promise<void> | null = null;
+
+function refreshPs(): void {
+  if (psReading || process.platform === "win32") return;
+  psReading = promisify(execFile)("ps", ["-axo", "pid=,command="], { encoding: "utf8", timeout: 3000, maxBuffer: 8 * 1024 * 1024 })
+    .then(({ stdout }) => { psSeen = { at: Date.now(), text: stdout }; }, () => { psSeen = { at: Date.now(), text: null }; })
+    .finally(() => { psReading = null; });
+}
+
+/** `installerRunning` without waiting: the last reading's answer, or null when there is no fresh one
+ *  (also when `ps` could not be read) — never a blocking `ps`. */
+export function installerSeen(bin: string): InstallerProc | null {
   if (process.platform === "win32") return null;
-  try {
-    const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8", timeout: 3000, maxBuffer: 8 * 1024 * 1024 });
-    return installerIn(out, bin, process.pid);
-  } catch { return null; }
+  const seen = psSeen && Date.now() - psSeen.at < PS_FRESH_MS ? psSeen : null;
+  if (!seen) { refreshPs(); return null; }
+  return seen.text === null ? null : installerIn(seen.text, bin, process.pid);
 }
 
 /** Does `bin` resolve: a path that exists, or a bare name on this process's PATH. */
@@ -100,7 +114,7 @@ export function installingWords(label: string, p: InstallerProc): string {
  */
 export function binMissingRefusal(
   label: string, bin: string,
-  facts: { resolves: (b: string) => boolean; installer: (b: string) => InstallerProc | null } = { resolves: binResolves, installer: installerRunningSync },
+  facts: { resolves: (b: string) => boolean; installer: (b: string) => InstallerProc | null } = { resolves: binResolves, installer: installerSeen },
   ownWords = false,
 ): string | null {
   if (facts.resolves(bin)) return null;
@@ -134,8 +148,14 @@ export function backendBinUnavailable(backend: Pick<BackendDescriptor, "label" |
   } catch { return null; }
 }
 
-/** `binMissingRefusal` for a backend about to be launched; claude speaks its own "not installed" in `prepare`. */
-export function backendBinRefusal(backend: Pick<BackendDescriptor, "label" | "bin">): string | null {
+/**
+ * `binMissingRefusal` for a backend about to be launched; claude speaks its own "not installed" in `prepare`.
+ * A binary that resolves answers null SYNCHRONOUSLY (a core backend spawns before any await); only a miss
+ * waits, for a fresh `ps`, so a start during an upgrade still says "being installed" the first time.
+ */
+export function backendBinRefusal(backend: Pick<BackendDescriptor, "label" | "bin">): string | null | Promise<string | null> {
   const bin = backend.bin();
-  return binMissingRefusal(backend.label, bin, undefined, bin === claudeBin());
+  if (binResolves(bin)) return null;
+  return installerRunning(bin).then((inst) =>
+    binMissingRefusal(backend.label, bin, { resolves: () => false, installer: () => inst }, bin === claudeBin()));
 }

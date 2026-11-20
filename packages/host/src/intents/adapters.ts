@@ -44,6 +44,7 @@ import {
   type Intent,
   type IntentDraft,
   type ItemCategory,
+  type ItemValue,
   type LaunchIntent,
   type LaunchOpts,
   type LaunchState,
@@ -571,6 +572,8 @@ export function intentToBacklogItem(i: Intent, review?: ReviewSidecar): BacklogI
     headlineBy: i.headlineBy,
     category: i.category,
     categoryBy: i.categoryBy,
+    estimate: i.estimate,
+    value: i.value,
     ...review,
   };
 }
@@ -658,6 +661,9 @@ export function backlogDraft(p: {
   headline?: string;
   category?: ItemCategory;
   nameBy?: "assess" | "name";
+  /** What it costs / is worth, as the filer said (`shared/estimate.ts`). */
+  estimate?: string;
+  value?: ItemValue;
 }): IntentDraft {
   // `steps[0]` is `text` again by contract. A caller that sends a chain whose
   // head disagrees is trusted about the chain: the steps are what runs.
@@ -694,6 +700,8 @@ export function backlogDraft(p: {
     // already the shape the store keeps, rather than one it silently repairs.
     ...(p.nameBy && p.headline ? { headline: p.headline, headlineBy: p.nameBy } : {}),
     ...(p.nameBy && p.category ? { category: p.category, categoryBy: p.nameBy } : {}),
+    ...(p.estimate ? { estimate: p.estimate } : {}),
+    ...(p.value ? { value: p.value } : {}),
   };
 }
 

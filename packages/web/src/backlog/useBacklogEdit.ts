@@ -1,10 +1,9 @@
 /**
- * The inline editor's fields, and the two verbs that open and save it. A save
- * sends CHANGED fields only — an unchanged headline sent back would stamp
- * `hand` on a title the person merely looked at.
+ * The inline editor's fields and the two verbs that open and save it. A save sends CHANGED
+ * fields only — an unchanged headline sent back would stamp `hand` on a title merely looked at.
  */
 import { useState } from "react";
-import type { BacklogItem, ItemCategory } from "@waterplane/shared";
+import type { BacklogItem, ItemCategory, ItemValue } from "@waterplane/shared";
 import type { BacklogProps } from "./backlogTypes";
 
 export function useBacklogEdit(p: BacklogProps) {
@@ -26,6 +25,8 @@ export function useBacklogEdit(p: BacklogProps) {
    */
   const [editHeadline, setEditHeadline] = useState("");
   const [editCategory, setEditCategory] = useState<ItemCategory | "">("");
+  const [editEstimate, setEditEstimate] = useState(""); // cost + worth: no author, changed-only like the rest
+  const [editValue, setEditValue] = useState<ItemValue | "">("");
 
   function beginEdit(it: BacklogItem) {
     setEditingId(it.id);
@@ -41,11 +42,12 @@ export function useBacklogEdit(p: BacklogProps) {
     // in it.
     setEditHeadline(it.headline ?? "");
     setEditCategory(it.category ?? "");
+    setEditEstimate(it.estimate ?? ""); setEditValue(it.value ?? "");
   }
   function saveEdit(it: BacklogItem) {
     const trimmed = editText.trim();
     if (!trimmed) return;
-    const patch: { text?: string; label?: string; repoDir?: string; targetSessionId?: string; headline?: string; category?: ItemCategory | "" } = {};
+    const patch: { text?: string; label?: string; repoDir?: string; targetSessionId?: string; headline?: string; category?: ItemCategory | ""; estimate?: string; value?: ItemValue | "" } = {};
     if (trimmed !== it.text) patch.text = trimmed;
     if ((editLabel || undefined) !== it.label) patch.label = editLabel;
     // **Changed fields only**, and `""` is a VALUE here rather than an absence:
@@ -56,6 +58,8 @@ export function useBacklogEdit(p: BacklogProps) {
     const headline = editHeadline.trim();
     if (headline !== (it.headline ?? "")) patch.headline = headline;
     if (editCategory !== (it.category ?? "")) patch.category = editCategory;
+    if (editEstimate.trim() !== (it.estimate ?? "")) patch.estimate = editEstimate.trim();
+    if (editValue !== (it.value ?? "")) patch.value = editValue;
     if (it.status !== "running") {
       if (editRepo && editRepo !== it.repoDir) patch.repoDir = editRepo;
       // Empty string clears the target back to the repo default (host reads "").
@@ -79,6 +83,7 @@ export function useBacklogEdit(p: BacklogProps) {
     setEditHeadline,
     editCategory,
     setEditCategory,
+    editEstimate, setEditEstimate, editValue, setEditValue,
     beginEdit,
     saveEdit,
   };

@@ -116,6 +116,8 @@
 @media (max-height: 520px) { .term-pending-more { display: none; } }
 .term-pending .term-overlay-acts { margin-top: var(--sp-4); }
 .term-pending > .key { flex: 0 0 auto; }
+/* The words a pending open carries (`features/activity/PendingPrompts.tsx`): the Activity rows, under the line. */
+.term-pending-words { flex: 0 1 auto; max-height: 55%; overflow-y: auto; }
 /* Where the toolbar would be: the verbs that need a PTY, as prose. Same border
    as the toolbar so the row it replaces keeps its place in the column. */
 .toolbar-cants {

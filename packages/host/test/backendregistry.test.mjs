@@ -184,8 +184,8 @@ test("R6: `measured` rides the wire; a running version none of them is a sentenc
 
 test("R6: the desktop's checklist has ONE warn row per drifted plugin backend, the host's sentence verbatim", async () => {
   const { hostChecks, backendDriftRows } = await import("../dist/plugins/setupcontrib.js");
-  const driftIds = () => hostChecks("/nonexistent-root").filter((c) => c.id.startsWith("backend-drift-"));
-  assert.deepEqual(driftIds(), [], "core backends only (claude, claude-local, claude-endpoint, shell): no row");
+  const driftIds = async () => (await hostChecks("/nonexistent-root")).filter((c) => c.id.startsWith("backend-drift-"));
+  assert.deepEqual(await driftIds(), [], "core backends only (claude, claude-local, claude-endpoint, shell): no row");
   registerBackend(plugin("driftcli", {}, { measured: { versions: ["1.0.91"], version: async () => "1.0.95" } }));
   registerBackend(plugin("steadycli", {}, { measured: { versions: ["1.0.91"], version: async () => "1.0.91" } }));
   registerBackend(plugin("mutecli2", {}, { measured: { versions: ["1.0.91"], version: async () => null } }));
@@ -193,10 +193,10 @@ test("R6: the desktop's checklist has ONE warn row per drifted plugin backend, t
     await idx.primeNewBackendModels();
     const drift = backendInfos().find((i) => i.id === "driftcli").measured.drift;
     assert.ok(drift, "the host computed a sentence");
-    assert.deepEqual(driftIds(), [{ id: "backend-drift-driftcli", label: "driftcli runs a version it was not measured on",
+    assert.deepEqual(await driftIds(), [{ id: "backend-drift-driftcli", label: "driftcli runs a version it was not measured on",
       status: "warn", scope: "host", fix: null, detail: drift }], "one warn, no fix, the sentence as the host said it");
   } finally { for (const id of ["driftcli", "steadycli", "mutecli2"]) unregisterBackend(id); }
-  assert.deepEqual(driftIds(), [], "an unregistered backend's row goes with it");
+  assert.deepEqual(await driftIds(), [], "an unregistered backend's row goes with it");
   // The pure half: only `measured.drift` makes a row — a shell, or claude with no `measured`, never does.
   assert.deepEqual(backendDriftRows([
     { id: "claude", label: "Claude Code", caps: {}, models: { aliases: [], ids: [] } },

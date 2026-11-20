@@ -10,6 +10,7 @@ import { api } from "../../api";
 import type { SendSeed } from "../../sendIntent";
 import { aimEvidence, armStep, core, featureSheetId, isExtensionEnabled } from "../../sdk";
 import { REMEDY_NEEDS_REPO } from "../../setupCheckWords";
+import { remedyPrompt as checkRemedyPrompt, setupRows } from "../../setupRemedy";
 import { doorRepoId, landingScope, menuAim, tabOfScope, waiveBody, type SetupCheckAim, type SetupCheckView } from "./logic";
 import { setupCheckAim } from "./store";
 import { leaveHealth, placeHealth, type HealthPlace } from "../../setupHealth";
@@ -177,6 +178,25 @@ export function openEvidence(rawRoute: EvidenceRoute, repoId: string | null): vo
   }
 }
 
+/** An `agent` remedy: the check's own words for that repo's agent, typed into the Send sheet. Sends nothing. */
+export function agentRemedy(f: Finding, repoId: string | null): { ok: true } | { ok: false; why: string } {
+  if (f.remedy.kind !== "agent") return { ok: false, why: "no prompt" };
+  const c = core();
+  const repo = repoOf(repoId) ?? c.world.activeRepo ?? c.world.repos.find((r) => r.isPrimary) ?? null;
+  if (!repo) return { ok: false, why: REMEDY_NEEDS_REPO };
+  const { checkId, label, detail } = f.remedy;
+  const prompt = checkRemedyPrompt([{ id: checkId, label, detail, status: "warn", fix: null }], repo.repoName, setupRows());
+  c.say.track("action:setupcheck.remedy");
+  c.nav.openSend({
+    prompts: [prompt],
+    target: { kind: "repo", cwd: repo.worktreePath },
+    cwdHint: repo.worktreePath,
+    repoId: repo.id,
+    origin: `From Setup & health — ${f.what.slice(0, 60)}`,
+  });
+  return { ok: true };
+}
+
 /** A `seed` remedy: the words for the agent, typed into the Send sheet. Sends nothing. */
 export function seedRemedy(f: Finding, repoId: string | null): { ok: true } | { ok: false; why: string } {
   if (f.remedy.kind !== "seed") return { ok: false, why: "no prompt" };
@@ -200,7 +220,7 @@ export function seedRemedy(f: Finding, repoId: string | null): { ok: true } | { 
     target: { kind: "repo", cwd: repo.worktreePath },
     cwdHint: repo.worktreePath,
     repoId: repo.id,
-    origin: `From the Setup check — ${f.what.slice(0, 60)}`,
+    origin: `From Setup & health — ${f.what.slice(0, 60)}`,
   };
   c.nav.openSend(seed);
   return { ok: true };

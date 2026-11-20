@@ -301,7 +301,7 @@ they survive the restart. Logs land in `~/Library/Logs/waterplane-host.{out,err}
 ## Update
 
 With the `curl | sh` installer, all of this is `waterplane update`. From the folder you cloned into
-(on Windows: inside the WSL shell, not `C:\`):
+(a clone inside WSL: in the WSL shell):
 
 ```bash
 git pull --ff-only   # the latest release
@@ -310,8 +310,13 @@ npm run doctor       # new checks arrive with new releases; re-read what it says
 npm run restart      # builds, then restarts the host (the service if installed, else detached)
 ```
 
-- **Or tap Update** in Settings → Tools → updates (the `curl | sh` installer's install only; other
-  installs show the command above).
+- **A Windows checkout under `C:\`** is built on Windows, so its packages are installed there: run
+  the steps in PowerShell, or from a session (a WSL shell) as one line:
+  `git pull --ff-only && cmd.exe /d /c "npm ci && npm run restart"`. An `npm ci` typed into the WSL
+  shell installs Linux binaries the Windows build cannot use; `npm run restart` notices and
+  reinstalls them on Windows, which costs a few minutes.
+- **Or tap Update** in Settings → Tools → updates. A checkout or npm install shows the command it
+  runs beside the button.
 - **Sessions survive it.** They run inside tmux; the phone reconnects and carries on.
 - **The phone updates itself.** The new UI is served by the host; the web app and the Android app
   pick it up on their next launch. A new APK is needed only when the native shell changed:

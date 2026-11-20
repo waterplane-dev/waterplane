@@ -22,7 +22,7 @@ export const SKILLS_HOST_ROUTES: readonly ApiEntry[] = [
   route("POST", "/api/host/skills/write", async ({ req, res }, ctx) => {
     const body = await readJson(req);
     const { doc } = await buildInventory();
-    const r = applySkillWrite({ logFile: logFile(ctx.root), level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global"], doc });
+    const r = await applySkillWrite({ logFile: logFile(ctx.root), level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global"], doc });
     if (!r.ok) { json(res, r, r.status); return true; }
     forgetSkillJobs(jobsOf(ctx));   // a global write changes every repo's inventory
     json(res, { ...r, doc: (await buildInventory()).doc });
@@ -46,7 +46,7 @@ export const SKILLS_REPO_ROUTES: readonly ApiEntry<RepoReq>[] = [
   route<RepoReq>("POST", "skills/write", async ({ req, res, wt, target }, ctx) => {
     const body = await readJson(req);
     const { doc } = await buildInventory({ worktree: wt, repoId: target.id });
-    const r = applySkillWrite({ logFile: logFile(ctx.root), repoId: target.id, level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global", "repo-local", "repo-shared"], worktree: wt, doc });
+    const r = await applySkillWrite({ logFile: logFile(ctx.root), repoId: target.id, level: body?.level, revs: body?.revs, changes: body?.changes, allowed: ["global", "repo-local", "repo-shared"], worktree: wt, doc });
     if (!r.ok) { json(res, r, r.status); return true; }
     forgetSkillJobs(jobsOf(ctx), target.id);
     json(res, { ...r, doc: (await repoDoc(ctx.root, wt, target.id)).doc });

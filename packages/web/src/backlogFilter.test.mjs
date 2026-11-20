@@ -140,7 +140,7 @@ test("the empty filter is empty in all FIVE dimensions", () => {
   // default that collapsed the two would make the sheet open on a cut nobody
   // asked for. The fifth is the CLOCK, and it is the one axis with a single
   // interesting side — `null` is "no filter", never "the rows with no clock".
-  assert.deepEqual(NO_BACKLOG_FILTER, { status: null, age: null, category: null, ids: null, clock: null });
+  assert.deepEqual(NO_BACKLOG_FILTER, { status: null, age: null, category: null, value: null, cost: null, ids: null, clock: null });
   assert.equal(hasBacklogFilter({ ...NO_BACKLOG_FILTER, clock: true }), true);
   assert.equal(hasBacklogFilter(NO_BACKLOG_FILTER), false);
   assert.equal(backlogFilterSentence(NO_BACKLOG_FILTER), "showing everything");
@@ -833,7 +833,7 @@ test("a chip equal to the total is hidden unless it is active", () => {
   const counts = backlogCounts(items, f, NOW);
   assert.equal(counts.age.week, 4);
   assert.equal(counts.category.none, 4);
-  assert.deepEqual(counts.pool, { status: 4, age: 4, category: 4, clock: 4 });
+  assert.deepEqual(counts.pool, { status: 4, age: 4, category: 4, value: 4, cost: 4, clock: 4 });
   const shown = drawnChips(counts, f);
   assert.deepEqual(shown.age, ["hour", "day"], "past week = all four: it cuts nothing, so it is not drawn");
   assert.deepEqual(shown.category, [], "no kind = all four: the whole axis goes");
@@ -1370,4 +1370,27 @@ test("a call-off is settled, never failed — no count, no refused verb, no cloc
 
   assert.deepEqual(clockSeat(clockGroups(mates), "q2"), { idx: 1, of: 2 }, "a call-off takes no seat on the clock");
   assert.equal(clockSeat(clockGroups(mates), "w"), null);
+});
+
+test("value and cost: one bucket per axis feeds the count and the cut; nobody-said is its own bucket", async () => {
+  const { costBucket, valueBucket, sortRows } = await import("./backlogFilter.ts");
+  const rows = [
+    item({ id: "a", value: "low", estimate: "~$1 · 10 min" }),
+    item({ id: "b", value: "high", estimate: "~$10-30 · 2 h" }),
+    item({ id: "c" }),
+    item({ id: "d", value: "high", estimate: "~$3 · 20 min" }),
+    item({ id: "e", value: "medium", estimate: "about an hour" }),
+  ];
+  assert.deepEqual(rows.map(costBucket), ["small", "mid", "none", "small", "none"], "$10-30 is its middle, 20; no dollar figure is no estimate, never cheap");
+  assert.deepEqual(rows.map(valueBucket), ["low", "high", "none", "high", "medium"]);
+  // Most value: high first, cheaper first among equals; nobody-said last.
+  assert.deepEqual(sortRows(rows, "value").map((r) => r.id), ["d", "b", "e", "a", "c"]);
+  // Cheapest: lowest dollars first; rows with no dollar figure last, by value.
+  assert.deepEqual(sortRows(rows, "cost").map((r) => r.id), ["a", "d", "b", "e", "c"]);
+  // The count IS the tap: high value · 2 with "up to $5" on is the one cheap high row.
+  const f = { ...NO_BACKLOG_FILTER, cost: "small" };
+  const c = backlogCounts(rows, f, NOW);
+  assert.equal(c.value.high, 1);
+  assert.equal(rows.filter((r) => matchesBacklogFilter(r, { ...f, value: "high" }, NOW)).length, 1);
+  assert.equal(backlogFilterSentence({ ...f, value: "high" }), "showing high value · costing ≤ $5");
 });

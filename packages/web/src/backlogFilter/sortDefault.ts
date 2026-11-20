@@ -7,5 +7,5 @@
 import type { BacklogSort } from "./rowSort.ts";
 
 export function sortFromStored(stored: string | null | undefined): BacklogSort {
-  return stored === "1" ? "run" : "newest";
+  return stored === "1" ? "run" : stored === "value" || stored === "cost" ? stored : "newest";
 }

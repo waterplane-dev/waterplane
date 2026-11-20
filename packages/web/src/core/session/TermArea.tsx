@@ -66,6 +66,7 @@ import { useWeekIncl, useWeekRefused, useWeekUsdPerPct } from "../../features/to
 import { lineToShell, openShellsFor } from "../../features/shells";
 import { openLogins } from "../../features/shellLogins";
 import { DemoHookCard, DemoHookHint } from "../../features/demoTour";
+import { PendingPrompts } from "../../features/activity";
 import type { SessionChrome } from "./useSessionChrome";
 import { useTermPick } from "./useTermPick";
 import { useReaderPick } from "./useReaderPick";
@@ -646,6 +647,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
           <div className="term-stage">
             {/* First in the column, so the empty grid under it gives up the height (`.term-pending`). */}
             {kind === "pending" && pendingLine()}
+            {/* The words this open carries, editable here — not only behind Waiting work. */}
+            {kind === "pending" && pendingEntry && <PendingPrompts createAck={pendingEntry.ackId} />}
             {/* Dimming is a CSS filter on the container, never injected ANSI: a
                 replayed TUI re-sets its own SGR attributes within bytes and would
                 paint straight over any dim code we wrote. */}

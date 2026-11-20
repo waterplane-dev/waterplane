@@ -155,7 +155,8 @@ app from the latest release, or the web app. Never post the code anywhere but th
 
 ## Update and remove
 
-- Update: `waterplane update` (installer) — or in a clone `git pull --ff-only && npm ci && npm run restart`.
+- Update: `waterplane update` (installer) — or in a clone `git pull --ff-only && npm ci && npm run restart`
+  (a Windows checkout under `C:\`, from WSL: `git pull --ff-only && cmd.exe /d /c "npm ci && npm run restart"`).
   Sessions run in tmux and survive it; the phone picks up the new UI on its next launch.
 - Remove: `sh /tmp/waterplane-install.sh --uninstall` (installer); `bash deploy/uninstall-service.sh`
   (macOS checkout); `node scripts/windows/host.mjs autostart --remove` then `npm run stop` (Windows).

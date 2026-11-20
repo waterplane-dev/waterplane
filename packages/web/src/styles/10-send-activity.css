@@ -376,6 +376,10 @@ button.sched-clock:active { background: var(--raise); }
    button already had plus `.danger`, which is the point of it. Only the
    dialog, which stands in for `window.confirm`, has a shape. */
 .confirm-modal { max-width: 340px; }
+/* The app-wide ask (ConfirmHost, AskText) answers whatever layer raised it, so it
+   stands above every layer — the open-tabs list (59) hid it at the shared
+   `.bl-modal-backdrop` 30. Only the app lock (90) covers it. */
+.confirm-backdrop { z-index: 85; }
 .ask-text-input { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-16); padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8); background: var(--bg); color: var(--fg); }
 .ask-text-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); }
 .confirm-lines { margin: 0; padding-left: var(--sp-16); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-15); }
@@ -531,3 +535,6 @@ button.sched-clock:active { background: var(--raise); }
    text: the facet labels above are sentence case, and "THE CUT" shouted over them. Scoped to this
    sheet; every other `.section` keeps its uppercase. */
 .close-cut { text-transform: none; letter-spacing: 0; }
+/* The per-row toggle carries a checkbox AND its word: `.row-act`'s fixed 48px
+   let both spill past the screen edge, so it sizes to its content instead. */
+.close-tick { flex: 0 0 auto; width: auto; display: flex; align-items: center; gap: var(--sp-6); padding: 0 var(--gutter) 0 var(--sp-10); cursor: pointer; }

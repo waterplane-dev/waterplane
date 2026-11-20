@@ -11,6 +11,7 @@ import { cleanParamValue } from "../buildparams.js";
 import { DEFAULT_GRACE_MIN, INTENT_MAX_STEPS, cleanRule } from "../schedule.js";
 import { LAUNCH_WAIT_MS, cleanLaunchOpts, safeRel } from "../launch.js";
 import { cleanAuthor, cleanCategory, cleanHeadline } from "../naming.js";
+import { cleanEstimate, cleanValue } from "../estimate.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
 import type { AssessPayload, BlockReason, BudgetPass, BuildPayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
 import { REQUEUE_KEEP } from "./types.js";
@@ -167,6 +168,8 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     headlineBy: headline ? headlineBy : undefined,
     category,
     categoryBy: category ? categoryBy : undefined,
+    estimate: cleanEstimate(r.estimate),
+    value: cleanValue(r.value),
     cols: num(r.cols),
     rows: num(r.rows),
     // Rebuilt from its five fields (`cleanLaunchOpts`): a row keeps its launch
@@ -524,6 +527,7 @@ export const INTENT_FIELD_WRITER = {
   // stated once, at the post
   id: "post", interject: "post", manual: "post",
   headline: "post", headlineBy: "post", category: "post", categoryBy: "post",
+  estimate: "post", value: "post",
   cols: "post", rows: "post", budget: "post", replaceSessionId: "post",
   origin: "post", groupId: "post",
   // the host's

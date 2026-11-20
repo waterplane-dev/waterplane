@@ -148,7 +148,7 @@ export interface RegistryDeps {
   usage(): UsageInfo;
   /** The plugin list changed — broadcast it. */
   changed(): void;
-  /** `api.push` — broadcast `plugin.push` to every phone. Absent ⇒ the api refuses in words. */
+  /** `api.push` — broadcast `plugin.push` to every phone but a passive device (`pushToFullDevices`). Absent ⇒ the api refuses in words. */
   push?(plugin: string, event: string, data: unknown): void;
   /** The daemon's ctx, read at CALL time: `api.handToAgent` is its backlog add. Absent ⇒ refused in words. */
   host?: Pick<HostCtx, "backlog" | "intents" | "containRepoDir">;

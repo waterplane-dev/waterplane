@@ -9,6 +9,7 @@ import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
 import {
   BACKLOG_AGES, BACKLOG_STATUSES, CATEGORY_BUCKETS, categoryBucket, type BacklogAge, type CategoryBucket, withinAge,
 } from "./rowBuckets.ts";
+import { COST_BUCKETS, VALUE_BUCKETS, costBucket, valueBucket, type CostBucket, type ValueBucket } from "./worthBuckets.ts";
 import { isFailedRow, statusBucket } from "./calledOff.ts";
 import { type BacklogFilter } from "./rowFilter.ts";
 
@@ -32,31 +33,35 @@ export function backlogCounts(items: BacklogItem[], f: BacklogFilter, now: numbe
   const status = { running: 0, queued: 0, failed: 0, done: 0 } as Record<BacklogStatus, number>;
   const age = { hour: 0, day: 0, week: 0, older: 0 } as Record<BacklogAge, number>;
   const category = { bug: 0, feature: 0, enhancement: 0, chore: 0, none: 0 } as Record<CategoryBucket, number>;
-  // The fourth axis, counted against the other three exactly as they are
-  // against each other: with "failed" on, "on a clock 3" has to mean three
-  // failed rows with a clock, because that is the list its tap opens.
+  const value = { high: 0, medium: 0, low: 0, none: 0 } as Record<ValueBucket, number>;
+  const cost = { small: 0, mid: 0, big: 0, none: 0 } as Record<CostBucket, number>;
   let clock = 0;
-  const pool = { status: 0, age: 0, category: 0, clock: 0 };
+  const pool = { status: 0, age: 0, category: 0, value: 0, cost: 0, clock: 0 };
   for (const it of items) {
     if (f.ids && !f.ids.includes(it.id)) continue;
-    // Each axis counted against the OTHER two, exactly as the first two have
-    // always been counted against each other: with "failed" and "past 24h"
-    // already on, `bug 3` has to mean three failed bugs from the past 24 hours,
-    // because that is the list its tap opens.
+    // Each axis counted against ALL the others: with "failed" and "past 24h"
+    // on, `bug 3` means three failed bugs from the past 24 hours — its tap's list.
     const st = statusBucket(it);
     const okStatus = !f.status || st === f.status;
     const okAge = !f.age || withinAge(it.createdAt, f.age, now);
     const okCat = !f.category || categoryBucket(it) === f.category;
     const okClock = !f.clock || !!it.at;
-    if (okAge && okCat && okClock) { status[st] = (status[st] ?? 0) + 1; pool.status++; }
-    if (okStatus && okCat && okClock) {
+    const vb = valueBucket(it), cb = costBucket(it);
+    const okVal = !f.value || vb === f.value;
+    const okCost = !f.cost || cb === f.cost;
+    const okVC = okVal && okCost;
+    if (okAge && okCat && okClock && okVC) { status[st] = (status[st] ?? 0) + 1; pool.status++; }
+    if (okStatus && okCat && okClock && okVC) {
       pool.age++;
       for (const a of BACKLOG_AGES) if (withinAge(it.createdAt, a, now)) age[a]++;
     }
-    if (okStatus && okAge && okClock) { category[categoryBucket(it)]++; pool.category++; }
-    if (okStatus && okAge && okCat) { pool.clock++; if (it.at) clock++; }
+    if (okStatus && okAge && okClock && okVC) { category[categoryBucket(it)]++; pool.category++; }
+    if (okStatus && okAge && okCat && okVC) { pool.clock++; if (it.at) clock++; }
+    const okRest = okStatus && okAge && okCat && okClock;
+    if (okRest && okCost) { value[vb]++; pool.value++; }
+    if (okRest && okVal) { cost[cb]++; pool.cost++; }
   }
-  return { status, age, category, clock, pool };
+  return { status, age, category, value, cost, clock, pool };
 }
 
 /**
@@ -81,6 +86,8 @@ export function drawnChips(c: ReturnType<typeof backlogCounts>, f: BacklogFilter
       drawn(c.status[s], c.pool.status, f.status === s, s === "failed" || s === "done")),
     age: BACKLOG_AGES.filter((a) => drawn(c.age[a], c.pool.age, f.age === a)),
     category: CATEGORY_BUCKETS.filter((k) => drawn(c.category[k], c.pool.category, f.category === k)),
+    value: VALUE_BUCKETS.filter((k) => drawn(c.value[k], c.pool.value, f.value === k)),
+    cost: COST_BUCKETS.filter((k) => drawn(c.cost[k], c.pool.cost, f.cost === k)),
     clock: drawn(c.clock, c.pool.clock, !!f.clock, true),
   };
 }

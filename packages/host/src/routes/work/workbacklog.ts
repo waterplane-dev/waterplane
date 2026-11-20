@@ -110,6 +110,7 @@ const onBacklogAdd: Route<"backlog.add"> = (a) => {
     const run = addClientBacklogItem(a.c, {
       repoDir: a.msg.repoDir, text: a.msg.text, label: a.msg.label, targetSessionId: a.msg.targetSessionId,
       autoFire: a.msg.autoFire, steps: a.msg.steps, resume: a.msg.resume,
+      estimate: a.msg.estimate, value: a.msg.value,
       // Waits for the person's tap (`Intent.manual`): the phone's *Add to backlog*. Strictly true, never inferred.
       manual: a.msg.hold === true ? true : undefined,
       // Strictly a boolean: absent follows the global close-when-done setting.
@@ -180,6 +181,9 @@ const onBacklogUpdate: Route<"backlog.update"> = (a) => {
     // written down.
     const named = {
       headline: a.msg.headline, category: a.msg.category,
+      // Strings only; `""` clears (`IntentManager.edit`).
+      ...(typeof a.msg.estimate === "string" ? { estimate: a.msg.estimate } : {}),
+      ...(typeof a.msg.value === "string" ? { value: a.msg.value } : {}),
       // `true`/`false`/`null` (back to the global) only — anything else off the
       // wire says nothing, and nothing must not clear the override.
       ...(a.msg.closeWhenDone === true || a.msg.closeWhenDone === false || a.msg.closeWhenDone === null

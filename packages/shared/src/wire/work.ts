@@ -2,6 +2,7 @@
 
 import type { AssessInput, AssessProposal, AssessScope } from "../assess.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
+import type { ItemValue } from "../estimate.js";
 import type { ScheduleRule } from "../schedule.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "./session.js";
@@ -120,6 +121,10 @@ export interface BacklogItem {
   /** Who said so — the same pairing rule as `headlineBy`, for the same reason:
    *  a kind with no author cannot protect a kind a person picked. */
   categoryBy?: NameAuthor;
+  /** What the work will cost (`~$3 · 20 min`) and what it is worth — drawn in
+   *  front of the title (`estimatePrefix`). Absent = nobody said. */
+  estimate?: string;
+  value?: ItemValue;
   /** The session the item last actually fired INTO (resolved target). */
   sessionId?: string;
   /**

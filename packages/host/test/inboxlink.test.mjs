@@ -57,13 +57,13 @@ test("an in-repo link for the inbox keeps working", () => {
   assert.equal(files.saveInboxFile(wt, "a.txt", Buffer.from("x")).name, "a.txt");
 });
 
-test("setSecret refuses a .env that is a link and leaves its target untouched", () => {
+test("setSecret refuses a .env that is a link and leaves its target untouched", async () => {
   const wt = tmp("wp-env-wt-");
   const out = tmp("wp-env-out-");
   execFileSync("git", ["init", "-q"], { cwd: wt });
   writeFileSync(join(out, "target"), "A=1\n");
   symlinkSync(join(out, "target"), join(wt, ".env"));
-  const r = setSecret({ root: wt, scope: "repo", worktree: wt, file: ".env", key: "K", value: "v" });
+  const r = await setSecret({ root: wt, scope: "repo", worktree: wt, file: ".env", key: "K", value: "v" });
   assert.deepEqual(r, { ok: false, error: ".env is a link, not a file" });
   assert.equal(readFileSync(join(out, "target"), "utf8"), "A=1\n");
 });

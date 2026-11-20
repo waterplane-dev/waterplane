@@ -731,6 +731,11 @@ checkout, else npm):
   (`cmd.exe /c npm run restart`): building in WSL fails on the Windows esbuild/rollup, and a daemon
   started with `nohup` there is one no keeper holds. So "pull, then `npm run restart`" works from the
   phone too.
+- **`npm ci` typed into that WSL shell** replaces the Windows `node_modules` with Linux binaries (no
+  `.cmd` shims), and the install guide's update steps said to do exactly that: the restart then
+  refused and the old host and UI stayed up. `scripts/windows/host.mjs` reinstalls on Windows itself
+  for the tasks that build or run, and the update button and the command it shows go through
+  `cmd.exe` on such a checkout (`windowsBuilt`, `updates/selfother.ts`).
 - **Stopping THIS install's daemon** (`stopScript`): a process is this install's when its argv is
   `node <install>/packages/host/dist/main.js` (the ABSOLUTE path today's keeper execs), or `node
   packages/host/dist/main.js` RELATIVE with `readlink /proc/<pid>/cwd` = the install — an older

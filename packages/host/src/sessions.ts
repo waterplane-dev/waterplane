@@ -21,7 +21,7 @@ import {
   TMUX_SERVER, TMUX_PREFIX,
 } from "./sessions/knobs.js";
 // After knobs, which tmux.ts also imports: knobs is still evaluated first.
-import { adoptOrPark, armOrphanSweep, deleteLive, exitReport, hasLiveTmux, loadLive, persistLive, reattach, reclaimStaleLive, retryParked, settleParked, spawnBackend } from "./sessions/tmux.js";
+import { adoptOrPark, armOrphanSweep, deleteLive, exitReport, hasLiveTmux, liveTmuxIds, loadLive, persistLive, reattach, reclaimStaleLive, retryParked, settleParked, spawnBackend } from "./sessions/tmux.js";
 export { droppedEnvNames, exitReport, paneUnsetNames, staleLiveIds, sweepSessionStores, tmuxEnvPrefix } from "./sessions/tmux.js";
 import {
   adoptBackendId, adoptClaudeId, backendField, detectBackendId, detectClaudeId, readSignInAtSpawn, readSpawnVersion, refreshModel,
@@ -102,7 +102,7 @@ export class SessionManager extends EventEmitter {
       // tmux.ts
       spawnBackend: (id, cwd, cols, rows, args, backend, launchEnv, dropEnv) => spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv),
       reattach: (m) => { reattach(this.core, m); this.net.restored(m.id); this.signIn.restored(m.id, m.signInSince); }, persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
-      deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), supersede: (from, to, by) => drive.supersede(this.core, from, to, by), carryFor: (id, rid) => record.carryOf(this.core, id, rid), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
+      deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), supersede: (from, to, by) => drive.supersede(this.core, from, to, by), carryFor: (id, rid) => record.carryOf(this.core, id, rid), hasLiveTmux: (id) => hasLiveTmux(id), liveTmuxIds: () => liveTmuxIds(), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
       detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid, o) => adoptClaudeId(this.core, s, cid, o),
       watchClaudeId: (s) => watchClaudeId(this.core, s), stopClaudeIdWatch: (s) => stopClaudeIdWatch(s),
@@ -237,7 +237,7 @@ export class SessionManager extends EventEmitter {
     // (`resolveBackend`). Never `?? claude`: spawning something other than what
     // was asked for, silently, is the one outcome this indirection exists to
     // prevent. Same for a resume mode the backend has no flag for.
-    const backend = resolveBackend(launch.backend); const refused = halt.openRefusal(backend, opts.origin); if (refused) throw new Error(refused); const modeRefused = launchModeRefusal(backend.label, launch.permissionMode, backend.caps) ?? backendBinRefusal(backend); /* `?? `: a missing or mid-upgrade binary is a sentence, never tmux's [exited] */ if (modeRefused) throw new Error(modeRefused); /* a mode it cannot START in (`caps.launchModes`): refused in words before `prepare` */ // a job never opens a shell; nothing AI opens while halted — before `prepare`, which may start a server
+    const backend = resolveBackend(launch.backend); const refused = halt.openRefusal(backend, opts.origin); if (refused) throw new Error(refused); const refusing = launchModeRefusal(backend.label, launch.permissionMode, backend.caps) ?? backendBinRefusal(backend); const modeRefused = refusing instanceof Promise ? await refusing : refusing; /* `?? `: a missing or mid-upgrade binary is a sentence, never tmux's [exited]; awaited ONLY on a miss (its `ps`), so a binary that resolves still spawns before any await */ if (modeRefused) throw new Error(modeRefused); /* a mode it cannot START in (`caps.launchModes`): refused in words before `prepare` */ // a job never opens a shell; nothing AI opens while halted — before `prepare`, which may start a server
     // Two ids, never one field: `sessionId` is claude's uuid (a log path), `backendSessionId` the other backend's own; at most one, only when KNOWN (`backends/types.ts`).
     // Order (prepare → files → spawn → persist → register): a refused plan writes nothing, spawns nothing.
     const askRules = askRulesForCwd(cwd); // read per launch; the plan says how they hold

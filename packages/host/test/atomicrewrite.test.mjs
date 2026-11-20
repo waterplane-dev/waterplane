@@ -103,12 +103,12 @@ test("claude-md fix: appends exactly the block with the mode kept, and never sca
   assert.equal(readFileSync(p, "utf8"), body);
 });
 
-test("setSecret: the .gitignore it must add before writing keeps its mode and ends in a newline", () => {
+test("setSecret: the .gitignore it must add before writing keeps its mode and ends in a newline", async () => {
   const d = repo();
   const gi = join(d, ".gitignore");
   writeFileSync(gi, "dist");
   chmodSync(gi, 0o640);
-  const r = setSecret({ root: d, scope: "repo", worktree: d, file: ".env", key: "K", value: "v" });
+  const r = await setSecret({ root: d, scope: "repo", worktree: d, file: ".env", key: "K", value: "v" });
   assert.equal(r.ok, true, r.error);
   assert.equal(readFileSync(gi, "utf8"), "dist\n.env\n");
   assert.equal(mode(gi), 0o640);

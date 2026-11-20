@@ -9,9 +9,9 @@ import type { BillingProfile, Finding, NotChecked, PassedCheck } from "@waterpla
 import { api } from "../../api";
 import { core } from "../../sdk";
 import { Button, ConfirmButton, Explain, Hint, useRemoteResource } from "../../kit";
-import { fixConfirmWords, fixNeedsConfirm, fixVerb } from "../../setupRemedy";
+import { agentVerb, fixConfirmWords, fixNeedsConfirm, fixVerb, setupRows } from "../../setupRemedy";
 import { doorOffered, evidenceLabel, savingLine, writePlanWords } from "../../setupCheckWords";
-import { openEvidence, permissionsDoorOn, runFix, runHostFix, seedRemedy, waive, writeRules } from "./actions";
+import { agentRemedy, openEvidence, permissionsDoorOn, runFix, runHostFix, seedRemedy, waive, writeRules } from "./actions";
 import { WEIGHT_FINDING_ID, backendLabels, blockLines, notCheckedSentences, evidenceDoorOf, fixRoute, weightClocksOf } from "./logic";
 import { SeriesSpark } from "../../RepoHealthTiles";
 import { rankSentence, seriesValueWords } from "../../repoHealthWords";
@@ -104,6 +104,8 @@ function RemedyControl({ f, ctx, setNote, doFix }: { f: Finding; ctx: RowCtx; se
   switch (r.kind) {
     case "seed":
       return <Button title="opens the Send sheet with the words for the agent; nothing is sent" onClick={() => { const a = seedRemedy(f, ctx.repoId); setNote(a.ok ? null : a.why); }}>ask the agent</Button>;
+    case "agent":
+      return <Button title="opens the Send sheet with the words for the agent; nothing is sent" onClick={() => { const a = agentRemedy(f, ctx.repoId); setNote(a.ok ? null : a.why); }}>{agentVerb(r.checkId, setupRows())}</Button>;
     case "fix":
       return fixNeedsConfirm(r.fixId)
         ? <ConfirmButton confirm={<><Wrench size={12} /> {fixConfirmWords(r.fixId) ?? "apply the fix"}</>} onConfirm={() => void doFix(r.fixId)}><Wrench size={12} /> {fixVerb(r.fixId)}</ConfirmButton>

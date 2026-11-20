@@ -5,8 +5,7 @@
  * this — and every row rendered the same three words ("queued", "done") over a
  * forty-character truncation of its own text. Two questions could not be
  * answered by looking at it: how old is this, and where are the failures. The
- * search box answers neither (it matches words, and "failed" is not a word in
- * the item's text).
+ * search box answers neither ("failed" is not a word in the item's text).
  *
  * So: the age of a row is a BUCKET, the same one that feeds the chip's count and
  * the cut it opens — `ageBucket` and nothing else, for the reason
@@ -28,10 +27,10 @@
  * map routes by basename). What each file holds:
  *
  *   rowBuckets.ts     the age and kind buckets — the ONE edge each chip's count
- *                     and its cut share; calledOff.ts: a call-off is not a failure
+ *                     and its cut share (worthBuckets.ts: value, cost); calledOff.ts: a call-off is not a failure
  *   rowFilter.ts      the cut (`matchesBacklogFilter`), the bar's sentence, the
  *                     archived hide (`hiddenByArchive`), the offline refusals
- *   rowSort.ts        newest first or run order — a VIEW; the number stays the run seat
+ *   rowSort.ts        newest, run order, most value, cheapest — a VIEW; the number stays the run seat
  *   cutCounts.ts      the numbers on the controls and their sentences
  *                     (`backlogCounts`, `focusRunWords`, archive/assess scope)
  *   clockGroups.ts    the GROUPS of rows that share a clock, and their seats
@@ -46,6 +45,7 @@
  * barrel's export list, so a name cannot fall out of it in a later cut.
  */
 export * from "./backlogFilter/rowBuckets.ts";
+export * from "./backlogFilter/worthBuckets.ts";
 export * from "./backlogFilter/rowFilter.ts";
 export * from "./backlogFilter/rowSort.ts";
 export * from "./backlogFilter/cutCounts.ts";

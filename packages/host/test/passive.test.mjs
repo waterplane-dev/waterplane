@@ -51,6 +51,7 @@ test("passiveNeverAllows: auth material is refused to a passive row even while u
   for (const [m, p] of [
     ["POST", "/api/pair/mint"], ["POST", "/api/devices/revoke"], ["POST", "/api/peers"], ["DELETE", "/api/peers/pc"], ["PUT", "/api/peers/pc"],
     ["GET", "/api/lan/identity"], ["HEAD", "/api/lan/identity"],
+    ["GET", "/api/plugin-file/vault/tok"], ["HEAD", "/api/plugin-file/vault/tok"], // a plugin's offered file (the vault's encrypted export): fetching it consumes it
     ["POST", "/api/host/root"], // persists the code root and restarts the host: outlives the unlock (R-connection-013)
   ]) assert.equal(passiveNeverAllows(m, p), true, `${m} ${p}`);
   for (const [m, p] of [

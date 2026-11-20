@@ -99,15 +99,15 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // ── Opt-ins: offers, never findings (`optins.ts`) ──────────────────
   // Nothing here touches the setup checklist, its badge or the sweep's store.
   // The mutation is a POST because it writes (origin.ts: no /api GET may change state).
-  route<RepoReq>("GET", "optins/*", ({ res, rest, target }, ctx) => {
+  route<RepoReq>("GET", "optins/*", async ({ res, rest, target }, ctx) => {
     if (rest[0]) return false;
-    json(res, optInReport(target, ctx));
+    json(res, await optInReport(target, ctx));
     return true;
   }),
   route<RepoReq>("POST", "optins/choice/*", async ({ req, res, target }, ctx) => {
     const body = await readJson(req);
     const r = setOptInChoice(target.worktreePath, String(body?.id ?? ""), (body?.choice ?? null) as OptInChoice | null);
-    json(res, r.ok ? { ok: true, report: optInReport(target, ctx) } : { ok: false, error: r.error }, r.ok ? 200 : 400);
+    json(res, r.ok ? { ok: true, report: await optInReport(target, ctx) } : { ok: false, error: r.error }, r.ok ? 200 : 400);
     return true;
   }),
 
@@ -295,8 +295,8 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   }),
 ];
 
-function optInReport(target: RepoTarget, ctx: ApiCtx): OptInReport {
-  const rows = inspectOptIns(target.worktreePath, {
+async function optInReport(target: RepoTarget, ctx: ApiCtx): Promise<OptInReport> {
+  const rows = await inspectOptIns(target.worktreePath, {
     standingPrompts: (wt) => { try { return standingPromptsOf(ctx.intents.list(), wt); } catch { return null; } },
     sightings: (wt) => optInSightings(wt, ctx.intents.list(), ctx.sessions.list().map((s) => ({ cwd: s.cwd, history: ctx.sessions.getHistory(s.id) }))),
   });

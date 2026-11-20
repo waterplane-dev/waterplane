@@ -23,6 +23,8 @@ export type RemedyPromptId = RemedyId;
 export type FindingRemedy =
   | { kind: "seed"; prompt: RemedyPromptId; facts: Record<string, string | number> }
   | { kind: "fix"; fixId: string }
+  /** A checklist row no patch closes: its own words go to the repo's agent (the phone's `remedyPrompt` over the check). */
+  | { kind: "agent"; checkId: string; label: string; detail: string }
   | { kind: "write"; target: "CLAUDE.md" | "AGENTS.md" }
   | { kind: "door"; route: EvidenceRoute }
   | { kind: "howto"; text: string };

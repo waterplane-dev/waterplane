@@ -14,7 +14,7 @@ import { compareVersions, currentMode, installedVersions, latestRelease, release
 import type { InstallMode } from "../cli/selfupdate.js";
 import { identity } from "../cli/index.js";
 import { ghJson } from "./github.js";
-import { checkoutBehind } from "./selfother.js";
+import { checkoutBehind, checkoutCommand, windowsBuilt } from "./selfother.js";
 
 export interface SelfDeps {
   mode: () => InstallMode;
@@ -26,6 +26,8 @@ export interface SelfDeps {
   installed: (dataDir: string) => string[];
   /** A checkout's commits behind its upstream (after a fetch); throws git's words. */
   behind?: (root: string) => Promise<{ behind: number; upstream: string }>;
+  /** A checkout on the Windows drive run from WSL: its packages install on Windows (`selfother.ts`). */
+  windowsBuilt?: (root: string) => boolean;
 }
 
 async function githubNotes(version: string): Promise<string | undefined> {
@@ -44,6 +46,7 @@ export const realSelfDeps: SelfDeps = {
   notes: githubNotes,
   installed: installedVersions,
   behind: checkoutBehind,
+  windowsBuilt,
 };
 
 /** The install-shaped half: mode, current, button or command. Synchronous, offline. */
@@ -56,7 +59,7 @@ export function selfBase(deps: SelfDeps = realSelfDeps): SelfUpdateInfo {
     case "npm":
       return { mode: "npm", current, canApply: true, command: `npm i -g ${BRAND.slug}@latest`, caveat: "npm checks the package's integrity, not the publisher's signature as the install.sh updater does, and there is no roll back: going back means installing the older version the same way." };
     case "checkout":
-      return { mode: "checkout", current, canApply: true, command: "git pull --ff-only && npm ci && npm run restart", caveat: "This updates the git checkout to its branch's newest commits: no signature check and no roll back. It refuses when the checkout has changes or commits of its own." };
+      return { mode: "checkout", current, canApply: true, command: checkoutCommand(deps.windowsBuilt?.(mode.root) ?? false), caveat: "This updates the git checkout to its branch's newest commits: no signature check and no roll back. It refuses when the checkout has changes or commits of its own." };
     default:
       return { mode: "unknown", current, canApply: false, why: "This install is not one the updater recognises, so it cannot update it. Reinstall from the release to get updates." };
   }

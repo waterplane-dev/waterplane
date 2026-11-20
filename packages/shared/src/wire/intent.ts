@@ -17,6 +17,7 @@
  */
 import type { AssessPayload, BudgetPass, BudgetWaiver, BuildPayload, IntentPayload, IntentTarget, IntentTrigger } from "../intent.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
+import type { ItemValue } from "../estimate.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "./session.js";
 
@@ -93,6 +94,9 @@ export interface IntentDraft {
    *  nobody said, never "chore". */
   category?: ItemCategory;
   categoryBy?: NameAuthor;
+  /** See `Intent.estimate` / `Intent.value`. */
+  estimate?: string;
+  value?: ItemValue;
   cols?: number;
   rows?: number;
   launch?: unknown;

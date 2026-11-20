@@ -17,6 +17,7 @@ import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
 import { CATEGORY_ICON } from "./backlogLabels";
 import { BacklogSortBar } from "./BacklogSortBar";
+import { WorthChips } from "./WorthChips";
 
 export function BacklogFilterBar({ m }: { m: BacklogModel }) {
   const {
@@ -25,7 +26,7 @@ export function BacklogFilterBar({ m }: { m: BacklogModel }) {
   } = m;
   // Which chips exist at all is `drawnChips`' call, off the same counts the chips print.
   const shown = drawnChips(counts, filter);
-  const anyChip = shown.status.length > 0 || shown.clock || shown.age.length > 0 || shown.category.length > 0;
+  const anyChip = shown.status.length > 0 || shown.clock || shown.age.length > 0 || shown.category.length > 0 || shown.value.length > 0 || shown.cost.length > 0;
   return (
     <>
       {/* Search, and only search. It used to be one field doing two jobs — the
@@ -133,6 +134,7 @@ export function BacklogFilterBar({ m }: { m: BacklogModel }) {
               })}
             </div>
           )}
+          <WorthChips m={m} shown={shown} />
         </div>
       )}
 

@@ -65,7 +65,7 @@
  * session that picks up the repo's last conversation (`resume`, i.e.
  * `claude --continue`).
  */
-import type { AutoSlotFacts, BacklogItem, BudgetPass, BudgetWaiver, Intent, LaunchOpts, SessionBudget } from "@waterplane/shared";
+import type { AutoSlotFacts, BacklogItem, Intent } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import type { SessionManager } from "./sessions.js";
 import type { IntentManager, ExecutorResult } from "./intents/manager.js";
@@ -150,7 +150,7 @@ export class BacklogManager {
   // ── Mutations (each one a store write) — `backlog/backlogedits.ts` ──────
 
   add(text: string, repoDir: string, label?: string, targetSessionId?: string, autoFire?: boolean,
-    opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
+    opts?: Parameters<typeof edits.add>[6]): BacklogItem {
     return edits.add(this.core, text, repoDir, label, targetSessionId, autoFire, opts);
   }
 

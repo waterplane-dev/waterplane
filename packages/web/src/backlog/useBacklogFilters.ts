@@ -64,6 +64,8 @@ export function useBacklogFilters(p: BacklogProps) {
   const pickStatus = (v: BacklogFilter["status"]) => pick((f) => ({ ...f, status: f.status === v ? null : v }));
   const pickAge = (v: BacklogFilter["age"]) => pick((f) => ({ ...f, age: f.age === v ? null : v }));
   const pickCategory = (v: BacklogFilter["category"]) => pick((f) => ({ ...f, category: f.category === v ? null : v }));
+  const pickValue = (v: BacklogFilter["value"]) => pick((f) => ({ ...f, value: f.value === v ? null : v }));
+  const pickCost = (v: BacklogFilter["cost"]) => pick((f) => ({ ...f, cost: f.cost === v ? null : v }));
   /** The fourth axis, and the only boolean one: on a clock, or no filter. */
   const pickClock = () => pick((f) => ({ ...f, clock: f.clock ? null : true }));
 
@@ -88,6 +90,8 @@ export function useBacklogFilters(p: BacklogProps) {
     pickStatus,
     pickAge,
     pickCategory,
+    pickValue,
+    pickCost,
     pickClock,
     toggleArchived,
   };

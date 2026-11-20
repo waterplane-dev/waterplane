@@ -278,7 +278,8 @@ export interface HostPluginApi {
    */
   handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown | Promise<unknown>): () => void;
   /**
-   * Broadcast `event` to every phone as `plugin.push` (the web half's `pushes`).
+   * Broadcast `event` as `plugin.push` (the web half's `pushes`) to every phone except a
+   * passive (kids') device, even an unlocked one (since 2.9; a push carries no caller).
    * Returns null when sent, or a refusal in words (bad event name, not JSON, over
    * PLUGIN_PUSH_MAX, this plugin not running).
    */

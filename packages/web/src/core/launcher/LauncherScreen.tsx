@@ -211,6 +211,8 @@ export function LauncherScreen(p: LauncherProps) {
             <MenuGroup title="Find">
               <button className="more-act" title="search words across all sessions"
                 onClick={() => { setNavMenu(false); openSearch(null); }}><Search size={ICON} />Search</button>
+              <button className="more-act" title="find repos — look again for repos and branch copies under the code folder"
+                onClick={() => { setNavMenu(false); refreshRepos(); void scanPlainFolders().then((n) => showToast(n ? `Looked for repos: ${n} folder${n === 1 ? "" : "s"} without git, see above the list` : "Looked for repos: the list is up to date")); }}><RotateCw size={ICON} />Find repos</button>
               <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("gallery"); }}><Images size={ICON} />Images &amp; documents</button>
               {/* The route to the downloads when nothing is downloading: the
                   PullBar strip is drawn only while a transfer is ACTIVE. The 2px
@@ -459,11 +461,11 @@ export function LauncherScreen(p: LauncherProps) {
               {/* The three verbs that are about the SET of repos, not one of
                   them — they headed the repos section that this list absorbed,
                   and there is nowhere else for them to be. */}
-              {/* Worded keys (spec §1 head row 2): Fan out, Waiting work, Find repos,
-                  Close sessions, Search — each says the screen it opens. */}
-              <button className="head-act head-act-wide" title="fan out — run one prompt in several repos at once (a fresh session each)" onClick={() => { track("overlay:fanout"); setOverlay("fanout"); }}><Split size={ICON} />Fan out</button>
-              <button className="head-act head-act-wide" title="waiting work — what is running, queued, in a backlog or scheduled"
-                onClick={() => { track("overlay:activity"); openActivity(null); }}><ListOrdered size={ICON} />Waiting work</button>
+              {/* Icon keys (owner 2026-11-20: the words were noise once learned; the ☰
+                  carries the same verbs worded). The aria-label keeps each key's name. */}
+              <button className="head-act" aria-label="Fan out" title="fan out — run one prompt in several repos at once (a fresh session each)" onClick={() => { track("overlay:fanout"); setOverlay("fanout"); }}><Split size={ICON} /></button>
+              <button className="head-act" aria-label="Waiting work" title="waiting work — what is running, queued, in a backlog or scheduled"
+                onClick={() => { track("overlay:activity"); openActivity(null); }}><ListOrdered size={ICON} /></button>
               {/* The schedules button, and what it is holding.
                   A bare calendar icon says a schedule list exists; it never
                   said whether anything was about to happen. "7 scheduled"
@@ -482,24 +484,22 @@ export function LauncherScreen(p: LauncherProps) {
                 </button>
               )}
               <button className="head-act" aria-label="sync repos" title="sync repos — pull, push or sync every repo at once" onClick={() => { track("overlay:reposync"); setOverlay("reposync"); }}><ArrowDownUp size={ICON} /></button>
-              <button className="head-act head-act-wide" title="find repos — look again for repos and branch copies under the code folder" onClick={() => { refreshRepos(); void scanPlainFolders().then((n) => showToast(n ? `Looked for repos: ${n} folder${n === 1 ? "" : "s"} without git, see above the list` : "Looked for repos: the list is up to date")); }}><RotateCw size={ICON} />Find repos</button>
               {visibleSessions.some((s) => !s.running && !listedBlockOf(s)) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
               {visibleSessions.length > 0 && (
-                <button className="head-act head-act-wide danger" data-hint="session.close.all"
+                <button className="head-act danger" data-hint="session.close.all" aria-label="Close sessions"
                   title={`close sessions — review the ${visibleSessions.length} listed, cut by state, idle time, what is still running underneath, or a repo`}
                   onClick={() => setCloseAllPick("*")}>
-                  <X size={ICON} />Close sessions
+                  <X size={ICON} />
                 </button>
               )}
-              <button className="head-act head-act-wide" title="search what the sessions said — every transcript, on the desktop"
-                onClick={() => { track("action:launcher.search.key"); openSearch(null); }}><Search size={ICON} />Search</button>
               </span>
             </div>
           )}
           {(repoGroups.length > 0 || textOn) && (
             // The quick filter: always on screen, filters the rows by what they
-            // SHOW. Searching what the sessions SAID is the search sheet,
-            // one tap at its end — the two searches side by side.
+            // SHOW. Searching what the sessions SAID is its second option, the
+            // key at its end, carrying the typed words (owner 2026-11-20: the
+            // head row's separate Search key folded in here — one place to search).
             <div className="section quick-filter">
               <Search size={14} className="quick-filter-icon" />
               <input type="search" value={textQuery} placeholder="filter sessions & repos"
@@ -512,8 +512,8 @@ export function LauncherScreen(p: LauncherProps) {
                   onClick={() => setTextQuery("")}><X size={ICON} /></button>
               )}
               <button className="head-act" aria-label="search what sessions said"
-                title="search what the sessions SAID — every transcript, on the desktop"
-                onClick={() => { track("action:launcher.search"); openSearch(null); }}><ScrollText size={ICON} /></button>
+                title={textOn ? `search what the sessions SAID for “${textQuery.trim()}” — every transcript, on the desktop` : "search what the sessions SAID — every transcript, on the desktop"}
+                onClick={() => { track("action:launcher.search"); openSearch(null, textQuery); }}><ScrollText size={ICON} /></button>
             </div>
           )}
           {statusFilter && (

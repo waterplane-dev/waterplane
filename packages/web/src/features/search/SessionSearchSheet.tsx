@@ -10,11 +10,12 @@ import { openArchivedConversation } from "../../archiveOpen";
 
 export function SessionSearchSheet() {
   const c = useCore();
-  const { scope, results, loading, archive } = useStore(search);
+  const { scope, query, results, loading, archive } = useStore(search);
   const sessions = c.world.sessions;
   return (
     <SearchSheet
       sessionId={scope}
+      initialQuery={query}
       sessionLabel={scope ? sessions.find((s) => s.id === scope)?.title : undefined}
       results={results}
       loading={loading}

@@ -6,8 +6,8 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import type { BacklogItem, ItemCategory } from "@waterplane/shared";
-import { ITEM_CATEGORIES, MAX_HEADLINE_CHARS } from "@waterplane/shared";
+import type { BacklogItem, ItemCategory, ItemValue } from "@waterplane/shared";
+import { ITEM_CATEGORIES, ITEM_VALUES, MAX_ESTIMATE_CHARS, MAX_HEADLINE_CHARS } from "@waterplane/shared";
 import { editTargetOptions, headlineEditHint } from "../backlogFilter";
 import { PromptComposer } from "../PromptComposer";
 import { RepoSelect } from "../RepoPicker";
@@ -17,18 +17,15 @@ import { Hint } from "../kit/Hint";
 
 export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
   const {
-    editCategory, editHeadline, editLabel, editRepo, editTarget, editText, p, repoLabel, saveEdit, setEditCategory,
+    editCategory, editEstimate, editValue, setEditEstimate, setEditValue, editHeadline, editLabel, editRepo, editTarget, editText, p, repoLabel, saveEdit, setEditCategory,
     setEditHeadline, setEditingId, setEditLabel, setEditRepo, setEditTarget, setEditText,
   } = m;
             const running = it.status === "running";
   return (
               <div key={it.id} className={`bl-row bl-${it.status} bl-edit`}>
                 <div className="form" style={{ width: "100%" }}>
-                  {/* The one prompt-writing surface (`PromptComposer`), inline:
-                      this editor sits inside a list row with four more fields
-                      under it. */}
-                  <PromptComposer inline rows={3} prompts={[editText]}
-                    onChange={(next) => setEditText(next[0] ?? "")} placeholder="Instruction…" />
+                  {/* The one prompt-writing surface (`PromptComposer`), inline in a list row. */}
+                  <PromptComposer inline rows={3} prompts={[editText]} onChange={(next) => setEditText(next[0] ?? "")} placeholder="Instruction…" />
                   <input className="search" value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label (optional)" />
                   {/* **The machine's title, and the one consequence of saving
                       it.** Editing a suggestion is how a wrong one costs a tap
@@ -50,6 +47,11 @@ export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
                     onChange={(e) => setEditCategory(e.target.value as ItemCategory | "")}>
                     <option value="">— none —</option>
                     {ITEM_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input className="search" value={editEstimate} maxLength={MAX_ESTIMATE_CHARS} onChange={(e) => setEditEstimate(e.target.value)} placeholder="Estimate: ~$ · time (optional)" />
+                  <select className="search" value={editValue} aria-label="value" onChange={(e) => setEditValue(e.target.value as ItemValue | "")}>
+                    <option value="">— no value —</option>
+                    {ITEM_VALUES.map((v) => <option key={v} value={v}>{v} value</option>)}
                   </select>
                   {/* `keepValue`: an item whose repo has since gone must stay
                       offerable, or picking a session below silently re-aims it

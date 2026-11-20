@@ -8,7 +8,7 @@
  * mode kept; a repo file may not link out of the repo). Contents never reach a log line.
  */
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { savingsOf, withSkillSettings, type SkillChange, type SkillInventoryDoc, type SkillRow, type PluginRow, type SwitchLevel } from "@waterplane/shared";
@@ -73,7 +73,7 @@ export function targetFile(level: SwitchLevel, worktree?: string): { abs: string
   return abs ? { abs, display: rel } : null;
 }
 
-export function applySkillWrite(input: WriteInput): WriteOutcome {
+export async function applySkillWrite(input: WriteInput): Promise<WriteOutcome> {
   const { level, revs, changes, doc, worktree } = input;
   if (typeof level !== "string" || !LEVELS.includes(level as SwitchLevel) || !input.allowed.includes(level as SwitchLevel)) {
     return bad("This screen cannot write that settings level from here.", 400);
@@ -174,8 +174,10 @@ export function applySkillWrite(input: WriteInput): WriteOutcome {
   }
   const out: WriteOutcome = { ok: true, file: t.display, changed: merged.changed };
   if (lvl === "repo-local" && worktree) {
-    let ignored = true;
-    try { execFileSync("git", ["check-ignore", "-q", "--", ".claude/settings.local.json"], { cwd: worktree, stdio: "ignore" }); } catch { ignored = false; }
+    // Async, after the write: the route runs on the loop that pumps every PTY (`tools/hostsyncpins.test.mjs`).
+    const ignored = await new Promise<boolean>((done) => {
+      execFile("git", ["check-ignore", "-q", "--", ".claude/settings.local.json"], { cwd: worktree }, (err) => done(!err));
+    });
     out.gitignored = ignored;
     if (!ignored) out.ignoredNote = ".claude/settings.local.json is not in this repo's .gitignore, so git would show it as a new file. Nothing here edits .gitignore.";
   }

@@ -302,6 +302,13 @@ curl -s -X POST ${base}/api/agent/intents -H 'content-type: application/json' \\
   work the same way, adding \`"proposedBy":"<script name>"\` (letters, digits,
   \`.\`, \`_\`, \`-\`) — it never needs a session. The phone shows it apart
   as a proposal with one push; the person fires, schedules or deletes it.
+- **Say what it costs and what it is worth** — on every row you post, both
+  routes: \`"estimate"\` (≤ 24 chars: the agent cost at list price and the wall
+  time, e.g. \`"~$3 · 20 min"\`; a rough guess beats none, name a range when
+  unsure, \`"~$2-8"\`) and \`"value"\` (\`"high"\`, \`"medium"\` or \`"low"\`: high =
+  blocks a release, fixes something broken a person relies on, or protects
+  data; low = a nicety). The phone shows both in front of the row's title. Read
+  enough of the code to estimate honestly; leave one out rather than invent it.
 - \`GET ${base}/api/agent/intents\` lists what agents posted (both kinds); \`DELETE
   ${base}/api/agent/intents/<id>\` calls one off before it starts. Local only:
   it answers \`curl\` on this desktop, never a browser.

@@ -293,20 +293,20 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
   route("PUT", "/api/askrules", askRules),
   // The desktop's own checklist: the rows about this machine (`scope: "host"`), which no repo's
   // checklist lists. The fix answers with the re-read rows and the fix's own words.
-  route("GET", "/api/host/setup", ({ res }, ctx) => {
-    json(res, { checks: hostChecks(ctx.root) } satisfies HostSetupReport);
+  route("GET", "/api/host/setup", async ({ res }, ctx) => {
+    json(res, { checks: await hostChecks(ctx.root) } satisfies HostSetupReport);
     return true;
   }),
   route("POST", "/api/host/setup/fix", async ({ req, res }, ctx) => {
     const { fixes } = await readJson(req);
     const list = Array.isArray(fixes) ? fixes.map(String) : [];
-    const ran = hostFixes(list, ctx.root);
+    const ran = await hostFixes(list, ctx.root);
     invalidateSetupCheck();
     const reply: HostSetupFixResult = {
       ok: true,
       applied: ran.filter((r) => r.outcome.applied).map((r) => r.id),
       notes: ran.length ? ran.map((r) => r.outcome.note) : ["Nothing to fix: no desktop row names that fix any more."],
-      checks: hostChecks(ctx.root),
+      checks: await hostChecks(ctx.root),
     };
     json(res, reply);
     return true;
@@ -491,10 +491,10 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     if (scope === "repo") {
       const target = await findTarget(ctx.root, String(repoId || ""));
       if (!target) return json(res, { ok: false, error: "unknown repo" }, 404), true;
-      const r = setSecret({ root: ctx.root, scope: "repo", worktree: target.worktreePath, file: file ? String(file) : undefined, key: String(key || ""), value: String(value ?? "") });
+      const r = await setSecret({ root: ctx.root, scope: "repo", worktree: target.worktreePath, file: file ? String(file) : undefined, key: String(key || ""), value: String(value ?? "") });
       return json(res, r, r.ok ? 200 : 400), true;
     }
-    const r = setSecret({ root: ctx.root, scope: "host", targetId: targetId ? String(targetId) : undefined, key: key != null ? String(key) : undefined, value: String(value ?? "") });
+    const r = await setSecret({ root: ctx.root, scope: "host", targetId: targetId ? String(targetId) : undefined, key: key != null ? String(key) : undefined, value: String(value ?? "") });
     return json(res, r, r.ok ? 200 : 400), true;
   }),
 ];

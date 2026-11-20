@@ -18,6 +18,8 @@ interface Props {
   sessionId: string | null;
   /** Title of the scoped session, shown in the header when sessionId is set. */
   sessionLabel?: string;
+  /** Words to open with (the launcher filter's text); searched at once like typed ones. */
+  initialQuery?: string;
   /** Results for the last query (null = nothing searched yet). */
   results: SessionSearchResult[] | null;
   /** A request is in flight. */
@@ -121,8 +123,9 @@ function Snippet({ m, q }: { m: SessionSearchMatch; q: string }) {
  * it — a word common to a prompt and the reply to it matches the CLI's own
  * output hundreds of times over the one line somebody typed.
  */
-export function SearchSheet({ sessionId, sessionLabel, results, loading, online = true, sessions, backends, onSearch, archive, openArchived, onOpenSession, onClose }: Props) {
-  const [q, setQ] = useState("");
+export function SearchSheet({ sessionId, sessionLabel, initialQuery, results, loading, online = true, sessions, backends, onSearch, archive, openArchived, onOpenSession, onClose }: Props) {
+  // Seeded from the launcher's quick filter: "search what they said" carries the typed words.
+  const [q, setQ] = useState(initialQuery ?? "");
   /**
    * Also search ARCHIVED conversations — every closed one the CLI still has a log of. Off by
    * default: the open sessions are what this sheet is for, and the archive is thousands of

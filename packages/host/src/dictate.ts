@@ -73,7 +73,7 @@
  * accident, and why the log line still never carries the words.
  */
 
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { cpus, homedir, tmpdir } from "node:os";
@@ -82,6 +82,7 @@ import {
   applyDictateTerms, dictatePrompt, dictateRefusal, isPromptEcho,
   parseDictateTerms, wavFacts, whisperLang,
   type DictateAnswer, type DictateStatus, logTag, BRAND, envName } from "@waterplane/shared";
+import { pathHas } from "./claudebin.js";
 import { env } from "./env.js";
 import { expandHome } from "./pathx.js";
 
@@ -128,19 +129,15 @@ let whichCache: { bin: string; resolved: string | null } | null = null;
  *  absolute path inside a brew dir, else null. Cached until `resetEngineCache`. */
 export function resolveBin(bin: string): string | null {
   if (whichCache && whichCache.bin === bin) return whichCache.resolved;
-  // The OS's own lookup rather than a PATH walk: it honours the shell's rules,
-  // and this runs once per status read, not per dictation. `where` on Windows
-  // — `which` is not a program there, so asking for it would report every
-  // Windows desktop as having no transcriber whether or not it has one.
+  // A PATH scan (`claudebin.ts`' `pathHas`, `.exe`/`.cmd` on Windows), never a spawned `which`:
+  // this is asked per dictation status read, per session spawn (`tmuxreq.ts`) and by the doctor,
+  // on the loop that pumps every PTY (`tools/hostsyncpins.test.mjs`). A path is taken as named.
   let resolved: string | null = null;
-  try {
-    execFileSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: ["ignore", "ignore", "ignore"] });
+  if (bin.includes("/") || bin.includes("\\") ? existsSync(bin) : pathHas(bin, process.platform)) {
     resolved = bin;
-  } catch {
-    if (process.platform === "darwin" && !bin.includes("/")) {
-      const hit = BREW_BIN_DIRS.map((d) => join(d, bin)).find((p) => existsSync(p));
-      resolved = hit ?? null;
-    }
+  } else if (process.platform === "darwin" && !bin.includes("/")) {
+    const hit = BREW_BIN_DIRS.map((d) => join(d, bin)).find((p) => existsSync(p));
+    resolved = hit ?? null;
   }
   whichCache = { bin, resolved };
   return resolved;

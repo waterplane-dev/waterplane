@@ -308,6 +308,7 @@ export * from "./assess.js";
  *  stamp that says whether a title may be overwritten, and the one display rule
  *  deciding whose name is on a row. */
 export * from "./naming.js";
+export * from "./estimate.js";
 
 /** The change brief: the focus list both ends word alike, and its answer's shape. */
 export * from "./changebrief.js";

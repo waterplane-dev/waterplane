@@ -63,6 +63,9 @@ export function passiveAllows(
   return !!rel && queuedApk(repoId, rel);
 }
 
+/** `GET /api/plugin-file/:id/:token` (`routes/apisystem.ts`). */
+const PLUGIN_FILE_PREFIX = "/api/plugin-file/";
+
 /** Writes a passive row may NEVER make, unlocked or not. */
 const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke", "/api/host/root"]);
 
@@ -70,7 +73,7 @@ const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke", "
  * Auth MATERIAL is out of a passive row's reach even while it is unlocked: a
  * pairing code (it mints a full token), a revoke, a peer pairing, the LAN
  * identity secret — and the code root (`POST /api/host/root` persists it and
- * restarts the host). The unlock lifts the device to full scope for 30 minutes;
+ * restarts the host), and a file a plugin offered (`/api/plugin-file/`, any method). The unlock lifts the device to full scope for 30 minutes;
  * each of these would outlive it as a credential or a change in its own right.
  * Every `/api/(auth|pair|devices|lan|peers|peer)` route literal in the host is
  * classified in `packages/host/test/passiveroutes.test.mjs`, so a new one fails
@@ -80,6 +83,9 @@ const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke", "
  */
 export function passiveNeverAllows(method: string, path: string): boolean {
   if (path === "/api/lan/identity") return true;
+  // A file a plugin offered (`api.offerFile`, e.g. the vault's encrypted export): fetching it is the delivery, and the
+  // core deletes it on the last byte — an unlocked kids' phone must neither read nor consume it.
+  if (path.startsWith(PLUGIN_FILE_PREFIX)) return true;
   const write = !READ.has(method.toUpperCase());
   if (path === "/api/peers" || path.startsWith("/api/peers/")) return write;
   return write && PASSIVE_NEVER_WRITES.has(path);

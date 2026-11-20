@@ -3,7 +3,8 @@
  * of `BacklogManager` (move only): the methods are functions over `BacklogCore`.
  */
 import { randomUUID } from "node:crypto";
-import type { BacklogItem, BudgetPass, BudgetWaiver, Intent, IntentPatch, ItemCategory, LaunchOpts, SessionBudget } from "@waterplane/shared";
+import type { BacklogItem, BudgetPass, BudgetWaiver, Intent, IntentPatch, ItemCategory, ItemValue, LaunchOpts, SessionBudget } from "@waterplane/shared";
+import { cleanEstimate, cleanValue } from "@waterplane/shared";
 import { backlogDraft, intentToBacklogItem } from "../intents/adapters.js";
 import type { BacklogCore } from "./backlogcore.js";
 import { backlogRows } from "./backlogstore.js";
@@ -20,7 +21,7 @@ import { backlogRows } from "./backlogstore.js";
  * taps sets it.
  */
 export function add(c: BacklogCore, text: string, repoDir: string, label?: string, targetSessionId?: string, autoFire?: boolean,
-  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
+  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean; estimate?: string; value?: ItemValue }): BacklogItem {
   const now = Date.now();
   const orders = backlogRows(c).filter((i) => i.cwd === repoDir).map((i) => i.order ?? i.createdAt);
   // Newest on top (a smaller `order` than everything in this repo), EXCEPT an
@@ -35,6 +36,7 @@ export function add(c: BacklogCore, text: string, repoDir: string, label?: strin
     id: opts?.id ?? randomUUID().slice(0, 8), cwd: repoDir, text, label, targetSessionId, autoFire, order,
     steps: opts?.steps, resume: opts?.resume, closeWhenDone: opts?.closeWhenDone, flagWhenDone: opts?.flagWhenDone, budget: opts?.budget, launch: opts?.launch, holdForHost: opts?.holdForHost,
     pastBudget: opts?.pastBudget, budgetPass: opts?.budgetPass,
+    estimate: cleanEstimate(opts?.estimate), value: cleanValue(opts?.value),
   });
   // What put this row here, when it was not a person. The only caller that
   // passes one today is the schedule's `workItem` executor
@@ -91,6 +93,9 @@ export type BacklogUpdatePatch = {
    *  `edit()`'s rules — see there for what clearing means. */
   headline?: string;
   category?: ItemCategory | "";
+  /** What it costs / is worth (`shared/estimate.ts`); `""` clears. Through `edit()`: never re-queues. */
+  estimate?: string;
+  value?: ItemValue | "";
 };
 
 /**
@@ -125,6 +130,8 @@ export function update(c: BacklogCore, id: string, patch: BacklogUpdatePatch): {
   const names = {
     ...(patch.headline === undefined ? {} : { headline: patch.headline }),
     ...(patch.category === undefined ? {} : { category: patch.category }),
+    ...(patch.estimate === undefined ? {} : { estimate: patch.estimate }),
+    ...(patch.value === undefined ? {} : { value: patch.value }),
   };
   if (patch.closeWhenDone === true || patch.closeWhenDone === false || patch.closeWhenDone === null) {
     c.intents.edit(id, { closeWhenDone: patch.closeWhenDone });

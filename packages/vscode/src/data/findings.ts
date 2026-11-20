@@ -148,5 +148,6 @@ export function remedyCopy(f: Finding, weight: WeightDoc | null): string[] | nul
   }
   if (r.kind === "write") return [`Add this block to ${r.target}, keeping the markers:`, efficiencyBlock()];
   if (r.kind === "howto") return [r.text];
+  if (r.kind === "agent") return [`${r.label}: ${r.detail}`];
   return null;
 }

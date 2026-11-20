@@ -151,6 +151,9 @@ test("self info per install mode: every known install gets the button; npm and c
   assert.equal(n.canApply, true); assert.match(n.command, /^npm i -g .+@latest$/); assert.match(n.caveat, /signature/); assert.equal(n.why, undefined);
   const c = mk({ kind: "checkout", root: "/r" });
   assert.equal(c.canApply, true); assert.match(c.command, /git pull --ff-only/); assert.match(c.caveat, /refuses when the checkout has changes/);
+  const w = selfBase({ mode: () => ({ kind: "checkout", root: "/mnt/c/dev/app" }), current: () => "0.1.4", latest: async () => "0.1.5", notes: async () => undefined, installed: () => [], windowsBuilt: (root) => root.startsWith("/mnt/c/") });
+  assert.match(w.command, /cmd\.exe \/d \/c "npm ci && npm run restart"$/, "a Windows checkout run from WSL installs on Windows");
+  assert.doesNotMatch(c.command, /cmd\.exe/);
   const u = mk({ kind: "unknown", root: "/r" });
   assert.equal(u.canApply, false); assert.equal(u.command, undefined); assert.ok(u.why);
 });

@@ -16,7 +16,10 @@ import {
   budgetWaiverUntil,
   categoryRefusedText,
   cleanCategory,
+  cleanEstimate,
   cleanHeadline,
+  cleanValue,
+  valueRefusedText,
   cleanIntentRow,
   clockKey,
   headlineRefusedText,
@@ -31,6 +34,7 @@ import {
   type IntentTarget,
   type ItemCategory,
   type ItemName,
+  type ItemValue,
   type NameAuthor,
   type SessionBudget,
 } from "@waterplane/shared";
@@ -257,6 +261,9 @@ export class WriteSlice {
       ...(draft.category === undefined
         ? { category: prev?.category, categoryBy: prev?.categoryBy }
         : { category: draft.category, categoryBy: draft.categoryBy }),
+      // Cost and worth are the person's or the filer's, never a re-save's.
+      estimate: draft.estimate === undefined ? prev?.estimate : draft.estimate,
+      value: draft.value === undefined ? prev?.value : draft.value,
       // The LIST facts, for the same reason and with the same test. `order` and
       // `handOrdered` are where a person put the row — re-saving a time is not
       // a request to un-place it — and `archived` is "I set this aside", which
@@ -577,6 +584,9 @@ export class WriteSlice {
     headline?: string;
     /** A kind a person chose, one of `ITEM_CATEGORIES`. `""` CLEARS it. */
     category?: ItemCategory | "";
+    /** What it will cost / what it is worth (`shared/estimate.ts`). `""` CLEARS. */
+    estimate?: string;
+    value?: ItemValue | "";
     /** The per-item close-when-done override; `null` CLEARS it back to the
      *  global setting. Any state, a running row included — it is about the
      *  session, not the work, and the session is open right now. */
@@ -640,6 +650,16 @@ export class WriteSlice {
         const c = cleanCategory(patch.category);
         if (c) { row.category = c; row.categoryBy = "hand"; }
         else refusals.push(categoryRefusedText(patch.category));
+      }
+    }
+    // Cost and worth: any state, no author — no pass writes them, so there is
+    // nothing a person's value must be protected from.
+    if (typeof patch.estimate === "string") row.estimate = cleanEstimate(patch.estimate);
+    if (typeof patch.value === "string") {
+      if (!patch.value.trim()) row.value = undefined;
+      else {
+        const v = cleanValue(patch.value);
+        if (v) row.value = v; else refusals.push(valueRefusedText(patch.value));
       }
     }
     // **The session budget of a row still waiting** — `null` clears, an object

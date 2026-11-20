@@ -91,9 +91,9 @@ test("a desktop row is on the desktop's checklist, never a repo's, and only its 
   assert.ok(!inspectRepo(wt).some((c) => c.id === "desk"));
   // Core host rows (the Tailscale watchdog on a Mac) ride the same list, so pin the plugin's
   // two rows by name rather than the whole list: the desk row is there, the repo row is not.
-  const hostIds = hostChecks(wt).map((r) => r.id);
+  const hostIds = (await hostChecks(wt)).map((r) => r.id);
   assert.ok(hostIds.includes("desk") && !hostIds.includes("repo"), `host checklist: ${hostIds.join(", ")}`);
-  assert.deepEqual(hostFixes(["desk-fix", "repo-fix"], wt), [{ id: "desk-fix", outcome: { applied: true, note: "asked" } }],
+  assert.deepEqual(await hostFixes(["desk-fix", "repo-fix"], wt), [{ id: "desk-fix", outcome: { applied: true, note: "asked" } }],
     "a repo row's fix never runs from the desktop checklist");
 });
 

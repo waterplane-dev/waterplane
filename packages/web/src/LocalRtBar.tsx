@@ -10,6 +10,7 @@ import { dur } from "./format";
 import { agentCountText, agentLevel, dismissAgentStrip, useAgentCount, useAgentForced } from "./agentCount";
 import { showToast } from "./toast";
 import { usePref } from "./core/prefs";
+import { TabsListButton, useTabsButtonInBar } from "./SessionTabsBar";
 
 /**
  * **The desktop strip** — how hard the machine is working (CPU, GPU, memory
@@ -178,7 +179,10 @@ export function LocalRtBar() {
   // Past a parallel-agent mark the strip shows itself whatever the mode, until
   // the person closes it (`agentCount.ts`'s `stripForced`).
   const forced = useAgentForced();
-  const enabled = vis || forced;
+  // With the tab strip off (the phone default) the list button lives here, so
+  // the strip stays up to hold it whatever the mode.
+  const tabsHere = useTabsButtonInBar();
+  const enabled = vis || forced || tabsHere;
 
   // The strip's height, published as a CSS variable rather than measured by
   // every screen: `.screen` and `.sheet` add it to their top padding, so one
@@ -192,7 +196,9 @@ export function LocalRtBar() {
   // With the mode off nothing polls the machine, so the forced strip is the
   // count alone — never a machine strip saying "not polled here".
   if (!enabled) return null;
-  return mode === "off" ? <AgentOnlyStrip /> : <Strip closable={forced && !vis} />;
+  if (mode === "off") return forced ? <AgentOnlyStrip /> : <TabsOnlyStrip />;
+  if (!vis && !forced) return <TabsOnlyStrip />;
+  return <Strip closable={forced && !vis} />;
 }
 
 /**
@@ -247,13 +253,7 @@ function Strip({ closable }: { closable: boolean }) {
           <span className="lrt-lead-text">{modelNames(model.models)}</span>
           <span className="lrt-lead-size">{gbText(heldBytes(model.models))}{age ? <span className="lrt-age"> · {age} ago</span> : null}</span>
         </span>
-      ) : m ? (
-        <span className={`lrt-cpu lrt-lead${r.stale ? " stale" : ""}`} role="button" data-hint="localrt.cpu"
-          title={`the desktop's CPU is ${Math.round(cpuBusyPct(m))}% busy. Tap for the detail`}
-          onClick={(e) => openLocalRt("cpu", e)}>
-          <Cpu size={11} aria-hidden="true" /> {Math.round(cpuBusyPct(m))}%{age ? <span className="lrt-age"> · {age} ago</span> : null}
-        </span>
-      ) : (
+      ) : m ? null : (
         // No machine reading at all: disabled, unanswered or still asking.
         // Each is its own sentence, abbreviated — never a row of zeros.
         <span className="lrt-models stale" title={r.text}>{shortReading(r)}</span>
@@ -269,29 +269,36 @@ function Strip({ closable }: { closable: boolean }) {
           <HeldSpark series={series} ceiling={model ? seriesCeiling(series) : 100} w={model ? 56 : W} />
         </span>
       )}
+      {/* Read left to right (owner, 2026-11-20): the graph, then the numbers
+          beside it — CPU, GPU, memory free — then the agents, then the tab
+          list button at the far right. CPU is not repeated while a model
+          leads: at 390 px the model's name and the memory it is eating are
+          the two that must fit, and the sheet has the CPU. */}
+      {m && !model && (
+        <span className={`lrt-cpu lrt-lead${r.stale ? " stale" : ""}`} role="button" data-hint="localrt.cpu"
+          title={`the desktop's CPU is ${Math.round(cpuBusyPct(m))}% busy. Tap for the detail`}
+          onClick={(e) => openLocalRt("cpu", e)}>
+          <Cpu size={11} aria-hidden="true" /> {Math.round(cpuBusyPct(m))}%{age ? <span className="lrt-age"> · {age} ago</span> : null}
+        </span>
+      )}
+      {/* Absent, not zero, when nothing has been measured — this app's
+          standing rule for a reading it does not have. */}
+      {m?.gpuPct != null && (
+        <span className="lrt-gpu" role="button" data-hint="localrt.cpu"
+          title={`the desktop's GPU is ${Math.round(m.gpuPct)}% busy, system-wide. Tap for the detail`}
+          onClick={(e) => openLocalRt("cpu", e)}>
+          <Gpu size={10} aria-hidden="true" /> {Math.round(m.gpuPct)}%
+        </span>
+      )}
+      {m && (
+        <span className={`lrt-mem${tight ? " lrt-tight" : ""}`} role="button" data-hint="localrt.memory"
+          title={`${gbText(memAvailBytes(m))} available of ${gbText(m.memTotal)} on the desktop${tight ? " — memory is tight" : ""}. Tap for where it went`}
+          onClick={(e) => openLocalRt("memory", e)}>
+          <MemoryStick size={10} aria-hidden="true" /> {gbText(memAvailBytes(m))}
+        </span>
+      )}
       <AgentCountReading />
-      <span className="lrt-right">
-        {/* Absent, not zero, when nothing has been measured — this app's
-            standing rule for a reading it does not have. GPU first while a
-            model is resident: it is the number a generating model moves. */}
-        {m?.gpuPct != null && (
-          <span className="lrt-gpu" role="button" data-hint="localrt.cpu"
-            title={`the desktop's GPU is ${Math.round(m.gpuPct)}% busy, system-wide. Tap for the detail`}
-            onClick={(e) => openLocalRt("cpu", e)}>
-            <Gpu size={10} aria-hidden="true" /> {Math.round(m.gpuPct)}%
-          </span>
-        )}
-        {/* CPU is not repeated while a model leads: at 390 px the model's name
-            and the memory it is eating are the two that must fit, and GPU is
-            the number a generating model moves. The sheet has the CPU. */}
-        {m && (
-          <span className={`lrt-mem${tight ? " lrt-tight" : ""}`} role="button" data-hint="localrt.memory"
-            title={`${gbText(memAvailBytes(m))} available of ${gbText(m.memTotal)} on the desktop${tight ? " — memory is tight" : ""}. Tap for where it went`}
-            onClick={(e) => openLocalRt("memory", e)}>
-            <MemoryStick size={10} aria-hidden="true" /> {gbText(memAvailBytes(m))}
-          </span>
-        )}
-      </span>
+      <span className="lrt-right"><TabsListButton /></span>
       {closable && <CloseAgentStrip />}
     </div>
   );
@@ -330,7 +337,22 @@ function AgentOnlyStrip() {
       <span className="lrt-led" />
       <AgentCountReading />
       <span className="lrt-agents-words">{c ? `agents running at once` : ""}</span>
+      <TabsListButton />
       <CloseAgentStrip />
+    </div>
+  );
+}
+
+/** The desktop strip is switched off (or `auto` has nothing to show) but the
+ *  tab strip is off too: the strip stays up to hold the open-tabs button,
+ *  which is then the only way to the list on a phone. Agents, if any, ride
+ *  along; never a row of machine zeros, and no status dot — there is no
+ *  machine reading for it to colour. */
+function TabsOnlyStrip() {
+  return (
+    <div className="localrt-bar lrt-quiet lrt-tabs-only" role="status">
+      <AgentCountReading />
+      <span className="lrt-right"><TabsListButton /></span>
     </div>
   );
 }

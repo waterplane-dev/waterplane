@@ -253,8 +253,8 @@ rate-limited per device (5, then one per minute), and lifts that one token to fu
 minutes, held in host memory only. Expiry, "Lock now" (`POST /api/auth/lock`), a PIN change or a host
 restart end it, and its sockets are closed.
 
-**Auth material is the one part of full scope an unlock never grants**, because each piece would
-outlive the 30 minutes. An unlocked passive device cannot mint a pairing code (`POST /api/pair/mint`; a
+**Auth material is the one part of full scope an unlock never grants through waterplane's own
+routes**, because each piece would outlive the 30 minutes. An unlocked passive device cannot (see the limit below) mint a pairing code (`POST /api/pair/mint`; a
 redeemed code is a permanent full token) or a device token, revoke a device, pair or unpair a peer
 (`/api/peers` writes), read the LAN identity secret, set the password, the Tailscale gate or the
 PIN, or change the code root (`POST /api/host/root`, which persists and restarts the host). Three places enforce it: `passiveNeverAllows` in `passive.ts` (checked in `server/http.ts` right
@@ -263,10 +263,24 @@ WebSocket `auth.set`, `auth.clear` and `auth.gateTailscale` ops (`routes/system.
 device row). `packages/host/test/passiveroutes.test.mjs` fails on any `/api/(auth|pair|devices|lan|peers|peer)`
 route literal in the host that nobody has classified for a passive device. A plugin call from a passive
 device carries `scope: "passive"` (`PluginCaller`, plugin API 2.9), and the vault refuses every method
-to it, unlocked or not (`gatedHandle` in its `host/viewgate.mts`). Pairing never hands a passive device the LAN identity either (`redeemPair` in `pair.ts`,
+to it, unlocked or not (`gatedHandle` in its `host/viewgate.mts`). A plugin's pushes skip a passive
+device's sockets (`pushToFullDevices`, `server/plugins.ts`), and a file a plugin offers
+(`/api/plugin-file/`, the vault's export) is in `passiveNeverAllows`. Pairing never hands a passive device the LAN identity either (`redeemPair` in `pair.ts`,
 the sealed reply in `pairpake.ts`), and the phone keeps none from a passive pairing (`storeSealed`). A
 passive caller who knows the PASSWORD can still log in like any browser; the PIN model does not cover
 that.
+
+**The never-list covers the phone's own routes and socket ops, not what a session can run.** An
+unlocked passive device holds the WebSocket and may `session.create` (a shell, or a claude session in
+bypass mode), and nothing refuses it that. A command typed there runs as the desktop user and reaches
+the host from loopback, where no token is asked and no device row exists, so `passiveNeverAllows`
+never fires: it can `POST /api/pair/mint`, `POST /api/host/root`, read `/api/lan/identity`, or ask
+the vault's local socket through `wp-secret`, which releases without a tap wherever an armed lease,
+window or standing grant matches the request. **Treat a PIN unlock as code execution on the desktop
+that does not end with the 30 minutes:** the relock closes the phone's sockets, not the sessions it
+started, and a pairing code minted from one of them is a permanent full token. The list above is what an unlocked kid's phone cannot do through waterplane's own
+interface; it is not a sandbox. Gating session ops for a passive row would end the unlock's purpose
+(the owner using full waterplane on that phone), so the PIN, and who knows it, is the boundary.
 
 ### Browser origins
 

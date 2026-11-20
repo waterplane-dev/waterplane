@@ -647,6 +647,8 @@ export interface SessionCore {
   /** record.ts `carryOf`: what a session hands its replacement (prompts, tab name). */
   carryFor(id: string, resumeSessionId: string | undefined): SessionCarry | null;
   hasLiveTmux(id: string): boolean;
+  /** tmux.ts `liveTmuxIds`: every live pane's id from one async listing (a timer's `hasLiveTmux`). */
+  liveTmuxIds(): Promise<Set<string>>;
   armOrphanSweep(): void;
 
   // ── convid.ts (S3) ──

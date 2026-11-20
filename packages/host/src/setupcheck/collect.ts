@@ -26,7 +26,7 @@ export interface CollectDeps {
   /** The repo key of a worktree (`repoOfWorktree`). */
   repoKey(worktree: string): string;
   inspect(worktree: string): Promise<ComplianceCheck[]>;
-  hostChecks(): ComplianceCheck[];
+  hostChecks(): ComplianceCheck[] | Promise<ComplianceCheck[]>;
   /** The claude CLI row, or `null` when the probe could not answer. */
   claudeCli(): Promise<ComplianceCheck | null>;
   instructions(worktree: string): { files: InstructionFile[]; overlaps: InstructionOverlap[]; desktop: InstructionFile[] | null };

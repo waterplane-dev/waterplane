@@ -55,6 +55,9 @@ import {
   type LaunchOpts,
   type SessionBudget,
   type WhenShape,
+  cleanEstimate,
+  cleanValue,
+  type ItemValue,
 } from "@waterplane/shared";
 import { localProcessRefusal } from "./net.js";
 import type { IntentManager } from "./intents/manager.js";
@@ -139,12 +142,13 @@ export async function addClientBacklogItem(
   p: {
     repoDir: unknown; text: string; label?: string; targetSessionId?: string; autoFire?: boolean;
     steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; id?: string; origin?: string; manual?: boolean;
+    estimate?: string; value?: ItemValue;
   },
 ): Promise<{ ok: false; refusedCwd: true } | { ok: true; item: BacklogItem }> {
   const repoDir = await deps.containRepoDir(p.repoDir);
   if (!repoDir) return { ok: false, refusedCwd: true };
   const item = deps.backlog.add(p.text, repoDir, p.label, p.targetSessionId, p.autoFire,
-    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, flagWhenDone: p.flagWhenDone, budget: p.budget, launch: p.launch, id: p.id, origin: p.origin, manual: p.manual });
+    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, flagWhenDone: p.flagWhenDone, budget: p.budget, launch: p.launch, id: p.id, origin: p.origin, manual: p.manual, estimate: p.estimate, value: p.value });
   return { ok: true, item };
 }
 
@@ -228,7 +232,7 @@ export interface DraftFacts {
  *  Shared by the intent post and the backlog add, so the two refuse alike. */
 export function agentBasics(body: any, f: DraftFacts):
   | { refused: string }
-  | { b: any; key: string; steps: string[]; cwd: string; sessionId?: string; label?: string } {
+  | { b: any; key: string; steps: string[]; cwd: string; sessionId?: string; label?: string; estimate?: string; value?: ItemValue } {
   const b = body && typeof body === "object" ? body : {};
   const key = typeof b.key === "string" ? b.key.trim() : "";
   if (!KEY_RE.test(key)) return { refused: "`key` is required: 1-64 of A-Z a-z 0-9 . _ : - — the same key on a retry returns the same row" };
@@ -250,13 +254,15 @@ export function agentBasics(body: any, f: DraftFacts):
     return { refused: "`repo` (an id from GET /api/repos) or `dir` is required, and must be inside the configured root" };
   }
   const label = typeof b.label === "string" && b.label.trim() ? b.label.trim().slice(0, 80) : undefined;
-  return { b, key, steps, cwd: cwd!, sessionId: sessionId || undefined, label };
+  // Cost and worth (`shared/estimate.ts`): cleaned, never refused — a value
+  // outside the three words is no value, and the row still lands.
+  return { b, key, steps, cwd: cwd!, sessionId: sessionId || undefined, label, estimate: cleanEstimate(b.estimate), value: cleanValue(b.value) };
 }
 
 export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft } | { refused: string } {
   const basics = agentBasics(body, f);
   if ("refused" in basics) return basics;
-  const { b, key, steps, cwd, sessionId, label } = basics;
+  const { b, key, steps, cwd, sessionId, label, estimate, value } = basics;
   const target: IntentDraft["target"] = sessionId ? { kind: "session", sessionId } : { kind: "repo" };
 
   // When.
@@ -316,6 +322,8 @@ export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft }
         ...(cleanSessionBudget(b.budget) ? { budget: cleanSessionBudget(b.budget)! } : {}),
       }),
       label,
+      ...(estimate ? { estimate } : {}),
+      ...(value ? { value } : {}),
     },
   };
 }
@@ -327,14 +335,15 @@ export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft }
  */
 export function agentBacklogFrom(body: any, f: DraftFacts):
   | { refused: string }
-  | { add: { id: string; repoDir: string; text: string; steps: string[]; label?: string; targetSessionId?: string; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget } } {
+  | { add: { id: string; repoDir: string; text: string; steps: string[]; label?: string; estimate?: string; value?: ItemValue; targetSessionId?: string; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget } } {
   const basics = agentBasics(body, f);
   if ("refused" in basics) return basics;
-  const { b, key, steps, cwd, sessionId, label } = basics;
+  const { b, key, steps, cwd, sessionId, label, estimate, value } = basics;
   if (b.when != null || b.fire != null) return { refused: "a backlog add never starts by itself — no `when`, no `fire`; POST /api/agent/intents is the route for timed work" };
   return {
     add: {
       id: agentIntentId(key), repoDir: cwd, text: steps[0], steps, label,
+      ...(estimate ? { estimate } : {}), ...(value ? { value } : {}),
       targetSessionId: sessionId, resume: !sessionId && b.resume === true ? true : undefined,
       ...(!sessionId && typeof b.closeWhenDone === "boolean" ? { closeWhenDone: b.closeWhenDone } : {}),
       ...(!sessionId && b.flagWhenDone === true ? { flagWhenDone: true } : {}),
@@ -366,6 +375,8 @@ export function agentRowView(i: Intent) {
     cwd: i.cwd,
     target: i.target.kind === "session" ? { session: i.target.sessionId } : { newSession: true },
     label: i.label,
+    ...(i.estimate ? { estimate: i.estimate } : {}),
+    ...(i.value ? { value: i.value } : {}),
     ...(typeof i.closeWhenDone === "boolean" ? { closeWhenDone: i.closeWhenDone } : {}),
     ...(i.flagWhenDone ? { flagWhenDone: true } : {}),
     ...(i.budget ? { budget: i.budget } : {}),
