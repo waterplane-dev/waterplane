@@ -5,6 +5,10 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.33
+
+No user-facing changes in this release.
+
 ## 0.1.32
 
 ### New
