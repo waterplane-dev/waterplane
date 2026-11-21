@@ -15,7 +15,7 @@ import { EXT_DEVICE_PREFIX, LS } from "./storage.ts";
  */
 export const UI_RESET_KEYS: readonly (keyof typeof LS)[] = [
   "theme", "textScale", "iconScale", "termZoom", "readerZoom", "scrollZoom", "gitZoom", "textDumpWrap", "readerTableWrap",
-  "sessionTabs", "sessionTabsPhone", "sessionTabsCount", "sessionTabsOrder", "sessionTabsLimit", "sessionTabsSync", "netPulse", "localRtBar", "unfoldToEnd",
+  "sessionTabs", "sessionTabsPhone", "sessionTabsCount", "sessionTabsOrder", "sessionTabsLimit", "sessionTabsSync", "netPulse", "netPulseWhen", "localRtBar", "unfoldToEnd",
   "typingRoom", "closeKbOnSend", "shortcutCard", "busySend", "btwToCli", "toolbarOpen", "readMode", "cliMode", "termCostOpen", "termCornerPos",
   "hintChip", "annHintHidden",
 ];

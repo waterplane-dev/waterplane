@@ -347,7 +347,7 @@ test("the machine sentence says available, names the GPU only when read, and kee
 
 // ── The strip's mode when nobody picked one ───────────────────────────────
 
-test("an unpicked strip mode is always — except in the demo, which has no runner and so shows no strip; a picked one is read as picked", () => {
+test("an unpicked strip mode is always, the demo too (its desktop sends machine readings); a picked one is read as picked", () => {
   const store = new Map();
   const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", {
@@ -358,9 +358,8 @@ test("an unpicked strip mode is always — except in the demo, which has no runn
     assert.equal(readLocalRtMode(), "always", "the real app's default is unchanged");
     assert.equal(localRtMode(), "always");
     setDemoActive("first-look");
-    assert.equal(readLocalRtMode(), "auto", "in the demo it is read when asked, not fixed at import");
-    assert.equal(localRtMode(), "auto");
-    assert.equal(barVisible(localRtMode(), { holding: false, lastHeldAt: null, now: NOW }), false, "and `auto` with no model resident draws nothing");
+    assert.equal(readLocalRtMode(), "always", "the demo draws the strip every real phone shows (owner, 2026-11-21)");
+    assert.equal(barVisible(localRtMode(), { holding: false, lastHeldAt: null, now: NOW }), true, "drawn with no model resident");
     store.set(LS.localRtBar, JSON.stringify("always"));
     assert.equal(readLocalRtMode(), "always", "a mode somebody picked stays theirs, demo or not");
     store.set(LS.localRtBar, JSON.stringify("off"));

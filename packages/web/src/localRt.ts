@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { LS, lsGet, lsJson, lsSet, lsSetJson } from "./storage.ts";
-import { isDemo } from "./demo/mode.ts";
 import { BRAND, envName, type ClientMessage, type HostMessage, type LoadedModel, type LocalRuntimeSample } from "@waterplane/shared";
 export { modelBaseName } from "@waterplane/shared";
 import type { LinkStatus } from "./link.ts";
@@ -479,16 +478,15 @@ export const LOCAL_RT_MODE_LABEL: Record<LocalRtMode, string> = {
  * The old values were `true`/`false` and the old `true` meant "always drawn",
  * so it migrates to `always` and NOT to `auto`: a preference already expressed
  * must not quietly become a weaker one on upgrade. Unset is `always`,
- * the default for a new device — except in the demo, where it is `auto`: the
- * demo desktop runs no local model, so an always-on strip could only say "not
- * polled here" over every screen, a standing row about nothing, and `auto`
- * draws it the moment a model is resident, which the demo never has. A mode
+ * the default for a new device — the demo too: its desktop sends machine
+ * readings (`demo/host/machine.ts`), and a demo without the strip every real
+ * phone shows was not the app (owner, 2026-11-21). A mode
  * somebody PICKED is read as picked, demo or not; anything unrecognised is
  * `off` — never a mode somebody did not pick.
  */
 export function readLocalRtMode(): LocalRtMode {
   const raw = lsGet(LS.localRtBar);
-  if (raw === null) return isDemo() ? "auto" : "always";
+  if (raw === null) return "always";
   const v = raw.replace(/^"|"$/g, "");
   if (v === "off" || v === "auto" || v === "always") return v;
   return v === "true" ? "always" : "off";
@@ -496,8 +494,7 @@ export function readLocalRtMode(): LocalRtMode {
 
 /**
  * The mode somebody PICKED during this page life, or null — only then is it held here. An unset mode
- * is re-read, never cached: this module loads before the demo transport is installed (`main.tsx`),
- * so `isDemo()` is not yet true at import and a default fixed there would be the real app's.
+ * is re-read, never cached.
  */
 let barMode: LocalRtMode | null = null;
 const currentMode = (): LocalRtMode => barMode ?? readLocalRtMode();

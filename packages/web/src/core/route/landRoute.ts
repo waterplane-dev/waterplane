@@ -7,7 +7,7 @@
  * tests, not by hand (review R2-2b L2).
  */
 import { parseFocus, parseHash, routeFromPop, routeKey, routeToUrl, screenOfKey, type Overlay } from "../../routing.ts";
-import { adoptCarried, announceLeaves, forgetKept, keepCovered, popStepsTo, pushBackDepth, restoreKept, routeLanded, routeLanding, routeStack, screenParams, stackView } from "../../backStep.ts";
+import { adoptCarried, announceLeaves, takeAdoption, forgetKept, keepCovered, popStepsTo, pushBackDepth, restoreKept, routeLanded, routeLanding, routeStack, screenParams, stackView } from "../../backStep.ts";
 import { rememberRoute } from "../../resumeRoute.ts";
 
 /**
@@ -64,7 +64,7 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
   const known = st?.navRoute === key || onStep ? (st!.navDepth || 0) : -1;
   // What happens, and what is filed with the entry landed on, is ONE pure decision
   // (`routeLanding`, node-tested); this applies its moves.
-  const plan = routeLanding(routeStack.keys, routeStack.depth, key, first, known);
+  const plan = routeLanding(routeStack.keys, routeStack.depth, key, first, known, takeAdoption());
   // Booting on a screen with nothing of ours under it — a fresh document on a
   // deep route, or a reloaded entry an older build adopted at depth 0 — is the
   // one case where the stack has to be INVENTED rather than adopted. The entry
@@ -90,6 +90,17 @@ export function landRoute(activeId: string | null, overlay: Overlay, focusRepo: 
     // focus is already set. Landing on one BELOW it (a close, a leave) is a
     // Back, and the pop restores what that sheet showed (`restoreKept`).
     if (plan.forget) forgetKept(routeStack.depth);
+  } else if (plan.kind === "replace") {
+    // The spent sheet's entry, taken over: Back from this screen goes where Back from that sheet would have.
+    history.replaceState({ navRoute: key, navDepth: routeStack.depth }, "", routeToUrl(activeId, overlay, focusRepo));
+    routeStack.keys[routeStack.depth] = key;
+    routeStack.keys.length = routeStack.depth + 1;
+    forgetKept(routeStack.depth);
+    pushBackDepth();
+  } else if (plan.kind === "rename") {
+    // The same entry, under the session's own id: Back from it goes where Back from the pending screen would have.
+    history.replaceState({ ...(history.state ?? {}), navRoute: key, navDepth: routeStack.depth }, "", routeToUrl(activeId, overlay, focusRepo));
+    routeStack.keys[routeStack.depth] = key;
   } else if (plan.kind === "push") {
     // The sheet underneath is being covered, not closed: keep its cut for the
     // Back that returns to it, before its `onLeave` (`announceLeaves`, below) drops it.

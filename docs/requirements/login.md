@@ -40,3 +40,7 @@ The app shows the Copilot plan name and this month's local request count without
 The login page can be opened again on demand, fills its credentials from the vault, and stays open until the user is done with it.
 - asked: 2026-10-21
 
+### R-login-009 · requested
+The sign-in view offers the Google button alongside GitHub Copilot.
+- asked: 2026-11-17
+

@@ -139,3 +139,8 @@ Text in panels, such as Settings' Plugins door and the plugin list, has comforta
 The UI has comfortable, even margins on both sides and tuned spacing on every screen.
 - asked: 2026-11-10, 2026-11-11
 
+### R-layout-033 · shipped
+Repo cards sit close to the screen edge with equal left and right margins, and the launcher bar has room above and below.
+- asked: 2026-11-19, 2026-11-19
+- shipped: fb2552c28, d61a9d7f1
+

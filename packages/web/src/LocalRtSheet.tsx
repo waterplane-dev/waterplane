@@ -13,6 +13,7 @@ import { roomyCeiling } from "./graphGeom";
 import { useLink } from "./link";
 import { dur, hhmm, until } from "./format";
 import { SheetHead } from "./Sheet";
+import { StripsGear } from "./StripsGear";
 import { BRAND, type ProcRow, type SessionCpuRow } from "@waterplane/shared";
 import { ConfirmButton } from "./Confirm";
 import { SetWarn, SetNote } from "./SettingsKit";
@@ -690,7 +691,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
 
   return (
     <div className="sheet">
-      <SheetHead title="This desktop" icon={<Monitor size={ICON} />} onClose={onClose} />
+      <SheetHead title="This desktop" icon={<Monitor size={ICON} />} onClose={onClose}><StripsGear /></SheetHead>
       <div className="sheet-body">
         {/* The headline follows the strip: a resident model when there is one,
             otherwise the machine itself, with the runner's state demoted to

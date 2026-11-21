@@ -4,16 +4,18 @@
  * there, how old the reading is, and "switch to <name>"; each waiting item is its own row whose
  * tap switches AND lands on it (`switchHost(id, open)` → the next boot's `shellOpen`). A desktop
  * that stopped answering or signed this phone out says so in a sentence, with no number and no
- * switch button. Nothing switches until a tap.
+ * switch button. Nothing switches until a tap. Each alert has `done` (and the card `all done`), asked
+ * of THAT desktop (`markElsewhereDone`) — clearing it needs no switch.
  */
-import { ArrowLeftRight, CircleDot, KeyRound, MonitorDot, MonitorOff, Server } from "lucide-react";
+import { ArrowLeftRight, Check, CircleDot, KeyRound, MonitorDot, MonitorOff, Server } from "lucide-react";
 import { Sheet } from "../../Sheet";
 import { realHosts } from "../../hosts";
 import { agoText } from "../../format";
 import { useNow } from "../../useNow";
 import { Button, Hint, Row, RowSub, RowTitle } from "../../kit";
+import { ConfirmButton } from "../../Confirm";
 import { useCore } from "../../sdk";
-import { openHosts, switchHost } from "./actions";
+import { markElsewhereDone, openHosts, switchHost } from "./actions";
 import { elsewhereRowText, elsewhereRows, elsewhereSaidText, itemOpenTarget, itemWord, type ElsewhereRow } from "./logic";
 import { useElsewhere, useHosts } from "./store";
 
@@ -73,14 +75,25 @@ function HostCard({ row, now }: { row: ElsewhereRow; now: number }) {
         </Row>
         <div className="row-acts">
           <Button onClick={() => switchHost(row.host.id)}><ArrowLeftRight size={ICON} /> switch to {name}</Button>
+          {s.attention.items.length > 1 && (
+            <ConfirmButton className="key" confirm={`mark all ${s.attention.items.length} done on ${name}?`}
+              onConfirm={() => void markElsewhereDone(row.host.id, s.attention.items.map((i) => i.id))}>
+              <Check size={ICON} /> all done
+            </ConfirmButton>
+          )}
         </div>
       </Row>
       {s.attention.items.map((i) => {
         const open = itemOpenTarget(i);
         return (
-          <Row key={i.id} as="button" kind="grow" onClick={() => switchHost(row.host.id, open)}>
-            <RowTitle><CircleDot size={12} /> {i.title}</RowTitle>
-            <RowSub className="dim">{itemWord(i)} · {agoText(now - i.ts)} · tap to switch and {open ? "open it" : "see it"}</RowSub>
+          <Row key={i.id} kind="wrap">
+            <Row as="button" kind="grow" onClick={() => switchHost(row.host.id, open)}>
+              <RowTitle><CircleDot size={12} /> {i.title}</RowTitle>
+              <RowSub className="dim">{itemWord(i)} · {agoText(now - i.ts)} · tap to switch and {open ? "open it" : "see it"}</RowSub>
+            </Row>
+            <div className="row-acts">
+              <Button aria-label={`mark ${i.title} done on ${name}`} onClick={() => void markElsewhereDone(row.host.id, [i.id])}>done</Button>
+            </div>
           </Row>
         );
       })}

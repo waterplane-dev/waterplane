@@ -322,3 +322,13 @@ A claude session's fast mode can be turned on and off from the model, effort and
 Home's head keys Fan out, Waiting work and Close sessions are icons with no words (each keeps its name for screen readers and its long-press title); Find repos is a worded line in the ☰ under Find, not a head key.
 - asked: 2026-11-20
 - shipped: `LauncherScreen.tsx` head row and ☰ Find group
+### R-sessions-068 · shipped
+Offline, the New session screen reads as one calm state saying where the create waits, and the prompt written meanwhile is kept and sent when the desktop is back.
+- asked: 2026-11-18, 2026-11-18
+- shipped: 2dbfe50e6, e1b345899, 208d49f4c
+
+### R-sessions-069 · shipped
+The launcher's start-a-repo button reads 'New project…', since its sheet makes a project, clone, folder or worktree.
+- asked: 2026-11-19
+- shipped: 1d446b630
+

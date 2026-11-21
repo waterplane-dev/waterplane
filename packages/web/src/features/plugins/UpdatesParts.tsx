@@ -4,7 +4,7 @@
  * and `@waterplane/shared`'s `pluginMaturity`; nothing here decides what counts as an update.
  */
 import { useState } from "react";
-import { Download, Loader2, RefreshCw, RotateCcw } from "lucide-react";
+import { Download, Loader2, RefreshCw, RotateCcw, SquareTerminal } from "lucide-react";
 import { BRAND, PLUGIN_MATURITIES, pluginMaturity } from "@waterplane/shared";
 import type { UpdatesStatus, UpdatesTarget } from "@waterplane/shared";
 import { copyText } from "../../api";
@@ -12,7 +12,7 @@ import { core, useStore } from "../../sdk";
 import { Button, Explain, Hint, RowSub, Tag } from "../../kit";
 import { SetNote, SetWarn } from "../../SettingsKit";
 import { useNow } from "../../useNow";
-import { checkNow, installFromOrg, installFromUrl, restartDesktop, rollbackSelf, updateSelf } from "./updatesActions";
+import { checkNow, installFromOrg, installFromUrl, restartDesktop, rollbackSelf, runInShell, updateSelf } from "./updatesActions";
 import {
   ORG, applyRunning, availableRows, checkedWords, nextCheckWords, parseUrlInput, resultView, selfSwapped, selfView, type AvailableRow,
 } from "./logic";
@@ -148,8 +148,13 @@ export function SelfRow({ status }: { status: UpdatesStatus }) {
       {v.caveat && <SetNote>{v.caveat}</SetNote>}
       {v.command && (
         <SetNote>
-          {v.showUpdate ? "Or by hand: " : ""}<code>{v.command}</code>{" "}
-          <Button title="copy the command" onClick={() => void copyText(v.command!)}>copy</Button>
+          {/* The line with its `cd` into the checkout the RUNNING host is from: pasted in any folder, it updates that host,
+              never another checkout (zenbook 2026-11-21: updated the wrong folder, the phone kept the old version). */}
+          {v.showUpdate ? "Or by hand: " : ""}<code>{v.shellLine ?? v.command}</code>{" "}
+          <Button title="copy the command" onClick={() => void copyText(v.shellLine ?? v.command!)}>copy</Button>
+          {v.shellLine && !core().launch.shellCant() && (
+            <> <Button title="put the command in a desktop shell's prompt box — you tap Send" onClick={() => runInShell(v.shellLine!)}><SquareTerminal size={14} /> in shell</Button></>
+          )}
         </SetNote>
       )}
       <ApplyNote target={{ kind: "self" }} />

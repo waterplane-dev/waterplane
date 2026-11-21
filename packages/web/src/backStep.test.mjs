@@ -252,12 +252,21 @@ test("routeLanding: every branch of the routing effect and what it files", async
   // a close of Send lands ONE step down, on git: a return, the pop reads the entry back
   assert.deepEqual(routeLanding([L, s, g, send], 3, s, false, -1), { kind: "go", delta: -1, forget: false, how: "return" });
   assert.deepEqual(routeLanding([L, s], 1, g, false, -1), { kind: "push", how: "push" });
+  // Setup check -> Send -> Start: the new session TAKES the spent Send entry, so Back lands on the Setup check
+  const sc = S(null, "setupcheck"), sheetSend = S(null, "send"), p = S("pending:a1", null), live = S("demo-7", null);
+  assert.deepEqual(routeLanding([L, sc, sheetSend], 2, p, false, -1), { kind: "replace", how: "push" });
+  // ...but a SHEET over Send (the annotator, the gallery) still stacks: it returns to the seeded sheet
+  assert.deepEqual(routeLanding([L, sc, sheetSend], 2, S(null, "gallery"), false, -1), { kind: "push", how: "push" });
+  // the pending screen becoming its session renames its entry — only for THAT adoption
+  assert.deepEqual(routeLanding([L, sc, p], 2, live, false, -1, { from: "pending:a1", to: "demo-7" }), { kind: "rename", how: "stay" });
+  assert.deepEqual(routeLanding([L, sc, p], 2, live, false, -1), { kind: "push", how: "push" }, "a tap onto another session is a push");
+  assert.deepEqual(routeLanding([L, sc, p], 2, S("demo-8", null), false, -1, { from: "pending:a1", to: "demo-7" }), { kind: "push", how: "push" });
 });
 
 test("wiring: the routing effect files through routeLanding, once", async () => {
   const { readFileSync } = await import("node:fs");
   const r = readFileSync(new URL("./core/route/landRoute.ts", import.meta.url), "utf8");
-  assert.match(r, /const plan = routeLanding\(routeStack\.keys, routeStack\.depth, key, first, known\);/);
+  assert.match(r, /const plan = routeLanding\(routeStack\.keys, routeStack\.depth, key, first, known, takeAdoption\(\)\);/);
   assert.match(r, /routeLanded\(routeStack\.depth, routeStack\.keys\[routeStack\.depth\] \?\? "", plan\.how\);/);
   assert.equal((r.match(/routeLanded\(/g) || []).length, 2, "the effect's one call and the pop's (landPop)");
   const u = readFileSync(new URL("./core/route/useRoute.ts", import.meta.url), "utf8");

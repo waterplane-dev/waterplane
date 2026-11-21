@@ -420,7 +420,7 @@ export function createHttp(ctx: ServerCtx) {
       // `launches` is the intent store: `api.ts` needs exactly one method of it —
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
-        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, attention: ctx.attention, resolveAttention: ctx.resolveAttention, notify: (k, p) => ctx.notify(k, p), builds: ctx.builds, launches: ctx.intents,
+        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, attention: ctx.attention, resolveAttention: ctx.resolveAttention, handleNotification: (id) => ctx.handleNotification(id), notify: (k, p) => ctx.notify(k, p), builds: ctx.builds, launches: ctx.intents,
         periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usageReadings: () => ctx.usageSources.readings(), budgetStanding: (now) => ({ states: ctx.budget.periods(now), ceilings: ctx.budget.get().ceilings }), usagePollMs: USAGE_POLL_MS, bootId: ctx.BOOT_ID, weekBurn: ctx.weekBurn,
         usageNow: () => ({
           usage: ctx.usage.get(), readings: ctx.usageSources.readings(), billing: ctx.billing.status(),

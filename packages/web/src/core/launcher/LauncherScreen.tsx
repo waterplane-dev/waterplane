@@ -9,7 +9,7 @@
  * its index; the launcher's own state is `useLauncherModel`'s.
  */
 import { useLayoutEffect, useRef } from "react";
-import { Archive, ArrowDownUp, CalendarClock, CircleDot, Hourglass, OctagonPause, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, House, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
+import { Activity, Archive, ArrowDownUp, Cpu, CalendarClock, CircleDot, Hourglass, OctagonPause, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, House, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
@@ -36,6 +36,8 @@ import { openActivity } from "../../features/activity";
 import { pickImageFor } from "../../features/images";
 import { useHostPush } from "../../features/hostTools";
 import { ElsewhereChip, HostMenuItem, HostSwitchKey } from "../../features/hosts";
+import { openLocalRt, openNetHealth } from "../../features/tools";
+import { TabsMenuItem } from "../../SessionTabsBar";
 import { FirstRunCard } from "../../features/onboard";
 import { WhatsNewLauncherRow } from "../../features/whatsnew";
 import { ProposalsStrip } from "../../features/backlog";
@@ -264,6 +266,8 @@ export function LauncherScreen(p: LauncherProps) {
                 onClick={() => { setNavMenu(false); setTab("home"); }}>
                 <ListTodo size={ICON} />On this desktop{visibleSessions.length ? ` · ${visibleSessions.length}` : ""}
               </button>
+              {/* The list the top line's tabs button opens — reachable with that line off. */}
+              <TabsMenuItem size={ICON} onOpen={() => setNavMenu(false)} />
               <button className={`more-act${tab === "external" ? " on" : ""}`} title="`claude` processes started in a terminal by hand — resumable from here"
                 onClick={() => { setNavMenu(false); setTab("external"); }}>
                 <TerminalIcon size={ICON} />External{visibleExternal.length ? ` · ${visibleExternal.length}` : ""}
@@ -280,6 +284,11 @@ export function LauncherScreen(p: LauncherProps) {
             </MenuGroup>
             <MenuGroup title="This desktop">
               {isNativeShell() && <HostMenuItem size={ICON} onOpen={() => setNavMenu(false)} />}
+              {/* The two screens the lines at the top open, reachable with those lines switched off. */}
+              <button className="more-act" title="connection — the link to this desktop: ping history, speed test, the route"
+                onClick={() => { setNavMenu(false); openNetHealth(undefined); }}><Activity size={ICON} />Connection</button>
+              <button className="more-act" title="this desktop — CPU, memory, GPU, disk, agents and any local model"
+                onClick={() => { setNavMenu(false); openLocalRt(undefined); }}><Cpu size={ICON} />This desktop</button>
               {/* What extensions put on the home menu (Setup & health, Desktop, Links, Vault, Halt). */}
               <LauncherItems size={ICON} onOpen={() => setNavMenu(false)} />
             </MenuGroup>

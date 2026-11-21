@@ -9,7 +9,7 @@
  * clear button — a door is a filter, and a filter says "n of N".
  */
 import { core, createStore, useStore } from "./sdk";
-import { PLUGIN_SCOPE, settingRow } from "./settingsIndex";
+import { PLUGIN_SCOPE, ROW_SETS, SET_SCOPE, settingRow } from "./settingsIndex";
 
 export const settingsOnly = createStore<string | null>(null);
 
@@ -28,6 +28,15 @@ export function openSettingsAt(id: string): void {
   const c = core();
   settingsOnly.set(settingRow(id) ? id : null);
   c.say.track("action:settings.door");
+  c.nav.open("settings");
+}
+
+/** Open Settings showing only the rows of a named set (`ROW_SETS`) — the gear on a screen
+ *  whose look those rows decide. An unknown set opens the whole screen. */
+export function openSettingsSet(name: string): void {
+  const c = core();
+  settingsOnly.set(Object.hasOwn(ROW_SETS, name) ? `${SET_SCOPE}${name}` : null);
+  c.say.track(`action:settings.set.${name}`);
   c.nav.open("settings");
 }
 

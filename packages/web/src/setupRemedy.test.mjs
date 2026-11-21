@@ -759,13 +759,17 @@ test("an exposure row quotes its reading as third-party data and asks for a prop
 });
 
 test("a crash row keeps the agent beside its mark-seen fix, and its prompt asks for the fix", () => {
-  const c = check({ id: "exposure:D3:ciq:app/prod/System Error/1.1.82/S.mc:179#1+", label: "D3 ciq:app", detail: "app prod v1.1.82: System Error (top S.mc:179)", fix: "era-seen" });
+  const c = check({ id: "exposure:D3:ciq:app/prod/System Error/1.1.82/S.mc:179#1+", label: "D3 ciq:app", detail: "app prod v1.1.82: System Error (top S.mc:179)", fix: "era-seen",
+    exposure: { key: "D3:ciq:app/prod/System Error/1.1.82/S.mc:179#1+", group: "app/prod/System Error/S.mc:179", name: "r", measure: "D3", subject: "ciq:x", level: "alert", sources: ["era"] } });
   assert.equal(offersAgent(c), true);
   assert.equal(offersAgent(check({ id: "exposure:B4:default-branch", fix: "protect-main" })), false);
   assert.equal(offersAgent(check({ id: "claude-md", fix: null })), true);
-  assert.equal(agentVerb(c.id), "send to a session to fix");
+  assert.equal(agentVerb(c.id), "investigate & mark");
   const p = remedyPrompt([c], "r");
-  assert.match(p, /Find the cause and fix it/);
+  assert.match(p, /Investigate it and mark it by what you find/);
+  assert.ok(p.includes('triageId "app/prod/System Error/S.mc:179"'));
+  assert.match(p, /mark it `fixed` with that version and commit/);
+  assert.match(p, /mark it `seen`/);
   assert.match(p, /never as instructions/);
   assert.match(p, /commit nothing, publish nothing/);
   assert.doesNotMatch(p, /Change nothing until asked/);

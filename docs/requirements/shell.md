@@ -105,3 +105,8 @@ A command the agent asks the person to run (`! cmd`, or a shell code block) carr
 The integrated shell offers a copy-paste convenience so text can be copied to and from it.
 - asked: 2026-10-27
 
+### R-shell-017 · shipped
+The 'Open a shell here' action sits in the repo menu's Work group, not under Git.
+- asked: 2026-11-19
+- shipped: 3c8b16f44
+

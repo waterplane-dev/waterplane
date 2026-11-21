@@ -10,6 +10,7 @@ import { ConfirmButton, askConfirm } from "./Confirm";
 import { Empty } from "./Empty";
 import { ZoomPair } from "./ZoomPair";
 import { GitMediaDiff, isMediaDiff } from "./GitMediaDiff";
+import { nextMediaZoom } from "./mediaZoom";
 import { GitTextDiff, initialDiffMode, type DiffMode } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GitExplain } from "./GitExplain";
@@ -246,6 +247,18 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
     setZoomState(v);
     setGitZoom(v);
   }
+  /** The before/after pictures' own zoom (`mediaZoom.ts`) — the text pair above
+   *  only scales type, which is why both buttons did nothing on a picture.
+   *  Not stored: each opened file starts at fit. */
+  const [mediaZoom, setMediaZoom] = useState(1);
+  useEffect(() => { setMediaZoom(1); }, [openFile?.path, openFile?.staged]);
+  const mediaZoomPair = (
+    <div className="sb-zoom">
+      <ZoomPair smaller={nextMediaZoom(mediaZoom, -1)} bigger={nextMediaZoom(mediaZoom, 1)} onZoom={setMediaZoom}
+        noun="pictures" subject="the picture"
+        smallerHint=" — or pinch" biggerHint=" — or pinch; scroll to move around" />
+    </div>
+  );
   const zoomPair = (
     <div className="sb-zoom">
       <ZoomPair smaller={nextReaderZoom(zoom, -1, txt)} bigger={nextReaderZoom(zoom, 1, txt)} onZoom={applyZoom}
@@ -567,10 +580,10 @@ export function GitView({ repoId, onAskAgent, onBrowse, fileSheet, onClose, stor
               setFileOver({ path: openFile.path, edit: true });
             }}><Pencil size={16} /></Button>
           )}
-          {zoomPair}
+          {isMediaDiff(openFile.path) ? mediaZoomPair : zoomPair}
         </SheetHead>
         {isMediaDiff(openFile.path)
-          ? <GitMediaDiff repoId={repoId} path={openFile.path} staged={openFile.staged} />
+          ? <GitMediaDiff repoId={repoId} path={openFile.path} staged={openFile.staged} zoom={mediaZoom} onZoom={setMediaZoom} />
           : <GitTextDiff repoId={repoId} path={openFile.path} staged={openFile.staged} diff={diff} zoomFont={zoomFont}
               mode={diffMode} onMode={setDiffMode}
               onOpenPath={fileSheet ? (path) => setFileOver({ path, edit: false }) : undefined} />}

@@ -8,7 +8,7 @@
  * through to the screen underneath, the same as any other entry.
  */
 import { createElement, type ReactNode } from "react";
-import { overlayFromKey } from "../routing.ts";
+import { noteKeptOverlay, overlayFromKey } from "../routing.ts";
 import { setSheetKeeper, setSheetLeave } from "../backStep.ts";
 import { FEATURES } from "../features/registry.ts";
 import type { SheetId } from "../sdk/types.ts";
@@ -17,6 +17,7 @@ import { ExtBoundary } from "./ExtBoundary.tsx";
 import { createSheetTable } from "./featureRun.ts";
 
 const TABLE = createSheetTable(FEATURES);
+for (const [id, s] of TABLE.sheets) if (s.keep) noteKeptOverlay(id);
 setSheetKeeper((key) => TABLE.sheets.get(overlayFromKey(key) as SheetId)?.keep?.() ?? null);
 // The route layer tells each sheet that left its stack, and why (`announceLeaves`, backStep.ts).
 setSheetLeave((id, reason) => TABLE.leave(id, reason));

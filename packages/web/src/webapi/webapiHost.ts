@@ -145,7 +145,7 @@ export const hostApi = {
     }),
   /**
    * What ANOTHER saved desktop waits on the person for (`GET /api/attention`, `shared/waiting.ts`)
-   * — the ONLY cross-origin API call in the client, so it is spelled with that desktop's own
+   * — a cross-origin call (with `handleAt` below), so it is spelled with that desktop's own
    * `base` (the patched fetch sends this page's token only to the host in force, and keeps the
    * explicit `authorization` given here: `bearerForSaved`'s, that desktop's parked token). Raw
    * `timedFetch`, not `nfetch`: a background poll must not blink the activity bar.
@@ -158,6 +158,13 @@ export const hostApi = {
     let body: unknown = null;
     try { body = await r.json(); } catch { /* not JSON: absent */ }
     return { status: r.status, summary: parseWaitingSummary(body) };
+  },
+  /** Mark another desktop's alerts done (`POST /api/attention/handle`): its own `base` and token, as `waitingAt`; its summary after, or the refusal in words (404 = a release before the route). */
+  handleAt: async (base: string, auth: string | null, ids: string[]): Promise<{ summary: WaitingSummary | null; error?: string }> => {
+    const r = await timedFetch(`${base}/api/attention/handle`, { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: auth } : {}) }, body: JSON.stringify({ ids }), cache: "no-store", credentials: "omit" }, 8000);
+    const body = await r.json().catch(() => ({})) as { summary?: unknown; error?: unknown };
+    if (r.ok) return { summary: parseWaitingSummary(body.summary) };
+    return { summary: null, error: r.status === 404 ? "that desktop runs an older version — update it, or switch to it and mark them done in the bell" : typeof body.error === "string" ? body.error : `the desktop refused (${r.status})` };
   },
   /** Push text onto the desktop host's system clipboard (phone→desktop). */
   setClipboard: (text: string) =>

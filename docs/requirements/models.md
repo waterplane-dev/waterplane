@@ -43,9 +43,10 @@ An eject button allows unloading the currently loaded local model.
 laguna-xs-2.1 model is pulled into ollama and works with opencode toolcall/output.text filters, included in the model picker and benchmark runs.
 - asked: 2026-09-18
 
-### R-models-010 · requested
+### R-models-010 · shipped
 New CLI providers are selectable in the UI.
 - asked: 2026-10-02
+- shipped: b2d01bcea
 
 ### R-models-011 · shipped
 A button next to the read-mode toggle opens a model-and-effort wheel popover.

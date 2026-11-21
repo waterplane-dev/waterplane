@@ -264,6 +264,8 @@ export class WriteSlice {
       // Cost and worth are the person's or the filer's, never a re-save's.
       estimate: draft.estimate === undefined ? prev?.estimate : draft.estimate,
       value: draft.value === undefined ? prev?.value : draft.value,
+      // Who filed it is stated once, at the post: a re-save never drops or rewrites it.
+      rescued: draft.rescued === undefined ? prev?.rescued : draft.rescued,
       // The LIST facts, for the same reason and with the same test. `order` and
       // `handOrdered` are where a person put the row — re-saving a time is not
       // a request to un-place it — and `archived` is "I set this aside", which

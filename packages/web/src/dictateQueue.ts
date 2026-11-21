@@ -38,7 +38,8 @@ import { dictateTerms } from "./dictateLang";
 import { api, type UploadError } from "./api";
 import { idbDel, idbGet, idbKeys, idbSet } from "./idb";
 import { subscribeLink } from "./link";
-import { addPadNote } from "./outbox";
+import { rescueAuto, rescueFiledToast } from "./outbox";
+import { RESCUE_WHY } from "./rescueFile";
 import { LS, lsJsonUser, lsSetJsonUser } from "./storage";
 import { showToast } from "./toast";
 import {
@@ -251,7 +252,12 @@ async function landWords(clip: HeldClip, text: string): Promise<void> {
   if (!said || saidNothing(said)) { drop(clip.id); showToast("nothing was said"); return; }
   const take = landers.get(clip.id);
   if (typeof take === "function" && take(said)) { drop(clip.id); return; }
-  const refusal = addPadNote({ id: `p_${clip.id}`, text: said, ts: Date.now() });
+  // Automatic rescue: a marked, held row in the repo's backlog (the active / last-visited
+  // session's — a clip does not carry its own), the pad only where no repo is known or the
+  // filing was refused (`rescueFile.ts`). A crash between the queue write and `drop` can
+  // file the same words twice; that is the cheaper side of "never lost".
+  const out = rescueAuto({ text: said, why: RESCUE_WHY.dictation });
+  const refusal = out.where === "pad" ? out.refusal : null;
   if (refusal) {
     // The pad refuses rather than sheds when it is full, and so does this: the
     // clip STAYS, on the ladder, so the words can still be recovered once
@@ -263,7 +269,7 @@ async function landWords(clip: HeldClip, text: string): Promise<void> {
     return;
   }
   drop(clip.id);
-  showToast(landedAwayWords(clip.seconds));
+  showToast(out.where === "backlog" ? `${rescueFiledToast(out.cwd, out.offline)} (dictation, ${clip.seconds}s)` : landedAwayWords(clip.seconds));
 }
 
 /** Look again when the nearest backoff is up. One timer for the whole hold. */

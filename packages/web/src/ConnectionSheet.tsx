@@ -1,5 +1,6 @@
 import { Activity } from "lucide-react";
 import { SheetHead } from "./Sheet";
+import { StripsGear } from "./StripsGear";
 import { FilterChip } from "./kit/FilterChip";
 import { NetHealthSheet, type NetHealthFocus } from "./NetHealthSheet";
 import { SpeedTestSheet } from "./SpeedTestSheet";
@@ -25,7 +26,7 @@ export function ConnectionSheet({ onClose, ...health }: HealthProps & { focus?: 
   const tab = useStore(connectionTab);
   return (
     <div className="sheet">
-      <SheetHead title={TITLE.connection} icon={<Activity size={16} />} onClose={onClose} />
+      <SheetHead title={TITLE.connection} icon={<Activity size={16} />} onClose={onClose}><StripsGear /></SheetHead>
       <div className="fchips" aria-label="Connection" style={{ padding: "0 calc(var(--gutter) - 3px)", flexShrink: 0 }}>
         {TABS.map((t) => (
           <FilterChip key={t} on={tab === t} clears={false} onClick={() => connectionTab.set(t)}>{TAB.connection[t]}</FilterChip>

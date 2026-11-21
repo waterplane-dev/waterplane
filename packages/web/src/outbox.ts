@@ -32,7 +32,7 @@
 import {
   adoptPad, draftToRescue, parsePad, padFullText, removeNotes, serializePad, upsertNote,
   PAD_BYTES, PAD_CAP, PAD_WRITE_REFUSED,
-  type ClientMessage, type PadDoc, type PadNote, type SendView, type SessionBudget, type LaunchOpts,
+  type ClientMessage, type PadDoc, type PadNote, type Rescued, type SendView, type SessionBudget, type LaunchOpts,
 } from "@waterplane/shared";
 import { LS, lsGet } from "./storage";
 import { readGuarded, writeChecked, type Reading } from "./storedGuard";
@@ -40,7 +40,10 @@ import { clearLoss, reportLoss } from "./lossNotice";
 import { announceSetting, onAdopt } from "./settings";
 import { randId } from "./randId";
 import { parsePendingId } from "./core/queue/pendingId";
+import { adoptedSession, recordAdoption, redirectDraftWrite, type Adoptions } from "./core/queue/adoptions";
 import { isRelayedLive } from "./relayedRow";
+import { rescuedFiledToast } from "@waterplane/shared";
+import { rescueWords, RESCUE_WHY, type RescueFiler, type RescueOutcome } from "./rescueFile";
 
 const DRAFTS_KEY = LS.composeDrafts;
 const OUTBOX_KEY = LS.composeOutbox;
@@ -291,6 +294,8 @@ export interface OutboxEntry {
   pastBudget?: boolean;
   /** backlog mode: the row waits for the person's tap (`Add to backlog`), never started by the auto switch. */
   hold?: boolean;
+  /** backlog mode: the app filed these words from a rescue (`rescued.ts`); rides with `hold`, so the row waits for the person. */
+  rescued?: Rescued;
   /**
    * This entry is an ANSWER to a question the CLI was showing — a one-tap
    * approve-bar choice, a checkbox toggle, a Submit, an Esc — rather than text
@@ -464,9 +469,21 @@ export function loadDraft(sessionId: string): string {
 }
 export function saveDraft(sessionId: string, text: string): boolean {
   const all = read<Record<string, string>>(DRAFTS_KEY, {});
+  // A write aimed at a pending id that became a session goes to the session (`adoptions.ts`).
+  const via = redirectDraftWrite(all, loadAdoptions(), sessionId, text);
+  if (via.sid) return write(DRAFTS_KEY, via.drafts);
   if (text) all[sessionId] = text;
   else delete all[sessionId];
   return write(DRAFTS_KEY, all);
+}
+/** Every pending-to-session adoption still remembered (bounded: `adoptions.ts`). */
+export function loadAdoptions(): Adoptions {
+  const v = read<Adoptions>(LS.pendingAdopted, {});
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+/** Remember that `pending:<createAck>` became `sessionId`, whether or not anyone stands on that screen. */
+export function noteAdopted(createAck: string, sessionId: string): void {
+  write(LS.pendingAdopted, recordAdoption(loadAdoptions(), createAck, sessionId, Date.now()));
 }
 /**
  * **Words typed on a `pending:<createAck>` screen that nothing can reach any more.**
@@ -485,19 +502,64 @@ export function saveDraft(sessionId: string, text: string): boolean {
 export function rescueStrandedPendingDrafts(
   isLive: (screenId: string) => boolean,
   cwdOf: (screenId: string) => string | undefined,
-): { moved: number; refused: number } {
+): { moved: number; refused: number; adopted: { sessionId: string; n: number }[]; filed: { cwd: string; n: number; offline: boolean }[] } {
   const all = read<Record<string, string>>(DRAFTS_KEY, {});
+  const adoptions = loadAdoptions();
   let moved = 0, refused = 0;
+  const adopted: { sessionId: string; n: number }[] = [];
+  const filed: { cwd: string; n: number; offline: boolean }[] = [];
   for (const [id, text] of Object.entries(all)) {
     if (!parsePendingId(id) || isLive(id)) continue;
     const keep = draftToRescue(text, "");
     if (!keep) { saveDraft(id, ""); continue; }
-    const cwd = cwdOf(id);
-    if (addPadNote({ id: padNoteId(), ts: Date.now(), ...keep, ...(cwd ? { cwd } : {}) })) { refused++; continue; }
+    // The session DID open: the words belong in its draft box, not on the pad.
+    const sid = adoptedSession(adoptions, id);
+    if (sid) {
+      if (saveDraft(id, text)) {
+        const hit = adopted.find((a) => a.sessionId === sid);
+        if (hit) hit.n++; else adopted.push({ sessionId: sid, n: 1 });
+      } else refused++;
+      continue;
+    }
+    // Never opened: the words go to THAT repo's backlog as a rescued row (`rescueFile.ts`),
+    // and the draft is cleared only once the row is queued (or the pad holds it).
+    const out = rescueAuto({ ...keep, cwd: cwdOf(id), why: RESCUE_WHY.neverOpened });
+    if (out.where === "pad" && out.refusal) { refused++; continue; }
     saveDraft(id, "");
-    moved++;
+    if (out.where === "pad") { moved++; continue; }
+    const hit = filed.find((f) => f.cwd === out.cwd);
+    if (hit) { hit.n++; hit.offline ||= out.offline; } else filed.push({ cwd: out.cwd, n: 1, offline: out.offline });
   }
-  return { moved, refused };
+  return { moved, refused, adopted, filed };
+}
+
+// ── Automatic rescue: the backlog of the words' repo, not the pad ────────
+// `useQueue` binds the filer (`queueBacklog`) and the repo of the active / last-visited
+// session; nothing else may call `queueBacklog` from here, so this is the one seam.
+let rescueFile: RescueFiler | null = null;
+let rescueFallbackCwd: () => string | null | undefined = () => null;
+let rescueRepoName: (cwd: string) => string = (cwd) => cwd.split("/").filter(Boolean).pop() ?? cwd;
+/** Bound by `useQueue` every render (latest `queueBacklog`); `null` unbinds. */
+export function bindRescue(file: RescueFiler | null, fallbackCwd: () => string | null | undefined, repoName?: (cwd: string) => string): void {
+  rescueFile = file;
+  rescueFallbackCwd = fallbackCwd;
+  if (repoName) rescueRepoName = repoName;
+}
+/** The receipt for words filed as a rescued row: names the repo and says where they went. */
+export function rescueFiledToast(cwd: string, offline: boolean): string {
+  return rescuedFiledToast(rescueRepoName(cwd), offline);
+}
+/**
+ * File rescued words as a marked, held backlog row — or, with no repo to name or a
+ * refused filing, on the pad (the only remaining AUTOMATIC pad use). The caller
+ * clears its source only when the outcome is not a refusing pad.
+ */
+export function rescueAuto(p: { text: string; steps?: string[]; cwd?: string | null; why: string }): RescueOutcome {
+  return rescueWords({
+    file: rescueFile,
+    fallbackCwd: rescueFallbackCwd,
+    addPad: (n) => addPadNote({ id: padNoteId(), ts: Date.now(), ...n }),
+  }, p);
 }
 /** Every session id carrying an unsent draft right now — the close sheet's
  *  "words at stake" facet, read once rather than `loadDraft` re-parsing the
@@ -776,12 +838,19 @@ export function padNoteId(): string {
  * delete. The caller opens its sheet on the existing draft and says why.
  */
 export function seedSheetDraft(key: string, text: string, cwd?: string | null): "seeded" | "kept" | "refused" {
+  return seedSheetDraftDetailed(key, text, cwd).result;
+}
+/** `seedSheetDraft`, plus where a rescue went: `filed` names the repo whose backlog took it
+ *  (absent = the pad did, or nothing was rescued) so the caller can say so. The rescue is a
+ *  marked backlog row now (`rescueAuto`); `kept` still means "your old words were saved". */
+export function seedSheetDraftDetailed(key: string, text: string, cwd?: string | null):
+  { result: "seeded" | "kept" | "refused"; filed?: { cwd: string; offline: boolean } } {
   const keep = draftToRescue(loadSheetDraft(key), text);
-  if (!keep) { saveSheetDraft(key, text); return "seeded"; }
-  const refused = addPadNote({ id: padNoteId(), ts: Date.now(), ...keep, ...(cwd ? { cwd } : {}) });
-  if (refused) return "refused";
+  if (!keep) { saveSheetDraft(key, text); return { result: "seeded" }; }
+  const out = rescueAuto({ ...keep, cwd, why: RESCUE_WHY.replaced });
+  if (out.where === "pad" && out.refusal) return { result: "refused" };
   saveSheetDraft(key, text);
-  return "kept";
+  return out.where === "backlog" ? { result: "kept", filed: { cwd: out.cwd, offline: out.offline } } : { result: "kept" };
 }
 /**
  * Append to a draft's FIRST step, leaving the rest of the chain alone.

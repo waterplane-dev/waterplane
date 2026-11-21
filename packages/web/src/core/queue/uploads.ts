@@ -20,6 +20,8 @@ import { effectiveMaxWidth, etaText, scaleForUpload } from "../../uploadScale";
 import { sendModeToast } from "../../composeSend";
 import type { UploadBuf, UploadProgress } from "../../sdk/types.ts";
 import { UPLOAD_ROW_LINGER_MS, isLaterId } from "./logic.ts";
+import { loadAdoptions, loadDraft, saveDraft } from "../../outbox";
+import { adoptedSession } from "./adoptions.ts";
 import type { QueueCtx, UploadFns, UploadState } from "./types.ts";
 
 /** The buffer's state and the label it draws. Nothing here reaches the queue:
@@ -264,8 +266,12 @@ export function uploadFns(c: QueueCtx): UploadFns {
     void copyText(joined);
     // Fresh reads (not stale closures): the session the images were annotated for,
     // whether it's still the ACTIVE one, and the live compose draft.
-    const sess = buf.target ? sessionsRef.current.find((s) => s.id === buf.target!.id && s.running) : null;
-    const targetIsActive = !buf.target || activeIdRef.current === buf.target.id;
+    // The target may be a `pending:<ack>` screen whose create was acked while the picture was being
+    // annotated and uploaded: the words belong to the session it became (`adoptions.ts`).
+    const adoptedTo = buf.target ? adoptedSession(loadAdoptions(), buf.target.id) : null;
+    const targetId = adoptedTo ?? buf.target?.id;
+    const sess = targetId ? sessionsRef.current.find((s) => s.id === targetId && s.running) : null;
+    const targetIsActive = !buf.target || activeIdRef.current === targetId;
     const base = composeTextRef.current;
     const withDraft = base ? `${base}${base.endsWith(" ") ? "" : " "}${joined}` : joined;
     if (buf.queue && buf.target) {
@@ -282,7 +288,7 @@ export function uploadFns(c: QueueCtx): UploadFns {
       // queued behind it, so the draft stays exactly where it is.
       const queued = queueBacklog({
         text, repoDir: buf.target.cwd, label: text.slice(0, 40),
-        targetSessionId: sess ? buf.target.id : undefined, autoFire: true,
+        targetSessionId: sess ? targetId : undefined, autoFire: true,
       });
       if (queued === null) return;
       pushHistory(text);
@@ -310,6 +316,15 @@ export function uploadFns(c: QueueCtx): UploadFns {
       setCompose(withDraft);
       // `+ later` has no session to run in: the words wait in the box for its Send.
       showToast(buf.submit && !isLaterId(buf.target?.id) ? `Attached ${refs.length} · session gone, in box` : `Attached ${refs.length} · ready`);
+    } else if (adoptedTo && buf.target) {
+      // The create opened while the person was elsewhere: the words go into THAT session's draft
+      // (appended, never sent on their behalf) and say where.
+      const have = loadDraft(adoptedTo);
+      if (saveDraft(adoptedTo, have ? `${have}${have.endsWith(" ") ? "" : " "}${joined}` : joined)) {
+        showToast(`Attached ${refs.length} · in the box of the session that opened`);
+      } else {
+        showToast(`Attached ${refs.length} · copied (switched away)`);
+      }
     } else {
       // User switched sessions — don't touch the current draft. Refs are on the clipboard.
       showToast(`Attached ${refs.length} · copied (switched away)`);

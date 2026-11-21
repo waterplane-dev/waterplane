@@ -376,6 +376,11 @@ export interface ComplianceCheck {
    * group may return), never auto-pruned; the phone lists them as "marked, not in today's reading" with Clear.
    */
   staleMarks?: Array<{ triageId: string; triage: ExposureTriage }>;
+  /** Exposure SUMMARY row only: when the newest reading was taken (ISO), so the phone can say its age itself. */
+  readAt?: string;
+  /** Exposure SUMMARY row only: the measures this reading could NOT take, with the collector's reason. A measure
+   *  here is unknown, never clean: the phone heads the region with it instead of "nothing needs you". */
+  notMeasured?: Array<{ measure: string; why: string; unreachable: boolean }>;
   /** `"host"` when the check is about the HOST, not this repo (the Gemini
    *  credential is one key for the whole daemon). Repo rollups skip these:
    *  otherwise one unset env var reads as "every repo is misconfigured".

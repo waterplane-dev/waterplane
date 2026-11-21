@@ -330,9 +330,10 @@ Demo mode shows the vault: a fixture of value-free cards (release with advice, g
 - asked: 2026-10-18 (owner: follow-ups lesson 8)
 - plan: FOLLOWUPS-PLAN.md §8
 - shipped: eab7d1d3 c5f90c0f 9f5988f6
-### R-vault-063 · requested
+### R-vault-063 · shipped
 All items nested beneath a repo in the vault plugin can be collapsed and expanded, as in the main view.
 - asked: 2026-10-15
+- shipped: 3ec53e81e
 
 ### R-vault-064 · requested
 When an app needs a vault secret whose original was already removed, the phone prompts the user to release the key instead of the app failing silently.
@@ -509,7 +510,7 @@ A vault approval does not need Tailscale: it works on the desktop itself (localh
 The vault's list is hidden on a phone until it is unlocked with a fingerprint, and the desktop enforces it, not the app: while a phone's window is closed, `vault.list` answers only the cards waiting, the enrol, the recovery key and the export file offer; the history, users, consumers, day ledgers, a project's repo view, a scan's rows and a migration's report are refused with one sentence; and the lease push carries no rows (a content-free tick, sent only while some window is open). The unlock is a fresh single-use nonce from the desktop, one fingerprint on the phone, and an HMAC under the host-binding key as the only thing sent back (the vault key is zeroed on the phone and never leaves it). The window is per paired device, stays open while the app is in front (a beat every 15 s), and closes a minute after the app goes to the background or after "lock"; a restart closes every window. Waiting cards, the enrol and the recovery key are never behind it, so a closed window never blocks an approval. The lock says what is hidden and what is not, never "safe"; a phone that cannot do a fingerprint says why in a sentence. It does not stop a program of the same user on the desktop (it holds the binding key, and `wp-secret ls` is its own rule, R-vault-096) and it is not a second lock on approving: that stays one fingerprint per card.
 - asked: 2026-11-04 (exposure challenge F2); owner built it in full 2026-11-05 despite the replan's suggestion to cut it
 - shipped: aff45d98
-- note: `shared/wire/view.mts` is the contract and holds the one list of which method is gated, cut or open (`test/vaultviewgate.test.mjs` fails for a new method until it is placed). Phone seam: `web/viewprove.ts` takes any "unwrap under a fingerprint" function; Android passes the shell's existing `unwrap`, so no new APK, and iOS passes its own. View-for card (2026-11-09, host half built, phone/web half not yet): a locked SCREEN (a paired browser, or the desktop's own browser as `-:loopback`) calls `vault.viewAsk`; every phone's `vault.list` then carries a `viewFor` card naming it (name, kind, how it arrived, host) and saying nothing is released; the phone answers `vault.viewGrant` with the same HMAC-only proof (the vault key never leaves it), which opens only the slot that card names, for as long as that screen keeps beating (`viewKeep`); a phone locks one screen with `vault.viewCloseFor`. A screen with no sign-in of its own (`-:tailscale`, `-:lan`, `-:unknown`) is refused in words (set the desktop password), since opening it would open every such screen. `wp-secret` on the desktop still gets no more than `ls --full` after its own card. `ViewGate.open` now checks every enrolled device's HB, not only the first. Tests: `test/vaultviewfor.test.mjs`. Gated too: the id-keyed edits and reads whose answer comes from the catalog (`vault.accountUpdate`, `setPurpose`, `rewireDraft`, `rewirePrompt`, `rewireMark`, `rewireSent`, `keepPlace`, `setAside`, `setPhase`, `repoLink`, `repoUnlink`, `consumerConfirm`). A caller with no device id is keyed by `kind`, so a loopback tab is not the tailnet phone's window; two same-kind callers with no id still share one. The phone locks itself `VIEW_WINDOW_MS` after the last answer that said open (`web/viewlogic.ts`), keeps a scan's and a migration's ids through a lock and re-reads them on unlock, and the head's list lock (`hide` glyph, "lock list") is a different verb and glyph from the kept rows' "lock now".
+- note: `shared/wire/view.mts` is the contract and holds the one list of which method is gated, cut or open (`test/vaultviewgate.test.mjs` fails for a new method until it is placed). Phone seam: `web/viewprove.ts` takes any "unwrap under a fingerprint" function; Android passes the shell's existing `unwrap`, so no new APK, and iOS passes its own. View-for card (2026-11-09, host half built, phone/web half not yet): a locked SCREEN (a paired browser, or the desktop's own browser as `-:loopback`) calls `vault.viewAsk`; every phone's `vault.list` then carries a `viewFor` card naming it (name, kind, how it arrived, host) and saying nothing is released; the phone answers `vault.viewGrant` with the same HMAC-only proof (the vault key never leaves it), which opens only the slot that card names, for as long as that screen keeps beating (`viewKeep`); a phone locks one screen with `vault.viewCloseFor`. A screen with no sign-in of its own (`-:tailscale`, `-:lan`, `-:unknown`) is refused in words (set the desktop password), since opening it would open every such screen. `wp-secret` on the desktop still gets no more than `ls --full` after its own card. `ViewGate.open` now checks every enrolled device's HB, not only the first. Tests: `test/vaultviewfor.test.mjs`. Gated too: the id-keyed edits and reads whose answer comes from the catalog (`vault.accountUpdate`, `setPurpose`, `rewireDraft`, `rewirePrompt`, `rewireMark`, `rewireSent`, `keepPlace`, `setAside`, `setPhase`, `repoLink`, `repoUnlink`, `consumerConfirm`). A caller with no device id is keyed by `kind`, so a loopback tab is not the tailnet phone's window; two same-kind callers with no id still share one. The phone locks itself `VIEW_WINDOW_MS` after the last answer that said open (`web/viewlogic.ts`), keeps a scan's and a migration's ids through a lock and re-reads them on unlock, and the head's list lock (`hide` glyph, "close the vault") is a different verb and glyph from the kept rows' "lock now".
 - note: not yet tried on a real phone.
 
 ### R-vault-098 · shipped
@@ -654,7 +655,7 @@ Every secret's own card has "show value", "copy value" and "change value". Show 
 - shipped: f4ed225a
 
 ### R-vault-123 · shipped
-While a card is waiting, the locked vault's lock is one line ("list locked", an unlock button and a `?` that opens the sentences), so the card is at the top of the screen. With nothing waiting it is the full box. A warning or a reason the phone cannot unlock is still said in text under the line.
+While a card is waiting, the locked vault's lock is one line ("vault closed", an "open" button and a `?` that opens the sentences), so the card is at the top of the screen. With nothing waiting it is the full box. A warning or a reason the phone cannot unlock is still said in text under the line.
 - asked: 2026-11-07
 - shipped: f4728145
 
@@ -716,35 +717,40 @@ The same "Ask an agent about this in <repo>" button is on the receipt an answere
 
 Collected 2026-11-08 from the owner's own messages about the vault's phone screens. Quotes are verbatim (dictated; garble noted in brackets). A complaint already held by an earlier item is not repeated here: see `.claude/outbox/journey-vault/E-complaints.md` for the full map.
 
-### R-vault-132 · requested
+### R-vault-132 · shipped
 The export dialog says in plain words which copy it removes: the temporary plain-text copy made for the export on the phone is wiped, and the vault's own encrypted values stay and remain usable. The dialog never offers "drop" without saying what is dropped.
 - asked: 2026-10-11: "Export ....has bad wording I think. I do read in a dialogue with the plain text values "drop from the phone" . I trink [think] itnmeans [it means] wiping the temporary copy in the phone that exist llfor Tre [exist for the] export and the original values int the vault remain encrypted and usable."
 - note: the lock button asked beside it is R-vault-008; the export itself R-vault-007.
+- shipped: 9e42608aa
 
-### R-vault-133 · requested
+### R-vault-133 · shipped
 Before a program or session can cause a fingerprint prompt, the person can read, on that secret's card and in the project's page, when the next fingerprint will be asked: at start, on each use, after a restart of the service, or never while a grant stands. The answer names the event, not the setting.
 - asked: 2026-10-12: "if i woudl use the tiptoi app now to generate a new audio with gemini - would i then get a fingerprint prompt for the secret in our vault, or if the service restarts?"
 - asked: 2026-10-13: "I moved in the Gemini key of Tiptoi. When will I now be asked to probed [prove] my appeal [approval?] with my finger print?"
 - asked: 2026-10-26: "For which things do you need credentials from the vault and for which not and how do we handle the need for my fingerprint here?"
 - note: R-vault-029 (treatments say what they mean) and R-vault-081 (restart) hold parts; none answers the question for one concrete secret. Recurs on three dates.
+- shipped: 88d413b2d, 3ec53e81e
 
-### R-vault-134 · requested
+### R-vault-134 · shipped
 Back inside the vault returns to the vault screen the person came from, never to the app's main view, and a vault sheet reached from a notification or a card still has a Back that ends on the vault home.
 - asked: 2026-10-13: "The back button here in the vault plugin does lead back to the main view instead of tonthe [to the] vault screen I want to reach. Effectively I'm now stuck in this one screen of the vault plugin..we have similar issues in other places as well that the back button does not lead to the last visible "page""
 - note: the app-wide rule is R-navigation-006; this item pins it for the vault's screens.
+- shipped: 62b1036f8
 
-### R-vault-135 · requested
+### R-vault-135 · shipped
 A login that has a one-time-password seed shows the current code on the phone after one fingerprint, beside its password, and says when the code changes. A person who can approve an npm 2FA prompt by fingerprint can find where the code is.
 - asked: 2026-10-18: "Where do I find the otp? I can npm 2fa with fingerprint but don't find a otp entry generator"
 - asked: 2026-10-18: "Is there no mom [MFA/OTP] login available in the wp vault?"
 - note: R-vault-039 only carries the otp field into a KeePass/Bitwarden export; the phone side is not asked for anywhere else.
+- shipped: 0a3b80fe8
 
-### R-vault-136 · requested
+### R-vault-136 · shipped
 In every vault list (secrets, logins, Move in, Use › Users, rate-many) each item is visibly its own block: a person can tell where one item starts and where it ends in a list of many, and which control belongs to which item.
 - asked: 2026-10-13: "Please structure this better - it hard to grasp what I see here"
 - asked: 2026-11-06: "this list view is also really bad and it's hard to see if many items are listed, where which item starts or ends. We have this issue in many places in the vault ui."
 - asked: 2026-11-06: "the list view can use some improvements to look better"
 - note: R-vault-051 (shared row grammar) and R-vault-102 hold the grammar and the copy button; the item-boundary complaint recurs after both, so look at it as still open. Owner also said "also these dialogues look really bad" (2026-11-06, session a68700c9); R-vault-113 holds only the width.
+- shipped: 55afb6a3d
 
 ### R-vault-137 · requested
 A `?` help icon sits on the thing it explains and nowhere else; it is never placed between two cards or beside a card's title so that it could belong to either. On the release-ask screen every explanation comes with words of its own or sits inside a labelled control, so no bare explanation icon appears alone.
@@ -780,10 +786,11 @@ When an action finishes using a credential without a fingerprint card, the perso
 - asked: 2026-11-06: "I did not get a fingerprint request for his [this] action that apparently succeeded - did we miss to move some credentials to the vault?"
 - note: R-vault-064 covers a removed original; R-vault-086/087/089 show asks that did come. Recurs on two dates.
 
-### R-vault-142 · requested
+### R-vault-142 · shipped
 The Use › Users group of unregistered programs says why a program is unregistered (nobody has registered it; an agent does not register on its own), what changes for the person and for security once it is registered, and offers the register button on that row.
 - asked: 2026-11-06: "ui need to explain the categories better and I now wander myself why there are any unregistered programs and why AI did not register them and what's the effective difference for me as user and for the security?"
 - note: R-vault-103 explains what each group may do; the "why unregistered" and "difference for me" parts are not stated there.
+- shipped: 9cd3a4535
 
 ### R-vault-143 · shipped
 The vault's documents are written for a first-time reader: they say what is true now, never how it changed or what the previous conversation decided. The vault has one README that starts a new reader, fewer and more compact files, and the other reader-facing docs follow the same rule.
@@ -888,10 +895,32 @@ Scheduled Garmin jobs run without a daily phone approval: the broad Garmin crede
 - asked: 2026-11-14
 
 
-### R-vault-168 · requested
+### R-vault-168 · shipped
 An ask outlived by a newer one — a program's release card whose program stopped waiting, with a newer ask or an approval since for the same secrets, command and folder — is marked on the waiting list, moves to its foot, and all of them are dismissed together by one tap (one confirm; each denied and closed).
 - asked: 2026-11-19 (screenshot: six FRED_API_KEY cards from one program after one was approved)
+- shipped: 8e7c25752
 
-### R-vault-169 · requested
+### R-vault-169 · shipped
 One fingerprint covers the whole release train, and a fix-and-rerun asks no new card: the grant card offers "If the run stops: keep it for retries for [180] min", a number the person may change (0 ends it with the run) before the fingerprint. A train that finishes ends the grant; one that fails keeps it only for the window the person approved (never past the grant's own end), and the rerun reuses it while it still covers exactly the train's secrets.
 - asked: 2026-11-20
+- shipped: 39b555702
+
+### R-vault-170 · shipped
+Marking a reader as 'the code is updated' in the vault marks every place that one code line reads from, so a line read from two env files of one secret leaves 'with a session' in both rows.
+- asked: 2026-11-15
+- shipped: 569d6e4be
+
+### R-vault-171 · shipped
+The vault secrets list has buttons to ask an agent to assess or reassess the reach of secrets, including ones already rated.
+- asked: 2026-11-15
+- shipped: 400cf633c, fe632996f
+
+### R-vault-172 · requested
+Vault key-handling code lives in one core folder that policy code may import but core never imports from, enforced by a lint boundary.
+- asked: 2026-11-19
+
+### R-vault-173 · shipped
+The vault lock actions read 'open the vault' and 'close the vault'.
+- asked: 2026-11-20
+- shipped: 7998668f5
+

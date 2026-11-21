@@ -15,6 +15,7 @@ import { drawBadges, drawCropOverlay, drawSelection, drawShape } from "./annDraw
 import { editActions } from "./annEdit";
 import { clampRect, normRect } from "./annGeom";
 import { pointerActions } from "./annPointer";
+import { useStrayTouches } from "./annStray";
 import { readActions } from "./annRead";
 import { autoReadActions, type ReadSlot } from "./annAutoRead";
 import { useImageTextReader } from "../sdk/extensions";
@@ -133,6 +134,7 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const fitRef = useRef({ k: 1, tx: 0, ty: 0 }); // the "fit to wrapper" view
   // Active pointers for gesture detection.
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const strays = useRef<Map<number, { x: number; y: number }>>(new Map());
   const gesture = useRef<null | { startDist: number; startK: number; cx: number; cy: number }>(null);
 
   useEffect(() => {
@@ -267,11 +269,12 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
     setKnobs, knobsRef, moveRef, busy, setBusy, setErr, cropMode, setCropMode, pendingCrop, setPendingCrop, cropDrag,
     pendingText, setPendingText, textDraft, setTextDraft, textInputRef, idRef, readTextRef, genRef,
     editRead, setEditRead, readDraft, setReadDraft, readInputRef, setPaletteOpen, setView, viewRef, fitRef,
-    pointers, gesture, redraw, clampToImage,
+    pointers, strays, gesture, redraw, clampToImage,
   };
   const edit = editActions(ctx);
   const read = readActions(ctx);
   const pointer = pointerActions(ctx);
+  useStrayTouches(wrapRef, pointers, strays, pointer);
   const { send, sendAll } = sendActions(ctx);
   const ocrAct = ocrActions({ canvasRef, genRef, redraw, setOcr, setOcrDraft, onText });
   const autoRead = autoReadActions({ canvasRef, imgRef, setShapes, genRef, readsRef });

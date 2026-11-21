@@ -140,13 +140,13 @@ export const KEY_SCOPE = {
   // what that host's plugin list last said
   pluginList: "host",
   // the link: the phone's own switches are device, what was MEASURED against a host is host
-  dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
+  dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", netPulseWhen: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",
   // the session tab strip: its SHAPE is this screen's, its open counts are that host's sessions
   sessionTabs: "device", sessionTabsPhone: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
   sessionTabsSync: "device", tabsSaverAsked: "device", tabOrderShared: "host", tabOpensShared: "host",
   // work in flight: that host's words, that host's queue
-  outbox: "host", compose: "host", composeDrafts: "host", composeOutbox: "host", composeSheets: "host",
+  outbox: "host", compose: "host", composeDrafts: "host", pendingAdopted: "host", composeOutbox: "host", composeSheets: "host",
   deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
   // the language spoken into THIS phone (the vocabulary, `dictateTerms`, is the person's and synced)
   dictateLang: "device", dictateLangs: "device", snippetRecent: "device",

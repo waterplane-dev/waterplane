@@ -3037,3 +3037,24 @@ test("a queued row held only by a STALLED row's serial claim SAYS so, and points
   const plain = intentSerialHolders([{ ...sessions[0], netStalled: undefined }], occupied);
   assert.match(intentVerdict(row, { ...facts, serialHolders: plain }).detail, /\(starting a queued job\)$/);
 });
+
+// ── rescued words: the app's own mark on a backlog row ─────────────────────
+test("a rescued row is posted held, keeps its mark through a re-save, is returned on the wire and cleaned on disk", async () => {
+  const { store, state, root } = makeStore();
+  await store.reconcile();
+  const rescued = { why: "Typed for a session that never opened.", at: 1234 };
+  store.post({ ...backlogDraft({ id: "rs1", cwd: REPO, text: "words", order: 1, rescued }), manual: true });
+  store.kick();
+  await settle();
+  assert.deepEqual(state.ran, [], "manual: nothing but the person's tap starts it");
+  assert.deepEqual(store.get("rs1").rescued, rescued, "persisted on the row");
+  assert.deepEqual(intentToBacklogItem(store.get("rs1")).rescued, rescued, "and returned on the backlog row");
+  // A re-save through the same id carries the mark (stated once, at the post).
+  store.post({ ...backlogDraft({ id: "rs1", cwd: REPO, text: "words", order: 1 }), manual: true });
+  assert.deepEqual(store.get("rs1").rescued, rescued, "a re-save never drops it");
+  assert.equal(backlogDraft({ id: "rs2", cwd: REPO, text: "x", order: 2 }).rescued, undefined, "absent stays absent");
+  store.post({ ...backlogDraft({ id: "rs3", cwd: REPO, text: "x", order: 3, rescued: { why: "  ", at: 1 } }), manual: true });
+  assert.equal(store.get("rs3").rescued, undefined, "a mark without words is no mark");
+  store.stop();
+  rmSync(root, { recursive: true, force: true });
+});

@@ -121,6 +121,7 @@ import {
 import { bearerForSaved } from "../../deviceToken.ts";
 import { takeOpenAfter, writeOpenAfter } from "../../hosts.ts";
 import { LS } from "../../storage.ts";
+import { notifFromShell } from "@waterplane/shared";
 
 const A = { id: "aaa111", name: "mac studio", base: "http://100.64.0.1:8770" };
 const B = { id: "bbb222", name: "zenbook", base: "http://100.64.0.2:8770" };
@@ -197,6 +198,15 @@ test("elsewhere: an item lands on its plugin's screen or its session", () => {
   assert.equal(itemOpenTarget({ plugin: "vault" }), "plugin:vault");
   assert.equal(itemOpenTarget({ sessionId: "a1b2c3d4" }), "a1b2c3d4");
   assert.equal(itemOpenTarget({}), undefined);
+  // A prompt that never made it in: its session is usually gone, so the tap lands on the alert's row.
+  const t = itemOpenTarget({ id: "e78924d4", ts: 5, kind: "undelivered", title: "Prompt not delivered · todo-garden", sessionId: "ddcfce70" });
+  assert.ok(t.startsWith("notif:"));
+  const back = notifFromShell(t);
+  assert.equal(back.id, "e78924d4");
+  assert.equal(back.sessionId, undefined, "no session to wait for");
+  const kv = new Map(); const store = { getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => kv.set(k, v), removeItem: (k) => kv.delete(k) };
+  writeOpenAfter(store, "bbb222", t);
+  assert.equal(takeOpenAfter(store, "bbb222"), t, "a switch accepts it as a landing");
 });
 
 test("bearerForSaved: that desktop's tailnet origin only — never its LAN address, never another origin", () => {

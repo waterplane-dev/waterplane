@@ -118,3 +118,17 @@ Web Push is done by the host itself on node:crypto, with the web-push library an
 - asked: 2026-11-14 (owner)
 - shipped: ddedfc181
 - note: not yet seen during a real outage.
+
+### R-notifications-025 · shipped
+The Needs-you heading has an "all done" (two taps) that marks every row under it as dealt with — exactly the rows shown, so a sheet opened from the bell's count ("39 of 104") marks those and nothing hidden. The desktop-wide clear stays off in a cut view.
+- asked: 2026-11-20 (owner, screenshot: no button to clear the list)
+- shipped: this commit
+### R-notifications-026 · requested
+The fingerprint approval request reaches a backgrounded phone promptly, not a minute or more late; a background link dial that never answers is given up and retried.
+- asked: 2026-11-15, 2026-11-20
+
+### R-notifications-027 · shipped
+Every long-running finisher (assessment, build, backlog item, peer report) notifies with a tap target that opens the screen where the work ran.
+- asked: 2026-11-17
+- shipped: ab7ce07a4
+

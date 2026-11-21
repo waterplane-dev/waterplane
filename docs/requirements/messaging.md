@@ -43,9 +43,10 @@ The Send sheet and the pad offer the saved-snippet (quote) button like the compo
 - asked: 2026-09-24
 - shipped: 7f118baa
 
-### R-messaging-010 · requested
+### R-messaging-010 · shipped
 Typed compose words are kept until the user deletes them, and deleting them asks for confirmation once with an in-app confirm button, never a browser confirm dialog.
 - asked: 2026-10-04
+- shipped: 7aaee350d
 
 ### R-messaging-011 · requested
 A promo that was sent successfully is reported as sent.
@@ -80,3 +81,8 @@ The snippet picker (compose bar, Send sheet, pad) inserts a tapped snippet at on
 A person who has no snippet list at all is shown shipped starter snippets (marked by one line above the list), which are written to the synced list only when they save an edit in the manage sheet. An existing list, an adopted copy from another device and an emptied list never show or receive starters; the manage sheet can append the starters that are missing, never replace.
 - asked: 2026-11-12 (owner)
 - shipped: 2026-11-12
+### R-messaging-018 · shipped
+A relayed message that failed without a host verdict stays locked like a live relayed one, since its words may have run; the person can remove a stuck row after a confirm.
+- asked: 2026-11-19
+- shipped: d159e225a, 42916b024
+

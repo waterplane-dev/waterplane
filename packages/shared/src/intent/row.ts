@@ -9,6 +9,7 @@
 
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { ItemValue } from "../estimate.js";
+import type { Rescued } from "../rescued.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "../wire/session.js";
 import type { AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
@@ -208,6 +209,8 @@ export interface Intent {
   estimate?: string;
   /** What it is worth: `high`/`medium`/`low`, absent = nobody said. */
   value?: ItemValue;
+  /** Filed by the app from words it rescued (`shared/rescued.ts`); stated once, at the post. */
+  rescued?: Rescued;
   cols?: number;
   rows?: number;
   /** The model/effort/backend the session this row OPENS is started with —

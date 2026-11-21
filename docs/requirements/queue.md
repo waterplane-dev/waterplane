@@ -126,3 +126,14 @@ Every backlog row may carry an estimate (agent cost and time, e.g. "~$3 · 20 mi
 - asked: 2026-11-20
 - shipped: 518564401
 
+### R-queue-027 · shipped
+A pending new session shows its waiting prompts inline with rewrite and discard, not only in Waiting work.
+- asked: 2026-11-20
+- shipped: 7e8c2b321
+
+
+### R-queue-028 · shipped
+Words the app rescues by itself no longer collect on the pad. A draft stranded under a session that never opened, a draft about to be replaced by new words, and a dictation whose box had gone each become a backlog row in that words' own repo, marked "rescued" with a one-line reason, waiting for a tap and never started by auto. The launcher's repo row shows a red "N rescued" chip that opens exactly those rows ("n of N", with a clear button); sending or discarding a row takes it out of the count, and the toast says which repo's backlog took the words. Offline the filing is queued durably like any backlog add; a refused filing, or no repo at all, falls back to the pad and says so. The explicit "keep it on the pad" actions are unchanged, and notes already on the pad stay there.
+- asked: 2026-11-21 (owner)
+- shipped: fd28cf699
+- note: not yet run on a real phone; a dictation clip names no repo of its own, so it files under the repo of the active or last-visited session.

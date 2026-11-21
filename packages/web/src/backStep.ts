@@ -27,7 +27,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { shellInterface } from "./shellBridge.ts";
-import { overlayFromKey, routeKey, routeStep, screenOfKey, stepKey, VACANT, type Overlay } from "./routing.ts";
+import { overlayFromKey, routeKey, routeStep, screenOfKey, SPENT_ON_LEAVE, stepKey, VACANT, type Overlay } from "./routing.ts";
 
 /** The keys this document pushed, by depth, and where we are in them. */
 export const routeStack: { depth: number; keys: string[] } = { depth: 0, keys: [] };
@@ -430,6 +430,21 @@ export function returnVerb(o: Overlay, top: Overlay): "close" | "open" | null {
   return top ? "close" : null;
 }
 
+/** A pending screen taken over by the session its create made (`adoptPendingSession`). */
+export type Adoption = { from: string; to: string };
+let adoption: Adoption | null = null;
+/** Said by `adoptPendingSession` just before it moves the screen: the next landing renames, never pushes. */
+export function noteAdoption(from: string, to: string): void { adoption = { from, to }; }
+/** The adoption the next landing may consume — read once, so a later tap is never taken for one. */
+export function takeAdoption(): Adoption | null { const a = adoption; adoption = null; return a; }
+/** Whether moving from entry `top` to `key` is exactly that adoption: same sheet, same focus, pending id → session id. */
+export function isAdoption(top: string | undefined, key: string, a: Adoption): boolean {
+  if (!top) return false;
+  const [ta, to, tr] = top.split("|");
+  const [ka, ko, kr] = key.split("|");
+  return ta === a.from && ka === a.to && to === ko && tr === kr;
+}
+
 /**
  * What the routing effect does when the route becomes `key`, and what it FILES with the entry it
  * lands on (`routeLanded`'s `how`) — one pure decision, node-tested, so no branch's filing can
@@ -442,21 +457,32 @@ export function returnVerb(o: Overlay, top: Overlay): "close" | "open" | null {
  * - `go` — unwind to an entry below: the very screen the tap named is a FRESH open and forgets
  *   its kept stores; one below it (a close, a leave) is a return.
  * - `push` — a new entry over the top.
+ * - `replace` — a new entry IN PLACE of a spent sheet's (`SPENT_ON_LEAVE`).
+ * - `rename` — the pending screen became its session (`noteAdoption`): same entry, the session's key.
  */
 export type Landing =
   | { kind: "seed"; how: "push" }
   | { kind: "known"; depth: number; how: "stay" }
   | { kind: "stay"; how: "stay" }
   | { kind: "go"; delta: number; forget: boolean; how: "open" | "return" }
-  | { kind: "push"; how: "push" };
-export function routeLanding(keys: readonly (string | undefined)[], depth: number, key: string, first: boolean, known: number): Landing {
+  | { kind: "push"; how: "push" }
+  | { kind: "rename"; how: "stay" }
+  | { kind: "replace"; how: "push" };
+export function routeLanding(keys: readonly (string | undefined)[], depth: number, key: string, first: boolean, known: number, adopt: Adoption | null = null): Landing {
   if (first && known <= 0) return { kind: "seed", how: "push" };
   if (known >= 0) return { kind: "known", depth: known, how: "stay" };
+  // The pending screen BECOMING its session is one screen, not two: its entry is renamed in place.
+  // Pushed, Back from the new session landed on the dead pending entry, and the next Back on
+  // whatever was under it — two presses to get back to the Setup check a prompt was started from.
+  if (adopt && isAdoption(keys[depth], key, adopt)) return { kind: "rename", how: "stay" };
   const step = routeStep(keys, depth, key);
   if (step.kind === "stay") return { kind: "stay", how: "stay" };
   if (step.kind === "go") {
     const fresh = (keys[depth + step.delta] ?? "") === key;
     return { kind: "go", delta: step.delta, forget: fresh, how: fresh ? "open" : "return" };
   }
+  // A bare screen leaving a SPENT sheet (the session a Send sheet's Start opened) takes its entry (`SPENT_ON_LEAVE`).
+  const top = keys[depth];
+  if (depth > 0 && top && top === screenOfKey(top) && SPENT_ON_LEAVE.has(top.split("|")[1] ?? "") && !key.split("|")[1]) return { kind: "replace", how: "push" };
   return { kind: "push", how: "push" };
 }

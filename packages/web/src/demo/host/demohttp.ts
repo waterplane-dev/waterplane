@@ -253,6 +253,7 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   // What this desktop waits on a person for (`shared/waiting.ts`), off the scenario's own sessions
   // and feed. The phone never polls it in the demo (one desktop), but it is a route the client names.
   if (path === "/api/attention" && method === "GET") return json(summarizeWaiting(sessions(m), m.notifications ?? [], now));
+  if (path === "/api/attention/handle" && method === "POST") return json({ handled: 0, summary: summarizeWaiting(sessions(m), m.notifications ?? [], now) });
 
   // A fork's theme overlay (`themeOverlay.ts`): the demo desktop has none — the upstream look.
   if (path === "/api/theme" && method === "GET") return json({ overlay: {} });

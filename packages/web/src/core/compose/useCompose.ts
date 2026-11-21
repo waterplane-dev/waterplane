@@ -36,7 +36,8 @@ import {
 import { hardSendAsk } from "../../budgetInput";
 import { recallMode, recallScreenAim, recallWhen, recalledWhenNote } from "../../sendMemory";
 import type { SendTarget } from "../../sendIntent";
-import { addPadNote, loadDraft, padNoteId, saveDraft } from "../../outbox";
+import { addPadNote, loadAdoptions, loadDraft, padNoteId, saveDraft } from "../../outbox";
+import { adoptedSession } from "../queue/adoptions.ts";
 import { PIPE_PAD, decodePipe, keyToBytes } from "../../cliKeys";
 import { useChord } from "./useChord";
 import { NAMED_KEY, type ChordMod } from "./chordState.ts";
@@ -378,7 +379,9 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   // `ownLine`: joined to words already there by a newline, not a space — a
   // command for a shell (`lineToShell`) glued onto a half-typed one is a
   // different command.
-  function seedDraft(sid: string, text: string, opts: { ownLine?: boolean } = {}): SeedOutcome {
+  function seedDraft(sidIn: string, text: string, opts: { ownLine?: boolean } = {}): SeedOutcome {
+    // A caller holding a `pending:<ack>` id from before the create was acked seeds the session it became.
+    const sid = adoptedSession(loadAdoptions(), sidIn) ?? sidIn;
     // Seeded words are for the person to read and send: CLI mode hides the box
     // behind the raw-keys pad, so the mode is left (the caller says so).
     const leftCli = cliModeOn;

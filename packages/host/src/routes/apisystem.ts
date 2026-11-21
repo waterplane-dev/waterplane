@@ -28,6 +28,7 @@ import { PeerClient } from "../peers/client.js";
 import { handlePeerAgent } from "../peers/agentpeer.js";
 import { ownPtys } from "../ptycap.js";
 import { ACK_WRITE_FAILED } from "../acks.js";
+import { identity, INSTALL_ROOT } from "../cli/index.js";
 import { BadBody, MIME, json, readBody, readJson, serveFileStream } from "./apiio.js";
 import { rangeLastByte } from "../plugins/pluginfiles.js";
 import { localProcessRefusal } from "../net.js";
@@ -58,6 +59,9 @@ function takeLoopDelayP99Ms(): number {
 /** A plugin id in a hook-sink path — the registry's own rule. */
 const PLUGIN_HOOK_ID = /^[a-z][a-z0-9-]{1,39}$/;
 
+/** Read once: `identity()` may run git, and the version cannot change under a running host. */
+let healthVersion: string | null = null;
+
 export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   // ── Simple GETs ─────────────────────────────────────────────────────
   route("*", "/api/health", ({ res }, ctx) => {
@@ -72,7 +76,10 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     const writeErrors = acksErr || intentsErr
       ? { ...(acksErr ? { acks: `${ACK_WRITE_FAILED} (${acksErr})` } : {}), ...(intentsErr ? { intents: `could not save to disk: ${intentsErr}` } : {}) }
       : undefined;
-    json(res, { ok: true, protocol: PROTOCOL_VERSION, root: ctx.root, ptys: ownPtys(), sessions: ctx.sessions.list().length, loopDelayP99Ms: takeLoopDelayP99Ms(), ...(writeErrors ? { writeErrors } : {}) });
+    // `install` + `version`: which install answers on this port — the Windows launcher's restart
+    // checks it, so another install's host on the same port is never reported as this one "up".
+    healthVersion ??= identity().version;
+    json(res, { ok: true, protocol: PROTOCOL_VERSION, root: ctx.root, install: INSTALL_ROOT, version: healthVersion, ptys: ownPtys(), sessions: ctx.sessions.list().length, loopDelayP99Ms: takeLoopDelayP99Ms(), ...(writeErrors ? { writeErrors } : {}) });
     return true;
   }),
 
@@ -94,6 +101,21 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   // over the socket.
   route("GET", "/api/attention", ({ res }, ctx) => {
     json(res, summarizeWaiting(ctx.sessions.list(), (ctx.attention?.unhandled() ?? []).map((r) => r.item), Date.now()));
+    return true;
+  }),
+
+  // The person's "done" on items another desktop's phone saw in that summary (`ElsewhereSheet`):
+  // the HTTP twin of the socket's `notification.handle`, because the phone holds a socket only to
+  // the desktop it is switched to. Same effect — handled by the person, the feed re-sent — and
+  // idempotent (an id already handled, or gone, changes nothing). POST, Origin/Host + token gated;
+  // not in `passive.ts`'s allowlist. Answers the summary after, so the phone needs no second read.
+  route("POST", "/api/attention/handle", async ({ req, res }, ctx) => {
+    const body = await readJson(req) as { ids?: unknown };
+    const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 64).slice(0, 200) : [];
+    if (!ids.length) { json(res, { error: "ids must be a non-empty array of item ids" }, 400); return true; }
+    let handled = 0;
+    for (const id of ids) if (ctx.handleNotification?.(id)) handled++;
+    json(res, { handled, summary: summarizeWaiting(ctx.sessions.list(), (ctx.attention?.unhandled() ?? []).map((r) => r.item), Date.now()) });
     return true;
   }),
 

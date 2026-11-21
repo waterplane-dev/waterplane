@@ -42,3 +42,8 @@ Every session's terminal screen is cached so it is available offline, not only t
 - asked: 2026-10-25
 - shipped: 8a51a166, 9ba71411
 
+### R-offline-011 · shipped
+On a bad connection the APK shows a small canvas storm scene (rough water, rain, the logo plane landing once the link is stable) instead of a plain bar, only after about two seconds of disconnect and only over an empty screen, never when output is cached. A clearly visible 'hide animation' pill dismisses it for the outage.
+- asked: 2026-11-17, 2026-11-18
+- shipped: be8c260c1, 764807d8f, c585513b4, eb6ec7bca
+

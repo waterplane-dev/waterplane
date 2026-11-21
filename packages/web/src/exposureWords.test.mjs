@@ -68,7 +68,7 @@ test("form: version only when the finding has one; refusal replaces the verb", (
   assert.deepEqual(acceptRequest("exposure:a", "why", "change", "").until, { change: true });
 });
 
-import { acceptedByMark, staleMarksHead, clearTriageRequest, triageControl, triageRefusal, triageRequest, TRIAGE_NO_FIXED_WHY } from "./exposureWords.ts";
+import { acceptedByMark, clearTriageRequest, triageControl, triageRefusal, triageRequest, TRIAGE_NO_FIXED_WHY } from "./exposureWords.ts";
 
 test("triageRefusal mirrors the host: fixed needs a clean version, commit hex, note length", () => {
   assert.equal(triageRefusal("seen", "", "", ""), null);
@@ -116,6 +116,34 @@ test("triageControl hides fixed without an app version and says why; a regressio
   assert.equal(triageControl(reg).line, null);
 });
 
-test("staleMarksHead counts", () => {
-  assert.equal(staleMarksHead(2), "Marked, not in today's reading (2)");
+test("markedHead counts", () => {
+  assert.equal(markedHead(2), "Marked fixed (2)");
+});
+
+import { crashOfGroup, crashOfSubject, crashTitle, markShort, markedHead, notMeasuredLine, tidyWhy, watchRowTitle, watchTally, watchVerdict } from "./exposureWords.ts";
+
+test("a crash subject and a crash group read as app · error, then place · version", () => {
+  const s = crashOfSubject("ciq:boulder-app-v3/prod/Out Of Memory Error/3.2.20/Streak.mc:179#1+");
+  assert.deepEqual(crashTitle(s), { title: "boulder-app-v3 · Out Of Memory Error", where: "Streak.mc:179 · v3.2.20 · 1+ crashes" });
+  const g = crashOfGroup("baby-sling/beta/System Error/a/b.mc:1");
+  assert.deepEqual(crashTitle(g), { title: "baby-sling (beta) · System Error", where: "a/b.mc:1" });
+  assert.equal(crashOfSubject("npm:left-pad"), null);
+  assert.equal(crashOfGroup("adv:GHSA-x"), null);
+  assert.equal(watchRowTitle({ label: "C6 domain:x", exposure: { subject: "domain:x" } }).title, "C6 domain:x");
+});
+
+test("watchVerdict: open alerts first, then unknown, never 'nothing' over an unread measure", () => {
+  const base = { alerts: 0, digest: 0, marked: 7, accepted: 0, notMeasured: 0, stale: false };
+  assert.deepEqual(watchVerdict({ ...base, alerts: 1 }), { tone: "needs", head: "1 open finding to look at" });
+  assert.equal(watchVerdict({ ...base, notMeasured: 1 }).tone, "unknown");
+  assert.equal(watchVerdict({ ...base, stale: true }).tone, "unknown");
+  assert.deepEqual(watchVerdict(base), { tone: "ok", head: "Nothing open — all handled" });
+});
+
+test("watchTally, notMeasuredLine and markShort", () => {
+  const now = Date.parse("2026-11-21T10:00:00Z");
+  assert.equal(watchTally({ readAt: "2026-11-21T08:00:00Z", now, marked: 7, accepted: 0, digest: 2 }), "read 2 h ago · 7 fixed, listed below · 2 to consider");
+  assert.equal(tidyWhy("ERROR: the vault refused.."), "the vault refused.");
+  assert.match(notMeasuredLine({ measure: "D3", why: "x" }), /^The crash list \(Connect IQ ERA\) could not be read: x$/);
+  assert.equal(markShort({ state: "fixed", fixedIn: "1.0.9", commit: "525bd812", at: "2026-10-27T08:24:55Z", by: { kind: "person" } }), "fixed in 1.0.9 · 27 Oct");
 });

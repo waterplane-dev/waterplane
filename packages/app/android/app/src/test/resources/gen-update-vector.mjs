@@ -1,13 +1,20 @@
 // Writes update-signature-vector.json beside this file: a real Node signature for
 // the JVM tests, so Java is checked against the signer it has to agree with
 // (host `crypto.sign` with `dsaEncoding: "ieee-p1363"`) and not only against itself.
-// The private key is thrown away. Run: node gen-update-vector.mjs
+// The private key is thrown away. Run: node gen-update-vector.mjs --force
+// Every run makes new random keys, so it refuses to replace an existing vector without
+// --force: a stray run would otherwise leave a key-only diff (and a public-snapshot scan hit).
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const out = join(here, "update-signature-vector.json");
+if (existsSync(out) && !process.argv.includes("--force")) {
+  console.error(`${out} exists; the old vector is still valid. Pass --force to replace it with new random keys.`);
+  process.exit(1);
+}
 const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const other = generateKeyPairSync("ec", { namedCurve: "P-256" }).publicKey;
 const spki = (k) => k.export({ type: "spki", format: "der" }).toString("base64");
@@ -46,7 +53,7 @@ const edge = (test) => {
 const tampered = Buffer.from(signed);
 tampered[tampered.indexOf('"gen":7') + 6] = "9".charCodeAt(0);
 
-writeFileSync(join(here, "update-signature-vector.json"), `${JSON.stringify({
+writeFileSync(out, `${JSON.stringify({
   publicKey: spki(publicKey),
   otherKey: spki(other),
   signed: signed.toString("base64"),

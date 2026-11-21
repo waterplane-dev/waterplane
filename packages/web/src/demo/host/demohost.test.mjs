@@ -328,14 +328,21 @@ test("a scenario's own usage wins over the default", () => {
   assert.deepEqual(h.frames().find((m) => m.t === "usage.status").usage, own);
 });
 
-test("localrt.watch is answered at once with the host's own 'not polled here' frame, never silence", () => {
+test("localrt.watch is answered at once with machine readings, back-filled once, never silence", () => {
   const h = harness(desk());
   h.conn.receive({ t: "localrt.watch" });
   const f = h.frames().filter((m) => m.t === "localrt.sample");
-  assert.equal(f.length, 1);
-  assert.equal(f[0].disabled, true, "the demo desktop polls nothing: the phone words that quietly, not as 'no answer'");
-  assert.equal(f[0].sample.reachable, false);
-  assert.deepEqual(f[0].sample.models, []);
+  assert.ok(f.length > 1, "the first watch back-fills, so the strip's line has a shape at once");
+  for (const x of f) {
+    assert.notEqual(x.disabled, true, "the demo desktop is measured, not 'not polled here'");
+    assert.equal(x.sample.reachable, false, "no local runner on the demo desktop");
+    assert.deepEqual(x.sample.models, []);
+    assert.ok(x.sample.memTotal > 0 && x.sample.cpuPct >= 0 && x.sample.cpuPct <= 100);
+  }
+  assert.ok(f.every((x, i) => i === 0 || x.sample.at > f[i - 1].sample.at), "oldest first");
+  h.conn.receive({ t: "localrt.watch" });
+  const again = h.frames().filter((m) => m.t === "localrt.sample").length - f.length;
+  assert.ok(again <= 1, "a renewal sends only the slots since, never the back-fill again");
 });
 
 test("session.create → op.ack with its id; attach replays in full, a current resume point replays nothing", () => {

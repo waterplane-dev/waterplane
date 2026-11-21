@@ -303,6 +303,29 @@ function ageWords(ms: number): string {
   return `${Math.round(ms / DAY_MS)} days ago`;
 }
 
+/** A Connect IQ crash group split for display. `ciq:` subjects carry `app/channel/error/version/top#N+`; a triage
+ *  id (the group) is `app/channel/error/top`. `top` may itself hold "/". Null for anything else (shown as is). */
+export interface CrashParts { app: string; channel: string; error: string; version: string | null; top: string; times?: string }
+export function crashOfSubject(subject: string): CrashParts | null {
+  if (!subject.startsWith("ciq:")) return null;
+  const hash = subject.lastIndexOf("#");
+  const times = hash > 0 && /^#\d+\+$/.test(subject.slice(hash)) ? subject.slice(hash + 1) : undefined;
+  const p = subject.slice(4, times ? hash : undefined).split("/");
+  const [app, channel, error, version] = p;
+  if (p.length < 5 || app === undefined || channel === undefined || error === undefined || version === undefined) return null;
+  return { app, channel, error, version, top: p.slice(4).join("/"), ...(times ? { times } : {}) };
+}
+export function crashOfGroup(id: string): CrashParts | null {
+  const p = id.split("/");
+  const [app, channel, error] = p;
+  if (p.length < 4 || app === undefined || channel === undefined || error === undefined || app.includes(":")) return null;
+  return { app, channel, error, version: null, top: p.slice(3).join("/") };
+}
+/** The row's title and the line under it: "boulder-app-v3 · Out Of Memory Error" / "Streak.mc:179 · v3.2.20". */
+export function crashTitle(c: CrashParts): { title: string; where: string } {
+  const ch = c.channel && c.channel !== "prod" ? ` (${c.channel})` : "";
+  return { title: `${c.app}${ch} · ${c.error}`, where: `${c.top}${c.version ? ` · v${c.version}` : ""}${c.times ? ` · ${c.times} crashes` : ""}` };
+}
 /**
  * One exposure row as setup-checklist rows: a summary first, then one per finding. Accepted
  * findings are still sent (marked `accepted`); the phone draws them folded, so "stop accepting"
@@ -339,12 +362,15 @@ export function exposureChecks(
     id: EXPOSURE_SUMMARY_ID, label: "Exposure watch", status: fresh && !absent.length ? "pass" : "warn",
     detail: parts.join(" "), fix: null, advisory: true,
     ...(staleMarks.length ? { staleMarks } : {}),
+    ...(known ? { readAt: row.at } : {}),
+    ...(absent.length ? { notMeasured: absent.map((a) => ({ measure: a.measure, why: a.why, unreachable: !!a.unreachable })) } : {}),
   }];
 
   for (const f of findings) {
     const check: ComplianceCheck = {
       id: exposureCheckId(f.key),
-      label: `${f.measure} ${f.subject}${f.version ? "@" + f.version : ""}`,
+      // A Connect IQ crash group reads by its app and error everywhere (Checks, Watch, a prompt); the raw key stays on `exposure`.
+      label: (() => { const cr = crashOfSubject(f.subject); return cr ? crashTitle(cr).title : `${f.measure} ${f.subject}${f.version ? "@" + f.version : ""}`; })(),
       status: f.level === "alert" ? (f.severity === "critical" || f.severity === "high" ? "fail" : "warn") : "warn",
       detail: f.triage && f.triage.state !== "fixed" ? `${f.text} (${triageWords(f.triage)})` : f.text,
       fix: f.accepted ? null : f.key === PROTECT_MAIN_KEY ? PROTECT_MAIN_FIX : f.measure === "D3" ? ERA_SEEN_FIX : null,

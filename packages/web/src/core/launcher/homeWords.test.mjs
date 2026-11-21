@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { capFirst, counted, gitWords, newFilesWords, questionsWords, setupLine } from "./homeWords.ts";
+import { capFirst, counted, gitWords, newFilesWords, questionsWords, rescuedChipTitle, setupLine } from "./homeWords.ts";
 
 const NOW = 1_800_000_000_000;
 
@@ -29,4 +29,9 @@ test("an extension's label reads as a menu line", () => {
   assert.equal(capFirst("permission rules"), "Permission rules");
   assert.equal(capFirst("Vault: this repo"), "Vault: this repo");
   assert.equal(capFirst(""), "");
+});
+
+test("the rescued chip's tooltip counts and says what a tap does", () => {
+  assert.match(rescuedChipTitle(1, "api"), /^1 item .*api's backlog.*send or discard.*Tap to show only those/);
+  assert.match(rescuedChipTitle(3, "api"), /^3 items /);
 });

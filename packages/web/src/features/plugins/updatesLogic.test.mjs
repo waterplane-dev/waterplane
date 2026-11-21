@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { updatesDue } from "@waterplane/shared";
 import {
   applyRunning, availableRows, bannerView, checkedWords, nextCheckWords, cutRows, cutWords, dueCount, installConfirm, installedRows, parseUrlInput,
-  receiptDue, receiptWords, resultView, selfSwapped, untaggedWords, rollbackConfirm, selfConfirm, selfView, sourceWords, updatePluginConfirm, urlConfirm,
+  receiptDue, receiptWords, resultView, selfSwapped, untaggedWords, rollbackConfirm, selfConfirm, selfView, shQuote, sourceWords, updatePluginConfirm, urlConfirm,
 } from "./logic.ts";
 
 const inst = (id, ref, over = {}) => ({ id, version: "1.0.0", source: "manager", ref, commit: "a", dir: "/d/" + id, ...over });
@@ -80,6 +80,17 @@ test("self view: buttons only when canApply, otherwise the command and why", () 
   assert.equal(selfView(cur.self, cur).headline, "0.1.4 · up to date");
   assert.equal(selfView(cur.self, cur).showUpdate, false);
   assert.equal(selfView(cur.self, cur).showRollback, true);
+});
+
+test("self view: the shell line cds into a checkout first, quoted; npm runs anywhere", () => {
+  const co = status({ self: self({ mode: "checkout", command: "git pull --ff-only && npm ci && npm run restart", dir: "/Users/me/dev/water plane", behind: 3, upstream: "origin/main" }) });
+  assert.equal(selfView(co.self, co).shellLine, "cd '/Users/me/dev/water plane' && git pull --ff-only && npm ci && npm run restart");
+  const npm = status({ self: self({ mode: "npm", command: "npm i -g waterplane" }) });
+  assert.equal(selfView(npm.self, npm).shellLine, "npm i -g waterplane");
+  const cur = status({ self: self({ latest: "0.1.4", command: "npm i -g waterplane" }) });
+  assert.equal(selfView(cur.self, cur).shellLine, null);
+  assert.equal(shQuote("/mnt/c/dev/app"), "/mnt/c/dev/app");
+  assert.equal(shQuote("it's"), "'it'\\''s'");
 });
 
 test("self view: npm gets the button with its caveat and the hand command; a checkout is due by commits, not by release", () => {

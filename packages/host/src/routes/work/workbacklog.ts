@@ -3,7 +3,7 @@
  */
 import { namingStartedNote } from "../../naming.js";
 import { addClientBacklogItem } from "../../agentintents.js";
-import { BUDGET_NOT_HOLDING, cleanLaunchOpts, cleanSessionBudget } from "@waterplane/shared";
+import { BUDGET_NOT_HOLDING, cleanLaunchOpts, cleanRescued, cleanSessionBudget } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 const onFanoutList: Route<"fanout.list"> = (a) => {
@@ -111,8 +111,10 @@ const onBacklogAdd: Route<"backlog.add"> = (a) => {
       repoDir: a.msg.repoDir, text: a.msg.text, label: a.msg.label, targetSessionId: a.msg.targetSessionId,
       autoFire: a.msg.autoFire, steps: a.msg.steps, resume: a.msg.resume,
       estimate: a.msg.estimate, value: a.msg.value,
+      // The app's own mark on words it rescued; garbage is no mark. It always rides with `hold`, so the row waits.
+      rescued: cleanRescued(a.msg.rescued),
       // Waits for the person's tap (`Intent.manual`): the phone's *Add to backlog*. Strictly true, never inferred.
-      manual: a.msg.hold === true ? true : undefined,
+      manual: a.msg.hold === true || cleanRescued(a.msg.rescued) ? true : undefined,
       // Strictly a boolean: absent follows the global close-when-done setting.
       closeWhenDone: typeof a.msg.closeWhenDone === "boolean" ? a.msg.closeWhenDone : undefined,
       flagWhenDone: a.msg.flagWhenDone === true ? true : undefined,

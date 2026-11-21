@@ -149,6 +149,8 @@ export interface AnnCtx {
   setPaletteOpen: Setter<boolean>;
   setView: Setter<AnnView>; viewRef: Ref<AnnView>; fitRef: Ref<AnnView>;
   pointers: Ref<Map<number, { x: number; y: number }>>;
+  /** Touches down OUTSIDE the picture while none is on it — adopted if one lands on it. */
+  strays: Ref<Map<number, { x: number; y: number }>>;
   gesture: Ref<null | { startDist: number; startK: number; cx: number; cy: number }>;
   redraw: (plain?: boolean) => void;
   clampToImage: (r: AnnRect) => AnnRect;

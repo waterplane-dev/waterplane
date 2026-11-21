@@ -16,7 +16,7 @@
  */
 import { useMemo, useRef } from "react";
 import { ownedPendingCreates, type LaunchOpts, type SessionInfo } from "@waterplane/shared";
-import { isCreateOp, loadDraft, newAckId, saveDraft, type OutboxEntry } from "../../outbox";
+import { isCreateOp, loadDraft, newAckId, noteAdopted, saveDraft, type OutboxEntry } from "../../outbox";
 import { noteSendFailed } from "../../link";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
@@ -24,6 +24,7 @@ import { baseName } from "../../format";
 import type { DurableOp } from "../../sdk/types.ts";
 import { isLaterId, isPendingId, laterId, parseLaterId, parsePendingId, pendingLaneId } from "./logic.ts";
 import { noteShellAdopted } from "../launch/shellReturn.ts";
+import { noteAdoption } from "../../backStep.ts";
 import type { PendingFns, PendingKept, QueueCtx } from "./types.ts";
 
 /** How long an adopted screen may stand in for a session the list has not
@@ -203,12 +204,17 @@ export function pendingFns(c: QueueCtx): PendingFns {
     // A shell a sheet went to (`launch.focusShell`) is remembered by this id
     // too — re-keyed whether or not it is the screen on top right now.
     noteShellAdopted(createAck, sessionId);
-    if (activeIdRef.current !== from) return;
+    // Remembered durably whether or not the person is on that screen: a late write aimed at the
+    // retired `pending:` id (the annotator's landing, a seed) is redirected to the session
+    // (`saveDraft`, `adoptions.ts`), and a stranded draft is not filed on the pad.
+    noteAdopted(createAck, sessionId);
+    // The half-written words move onto the session even when the person stands elsewhere
+    // (appended, never over words the session's draft already holds).
     const draft = loadDraft(from);
-    // The pending lane's draft is deleted only once the session's own draft holds
-    // the words: a refused write keeps them where they were typed.
-    if (!draft || saveDraft(sessionId, draft)) saveDraft(from, "");
+    if (draft) saveDraft(from, draft);
+    if (activeIdRef.current !== from) return;
     if (!buffers.current.has(sessionId)) buffers.current.set(sessionId, []);
+    noteAdoption(from, sessionId);
     setActiveId(sessionId);
     setLastVisitedId(sessionId);
   }

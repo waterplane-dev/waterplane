@@ -58,6 +58,7 @@ import {
   cleanEstimate,
   cleanValue,
   type ItemValue,
+  type Rescued,
 } from "@waterplane/shared";
 import { localProcessRefusal } from "./net.js";
 import type { IntentManager } from "./intents/manager.js";
@@ -142,13 +143,13 @@ export async function addClientBacklogItem(
   p: {
     repoDir: unknown; text: string; label?: string; targetSessionId?: string; autoFire?: boolean;
     steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; id?: string; origin?: string; manual?: boolean;
-    estimate?: string; value?: ItemValue;
+    estimate?: string; value?: ItemValue; rescued?: Rescued;
   },
 ): Promise<{ ok: false; refusedCwd: true } | { ok: true; item: BacklogItem }> {
   const repoDir = await deps.containRepoDir(p.repoDir);
   if (!repoDir) return { ok: false, refusedCwd: true };
   const item = deps.backlog.add(p.text, repoDir, p.label, p.targetSessionId, p.autoFire,
-    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, flagWhenDone: p.flagWhenDone, budget: p.budget, launch: p.launch, id: p.id, origin: p.origin, manual: p.manual, estimate: p.estimate, value: p.value });
+    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, flagWhenDone: p.flagWhenDone, budget: p.budget, launch: p.launch, id: p.id, origin: p.origin, manual: p.manual, estimate: p.estimate, value: p.value, rescued: p.rescued });
   return { ok: true, item };
 }
 

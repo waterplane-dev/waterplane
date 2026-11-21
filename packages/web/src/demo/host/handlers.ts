@@ -31,6 +31,7 @@ import { setBudget } from "./budget.ts";
 import { fireBuild, NO_DESKTOP } from "./builds.ts";
 import { setFollowUp } from "./followup.ts";
 import { addWaiting } from "./waiting.ts";
+import { machineSamples } from "./machine.ts";
 import { inRepos, mint, NOT_A_DEMO_REPO } from "./model.ts";
 import type { DemoModel, Desk, Frame } from "./model.ts";
 import type { DemoState } from "./snapshot.ts";
@@ -488,12 +489,11 @@ export const HANDLERS = {
   // The strip renews this watch every 25 s; a refusal would toast each time over every demo screen.
   // Answered at once, as the real host always does (host/localrt.ts `localRtWatch`): silence is what
   // the phone words as "this desktop didn't answer" — an amber strip over every film. The demo
-  // desktop measures nothing, which is exactly what a host with `WATERPLANE_LOCAL_RUNTIME=0` says:
-  // one `disabled` frame, drawn as a muted "not polled here". The zeros are the wire's required
-  // fields; the phone reads none of them while `disabled` is set, so no figure is made up.
+  // desktop is a machine with no local runner: CPU, GPU and memory readings on the real host's
+  // 5 s grid (`machine.ts`), back-filled on the first watch so the strip's line has a shape.
   "localrt.watch": {
     tier: "A",
-    run: (c) => { c.reply({ t: "localrt.sample", disabled: true, sample: { at: c.now, models: [], reachable: false, cpuPct: 0, memTotal: 0, memFree: 0 } }); },
+    run: (c) => { for (const sample of machineSamples(c.desk, c.now)) c.reply({ t: "localrt.sample", sample }); },
   },
   "notification.clear": STORE,
   "notification.handle": STORE,

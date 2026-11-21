@@ -22,6 +22,8 @@ if (!nodeMeetsMin(process.versions.node)) {
 
 /** `packages/host/dist/cli` → the release root (or the checkout root). */
 const ROOT_DIR = resolve(import.meta.dirname, "../../../..");
+/** Where this install lives — `/api/health` says it, so a launcher can tell its own host from another install's on the same port. */
+export const INSTALL_ROOT = ROOT_DIR;
 const MAIN_JS = resolve(import.meta.dirname, "../main.js");
 
 interface Identity { name: string; version: string; commit: string | null; source: "release.json" | "checkout" }

@@ -861,6 +861,7 @@ const PULLLINK_SPLIT_FILES = {
   "link/linkTraffic.ts": 125,
   "link/linkTypes.ts": 200,
   "link/linkVerdict.ts": 105,
+  "link/pulseTrouble.ts": 70, // when the connection strip shows itself in trouble mode
   "link/stallRecorder.ts": 150, // the stall record's pure half
   "pull/pullBgFetch.ts": 240,
   "pull/pullConsts.ts": 100,
@@ -974,6 +975,7 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/annRead.ts": 115,
   "annotator/annSend.ts": 155,
   "annotator/annSendGrid.ts": 20,
+  "annotator/annStray.ts": 70, // fingers off the picture still pan (R-images-018)
   "annotator/annTypes.ts": 170,
   "annotator/useAnnotator.ts": 305, // +"text only" (annOcr.ts) state, +the phone's mark reader (annAutoRead.ts)
   "annotator/useAutoPlace.ts": 35,
@@ -1023,7 +1025,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
   "webapi/webapiGit.ts": 94, // +pull, +log/show/fetch, +blob progress, +explain, +the PR card (lease, merge, auto-merge, close, log), +the explain job's state, +check, +push up to
-  "webapi/webapiHost.ts": 176, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold)
+  "webapi/webapiHost.ts": 183, // +dictate setup start/state (local whisper on a tap), +on-device whole-picture OCR, +plugin README (About fold), +handleAt (done on another desktop's alerts)
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 149, // +the Setup check (read, all repos, waive) and the efficiency-rules write (plan P1); earlier: // +skills switch (read, write, recommend); +opt-ins (read, choice, and the row cleaner); +compliance accept (exposure watch); +exposure re-run; +repo-health re-cut; +agent readings; +agent points and markers; +own readings read back (R-metrics-065); +setup block to the outbox (R-metrics-073); +lookup probe view, results, start (R-metrics-074)
   "webapi/webapiRepos.ts": 70, // +plainFolders/initPlainFolder, rescan names a folder with no git; +setRepoDisplayName, the name a repo is shown under

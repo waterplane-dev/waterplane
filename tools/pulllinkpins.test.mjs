@@ -46,8 +46,8 @@ const LINK = [
   "flushLinkSeries:value", "linkStatus:value", "readLinkSeries:value", "syncParts:value", "linkVerdict:value", "netBegin:value", "noteAckTimeout:value",
   "noteHostSeen:value", "noteLinkStatus:value", "noteOutstanding:value", "noteReload:value",
   "noteRtt:value", "noteSendConfirmed:value", "noteSendExpired:value", "noteSendFailed:value",
-  "noteStuckSends:value", "noteSynced:value", "noteTraffic:value", "pulseEnabled:value",
-  "resetLinkWindow:value", "rollup:value", "rttP95:value", "setPulseEnabled:value",
+  "noteStuckSends:value", "noteSynced:value", "noteTraffic:value", "pulseEnabled:value", "pulseWhenMode:value",
+  "resetLinkWindow:value", "rollup:value", "rttP95:value", "setPulseEnabled:value", "setPulseWhen:value",
   "startLinkProbes:value", "startLinkReporting:value", "subscribeLink:value", "summarize:value",
   "syncSnapshot:value", "trafficSnapshot:value", "useLink:value", "whenText:value",
 ];

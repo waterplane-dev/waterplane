@@ -76,6 +76,8 @@ export interface PulseSample {
 export interface LinkPulse {
   /** Is the permanent strip switched on? No strip ⇒ no probes. */
   enabled: boolean;
+  /** Drawn always, or only while something is wrong (`pulseTrouble.ts`). */
+  when: "always" | "trouble";
   status: LinkStatus;
   samples: readonly PulseSample[];
 }

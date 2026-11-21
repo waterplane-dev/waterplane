@@ -315,6 +315,13 @@ npm run restart      # builds, then restarts the host (the service if installed,
   `git pull --ff-only && cmd.exe /d /c "npm ci && npm run restart"`. An `npm ci` typed into the WSL
   shell installs Linux binaries the Windows build cannot use; `npm run restart` notices and
   reinstalls them on Windows, which costs a few minutes.
+- **Update the folder the host runs from.** Two checkouts on one desktop (an old clone, a peer
+  folder) means two hosts that want the same port; updating one while the other answers changes
+  nothing the phone sees. Settings → Tools → updates shows the command with a `cd` into the folder
+  the running host is from — copy that line, or tap **in shell**.
+- **Check it took:** the updates screen shows the new version once the phone reconnects. On
+  Windows, `npm run restart` refuses when the port is answered by another install's host, names
+  that host's folder and gives the steps to stop it — it never reports the old host as "up".
 - **Or tap Update** in Settings → Tools → updates. A checkout or npm install shows the command it
   runs beside the button.
 - **Sessions survive it.** They run inside tmux; the phone reconnects and carries on.

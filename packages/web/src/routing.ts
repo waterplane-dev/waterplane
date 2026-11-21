@@ -136,6 +136,26 @@ export function mergedTarget(o: Overlay): MergedTarget | null {
 export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "storage", "waiting"]);
 
 /**
+ * Sheets that are not persisted but still come back WHOLE on a pop: they declare `SheetDef.keep`
+ * and the pop puts their cut back (`restoreKept`). Filled by the sheet table (`core/sheets.ts`), so
+ * this module stays free of the feature registry. The Setup check is one: a finding's agent prompt
+ * started from it opens a session, and the session's arrow must land back on the cut list.
+ */
+const KEPT_OVERLAYS = new Set<string>();
+export function noteKeptOverlay(o: string): void { KEPT_OVERLAYS.add(o); }
+/** Whether a pop onto sheet `o` shows what it showed when it was covered. */
+export const comesBackWhole = (o: string): boolean => !o || PERSISTED_OVERLAYS.has(o as Overlay) || KEPT_OVERLAYS.has(o);
+
+/**
+ * Sheets SPENT by the screen that replaces them: the Send sheet's seed goes with its own send, so
+ * its entry has nothing left to show. A bare screen opened from it (the session a Start opened)
+ * TAKES its entry rather than stacking on it — pushed, Back from that session popped onto the
+ * empty entry and showed the launcher, not the sheet the prompt was started from. A SHEET over it
+ * (the annotator, the gallery) still pushes: those return to it, seed and all.
+ */
+export const SPENT_ON_LEAVE = new Set<string>(["send"]);
+
+/**
  * On a wide window (`core/layout`), which sheets take the MAIN pane instead of
  * the side panel (docs/analysis/desktop-workspace-plan.md §3). Every other
  * overlay — feature sheets included — opens as a panel over the right edge,
@@ -351,7 +371,7 @@ export function routeStep(
     const k = below >= 0 ? stack[below] : undefined;
     if (live(k) && !isStep(k)) {
       const [ka, ko, kr] = k!.split("|");
-      const whole = !ko || PERSISTED_OVERLAYS.has(ko as Overlay);
+      const whole = comesBackWhole(ko ?? "");
       if (!ka && kr === r && whole) return { kind: "go", delta: below - depth };
     }
   }

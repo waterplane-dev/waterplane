@@ -426,3 +426,18 @@ test("search finds screens by title, tab and the words a person types, and says 
   assert.equal(g.where, "Home menu");
   assert.equal(screenResults("archive", SEARCH_DOORS, SCREEN_WORDS, all)[0].where, null);
 });
+
+test("a named row set (the gear on a screen) names only rows the catalogue has, and pins exactly them", async () => {
+  const m = await import("./settingsIndex.ts");
+  for (const [name, set] of Object.entries(m.ROW_SETS)) {
+    for (const id of set.rows) assert.ok(m.settingRow(id), `${name}: unknown row ${id}`);
+    const pin = `${m.SET_SCOPE}${name}`;
+    assert.deepEqual(m.setScopeRows(pin), set.rows);
+    assert.equal(m.rowShown(set.rows[0], "", pin), true);
+    assert.equal(m.rowShown("theme", "", pin), false);
+    assert.equal(m.groupShown("appearance", "", pin), true);
+    assert.match(m.filterSummary(2, 50, "", pin), new RegExp(`showing ${set.name} only — 2 of 50`));
+  }
+  assert.equal(m.setScopeRows("set:nope"), null);
+  assert.equal(m.setScopeRows("theme"), null);
+});

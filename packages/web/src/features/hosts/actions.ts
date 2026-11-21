@@ -152,6 +152,28 @@ export function switchHost(id: string, open?: string): void {
   if (!switchTo(id, open)) core().say.toast("already on that host");
 }
 
+/**
+ * The person's "done" on items another desktop holds (the elsewhere sheet): asked of THAT desktop
+ * with its own token, the way the poll reads it, and its answer becomes the new reading at once.
+ * A refusal or no answer is said in words; nothing is dropped on this side unasked.
+ */
+export async function markElsewhereDone(hostId: string, ids: string[]): Promise<void> {
+  const h = realHosts(listHosts()).find((x) => x.id === hostId);
+  if (!h || !ids.length) return;
+  core().say.track("action:hosts.elsewhereDone");
+  const base = dialBaseOf(h, hasShellTls());
+  const url = `${base}/api/attention/handle`;
+  if (tokenWithheld(base, h)) { core().say.toast(`${h.name} could not be asked from here — switch to it and mark them done there.`); return; }
+  let res: { summary: WaitingSummary | null; error?: string };
+  try { res = await api.handleAt(base, bearerForSaved({ ...h, base }, tokenForHost(h.id), url), ids); } catch { res = { summary: null, error: `${h.name} did not answer` }; }
+  if (!res.summary) { core().say.toast(`Not marked done: ${res.error ?? `${h.name} did not answer`}.`); return; }
+  const at = Date.now();
+  const summary = res.summary;
+  elsewhere.set((prev) => ({ ...prev, [h.id]: nextRead(prev[h.id], at, { status: 200, summary }) }));
+  seenTotal.set(h.id, waitingTotal(summary));
+  core().say.toast(ids.length === 1 ? `Marked done on ${h.name}.` : `Marked ${ids.length} done on ${h.name}.`);
+}
+
 /** "Waiting elsewhere": the sheet listing exactly the rows the chip counted. */
 export function openElsewhere(): void {
   core().say.track("overlay:elsewhere");

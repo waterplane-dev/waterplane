@@ -195,6 +195,7 @@ docs/requirements/connection.md:e25b65e0a3  # a short session prefix in a requir
 docs/requirements/connection.md:c6c23715a0  # a short session prefix in a requirement's source line
 docs/requirements/connection.md:42f99aab32  # a short session prefix in a requirement's source line
 docs/requirements/vault.md:de44b6e08b  # a short session prefix in a requirement's source line, as connection.md
+docs/requirements/images.md:05717fde23  # a short session prefix in a requirement's source line, as images.md:74
 packages/extensions/links/test/links.test.mjs:4a29e7fba1  # made-up tailnet fixture in the links extension test (not this tailnet)
 packages/extensions/links/test/links.test.mjs:02c1ceb03d  # made-up tailnet fixture in the links extension test (not this tailnet)
 packages/extensions/links/test/links.test.mjs:a0d2e236f6  # made-up tailnet fixture in the links extension test (not this tailnet)

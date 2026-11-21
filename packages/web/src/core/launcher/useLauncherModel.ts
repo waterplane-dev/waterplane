@@ -32,7 +32,7 @@ import { autoPull } from "../../pull";
 import { stripRows } from "../../downloadState";
 import type { LauncherProps } from "./types";
 import {
-  type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, activityOpenKeys, repoGroupsOf,
+  type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, rescuedKeysByRepo, activityOpenKeys, repoGroupsOf,
   repoOfCwd, rollupByRepo, rollupTotal, sessionRepoLabelIn, sessionRepoNameIn, sessionRepoShownIn, sessionRowBranchIn, sessionRowTitleIn,
   sessionNumbersOf, sortSessions, starredByRepoOf,
 } from "./model";
@@ -245,6 +245,11 @@ export function useLauncherModel(p: LauncherProps) {
   const activityConfirmedDone = useActivityConfirmedDone();
   const queuedByRepo = useMemo(
     () => queuedKeysByRepo(outbox, intents, activityFiled, (cwd) => { const r = repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); }),
+    [outbox, intents, repos, activityFiled], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` is a per-render closure over `repos`
+  );
+  /** Rescued words waiting in each repo (the red chip) — its own bucket, so a row is on ONE chip. */
+  const rescuedByRepo = useMemo(
+    () => rescuedKeysByRepo(outbox, intents, activityFiled, (cwd) => { const r = repoForCwd(cwd); return r ? repoLabel(r) : baseName(cwd); }),
     [outbox, intents, repos, activityFiled], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` is a per-render closure over `repos`
   );
   /** The store by id — what `isBudgetHeld` reads a chain's predecessor off. */
@@ -554,7 +559,7 @@ export function useLauncherModel(p: LauncherProps) {
     // the list
     visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf, shownOf,
     attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, blockedTotal, codingTotal,
-    starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, intentById,
+    starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, rescuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,
     // chips
     scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, activityKeys, dl,

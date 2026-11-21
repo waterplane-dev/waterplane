@@ -148,3 +148,8 @@ The app takes an update over the air only when it can check it: once a phone hol
 - asked: 2026-11-03 (LAN security plan, section 5)
 - shipped: c7661bd2, e44959a9, 2815d9b1
 - note: two layers. The page checks the signature on every app, so a relay cannot swap a bundle once the phone holds a key; a newer app also checks natively, which covers page code that is already compromised, and asks in its own dialog the first time a desktop's key is seen. The signature proves the bundle came from the desktop that was paired, never that its code is good (SECURITY.md). A passive (kids') phone opens no socket, so it never learns a key and takes updates as it did before. Not tried on a phone.
+### R-apk-030 · shipped
+A good install log is never renamed aside when the system runs out of file handles.
+- asked: 2026-11-19
+- shipped: fd42e5738
+

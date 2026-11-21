@@ -136,3 +136,13 @@ Token cost prices every current Anthropic model at its published rates, includin
 The host's own metered calls are a line in token stats, with unpriced calls counted and never shown as free.
 - asked: 2026-11-16 (owner, setup check plan PLAN.md §8)
 - shipped: setup check plan 2026-11-16; tests: packages/extensions/token-stats/web/hostSpendWords.test.mjs
+### R-cost-028 · shipped
+Fast mode is read correctly: the CLI's 'Fast mode unavailable' refusal reads as off and the sheet says why.
+- asked: 2026-11-19
+- shipped: 50a71ac36
+
+### R-cost-029 · shipped
+Dollar amounts are formatted one way everywhere: two decimals, so $0.50 never appears as $0.5000.
+- asked: 2026-11-19
+- shipped: baeb85e3c
+

@@ -59,6 +59,7 @@ export function AppearanceRows() {
   const tabsMax = usePref("tabsMax");
   const tabsSync = usePref("tabsSync");
   const netPulse = usePref("netPulse");
+  const netPulseWhen = usePref("netPulseWhen");
   const unfoldToEnd = usePref("unfoldToEnd");
   const repoSort = usePref("repoSort");
   const localRtBar = usePref("localRtBar");
@@ -250,17 +251,30 @@ export function AppearanceRows() {
         note="On the launcher, tapping a repo's chevron scrolls down until the last revealed row is on screen. Off, it scrolls to the repo's header instead. Per device."
       />
 
-      <SetSwitch
-        id="net-pulse" label="connection strip" icon={Activity}
-        on={netPulse}
-        onChange={() => {
-          const on = !netPulse;
-          setPref("netPulse", on);
-          track(`action:netpulse.${on ? "on" : "off"}`);
-          showToast(on ? "connection strip on — pings every 3s while the app is open" : "connection strip off");
+      {/* Three states like the desktop strip below: off, only while something
+          is wrong (link/pulseTrouble.ts), always. Two prefs under one row:
+          `netPulse` is whether this phone probes at all, `netPulseWhen`
+          whether the strip is drawn on a good link. */}
+      <SetChoice
+        id="net-pulse" radio label="connection strip" icon={Activity}
+        value={!netPulse ? "off" : netPulseWhen}
+        options={[
+          { value: "off", label: "off" },
+          { value: "trouble", label: "only when something is wrong" },
+          { value: "always", label: "always on" },
+        ]}
+        onChange={(m) => {
+          const on = m !== "off";
+          if (on !== netPulse) setPref("netPulse", on);
+          if (on) setPref("netPulseWhen", m as "always" | "trouble");
+          track(`action:netpulse.${m}`);
+          showToast(m === "off" ? "connection strip off"
+            : m === "trouble" ? "connection strip shows itself when the link is down, slow, losing pings or not protected, or a send is stuck"
+            : "connection strip on — pings every 3s while the app is open");
         }}
-        note="A permanent bar: a state dot, the last ~90 seconds of round-trip times as a graph, and the current number."
+        note="A bar at the top: a state dot, the last ~90 seconds of round-trip times as a graph, and the current number."
         more={<>
+          <p><b>“Only when something is wrong”</b> draws it while the link is down or connecting, a ping went unanswered in the last 30 seconds, the median round trip is over 400 ms, the desktop is reached without protection, a send is stuck, or the desktop is restarting — and keeps it 30 seconds after, so a flapping link does not move the screen up and down. It still pings every 3 seconds: it cannot know the link went bad without measuring it. What it saves is the line of screen.</p>
           <p>It exists because every other connection readout here is retrospective — the banner appears once the socket is already gone, the activity strip once a request is already slow, and connection health only when you go and open it. None of them answers “is it bad right now, or is the app just being slow?”, which is the question you have while looking at a screen that has not changed.</p>
           <p>A graph rather than a number because an average cannot tell a steady 250 ms apart from 30 ms with every fourth ping lost, and only one of those is the link that eats prompts — unanswered pings are drawn as their own red marks, never averaged away.</p>
           <p>Costs one extra ping every 3 seconds, only while the app is in the foreground, and it only ever watches: a missed probe is drawn and nothing else, never a reconnect. Tap the bar for the full history.</p>

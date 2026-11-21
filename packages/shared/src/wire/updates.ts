@@ -59,6 +59,8 @@ export interface SelfUpdateInfo {
   canApply: boolean;
   /** The command the button runs (npm/checkout), shown so a person can run it by hand instead. */
   command?: string;
+  /** A checkout only: the folder `command` runs in (the phone's "in shell" button `cd`s there first). */
+  dir?: string;
   /** Why there is no button, in words (only when `canApply` is false). */
   why?: string;
   /** What the npm/checkout button does NOT do that the tarball updater does (no signature check, no roll back). */

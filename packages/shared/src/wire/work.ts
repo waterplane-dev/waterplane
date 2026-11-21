@@ -3,6 +3,7 @@
 import type { AssessInput, AssessProposal, AssessScope } from "../assess.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { ItemValue } from "../estimate.js";
+import type { Rescued } from "../rescued.js";
 import type { ScheduleRule } from "../schedule.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "./session.js";
@@ -125,6 +126,8 @@ export interface BacklogItem {
    *  front of the title (`estimatePrefix`). Absent = nobody said. */
   estimate?: string;
   value?: ItemValue;
+  /** The app filed this from words it rescued (`rescued.ts`). Absent = a person filed it. */
+  rescued?: Rescued;
   /** The session the item last actually fired INTO (resolved target). */
   sessionId?: string;
   /**

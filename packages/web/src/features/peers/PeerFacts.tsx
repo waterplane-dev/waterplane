@@ -18,7 +18,7 @@ export function PeerRowTags({ s }: { s: SessionInfo }) {
   if (!spend && !origin) return null;
   return (
     <>
-      {origin && <Tag className={origin.cls} title={origin.title}>{origin.body}</Tag>}
+      {origin && <Tag className={`${origin.cls} peer-origin`} title={origin.title}>{origin.body}</Tag>}
       {spend && <Tag className={spend.cls} title={spend.title}>{spend.body}</Tag>}
     </>
   );

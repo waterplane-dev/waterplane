@@ -37,7 +37,7 @@ test("every synced key follows the host — sync is per host, and so is its book
 test("the plan's device keys are device keys", () => {
   const device = [
     "hosts", "hostActive", "hostBase", "deviceId", "deviceName", "theme", "textScale", "iconScale", "termZoom",
-    "readerZoom", "scrollZoom", "gitZoom", "dataSaver", "netPulse", "localRtBar", "sessionTabs", "sessionTabsCount",
+    "readerZoom", "scrollZoom", "gitZoom", "dataSaver", "netPulse", "netPulseWhen", "localRtBar", "sessionTabs", "sessionTabsCount",
     "sessionTabsOrder", "sessionTabsSync", "tabsSaverAsked", "dictateLang", "dictateLangs", "cliMode", "typingRoom", "readMode", "toolbarOpen",
     "closeBy", "closeKeepStar", "closeCustomH", "schedPctLeft", "collageGap", "collageLabels",
     "dismissInsecure", "dismissPhoneSetup", "dismissedUpdate", "lastForcedReload", "toastLog", "hostedAck",

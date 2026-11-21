@@ -95,3 +95,8 @@ The build sheet shows a fire's note before any run is listed, shows the desktop'
 - asked: 2026-10-30
 - shipped: 4b9825e9, 4b90e29e, ab083add, e828f7aa
 
+### R-ci-cd-021 · shipped
+The release train rebuilds and pushes the static demo at waterplane.dev/demo by default, so the public demo shows the current look.
+- asked: 2026-11-20
+- shipped: 7b27d2cf9
+

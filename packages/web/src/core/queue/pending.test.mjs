@@ -23,7 +23,8 @@ globalThis.localStorage = {
 };
 
 const { foldIntoCreate, pendingFns, usePendingState } = await import("./pending.ts");
-const { loadDraft, loadPadDoc, rescueStrandedPendingDrafts, saveDraft } = await import("../../outbox.ts");
+const { LS } = await import("../../storage.ts");
+const { bindRescue, loadDraft, loadPadDoc, noteAdopted, rescueStrandedPendingDrafts, saveDraft } = await import("../../outbox.ts");
 
 // After the imports, so no module's load-time check sees a browser. These timers never fire: `track`'s
 // flush and the link log's write are neither this file's subject nor something to keep a test open for.
@@ -217,13 +218,14 @@ test("a retry carries the half-written words on the refused screen to the new on
 
 // ── stranded drafts (2026-11-12: words written offline after + now, gone) ─────
 
-test("a draft on a pending screen nothing can reach any more becomes a pad note, with its repo", () => {
+test("with no filer bound, a draft on a pending screen nothing can reach any more falls back to a pad note, with its repo", () => {
+  bindRescue(null, () => null);
   saveDraft("pending:gone", "words\fand then this");
   saveDraft("pending:live", "still on screen");
   saveDraft("pending:later:/repo", "the later screen finds its own draft");
   saveDraft("s1", "a real session's draft");
   const r = rescueStrandedPendingDrafts((id) => id === "pending:live", (id) => (id === "pending:gone" ? "/repo" : undefined));
-  assert.deepEqual(r, { moved: 1, refused: 0 });
+  assert.deepEqual(r, { moved: 1, refused: 0, adopted: [], filed: [] });
   const [note, ...rest] = loadPadDoc().notes;
   assert.equal(rest.length, 0);
   assert.equal(note.text, "words");
@@ -233,6 +235,29 @@ test("a draft on a pending screen nothing can reach any more becomes a pad note,
   assert.equal(loadDraft("pending:live"), "still on screen");
   assert.equal(loadDraft("pending:later:/repo"), "the later screen finds its own draft");
   assert.equal(loadDraft("s1"), "a real session's draft");
+});
+
+test("a stranded draft is filed on its repo's backlog as a held, marked row — never on the pad — and cleared only once queued", () => {
+  const filed = [];
+  bindRescue((f) => { filed.push(f); return true; }, () => "/last");
+  saveDraft("pending:gone2", "words\fnext");
+  saveDraft("pending:nowhere", "no cwd of its own");
+  const before = loadPadDoc().notes.length;
+  const r = rescueStrandedPendingDrafts(() => false, (id) => (id === "pending:gone2" ? "/repo" : undefined));
+  assert.deepEqual(r.filed.sort((a, b) => a.cwd.localeCompare(b.cwd)), [{ cwd: "/last", n: 1, offline: true }, { cwd: "/repo", n: 1, offline: true }]);
+  assert.equal(r.moved, 0);
+  assert.equal(loadPadDoc().notes.length, before, "nothing landed on the pad");
+  assert.deepEqual(filed.map((f) => [f.repoDir, f.hold, f.steps]), [["/repo", true, ["words", "next"]], ["/last", true, undefined]]);
+  assert.match(filed[0].rescued.why, /never opened/);
+  assert.equal(loadDraft("pending:gone2"), "");
+  // a refused filing falls back to the pad, and the draft is cleared only because the pad holds it
+  bindRescue(() => null, () => null);
+  saveDraft("pending:gone3", "refused words");
+  const r2 = rescueStrandedPendingDrafts(() => false, () => "/repo");
+  assert.equal(r2.moved, 1);
+  assert.equal(loadPadDoc().notes.at(-1).text, "refused words");
+  assert.equal(loadDraft("pending:gone3"), "");
+  bindRescue(null, () => null);
 });
 
 test("only a failed create is retried", () => {
@@ -266,12 +291,13 @@ test("adoption with no draft does not write an empty one over the session's own"
   assert.equal(loadDraft("s1"), "already here");
 });
 
-test("a screen not on top is stamped but not moved: its draft stays, the view stays", () => {
+test("a screen not on top: the view stays, the draft moves onto the session (never stranded under the retired id)", () => {
   saveDraft("pending:c1", "half a thought");
   const { c, fns } = fakeQueue([], { activeIdRef: { current: "s9" } });
   c.pendingKept.current.set("c1", { cwd: "/repo", title: "My repo", ts: 7 });
   fns.adoptPendingSession("c1", "s1");
-  assert.equal(loadDraft("pending:c1"), "half a thought");
+  assert.equal(loadDraft("pending:c1"), "");
+  assert.equal(loadDraft("s1"), "half a thought");
   assert.equal(c.active, undefined);
   assert.ok(c.pendingKept.current.get("s1").adoptedAt);
 });
@@ -373,4 +399,43 @@ test("no fold over a prompt the op has, ahead of a chained row, into a shell, or
   fns.queueSessionPrompt("/repo", "/compact", "c1", "command");
   assert.equal(c.outboxRef.current[0].op.prompt, undefined);
   assert.equal(c.outboxRef.current.length, 2);
+});
+
+// ── 2026-11-20: New session -> annotate -> the ack swaps the id -> the annotator lands its words ──────
+
+test("adoption is recorded even when the person is elsewhere, and a late write to the pending id reaches the session", () => {
+  const live = create("c9");
+  const { c, fns } = fakeQueue([live], { pendingEntry: live });
+  c.activeIdRef.current = "somewhere-else";
+  fns.adoptPendingSession("c9", "s9");
+  // the annotator lands its words under the id it captured BEFORE the swap
+  assert.equal(saveDraft("pending:c9", "see this ![marked](.claude/inbox/x-marked-1.png)"), true);
+  assert.equal(loadDraft("s9"), "see this ![marked](.claude/inbox/x-marked-1.png)");
+  assert.equal(loadDraft("pending:c9"), "");
+  // appended, never over words already there
+  saveDraft("pending:c9", "and more");
+  assert.equal(loadDraft("s9"), "see this ![marked](.claude/inbox/x-marked-1.png)\n\nand more");
+  // clearing the stale key does not erase the session's draft
+  saveDraft("pending:c9", "");
+  assert.notEqual(loadDraft("s9"), "");
+});
+
+test("a stranded draft whose create opened goes to that session's draft, not the pad", () => {
+  const before = loadPadDoc().notes.length;
+  // written under the pending key before this build remembered adoptions, then the adoption is noted
+  store.set(LS.composeDrafts, JSON.stringify({ "pending:c10": "orphan words" }));
+  noteAdopted("c10", "s10");
+  const r = rescueStrandedPendingDrafts(() => false, () => undefined);
+  assert.equal(r.adopted.find((a) => a.sessionId === "s10")?.n, 1);
+  assert.equal(loadPadDoc().notes.length, before);
+});
+
+test("adoptions stay bounded", async () => {
+  const { recordAdoption, ADOPTION_CAP } = await import("./adoptions.ts");
+  let m = {};
+  for (let i = 0; i < ADOPTION_CAP + 10; i++) m = recordAdoption(m, `a${i}`, `s${i}`, 1000 + i);
+  assert.equal(Object.keys(m).length, ADOPTION_CAP);
+  assert.equal(m.a0, undefined);
+  assert.deepEqual(recordAdoption(m, "old", "x", 1000 + 169 * 3_600_000).old?.sid, "x");
+  assert.equal(Object.keys(recordAdoption(m, "old", "x", 1000 + 169 * 3_600_000)).length, 1);
 });

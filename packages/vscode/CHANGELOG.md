@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.14 - 2026-11-21
+
+### New
+
+- **The Watch region opens with one answer.** It reads "Nothing open — all handled", "1 open finding to look at" or "not fully read today — unknown, not clean", with its age and tally. A source that failed to read says so in a sentence and what to do, instead of a card with ignore and fix buttons.
+- **Crash rows hand off as "investigate & mark".** The agent checks whether a newer commit already fixes the group, else makes the smallest fix, else marks it seen with what it checked. With two or more open crash groups, "investigate & mark all N" on the verdict card seeds Send and sends nothing.
+- **Crash groups are named "app · error".** Checks shows "boulder-app-v3 · Out Of Memory Error" with place, version and count, instead of a raw key or the title repeated three times.
+- **Fixed marks sit under one "Marked fixed" heading.** A ? explains it, rows say "seen on vX" and expand a long note on tap, and "Clear mark" now reads "reopen".
+- **The connection strip shows a third setting when something is wrong.** It appears when the link is down or connecting, a ping is lost or slow, the link is unprotected, a send is stuck or the desktop is restarting, and stays 30 seconds after so a flapping link does not move the screen.
+- **A gear on Connection, This desktop and the open-tabs list opens Settings at the lines at the top.** The main menu also reaches all three.
+- **Updates has an "in shell" button beside the hand command.** It puts the command, with its cd into the checkout, into the updates shell's prompt box.
+- **Words rescued from a lost draft go to the repo's backlog.** A stranded draft, a sheet draft about to be overwritten or a dictation whose box went is filed as a held, marked row, with a red "N rescued" chip on the repo row. It no longer lands on the pad.
+- **A worktree card is titled "Worktree".** A detached one reads "no branch", with the sub-line "a second checkout of".
+
+### Fixed
+
+- **A long prompt scrolled past its first line is confirmed as delivered.** A 69-line report no longer comes back unconfirmed five times while its words are still in the box.
+- **A session started from the Setup check returns to it on Back.** The arrow and the gesture both land on the check, with its cut kept, instead of the launcher.
+- **Words written while a new session opens are kept.** After New session, annotate and a slow picture upload, the annotator's words land in the session instead of being rescued onto the pad.
+- **Restarting on Windows never reports "up" for another install's host on the port.** It names that host's folder and the steps to stop it.
+- **A two-finger pan that starts with one finger off the picture pans instead of drawing a box.** A third finger re-bases the pinch.
+- **"All done" on the Needs-you heading marks exactly the rows shown.** A bell-cut sheet no longer hides the clear and leaves dozens of single taps.
+- **A marked row's note in Watch keeps the detail text size.**
+
 ## 0.9.13 - 2026-11-20
 
 ### Fixed

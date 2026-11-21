@@ -14,6 +14,9 @@ import { bootStripDoors } from "./actions";
 import { localRtFocus, netFocus } from "./store";
 import { archiveOpen } from "../../archiveOpen";
 
+/** The doors the home menu uses — the same ones the strips fire by event. */
+export { openLocalRt, openNetHealth } from "./actions";
+
 export const manifest: FeatureManifest = {
   id: "tools",
   sheets: [

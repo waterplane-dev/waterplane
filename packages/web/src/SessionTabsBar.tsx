@@ -14,6 +14,7 @@ import {
   type FileTab, type SessionTab, type StripTab, type TabsSnapshot,
 } from "./sessionTabs";
 import { Sheet } from "./Sheet";
+import { StripsGear } from "./StripsGear";
 import { AttentionChip } from "./core/launcher/AttentionChip";
 import { ExtBoundary } from "./core/ExtBoundary";
 import { tabMarks } from "./core/extensionPoints";
@@ -208,6 +209,22 @@ export function TabsListButton() {
   );
 }
 
+/**
+ * The home menu's line for the same list — the way to it with every line at the
+ * top switched off. Absent with nothing open (the list would shut at once). The
+ * count is every open tab, and the list opens on exactly those.
+ */
+export function TabsMenuItem({ size, onOpen }: { size: number; onOpen: () => void }) {
+  const n = useSessionTabs((s) => s.all.length);
+  if (n === 0) return null;
+  return (
+    <button className="more-act" title="open tabs — every open session and pinned file, as a list you can filter"
+      onClick={() => { onOpen(); viaKeyStore.set(false); listOpenStore.set(true); }}>
+      <Layers size={size} />Open tabs · {n}
+    </button>
+  );
+}
+
 /** True while the machine strip must stay up to hold the list button. */
 export function useTabsButtonInBar(): boolean {
   return useSessionTabs((s) => tabsListInBar(s.enabled, s.all.length > 0));
@@ -352,7 +369,7 @@ function TabsList({ s, fileOn, viaKey, onClose }: {
   const hidden = s.all.length - rows.length;
   return (
     <div className="stab-list-layer">
-      <Sheet title={`open tabs · ${s.all.length}`} onClose={onClose}>
+      <Sheet title={`open tabs · ${s.all.length}`} onClose={onClose} actions={<StripsGear before={onClose} />}>
         <div className="stab-list-find">
           <SearchBox className="grow" value={query} placeholder="type to find a tab"
             autoFocus={viaKey || keyboard} role="combobox" aria-expanded="true" aria-controls="stab-list"

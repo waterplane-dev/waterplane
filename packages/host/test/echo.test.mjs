@@ -456,6 +456,60 @@ test("the box may be scrolled to the HEAD as easily as to the tail", () => {
     "a window that happens to start at the head is still a window, and it is more evidence than `head`");
 });
 
+/**
+ * The scroll label (live, 2026-11-21, `claude` 2.1.329/2.1.330): a multi-line
+ * prompt taller than the box draws its opening rule as `─── ↑ N more ───…` and
+ * the first visible row is a CONTINUATION — no `❯` anywhere in the frame,
+ * because the input row is among the rows scrolled off. Unrecognised, no frame
+ * was placed and a 69-line report came back `unconfirmed` five times with the
+ * words in the box. Shape copied from the live pane, words replaced.
+ */
+const REPORT = [
+  "[report from a peer] The job finished.",
+  "",
+  "Interop works and the input desktop opens. Creating the venv.",
+  "",
+  "Still to do on an unlocked session: the act and reach ops, and the DPI check",
+  "that act neither re-sends a gesture that landed nor reports one as landed",
+  "when it wasn't.",
+  "",
+  "Files the peer produced (1):",
+  "- windows-validation.md (8350 bytes)",
+].join("\n");
+
+test("a composer scrolled past its first line is found under its `↑ N more` rule", () => {
+  const rows = [
+    "✻ Crunched for 17m 31s · done 2:37 PM",
+    "                                        new task? /clear to save 331.4k tokens",
+    "─── ↑ 75 more ──────────────────────────────────────────────────────────────────",
+    "  Still to do on an unlocked session: the act and reach ops, and the DPI check",
+    "  that act neither re-sends a gesture that landed nor reports one as landed",
+    "  when it wasn't.",
+    "",
+    "  Files the peer produced (1):",
+    "  - windows-validation.md (8350 bytes)",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle)",
+  ];
+  const spans = composerSpans(rows);
+  assert.equal(spans.length, 1, "the scrolled box is a frame");
+  assert.equal(spans[0].at, 3, "its top is the first row under the label");
+  assert.equal(composerEcho(rows, REPORT), "scrolled",
+    "every row the box is drawing is a window onto this report");
+  assert.equal(composerEcho(rows, LONG), "none",
+    "the box is placed, and somebody else's prompt is not in it");
+});
+
+test("an `↑ N more` label with nothing closing it is not a box", () => {
+  const rows = [
+    "─── ↑ 75 more ──────────────────────────────────────────────────────────────────",
+    "  Still to do on an unlocked session: the act and reach ops, and the DPI check",
+    "  that act neither re-sends a gesture that landed nor reports one as landed",
+  ];
+  assert.equal(composerSpans(rows).length, 0, "a torn frame never runs on into the screen");
+  assert.equal(composerEcho(rows, REPORT), null, "no frame: no opinion, the caller's fallback decides");
+});
+
 test("a window shorter than `SLICE_MIN` is not an identification", () => {
   const rows = [
     "────────────────────────────────────────────────────────────",

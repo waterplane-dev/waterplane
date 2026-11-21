@@ -9,3 +9,8 @@ The VS Code extension keeps the last scan for the next open, so token stats and 
 - asked: 2026-11-09
 - shipped: 171ae188, 7db4e801
 
+### R-performance-003 · shipped
+The host does not block its event loop with synchronous child processes on per-request or per-tick paths; startup and kill paths may stay synchronous.
+- asked: 2026-11-20
+- shipped: 88487afdf, 89d4b4cdb
+

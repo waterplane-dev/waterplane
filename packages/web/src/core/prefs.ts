@@ -30,7 +30,7 @@ import { dataSaver, setDataSaver } from "../media.ts";
 import { bgFresh, setBgFresh, type BgFresh } from "./term/bgFresh.ts";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../theme.ts";
 import { iconScale, readerZoom, setIconScale, setReaderZoom, setTermZoom, setTextScale, termZoom, textScale } from "../uiScale.ts";
-import { pulseEnabled, setPulseEnabled } from "../link.ts";
+import { pulseEnabled, pulseWhenMode, setPulseEnabled, setPulseWhen } from "../link.ts";
 import { localRtMode, setLocalRtMode, type LocalRtMode } from "../localRt.ts";
 import { setTabsCount, setTabsEnabled, setTabsLimit, setTabsOrder, setTabsSynced, tabsCount, tabsEnabled, tabsLimit, tabsOrder, tabsSynced, type TabOrder } from "../sessionTabs.ts";
 import { readerToolsMode, setReaderToolsMode, type ReaderToolsMode } from "../transcriptUtil.ts";
@@ -99,6 +99,8 @@ export interface DevicePrefs {
   dismissedUpdate: string;
   /** The connection strip. Per device. */
   netPulse: boolean;
+  /** The connection strip always, or only while something is wrong. Per device. */
+  netPulseWhen: "always" | "trouble";
   /** The local-runner strip's mode. Per device. */
   localRtBar: LocalRtMode;
   /** Unfolding a launcher repo scrolls to its last row. Default ON, per device. */
@@ -219,6 +221,7 @@ export const prefs = createPrefs<DevicePrefs>({
   typingRoom: { load: loadTypingRoom, save: (v) => lsSet(LS.typingRoom, flagText(v)) },
   dismissedUpdate: { load: () => lsGet(LS.dismissedUpdate) || "", save: (v) => lsSet(LS.dismissedUpdate, v) },
   netPulse: { load: pulseEnabled, save: setPulseEnabled },
+  netPulseWhen: { load: pulseWhenMode, save: setPulseWhen },
   localRtBar: { load: localRtMode, save: setLocalRtMode },
   unfoldToEnd: flag(LS.unfoldToEnd, onUnlessZero),
   repoSort: { load: () => lsGet(LS.repoSort) === "name" ? "name" : "sessions", save: (v) => { if (v === "name") lsSet(LS.repoSort, v); else lsDel(LS.repoSort); } },

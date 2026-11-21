@@ -106,6 +106,22 @@ export function restartDesktop(): void {
   void applyTarget({ kind: "restart" }, `Restart ${desktopLabel()}? Sessions keep running.`, "restart");
 }
 
+/**
+ * "in shell": the hand command into THE updates shell's prompt box (`launch.focusShell`, key
+ * `"updates"`: reused while alive, else a running shell at the host root, else a fresh one), with a
+ * one-tap way back here. Seeded, never sent — the person taps Send. Words already in that box stay
+ * (`seedDraft` appends on its own line). Only drawn when this desktop has a shell.
+ */
+export function runInShell(line: string): void {
+  const c = core();
+  const sid = c.launch.focusShell("updates", { title: "shell · update", back: { label: "updates", open: openUpdates } });
+  if (!sid) return;
+  const r = c.compose.seedDraft(sid, line, { ownLine: true });
+  c.say.toast(r.already ? "The command is already in the prompt box — tap Send."
+    : r.joined ? "The command is in the prompt box, under words that were already there — send only what you mean to run."
+    : "The command is in the prompt box — tap Send to run it.");
+}
+
 /** Open the updates sheet, asking the host for a fresh copy of what it knows (a read, no check). */
 export function openUpdates(): void {
   const c = core();

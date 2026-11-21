@@ -11,7 +11,7 @@
  * second copy of the rule.
  */
 import type { Intent, RepoSetupState, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow, repoLabel, repoShown } from "@waterplane/shared";
+import { branchLabel, glueCompanions, isBacklogRow, isRescuedOpen, isScheduleRow, repoLabel, repoShown } from "@waterplane/shared";
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
@@ -289,16 +289,52 @@ export function queuedKeysByRepo(outbox: readonly OutboxEntry[], intents: readon
   };
   for (const e of outbox) {
     if (e.status === "failed") continue; // a failure is not "waiting" — Activity triages those
+    // A rescued row has its OWN, red chip (`rescuedKeysByRepo`): counted once, not on both chips.
+    if (e.rescued) continue;
     if (e.cwd) bump(e.cwd, queueRowKey(e.ackId));
   }
   for (const i of intents) {
     if (i.archived) continue;
     if (i.state !== "queued" && i.state !== "blocked") continue;
+    if (isRescuedOpen(rescueFactsOf(i))) continue;
     // A timed one-off is this repo's waiting work and is counted; only a
     // standing RULE (or a one-off sweep, which belongs to no single repo) is
     // left to the schedules chip.
     if (isScheduleRow(i)) continue;
     if (i.cwd) bump(i.cwd, intentRowKey(i.id));
+  }
+  return m;
+}
+
+/** An intent as the facts `isRescuedOpen` reads — its lifecycle is the `status`. */
+const rescueFactsOf = (i: Intent) => ({ rescued: i.rescued, status: i.state, archived: i.archived });
+
+/**
+ * **Words the app rescued by itself, per repo, as Activity ROW KEYS** — the red "N rescued" chip.
+ *
+ * Rows the app filed from rescued words (`shared/rescued.ts`) that still wait for a person: the
+ * desktop's intents (`isRescuedOpen`: marked, not archived, `queued`/`blocked`) and the phone's own
+ * backlog entries not yet on the desktop (not failed). Sending or discarding a row takes it out of
+ * the count; so does this phone's Activity "filed" mark, as for the queued chip. Keys and not a
+ * number because the number is a filter: the chip's count and the cut its tap opens are the same
+ * `keys.length` (`queuedChipCut` decides where the tap opens). A rescued row is NOT in
+ * `queuedKeysByRepo`: one row, one chip.
+ */
+export function rescuedKeysByRepo(outbox: readonly OutboxEntry[], intents: readonly Intent[], filed: { has(key: string): boolean },
+  repoNameOfCwd: (cwd: string) => string): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  const bump = (cwd: string | undefined, key: string) => {
+    if (!cwd || filed.has(key)) return;
+    const name = repoNameOfCwd(cwd);
+    if (!name) return;
+    const cur = m.get(name);
+    if (cur) cur.push(key); else m.set(name, [key]);
+  };
+  for (const e of outbox) {
+    if (e.mode === "backlog" && e.rescued && e.status !== "failed") bump(e.cwd, queueRowKey(e.ackId));
+  }
+  for (const i of intents) {
+    if (isRescuedOpen(rescueFactsOf(i))) bump(i.cwd, intentRowKey(i.id));
   }
   return m;
 }

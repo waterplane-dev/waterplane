@@ -388,9 +388,18 @@ export function elsewhereRose(prev: number | undefined, next: number): boolean {
   return prev !== undefined && next > prev;
 }
 
-/** Where a tap on one item lands after the switch (a `shellOpen` string), or undefined. */
-export function itemOpenTarget(i: Pick<WaitingAttention, "plugin" | "sessionId">): string | undefined {
+/**
+ * Where a tap on one item lands after the switch (a `shellOpen` string), or undefined.
+ * A prompt that never made it in names a session that is usually gone by the time anybody looks
+ * (it was 9 days on the zenbook), and a parked session id that never appears lands NOWHERE — so
+ * that kind lands on its own row in the bell (`notif:<json>`, no session: `openNotif`'s floor),
+ * where `done` clears it and a tap opens the session if it still exists.
+ */
+export function itemOpenTarget(i: Pick<WaitingAttention, "plugin" | "sessionId"> & Partial<Pick<WaitingAttention, "id" | "ts" | "kind" | "title">>): string | undefined {
   if (i.plugin) return `plugin:${i.plugin}`;
+  if (i.kind === "undelivered" && i.id && i.title) {
+    return `notif:${JSON.stringify({ id: i.id, ts: i.ts, kind: i.kind, title: i.title, body: "", level: "attention" })}`;
+  }
   return i.sessionId || undefined;
 }
 

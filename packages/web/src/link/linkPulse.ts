@@ -1,4 +1,4 @@
-import { LS, lsBool, lsSetBool } from "../storage";
+import { LS, lsBool, lsGet, lsSet, lsSetBool } from "../storage"; import type { PulseWhen } from "./pulseTrouble";
 import type { LinkStatus, PulseSample } from "./linkTypes";
 import { noteLinkStatus, status } from "./linkStatus";
 import { emit, invalidate } from "./linkBus";
@@ -68,6 +68,11 @@ export let pulseOn = lsBool(LS.netPulse, true);
 export let samples: PulseSample[] = [];
 
 export function pulseEnabled(): boolean { return pulseOn; }
+
+/** Drawn always, or only while something is wrong; the probes run either way (`pulseTrouble.ts`). */
+export let pulseWhen: PulseWhen = lsGet(LS.netPulseWhen) === "trouble" ? "trouble" : "always";
+export function pulseWhenMode(): PulseWhen { return pulseWhen; }
+export function setPulseWhen(when: PulseWhen): void { pulseWhen = when; lsSet(LS.netPulseWhen, when); invalidate("pulse"); emit(); }
 
 /** Flip the strip on/off. Persists immediately — the toggle is per device, so
  *  there is no push to wait for. */

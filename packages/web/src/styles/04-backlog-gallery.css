@@ -513,3 +513,23 @@ button.bl-chip { cursor: pointer; }
 .route-card > summary::-webkit-details-marker { display: none; }
 .route-card-head { display: flex; align-items: center; gap: var(--sp-6); flex-wrap: wrap; }
 .route-card-tag { margin-left: auto; }
+/* The exposure watch's answer at the top of its region: one verdict line, its tally, and what could not be read. */
+.watch-verdict-li { list-style: none; }
+/* Drawn as a check row (full bleed, bottom rule, left stripe) so it reads as the first row of the same list. */
+.watch-verdict { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-12) var(--sp-14); border-bottom: 1px solid var(--line); border-left: 3px solid var(--line); }
+.watch-verdict.watch-ok { border-left-color: var(--ok); }
+.watch-verdict.watch-needs { border-left-color: var(--dead); }
+.watch-verdict.watch-unknown { border-left-color: var(--warn); }
+.watch-verdict-head { display: flex; align-items: center; gap: var(--sp-8); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
+.watch-ok .watch-verdict-head svg { color: var(--ok); }
+.watch-needs .watch-verdict-head svg { color: var(--dead); }
+.watch-unknown .watch-verdict-head svg { color: var(--warn); }
+.watch-verdict-sub { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.watch-verdict-why { color: var(--fg); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); word-break: break-word; }
+/* A fixed mark's note is context, not the headline: two lines until tapped, then all of it. */
+.mark-note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; background: none; border: 0; margin: 0; text-align: left; font-family: inherit; cursor: pointer; }
+.mark-note.open { display: block; }
+/* An exposure finding's verbs: ONE wrapping row after its text; an open form or a line takes the full width. */
+.xp-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--sp-6); margin-top: var(--sp-6); }
+.xp-acts > .check-acts { margin-top: 0; }
+.xp-acts > :not(.check-acts), .xp-acts > .check-form { flex-basis: 100%; }

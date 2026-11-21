@@ -4,9 +4,9 @@
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, SendHorizontal, Star, Terminal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, LifeBuoy, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel, withShownName } from "@waterplane/shared";
+import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel, rescuedChipText, withShownName } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
 import { isBudgetHeld } from "../../sendIntent";
 import { intentRowKey } from "../../activityRows";
@@ -42,7 +42,7 @@ import { flaggedChipTitle } from "../sessions/followUpFacts";
 import { RowTitle, RowSub } from "../../kit/Row";
 import type { RepoActionItem } from "../featureRun";
 import { MenuGroup } from "./LauncherItems";
-import { capFirst, counted, gitParts, gitWords, newFilesWords, setupLine, WORK_EXT } from "./homeWords";
+import { capFirst, counted, gitParts, gitWords, newFilesWords, rescuedChipTitle, setupLine, WORK_EXT } from "./homeWords";
 
 const ICON = 16;
 
@@ -58,7 +58,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   const { enterOldestPending, enterLater } = p.queue;
   const {
     primaryRepo, worktreesOf, attentionByRepo, statusFilter, textOn, collapsedRepos, toggleRepoCollapsed, openFocusWindow,
-    statusFilterActive, toggleStatusFilter, waitingRepliesByRepo, queuedByRepo, intentById, clocksPerRepo, starredByRepo, flaggedByRepo,
+    statusFilterActive, toggleStatusFilter, waitingRepliesByRepo, queuedByRepo, rescuedByRepo, intentById, clocksPerRepo, starredByRepo, flaggedByRepo,
     repoMenu, setRepoMenu, setCloseAllPick,
   } = m;
   const n = groupSessions.length;
@@ -414,6 +414,33 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             </button>
           );
         })()}
+        {(rescuedByRepo.get(repoName)?.length ?? 0) > 0 && (() => {
+          // **Words the app rescued by itself and filed here** — red, because
+          // nothing will run them and somebody has to take care of each. A COUNT
+          // ON A CONTROL IS A FILTER: the tap carries the keys the number was
+          // made of (`rescuedKeysByRepo`), into the backlog cut when they are all
+          // its rows in one checkout (`queuedChipCut`, the one test of that), else
+          // Activity (a still-offline row is only a phone-side send). Sending or
+          // discarding a row takes it out of both the number and the cut.
+          const keys = rescuedByRepo.get(repoName) ?? [];
+          const rn = keys.length;
+          return (
+            <button className="repo-group-stat bad rescued" title={rescuedChipTitle(rn, shown)}
+              onClick={() => {
+                const cut = queuedChipCut(keys, intents);
+                const label = `the ${rn} rescued in ${shown}`;
+                if (cut.kind === "backlog") {
+                  track("action:repo.rescued.backlog");
+                  openBacklogCut(cut.cwd, cut.ids, label);
+                  return;
+                }
+                track("action:repo.rescued.open");
+                openActivity({ keys, label });
+              }}>
+              <LifeBuoy size={12} />{rescuedChipText(rn)}
+            </button>
+          );
+        })()}
         {(clocksPerRepo.get(repoName)?.ids.length ?? 0) > 0 && (() => {
           // **What fires on a clock in THIS repo.** Beside the
           // waiting chip because they are the same question split
@@ -539,9 +566,11 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             already says worktree — and that line names the REPO in its own
             hue: between two session cards a bare branch row read as a
             stranger, not as part of the group it sits in. */}
-        <RowTitle><span className="wt-branch">{t.branch.replace(/^worktree-/, "")}</span></RowTitle>
+        {/* The KIND leads the title: a bare "(detached)" read as a broken
+            session, and only the explainer further down said "worktree". */}
+        <RowTitle><span className="wt-kind">Worktree</span>{" · "}<span className="wt-branch">{t.branch === "(detached)" ? "no branch" : t.branch.replace(/^worktree-/, "")}</span></RowTitle>
         <RowSub className="repo-sub">
-          <span className="repo-branch wt-of"><GitBranch size={12} />branch copy of <b>{shown}</b></span>
+          <span className="repo-branch wt-of"><GitBranch size={12} />a second checkout of <b>{shown}</b></span>
           {(() => {
             const o = openingCwds.get(t.worktreePath);
             return o ? (

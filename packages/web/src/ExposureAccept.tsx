@@ -2,14 +2,16 @@
 // reason, for a while or for good), and the "Accepted (n)" list that keeps every accept visible.
 // Sentences are exposureWords.ts's. Nothing here applies itself: the host re-checks the request.
 import { useState, type ReactNode } from "react";
-import { ChevronDown, BadgeCheck, ChevronRight, ShieldCheck } from "lucide-react";
-import { triageWords, type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest, type ExposureTriage } from "@waterplane/shared";
+import { ChevronDown, BadgeCheck, ChevronRight, CircleAlert, CircleCheck, CircleHelp, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest, type ExposureTriage } from "@waterplane/shared";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { Explain } from "./Explain";
 import { RadioRows } from "./kit/RadioRows";
 import {
-  BUILT_IN_WORDS, TRIAGE_STATES, acceptRefusal, acceptRequest, acceptedByMark, acceptedHead, acceptedLine,
-  clearTriageRequest, digestHead, staleMarksHead, triageControl, triageRefusal, triageRequest, untilChoices, untilVersionOffered,
+  BUILT_IN_WORDS, TRIAGE_STATES, acceptRefusal, acceptRequest, acceptedHead, acceptedLine,
+  MARKED_STALE_WORDS, MARKED_UNCHECKED_WORDS, MARKED_WORDS, NOT_MEASURED_NEXT, REOPEN_LABEL, REOPEN_WORDS,
+  clearTriageRequest, crashOfGroup, crashTitle, digestHead, markShort, markedHead, notMeasuredLine, triageControl, watchRowTitle, watchTally, watchVerdict, triageRefusal, triageRequest, untilChoices, untilVersionOffered,
   type TriageState, type UntilChoice,
 } from "./exposureWords";
 
@@ -46,7 +48,7 @@ export function AcceptControl({ check, onAccept }: {
     if (err) setError(err); else setOpen(false);
   }
   return (
-    <div className="check-acts" style={{ display: "block" }}>
+    <div className="check-acts check-form">
       <Hint>Accepting keeps the row, with your reason, under Accepted — it is not counted while accepted.</Hint>
       <textarea className="search" rows={2} value={reason} autoFocus placeholder="why is this fine here?"
         aria-label="reason" onChange={(e) => setReason(e.target.value)} />
@@ -107,23 +109,23 @@ export function TriageControl({ check, onMark }: {
   }
   if (!open) {
     return (
-      <div className="check-acts" style={{ display: "block" }}>
+      <>
         {ctl.line && <div className="check-detail check-detail-quiet">{ctl.line}</div>}
         <div className="check-acts">
           <Button onClick={openForm}>
             <BadgeCheck size={12} /> {ctl.open}
           </Button>
           {ctl.canClear && (
-            <Button onClick={() => void send(clearTriageRequest(check.id), false)}>{sending ? "Clearing…" : "Clear mark"}</Button>
+            <Button onClick={() => void send(clearTriageRequest(check.id), false)}>{sending ? "Reopening…" : REOPEN_LABEL}</Button>
           )}
         </div>
         {error && <Hint tone="warn">{error}</Hint>}
-      </div>
+      </>
     );
   }
   const refusal = triageRefusal(state, fixedIn, commit, note);
   return (
-    <div className="check-acts" style={{ display: "block" }}>
+    <div className="check-acts check-form">
       <Hint>{TRIAGE_STATES.find((s) => s.key === state)!.hint}</Hint>
       <RadioRows label="Mark as" value={state} onChange={setState}
         options={TRIAGE_STATES.filter((s) => s.key !== "fixed" || ctl.offerFixed).map((s) => ({ key: s.key, label: s.label }))} />
@@ -151,11 +153,10 @@ export function TriageControl({ check, onMark }: {
 }
 
 /** "Accepted (n)": every accepted row, with its reason. A built-in one has no way back here. */
-export function AcceptedSection({ rows, now, onStop, onClearMark }: {
+export function AcceptedSection({ rows, now, onStop }: {
   rows: ComplianceCheck[];
   now: number;
   onStop: (id: string) => void;
-  onClearMark: (id: string) => void;
 }) {
   if (!rows.length) return null;
   return (
@@ -169,8 +170,6 @@ export function AcceptedSection({ rows, now, onStop, onClearMark }: {
               <span className="check-label">{c.label}</span>
               {c.accepted!.builtIn
                 ? <Hint as="span">{BUILT_IN_WORDS}</Hint>
-                : acceptedByMark(c)
-                ? <Button onClick={() => onClearMark(c.id)}>Clear mark</Button>
                 : <Button onClick={() => onStop(c.id)}>stop accepting</Button>}
             </div>
             <div className="check-detail check-detail-quiet">{acceptedLine(c.accepted!, now)}</div>
@@ -181,29 +180,88 @@ export function AcceptedSection({ rows, now, onStop, onClearMark }: {
   );
 }
 
-/** "Marked, not in today's reading (n)": marks whose group is absent from the newest reading (it may return).
- *  Each says its mark in the shared words and clears with the same triage request as a card's Clear mark. */
-export function StaleMarksSection({ marks, onClear }: {
-  marks: Array<{ triageId: string; triage: ExposureTriage }>;
-  onClear: (triageId: string) => void;
+/** The answer the region opens with: is anything open today? Counts come from `exposureCut`, so the
+ *  number is the rows drawn below. A measure the reading could not take heads it as UNKNOWN, never as clean. */
+export function WatchVerdict({ summary, alerts, digest, marked, accepted, now, investigate }: {
+  summary: ComplianceCheck;
+  alerts: number; digest: number; marked: number; accepted: number; now: number;
+  /** Hand every open crash group to the agent to investigate and mark (seeds Send; nothing is sent by the tap). */
+  investigate?: { label: string; run: () => void } | null;
 }) {
-  if (!marks.length) return null;
+  const nm = summary.notMeasured ?? [];
+  // An older host sends no readAt/notMeasured: fall back to its own sentence, never to a guessed verdict.
+  if (summary.readAt === undefined && !nm.length) {
+    return <div className="watch-verdict watch-unknown"><div className="watch-verdict-sub">{summary.detail}</div></div>;
+  }
+  const stale = summary.status !== "pass" && !nm.length;
+  const v = watchVerdict({ alerts, digest, marked, accepted, notMeasured: nm.length, stale });
+  const Icon = v.tone === "ok" ? CircleCheck : v.tone === "needs" ? CircleAlert : CircleHelp;
+  return (
+    <div className={`watch-verdict watch-${v.tone}`} data-check={summary.id}>
+      <div className="watch-verdict-head"><Icon size={20} /> {v.head}</div>
+      <div className="watch-verdict-sub">{watchTally({ readAt: summary.readAt ?? null, now, marked, accepted, digest })}</div>
+      {nm.map((m) => <div key={m.measure} className="watch-verdict-why">{notMeasuredLine(m)}</div>)}
+      {nm.length > 0 && <Hint>{NOT_MEASURED_NEXT}</Hint>}
+      {investigate && (
+        <div className="check-acts">
+          <Button onClick={investigate.run}><Send size={12} /> {investigate.label}</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Marked fixed (n)": every crash group with a fixed mark — the ones today's reading still lists (old installs)
+ *  and the ones it does not. What the marks mean is behind a `?`; each row its app, error, place and fix. */
+export function MarkedSection({ rows, stale, unread, onReopen }: {
+  rows: ComplianceCheck[];
+  stale: Array<{ triageId: string; triage: ExposureTriage }>;
+  /** The crash list could not be read today: a stale mark was not CHECKED, not absent. */
+  unread: boolean;
+  onReopen: (triageId: string) => void;
+}) {
+  const n = rows.length + stale.length;
+  if (!n) return null;
   return (
     <>
-      <div className="section">{staleMarksHead(marks.length)}</div>
+      <div className="section">{markedHead(n)} <Explain of="marked fixed">{MARKED_WORDS} {REOPEN_WORDS}</Explain></div>
       <ul className="check-list">
-        {marks.map((m) => (
-          <li key={m.triageId} className="check-row check-ignored">
-            <div className="check-top">
-              <span className="check-icon"><BadgeCheck size={16} color="var(--dim)" /></span>
-              <span className="check-label">{m.triageId.replace(/^exposure:/, "")}</span>
-              <Button onClick={() => onClear(m.triageId)}>Clear mark</Button>
-            </div>
-            <div className="check-detail check-detail-quiet">{triageWords(m.triage)}</div>
-          </li>
-        ))}
+        {rows.map((c) => {
+          const { title, where } = watchRowTitle(c);
+          const from = c.exposure?.appVersion;
+          return <MarkedRow key={c.id} id={c.id} t={c.exposure?.triage} title={title} where={where}
+            state={from ? `seen on v${from}` : null} onReopen={onReopen} />;
+        })}
+        {stale.map((m) => {
+          const crash = crashOfGroup(m.triageId);
+          const { title, where } = crash ? crashTitle(crash) : { title: m.triageId, where: null };
+          return <MarkedRow key={m.triageId} id={m.triageId} t={m.triage} title={title} where={where}
+            state={unread ? MARKED_UNCHECKED_WORDS : MARKED_STALE_WORDS} onReopen={onReopen} />;
+        })}
       </ul>
     </>
+  );
+}
+
+function MarkedRow({ id, t, title, where, state, onReopen }: {
+  id: string; t: ExposureTriage | undefined; title: string; where: string | null; state: string | null;
+  onReopen: (id: string) => void;
+}) {
+  // The note is context, not the headline: two lines until tapped, then all of it.
+  const [noteOpen, setNoteOpen] = useState(false);
+  return (
+    <li className="check-row check-ignored">
+      <div className="check-top">
+        <span className="check-icon"><BadgeCheck size={16} color="var(--ok)" /></span>
+        <span className="check-label">{title}</span>
+        <Button onClick={() => onReopen(id)}><RotateCcw size={12} /> {REOPEN_LABEL}</Button>
+      </div>
+      {where && <div className="check-detail">{where}</div>}
+      <div className="check-detail check-detail-quiet">{[t ? markShort(t) : null, state].filter(Boolean).join(" · ")}</div>
+      {/* raw: a tap target over prose, not a control the kit draws */}
+      {t?.note && <button type="button" className={`check-detail check-detail-quiet mark-note${noteOpen ? " open" : ""}`}
+        aria-expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>{t.note}</button>}
+    </li>
   );
 }
 

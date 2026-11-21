@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import { AgentReadingsRegion } from "./AgentReadingsRegion";
 import { AGENT_REGION_WORDS } from "./agentReadingsWords";
-import { isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
+import { EXPOSURE_SUMMARY_ID, isSetupConsider, isSetupFinding, isWatchCheck } from "@waterplane/shared";
 import type {
   ComplianceAcceptRequest, ComplianceCheck, ComplianceReport, ComplianceTriageRequest, RepoHealthView, RepoTarget,
 } from "@waterplane/shared";
@@ -76,7 +76,7 @@ import { Sheet } from "./Sheet";
 import { Empty } from "./Empty";
 import { loadPresets, remedyFor, type Preset } from "./presets";
 import {
-  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb, offersAgent, patchFindings, patchIds, remedyPrompt, setupRows,
+  agentFindings, agentVerb, bulkLabel, bulkNote, crashBulkVerb, openCrashes, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb, offersAgent, patchFindings, patchIds, remedyPrompt, setupRows,
 } from "./setupRemedy";
 import { ConfirmButton } from "./Confirm";
 import { ContextLimitsEditor } from "./ContextLimits";
@@ -94,9 +94,9 @@ import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { AlwaysOnRows, type SessionDoor } from "./AlwaysOnRows";
-import { AcceptControl, AcceptedSection, StaleMarksSection, DigestGroup, TriageControl } from "./ExposureAccept";
+import { AcceptControl, AcceptedSection, MarkedSection, DigestGroup, TriageControl, WatchVerdict } from "./ExposureAccept";
 import {
-  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, exposureCut, exposureMeta, exposureSource, inExposureMainList,
+  WATCH_HEAD_WORDS, WATCH_REGION_WORDS, acceptedByMark, exposureCut, watchRowTitle, exposureMeta, exposureSource, inExposureMainList,
   clearTriageRequest, WATCH_EMPTY_WORDS, WATCH_EMPTY_LINK,
   WATCH_RECHECK_LABEL, WATCH_RECHECK_RUNNING, WATCH_RECHECK_TITLE, watchRecheckFailed,
 } from "./exposureWords";
@@ -524,17 +524,40 @@ function SetupRegion({
       ? { label: agentVerb(c.id, setupRows()), run: () => runRowAgent(setupRows().byCheck(c.id)!.agent!, repo, c.label) }
       : { label: agentVerb(c.id, setupRows()), run: () => onRemedy!(remedyPrompt([c], repo.repoName, setupRows()), repo, c.label.toLowerCase()) }
       : null;
-    // An exposure finding: the line it crossed, where it came from, then Accept….
+    // The watch's own summary row is the region's answer, drawn as one: a verdict, not a "consider" card.
+    if (c.id === EXPOSURE_SUMMARY_ID) {
+      return <li key={c.id} className="watch-verdict-li"><WatchVerdict summary={c} alerts={xcut.alerts.length} digest={xcut.digest.length}
+        marked={markedRows.length + (c.staleMarks?.length ?? 0)}
+        accepted={xcut.accepted.length - markedRows.length} now={Date.now()} investigate={investigateAll} /></li>;
+    }
+    // A crash group reads by its app and error; the raw key stays in the meta line below.
+    const named = c.exposure ? watchRowTitle(c) : null;
+    // An exposure finding: the line it crossed (a crash: its place, version and count instead), where it came
+    // from, then ONE action row — the agent, Accept…, Mark… and the row's fix — after all the text.
+    const crash = !!named?.where;
     const xpSource = c.exposure ? exposureSource(c.exposure) : null;
     const xp = c.exposure
       ? <>
-          <div className="check-detail check-detail-quiet">{exposureMeta(c.exposure)}</div>
+          {crash ? <div className="check-detail">{named!.where}</div>
+            : <div className="check-detail check-detail-quiet">{exposureMeta(c.exposure)}</div>}
           {xpSource && <div className="check-detail check-detail-quiet">{xpSource}</div>}
-          <AcceptControl check={c} onAccept={onAccept} />
-          <TriageControl check={c} onMark={onMark} />
+          <div className="xp-acts">
+            {ask && <div className="check-acts"><Button onClick={ask.run}><Send size={12} /> {ask.label}…</Button></div>}
+            <AcceptControl check={c} onAccept={onAccept} />
+            <TriageControl check={c} onMark={onMark} />
+            {c.fix && fixNeedsConfirm(c.fix) && (
+              <div className="check-acts">
+                <ConfirmButton confirm={<><Wrench size={12} /> {fixConfirmWords(c.fix, report.autoCompactDefault)}</>}
+                  disabled={busy} onConfirm={() => void onFix([c.fix!])}>
+                  <Wrench size={12} /> {fixVerb(c.fix, report.autoCompactDefault, setupRows())}
+                </ConfirmButton>
+              </div>
+            )}
+          </div>
         </>
       : null;
-    return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
+    return <Row key={c.id} c={crash ? { ...c, label: named!.title } : c} busy={busy} onFix={onFix}
+      remedy={c.exposure ? null : ask} actsInExtra={!!c.exposure} hideDetail={crash}
       size={report.autoCompactDefault} onIgnore={onIgnore}
       extra={xp} />;
   }
@@ -552,6 +575,13 @@ function SetupRegion({
     setWatchRun({ repoId: forRepo, running: false, ...r });
   }
   const xcut = exposureCut(allRows);
+  // Accepted rows the host made from a fixed mark: ONE filter feeds the verdict's tally and the Marked list.
+  const markedRows = xcut.accepted.filter(acceptedByMark);
+  // Two or more open crash groups: one tap hands them all to the agent, which investigates and marks each.
+  const crashes = openCrashes(xcut.alerts);
+  const investigateAll = crashes.length >= 2 && canAsk && repo
+    ? { label: crashBulkVerb(crashes.length), run: () => onRemedy!(remedyPrompt(crashes, repo.repoName, setupRows()), repo, `${crashes.length} crash groups`) }
+    : null;
 
   return (
     <>
@@ -648,11 +678,12 @@ function SetupRegion({
 
           {/* Accepted exposure findings stay visible with their reason, never hidden; like Ignored,
               not under the findings cut (an accepted row is not a finding). */}
-          {!cut && <AcceptedSection rows={xcut.accepted} now={Date.now()}
-            onStop={(id) => void onAccept({ id, accept: false }).then((err) => { if (err) showToast(err); })}
-            onClearMark={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
-          {!cut && <StaleMarksSection marks={xcut.summary?.staleMarks ?? []}
-            onClear={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
+          {/* Crash groups marked fixed — today's (old installs) and earlier ones — under one head with one verb. */}
+          {!cut && <MarkedSection rows={markedRows} stale={xcut.summary?.staleMarks ?? []}
+            unread={!!xcut.summary?.notMeasured?.some((m) => m.measure === "D3")}
+            onReopen={(id) => void onMark(clearTriageRequest(id)).then((err) => { if (err) showToast(err); })} />}
+          {!cut && <AcceptedSection rows={xcut.accepted.filter((a) => !acceptedByMark(a))} now={Date.now()}
+            onStop={(id) => void onAccept({ id, accept: false }).then((err) => { if (err) showToast(err); })} />}
 
         </>
       )}
@@ -665,7 +696,7 @@ function runRowAgent(agent: (repo: RepoTarget, core: CoreApi) => void, repo: Rep
   try { agent(repo, core()); } catch (e) { showToast(`${label} could not start: ${e instanceof Error ? e.message : String(e)}`); }
 }
 
-function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
+function Row({ c, busy, onFix, onIgnore, size, remedy, extra, actsInExtra, hideDetail }: {
   c: ComplianceCheck;
   busy: boolean;
   onFix: (f: string[]) => unknown;
@@ -677,6 +708,10 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
   /** Row-specific controls, under the sentence. Today: the context-weight
    *  thresholds, and that row's twin from the series. */
   extra?: ReactNode;
+  /** The row's fix and agent verbs are drawn by `extra` (an exposure row's one action row), not here. */
+  actsInExtra?: boolean;
+  /** `extra` says what the detail would (a crash group's place, version and count). */
+  hideDetail?: boolean;
 }) {
   // A thing to consider, not a finding: its own icon and stripe, and a word
   // saying so, because amber beside the badge's findings read as one of them.
@@ -692,7 +727,7 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
           </Button>
         )}
       </div>
-      <div className="check-detail">{c.detail}</div>
+      {!hideDetail && <div className="check-detail">{c.detail}</div>}
       {/* A short verb on the button, its full effect as TEXT: a title is invisible on a phone. */}
       {c.fix && !fixNeedsConfirm(c.fix) && fixTitle(c.fix) && <Hint>{fixTitle(c.fix)}</Hint>}
       {consider && !c.exposure && (
@@ -707,7 +742,7 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
           repairing a convention: two taps, the armed label saying exactly what
           the second one writes, and never part of "Fix all". Under the
           sentence, because its label is a whole clause. */}
-      {c.fix && fixNeedsConfirm(c.fix) && (
+      {c.fix && fixNeedsConfirm(c.fix) && !actsInExtra && (
         <div className="check-acts">
           <ConfirmButton confirm={<><Wrench size={12} /> {fixConfirmWords(c.fix, size)}</>}
             disabled={busy} onConfirm={() => void onFix([c.fix!])}>

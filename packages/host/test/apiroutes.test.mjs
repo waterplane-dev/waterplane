@@ -17,6 +17,8 @@ const ROUTES = [
   "GET /api/theme",
   // What this desktop waits on a person for (`shared/waiting.ts`) — another desktop's phone polls it.
   "GET /api/attention",
+  // The person's done on another desktop's items, from a phone switched elsewhere (`ElsewhereSheet`).
+  "POST /api/attention/handle",
   "* /api/webbundle",
   "* /api/webbundle/file",
   "POST /api/hook",

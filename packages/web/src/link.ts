@@ -55,7 +55,7 @@
 export { deviceId, noteAckTimeout, noteOutstanding, noteReload, noteRtt, noteSendConfirmed, noteSendExpired, noteSendFailed, noteStuckSends, resetLinkWindow, rollup, rttP95 } from "./link/linkLog";
 export { installLinkMeters, startLinkReporting } from "./link/linkMeters";
 export { labelForUrl, netBegin } from "./link/linkOps";
-export { PULSE_CAP, pulseEnabled, setPulseEnabled, startLinkProbes, summarize } from "./link/linkPulse";
+export { PULSE_CAP, pulseEnabled, pulseWhenMode, setPulseEnabled, setPulseWhen, startLinkProbes, summarize } from "./link/linkPulse";
 export type { PulseSource, PulseSummary } from "./link/linkPulse";
 export { linkOnline, linkStatus, noteLinkStatus } from "./link/linkStatus";
 export { linkSnapshot, subscribeLink, useLink } from "./link/linkStore";

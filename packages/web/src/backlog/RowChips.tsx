@@ -7,7 +7,7 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { ArrowDown, ArrowUp, CalendarClock, DoorClosed, DoorOpen, Flag, Flame, Gauge, Hand, History, Hourglass, Play, Sparkles, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, DoorClosed, DoorOpen, Flag, Flame, Gauge, Hand, History, Hourglass, LifeBuoy, Play, Sparkles, Wallet } from "lucide-react";
 import type { RowFacts } from "./BacklogRow";
 import { budgetWaived, FROM_WEEKBURN_WORDS, isWeekBurnOrigin } from "@waterplane/shared";
 import { budgetChipWords } from "../budgetInput";
@@ -28,6 +28,15 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
   return (
                   <span className="bl-meta">
                     <span className={`tag-${rowStatusKey(it)}`}>{rowStatusWord(it)}</span>
+                    {/* **The app filed this from words it rescued** (`BacklogItem.rescued`): the
+                        tag and the reason, as TEXT. It waits for a tap and counts on the
+                        launcher's repo row until sent or discarded. Absent says nothing. */}
+                    {it.rescued && (
+                      <>
+                        <span className="bl-chip bl-rescued"><LifeBuoy size={11} style={{ verticalAlign: "-1px" }} /> rescued</span>
+                        <span className="bl-age bl-rescued-why">{it.rescued.why}</span>
+                      </>
+                    )}
                     {/* **What kind of thing this row is** — icon and word, and
                         NOTHING AT ALL when nobody has said. Absent means nobody
                         said (`naming.ts`), which is a real answer: a default

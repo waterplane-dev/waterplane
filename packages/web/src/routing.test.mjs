@@ -305,3 +305,15 @@ test("pluginSettings (a plugin's Settings over the manager) is never reload-pers
   assert.ok(!PERSISTED_OVERLAYS.has("pluginSettings"));
   assert.equal(routeToHash(null, "pluginSettings"), "");
 });
+
+test("the session's arrow lands on a sheet below that comes back WHOLE: persisted, or one that keeps its cut", async () => {
+  const { noteKeptOverlay, comesBackWhole } = await import("./routing.ts");
+  const L = routeKey(null, null), sc = routeKey(null, "setupcheck"), s = routeKey("s1", null);
+  // before the sheet table says the Setup check keeps its cut, the arrow searches for the bare launcher
+  assert.equal(comesBackWhole("setupcheck"), false);
+  assert.deepEqual(routeStep([L, sc, s], 2, L), { kind: "go", delta: -2 });
+  noteKeptOverlay("setupcheck");
+  assert.equal(comesBackWhole("setupcheck"), true);
+  assert.deepEqual(routeStep([L, sc, s], 2, L), { kind: "go", delta: -1 });
+  assert.equal(comesBackWhole("send"), false, "Send reopens empty");
+});

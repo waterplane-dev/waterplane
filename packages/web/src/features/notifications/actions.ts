@@ -43,6 +43,20 @@ export function handleNotif(id: string): void {
   if (repoChipKeys(notifs.get()) !== before) c.world.refreshRepos();
 }
 
+/** `all done` on the Needs-you heading: `done` on exactly the rows shown
+ *  there (a cut sheet marks only its cut — a count is a filter). One
+ *  idempotent `notification.handle` per id, sent together or not at all. */
+export function handleNotifs(ids: string[]): void {
+  const c = core();
+  if (!ids.length) return;
+  if (!c.conn.liveSendAll(ids.map((id) => ({ t: "notification.handle", id })), `${ids.length} marked done`)) return;
+  const sent = new Set(ids);
+  const before = repoChipKeys(notifs.get());
+  const at = Date.now();
+  notifs.set((prev) => prev.map((n) => (sent.has(n.id) && !n.handled ? { ...n, handled: { at, by: "person" as const } } : n)));
+  if (repoChipKeys(notifs.get()) !== before) c.world.refreshRepos();
+}
+
 /** `notify.prefs`: the host's merged set of muted kinds. */
 export function onNotifyPrefs(prefs: NotifyPrefs, info?: boolean): void {
   mutes.set(prefs);

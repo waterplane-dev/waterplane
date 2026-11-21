@@ -1,7 +1,8 @@
 // The exposure watch's sentences on the phone — pure, so a test pins them and the card, the
 // accept form and the counts say the same thing. The rows themselves are the host's
 // (`ComplianceCheck` with `exposure` / `accepted`); nothing here measures anything.
-import { EXPOSURE_SUMMARY_ID, triageWords, type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest } from "@waterplane/shared";
+import { EXPOSURE_SUMMARY_ID, triageWords, type ComplianceAcceptRequest, type ComplianceCheck, type ComplianceTriageRequest, type ExposureTriage, crashOfGroup, crashOfSubject, crashTitle } from "@waterplane/shared";
+export { crashOfGroup, crashOfSubject, crashTitle };
 
 type Exposure = NonNullable<ComplianceCheck["exposure"]>;
 type Accepted = NonNullable<ComplianceCheck["accepted"]>;
@@ -204,9 +205,6 @@ export function triageControl(c: ComplianceCheck): { open: string; canClear: boo
 }
 export const TRIAGE_NO_FIXED_WHY = "Fixed needs an app version; Accept it instead.";
 
-/** "Marked, not in today's reading (n)": marks whose group is absent from the newest reading. */
-export const staleMarksHead = (n: number): string => `Marked, not in today's reading (${n})`;
-
 /** An accepted row the host made from a fixed mark (`accepted.byMark`), as opposed to a person's accept
  *  that a mark sits beside. Only the first reads "Clear mark" in the Accepted list. */
 export const acceptedByMark = (c: ComplianceCheck): boolean => !!c.accepted && !c.accepted.builtIn && c.accepted.byMark === true;
@@ -231,3 +229,65 @@ export const watchRecheckFailed = (why: string): string => `The watch did not ru
 export const WATCH_EMPTY_WORDS =
   "Not watched yet: the daily exposure watch has no rows for this repo, and Scorecard has no reading yet.";
 export const WATCH_EMPTY_LINK = "add this repo to the exposure watch";
+
+// ── The watch's verdict and the Connect IQ crash rows ──────────────────────────────────────────────────
+
+/** A check's display title: a crash group by its app and error, anything else by its own label. */
+export function watchRowTitle(c: ComplianceCheck): { title: string; where: string | null } {
+  const crash = c.exposure ? crashOfSubject(c.exposure.subject) : null;
+  return crash ? crashTitle(crash) : { title: c.label, where: null };
+}
+
+/** The collector's reason, tidied for reading: no "ERROR:" shout, no doubled full stop. Words kept. */
+export function tidyWhy(why: string): string {
+  let t = why.replace(/\bERROR: ?/g, "").trim();
+  while (t.endsWith("..")) t = t.slice(0, -1);
+  return t;
+}
+
+export type WatchTone = "ok" | "needs" | "unknown";
+/** The one answer at the top of the region: is anything open today? Counted from the SAME cut the lists
+ *  are drawn from (`exposureCut`), so the number is the rows below it. An unread measure is never "nothing". */
+export function watchVerdict(v: { alerts: number; digest: number; marked: number; accepted: number; notMeasured: number; stale: boolean }): { tone: WatchTone; head: string } {
+  if (v.alerts > 0) return { tone: "needs", head: v.alerts === 1 ? "1 open finding to look at" : `${v.alerts} open findings to look at` };
+  if (v.notMeasured > 0) return { tone: "unknown", head: "Could not read everything today" };
+  if (v.stale) return { tone: "unknown", head: "No fresh reading — the daily watch has not run" };
+  return { tone: "ok", head: "Nothing open — all handled" };
+}
+/** The line under the verdict: how old, and where every other row went. Zero groups are left out. */
+export function watchTally(v: { readAt: string | null; now: number; marked: number; accepted: number; digest: number }): string {
+  const parts: string[] = [];
+  if (v.readAt) { const a = ageWords(v.readAt, v.now); parts.push(a ? `read ${a === "today" ? hoursAgo(v.readAt, v.now) : a}` : ""); }
+  if (v.marked) parts.push(`${v.marked} fixed, listed below`);
+  if (v.accepted) parts.push(`${v.accepted} accepted`);
+  if (v.digest) parts.push(`${v.digest} to consider`);
+  return parts.filter(Boolean).join(" · ");
+}
+function hoursAgo(iso: string, now: number): string {
+  const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
+  return m < 90 ? `${Math.max(1, m)} min ago` : `${Math.round(m / 60)} h ago`;
+}
+/** A measure the reading could not take, as one sentence. D3 is the Connect IQ crash list. */
+export function notMeasuredLine(m: { measure: string; why: string }): string {
+  const what = m.measure === "D3" ? "The crash list (Connect IQ ERA) could not be read" : `${m.measure} could not be read`;
+  return `${what}: ${tidyWhy(m.why)}`;
+}
+export const NOT_MEASURED_NEXT = "Tap re-check to read it again; approve the vault card on the phone if one appears.";
+
+/** "Marked fixed (n)": crash groups somebody marked fixed — from today's reading (old installs still report
+ *  them) and from earlier readings (not in today's). One head, one explanation of the one verb. */
+export const markedHead = (n: number): string => `Marked fixed (${n})`;
+export const MARKED_WORDS =
+  "A fix shipped for each of these. Reports from versions older than the fix are not counted; " +
+  "a crash on the fixed version or newer comes back as an open finding by itself.";
+export const REOPEN_LABEL = "reopen";
+export const REOPEN_WORDS = "Reopen forgets the fixed mark, so the crash counts as open again.";
+export const MARKED_STALE_WORDS = "not in today's crash list";
+export const MARKED_UNCHECKED_WORDS = "not checked today — the crash list could not be read";
+/** A fixed mark's short line: "fixed in 1.0.9 · 27 Oct" (the commit is in the note and the triage file). The note goes on its own quiet line. */
+export function markShort(t: ExposureTriage): string {
+  const d = Date.parse(t.at);
+  const day = Number.isFinite(d) ? `${new Date(d).getUTCDate()} ${MONTHS[new Date(d).getUTCMonth()]}` : "";
+  return [t.state === "fixed" ? `fixed${t.fixedIn ? ` in ${t.fixedIn}` : ""}` : t.state, day].filter(Boolean).join(" · ");
+}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

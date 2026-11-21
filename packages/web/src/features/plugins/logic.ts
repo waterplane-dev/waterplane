@@ -363,10 +363,17 @@ export interface SelfView {
   to: string | null;
   /** The command: to copy instead of a button, or beside an npm/checkout button to run by hand. */
   command: string | null;
+  /** `command` as one line a fresh shell at the host root can run: a checkout's `cd` first. */
+  shellLine: string | null;
   /** Why there is no button. */
   why: string | null;
   /** What the npm/checkout button skips that the install.sh updater does. */
   caveat: string | null;
+}
+
+/** A POSIX single-quoted word (`'` inside becomes `'\\''`); bare when it is only safe characters. */
+export function shQuote(s: string): string {
+  return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 export function selfView(self: SelfUpdateInfo, status: UpdatesStatus | null): SelfView {
@@ -380,6 +387,7 @@ export function selfView(self: SelfUpdateInfo, status: UpdatesStatus | null): Se
     showRollback: self.canApply && !!self.rollbackTo,
     to,
     command: due ? self.command ?? null : null,
+    shellLine: due && self.command ? (self.dir ? `cd ${shQuote(self.dir)} && ${self.command}` : self.command) : null,
     why: !self.canApply && due ? self.why ?? null : null,
     caveat: self.canApply && due ? self.caveat ?? null : null,
   };

@@ -36,7 +36,7 @@ import { SendSheet } from "../../SendSheet";
 import type { RenderRetime } from "../../RetimeBar";
 import { BL_OFFLINE, retimeQueuedToast, retimeToast } from "../../backlogFilter";
 import { rememberSend, type SendMemory } from "../../sendMemory";
-import { clearDeadUpload, removePadNotes, seedSheetDraft, newAckId } from "../../outbox";
+import { clearDeadUpload, removePadNotes, rescueFiledToast, seedSheetDraftDetailed, newAckId } from "../../outbox";
 import { keptBytes, dropKept } from "../../attachments";
 import { idbGet, idbSet } from "../../idb";
 import { effectiveMaxWidth, scaleForUpload } from "../../uploadScale";
@@ -321,8 +321,8 @@ export function useSend(deps: SendDeps) {
     // pad note first (`local/no-draft-clobber`) — and where the pad REFUSED it,
     // the draft is left exactly where it is and the sheet opens on it. A rescue
     // that could not happen must not also be a delete.
-    const kept = seedSheetDraft(SEND_DRAFT, (seed.prompts?.length ? seed.prompts : [""]).join("\f"), seed.cwdHint);
-    if (kept === "kept") showToast(DRAFT_KEPT_TOAST);
+    const { result: kept, filed } = seedSheetDraftDetailed(SEND_DRAFT, (seed.prompts?.length ? seed.prompts : [""]).join("\f"), seed.cwdHint);
+    if (kept === "kept") showToast(filed ? rescueFiledToast(filed.cwd, filed.offline) : DRAFT_KEPT_TOAST);
     else if (kept === "refused") showToast(DRAFT_REFUSED_TOAST);
     sendResumeRef.current = null;
     // On a refusal the slot still holds the OLD draft and the sheet will open on

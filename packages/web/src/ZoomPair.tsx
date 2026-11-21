@@ -15,13 +15,15 @@ import { Button } from "./kit/Button";
  * row, and the wrapper's placement (anchored right, fixed, floating) is each
  * caller's own layout question.
  */
-export function ZoomPair({ smaller, bigger, onZoom, what = "", subject = "the text", smallerHint = "", biggerHint = "", endClassName = "row-sub", iconSize = 14 }: {
+export function ZoomPair({ smaller, bigger, onZoom, what = "", noun = "", subject = "the text", smallerHint = "", biggerHint = "", endClassName = "row-sub", iconSize = 14 }: {
   /** The next step each way, or null at that end of the ladder. */
   smaller: number | null;
   bigger: number | null;
   onZoom(v: number): void;
   /** Qualifier in the labels: "console" → "smaller console text". */
   what?: string;
+  /** Replaces "text" in the labels outright, for a pair that zooms something else ("pictures"). */
+  noun?: string;
   /** Who the end word is about: "the console is as small as it goes". */
   subject?: string;
   /** Tail of each button's title, after "smaller text". */
@@ -32,7 +34,7 @@ export function ZoomPair({ smaller, bigger, onZoom, what = "", subject = "the te
   iconSize?: number;
 }) {
   const end = smaller == null ? "smallest" : bigger == null ? "biggest" : "";
-  const txt = what ? `${what} text` : "text";
+  const txt = noun || (what ? `${what} text` : "text");
   return (
     <>
       {smaller != null && (

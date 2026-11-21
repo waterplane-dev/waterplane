@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, CircleCheck, CloudUpload, Globe, RefreshCcw, Router } from "lucide-react";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { restartLine, restartView, subscribeRestart } from "./link/hostRestart";
 import {
   PULSE_CAP, fmtRate, fmtTotal, lastSyncEver, summarize, useLink, whenText,
@@ -8,6 +8,7 @@ import {
 import { dur } from "./format";
 import { useHostRoute } from "./hostRoute";
 import { plainHostRoute } from "./hostUrl";
+import { stripShown, troubleReasons } from "./link/pulseTrouble";
 
 /**
  * The permanent connection strip — a dot, a latency graph and a number, pinned
@@ -288,7 +289,11 @@ function RouteChip() {
  * reason it wakes up.
  */
 export function NetPulseBar() {
-  const enabled = useLink((s) => s.pulse.enabled);
+  const on = useLink((s) => s.pulse.enabled);
+  const when = useLink((s) => s.pulse.when);
+  // "Only when something is wrong" needs the live readings to decide, so that
+  // mode subscribes to the ticking snapshot; "always" stays event-driven.
+  const enabled = useTroubleGate(on && when === "trouble") || (on && when === "always");
 
   // The strip's own height is published as a CSS variable rather than measured
   // by every screen: `.screen` and `.sheet` add it to their top padding, so one
@@ -300,6 +305,25 @@ export function NetPulseBar() {
   }, [enabled]);
 
   return enabled ? <Strip /> : null;
+}
+
+/** True while trouble mode should draw the strip (`link/pulseTrouble.ts`): a
+ *  wrong reading now, or one within the hold. Always false when not `active`. */
+function useTroubleGate(active: boolean): boolean {
+  const s = useLink<LinkSnapshot | null>((x) => (active ? x : null), active);
+  const restart = useSyncExternalStore(subscribeRestart, restartView);
+  const lastAt = useRef<number | null>(null);
+  if (!active || !s) return false;
+  const now = Date.now();
+  const reasons = troubleReasons({
+    status: s.pulse.status,
+    samples: s.pulse.samples,
+    insecure: plainHostRoute(),
+    stuckSends: s.stuckSends,
+    restarting: restartLine(restart, now) != null,
+  });
+  if (reasons.length) lastAt.current = now;
+  return stripShown("trouble", reasons, lastAt.current, now);
 }
 
 function Strip() {

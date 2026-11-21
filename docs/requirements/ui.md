@@ -408,8 +408,8 @@ The sessions list has separate expand-all and collapse-all buttons for the repo 
 - asked: 2026-10-10
 
 ### R-ui-094 · shipped
-The sessions list has an always-visible quick filter that narrows the rows to those whose shown text (title, prompts, repo, branch) contains every typed word, saying "n of N"; the full transcript search sits at the end of the same line, is the launcher's only search key, and opens already searching the typed words.
-- asked: 2026-10-10; 2026-11-20: the head row's separate search key folded into the filter line
+The sessions list has an always-visible quick filter that narrows the rows to those whose shown text (title, prompts, repo, branch) contains every typed word, saying "n of N"; the full transcript search sits at the end of the same line, is the launcher's only search key (no separate Search icon), and opens already searching the typed words.
+- asked: 2026-10-10; 2026-11-20: the head row's separate search key folded into the filter line, 2026-11-20
 
 ### R-ui-095 · shipped
 With a picture open on the annotator beside the session, Send in the session's prompt box asks whether the picture goes too; yes sends it with the message (its marks included), no sends the words alone and leaves the picture open.
@@ -543,9 +543,10 @@ A plugin panel pinned to the header, such as GitHub Copilot, shows as one icon t
 - asked: 2026-10-23, 2026-10-23
 - shipped: 080e4276
 
-### R-ui-123 · requested
+### R-ui-123 · shipped
 Every user-visible reference to the old name "USMC" is replaced with "waterplane".
 - asked: 2026-10-24
+- shipped: 1d7d1e625, cf9347ff0, 0b06e8b76
 
 ### R-ui-124 · shipped
 Text in a marked strip shows on one line and is cut with an ellipsis when it does not fit.
@@ -553,8 +554,8 @@ Text in a marked strip shows on one line and is cut with an ellipsis when it doe
 - shipped: 34e7cef4, 724f6908
 
 ### R-ui-125 · shipped
-Filters, search, bulk buttons and a marked element sit at the top of a list, above its rows, never at the end.
-- asked: 2026-10-25, 2026-10-25
+Filters, search, bulk buttons, add buttons and a marked element sit at the top of a list, above its rows, never after the last row of a long list; the one exception is a fixed, always-visible footer.
+- asked: 2026-10-25, 2026-10-25, 2026-11-15
 - shipped: 9896a16e, 723c6cad
 
 ### R-ui-126 · shipped
@@ -633,3 +634,22 @@ When Ultracode is on, an icon on the model wheel button shows it is active.
 With the on-screen keyboard up, every bar between the terminal and the prompt box is drawn at its full height or not at all (never squeezed or cut), none overlaps another, the prompt box's key row stays wholly above the keyboard, and the bars come back when the keyboard goes down.
 - asked: 2026-11-18
 - shipped: aed7a3436
+### R-ui-142 · shipped
+Repo colour is a register card in both light and dark mode: a plain neutral card with a thick, clean coloured left edge (no notches at corners or dividers), rounded corners and plain uncoloured repo names, on the main screen, session tabs and open-tabs list.
+- asked: 2026-11-18, 2026-11-19
+- shipped: 742b52a6f, 674837d14, 1d787ca7c, 57467fb49, e71df6bd3, 410bb4512, d61a9d7f1
+
+### R-ui-143 · shipped
+The Capture feature is removed from the app, including its button.
+- asked: 2026-11-19
+- shipped: 8449f7cf1
+
+### R-ui-144 · requested
+Inbox items offer action buttons, such as sending the item to an agent.
+- asked: 2026-11-20
+
+### R-ui-145 · shipped
+The confirmation dialog appears above the open-tabs list, never beneath it.
+- asked: 2026-11-20
+- shipped: 971a94708
+

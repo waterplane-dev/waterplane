@@ -252,9 +252,10 @@ The repo-health reading checks a Dart/Flutter project like any other: which Dart
 - asked: 2026-11-09 (health-metrics plan, package P5)
 - shipped: e1811395
 
-### R-metrics-052 · requested
+### R-metrics-052 · shipped
 The repo-health readings include git-only measures that work in any language: how many commits fix a change from the last week, how much is deleted per line added (moves not counted) and how many commits delete more than they add, how many source commits also change a test, p95 commit size, the files where churn and size multiply, tracked binaries and build output, and docs naming paths that no longer exist. A reading that cannot be taken (shallow clone, no tests recognised) says why instead of showing zero.
 - asked: 2026-11-09 (health-metrics plan, package P3)
+- shipped: a8e8088fb
 
 ### R-metrics-053 · shipped
 The health index never reads 100 over code it could not read: beside the score it says how many of the dimensions that apply to the repo were measured and names each unmeasured one with its reason (such as "untested modules: no rule for how a Dart test names a module (391 of 537 source files)"); an unmeasured dimension counts for nothing, so the score is at most 100 × measured ÷ applicable. A repo can mark one of its own health.json readings as a gate (`"gate": { "fails": "below" | "above", "at": n }`); a failing gate holds the score under 50 and is named on the phone and in VS Code, and a gate with no reading counts as unmeasured, never as passed, while a passing gate never raises the cap; a reading the repo replaced with its own whole-repo command counts as measured.
@@ -262,9 +263,10 @@ The health index never reads 100 over code it could not read: beside the score i
 - shipped: healthindex/coverage.ts (shared), tools/repohealth/reach.mjs + own.mjs gate, HealthIndexChart.tsx (phone and VS Code)
 
 
-### R-metrics-054 · requested
+### R-metrics-054 · shipped
 The repo-health reading also shows what the repo's own tools already say, taken from the newest commit only: vulnerable dependencies by severity with the package and version (osv-scanner), the analyzer findings per 1,000 lines of each language present (eslint, the TypeScript compiler, ruff, mypy, the Dart or Flutter analyzer, shellcheck, detekt, ktlint), which strictness settings the configs state, and the coverage files already on disk that are newer than the last commit. A tool that is not installed shows "X is not installed", never zero; no tool is installed, no test is run and nothing is written into the repo.
 - asked: 2026-11-09 (health-metrics plan, package P6)
+- shipped: cb471274f
 
 ### R-metrics-055 · shipped
 The health index scores six more readings the engine already takes, each against a good line calibrated on the owner's repos: duplicate code (near-duplicate block pairs per 1,000 lines read, good under 0.25), dead exports (exports no other file uses per 1,000 lines, under 1.5), import cycles (share of import-graph files in a cycle, under 1%), files that change together (median other files a change to a busy file touches, under 5), fixes after a change (share of recent source commits fixing what a commit in the week before changed, under 10%) and tests changed with code (share of recent source commits that also change a test, at least 50%). Each has a plain alert sentence; a reading the engine could not take is unknown with its reason and counts for nothing, never 100. When the weekly move was caused by a repo gate starting to fail (or passing again) or by the share of measured dimensions, the move sentence names that cause.
@@ -341,12 +343,13 @@ Start context is grouped by whose each part is, so two people on one repo can se
 - asked: 2026-11-14 (owner, setup-panel P2)
 - shipped: host agentclass.ts (`startPartsOf`: file type, `mcp__` names, `builtInTypes`), agentreadings.ts (store VERSION 5: rescan); shared wire/agentreadings.ts (`StartPart` open, `START_GROUPS`, `START_PARTS` groups, `startGroupOf`, `partsByGroup`), agentseries/markers.ts (`modelCli`, `MODEL_CLI_TEXT`); web AgentReadingsRegion.tsx, agentReadingsWords.ts (`startPartGroups`); token-stats AgentSeriesCard.tsx, agentSeriesPlot.ts (`groupedPartOrder`, grouped `partTwinWords`, `modelCli` row); tests packages/shared/test/agentseries.test.mjs, packages/host/test/agentreadings.test.mjs, packages/web/src/agentReadingsWords.test.mjs, packages/extensions/token-stats/web/agentSeriesPlot.test.mjs
 
-### R-metrics-069 · requested
+### R-metrics-069 · shipped
 Every reading that comes from this desktop rather than from git (the agent readings / setup panel: conversation logs, local settings, memory, model and CLI; probe results; an imported colleague's block; a repo's own reading marked `"backfill": false`) says so plainly, once per card in the same words, in contrast to the health score and waterplane's readings, which are built only from checked-in git data and read the same on every desktop.
 - asked: 2026-11-14 (owner)
 - note: partly shipped 2026-11-14 (P2, P3) for the agent readings: one sentence, shared `agentSourceText()`, said ONCE for the whole Agent readings region as the caption under its headline (P3: no longer repeated visibly on every card, which said one fact eight times) and in every card's `?`, and once on the token-stats Agent readings over time card; P5 (2026-11-14): an imported setup block names whose desktop it came from and its days in shared `shareSourceText(name, days)`, once per imported block on the Compare setups card (R-metrics-073)
 - amended: 2026-11-14 — a repo's own reading marked `"backfill": false` carries that on the wire (`RepoHealthOwnSeries.backfill`) and its tile's means line says, once, in shared `ownThisDesktopText()`, that it reads this desktop, not the commit, and is not in the health score; no target counts for it (R-metrics-066). Tests tools/repohealth-own.test.mjs, packages/shared/test/healthown.test.mjs, packages/web/src/repoHealthWords.test.mjs
 - amended: 2026-11-14 (P7) — probe results say their source: the Lookup probe card says shared `probeSourceText()` once (and in its `?`), each result names the desktop it ran on with `probeFromText`; an imported setup block names whose desktop it came from (`shareSourceText`, P5). The agent readings, probe results and imported blocks now all say it.
+- shipped: 2b44570e3, eb4eccf35, da23be2fe, 1ec26dc6f
 
 ### R-metrics-070 · shipped
 The Agent readings region opens on a headline: what the setup costs a median session — the start context (what the first request carries before anyone types) times the session's requests, priced at the model's cache-read rate at list price, in dollars with the tokens beside it, the median of that per-session product over the last 14 days' fresh interactive sessions (at least 10) — with its split by whose it is (the repo's / yours / the CLI's / not split, as shares of the measured part characters, never a dollar figure per group), what it is made of, and that it errs low (the first cache write and rebuilds after a pause are left out). A session on a model with no list price stays in the tokens and out of the dollars; too few priced ⇒ tokens only, said so. Beside it the last probe ("none run yet" until the probe ships) and one pattern sentence around the newest change that has a before/after on two or more readings (start context, looks before the first edit, requests, skill loads; one model at a time, the before/after's own band): none outside ⇒ "no detectable change", one ⇒ it and the rest within normal variation, two or more ⇒ each with its direction and, where the directions fit a known shape, the pattern's name (e.g. start down with looks or requests up: "the pattern of a trim that removed something agents used"); it says how many other changes fall in the same days, which a before/after cannot tell apart. Neutral words only, never better or worse; no 0–100 score.
@@ -463,3 +466,8 @@ A count of repos on a rule opens exactly those repos, and a repo there opens its
 The main menu has a "setup check" line that needs no repo and carries no count; it opens all repos with two or more primary repos, else that repo, else this machine.
 - asked: 2026-11-16 (owner, ALL-REPOS.md §3.5 and decision 2)
 - shipped: tests: packages/web/src/features/setupCheck/logic.test.mjs, scripts/ui/journey-back-lands.mjs
+### R-metrics-092 · shipped
+The release installs tile counts only real release installs and leaves out each asset's self-check download.
+- asked: 2026-11-16
+- shipped: ab34ee29c
+

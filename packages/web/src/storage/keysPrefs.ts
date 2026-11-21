@@ -162,6 +162,8 @@ export const LS_PREFS = {
   netSync: lsKey("netsync"),
   /** The permanent connection strip, on or off. Per device, deliberately. */
   netPulse: lsKey("netPulse"),
+  /** The connection strip drawn always, or only while something is wrong (`link/pulseTrouble.ts`). Per device. */
+  netPulseWhen: lsKey("netPulseWhen"),
   /**
    * The LOCAL RUNNER strip, on or off — `netPulse`'s argument, verbatim.
    *

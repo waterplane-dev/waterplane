@@ -85,3 +85,8 @@ The open tabs list has a waiting chip as a filter showing only tabs waiting for 
 - asked: 2026-11-14
 - shipped: ab8d962c2
 
+### R-tabs-019 · shipped
+The open-tabs list is a right-hand panel on a wide layout like other sheets, not a full-width table; on a phone the tab strip is off by default and the open-tabs button moves to the desktop strip.
+- asked: 2026-11-19, 2026-11-20
+- shipped: 59676d5c0, 6fc6270f4
+

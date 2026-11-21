@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { api } from "./api";
 import { isAudio, isImage, isVideo } from "./docKind";
 import { fmtBytes } from "@waterplane/shared";
 import { Button } from "./kit/Button";
+import { clampMediaZoom } from "./mediaZoom";
 
 /** A changed file the git view draws as before/after instead of a text diff. */
 export function isMediaDiff(path: string): boolean {
@@ -75,10 +76,68 @@ function MediaSide({ repoId, path, side, staged }: { repoId: string; path: strin
   );
 }
 
-/** "Binary files differ", drawn: the file before and after, one above the other. */
-export function GitMediaDiff({ repoId, path, staged }: { repoId: string; path: string; staged: boolean }) {
+/**
+ * "Binary files differ", drawn: the file before and after, one above the other.
+ *
+ * `zoom` is a multiple of the fit width (`mediaZoom.ts`); the header's pair steps
+ * it and a two-finger pinch anywhere on the pair sets it. The page viewport is
+ * not zoomable (index.html `maximum-scale=1`), so the pinch is ours to handle:
+ * `touch-action: pan-x pan-y` keeps one-finger scrolling native and hands the
+ * second finger to these pointer handlers. The point under the fingers stays put.
+ */
+export function GitMediaDiff({ repoId, path, staged, zoom, onZoom }: {
+  repoId: string; path: string; staged: boolean; zoom: number; onZoom(v: number): void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; z: number } | null>(null);
+  const zoomRef = useRef(zoom);
+  // Scroll to apply once the new width has laid out (anchors the pinch midpoint).
+  const anchor = useRef<{ mx: number; my: number; ratio: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    const a = anchor.current;
+    if (el && a) {
+      el.scrollLeft = (el.scrollLeft + a.mx) * a.ratio - a.mx;
+      el.scrollTop = (el.scrollTop + a.my) * a.ratio - a.my;
+    }
+    anchor.current = null;
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  const pair = () => {
+    const p = [...ptrs.current.values()];
+    return p.length >= 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1 : null;
+  };
+  function down(e: React.PointerEvent) {
+    if (e.pointerType !== "touch") return;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const d = pair();
+    if (d) pinch.current = { dist: d, z: zoomRef.current };
+  }
+  function move(e: React.PointerEvent) {
+    if (!ptrs.current.has(e.pointerId)) return;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const d = pair();
+    const el = box.current;
+    if (!d || !pinch.current || !el) return;
+    const next = clampMediaZoom(pinch.current.z * (d / pinch.current.dist));
+    if (Math.abs(next - zoomRef.current) < 0.02) return;
+    const p = [...ptrs.current.values()];
+    const r = el.getBoundingClientRect();
+    anchor.current = { mx: (p[0].x + p[1].x) / 2 - r.left, my: (p[0].y + p[1].y) / 2 - r.top, ratio: next / zoomRef.current };
+    zoomRef.current = next;
+    onZoom(next);
+  }
+  function up(e: React.PointerEvent) {
+    ptrs.current.delete(e.pointerId);
+    if (ptrs.current.size < 2) pinch.current = null;
+  }
+
   return (
-    <div className="gm-diff">
+    <div className="gm-diff" ref={box} style={zoom > 1 ? { ["--gm-zoom" as string]: String(zoom) } : undefined}
+      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       <MediaSide repoId={repoId} path={path} side="old" staged={staged} />
       <MediaSide repoId={repoId} path={path} side="new" staged={staged} />
     </div>

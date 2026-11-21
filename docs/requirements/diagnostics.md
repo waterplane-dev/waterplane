@@ -93,3 +93,23 @@ The VS Code extension and the web app show the same repo-health data for a repo 
 Every CLI signal and screen reader the host depends on has proof on the installed claude version: a repo fixture, a host capture, or a live good from that version, and every kept capture is either a fixture or has a stated reason it was refused.
 - asked: 2026-11-11
 
+### R-diagnostics-020 · shipped
+The background link's ups and downs are logged with timestamps on both sides: the host records every notify-link open, close and alert, and the phone app keeps its own link log and sends it to the host on each reconnect.
+- asked: 2026-11-15, 2026-11-16
+- shipped: 6a0b59e11, a87704502
+
+### R-diagnostics-021 · shipped
+The Setup check keeps a check that the claude CLI is installed and signed in.
+- asked: 2026-11-16
+- shipped: 1986adad9
+
+### R-diagnostics-022 · shipped
+The context-weight finding shows the WeightTwin as its evidence.
+- asked: 2026-11-16
+- shipped: a107bcc47
+
+### R-diagnostics-023 · shipped
+A check that only reads files shows no scope line about backends it does not read.
+- asked: 2026-11-16
+- shipped: 0e0022255
+

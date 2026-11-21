@@ -34,6 +34,11 @@ export function gitParts(r: Pick<RepoTarget, "changedCount" | "ahead" | "behind"
   return parts;
 }
 
+/** The red chip's tooltip: what the count is and what a tap does ("n of N" is the opened view's own line). */
+export function rescuedChipTitle(n: number, repo: string): string {
+  return `${n} ${n === 1 ? "item" : "items"} the app rescued and filed in ${repo}'s backlog — each waits for you to send or discard it. Tap to show only those.`;
+}
+
 /** The repo ⋯'s setup line: the screen's title, then the findings as a worded count. */
 export function setupLine(setup?: { issues: number }): string {
   return setup && setup.issues > 0 ? `Setup & health · ${setup.issues} to fix` : "Setup & health";

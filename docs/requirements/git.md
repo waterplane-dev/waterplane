@@ -179,3 +179,13 @@ The public waterplane repository carries only its main branch.
 - asked: 2026-11-03
 - note: no commit, this is GitHub state; `git ls-remote --heads` showed only main on 2026-11-06.
 
+### R-git-037 · shipped
+A repo's new, to-commit and to-push counts are listed one per line under the New session button, and the outbox count says 'modified files' since it counts files new or changed.
+- asked: 2026-11-19, 2026-11-19
+- shipped: 62821a56f, ae8c632ed
+
+### R-git-038 · shipped
+A leftover worktree's explainer and remove button sit inside its card, and the card's title says Worktree.
+- asked: 2026-11-20, 2026-11-20
+- shipped: 89a397215, 4d26eff94
+

@@ -11,9 +11,10 @@ import { applyKnob, knobAt } from "../annKnobs";
 import { normRect, shapeBBox, hitShapeOn } from "./annGeom";
 import { type AnnCtx, type Shape } from "./annTypes";
 import { placesFor as knobPlacesFor } from "./annDraw";
+import { adoptStrays } from "./annStray";
 
 export function pointerActions(c: AnnCtx) {
-  const { canvasRef, wrapRef, tool, color, factor, setShapes, shapesRef, dragRef, moveMode, setSelected, selectedRef, setTarget, targetRef, setMoveNote, knobsRef, moveRef, cropMode, setPendingCrop, cropDrag, setPendingText, setTextDraft, textInputRef, idRef, setView, viewRef, fitRef, pointers, gesture, redraw, clampToImage } = c;
+  const { canvasRef, wrapRef, tool, color, factor, setShapes, shapesRef, dragRef, moveMode, setSelected, selectedRef, setTarget, targetRef, setMoveNote, knobsRef, moveRef, cropMode, setPendingCrop, cropDrag, setPendingText, setTextDraft, textInputRef, idRef, setView, viewRef, fitRef, pointers, strays, gesture, redraw, clampToImage } = c;
   const hitShape = (s: Shape, x: number, y: number, tol: number) => hitShapeOn(canvasRef.current, s, x, y, tol);
   const placesFor = (canvas: HTMLCanvasElement, s: Shape) => knobPlacesFor(canvas, s, viewRef.current.k || 1);
 
@@ -49,6 +50,21 @@ export function pointerActions(c: AnnCtx) {
     return null;
   }
 
+  /** Two fingers are down: drop any in-progress draw or move and pan/zoom instead. */
+  function beginPinch() {
+    dragRef.current = null;
+    moveRef.current = null;
+    const pts = [...pointers.current.values()];
+    const dist = Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y));
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const local = wrapLocal({ clientX: mid.x, clientY: mid.y });
+    const v = viewRef.current;
+    // content point under the pinch midpoint (transform-origin 0,0)
+    gesture.current = { startDist: dist, startK: v.k, cx: (local.x - v.tx) / v.k, cy: (local.y - v.ty) / v.k };
+    cropDrag.current = null;
+    redraw();
+  }
+
   function onDown(e: React.PointerEvent) {
     e.preventDefault();
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -56,21 +72,10 @@ export function pointerActions(c: AnnCtx) {
     // letterbox beside the image, and a capture on whichever element the finger
     // happened to land on is a different element per gesture.
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (pointers.current.size === 2) {
-      // Begin pinch: drop any in-progress draw or move.
-      dragRef.current = null;
-      moveRef.current = null;
-      const pts = [...pointers.current.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-      const local = wrapLocal({ clientX: mid.x, clientY: mid.y });
-      const v = viewRef.current;
-      // content point under the pinch midpoint (transform-origin 0,0)
-      gesture.current = { startDist: dist, startK: v.k, cx: (local.x - v.tx) / v.k, cy: (local.y - v.ty) / v.k };
-      cropDrag.current = null;
-      redraw();
-      return;
-    }
+    // A finger resting outside the picture (landed first, on a bar) is the other half of a pan.
+    if (e.pointerType === "touch") adoptStrays(wrapRef.current, pointers.current, strays.current);
+    // `>= 2`, not `=== 2`: a third finger must not start a mark under a pinch.
+    if (pointers.current.size >= 2) return beginPinch();
     if (cropMode) {
       const { x, y } = toCanvas(e);
       cropDrag.current = { x0: x, y0: y, x1: x, y1: y };
@@ -155,7 +160,7 @@ export function pointerActions(c: AnnCtx) {
     dragRef.current = { tool, x0: x, y0: y, x1: x, y1: y, color, factor, id: idRef.current++ };
   }
 
-  function onMove(e: React.PointerEvent) {
+  function onMove(e: { pointerId: number; clientX: number; clientY: number }) {
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (gesture.current && pointers.current.size >= 2) {
       const pts = [...pointers.current.values()];
@@ -200,7 +205,7 @@ export function pointerActions(c: AnnCtx) {
     redraw();
   }
 
-  function onUp(e: React.PointerEvent) {
+  function onUp(e: { pointerId: number; clientX: number; clientY: number }) {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) gesture.current = null;
     if (pointers.current.size > 0) return; // still gesturing
@@ -270,5 +275,5 @@ export function pointerActions(c: AnnCtx) {
     }
   }
 
-  return { onDown, onMove, onUp };
+  return { onDown, onMove, onUp, beginPinch };
 }

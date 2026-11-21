@@ -59,7 +59,7 @@ export function selfBase(deps: SelfDeps = realSelfDeps): SelfUpdateInfo {
     case "npm":
       return { mode: "npm", current, canApply: true, command: `npm i -g ${BRAND.slug}@latest`, caveat: "npm checks the package's integrity, not the publisher's signature as the install.sh updater does, and there is no roll back: going back means installing the older version the same way." };
     case "checkout":
-      return { mode: "checkout", current, canApply: true, command: checkoutCommand(deps.windowsBuilt?.(mode.root) ?? false), caveat: "This updates the git checkout to its branch's newest commits: no signature check and no roll back. It refuses when the checkout has changes or commits of its own." };
+      return { mode: "checkout", current, canApply: true, command: checkoutCommand(deps.windowsBuilt?.(mode.root) ?? false), dir: mode.root, caveat: "This updates the git checkout to its branch's newest commits: no signature check and no roll back. It refuses when the checkout has changes or commits of its own." };
     default:
       return { mode: "unknown", current, canApply: false, why: "This install is not one the updater recognises, so it cannot update it. Reinstall from the release to get updates." };
   }

@@ -16,21 +16,8 @@
 
 import { SLICE_MIN, screenEcho, squash, type EchoRule } from "./echo.js";
 
-/**
- * The composer's own full-width rules, above and below its input row.
- *
- * Shared with `prompt.ts` — the CONSTANT, deliberately not the semantics. That
- * file asks "has this dialog been ANSWERED", so its notion of a composer row is
- * and should be loose; this file asks "is this the box the user is typing
- * into", where the same looseness is the bug (see `COMPOSER_CURSOR_RE`).
- *
- * The opening rule may wear a label at its right end: `──────── ultracode ─`,
- * for as long as ultracode is on. Refusing that shape placed no box at all, so
- * every read of the composer answered "no opinion" — and a dim proposal equal
- * to the words being sent read as "already typed": nothing typed, five Returns
- * into an empty box, `unsubmitted` (live, 2026-11-06).
- */
-export const COMPOSER_RULE_RE = /^[\u2500\u2501\u2504\u2505\u2508\u2509]{20,}(?:\s+\S(?:.*\S)?\s+[\u2500\u2501\u2504\u2505\u2508\u2509]{1,4})?$/;
+import { COMPOSER_RULE_RE, COMPOSER_SCROLLED_RULE_RE } from "./composerrules.js";
+export { COMPOSER_RULE_RE };
 
 /**
  * The composer's input row: `❯` and then whitespace — NBSP included,
@@ -85,7 +72,7 @@ export const FALLBACK_ROWS = 40;
 
 /** One drawn composer frame: where its input row is, and what it is holding. */
 export interface ComposerSpan {
-  /** Index of the `❯` input row within the rows it was found in. */
+  /** Index of the `❯` input row (a scrolled box: its top drawn row) in the rows given. */
   readonly at: number;
   /** The rows the box is drawing, input row first, borders stripped. */
   readonly rows: readonly string[];
@@ -149,15 +136,19 @@ export function composerSpans(
   rule: RegExp = COMPOSER_RULE_RE,
 ): ComposerSpan[] {
   const out: ComposerSpan[] = [];
+  const scrolledRule = rule === COMPOSER_RULE_RE ? COMPOSER_SCROLLED_RULE_RE : null; // claude's only
   for (let i = 0; i < rawRows.length; i++) {
     const head = bareRow(rawRows[i]);
-    if (!cursor.test(head)) continue;
     let above = i - 1;
     while (above >= 0 && !rawRows[above].trim()) above--;
+    // Under an `↑ N more` rule the first row is the top; believed only if a rule closes it.
+    const scrolled = !!head && !cursor.test(head) && !isRuleRow(rawRows[i], rule) && above >= 0 && !!scrolledRule?.test(rawRows[above].trim());
+    if (!scrolled && !cursor.test(head)) continue;
     if (above < 0 || !isRuleRow(rawRows[above], rule)) continue;
     // The cursor itself is not content: an EMPTY box must read as empty, which
     // is how `newestOnly` below tells a live frame from a stale one.
-    const rows: string[] = [head.replace(cursor, "")];
+    const rows: string[] = [scrolled ? head : head.replace(cursor, "")];
+    let closed = false;
     for (let j = i + 1; j < rawRows.length; j++) {
       const row = rawRows[j];
       if (!row.trim()) {
@@ -170,12 +161,14 @@ export function composerSpans(
         const close = closingRuleAfter(rawRows, j, cursor, rule);
         if (close < 0) break;
         for (; j < close; j++) rows.push(bareRow(rawRows[j]));
+        closed = true;
         break;
       }
-      if (isRuleRow(row, rule)) break;                     // the rule that closes it
+      if (isRuleRow(row, rule)) { closed = true; break; } // the rule that closes it
       if (cursor.test(bareRow(row))) break;                // the next frame, not this one
       rows.push(bareRow(row));
     }
+    if (scrolled && !closed) continue;
     out.push({ at: i, rows });
   }
   return out;

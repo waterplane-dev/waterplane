@@ -22,8 +22,8 @@ After restart or an APK update, app restores the user to the exact location they
 - shipped: b2d01bc
 
 ### R-navigation-006 · shipped
-Back navigation returns to the previous screen, not the main view — the session header's back arrow included (a session started from a launcher sheet returns to that sheet), and a sheet returned to shows the cut it had (the backlog's "the 10 waiting").
-- asked: 2026-09-28, 2026-10-28
+Back navigation returns to the previous screen, not the main view — the session header's back arrow included (a session started from a launcher sheet returns to that sheet), and a sheet returned to shows the cut it had (the backlog's "the 10 waiting"). Back from a finding's session returns to the list of findings.
+- asked: 2026-09-28, 2026-10-28, 2026-11-16, 2026-11-21
 - shipped: 3d62f7f, 46310e4a
 
 ### R-navigation-007 · shipped
@@ -97,4 +97,9 @@ Screens can tell a real close apart from being covered by another screen, so onL
 A repo can be shown under a name a person gives it (the product is waterplane, the folder keeps an older name), set from that repo's own "⋯" menu, kept on the desktop so every device agrees, and absent meaning the folder name. The name changes only what is SHOWN: tabs and the tab list, launcher groups and rows, "Start …", repo pickers, sheet headings, search results, notifications and the window title. Every id, path, API parameter, vault repo entry, stored key, repo colour and group/fold key stays on the folder name, and a search finds the repo by either name. Nothing sets it by itself: a desktop starts with no names, and setting `usmc` to `waterplane` is one person's tap on "shown as…".
 - asked: 2026-11-04
 - shipped: ad27d6b4
+
+### R-navigation-021 · shipped
+No screen or sheet shows a Home button; the back chevron is the only way back to the previous screen, and it is icon-only.
+- asked: 2026-11-18, 2026-11-18, 2026-11-19
+- shipped: a2d286174
 

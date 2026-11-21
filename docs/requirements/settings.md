@@ -66,3 +66,12 @@ The app has a link to the auto setup management screen.
 - asked: 2026-10-31
 - shipped: ca20fc62
 
+### R-settings-014 · requested
+The second status row reads traffic light, CPU graph, GPU, free memory, running agents; phone and desktop each have their own default status layout the user can change, with the third row off on the phone by default.
+- asked: 2026-11-20
+
+### R-settings-015 · shipped
+Each top screen (Connection, This desktop, open tabs) has a gear that opens Settings cut to its lines, to show or hide its rows.
+- asked: 2026-11-20
+- shipped: b3bb290af
+

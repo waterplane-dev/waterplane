@@ -5,6 +5,27 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.34
+
+### New
+
+- **A restart no longer reports success for someone else's host.** If another install is answering on the port, the Windows launcher now refuses to restart, names that host's folder and gives the steps to stop it. The updates screen shows the command to run by hand and has an "in shell" button that drops it into the updates shell's prompt box.
+- **Crash reports hand off to the agent in one tap.** "Investigate & mark" asks the agent to check whether a newer commit already fixes the crash, make the smallest fix if not, and mark the result. With two or more open crash groups, one button covers them all.
+- **The watch screen opens with one answer.** It reads "Nothing open — all handled", "1 open finding to look at" or "not fully read today", with its age. Crash groups are titled by app and error, and every fixed mark sits under one "Marked fixed" heading.
+- **Words rescued from a lost draft go to the repo's backlog.** They are held and marked there, with a red "N rescued" chip on the repo row, instead of landing on the pad.
+- **The connection strip shows a third setting when something is wrong.** It appears for a down link, slow or lost pings, an unprotected link, a stuck send or a restarting desktop, and stays 30 seconds so it doesn't flicker.
+- **A gear on Connection, This desktop and the open-tabs list opens Settings at the top lines.** The main menu also reaches all three.
+
+### Fixed
+
+- **Peer reports no longer come back unconfirmed.** Long prompts that scroll past the first line of the composer are now recognised as delivered.
+- **A session started from the Setup check returns to it on Back.**
+- **Annotator words no longer land on the pad after a New session.** If the session opens while the picture uploads, they are appended to that session.
+- **Two-finger pan in the annotator no longer draws a box** when one finger is off the picture.
+- **"All done" on the Needs-you heading clears exactly the rows shown**, instead of leaving dozens of single taps.
+- **Watch rows read cleanly.** Crash rows no longer repeat the title, finding actions sit in one row, and "Clear mark" is now "reopen".
+- **Worktree cards say "Worktree"**, with "no branch" for a detached one.
+
 ## 0.1.33
 
 No user-facing changes in this release.

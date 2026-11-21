@@ -882,7 +882,7 @@ export function eraFindings(status, stdout, stderr) {
     const b = bucket(e.count);
     stores[`D3.${e.key}.count`] = String(e.count ?? "");
     const f = finding({ measure: "D3", subject: `ciq:${e.key}#${b}+`, level: "alert", severity: "high", sources: ["era"],
-      text: `${e.app} ${e.channel} v${e.version}: ${e.error}, ${b}+ times (top ${e.top}); the count is in the row` });
+      text: `${e.app} ${e.channel} v${e.version}: ${e.error}, ${b}+ times (top ${e.top})` });
     // key = app/channel/type/version/location (location may hold "/"): the group is the key without its version.
     const kp = String(e.key).split("/");
     // Fewer than 5 parts: no group, so a mark falls back to the full key (version + bucket) and ends at the next growth bucket (a degrade, not an error).

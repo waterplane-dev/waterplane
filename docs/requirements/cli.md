@@ -66,3 +66,8 @@ When a backend CLI (claude or another coding backend) is not installed or not on
 `setup-check --all` prints each repeated finding once with its repos, then the repos with nothing open and the repos not checked.
 - asked: 2026-11-16 (owner, ALL-REPOS.md decision 3)
 - shipped: setup check A2; tests: packages/host/test/setupcheckcli.test.mjs
+### R-cli-015 · shipped
+A destructive command (regenerating the update-signature vector) refuses to run without an explicit --force.
+- asked: 2026-11-20
+- shipped: f31fa953b
+

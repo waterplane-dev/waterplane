@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
-  openCountByRepo, queuedChipCut, queuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuAim, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
+  openCountByRepo, queuedChipCut, queuedKeysByRepo, rescuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuAim, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
   starredSpared, closeMarked, isCloseSpared, markedWords, sessionRepoShownIn, repoShownByKey,
 } from "./model.ts";
 
@@ -254,4 +254,32 @@ test("a shown name is words only: the group key, the colour key and the lookup s
   assert.equal(sessionRowTitleIn(named, s), "waterplane");
   // The groups are still made by the folder name.
   assert.deepEqual(repoGroupsOf([s], named, false, (x) => sessionRepoNameIn(named, x)).map((g) => g.repoName).sort(), ["ciqkit", "myapp"]);
+});
+
+test("the red rescued chip counts its own rows once: marked, open, not archived, not failed — and the waiting chip does not count them again", () => {
+  const rescued = { why: "Typed for a session that never opened.", at: 1 };
+  const work = (id, o = {}) => ({ id, cwd: "/r/a", state: "queued", trigger: { kind: "idle" }, payload: { kind: "prompt" }, target: { kind: "repo" }, ...o });
+  const intents = [
+    work("r1", { rescued }),
+    work("r2", { rescued, state: "blocked" }),
+    work("r3", { rescued, state: "running" }),   // sent: out of the count
+    work("r4", { rescued, state: "done" }),
+    work("r5", { rescued, archived: true }),     // discarded / set aside
+    work("p1"),                                  // an ordinary waiting row
+  ];
+  const outbox = [
+    { ackId: "q1", mode: "backlog", cwd: "/r/a", status: "queued", rescued },   // offline rescue, still on the phone
+    { ackId: "q2", mode: "backlog", cwd: "/r/a", status: "failed", rescued },
+    { ackId: "q3", mode: "backlog", cwd: "/r/a", status: "queued" },
+  ];
+  const name = (cwd) => cwd.split("/").pop();
+  const res = rescuedKeysByRepo(outbox, intents, new Set(), name).get("a");
+  assert.deepEqual(res, ["queue:q1", "intent:r1", "intent:r2"]);
+  const waiting = queuedKeysByRepo(outbox, intents, new Set(), name).get("a");
+  assert.deepEqual(waiting, ["queue:q3", "intent:p1"], "a rescued row is on ONE chip");
+  assert.deepEqual(rescuedKeysByRepo(outbox, intents, new Set(["intent:r1"]), name).get("a"), ["queue:q1", "intent:r2"], "a row marked dealt with leaves the count");
+  // one function feeds the number and the cut: all-intents opens exactly those rows in the Backlog
+  const only = rescuedKeysByRepo([], intents, new Set(), name).get("a");
+  assert.deepEqual(queuedChipCut(only, intents), { kind: "backlog", cwd: "/r/a", ids: ["r1", "r2"] });
+  assert.equal(queuedChipCut(res, intents).kind, "activity", "a phone-side row is not on the Backlog yet, so the cut is Activity");
 });

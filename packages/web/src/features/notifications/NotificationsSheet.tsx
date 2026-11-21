@@ -9,12 +9,13 @@ import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { ToastLog, useToastLog } from "../../ToastLog";
+import { ConfirmButton } from "../../Confirm";
 import { phoneHalfFirst } from "../../toast";
 import { ago } from "../../format";
 import { viewerHandles } from "../../docKind";
 import { levelOf } from "@waterplane/shared";
 import { notifCut, notifFocus, notifs as notifStore } from "./store";
-import { clearNotifFocus, dismissInfoNote, handleNotif, infoNoteSeen, openNotif, openToastGo, showAllNotifs } from "./actions";
+import { clearNotifFocus, dismissInfoNote, handleNotif, handleNotifs, infoNoteSeen, openNotif, openToastGo, showAllNotifs } from "./actions";
 import { feedCut, feedCutWords, feedSections, handledWords, INFO_NOTE_TEXT } from "./logic";
 import { Button, RowSub } from "../../kit";
 import type { NotificationItem } from "@waterplane/shared";
@@ -147,7 +148,15 @@ export function NotificationsSheet() {
           return (
             <>
               {secs.needs.length > 0 && (
-                <div className="notif-sec"><span className="notif-sec-title"><CircleAlert size={13} /> Needs you · {secs.needs.length}</span></div>
+                <div className="notif-sec">
+                  <span className="notif-sec-title"><CircleAlert size={13} /> Needs you · {secs.needs.length}</span>
+                  {/* `done` on every row under this heading — exactly those, so a
+                      sheet cut to "39 of 104" marks the 39 and nothing hidden. */}
+                  {secs.needs.length > 1 && (
+                    <ConfirmButton confirm={`mark all ${secs.needs.length} done?`} title="mark every row under this heading as dealt with"
+                      onConfirm={() => handleNotifs(secs.needs.map((n) => n.id))}>all done</ConfirmButton>
+                  )}
+                </div>
               )}
               {secs.needs.map(row)}
               {secs.handled.length > 0 && (

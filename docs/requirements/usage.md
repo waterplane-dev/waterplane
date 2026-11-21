@@ -150,3 +150,8 @@ The reach dashboard's GitHub tiles say where GitHub's traffic data ends, so days
 ### R-usage-031 · shipped
 "What drives the cost" on the token usage screen follows the span when one is picked (switch back to the whole record with a chip), and each finding says how its share moved against the span before — the week before, the window before, or the same number of days before. Where the record does not reach a whole span back, nothing is compared and it says so; re-caching after breaks is counted over the whole record only, and the span view says that.
 - asked: 2026-11-11 ("Can we optionally cut it to the span and also show a delta?")
+### R-usage-032 · shipped
+Driven sessions are told how to read the weekly usage meter and can stop at a share of the week.
+- asked: 2026-11-19
+- shipped: 38fd9a4b5
+

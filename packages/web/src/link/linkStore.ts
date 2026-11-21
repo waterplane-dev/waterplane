@@ -3,7 +3,7 @@ import type { LinkSnapshot } from "./linkTypes";
 import { dirty, emit, invalidate, listeners, setSnapshotBuilder, type Listener } from "./linkBus";
 import { doc } from "./linkDoc";
 import { status } from "./linkStatus";
-import { pulseOn, samples } from "./linkPulse";
+import { pulseOn, pulseWhen, samples } from "./linkPulse";
 import { syncSnapshot } from "./linkSync";
 import { trafficSnapshot } from "./linkTraffic";
 import { everOutstanding, outstanding, rollup, stuckSends } from "./linkLog";
@@ -20,7 +20,7 @@ export function linkSnapshot(): LinkSnapshot {
     status,
     online: status === "open",
     now: clockNow,
-    pulse: prev && !dirty.has("pulse") && !dirty.has("status") ? prev.pulse : { enabled: pulseOn, status, samples: samples.slice() },
+    pulse: prev && !dirty.has("pulse") && !dirty.has("status") ? prev.pulse : { enabled: pulseOn, when: pulseWhen, status, samples: samples.slice() },
     sync: prev && !dirty.has("sync") && !dirty.has("status") ? prev.sync : syncSnapshot(),
     traffic: prev && !dirty.has("traffic") ? prev.traffic : trafficSnapshot(),
     log: prev && !dirty.has("log") && !dirty.has("status") ? prev.log : rollup(),

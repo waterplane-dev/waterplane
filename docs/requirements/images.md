@@ -83,3 +83,9 @@ On a desktop browser the web app offers a screenshot button that captures any wi
 - asked: 2026-11-02
 - shipped: 82e2fc32
 
+
+### R-images-018 · shipped
+In the image annotator a two-finger gesture pans and zooms and never places a mark, even when one finger lands on the toolbar, the bar under the picture or anywhere off the picture.
+- asked: 2026-11-20 (session 7d8630ec: "I must be able to scroll the screen with a 2 finger gesture - that kind of works at the moment but it also always places annotations I don't want to place"), 2026-11-20
+- shipped: the commit naming R-images-018
+

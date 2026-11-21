@@ -2,6 +2,7 @@
 
 import type { ItemCategory } from "../../naming.js";
 import type { ItemValue } from "../../estimate.js";
+import type { Rescued } from "../../rescued.js";
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
 import type { LaunchOpts } from "../session.js";
@@ -39,7 +40,7 @@ export type ClientBacklogMsg =
    *  `cleanLaunchOpts` on the way in; meaningless beside `targetSessionId`.
    *  Additive: an older desktop drops it and opens the session on its own
    *  new-session defaults, which is what absent means. */
-  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; hold?: boolean; estimate?: string; value?: ItemValue; ackId?: string } & SendStamp)
+  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; hold?: boolean; estimate?: string; value?: ItemValue; rescued?: Rescued; ackId?: string } & SendStamp)
   | { t: "backlog.remove"; id: string }
   | { t: "backlog.fire"; id: string }
   | { t: "backlog.done"; id: string }

@@ -57,11 +57,6 @@
       "count": 2
     }
   },
-  "packages/host/src/cli/windows.ts": {
-    "regexp/no-super-linear-move": {
-      "count": 4
-    }
-  },
   "packages/host/src/clifixtures.ts": {
     "regexp/no-super-linear-backtracking": {
       "count": 1

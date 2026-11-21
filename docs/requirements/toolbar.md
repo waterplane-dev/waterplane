@@ -47,3 +47,8 @@ Every toolbar hint names a toolbar item that still exists, so the e2e hint check
 - asked: 2026-11-08, 2026-11-08
 - shipped: b5d83684
 
+### R-toolbar-011 · shipped
+The More button, the Build button and the top-bar menu button show only their icon, with no text label.
+- asked: 2026-11-19, 2026-11-19
+- shipped: c666291a9
+

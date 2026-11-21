@@ -53,10 +53,10 @@ export const toWsl = (p: string): string => p.replace(/^([a-z]):/i, (_, d: strin
 
 /** `.wslconfig` with mirrored networking turned on under `[wsl2]`, or why it was not touched. */
 export function mirroredWslConfig(text: string): { text: string; changed: boolean; other: boolean } {
-  if (/^\s*networkingMode\s*=\s*mirrored\s*$/im.test(text)) return { text, changed: false, other: false };
-  if (/^\s*networkingMode\s*=/im.test(text)) return { text, changed: false, other: true };
-  const next = /^\s*\[wsl2\]\s*$/im.test(text)
-    ? text.replace(/^\s*\[wsl2\]\s*$/im, (h) => `${h}\nnetworkingMode=mirrored`)
+  if (/^[ \t]*networkingMode[ \t]*=[ \t]*mirrored[ \t\r]*$/im.test(text)) return { text, changed: false, other: false };
+  if (/^[ \t]*networkingMode[ \t]*=/im.test(text)) return { text, changed: false, other: true };
+  const next = /^[ \t]*\[wsl2\][ \t\r]*$/im.test(text)
+    ? text.replace(/^[ \t]*\[wsl2\][ \t\r]*$/im, (h) => `${h}\nnetworkingMode=mirrored`)
     : `${text}${text && !text.endsWith("\n") ? "\n" : ""}[wsl2]\nnetworkingMode=mirrored\n`;
   return { text: next, changed: true, other: false };
 }
@@ -230,6 +230,8 @@ export function stopScript(o: { port: number; lroot: string; signal: "TERM" | "K
     `ss_ok=0; how=port; pids=""`,
     `if command -v ss >/dev/null 2>&1; then ss_ok=1; for p in $(ss -Hltnp ${shq(`sport = :${o.port}`)} 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do mine "$p" && pids="$pids $p"; done; fi`,
     `if [ -z "$pids" ]; then how=proc; for d in "$P"/[0-9]*; do p="\${d##*/}"; [ "$p" = "$$" ] && continue; mine "$p" && pids="$pids $p"; done; fi`,
+    // Nothing of this install: name whoever DOES listen on the port (pid + folder), so the person can find it.
+    `if [ -z "$pids" ] && [ $ss_ok = 1 ]; then for p in $(ss -Hltnp ${shq(`sport = :${o.port}`)} 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do echo "other: pid=$p cwd=$(readlink "$P/$p/cwd" 2>/dev/null)"; done; fi`,
     `if [ -n "$pids" ]; then kill -${o.signal} $pids 2>/dev/null; echo "stop: $how pids=\${pids# } ss=$ss_ok"; else echo "stop: none ss=$ss_ok"; fi`,
     "true",
   ].join("; ");
@@ -239,6 +241,45 @@ export function stopScript(o: { port: number; lroot: string; signal: "TERM" | "K
 export function parseStopLine(out: string): { found: "port" | "proc" | "none"; ss: boolean } | null {
   const m = /^stop: (port|proc|none)\b.*\bss=([01])\s*$/m.exec(out);
   return m ? { found: m[1] as "port" | "proc" | "none", ss: m[2] === "1" } : null;
+}
+
+/** The port's listeners `stopScript` found that are NOT this install's: pid and folder (cwd; empty when unreadable). */
+export function parseOtherLines(out: string): { pid: number; cwd: string }[] {
+  return [...out.matchAll(/^other: pid=(\d+) cwd=(.*)$/gm)].map((m) => ({ pid: Number(m[1]), cwd: m[2]!.trim() }));
+}
+
+/** What `/api/health` says about the host answering on a port: its install folder and version (absent on a host built before the launcher checked it). */
+export interface HostAnswer { install: string | null; version: string | null }
+
+/** Same folder, the way WSL spells a Windows-drive path: case and a trailing slash do not count. */
+export const sameInstall = (a: string, b: string): boolean => noTrailingSlash(a).toLowerCase() === noTrailingSlash(b).toLowerCase();
+
+function noTrailingSlash(p: string): string {
+  let end = p.length;
+  while (end > 0 && p[end - 1] === "/") end--;
+  return p.slice(0, end);
+}
+
+/**
+ * The refusal when the port answers but not with this install's host: which host it is (as far as it
+ * says, or as far as `ss` saw it), that nothing here changed, and the exact steps out. Never "up".
+ */
+export function foreignHostSentence(o: { port: number; lroot: string; answer: HostAnswer | null; others: { pid: number; cwd: string }[] }): string {
+  const where = o.answer?.install ?? o.others.find((x) => x.cwd)?.cwd ?? null;
+  const ver = o.answer?.version ? ` ${o.answer.version}` : "";
+  const who = where ? `the host${ver} installed at ${where}` : `another host${ver} (too old to say where it is installed${o.others.length ? `; WSL pid ${o.others.map((x) => x.pid).join(", ")}` : ""})`;
+  const pid = o.others[0]?.pid;
+  return [
+    `port ${o.port} is answered by ${who} — NOT this checkout (${o.lroot}). Nothing was restarted: the phone keeps talking to that one.`,
+    "To fix it:",
+    where
+      ? `  1. stop that host — in PowerShell, in its folder (${where}): node scripts/windows/host.mjs stop   (an npm install: ${BRAND.slug} stop)`
+      : `  1. stop that host — in WSL: ss -ltnp 'sport = :${o.port}' names its pid, then: kill <pid>` +
+        "\n     no pid there? It runs on Windows: in PowerShell, Get-NetTCPConnection -LocalPort " + o.port + " -State Listen | % OwningProcess, then Stop-Process -Id <that>",
+    ...(pid && where ? [`     (or in WSL: kill ${pid})`] : []),
+    `  2. if it starts by itself at logon: in its folder, node scripts/windows/host.mjs autostart --remove`,
+    `  3. here: npm run restart   (and node scripts/windows/host.mjs autostart, if this one should start at logon)`,
+  ].join("\n");
 }
 
 /**
@@ -297,6 +338,8 @@ export interface LauncherMachine {
   exec: (cmd: string, args: string[], opts: SpawnSyncOptions) => SpawnSyncReturns<string | Buffer>;
   /** Is the host answering on the launcher's port. */
   healthy: () => Promise<boolean>;
+  /** Which install answers on the port (`/api/health`'s `install` + `version`); null = no answer. */
+  answering: () => Promise<HostAnswer | null>;
   sleep: (ms: number) => Promise<void>;
   /** PIDs of the keepers running for this install. */
   keepers: () => number[];
@@ -370,6 +413,26 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
   const healthy = machine.healthy ?? (async (): Promise<boolean> => {
     try { return (await fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(1500) })).ok; } catch { return false; }
   });
+  const answering = machine.answering ?? (async (): Promise<HostAnswer | null> => {
+    try {
+      const r = await fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(1500) });
+      if (!r.ok) return null;
+      const j = await r.json() as { install?: unknown; version?: unknown };
+      return { install: typeof j.install === "string" ? j.install : null, version: typeof j.version === "string" ? j.version : null };
+    } catch { return null; }
+  });
+  /**
+   * The host that answers is this install's, or the launcher stops in words. `others`: what a stop
+   * saw on the port. A host that does not say where it is installed is older than this check: after
+   * a `restart` (which stopped nothing of this install and so knows it is foreign) that is caught
+   * before here; on a plain `start`/`status` it gets a note, not a refusal.
+   */
+  const confirmOurs = async (others: { pid: number; cwd: string }[] = []): Promise<void> => {
+    const a = await answering();
+    if (!a) return;
+    if (a.install && !sameInstall(a.install, LROOT)) die(foreignHostSentence({ port: PORT, lroot: LROOT, answer: a, others }));
+    if (!a.install) say(`(the host answering is too old to say which install it is${a.version ? "" : " or its version"} — if this checkout was just updated, \`npm run restart\` here)`);
+  };
   const sleep = machine.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const waitFor = async (want: boolean, tries = 50): Promise<boolean> => {
     for (let i = 0; i < tries; i++) { if ((await healthy()) === want) return true; await sleep(400); }
@@ -404,13 +467,13 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
   };
 
   const start = async (envPrefix = ENV_PREFIX): Promise<void> => {
-    if (await healthy()) { clearStopFlags(); say(`already up · http://127.0.0.1:${PORT}`); return; }
+    if (await healthy()) { await confirmOurs(); clearStopFlags(); say(`already up · http://127.0.0.1:${PORT}`); return; }
     // A keeper still running (between two restarts of a crashed host) starts the daemon itself: a
     // second one would start a second daemon, and the two fight over the port.
     if (keepers().length) {
       clearStopFlags();
       say("the keeper is already restarting it — waiting…");
-      if (await waitFor(true, 300)) { say(`up · http://127.0.0.1:${PORT} (log: ${liveLog()})`); return; }
+      if (await waitFor(true, 300)) { await confirmOurs(); say(`up · http://127.0.0.1:${PORT} (log: ${liveLog()})`); return; }
       die(`no answer in 2 min — see ${liveLog()}\n${tail(liveLog())}`);
     }
     if (!existsSync(join(root, "packages/host/dist/main.js"))) build();
@@ -429,16 +492,21 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
     exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
       `Start-Process -FilePath powershell.exe -ArgumentList ${args.join(",")} -WindowStyle Hidden`], { stdio: "inherit", windowsHide: true });
     say(`starting in WSL (the first boot loads the host over /mnt${kind === "checkout" ? " and scans every repo under the root" : ""} — allow ~30 s)…`);
-    if (await waitFor(true, 300)) { say(`up · http://127.0.0.1:${PORT} (log: ${LOG})`); return; }
+    if (await waitFor(true, 300)) { await confirmOurs(); say(`up · http://127.0.0.1:${PORT} (log: ${LOG})`); return; }
     die(`started, but no answer in 2 min — see ${LOG}\n${tail(LOG)}`);
   };
 
-  const stop = async (): Promise<void> => {
+  /** Stops this install's host. `foreign`: the port still answers and none of it was this install's. */
+  const stop = async (): Promise<{ foreign: boolean; others: { pid: number; cwd: string }[] }> => {
     setStopFlags();   // the keeper must not restart it
     // The daemon's own SIGTERM handler flushes the ack ledger and the stores; tmux keeps the sessions.
     // THIS install's daemon only: its absolute main.js, or the relative one run at this install (`stopScript`).
-    const signal = (sig: "TERM" | "KILL") => parseStopLine(String(wsl(stopScript({ port: PORT, lroot: LROOT, signal: sig }),
-      { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).stdout ?? ""));
+    let others: { pid: number; cwd: string }[] = [];
+    const signal = (sig: "TERM" | "KILL") => {
+      const out = String(wsl(stopScript({ port: PORT, lroot: LROOT, signal: sig }), { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).stdout ?? "");
+      if (sig === "TERM") others = parseOtherLines(out);
+      return parseStopLine(out);
+    };
     const term = signal("TERM");
     const forced = !(await waitFor(false, 40));
     if (forced) signal("KILL");
@@ -450,6 +518,7 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
     for (const pid of left) exec("taskkill.exe", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore", windowsHide: true });
     say(stopVerdict({ term, forced, keepersKilled: left.length, port: PORT }));
     taskNote();
+    return { foreign: forced && term?.found === "none" && (await healthy()), others };
   };
 
   /** Mirrored networking: WSL then sees the Windows interfaces, the Tailscale 100.x among them, and
@@ -555,8 +624,18 @@ export async function run(argv: string[], root: string = ROOT, machine: Partial<
       case "setup": await setup(); return 0;
       case "start": rememberKnobs(); await start(); return 0;
       case "stop": await stop(); return 0;
-      case "restart": rememberKnobs(); build(); await stop(); await start(); return 0;
-      case "status": say((await healthy()) ? `up · http://127.0.0.1:${PORT}` : `not running${stopFlagSet() ? " (stopped: `start` brings it back)" : ""}`); taskNote(); return 0;
+      case "restart": {
+        rememberKnobs(); build();
+        // Another install's host on the port: starting would "succeed" against IT — the phone keeps
+        // the old version and the launcher said "up" (zenbook, 2026-11-21). Refuse with the way out.
+        const s = await stop();
+        if (s.foreign) { clearStopFlags(); die(foreignHostSentence({ port: PORT, lroot: LROOT, answer: await answering(), others: s.others })); }
+        await start(); return 0;
+      }
+      case "status":
+        if (await healthy()) { await confirmOurs(); say(`up · http://127.0.0.1:${PORT}`); }
+        else say(`not running${stopFlagSet() ? " (stopped: `start` brings it back)" : ""}`);
+        taskNote(); return 0;
       case "autostart": autostart(rest.includes("--remove")); return 0;
       // The preflight checks the build the host RUNS, so a checkout builds only when there is none:
       // a rebuild here cost ~100 s of a 139 s doctor on the first Windows box. `restart` rebuilds.

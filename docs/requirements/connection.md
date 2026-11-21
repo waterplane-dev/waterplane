@@ -226,3 +226,7 @@ The connection screen shows either a loading state or a connecting state, never 
 - asked: 2026-11-12
 - shipped: 09f1b2817
 
+
+### R-connection-041 · shipped
+The connection strip can be set to show only when something is wrong: the link is down or connecting, pings go unanswered, round trips are slow, the desktop is reached unprotected, a send is stuck, or the desktop is restarting; it stays a short while after, so a flapping link does not move the screen.
+- asked: 2026-11-20

@@ -284,7 +284,31 @@ const SCOPE_NAMES = new Map<string, string>();
 /** The name the filter bar prints for a plugin scope (the `plugin.list` handler is the one writer). */
 export function setPluginName(id: string, name: string): void { SCOPE_NAMES.set(id, name); }
 
+// ── a named set of rows on the pin ──────────────────────────────────────────
+/** `set:<name>` = a fixed handful of core rows that configure ONE thing on screen together — the gear on a
+ *  screen opens Settings showing exactly them (`openSettingsSet`). Same filter bar, same "n of N". */
+export const SET_SCOPE = "set:";
+
+/** Every named set: what the filter bar calls it, and its rows (ids in `SETTING_ROWS`, held there by the test). */
+export const ROW_SETS: Readonly<Record<string, { name: string; rows: readonly string[] }>> = {
+  // The three lines pinned to the top of every screen: each one's show/hide, and what each one holds.
+  // One set for all three gears (connection, this desktop, open tabs): hiding a line is the first thing
+  // asked of any of them, and the other two lines' switches are the next.
+  strips: {
+    name: "the lines at the top",
+    rows: ["net-pulse", "local-rt", "agent-warn", "agent-alarm", "tabs", "tabs-count", "tabs-limit", "tabs-order", "tabs-sync"],
+  },
+};
+
+/** The rows a `set:` pin shows, or null for any other pin. */
+export function setScopeRows(only: string | null | undefined): readonly string[] | null {
+  if (!only || !only.startsWith(SET_SCOPE)) return null;
+  return ROW_SETS[only.slice(SET_SCOPE.length)]?.rows ?? null;
+}
+
 function pinIncludes(only: string, rowId: string): boolean {
+  const set = setScopeRows(only);
+  if (set) return set.includes(rowId);
   const p = pluginScopeOf(only);
   return p === null ? rowId === only : scopeRowIds(p).includes(rowId);
 }
@@ -378,6 +402,8 @@ export function rowShown(id: string, query: string, only?: string | null): boole
 /** The heading's half of `rowShown` — see `groupMatches`. */
 export function groupShown(groupId: string, query: string, only?: string | null): boolean {
   if (only) {
+    const set = setScopeRows(only);
+    if (set) return set.some((r) => BY_ID.get(r)?.group === groupId);
     const p = pluginScopeOf(only);
     return p === null ? BY_ID.get(only)?.group === groupId : scopeRowIds(p).some((r) => BY_ID.get(r)?.group === groupId);
   }
@@ -407,6 +433,8 @@ export function settingRow(id: string): SettingRowMeta | undefined {
  */
 export function filterSummary(shown: number, total: number, query: string, only?: string | null): string {
   if (only) {
+    const set = setScopeRows(only) ? ROW_SETS[only.slice(SET_SCOPE.length)] : undefined;
+    if (set) return `showing ${set.name} only — ${shown} of ${total} settings`;
     const p = pluginScopeOf(only);
     if (p !== null) {
       const name = SCOPE_NAMES.get(p) ?? p;

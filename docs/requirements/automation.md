@@ -301,9 +301,10 @@ While a build tool entry runs in a repo, its header button shows a busy indicato
 - asked: 2026-10-17
 - shipped: c4e08626
 
-### R-automation-063 · requested
+### R-automation-063 · shipped
 Work the person asks to be scheduled for later is posted in waterplane's own schedule, so it shows on the phone, never held only inside an agent session.
 - asked: 2026-10-18
+- shipped: 0a958798b
 
 
 ### R-automation-064 · shipped

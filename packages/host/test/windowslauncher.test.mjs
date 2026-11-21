@@ -12,8 +12,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  autostartTaskXml, installId, installKind, keeperPatternPs, launcherNames, mirroredWslConfig, parseStopLine, resolveKnobs, run,
-  staleTaskNote, stopScript, stopVerdict, toWsl,
+  autostartTaskXml, foreignHostSentence, installId, installKind, keeperPatternPs, launcherNames, mirroredWslConfig, parseOtherLines,
+  parseStopLine, resolveKnobs, run, sameInstall, staleTaskNote, stopScript, stopVerdict, toWsl,
 } from "../dist/cli/windows.js";
 import { keepTaskNames, launcherTaskName } from "../dist/doctorwsl.js";
 import { BRAND } from "@waterplane/shared";
@@ -180,6 +180,31 @@ test("stopScript: nothing of this install running ⇒ no kill, and it says none 
   assert.doesNotMatch(stopScript({ port: 8770, lroot: "/x", signal: "TERM" }), /pkill/);
 });
 
+test("stopScript: nothing of this install, but ss names a listener ⇒ an `other:` line with its pid and folder, never a kill", () => {
+  const procs = fakeProc("proc-other", { 103: PROCS[103] });
+  const r = runStop(procs, fakeBin("bin-other", 'LISTEN 0 511 *:8771 *:* users:(("node",pid=103,fd=21))'));
+  assert.deepEqual(r.killed, []);
+  assert.deepEqual(r.line, { found: "none", ss: true });
+  assert.deepEqual(parseOtherLines(r.out), [{ pid: 103, cwd: "/mnt/c/dev/my app (2)-peer" }]);
+});
+
+test("foreignHostSentence: names the other host, says nothing restarted, and gives numbered steps out", () => {
+  const named = foreignHostSentence({ port: 8770, lroot: "/mnt/c/dev/waterplane", answer: { install: "/mnt/c/dev/oldcopy", version: "0.1.24" }, others: [{ pid: 55, cwd: "/mnt/c/dev/oldcopy" }] });
+  assert.match(named, /host 0\.1\.24 installed at \/mnt\/c\/dev\/oldcopy — NOT this checkout \(\/mnt\/c\/dev\/waterplane\)/);
+  assert.match(named, /Nothing was restarted/);
+  assert.match(named, /1\. stop that host.*\/mnt\/c\/dev\/oldcopy.*host\.mjs stop/);
+  assert.match(named, /kill 55/);
+  assert.match(named, /autostart --remove/);
+  assert.match(named, /3\. here: npm run restart/);
+  // An old host says nothing and ss saw nothing (it runs on Windows): the way to find it is spelled out.
+  const blind = foreignHostSentence({ port: 8770, lroot: "/mnt/c/x", answer: { install: null, version: null }, others: [] });
+  assert.match(blind, /another host \(too old to say where/);
+  assert.match(blind, /ss -ltnp 'sport = :8770'/);
+  assert.match(blind, /Get-NetTCPConnection -LocalPort 8770/);
+  assert.ok(sameInstall("/mnt/c/Dev/App/", "/mnt/c/dev/app"));
+  assert.ok(!sameInstall("/mnt/c/dev/app", "/mnt/c/dev/app-peer"));
+});
+
 test("stopVerdict: a forced end says why; a plain one does not invent a reason", () => {
   assert.equal(stopVerdict({ term: { found: "port", ss: true }, forced: false, keepersKilled: 0, port: 8770 }), "stopped");
   assert.match(stopVerdict({ term: { found: "none", ss: true }, forced: false, keepersKilled: 0, port: 8770 }), /nothing of this install was running/);
@@ -229,7 +254,7 @@ async function launch(argv, root, platform = "win32", machine = {}) {
  * A fake Windows: every child recorded, the host "up" until a stop script reaches WSL and up again
  * once a keeper is Start-Process'd. `ps` answers a powershell command by its text.
  */
-function fakeWindows({ up = true, stopOut = "stop: port pids=4242 ss=1", ps = () => "", keepers = () => [] } = {}) {
+function fakeWindows({ up = true, stopOut = "stop: port pids=4242 ss=1", ps = () => "", keepers = () => [], answer = null } = {}) {
   const calls = [];
   const state = { up };
   const exec = (cmd, args, opts) => {
@@ -241,7 +266,8 @@ function fakeWindows({ up = true, stopOut = "stop: port pids=4242 ss=1", ps = ()
     if (cmd === "powershell.exe" && !script.startsWith("Start-Process")) stdout = ps(script);
     return { pid: 1, status: 0, signal: null, output: [null, stdout, ""], stdout, stderr: "" };
   };
-  return { calls, state, machine: { exec, healthy: async () => state.up, sleep: async () => {}, keepers } };
+  // `answer`: what /api/health says about the host on the port; null = it says nothing (the check is skipped).
+  return { calls, state, machine: { exec, healthy: async () => state.up, answering: async () => (state.up ? answer : null), sleep: async () => {}, keepers } };
 }
 const lroot = (root) => toWsl(root);
 const npmRoot = join(scratch, "npm-install");
@@ -384,4 +410,37 @@ test("scripts/windows/host.mjs tells the launcher about its own first build", ()
   const wrapper = readFileSync(new URL("../../../scripts/windows/host.mjs", import.meta.url), "utf8");
   assert.match(wrapper, /run\(process\.argv\.slice\(2\), REPO, \{ justBuilt \}\)/);
   assert.match(wrapper, /justBuilt = true;/);
+});
+
+// ── another install's host on the port (zenbook, 2026-11-21: restart said "up", the phone kept 0.1.24) ──
+
+test("run restart: the port held by another install ⇒ refused in words, nothing started, never \"up\"", async () => {
+  const d = dirs("co-foreign");
+  const w = fakeWindows({ stopOut: "other: pid=55 cwd=/mnt/c/dev/oldcopy\nstop: none ss=1", answer: { install: "/mnt/c/dev/oldcopy", version: "0.1.24" } });
+  w.machine.exec = ((inner) => (cmd, args, opts) => { const r = inner(cmd, args, opts); if (cmd === "wsl.exe") w.state.up = true; return r; })(w.machine.exec);
+  const r = await launch(["restart"], coRoot, "win32", { ...w.machine, env: d.env, localAppData: d.lad, temp: d.temp, justBuilt: true });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /installed at \/mnt\/c\/dev\/oldcopy — NOT this checkout/);
+  assert.match(r.err, /kill 55/);
+  assert.doesNotMatch(r.out, /\bup ·/);
+  assert.ok(!w.calls.some((c) => c.cmd === "powershell.exe" && (c.args.at(-1) ?? "").startsWith("Start-Process")), "no keeper started");
+  assert.ok(!existsSync(flag(d.lad, `${BRAND.slug}-host`)), "the stop flag does not linger: this install is not held down");
+});
+
+test("run start/status: up, but another install answers ⇒ refused; this install answers ⇒ up", async () => {
+  const d = dirs("co-foreign-start");
+  const theirs = fakeWindows({ answer: { install: "/mnt/c/dev/oldcopy", version: "0.1.24" } });
+  for (const cmd of ["start", "status"]) {
+    const r = await launch([cmd], coRoot, "win32", { ...theirs.machine, env: d.env, localAppData: d.lad, temp: d.temp });
+    assert.equal(r.code, 1, cmd);
+    assert.match(r.err, /NOT this checkout/, cmd);
+  }
+  const ours = fakeWindows({ answer: { install: toWsl(coRoot).toUpperCase(), version: "0.1.34" } });
+  const r = await launch(["start"], coRoot, "win32", { ...ours.machine, env: d.env, localAppData: d.lad, temp: d.temp });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /already up/);
+  const old = fakeWindows({ answer: { install: null, version: null } });
+  const o = await launch(["status"], coRoot, "win32", { ...old.machine, env: d.env, localAppData: d.lad, temp: d.temp });
+  assert.equal(o.code, 0);
+  assert.match(o.out, /too old to say which install/);
 });

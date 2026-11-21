@@ -10,6 +10,7 @@ import type { ClientMessage } from "../wire/messages.js";
 import type { LaunchOpts, SendView } from "../wire/session.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import { withFirstSentAt } from "../sendstamp.js";
+import type { Rescued } from "../rescued.js";
 import type { SendMode } from "./queueentry.js";
 
 /**
@@ -43,6 +44,8 @@ export interface QueueFrameEntry {
   pastBudget?: boolean;
   /** backlog mode: the row waits for a tap (`Intent.manual`), whatever the auto switch says. */
   hold?: boolean;
+  /** backlog mode: the app filed these words from a rescue (`rescued.ts`). */
+  rescued?: Rescued;
 }
 
 /**
@@ -86,6 +89,8 @@ export function entryFrame(e: QueueFrameEntry): ClientMessage | null {
       ...(e.pastBudget ? { pastBudget: true } : {}),
       // Additive: an older desktop ignores it and the row may start by itself when its auto switch is on.
       ...(e.hold ? { hold: true } : {}),
+      // Additive: an older desktop ignores it and the row is an ordinary held one.
+      ...(e.rescued ? { rescued: e.rescued } : {}),
     };
   }
   if (e.answer) {

@@ -3,8 +3,8 @@
  * of `BacklogManager` (move only): the methods are functions over `BacklogCore`.
  */
 import { randomUUID } from "node:crypto";
-import type { BacklogItem, BudgetPass, BudgetWaiver, Intent, IntentPatch, ItemCategory, ItemValue, LaunchOpts, SessionBudget } from "@waterplane/shared";
-import { cleanEstimate, cleanValue } from "@waterplane/shared";
+import type { BacklogItem, BudgetPass, BudgetWaiver, Intent, IntentPatch, ItemCategory, ItemValue, LaunchOpts, Rescued, SessionBudget } from "@waterplane/shared";
+import { cleanEstimate, cleanRescued, cleanValue } from "@waterplane/shared";
 import { backlogDraft, intentToBacklogItem } from "../intents/adapters.js";
 import type { BacklogCore } from "./backlogcore.js";
 import { backlogRows } from "./backlogstore.js";
@@ -21,7 +21,7 @@ import { backlogRows } from "./backlogstore.js";
  * taps sets it.
  */
 export function add(c: BacklogCore, text: string, repoDir: string, label?: string, targetSessionId?: string, autoFire?: boolean,
-  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean; estimate?: string; value?: ItemValue }): BacklogItem {
+  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean; estimate?: string; value?: ItemValue; rescued?: Rescued }): BacklogItem {
   const now = Date.now();
   const orders = backlogRows(c).filter((i) => i.cwd === repoDir).map((i) => i.order ?? i.createdAt);
   // Newest on top (a smaller `order` than everything in this repo), EXCEPT an
@@ -37,6 +37,7 @@ export function add(c: BacklogCore, text: string, repoDir: string, label?: strin
     steps: opts?.steps, resume: opts?.resume, closeWhenDone: opts?.closeWhenDone, flagWhenDone: opts?.flagWhenDone, budget: opts?.budget, launch: opts?.launch, holdForHost: opts?.holdForHost,
     pastBudget: opts?.pastBudget, budgetPass: opts?.budgetPass,
     estimate: cleanEstimate(opts?.estimate), value: cleanValue(opts?.value),
+    rescued: cleanRescued(opts?.rescued),
   });
   // What put this row here, when it was not a person. The only caller that
   // passes one today is the schedule's `workItem` executor

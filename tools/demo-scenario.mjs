@@ -39,7 +39,7 @@ export const RULES = {
   // A prefix list, so a frame type added to a family later (auth.*, settings.*,
   // plugin.* — the ones a person types a password, a key or a plugin config
   // into) is dropped without anyone remembering to list it.
-  dropFrames: /^(?:authRequired|auth\.|pair|settings\.|install\.|usage\.|meter\.|budget\.|update\.status|backends|plugin\.|clihealth)/,
+  dropFrames: /^(?:authRequired|auth\.|pair|settings\.|install\.|usage\.|meter\.|budget\.|updates?\.|backends|plugin\.|clihealth)/,
 
   // 2. REDACT: fields of a frame we KEEP, overwritten with a fixed fictional
   //    value (`undefined` = delete the key). Only `welcome` today.

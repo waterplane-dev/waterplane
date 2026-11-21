@@ -27,7 +27,7 @@ import {
   type LaunchIntent, type RelayPlan, type OpenDelivery, type SendBlockReason, type SerialWatch, type SessionInfo,
 } from "@waterplane/shared";
 import {
-  isCreateOp, loadOutbox, noteDeadUpload, rescueStrandedPendingDrafts, saveOutbox, MAX_SEND_ATTEMPTS, OUTBOX_CAP, OUTBOX_HARD_MAX,
+  bindRescue, isCreateOp, loadOutbox, noteDeadUpload, rescueFiledToast, rescueStrandedPendingDrafts, saveOutbox, MAX_SEND_ATTEMPTS, OUTBOX_CAP, OUTBOX_HARD_MAX,
   type OutboxEntry,
 } from "../../outbox";
 import { activeHost } from "../../hosts";
@@ -833,16 +833,37 @@ export function useQueue(input: QueueDeps): QueueApi {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only recovery of the previous tab's rows, read off `outboxRef`
   }, []);
 
+  // Automatic rescues file onto the backlog through THIS queue's `queueBacklog` (`rescueFile.ts`):
+  // bound every render so the filer is never stale, with the repo of the screen on top, else the last
+  // one that had a session (where a rescue names no repo of its own). Declared BEFORE the rescue
+  // effect below: effects run in order, and that one files on mount.
+  const lastCwd = useRef<string | null>(null);
+  const activeCwd = (sessions.find((s) => s.id === given.activeId) ?? pendingSession)?.cwd ?? null;
+  useEffect(() => {
+    if (activeCwd) lastCwd.current = activeCwd;
+    bindRescue(
+      (f) => c.queueBacklog(f),
+      () => lastCwd.current,
+      (cwd) => given.repoForCwd(cwd)?.repoName ?? cwd.split("/").filter(Boolean).pop() ?? cwd,
+    );
+  });
+
   // Words typed on a `pending:` screen whose create is gone (dropped, retried,
-  // or adopted while the person stood elsewhere) go to the pad, said — never
-  // left under an id no screen loads again (`rescueStrandedPendingDrafts`).
+  // or adopted while the person stood elsewhere) go to that repo's backlog as a
+  // rescued row, said — never left under an id no screen loads again
+  // (`rescueStrandedPendingDrafts`). With no repo they fall back to the pad.
   useEffect(() => {
     const live = new Set(outbox.filter(isCreateOp).map((e) => pendingLaneId(e.ackId)));
     const r = rescueStrandedPendingDrafts(
       (id) => id === given.activeId || live.has(id),
       (id) => pendingKept.current.get(parsePendingId(id) ?? "")?.cwd,
     );
-    if (r.moved) showToast(`the words written for a session that never opened are on the pad (${r.moved})`);
+    for (const a of r.adopted) {
+      const title = sessionsRef.current.find((x) => x.id === a.sessionId)?.title;
+      showToast(`words written while the session was opening are in the box of ${title ? `"${title}"` : "the session that opened"}`);
+    }
+    for (const f of r.filed) showToast(rescueFiledToast(f.cwd, f.offline));
+    if (r.moved) showToast(`the words written for a session that never opened are on the pad (${r.moved}) — no repo to file them under`);
     else if (r.refused) showToast("words written for a session that never opened are kept on this device — the pad is full");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKept is a ref
   }, [outbox, given.activeId]);

@@ -14,7 +14,7 @@ export type { LauncherItemCount, LauncherItemDef, SessionViewDef };
 import type { ComponentType, ReactNode } from "react";
 import type {
   AuthState, BackendInfo, BacklogItem, BillingStatus, BudgetVerdict, PeriodState, ClientMessage, ClosedSession, HostMessage, Intent, LaunchIntent, LaunchOpts,
-  MeterSummary, RecentSession, RepoTarget, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, StoreLoss, SweepScope, UpdateInfo, UsageBudget, UsageInfo, UsageReading,
+  MeterSummary, RecentSession, RepoTarget, Rescued, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, StoreLoss, SweepScope, UpdateInfo, UsageBudget, UsageInfo, UsageReading,
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../outbox.ts";
 import type { ResourceState } from "../useRemoteResource.ts";
@@ -134,6 +134,8 @@ export interface QueueBacklogOpts {
   pastBudget?: boolean;
   /** The row waits for a tap: nothing starts it by itself, whatever the backlog's auto switch says (`Intent.manual`). */
   hold?: boolean;
+  /** The app filed these words from a rescue (`shared/rescued.ts`): marks the row, counts it on the launcher. */
+  rescued?: Rescued;
 }
 
 /** Ordered background-upload buffer for the session image-annotate flow. */

@@ -18,6 +18,7 @@
 import type { AssessPayload, BudgetPass, BudgetWaiver, BuildPayload, IntentPayload, IntentTarget, IntentTrigger } from "../intent.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { ItemValue } from "../estimate.js";
+import type { Rescued } from "../rescued.js";
 import type { SessionBudget } from "../sessionbudget.js";
 import type { LaunchOpts } from "./session.js";
 
@@ -97,6 +98,8 @@ export interface IntentDraft {
   /** See `Intent.estimate` / `Intent.value`. */
   estimate?: string;
   value?: ItemValue;
+  /** See `Intent.rescued`. */
+  rescued?: Rescued;
   cols?: number;
   rows?: number;
   launch?: unknown;

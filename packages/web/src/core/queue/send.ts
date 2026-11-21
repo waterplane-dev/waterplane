@@ -14,8 +14,9 @@ import {
   type ClientMessage, type SessionInfo,
 } from "@waterplane/shared";
 import {
-  deadUploadReason, newAckId, plannedInboxPath, MAX_SEND_ATTEMPTS, type OutboxEntry,
+  deadUploadReason, loadAdoptions, newAckId, plannedInboxPath, MAX_SEND_ATTEMPTS, type OutboxEntry,
 } from "../../outbox";
+import { adoptedSession } from "./adoptions.ts";
 import { keepUploadBytes } from "../../attachments";
 import { idbDel, idbGet, idbSet } from "../../idb";
 import { noteAckTimeout, noteSendExpired, rttP95, syncSnapshot } from "../../link";
@@ -471,6 +472,10 @@ export function sendFns(c: QueueCtx): SendFns {
       return false;
     }
     if (isPendingId(id)) {
+      // The create behind this screen was already acked (the screen id is stale): send to the session
+      // it became through the ordinary queue path below, never into a retired create's lane.
+      const real = adoptedSession(loadAdoptions(), id);
+      if (real) return submitInput(real, cwd, text, kind, holdUntilIdle);
       queueSessionPrompt(cwd, text, parsePendingId(id) ?? "", kind);
       flushOutbox();
       return true;
@@ -755,6 +760,7 @@ export function sendFns(c: QueueCtx): SendFns {
       launch: opts.launch,
       pastBudget: opts.pastBudget || undefined,
       hold: opts.hold || undefined,
+      rescued: opts.rescued,
       offline, armed: !offline,
     });
     if (!offline) armLane(opts.targetSessionId ?? opts.repoDir);
