@@ -20,10 +20,19 @@ export type { Roots } from "./candidates.mjs";
 
 const { env } = makeEnvReader(process.env, (text) => console.warn(text));
 
-const OLLAMA_PLACES = ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama", "/usr/bin/ollama"];
+/**
+ * Where each system's own ollama lives. Never a mac path on linux: an OrbStack VM mounts the Mac's
+ * /Applications, and the wp-peer VM ran the MAC's ollama through it — listing (and offering to
+ * delete) the Mac's models from the VM's screen.
+ */
+export const OLLAMA_PLACES: Record<DiskProfile, readonly string[]> = {
+  mac: ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama"],
+  linux: ["/usr/local/bin/ollama", "/usr/bin/ollama"],
+  wsl: ["/usr/local/bin/ollama", "/usr/bin/ollama"],
+};
 
-async function findOllama(): Promise<string | null> {
-  for (const p of OLLAMA_PLACES) { try { await access(p); return p; } catch { /* next */ } }
+async function findOllama(profile: DiskProfile): Promise<string | null> {
+  for (const p of OLLAMA_PLACES[profile]) { try { await access(p); return p; } catch { /* next */ } }
   return null;
 }
 
@@ -86,7 +95,8 @@ export async function defaultRoots(): Promise<Roots> {
     duBin: "/usr/bin/du",
     gitBin: "git",
     findBin: "/usr/bin/find",
-    ollamaBin: await findOllama(),
+    mdfindBin: profile === "mac" ? "/usr/bin/mdfind" : null,
+    ollamaBin: await findOllama(profile),
     duTimeoutMs: 120_000,
     concurrency: 4,
     walkDepth: 8,
@@ -107,7 +117,7 @@ export function serve(api: Pick<HostPluginApi, "handle" | "push">, engine: Engin
     scanLarge: () => engine.scanLarge(),
     scanCode: () => engine.scanCode(),
     remove: (a) => engine.remove((a as { id?: unknown } | null)?.id as string),
-    cleanTemp: () => engine.cleanTemp(),
+    cleanTemp: (a) => { const vol = (a as { vol?: unknown } | null)?.vol; return engine.cleanTemp(typeof vol === "string" ? vol : undefined); },
   });
 }
 

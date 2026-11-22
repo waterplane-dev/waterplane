@@ -429,6 +429,10 @@
 /* A `.set-row` is only padded by the `.set-group` around it; inside a bare
    `.form` (the auto-download pattern box) it was flush to the screen edge. */
 .form > .set-row { padding: 0 var(--gutter); }
+/* Same for a `.set-row` straight under a sheet's scroller: the Apps sheet's
+   "waiting to install" filter and its delete-after-install switch + note sat
+   at x=0 between gutter-padded hints. */
+.sheet-scroll > .set-row { padding: 0 var(--gutter); }
 /* `.form .search` carries its own 10px gutter for the case where it IS the
    form's own child. Inside a `.set-row` that gutter is the row's already, and
    the two stack into a field indented twice as far as the select beside it

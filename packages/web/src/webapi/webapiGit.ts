@@ -1,4 +1,4 @@
-import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitExplainState, type GitLog, type GitPushState, type GitStatus, type PrActionResult, type PrListDoc } from "@waterplane/shared";
+import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type ChangeBrief, type GitExplainState, type GitLog, type GitPushState, type GitShow, type GitStatus, type PrActionResult, type PrListDoc } from "@waterplane/shared";
 import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
 import { readBodyFused } from "./webapiBody";
 
@@ -70,8 +70,8 @@ export const gitApi = {
   /** The branch against its upstream — incoming, outgoing, the shared history (host `gitlog.ts`). */
   gitLog: (repoId: string) => jget<GitLog>(`/api/repos/${repoId}/git/log`),
   /** One commit's message and file stat. */
-  gitShow: (repoId: string, sha: string) =>
-    jget<{ body: string }>(`/api/repos/${repoId}/git/show?${new URLSearchParams({ sha })}`).then((r) => r.body),
+  gitShow: (repoId: string, sha: string) => jget<GitShow>(`/api/repos/${repoId}/git/show?${new URLSearchParams({ sha })}`),
+  gitShowFile: (repoId: string, sha: string, path: string, from?: string /* a rename's old path */, signal?: AbortSignal) => jget<{ diff: string }>(`/api/repos/${repoId}/git/show?${new URLSearchParams({ sha, path, ...(from ? { from } : {}) })}`, undefined, signal).then((r) => r.diff),
   /** `git fetch` of the upstream's remote — refs only, never the branch or the tree. */
   gitFetch: (repoId: string) =>
     jpost<{ ok: boolean; error?: string }>(`/api/repos/${repoId}/git/fetch`, {}, SLOW_OP_TIMEOUT_MS),

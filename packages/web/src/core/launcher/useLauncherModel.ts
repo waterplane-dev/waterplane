@@ -303,6 +303,8 @@ export function useLauncherModel(p: LauncherProps) {
    * with rows it did not ask for.
    */
   const repoSort = usePref("repoSort");
+  // Pinned repos lead, in their placed order; the sort above orders only the rest (`pinAt`).
+  const pinnedRepos = usePref("pinnedRepos");
   const openByRepo = useMemo(() => repoSort === "sessions" ? openCountByRepo(sortedSessions, sessionRepoName) : undefined,
     [repoSort, sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
   const repoGroups = useMemo(
@@ -313,9 +315,11 @@ export function useLauncherModel(p: LauncherProps) {
     () => repoGroupsOf(shownSessions, visibleRepos, !!statusFilter || textOn, sessionRepoName,
       statusFilter?.status === "worktrees" && statusFilter.repo ? [statusFilter.repo]
         : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [repoLabel(r), r.displayName, r.branch])).map((r) => repoLabel(r)) : [],
-      openByRepo),
-    [shownSessions, visibleRepos, statusFilter, repos, textQuery, openByRepo], // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` closes over `repos`, `textOn` derives from `textQuery`
+      openByRepo, pinnedRepos),
+    [shownSessions, visibleRepos, statusFilter, repos, textQuery, openByRepo, pinnedRepos], // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` closes over `repos`, `textOn` derives from `textQuery`
   );
+  // The repos on screen right now: a pin names a place only among these (`RepoPin`).
+  const groupNames = useMemo(() => new Set(repoGroups.map((g) => g.repoName)), [repoGroups]);
   const allReposCollapsed = repoGroups.length > 0 && repoGroups.every((g) => collapsedRepos.has(g.repoName));
   const noRepoCollapsed = repoGroups.every((g) => !collapsedRepos.has(g.repoName));
 
@@ -557,7 +561,7 @@ export function useLauncherModel(p: LauncherProps) {
     // names
     repoForCwd, sessionRepo, sessionRepoName, sessionRepoLabel, sessionRowBranch, sessionRowTitle,
     // the list
-    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf, shownOf,
+    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, groupNames, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf, shownOf,
     attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, blockedTotal, codingTotal,
     starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, rescuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,

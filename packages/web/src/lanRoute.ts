@@ -32,19 +32,12 @@ import {
   LAN_PROBE_TIMEOUT_MS, cleanHostTls, decideLanRoute, isHostId, isPlainRoute, isProxyBase, lanMacMessage, needsTunnel,
   type HostTls, type LanFailure, type LanProbe, type LanRoute, type LanVerifyResponse, type NetState, type SavedHost,
 } from "@waterplane/shared";
+import { parseLanIdentity, type LanIdentity } from "./deviceToken.ts";
 import { dialBaseOf, routeContext } from "./hostUrl.ts";
 import type { TlsPin, TlsRefusal } from "./sdk/shellTls.ts";
 
-export interface LanIdentity { hostId: string; secret: string }
-
-/** A stored/served identity, or null for anything that is not one. */
-export function parseLanIdentity(v: unknown): LanIdentity | null {
-  if (!v || typeof v !== "object") return null;
-  const o = v as Record<string, unknown>;
-  return typeof o.hostId === "string" && o.hostId && typeof o.secret === "string" && o.secret.length >= 16
-    ? { hostId: o.hostId, secret: o.secret }
-    : null;
-}
+// Defined beside the token it guards (`deviceToken.ts`), which also holds it in sealed mode.
+export { parseLanIdentity, type LanIdentity };
 
 /** 32 random hex characters (16 bytes). */
 export function newNonce(rand: (a: Uint8Array) => Uint8Array = (a) => globalThis.crypto.getRandomValues(a)): string {

@@ -234,3 +234,19 @@ test("agent readings: the shard directory is live, the pre-shard file is live un
   assert.equal(rowOf(rep, "rollback").bytes, 17);
   assert.equal(rowOf(rep, "live").count, 2);
 });
+
+test("token statistics: the shard directory and the pre-shard file are one row, the .migrated copy a clearable leftover", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hoststore-"));
+  const store = join(dir, BRAND.stateDirName);
+  mkdirSync(join(store, "tokenstats"), { recursive: true });
+  writeFileSync(join(store, "tokenstats", "-r-app.json"), "x".repeat(11));
+  writeFileSync(join(store, "tokenstats", "-r-other.json"), "x".repeat(13));
+  let rep = hostStoreReport(dir, 1_000);
+  assert.equal(rowOf(rep, "tokenstats").count, 2);
+  assert.equal(rowOf(rep, "tokenstats").bytes, 24);
+  assert.equal(rowOf(rep, "unknown").count, 0);
+  writeFileSync(join(store, "tokenstats.json.migrated"), "x".repeat(17));
+  rep = hostStoreReport(dir, 1_000);
+  assert.equal(rowOf(rep, "rollback").bytes, 17);
+  assert.equal(rowOf(rep, "tokenstats").count, 2);
+});

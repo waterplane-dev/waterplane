@@ -6,7 +6,7 @@
  */
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { GitCommit, GitLog } from "@waterplane/shared";
+import type { GitCommit, GitCommitFile, GitLog, GitShow } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
 import { prePushFacts, readChecks } from "./prepushcheck.js";
 
@@ -89,11 +89,51 @@ export async function gitFetch(wt: string): Promise<{ ok: boolean; error?: strin
   }
 }
 
-/** One commit's message body and file stat, for a tapped row. `null` = no such commit. */
-export async function gitShow(wt: string, sha: string): Promise<string | null> {
-  if (!/^[0-9a-f]{7,40}$/.test(sha)) return null;
+/** One commit's message body and file stat, for a tapped row, plus the files it changed (each one
+ *  tappable for its own diff). A merge is told against its first parent — what the merge brought
+ *  into this branch. `null` = no such commit. */
+export async function gitShow(wt: string, sha: string): Promise<GitShow | null> {
+  if (!SHA_RE.test(sha)) return null;
   try {
-    return await git(wt, ["show", "--stat", "--no-color", "--format=%B", sha]);
+    const body = await git(wt, ["show", "--stat", "--no-color", "--diff-merges=first-parent", "--format=%B", sha]);
+    // The list is extra: a failure to read it leaves the body, and the row draws no list.
+    const files = await git(wt, ["show", "--name-status", "-z", "--find-renames", "--diff-merges=first-parent", "--format=", sha])
+      .then(parseNameStatus, () => undefined);
+    return files ? { body, files } : { body };
+  } catch {
+    return null;
+  }
+}
+
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+
+/** `git show --name-status -z`: NUL-separated status, path, and a second path for a rename/copy. */
+export function parseNameStatus(out: string): GitCommitFile[] {
+  const parts = out.replace(/^\n+/, "").split("\0");
+  const files: GitCommitFile[] = [];
+  for (let i = 0; i < parts.length;) {
+    const st = parts[i++]?.trim();
+    if (!st) continue;
+    const letter = st[0];
+    if (letter === "R" || letter === "C") {
+      const from = parts[i++], path = parts[i++];
+      if (path) files.push({ path, status: letter, from });
+    } else {
+      const path = parts[i++];
+      if (path) files.push({ path, status: letter });
+    }
+  }
+  return files;
+}
+
+/** One file's diff in one commit (against its first parent). `from` = the rename's old path, so
+ *  a renamed file shows as one rename rather than an add and a delete. `null` = no such commit. */
+export async function gitShowFile(wt: string, sha: string, path: string, from?: string): Promise<string | null> {
+  if (!SHA_RE.test(sha) || !path) return null;
+  try {
+    // Literal pathspecs: the path is a file name the host listed, never a glob or a `:(magic)`.
+    return await git(wt, ["--literal-pathspecs", "show", "--no-color", "--find-renames", "--diff-merges=first-parent",
+      "--format=", sha, "--", ...(from ? [from] : []), path]);
   } catch {
     return null;
   }

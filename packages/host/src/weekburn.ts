@@ -26,11 +26,12 @@
  */
 import { join } from "node:path";
 import {
-  cleanWeekBurnPrefs, envName, healthHeadlineWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
+  cleanWeekBurnPrefs, healthHeadlineWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
   isWeekBurnOrigin, RESET_MATCH_MS, WEEKBURN_MEASURE_MS, WEEKBURN_ORIGIN,
   type BudgetPass, type Intent, type RepoHealthIndex, type UsageHistoryDoc, type UsageInfo,
   type WeekBurnPrefs, type WeekBurnStatus,
 } from "@waterplane/shared";
+import { env } from "./env.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 import type { Notify } from "./notifytypes.js";
 
@@ -89,7 +90,7 @@ export interface WeekBurn {
 }
 
 function envInt(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = env(name);
   if (raw == null || raw.trim() === "") return fallback;
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : fallback;
@@ -129,7 +130,7 @@ const sameWeek = (a: number | null | undefined, b: number | null | undefined): b
 
 export function createWeekBurn(deps: WeekBurnDeps): WeekBurn {
   const now = deps.now ?? Date.now;
-  const maxPerRepo = deps.maxPerRepo ?? envInt(envName("WEEKBURN_MAX_PER_REPO"), WEEKBURN_DEFAULT_MAX_PER_REPO);
+  const maxPerRepo = deps.maxPerRepo ?? envInt("WEEKBURN_MAX_PER_REPO", WEEKBURN_DEFAULT_MAX_PER_REPO);
   const file = join(deps.stateDir, "weekburn.json");
   let store: WeekBurnStore = cleanWeekBurnStore(readJsonGuarded<unknown>(file, {}));
   let inFlight: Promise<string[]> | null = null;

@@ -219,6 +219,9 @@
 .ts-barval em { font-style: normal; opacity: .65; margin-left: var(--sp-6); }
 .ts-bartrack { margin-top: var(--sp-4); height: 8px; border-radius: var(--r-4); background: var(--line); overflow: hidden; }
 .ts-barfill { display: block; height: 100%; border-radius: var(--r-4); background: var(--chart-1); }
+/* A bar row that is also a control (`WeekCosts.tsx`): a plain button, ringed when it is the span. */
+.ts-barrow-btn { display: block; width: calc(100% + 2 * var(--sp-6)); min-height: 44px; margin: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-6)); padding: var(--sp-6); border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-4); }
+.ts-barrow-btn.on { box-shadow: 0 0 0 2px var(--fg); }
 /* A costliest row's first-request bar: a different yardstick (the largest first request here) from
    the `--chart-1` share-of-cost bars on the same screen, so it is drawn in ink, not the series hue. */
 .ts-barfill.ts-barfill-first { background: color-mix(in srgb, var(--fg) 55%, var(--panel)); }

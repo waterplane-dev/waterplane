@@ -360,6 +360,15 @@ export interface RepoDaySlice {
   /** Input + cache read + cache write over `turns`: the context those requests
    *  sent (`shared/healthspend.ts`). Absent on an older host. */
   ctxTok?: number;
+  /** Every token this repo used that day, by kind — what lets a calendar span longer than the
+   *  host's cost window (`/api/costwindow`, 35 days) still rank its repos, summed from the days.
+   *  Absent on an older host, and then that span has no repo split. */
+  totals?: TokenTotals;
+  /** The same day's list-price cost, per model×day underneath like every figure here. */
+  cost?: CostBreakdown;
+  /** The part of `totals` run on a non-Anthropic model (claude-local): a day×repo cell has no
+   *  model split, so this is what the phone's default Anthropic-only view takes off. Absent = none. */
+  localTotals?: TokenTotals;
 }
 
 /**

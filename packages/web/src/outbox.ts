@@ -34,7 +34,7 @@ import {
   PAD_BYTES, PAD_CAP, PAD_WRITE_REFUSED,
   type ClientMessage, type PadDoc, type PadNote, type Rescued, type SendView, type SessionBudget, type LaunchOpts,
 } from "@waterplane/shared";
-import { LS, lsGet } from "./storage";
+import { LS, lsGet, lsSetChecked, lsStore } from "./storage";
 import { readGuarded, writeChecked, type Reading } from "./storedGuard";
 import { clearLoss, reportLoss } from "./lossNotice";
 import { announceSetting, onAdopt } from "./settings";
@@ -436,10 +436,12 @@ function shapeOf(key: string): (v: unknown) => boolean {
   return () => true;
 }
 function readState<T>(key: string, fallback: T): Reading<T> {
+  const st = lsStore();
+  if (!st) return { value: fallback, unreadable: true }; // no storage at all (node, blocked)
   try {
-    return readGuarded(localStorage, key, fallback, shapeOf(key));
+    return readGuarded(st, key, fallback, shapeOf(key));
   } catch {
-    return { value: fallback, unreadable: true }; // no storage at all (node, blocked)
+    return { value: fallback, unreadable: true }; // the store threw on read
   }
 }
 /** The keys that hold words a person typed and has not sent, and what to call them on the composer's loss line. */
@@ -457,7 +459,8 @@ function read<T>(key: string, fallback: T): T {
  */
 function write(key: string, val: unknown): boolean {
   let ok = false;
-  try { ok = writeChecked(localStorage, key, val, shapeOf(key)); } catch { ok = false; } // `localStorage` itself absent
+  const st = lsStore();
+  try { ok = st !== null && writeChecked(st, key, val, shapeOf(key)); } catch { ok = false; }
   const what = USER_WORDS[key];
   if (what) { if (ok) clearLoss(`refused:${what}`); else reportLoss({ kind: "refused", what }); }
   return ok;
@@ -627,16 +630,15 @@ export function loadPadDoc(): PadDoc {
  * would put a JSON document inside a JSON string. Canonical because two devices
  * holding the same notes have to produce the same bytes — see `serializePad`.
  *
- * Raw rather than `lsSet`, too, and that one is deliberate in the other
- * direction: `lsSet` swallows the quota throw, and swallowing it here is the
+ * `lsSetChecked` rather than `lsSet`, too, and that one is deliberate in the
+ * other direction: `lsSet` swallows the quota throw, and swallowing it here is the
  * whole bug this return value exists to stop. `false` is what makes `addPadNote`
  * refuse in words with the editor still holding the text, and what makes the
  * rescue migration retry on the next boot instead of marking itself done over
  * notes it never wrote.
  */
 export function writePadDoc(doc: PadDoc): boolean {
-  // eslint-disable-next-line no-restricted-properties -- this write must be able to THROW; `lsSet` swallows the quota error, which is the one thing this function may not do (see above)
-  try { localStorage.setItem(PAD_KEY, serializePad(doc)); } catch { return false; }
+  if (!lsSetChecked(PAD_KEY, serializePad(doc))) return false;
   // Tell whoever is rendering the pad. A local write is not announced by the
   // settings patch (see `announceSetting`), and this store has several writers.
   announceSetting(PAD_KEY);

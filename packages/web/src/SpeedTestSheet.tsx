@@ -10,6 +10,8 @@ import { Hint } from "./kit/Hint";
 import { useStore } from "./sdk";
 import { DEFAULT_SPEED_MB, connTestStart, openNetHealth } from "./connTest";
 import { latencyVerdict, summarizeLatency, throughputBasis, type LatencySummary } from "./connTestWords";
+import { rateSeries, type SpeedPoint, type SpeedSample } from "./speedSeries";
+import { SpeedGraph, DOWN_HUE, UP_HUE } from "./SpeedGraph";
 
 interface Props {
   onClose: () => void;
@@ -30,6 +32,21 @@ function fmtMbps(v: number): string {
 function fmtMBs(mbps: number): string {
   return (mbps / 8).toFixed(1); // megabits → megabytes
 }
+/** Progress callbacks → the graph's series, redrawn at most every 100 ms (a LAN fires hundreds a second). */
+function tracker(set: (pts: SpeedPoint[]) => void) {
+  const t0 = performance.now();
+  const samples: SpeedSample[] = [];
+  let drawn = 0;
+  return {
+    add(bytes: number) {
+      const now = performance.now() - t0;
+      samples.push({ ms: now, bytes });
+      if (now - drawn >= 100) { drawn = now; set(rateSeries(samples)); }
+    },
+    flush() { set(rateSeries(samples)); },
+  };
+}
+
 function ms(v: number | null): string {
   return v == null ? "—" : `${Math.round(v)} ms`;
 }
@@ -61,6 +78,8 @@ export function SpeedTestSheet({ onClose, embedded }: Props) {
   const [debug, setDebug] = useState<SpeedDebug | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [downPts, setDownPts] = useState<SpeedPoint[]>([]);
+  const [upPts, setUpPts] = useState<SpeedPoint[]>([]);
   const start = useStore(connTestStart);
   const live = useRef(true);
   useEffect(() => () => { live.current = false; }, []);
@@ -100,14 +119,20 @@ export function SpeedTestSheet({ onClose, embedded }: Props) {
     setUp(null);
     setDebug(null);
     setPct(0);
+    setDownPts([]);
+    setUpPts([]);
     try {
       setPhase("down");
-      const d = await api.speedtest.download(bytes, (recv) => setPct(Math.round((recv / bytes) * 100)));
+      const dTrack = tracker(setDownPts);
+      const d = await api.speedtest.download(bytes, (recv) => { setPct(Math.round((recv / bytes) * 100)); dTrack.add(recv); });
+      dTrack.flush();
       setDown(d);
 
       setPhase("up");
       setPct(0);
-      const u = await api.speedtest.upload(bytes);
+      const uTrack = tracker(setUpPts);
+      const u = await api.speedtest.upload(bytes, (sent) => { setPct(Math.round((sent / bytes) * 100)); uTrack.add(sent); });
+      uTrack.flush();
       setUp(u);
 
       if (withDebug) {
@@ -131,7 +156,7 @@ export function SpeedTestSheet({ onClose, embedded }: Props) {
   const relayed = debug?.clientKind === "tailscale" && debug.route === "derp";
   const running = phase === "ping" ? `Testing the connection… ${pct}%`
     : phase === "down" ? `Downloading… ${pct}%`
-    : phase === "up" ? "Uploading…"
+    : phase === "up" ? `Uploading… ${pct}%`
     : phase === "debug" ? "Probing connection…"
     : null;
 
@@ -198,18 +223,20 @@ export function SpeedTestSheet({ onClose, embedded }: Props) {
 
           {error && <Hint style={{ color: "var(--dead)" }}>Error: {error}</Hint>}
 
+          {(downPts.length > 0 || upPts.length > 0) && <SpeedGraph down={downPts} up={upPts} live={phase === "down" || phase === "up" ? phase : undefined} />}
+
           {/* results */}
           {(down || up) && (
             <div style={{ marginTop: 4 }}>
               {down && (
                 <SetLine style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span><Download size={14} style={{ verticalAlign: "-2px" }} /> Download <span style={{ opacity: 0.6 }}>· {throughputBasis(down.bytes, down.ms)}</span></span>
+                  <span><Download size={14} color={DOWN_HUE} style={{ verticalAlign: "-2px" }} /> Download <span style={{ opacity: 0.6 }}>· {throughputBasis(down.bytes, down.ms)}</span></span>
                   <strong>{fmtMbps(down.mbps)} Mbps <span style={{ opacity: 0.6, fontWeight: 400 }}>· {fmtMBs(down.mbps)} MB/s</span></strong>
                 </SetLine>
               )}
               {up && (
                 <SetLine style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span><Upload size={14} style={{ verticalAlign: "-2px" }} /> Upload <span style={{ opacity: 0.6 }}>· {throughputBasis(up.bytes, up.ms)}</span></span>
+                  <span><Upload size={14} color={UP_HUE} style={{ verticalAlign: "-2px" }} /> Upload <span style={{ opacity: 0.6 }}>· {throughputBasis(up.bytes, up.ms)}</span></span>
                   <strong>{fmtMbps(up.mbps)} Mbps <span style={{ opacity: 0.6, fontWeight: 400 }}>· {fmtMBs(up.mbps)} MB/s</span></strong>
                 </SetLine>
               )}

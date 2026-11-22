@@ -122,6 +122,8 @@ const KNOWN_DIRS: Record<string, "live"> = {
    *  pre-shard single file is renamed `agentreadings.json.migrated` once seeded, so it shows
    *  under the migration leftovers a person may clear. */
   agentreadings: "live",
+  /** `skills/skilluse.ts`: one summary file per project dir (`JsonShards`), a cache the logs rebuild; the pre-shard `skilluse.json` becomes `.json.migrated` once seeded. */
+  skilluse: "live",
 };
 
 /** Bytes and files directly inside one flat directory. Files only, symlinks
@@ -198,7 +200,7 @@ export function hostStoreReport(root: string, now = Date.now()): HostStoreReport
   const ledgers: Bucket = { count: 0, bytes: 0, known: true };
   const live: Bucket = { count: 0, bytes: 0, known: true };
   const unknown: Bucket = { count: 0, bytes: 0, known: false };
-  let tokenstats: { count: number; bytes: number } | null = null;
+  let tokenstats = null as { count: number; bytes: number } | null;
   let readable = true;
 
   let names: string[] = [];
@@ -214,12 +216,17 @@ export function hostStoreReport(root: string, now = Date.now()): HostStoreReport
     if (st.isDirectory()) {
       if (n === "thumbs") continue;               // its owner reports it
       const usage = flatUsage(full);
+      // `tokenstats/` is the token ledger itself, one shard per project slug (`tokenstats.ts`): the same row as the pre-shard file.
+      if (n === "tokenstats") {
+        if (usage) tokenstats = { count: (tokenstats?.count ?? 0) + usage.count, bytes: (tokenstats?.bytes ?? 0) + usage.bytes };
+        continue;
+      }
       const bucket = KNOWN_DIRS[n] ? live : unknown;
       if (usage) { bucket.count += usage.count; bucket.bytes += usage.bytes; }
       continue;
     }
     if (!st.isFile()) continue;
-    if (n === TOKENSTATS) { tokenstats = { count: 1, bytes: st.size }; continue; }
+    if (n === TOKENSTATS) { tokenstats = { count: (tokenstats?.count ?? 0) + 1, bytes: (tokenstats?.bytes ?? 0) + st.size }; continue; }
     const bucket = ROLLBACK_RE.test(n) ? rollback
       : BOUNDED_LEDGERS[n] ? ledgers
         : LIVE_FILES.has(n) ? live

@@ -118,7 +118,7 @@ export async function tryUnseal(): Promise<string | null> {
   const r = await openBlob(p, UNLOCK_PROMPT);
   stuck ||= shownStuck(r);
   if (r.ok) {
-    holdTokens(r.tokens);
+    holdTokens(r.tokens, r.lan);
     land(false);
     return null;
   }
@@ -193,7 +193,7 @@ export async function unlockSignIns(): Promise<string | null> {
   if (!p) return SEAL_NO_KEYSTORE;
   const r = await openBlob(p, OPEN_PROMPT);
   stuck ||= shownStuck(r);
-  if (r.ok) { holdTokens(r.tokens); return null; }
+  if (r.ok) { holdTokens(r.tokens, r.lan); return null; }
   if (r.why === "unreadable") return sealUnreadableWords(false);
   if (r.verdict === "stay") return sealRefusalWords(r.code, r.message, false, savedPlain());
   const words = sealLostWords(r.code, sealedNames());

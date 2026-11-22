@@ -30,7 +30,8 @@
  * that only holds where somebody remembered to call a helper is a rule that
  * breaks silently three edits later. `tools/eslint/rules.js` keeps new
  * prefixed literals from being written outside this file and the key slices it
- * spreads into `LS` (`storage/keys*.ts`).
+ * spreads into `LS` (`storage/keys*.ts`), and keeps every other file off the two
+ * storage globals (`no-raw-storage`): the access goes through the helpers below.
  *
  * Every key is `lsKey(name)`: the PREFIX is the brand's (`shared/brand.ts`),
  * so a rename edits one value there and no line here. A phone carrying an older
@@ -129,7 +130,7 @@ export type KeyScope = "device" | "host";
 export const KEY_SCOPE = {
   // synced — the settings document is per host
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
-  launchAsk: "host", spendWarn: "host", weekAllDesktops: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
+  launchAsk: "host", spendWarn: "host", weekAllDesktops: "host", pad: "host", hiddenRepos: "host", pinnedRepos: "host", enterSends: "host", dictateTerms: "host",
   autoSend: "host", updatesAutoCheck: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
   hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", agentWindowWarn: "host", syncTs: "host",
   // identity and the host list itself; healthAxis is this screen's choice, the app lock this hand's
@@ -205,6 +206,57 @@ if (import.meta.env?.DEV) {
   const known = new Set<string>(Object.values(LS));
   const missing = SYNCED_SETTING_KEYS.filter((k) => !known.has(k));
   if (missing.length) console.warn("[storage] synced keys missing from the registry:", missing);
+}
+
+/**
+ * The store itself, for code that hands a `Storage` to a pure function a node test feeds a Map
+ * (`hosts.ts`'s `KV`, `storedGuard`, the brand migration). Null where touching it throws. Read
+ * fresh on every call, never cached: the static demo swaps `window.localStorage` for its
+ * prefixed facade (`demo/world.ts`), and the `settings.ts` patch sits on whatever is there.
+ * `local/no-raw-storage` keeps every other file off the global.
+ */
+export function lsStore(): Storage | null {
+  try { return globalThis.localStorage ?? null; } catch { return null; }
+}
+
+/** Every key in the store (the hard reset's sweep), or none where it throws. */
+export function lsKeys(): string[] {
+  const st = lsStore();
+  if (!st) return [];
+  try {
+    const out: string[] = [];
+    for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k !== null) out.push(k); }
+    return out;
+  } catch { return []; }
+}
+
+/**
+ * A raw write that SAYS whether it landed. `lsSet` swallows the quota throw, which is right for a
+ * preference and wrong for the last copy of someone's words: the pad (`outbox.ts` `writePadDoc`)
+ * refuses in words with the text still in the editor when this is `false`. Through the patched
+ * `setItem`, so a synced key still syncs.
+ */
+export function lsSetChecked(key: string, value: string): boolean {
+  const st = lsStore();
+  if (!st) return false;
+  try { st.setItem(key, value); return true; } catch { return false; }
+}
+
+/**
+ * sessionStorage: this tab's life only — the watchdog's reload guard (`ws.ts`) and the demo's
+ * fake desktop (`demoSnapKey`). Never synced (the patch is on `localStorage` alone), never parked.
+ */
+export function ssStore(): Storage | null {
+  try { return globalThis.sessionStorage ?? null; } catch { return null; }
+}
+export function ssGet(key: string): string | null {
+  try { return ssStore()?.getItem(key) ?? null; } catch { return null; }
+}
+export function ssSet(key: string, value: string): void {
+  try { ssStore()?.setItem(key, value); } catch { /* quota / storage off */ }
+}
+export function ssDel(key: string): void {
+  try { ssStore()?.removeItem(key); } catch { /* storage off */ }
 }
 
 /** Raw string, or null. Never throws — private mode is not a crash. */

@@ -1,6 +1,6 @@
 /* ── scorecard (ScorecardSheet.tsx): the score head, check rows, the accept and scored-as forms.
    Colours are the theme's tokens only. */
-.sc-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.sc-scorehead { display: flex; align-items: center; gap: 12px; padding: 8px var(--gutter); }
 .sc-score { font-size: calc(28px * var(--ui-font, 1)); font-weight: 700; }
 .sc-row { display: flex; flex-direction: column; gap: 4px; }
 .sc-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }

@@ -53,6 +53,8 @@ export interface DiskEntry {
   copy?: string;
   /** wsl only: which disk this row is on. */
   side?: DiskSide;
+  /** mac/linux: the `DiskScan.volumes` key of the disk this row's bytes are on; absent when not known. */
+  vol?: string;
 }
 
 export interface DiskVolume {
@@ -60,8 +62,11 @@ export interface DiskVolume {
   path: string;
   freeKb: number;
   totalKb: number;
-  /** What the disk is called when there are two ("C:", "inside WSL"); absent on mac and plain Linux. */
+  /** What the disk is called: "C:", "inside WSL" on wsl; "Macintosh HD", "External", a mount point
+   *  ("/", "/data") in `DiskScan.volumes`. Absent on the mac/linux header volume from an older host. */
   label?: string;
+  /** `DiskScan.volumes` only: the key rows name in `DiskEntry.vol`. */
+  key?: string;
 }
 
 export interface DiskScan {
@@ -71,6 +76,8 @@ export interface DiskScan {
   volume: DiskVolume | null;
   /** wsl only: the Linux side's own free space (inside WSL's virtual disk), the second line. */
   wslVolume?: DiskVolume | null;
+  /** mac/linux: every real disk, the fullest first. Absent on wsl and from an older host. */
+  volumes?: DiskVolume[];
   /** Absent from a host older than the field: read as `mac`. */
   profile?: DiskProfile;
   temp: DiskEntry[];
@@ -80,7 +87,8 @@ export interface DiskScan {
   notes: string[];
 }
 
-export interface LargeFile { path: string; sizeKb: number; mtime: number | null }
+/** `vol`: the `DiskScan.volumes` key of its disk, when known. */
+export interface LargeFile { path: string; sizeKb: number; mtime: number | null; vol?: string }
 
 export interface LargeScan {
   at: number;
@@ -154,6 +162,9 @@ export interface DiskState {
 }
 
 /** The time bound on the large-file find, in seconds. */
+/** A row's `sizeNote` while the running scan has not sized it yet (listed first, sized after). */
+export const PENDING_NOTE = "still being measured";
+
 export const LARGE_LIMIT_S = 120;
 /** How many large files are listed. */
 export const LARGE_TOP = 50;
@@ -175,5 +186,6 @@ export type DiskMethods = {
   /** Queue one candidate's delete. Answers once it is ACCEPTED; the outcome arrives in `results`. */
   remove: { args: { id: string }; result: { accepted: true; label: string } };
   /** Queue every temporary candidate of the last scan. */
-  cleanTemp: { args: Record<string, never>; result: { accepted: number } };
+  /** `vol`: only the temporary rows on that disk (the sheet's disk cut); absent = every temporary row. */
+  cleanTemp: { args: { vol?: string }; result: { accepted: number } };
 };

@@ -91,6 +91,8 @@ export const SYNCED_SETTING_KEYS = [
   lsKey("pad"),
   /** Repos hidden from the launcher list. */
   lsKey("hiddenRepos"),
+  /** Repos pinned to the top of the launcher list, in the order they were placed. */
+  lsKey("pinnedRepos"),
   /** Enter submits vs. inserts a newline. */
   lsKey("enterSends"),
   /**

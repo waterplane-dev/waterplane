@@ -34,7 +34,7 @@ import { PLAIN_ROUTE_TOAST } from "@waterplane/shared";
 import { showToast } from "./toast";
 import type { DeviceTokenResponse, HostMessage, LanIdentityResponse, LanVerifyResponse } from "@waterplane/shared";
 import { bgFetch, bgJson } from "./api";
-import { deviceToken, dropDeviceToken, onBearerRejected, pickDeviceName, setDeviceToken } from "./deviceToken";
+import { deviceToken, dropDeviceToken, dropLanIdentity, lanIdentity, onBearerRejected, pickDeviceName, setDeviceToken, setLanIdentity } from "./deviceToken";
 import { setHostRoute, type HostRouteView } from "./hostRoute";
 import { activeHost, browserKV, listHosts, realHosts, setHostPins } from "./hosts";
 import { baseOfDial, invalidateSavedHostBase, isNativeShell, netOwedNow, pinnedRouteBase, plainBaseNow, plainHostRoute, readTicketLeft, routeBase, savedBasePinned, savedHostBase, setReadTicket, setRouteBase, tokenWithheld, whenNetRead, wsUrl } from "./hostUrl";
@@ -44,7 +44,6 @@ import { createLanRouter, fallbackGone, lanDialOf, lanDropOnSave, lanOnlyBase, l
 import { hasShellTls, shellTls, shellTlsPins, shellTlsRefusal } from "./sdk/shellTls";
 import { resyncShellLink } from "./shellLink";
 import { currentNet, onShellNet } from "./shellNet";
-import { LS, lsDel, lsJson, lsSetJson } from "./storage";
 import type { LanTest } from "./hostTestWords";
 
 /** What this needs of `HostConnection` — structural, like `link.ts`'s source. */
@@ -115,7 +114,7 @@ export async function testLanAddress(lan: string, hostId: string): Promise<LanTe
     const r = await bgFetch(`${lan}/api/health`, { cache: "no-store", credentials: "omit" }, 4000);
     const took = performance.now() - t0;
     if (!lanProbeAnswered(r.status)) return { s: "bad", aborted: false };
-    const id = activeHost()?.id === hostId ? storedIdentity() : null;
+    const id = activeHost()?.id === hostId ? lanIdentity() : null;
     if (!id) return { s: "ok", ms: took, proven: null };
     const nonce = newNonce();
     return { s: "ok", ms: took, proven: await verifyLanAnswer(id, nonce, await lanVerify(lan, nonce)) };
@@ -127,18 +126,15 @@ export async function testLanAddress(lan: string, hostId: string): Promise<LanTe
 let router: LanRouter | null = null;
 let started = false;
 
-function storedIdentity(): LanIdentity | null {
-  return parseLanIdentity(lsJson<unknown>(LS.lanIdentity, null));
-}
-
+/** Read and kept through `deviceToken.ts`, which knows whether the sign-ins are sealed. */
 async function ensureIdentity(): Promise<LanIdentity | null> {
-  const have = storedIdentity();
+  const have = lanIdentity();
   if (have) return have;
   const saved = savedHostBase();
   // The secret behind the LAN proof: over a plain route it is the relay's to read.
   if (!saved || netOwedNow() || plainBaseNow(saved)) return null;
   const got = parseLanIdentity(await lanIdentityOver(saved));
-  if (got) lsSetJson(LS.lanIdentity, got);
+  if (got) setLanIdentity(got);
   return got;
 }
 
@@ -399,9 +395,9 @@ export function startLanRoute(conn: LanConn): void {
     if (msg.t !== "welcome") return;
     learnPins(msg);
     void renewTicket();
-    const id = storedIdentity();
+    const id = lanIdentity();
     if (msg.hostId && id && id.hostId !== msg.hostId) {
-      lsDel(LS.lanIdentity);
+      dropLanIdentity();
       // On the LAN that is a different desktop than the one that proved itself.
       if (routeBase() !== null) { fail("a different desktop answered on the LAN"); return; }
     }

@@ -331,7 +331,7 @@ function aggregate(files: LogFile[], now: number): Ledger {
   const hourModel = new Map<string, Map<string, TokenTotals>>();
   const hourModelCost = new Map<string, Map<string, CostBreakdown>>();
   const dayAgents = new Map<string, Map<string, number>>();
-  const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number }>>();
+  const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number; totals: TokenTotals; cost: CostBreakdown }>>();
   const repoModel = new Map<string, Map<string, TokenTotals>>();
   const repoModelCost = new Map<string, Map<string, CostBreakdown>>();
   const cold = { count: 0, tok: 0, usd: 0, premiumUsd: 0 };
@@ -385,8 +385,9 @@ function aggregate(files: LogFile[], now: number): Ledger {
       if (f.sub) addTotals(subagents, v);
       addTotals(nest(dayModel, day, model, zeroTotals), v);
       addTotals(nest(hourModel, hour, model, zeroTotals), v);
-      const dr = nest(dayRepo, day, f.repo, () => ({ turns: 0, pricedTurns: 0, usd: 0 }));
+      const dr = nest(dayRepo, day, f.repo, () => ({ turns: 0, pricedTurns: 0, usd: 0, totals: zeroTotals(), cost: zeroCost() }));
       dr.turns += v.turns;
+      addTotals(dr.totals, v);
       addTotals(nest(repoModel, f.repo, model, zeroTotals), v);
       addTotals(cv.totals, v);
       if (f.sub) addTotals(cv.agentTotals, v);
@@ -398,6 +399,7 @@ function aggregate(files: LogFile[], now: number): Ledger {
       if (!c) { addTotals(unpriced, v); continue; }
       dr.pricedTurns += v.turns;
       dr.usd += c.total;
+      addCost(dr.cost, c);
       addCost(bag.c, c);
       addCost(cv.cost, c);
       if (f.sub) addCost(cv.agentCost, c);

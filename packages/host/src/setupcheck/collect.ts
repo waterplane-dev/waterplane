@@ -55,6 +55,8 @@ export interface CollectDeps {
   /** Findings extensions and plugins contribute (`api.setupFinding`). Absent ⇒ none were asked. */
   contributed?(worktree: string): Promise<{ findings: Finding[]; answered: string[] }>;
   efficiency?(worktree: string): { present: boolean; target: "CLAUDE.md" | "AGENTS.md" };
+  /** Stamp when each finding was first seen open (`seen.ts`). Absent ⇒ only a source's own date (the exposure watch's). */
+  seen?(findings: Finding[], now: number): Finding[];
 }
 
 /** Run one source: a throw (or a rejection) is an `absent` entry. */
@@ -162,7 +164,11 @@ export async function runSetupCheck(d: CollectDeps, worktree: string): Promise<S
   if (cli === null) merged.notChecked.push({ rule: "install.claude-cli", scope: "machine", why: "claude's sign-in state could not be read just now (the probe did not answer)" });
   const at = facts.now;
   const done = checkedOffOf(merged, at);
-  return { ...done, findings: rankFindings(done.findings), absent, at };
+  let open = done.findings;
+  if (d.seen) {
+    try { open = d.seen(open, at); } catch { /* a ledger that cannot be read leaves the source's own dates */ }
+  }
+  return { ...done, findings: rankFindings(open), absent, at };
 }
 
 /** The sources that do not depend on the worktree, memoized for ONE sweep: N repos read them once, not N times. */

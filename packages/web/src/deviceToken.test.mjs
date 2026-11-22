@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 
 import { BRAND, parkedKeyFor } from "@waterplane/shared";
 import {
-  bearerFor, bearerForSaved, deviceToken, dropDeviceToken, forgetHeldToken, heldToken, heldTokens, holdToken, holdTokens, pickDeviceName,
-  releaseTokens, sealedMode, setDeviceToken, tokenForHost, wsProtocols,
+  bearerFor, bearerForSaved, deviceToken, dropDeviceToken, dropLanIdentity, forgetHeldLanIdentity, forgetHeldToken, heldLanIdentities, heldToken,
+  heldTokens, holdLanIdentity, holdToken, holdTokens, lanIdentity, pickDeviceName, releaseTokens, sealedMode, setDeviceToken, setLanIdentity,
+  tokenForHost, wsProtocols,
 } from "./deviceToken.ts";
 import { LS } from "./storage.ts";
 
@@ -133,4 +134,66 @@ test("a held token of the wrong shape is not held", (t) => {
   holdToken(B, "short");
   assert.equal(deviceToken(), null);
   assert.equal(tokenForHost(B), null);
+});
+
+// ── The LAN identity: one reader, and never a plain key while sealed ─────
+
+const IDENT = { hostId: "desk1234", secret: "s".repeat(32) };
+const IDENT_B = { hostId: "desk5678", secret: "t".repeat(32) };
+
+test("identity, mode off: storage is the only answer, and set and drop write the key as they always did", (t) => {
+  const m = store(t, { [LS.hostActive]: A });
+  holdLanIdentity(A, IDENT_B);
+  assert.equal(lanIdentity(), null, "the map is not consulted");
+  setLanIdentity(IDENT);
+  assert.deepEqual(JSON.parse(m.get(LS.lanIdentity)), IDENT);
+  assert.deepEqual(lanIdentity(), IDENT);
+  dropLanIdentity();
+  assert.equal(m.has(LS.lanIdentity), false);
+});
+
+test("identity, sealed: what the blob held answers for the active desktop only, and nothing is written", (t) => {
+  const m = store(t, { [LS.hostActive]: A, [LS.tokenSealOn]: "1" });
+  assert.equal(lanIdentity(), null, "before the unseal there is none");
+  holdTokens({ [A]: TOK, [B]: OTHER }, { [A]: IDENT, [B]: IDENT_B, cccc3333: { hostId: "x", secret: "short" } });
+  assert.deepEqual(lanIdentity(), IDENT);
+  assert.deepEqual(heldLanIdentities(), { [A]: IDENT, [B]: IDENT_B }, "a row that is no identity is not held");
+  m.set(LS.hostActive, B);
+  assert.deepEqual(lanIdentity(), IDENT_B, "a host switch moves no key: the row id picks it");
+  assert.equal(m.has(LS.lanIdentity), false);
+});
+
+test("identity, sealed: one read over the tailnet goes to memory and never to a key", (t) => {
+  const m = store(t, { [LS.hostActive]: A, [LS.tokenSealOn]: "1" });
+  setLanIdentity(IDENT);
+  assert.equal(m.has(LS.lanIdentity), false);
+  assert.deepEqual(lanIdentity(), IDENT);
+  assert.deepEqual(heldLanIdentities(), { [A]: IDENT }, "so the next re-wrap carries it");
+});
+
+test("identity, sealed: a drop empties the map for the active desktop, takes a plain leftover too, and leaves the blob", (t) => {
+  const m = store(t, { [LS.hostActive]: A, [LS.tokenSealOn]: "1", [LS.tokenSeal]: "the blob", [LS.lanIdentity]: JSON.stringify(IDENT) });
+  holdTokens({ [A]: TOK, [B]: OTHER }, { [A]: IDENT, [B]: IDENT_B });
+  dropLanIdentity();
+  assert.equal(lanIdentity(), null);
+  assert.equal(m.has(LS.lanIdentity), false);
+  assert.deepEqual(heldLanIdentities(), { [B]: IDENT_B });
+  assert.equal(m.get(LS.tokenSeal), "the blob");
+});
+
+test("identity, sealed over a blob from before identities were in it: the plain copy still answers", (t) => {
+  store(t, { [LS.hostActive]: A, [LS.tokenSealOn]: "1", [LS.lanIdentity]: JSON.stringify(IDENT) });
+  holdTokens({ [A]: TOK });
+  assert.deepEqual(lanIdentity(), IDENT);
+});
+
+test("identity: what arrived this run beats the blob, a forget is by row, and release empties it with the tokens", (t) => {
+  store(t, { [LS.hostActive]: A, [LS.tokenSealOn]: "1" });
+  holdLanIdentity(A, IDENT_B);
+  holdTokens({ [A]: TOK }, { [A]: IDENT, [B]: IDENT_B });
+  assert.deepEqual(lanIdentity(), IDENT_B);
+  forgetHeldLanIdentity(B);
+  assert.deepEqual(heldLanIdentities(), { [A]: IDENT_B });
+  releaseTokens();
+  assert.deepEqual(heldLanIdentities(), {});
 });

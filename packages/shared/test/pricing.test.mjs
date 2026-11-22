@@ -223,7 +223,8 @@ test("fmtUsd: the one rule - 2 decimals, 2 significant digits under a cent", () 
 test("money is formatted so a real amount is never rendered as $0.00", () => {
   assert.equal(fmtUsd(0), "$0");
   assert.equal(fmtUsd(4.207), "$4.21");
-  assert.equal(fmtUsd(1284.4).replace(/,/g, ""), "$1284");
+  assert.equal(fmtUsd(1284.4), "$1,284");
+  assert.equal(fmtUsd(16956.2), "$16,956"); // never "$16.956" on a German phone
   assert.equal(fmtUsd(NaN), "—");
 });
 

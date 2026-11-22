@@ -8,11 +8,12 @@
  * a partial number presented as complete. A skill name is matched to the inventory at READ
  * time, so the cache does not depend on which skills are installed.
  */
+import { existsSync, renameSync } from "node:fs";
 import { open, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { addLocalDays } from "@waterplane/shared";
-import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { JsonShards, readJsonGuarded } from "../jsonstore.js";
 import { SCAN_CHUNK, walkLogs } from "../tokenscan.js";
 
 export const SKILLUSE_VERSION = 1;
@@ -30,6 +31,21 @@ export interface UseFile {
   day?: Record<string, Bag>; typedDay?: Record<string, Bag>;
 }
 interface Store { version: number; files: Record<string, UseFile> }
+
+/** One shard's body: the store VERSION it was written at, and one project dir's summaries (log path -> summary). */
+interface DirShard { v: number; files: Record<string, UseFile> }
+const isDirShard = (b: unknown): b is DirShard =>
+  typeof b === "object" && b !== null && (b as DirShard).v === SKILLUSE_VERSION && typeof (b as DirShard).files === "object" && (b as DirShard).files !== null;
+
+/**
+ * The shard a log belongs to: its project directory. A conversation's subagent logs live in
+ * `<project>/<conversation>/subagents[/workflows/<wf>]/`, so that tail is stripped: thousands of
+ * conversations must not become thousands of files. Decided from the path alone, so a load, a
+ * scan and the migration of the old single file all agree.
+ */
+export function useShardKey(logPath: string): string {
+  return dirname(logPath).replace(/\/[^/]+\/subagents(\/.*)?$/, "");
+}
 
 export interface SkillCounts { d30: number; all: number; typed30: number; typedAll: number }
 export interface SkillUseReading {
@@ -145,16 +161,56 @@ export const FRESH_MS = 30_000;
 const ALL_KEY = "\u0000all";
 
 export class SkillUseStore {
-  private store: Store;
+  private store: Store = { version: SKILLUSE_VERSION, files: {} };
+  private shards: JsonShards;
   private runs = new Map<string, Run>();
   private opts: SkillUseOpts;
   constructor(opts: SkillUseOpts) {
     this.opts = opts;
-    const loaded = readJsonGuarded<Store>(opts.file, { version: SKILLUSE_VERSION, files: {} },
-      (v) => !!v && typeof v === "object" && (v as Store).version === SKILLUSE_VERSION && typeof (v as Store).files === "object");
-    // A version change rebuilds: the accept test above falls back to an empty store.
-    this.store = loaded;
+    // One file per project dir beside `opts.file`. A shard of another VERSION is ignored: that dir is re-scanned.
+    this.shards = new JsonShards(join(dirname(opts.file), "skilluse"));
+    for (const body of this.shards.load().values()) if (isDirShard(body)) Object.assign(this.store.files, body.files);
+    this.migrate();
   }
+
+  /** Seed the dirs that have no shard yet from the pre-shard single file, write them, and set the file aside as `.migrated` (kept). A failed shard write leaves the file in place. */
+  private migrate(): void {
+    const legacy = this.opts.file;
+    try {
+      if (!existsSync(legacy)) return;
+      const raw = readJsonGuarded<Store | null>(legacy, null);
+      if (raw && raw.version === SKILLUSE_VERSION && raw.files && typeof raw.files === "object") {
+        const have = new Set(Object.keys(this.store.files).map(useShardKey));
+        for (const [p, f] of Object.entries(raw.files)) {
+          const k = useShardKey(p);
+          if (have.has(k) || !f || typeof f !== "object") continue;
+          this.store.files[p] = f;
+          this.shards.mark(k);
+        }
+      }
+      if (this.flush().failed) return;
+      // A corrupt file was already moved aside by `readJsonGuarded`; another VERSION seeds nothing and is set aside all the same.
+      if (existsSync(legacy)) renameSync(legacy, `${legacy}.migrated`);
+    } catch { /* a cache: the logs rebuild whatever was not seeded */ }
+  }
+
+  /** One dir's shard body, or undefined (the file is removed) when no summary is left in it. `groups` is one grouping of the store, built once per flush. */
+  private bodyOf(key: string, groups: Map<string, Record<string, UseFile>>): DirShard | undefined {
+    const files = groups.get(key);
+    return files ? { v: SKILLUSE_VERSION, files } : undefined;
+  }
+  private flush(): { written: number; removed: number; failed: number } {
+    if (!this.shards.pending) return { written: 0, removed: 0, failed: 0 };
+    const groups = new Map<string, Record<string, UseFile>>();
+    for (const [p, f] of Object.entries(this.store.files)) {
+      const k = useShardKey(p);
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = {}));
+      g[p] = f;
+    }
+    return this.shards.flush((k) => this.bodyOf(k, groups));
+  }
+
   private now() { return (this.opts.now ?? Date.now)(); }
 
   /**
@@ -182,7 +238,7 @@ export class SkillUseStore {
       const have = this.store.files[p];
       if (!have || have.m !== st.mtimeMs || have.s !== st.size) {
         const sum = await summarizeUse(p, st.size, st.mtimeMs, this.now(), this.opts.chunk);
-        if (sum) { this.store.files[p] = sum; dirty = true; }
+        if (sum) { this.store.files[p] = sum; this.shards.mark(useShardKey(p)); dirty = true; }
       }
       run.done++;
     }
@@ -190,7 +246,8 @@ export class SkillUseStore {
   }
 
   private save(): void {
-    try { writeJsonAtomic(this.opts.file, this.store); } catch { /* a ledger that cannot save just re-scans */ }
+    // Only the dirs a scan changed are written; a failed shard stays dirty and a ledger that cannot save just re-scans.
+    try { this.flush(); } catch { /* re-scans */ }
   }
 
   /** What the screen may show for this key. `dirs` decide which cached files belong to it. */

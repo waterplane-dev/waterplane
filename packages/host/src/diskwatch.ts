@@ -20,7 +20,7 @@
  */
 import { statfs } from "node:fs/promises";
 import os from "node:os";
-import { envName } from "@waterplane/shared";
+import { env } from "./env.js";
 import type { Notify } from "./notifytypes.js";
 
 export type DiskLevel = "ok" | "low" | "critical";
@@ -93,7 +93,7 @@ async function readHome(): Promise<{ availBytes: number; totalBytes: number } | 
 
 /** Start watching; returns the stop. `WATERPLANE_DISK_WARN_GB=0` starts nothing. */
 export function startDiskWatch(deps: DiskWatchDeps): () => void {
-  const warnGb = deps.warnGb !== undefined ? deps.warnGb : diskWarnGb(process.env[envName("DISK_WARN_GB")]);
+  const warnGb = deps.warnGb !== undefined ? deps.warnGb : diskWarnGb(env("DISK_WARN_GB"));
   if (warnGb === null) return () => {};
   const read = deps.read ?? readHome;
   let told: DiskLevel = "ok";

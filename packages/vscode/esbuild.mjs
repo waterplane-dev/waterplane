@@ -70,18 +70,18 @@ const hintChip = {
 // `kit/offlineGate.tsx`'s `../link` is swapped the same way (the webview has no socket to lose, so the
 // gate is always open) and `useRemoteResource.ts`'s `./offlineCache` for a store that keeps nothing:
 // the real one reaches the phone's whole api layer, hosts and an IndexedDB the webview has no use for.
+const phoneSwapList = [
+  [path.join(webSrc, "useRemoteResource.ts"), /^\.\/api(\.ts)?$/, "webview/shims/api.ts"],
+  [path.join(webSrc, "useRemoteResource.ts"), /^\.\/link(\.ts)?$/, "webview/shims/link.ts"],
+  [path.join(webSrc, "useRemoteResource.ts"), /^\.\/offlineCache(\.ts)?$/, "webview/shims/rescache.ts"],
+  [path.join(webSrc, "kit", "offlineGate.tsx"), /^\.\.\/link(\.ts)?$/, "webview/shims/link.ts"],
+  [path.join(webSrc, "webapi", "webapiStats.ts"), /^\.\/webapiFetch(\.ts)?$/, "webview/shims/jget.ts"],
+];
 const phoneReads = {
   name: "phone-reads",
   setup(b) {
-    const swaps = [
-      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/api(\.ts)?$/, "webview/shims/api.ts"],
-      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/link(\.ts)?$/, "webview/shims/link.ts"],
-      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/offlineCache(\.ts)?$/, "webview/shims/rescache.ts"],
-      [path.join(webSrc, "kit", "offlineGate.tsx"), /^\.\.\/link(\.ts)?$/, "webview/shims/link.ts"],
-      [path.join(webSrc, "webapi", "webapiStats.ts"), /^\.\/webapiFetch(\.ts)?$/, "webview/shims/jget.ts"],
-    ];
     b.onResolve({ filter: /^\.\.?\/(api|link|webapiFetch|offlineCache)(\.ts)?$/ }, (a) => {
-      const hit = swaps.find(([importer, re]) => a.importer === importer && re.test(a.path));
+      const hit = phoneSwapList.find(([importer, re]) => a.importer === importer && re.test(a.path));
       return hit ? { path: at(hit[2]) } : null;
     });
   },
@@ -240,6 +240,22 @@ if (release && existsSync(at("dist"))) {
 }
 writeFileSync(at("dist/buildstamp.json"), JSON.stringify(buildStamp) + "\n");
 
+// bundled-sources.json: which host, web and extension modules these bundles carry, and which of their
+// imports the plugins above swap. Those modules live in packages that build fine on their own, so a
+// new import there (a host module that spawns, a node: builtin in the webview, a package this one
+// does not install) broke only `npm run test:vscode`. tools/vscodebundle.test.mjs reads this list
+// at edit time and fails as soon as a listed module imports something outside it. The build fails
+// on a module the list does not hold yet; `--sources` rewrites the list after you checked it.
+const repo = path.join(here, "..", "..");
+const rel = (abs) => path.relative(repo, abs).split(path.sep).join("/");
+const SOURCES = at("bundled-sources.json");
+const inScope = (f) => /^packages\/(host\/src|web\/src|extensions\/[^/]+\/(host|web|shared))\//.test(f)
+  && !f.startsWith("packages/extensions/permissions/"); // private, resolved by alias, absent in the public tree
+const shimTable = {
+  shimmed: [hostEnv, hostAgents, path.join(webSrc, "HintChip.tsx")].map(rel),
+  swaps: phoneSwapList.map(([importer, re]) => ({ importer: rel(importer), spec: re.source })),
+};
+
 if (watch) {
   for (const c of configs) await (await context(c)).watch();
   console.log("watching…");
@@ -248,16 +264,30 @@ if (watch) {
   // per line (node_modules left out). The release train reads it to tell whether the extension
   // changed since the last release, since it bundles host/web/shared modules from source.
   const inputs = process.env.WP_VSCODE_INPUTS;
-  const results = await Promise.allSettled(configs.map((c) => build(inputs ? { ...c, metafile: true } : c)));
+  const results = await Promise.allSettled(configs.map((c) => build({ ...c, metafile: true })));
   const failed = results.filter((r) => r.status === "rejected");
   if (failed.length) process.exit(1);
-  if (inputs) {
-    const repo = path.join(here, "..", "..");
-    const files = new Set();
-    for (const r of results) for (const f of Object.keys(r.value.metafile.inputs)) {
-      if (f.includes("node_modules") || f.includes(":")) continue;
-      files.add(path.relative(repo, path.join(process.cwd(), f)));
-    }
-    writeFileSync(inputs, [...files].sort().join("\n") + "\n");
+  const files = new Set();
+  for (const r of results) for (const f of Object.keys(r.value.metafile.inputs)) {
+    if (f.includes("node_modules") || f.includes(":")) continue;
+    files.add(rel(path.join(process.cwd(), f)));
+  }
+  if (inputs) writeFileSync(inputs, [...files].sort().join("\n") + "\n");
+  const now = { ...shimTable, files: [...files].filter(inScope).sort() };
+  const was = existsSync(SOURCES) ? JSON.parse(readFileSync(SOURCES, "utf8")) : { files: [] };
+  const added = now.files.filter((f) => !was.files.includes(f));
+  const dropped = was.files.filter((f) => !now.files.includes(f));
+  const shimsMoved = JSON.stringify([was.shimmed, was.swaps]) !== JSON.stringify([now.shimmed, now.swaps]);
+  if (process.argv.includes("--sources")) {
+    writeFileSync(SOURCES, JSON.stringify(now, null, 2) + "\n");
+    console.log(`bundled-sources.json: ${now.files.length} modules (+${added.length} −${dropped.length})`);
+  } else if (added.length || shimsMoved) {
+    console.error(`bundled-sources.json is behind the bundles:\n${added.map((f) => `  + ${f}\n`).join("")}${shimsMoved ? "  (the shim table changed)\n" : ""}`
+      + "Each new module above now ships in the VS Code extension. Check it imports nothing the extension cannot carry\n"
+      + "(child_process, a host module that spawns or reads env.ts, a node: builtin in the webview), then run\n"
+      + "`node packages/vscode/esbuild.mjs --sources` and commit the list.");
+    process.exit(1);
+  } else if (dropped.length) {
+    console.log(`bundled-sources.json lists ${dropped.length} module(s) no longer bundled; \`node esbuild.mjs --sources\` drops them.`);
   }
 }

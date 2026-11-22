@@ -21,11 +21,15 @@ function maxTexture(): number {
 }
 
 /** Highest scale this image can be shown at without the backing store outgrowing
- *  a texture. Never below 2 — a viewer you can't zoom is worse than a blurry one. */
-function scaleCeiling(w: number, h: number): number {
+ *  a texture. Never below 2 — a viewer you can't zoom is worse than a blurry one.
+ *  Above MAX_SCALE only as far as the picture has pixels for (2× its natural
+ *  size): a tall contact sheet fitted to the screen height is a sliver whose
+ *  text only reads well past 6× (2026-11-21, desktop gallery). */
+function scaleCeiling(w: number, h: number, naturalW = 0): number {
   const px = Math.max(w, h) * (window.devicePixelRatio || 1);
   if (!px) return MAX_SCALE;
-  return clamp(maxTexture() / px, 2, MAX_SCALE);
+  const detail = w && naturalW ? (2 * naturalW) / w : 0;
+  return clamp(maxTexture() / px, 2, Math.max(MAX_SCALE, detail));
 }
 
 /** Full-screen pinch/pan/double-tap zoom stage. One-finger drag pans when zoomed
@@ -40,6 +44,7 @@ function scaleCeiling(w: number, h: number): number {
  *  and the scale ceiling comes from the GPU texture limit (see scaleCeiling).
  *  `will-change` is applied only during a gesture — as a permanent declaration it
  *  pins an oversized layer in GPU memory for as long as the viewer is open.
+ *  A mouse wheel or trackpad pinch zooms at the pointer (desktop browsers).
  *  Shared by the gallery viewer, the new-image swiper and the repo browser
  *  (`FilesSheet`). `onError` hands a failed load to a caller that has its own
  *  fallback to show (the browser's download button). */
@@ -67,13 +72,50 @@ export function ZoomableImage({ src, alt, onNav, onError }: { src: string; alt: 
   // Reset when the source changes (viewer reused for the next image).
   useEffect(() => { setT({ s: 1, x: 0, y: 0 }); }, [src]);
 
+  /** This image's own ceiling (1 when it has not laid out yet: fit() clamps again). */
+  function ceiling(): number {
+    const img = imgRef.current;
+    return img && img.offsetWidth ? scaleCeiling(img.offsetWidth, img.offsetHeight, img.naturalWidth) : MAX_SCALE;
+  }
+
+  /** Scale to `s` keeping stage point (fx, fy) — offsets from the stage centre — put. */
+  function zoomAt(c: { s: number; x: number; y: number }, s: number, fx: number, fy: number) {
+    const n = clamp(s, 1, ceiling());
+    if (n <= 1) return { s: 1, x: 0, y: 0 };
+    return fit({ s: n, x: fx - (fx - c.x) * (n / c.s), y: fy - (fy - c.y) * (n / c.s) });
+  }
+
+  /** Stage-centre offsets of a client point. */
+  function fromCentre(cx: number, cy: number) {
+    const box = stageRef.current?.getBoundingClientRect();
+    return box ? { fx: cx - box.left - box.width / 2, fy: cy - box.top - box.height / 2 } : { fx: 0, fy: 0 };
+  }
+
+  // Mouse wheel and trackpad pinch (Chrome sends that as ctrl+wheel) zoom at the
+  // pointer. A native listener: React's onWheel is passive, and a pinch that is
+  // not prevented zooms the whole page instead of the picture.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1;
+      const k = e.ctrlKey ? 0.01 : 0.002;
+      const factor = Math.exp(-clamp(e.deltaY * unit, -300, 300) * k);
+      const { fx, fy } = fromCentre(e.clientX, e.clientY);
+      setT((c) => zoomAt(c, c.s * factor, fx, fy));
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  });
+
   /** Clamp a transform so the image always covers / stays inside the stage.
    *  Layout size (offsetWidth) is pre-transform, which is what the maths needs. */
   function fit(next: { s: number; x: number; y: number }, freeX = false) {
     const img = imgRef.current;
     const stage = stageRef.current;
-    let s = Number.isFinite(next.s) ? clamp(next.s, 1, MAX_SCALE) : 1;
-    if (img && img.offsetWidth) s = Math.min(s, scaleCeiling(img.offsetWidth, img.offsetHeight));
+    let s = Number.isFinite(next.s) ? Math.max(1, next.s) : 1;
+    s = Math.min(s, ceiling());
     let x = Number.isFinite(next.x) ? next.x : 0;
     let y = Number.isFinite(next.y) ? next.y : 0;
     if (img && stage) {
@@ -116,10 +158,15 @@ export function ZoomableImage({ src, alt, onNav, onError }: { src: string; alt: 
     if (ptrs.current.size >= 2) {
       startPinch();
     } else {
-      // Double-tap toggles between fit and 2.5×.
+      // Double-tap toggles between fit and a zoom AT the tapped point: 2.5×, or
+      // the stage's width for a picture narrower than that (a tall sheet).
       const now = e.timeStamp;
       if (now - lastTap.current < 300) {
-        setT((c) => fit(c.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }));
+        const img = imgRef.current;
+        const stage = stageRef.current;
+        const fill = img && stage && img.offsetWidth ? stage.clientWidth / img.offsetWidth : 0;
+        const { fx, fy } = fromCentre(e.clientX, e.clientY);
+        setT((c) => (c.s > 1 ? { s: 1, x: 0, y: 0 } : zoomAt(c, Math.max(2.5, fill), fx, fy)));
         lastTap.current = 0;
       } else {
         lastTap.current = now;
@@ -141,7 +188,7 @@ export function ZoomableImage({ src, alt, onNav, onError }: { src: string; alt: 
       const box = stageRef.current?.getBoundingClientRect();
       const mx = (pair[0].x + pair[1].x) / 2 - (box ? box.left + box.width / 2 : 0);
       const my = (pair[0].y + pair[1].y) / 2 - (box ? box.top + box.height / 2 : 0);
-      const s = clamp((g.s * d) / g.dist, 1, MAX_SCALE);
+      const s = clamp((g.s * d) / g.dist, 1, ceiling());
       // Keep the point under the fingers put: with transform `translate then
       // scale`, a stage point f maps through x' = f - (f - x) * s'/s. The moving
       // midpoint carries the two-finger pan for free.

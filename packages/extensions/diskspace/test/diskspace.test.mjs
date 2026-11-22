@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, truncateSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, statSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, truncateSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -254,6 +254,30 @@ test("a size du cannot measure is UNKNOWN with its reason, never 0", async () =>
   } finally { f.done(); }
 });
 
+test("the deletable lists are pushed before a slow show-only folder is sized (~/Downloads held du for 120 s)", async () => {
+  const f = fixture();
+  try {
+    put(join(f.home, "Downloads/a.zip"));
+    const du = join(f.bin, "du-downloads-slow");
+    writeFileSync(du, `#!/bin/sh\ncase "$*" in *Downloads*) sleep 30;; esac\nexec /usr/bin/du "$@"\n`);
+    chmodSync(du, 0o755);
+    const h = harness({ ...f.roots, duBin: du, duTimeoutMs: 8000 });
+    await h.call("scan");
+    let s;
+    for (let i = 0; i < 200; i++) { s = await h.call("state"); if (s.scan) break; await new Promise((res) => setTimeout(res, 25)); }
+    assert.ok(s.scan, "rows are listed before anything is sized");
+    assert.ok(s.scan.temp.length > 0, "the temporary rows are among them");
+    for (let i = 0; i < 200; i++) { s = await h.call("state"); if (s.scan.temp.every((e) => e.sizeKb != null)) break; await new Promise((res) => setTimeout(res, 50)); }
+    assert.equal(s.scanning, true);
+    assert.ok(s.scan.temp.length > 0 && s.scan.temp.every((e) => e.sizeKb != null), "temporary rows already sized");
+    const dl = byLabel(s.scan.show, /Downloads$/);
+    assert.equal(dl.sizeKb, null);
+    assert.equal(dl.sizeNote, "still being measured");
+    await h.engine.idle();
+    assert.match(byLabel((await h.call("state")).scan.show, /Downloads$/).sizeNote, /did not finish within 8 s/);
+  } finally { f.done(); }
+});
+
 test("the large-file find lists big files (show-only) and stops at its bound with a partial list", async () => {
   const f = fixture();
   try {
@@ -284,6 +308,96 @@ test("the large-file find lists big files (show-only) and stops at its bound wit
   } finally { f.done(); }
 });
 
+test("mac large files come from Spotlight: covered folders dropped, the note says hidden folders were not searched; a failing mdfind falls back to find", async () => {
+  const f = fixture();
+  try {
+    put(join(f.home, "Movies/big.mov"), "");
+    truncateSync(join(f.home, "Movies/big.mov"), 3 * 1024 * 1024);
+    put(join(f.home, ".gradle/caches/huge.bin"), "");
+    truncateSync(join(f.home, ".gradle/caches/huge.bin"), 3 * 1024 * 1024);
+    const md = join(f.bin, "mdfind-fake");
+    // Answers as Spotlight would, including a covered file, a folder and a path that is gone.
+    writeFileSync(md, `#!/bin/sh\necho "$@" > '${join(f.bin, "md-args")}'\nprintf '%s\\n' '${join(f.home, ".gradle/caches/huge.bin")}' '${join(f.home, "Movies/big.mov")}' '${join(f.home, "Movies")}' '${join(f.home, "gone.bin")}'\n`);
+    chmodSync(md, 0o755);
+    // Two disks: Spotlight is asked about the home folder AND the other disk's mount point.
+    const disks = async () => [{ path: f.home, key: "dev:1", label: "Macintosh HD", freeKb: 1, totalKb: 10 }, { path: "/Volumes/Ext", key: "dev:2", label: "Ext", freeKb: 9, totalKb: 10 }];
+    const h = harness({ ...f.roots, profile: "mac", mdfindBin: md, findBin: "/nonexistent/find", listVolumes: disks });
+    await h.call("scanLarge");
+    await h.engine.idle();
+    const s = await h.call("state");
+    assert.deepEqual(s.large.items.map((x) => x.path), ["~/Movies/big.mov"]);
+    assert.equal(s.large.stoppedAfterS, null);
+    assert.match(s.large.note, /Spotlight/);
+    assert.equal(readFileSync(join(f.bin, "md-args"), "utf8").trim(), `-onlyin ${f.home} -onlyin /Volumes/Ext kMDItemFSSize > ${1000 * 1024}`);
+
+    const bad = join(f.bin, "mdfind-off");
+    writeFileSync(bad, "#!/bin/sh\nexit 1\n");
+    chmodSync(bad, 0o755);
+    const h2 = harness({ ...f.roots, profile: "mac", mdfindBin: bad, listVolumes: disks });
+    await h2.call("scanLarge");
+    await h2.engine.idle();
+    const s2 = await h2.call("state");
+    assert.deepEqual(s2.large.items.map((x) => x.path), ["~/Movies/big.mov"], "find ran instead");
+    assert.equal(s2.large.note, undefined);
+  } finally { f.done(); }
+});
+
+const { macUserMounts, linuxMounts, linuxDiskMounts, mountHolding, keyOfDev } = await import(`${D}/host/volumes.mjs`);
+
+test("linux disks are keyed by mount SOURCE: btrfs subvolumes and bind mounts of one device are one disk (the wp-peer VM showed four)", () => {
+  const proc = [
+    "/dev/vdb1 / btrfs rw,subvol=/scon/containers/A 0 0",
+    "/dev/vdb1 /opt/orbstack-guest/data btrfs rw,subvol=/ 0 0",
+    "/dev/vdb1 /mnt/machines/wp-t34 btrfs rw,subvol=/scon/containers/B 0 0",
+    "mac /Users virtiofs rw 0 0",
+    "/dev/sdb1 /data ext4 rw 0 0",
+  ].join("\n");
+  const m = linuxDiskMounts(proc);
+  assert.deepEqual([...new Set(m.map((x) => x.src))], ["/dev/vdb1", "/dev/sdb1"]);
+  assert.equal(mountHolding("/home/me/x", m).src, "/dev/vdb1");
+  assert.equal(mountHolding("/data/models/a", m).at, "/data");
+  assert.equal(mountHolding("/database", m).at, "/", "a prefix that is not a path boundary is not inside");
+});
+
+test("disks: mac keeps local writable disks under /Volumes; linux keeps block-device filesystems, not /boot or snaps", () => {
+  const mac = [
+    "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)",
+    "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect)",
+    "/dev/disk9s1 on /Volumes/External (apfs, local, nodev, nosuid, journaled, noowners)",
+    "/dev/disk10s1 on /Volumes/My Card (exfat, local, nodev, nosuid, noowners)",
+    "/dev/disk11s1 on /Volumes/Installer (hfs, local, nodev, nosuid, read-only, noowners)",
+    "//me@nas/share on /Volumes/share (smbfs, nodev, nosuid, mounted by me)",
+    "map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)",
+  ].join("\n");
+  assert.deepEqual(macUserMounts(mac), ["/Volumes/External", "/Volumes/My Card"]);
+  const proc = [
+    "/dev/nvme0n1p2 / ext4 rw,relatime 0 0",
+    "/dev/nvme0n1p1 /boot/efi vfat rw 0 0",
+    "/dev/loop3 /snap/core/1 squashfs ro 0 0",
+    "tmpfs /run tmpfs rw 0 0",
+    "/dev/sdb1 /mnt/big\\040disk xfs rw 0 0",
+  ].join("\n");
+  assert.deepEqual(linuxMounts(proc), ["/", "/mnt/big disk"]);
+});
+
+test("rows say which disk they are on, and clean all can be cut to one disk", async () => {
+  const f = fixture();
+  try {
+    const home = keyOfDev(statSync(f.home).dev);
+    const vols = [
+      { path: "/elsewhere", key: "dev:1", label: "External", freeKb: 900, totalKb: 1000 },
+      { path: f.home, key: home, label: "Macintosh HD", freeKb: 10, totalKb: 1000 },
+    ];
+    const h = harness({ ...f.roots, listVolumes: async () => vols });
+    const s = await h.scanned();
+    assert.deepEqual(s.scan.volumes.map((v) => v.label), ["External", "Macintosh HD"]);
+    assert.ok(s.scan.temp.length > 0 && s.scan.temp.every((e) => e.vol === home), "every temporary row is on the home disk");
+    assert.equal((await h.call("cleanTemp", { vol: "dev:1" })).accepted, 0, "nothing temporary on the other disk");
+    assert.equal((await h.call("cleanTemp", { vol: home })).accepted, s.scan.temp.length);
+    await h.engine.idle();
+  } finally { f.done(); }
+});
+
 test("ollama list parsing and sizes", () => {
   const rows = parseOllamaList("NAME   ID   SIZE   MODIFIED\nqwen3-coder:30b-64k          5d94265d163a    18 GB     2 weeks ago     \nbroken line\n");
   assert.deepEqual(rows, [{ name: "qwen3-coder:30b-64k", id: "5d94265d163a", size: "18 GB", modified: "2 weeks ago" }]);
@@ -297,7 +411,11 @@ test("ollama list parsing and sizes", () => {
 const { safeToRemove, relMatches, driveForm, compactHow } = await import(`${D}/host/candidates.mjs`);
 const { findArgs } = await import(`${D}/host/large.mjs`);
 const { parsePsDrive } = await import(`${D}/host/run.mjs`);
-const { parseUserProfile, detectProfile } = await import(`${D}/host/index.mjs`);
+const { parseUserProfile, detectProfile, OLLAMA_PLACES } = await import(`${D}/host/index.mjs`);
+
+test("linux and wsl never look for ollama in a mac place (an OrbStack VM sees the Mac's /Applications)", () => {
+  for (const prof of ["linux", "wsl"]) assert.ok(OLLAMA_PLACES[prof].every((p) => !p.startsWith("/Applications/") && !p.startsWith("/opt/homebrew/")), prof);
+});
 
 /** Set `p` and every folder up to (not including) `stop` back by `days`, leaf first. */
 function aged(p, stop, days) {
@@ -800,8 +918,10 @@ test("wsl scan: Windows-side rows are sized by the one PowerShell call; when it 
     const winPath = (p) => `W:${p}`;
     const ps = fakePs((paths) => paths.map((_, i) => `{"i":${i},"bytes":${(i + 1) * 1024 * 1000},"bad":0,"found":1}`).join("\r\n"));
     const s = (await harness({ ...f.roots, psBin: "powershell.exe", psRun: ps.runPs, winPath }).scanned()).scan;
-    assert.equal(ps.calls.length, 1, "one call for the whole fast part");
-    const handed = JSON.parse(ps.calls[0].opts.input).p;
+    // One call per stage at most: the deletable rows', then the show-only rows' (each pushed when done).
+    assert.ok(ps.calls.length >= 1 && ps.calls.length <= 2, `one PowerShell call per stage (${ps.calls.length})`);
+    assert.ok(JSON.parse(ps.calls[0].opts.input).p.some((p) => p.includes("npm-cache")), "the deletable rows are sized first");
+    const handed = ps.calls.flatMap((c) => JSON.parse(c.opts.input).p);
     assert.ok(handed.every((p) => p.startsWith(`W:${f.win}`)), "only Windows-side paths");
     const npm = s.temp.find((e) => e.label === join(f.win, "AppData/Local/npm-cache"));
     assert.equal(npm.sizeKb, (handed.indexOf(`W:${npm.label}`) + 1) * 1000);

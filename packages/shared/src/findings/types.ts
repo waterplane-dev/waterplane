@@ -72,7 +72,17 @@ export interface Finding {
   saving?: FindingSaving;
   remedy: FindingRemedy;
   waive: FindingWaive;
+  /**
+   * When this finding was first seen open, so a person can tell a new one from one that has sat for
+   * weeks. `at` is epoch ms. `from`: "watch" = the exposure watch's own first reading that had it;
+   * "desktop" = the first setup check on this desktop that produced it. `atLeast` = it was already
+   * open at the first check that could have seen it, so it may be older than `at` (worded so, never
+   * as the day it appeared). Absent = not known (an extension's finding the host did not stamp).
+   */
+  seen?: FindingSeen;
 }
+
+export interface FindingSeen { at: number; from: "watch" | "desktop"; atLeast?: true }
 
 /** A rule that ran and passed (or whose finding was waived): the checked-off list. */
 export interface PassedCheck {

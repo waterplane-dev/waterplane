@@ -109,10 +109,17 @@ never in `UI_RESET_KEYS`, all kept by the hard reset.
   the seal row), and the host setup form refuses to save one while old APK + app lock + seal all
   hold (`hostEditGuard.ts`). A plain address that got in some other way (an older build, restored
   storage) is still stranding; the way in is a newer APK or *forget the locked sign-ins*.
-- The LAN identity (`LS.lanIdentity`) is not in the blob and stays plaintext: with it and an
-  imitated saved Wi-Fi name, someone can answer as the desktop on a row with no TLS pin and receive
-  the sign-in next time the app is open there. A pinned row is not affected. SECURITY.md (Sealed
-  sign-ins) says why it is not sealed.
+- The LAN identity (`LS.lanIdentity`) is sealed with its desktop's token, in the same blob, and
+  only for a desktop whose token is there (`tokenVault.ts`, `deviceToken.ts` `lanIdentity()`). Three
+  copies can still be plain while the mode is on: one read over the tailnet since the last re-wrap
+  is in memory only, so after a restart the Wi-Fi link needs the tailnet once more (no sheet is
+  raised for it; the next pairing's re-wrap carries it); a blob sealed before identities went in
+  keeps its plain ones until the next re-wrap, or off and on again; and an identity whose desktop
+  has no token in the blob. With such a copy and an imitated saved Wi-Fi name, someone can answer
+  as the desktop on a row with no TLS pin and receive the sign-in next time the app is open there.
+  A pinned row is not affected. With the mode off every identity is plain, beside the plain token.
+- A build from before this reads the newer blob as tokens only: a re-wrap or an unseal done by it
+  leaves the identities out, and the Wi-Fi link then reads them over the tailnet again.
 - A seal that will not open has one way off, by hand: once a refusal about the seal (not a cancel, a
   lockout, another sheet or a plain route) or an unreadable blob, the row offers *forget the locked
   sign-ins*, behind `Confirm.tsx` and the lock's own sheet when the lock is on. It drops held tokens

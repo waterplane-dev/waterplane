@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { hourKeyMs, zeroCost, zeroTotals } from "@waterplane/shared";
 import {
-  calendarFrom, clockOf, daysCut, dayKeyOf, hoursCover, isLiveSpan, spanDays, spanHours, spanRange,
+  calendarFrom, clockOf, daysCut, dayKeyOf, foldRepoDays, hoursCover, isLiveSpan, spanDays, spanHours, spanRange,
 } from "./span.ts";
 
 const day = (key, input, extra = {}) => ({ day: key, ...zeroTotals(), input, turns: 1, cost: { ...zeroCost(), input, total: input }, ...extra });
@@ -107,4 +107,28 @@ test("all time: records with no date are said to be in the total and in no day (
   // Per log or not, all time holds every one of them.
   assert.match(allTimeUndatedText({ undated: 3, undatedUntil: 1, undatedLogs: [[1, 3]] }), /^3 records/);
   assert.equal(allTimeUndatedText({ undated: -1 }), null, "not a count: no sentence with a wrong number");
+});
+
+const slice = (repo, input, usd) => ({ repo, turns: 1, pricedTurns: 1, usd, totals: { ...zeroTotals(), input, turns: 1 }, cost: { ...zeroCost(), input: usd, total: usd } });
+
+test("a span longer than the cost window ranks its repos from the day rows, summed", () => {
+  const days = [
+    day("2026-08-01", 30, { byRepo: [slice("/r/a", 10, 1), slice("/r/b", 20, 4)] }),
+    day("2026-09-01", 5, { byRepo: [slice("/r/a", 5, 2)] }),
+  ];
+  const rows = foldRepoDays(days, [{ key: "/r/a", label: "a-label" }]);
+  const a = rows.find((r) => r.key === "/r/a");
+  const b = rows.find((r) => r.key === "/r/b");
+  assert.equal(a.label, "a-label");
+  assert.equal(a.input, 15);
+  assert.equal(a.cost.total, 3);
+  assert.equal(b.label, "b", "a repo the all-time rows do not name is labelled by its last path segment");
+  assert.equal(b.cost.total, 4);
+});
+
+test("an older host's day rows (no tokens on the repo slice, or no slice at all) give no repo split, never a floor", () => {
+  const old = { repo: "/r/a", turns: 1, pricedTurns: 1, usd: 1 };
+  assert.equal(foldRepoDays([day("2026-08-01", 10, { byRepo: [old] })], []), null);
+  assert.equal(foldRepoDays([day("2026-08-01", 10)], []), null);
+  assert.deepEqual(foldRepoDays([{ ...day("2026-08-01", 0), turns: 0 }], []), [], "an empty day without a split is no gap");
 });

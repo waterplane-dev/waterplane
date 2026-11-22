@@ -8,7 +8,7 @@
  * Props are what App owns (`types.ts`); a feature's state is read here through
  * its index; the launcher's own state is `useLauncherModel`'s.
  */
-import { useLayoutEffect, useRef } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 import { Activity, Archive, ArrowDownUp, Cpu, CalendarClock, CircleDot, Hourglass, OctagonPause, Camera, ChevronsDownUp, ChevronsUpDown, CloudOff, Download, Eraser, Flag, Gauge, House, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, repoShown } from "@waterplane/shared";
 import { Empty } from "../../Empty";
@@ -48,6 +48,7 @@ import { launcherScroll, useLauncherModel } from "./useLauncherModel";
 import { noReposWords } from "./model";
 import { listRead } from "../../listRead";
 import { RepoGroup } from "./RepoGroup";
+import { UnpinnedHead } from "./UnpinnedHead";
 import { ClosedRows } from "./ClosedRows";
 import { PlainFolders, scanPlainFolders } from "./PlainFolders";
 import { CloseSheet } from "./CloseSheet";
@@ -545,8 +546,12 @@ export function LauncherScreen(p: LauncherProps) {
             </div>
           )}
           <PlainFolders refreshRepos={refreshRepos} />
-          {repoGroups.map(({ repoName, sessions: groupSessions }) => (
-            <RepoGroup key={`g:${repoName}`} p={p} m={m} repoName={repoName} sessions={groupSessions} />
+          {repoGroups.map(({ repoName, sessions: groupSessions, pinned }, i) => (
+            <Fragment key={`g:${repoName}`}>
+              {/* Where the pinned block ends: what the rest are and their order (drawn only once a repo is pinned). */}
+              {!pinned && i > 0 && repoGroups[i - 1]!.pinned && <UnpinnedHead n={repoGroups.length - i} />}
+              <RepoGroup p={p} m={m} repoName={repoName} sessions={groupSessions} />
+            </Fragment>
           ))}
           {noReposText && <Empty>{noReposText}</Empty>}
           {textOn && repoGroups.length === 0 && <Empty>No session or repo shows “{textQuery.trim()}”. The search at the end of the filter looks through what sessions said.</Empty>}

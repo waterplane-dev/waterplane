@@ -19,6 +19,7 @@ import type { TokenStatsStore } from "../tokenstats.js";
 import type { UsageInfo, BillingProfile, PeriodState, UsageReading } from "@waterplane/shared";
 import { claudeCliRow, autoCompactFor, autoCompactMachineFor, copilotFact, healthFact, periodFact } from "./readers.js";
 import { efficiencyFact } from "../efficiencywrite.js";
+import { findingSeenLedger } from "./seen.js";
 import { runSetupCheck, sweepRepos, type CollectDeps, type RepoOutcome, type SetupCheckDoc, type SweepRepo } from "./collect.js";
 
 export const SETUP_CHECK_WAIT_MS = 8_000;
@@ -78,6 +79,7 @@ export function liveDeps(s: LiveSources): CollectDeps {
     waived: waivedFindings,
     efficiency: (wt) => efficiencyFact(wt),
     contributed: (wt) => contributedFindings(wt),
+    seen: (findings, now) => findingSeenLedger(s.root).stamp(findings, now),
   };
 }
 

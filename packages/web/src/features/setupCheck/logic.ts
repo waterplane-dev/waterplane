@@ -6,6 +6,7 @@
 import { checkedCut, findingCut, rankFindings } from "@waterplane/shared";
 import type { Finding, FindingScope, NotChecked, PassedCheck } from "@waterplane/shared";
 import type { SetupCheckResponse } from "../../setupCheckTypes";
+import { CLAUDE_MD_KEY, DESC_KEY } from "../../repoHealthPlot.ts";
 
 /** The chips: the all-repos overview beside the three scopes. */
 export type SetupCheckView = FindingScope | "all";
@@ -117,9 +118,6 @@ export const blockLines = (block: string): number => block.split("\n").filter((l
  */
 export function fixRoute(scope: string): "host" | "repo" { return scope === "machine" ? "host" : "repo"; }
 
-/** The series keys, spelled as `repoHealthPlot.ts` does (pinned in logic.test.mjs; this file loads bare under node --test). */
-const CLAUDE_MD_KEY = "context.claudeMdChars";
-const DESC_KEY = "context.descChars";
 
 /** The finding whose evidence is the always-on weight on its second clock. */
 export const WEIGHT_FINDING_ID = "repo.context-weight";

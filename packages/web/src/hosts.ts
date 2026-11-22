@@ -26,7 +26,7 @@ import {
   parkPrefix, parseHostList, planHostMigration, planHostSwitch, serializeHostList, vouchedAfter,
   type HostLan, type HostTls, type HostUpdateKey, type ParkOp, type SavedHost,
 } from "@waterplane/shared";
-import { LS, demoSnapKey, isDeviceKey } from "./storage.ts";
+import { LS, demoSnapKey, isDeviceKey, lsStore, ssDel } from "./storage.ts";
 
 /** The slice of `Storage` this needs — `localStorage`, or a Map in a test. */
 export interface KV {
@@ -39,7 +39,7 @@ export interface KV {
 
 /** `localStorage`, or null where it throws (private mode, blocked WebView). */
 export function browserKV(): KV | null {
-  try { return globalThis.localStorage ?? null; } catch { return null; }
+  return lsStore();
 }
 
 export function allKeys(kv: KV): string[] {
@@ -569,7 +569,7 @@ export function markDemoLeave(kv: KV): void {
 export function enterDemoHost(scenarioId: string): boolean {
   const kv = browserKV();
   if (!kv) return false;
-  try { globalThis.sessionStorage?.removeItem(demoSnapKey(scenarioId)); } catch { /* storage off */ }
+  ssDel(demoSnapKey(scenarioId));
   if (!markDemoEnter(kv, scenarioId)) return false;
   // The route names a session of the host being left; the demo starts at the launcher.
   try { history.replaceState(null, "", location.pathname); } catch { /* keep the url */ }
@@ -582,7 +582,7 @@ export function leaveDemoHost(): boolean {
   const kv = browserKV();
   if (!kv) return false;
   const id = kv.getItem(LS.demo);
-  try { if (id) globalThis.sessionStorage?.removeItem(demoSnapKey(id)); } catch { /* storage off */ }
+  if (id) ssDel(demoSnapKey(id));
   markDemoLeave(kv);
   try { history.replaceState(null, "", location.pathname); } catch { /* keep the url */ }
   location.reload();

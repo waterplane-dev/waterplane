@@ -107,6 +107,8 @@ export interface DevicePrefs {
   unfoldToEnd: boolean;
   /** The launcher's repo order (`core/launcher/model.ts`). Default by name, per device. */
   repoSort: RepoOrder;
+  /** Repos pinned to the top of the launcher, in their placed order. Synced, per host. */
+  pinnedRepos: string[];
   /** The session-tab strip: on, how many fit, which order, how many drawn. Per device. */
   tabsOn: boolean;
   tabsN: number;
@@ -225,6 +227,11 @@ export const prefs = createPrefs<DevicePrefs>({
   localRtBar: { load: localRtMode, save: setLocalRtMode },
   unfoldToEnd: flag(LS.unfoldToEnd, onUnlessZero),
   repoSort: { load: () => lsGet(LS.repoSort) === "name" ? "name" : "sessions", save: (v) => { if (v === "name") lsSet(LS.repoSort, v); else lsDel(LS.repoSort); } },
+  pinnedRepos: {
+    load: () => { const v = lsJson<unknown>(LS.pinnedRepos, []); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; },
+    save: (v) => { if (v.length) lsSetJson(LS.pinnedRepos, v); else lsDel(LS.pinnedRepos); },
+    keys: [LS.pinnedRepos], same: sameList,
+  },
   tabsOn: { load: tabsEnabled, save: setTabsEnabled },
   tabsN: { load: tabsCount, save: setTabsCount },
   tabsSort: { load: tabsOrder, save: setTabsOrder, keys: [LS.tabOrderShared] },

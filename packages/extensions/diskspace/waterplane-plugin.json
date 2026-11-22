@@ -11,6 +11,7 @@
   "optional": true,
   "experimental": true,
   "places": [
+    "Launcher ☰ menu, This desktop: Disk space",
     "Settings: free space from the last scan, and the full disk space screen"
   ]
 }

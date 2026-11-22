@@ -189,3 +189,8 @@ A leftover worktree's explainer and remove button sit inside its card, and the c
 - asked: 2026-11-20, 2026-11-20
 - shipped: 89a397215, 4d26eff94
 
+
+### R-git-039 · shipped
+A tapped commit in the history lists the files it changed, each with its change word (added, modified, deleted, renamed with its old path). Tapping one opens that file's change in that commit, as changes or side by side, captioned before and after this commit; a merge is shown against its first parent. Back lands on the history with the commit still open.
+- asked: 2026-11-21 (screenshot of the Commits screen) — "Ability to look at the file changes is missing"
+- shipped: (this commit)

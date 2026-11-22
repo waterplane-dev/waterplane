@@ -28,6 +28,9 @@ const STORAGE_OWNERS = [
   "packages/web/src/storage.ts",  // the key registry and the four readers
   "packages/web/src/settings.ts", // patches setItem for the synced allow-list
 ];
+// The static demo's facade REPLACES `window.localStorage` (`demo/world.ts`): it is the one other
+// file that must hold the real store. Only `no-raw-storage` is off there, not the whole web block.
+const STORAGE_FACADE = ["packages/web/src/demo/world.ts"];
 
 export default tseslint.config(
   // .claude/outbox and inbox are gitignored transport (agents drop scratch scripts there), never source.
@@ -111,22 +114,9 @@ export default tseslint.config(
             "on exactly the link this app is for.",
         },
       ],
-      // The KEY is the part that must be central; the global itself is fine to
-      // touch where a helper would only be a pass-through (a prefix sweep, a
-      // `Object.keys(localStorage)` walk). Warn, so growth is visible.
-      "no-restricted-properties": [
-        "warn",
-        {
-          object: "localStorage",
-          property: "getItem",
-          message: "`lsGet`/`lsJson`/`lsBool`/`lsNum` from storage.ts already swallow the private-mode throw.",
-        },
-        {
-          object: "localStorage",
-          property: "setItem",
-          message: "`lsSet`/`lsSetJson`/`lsSetBool` from storage.ts already swallow the quota throw.",
-        },
-      ],
+      // The key is central (`no-storage-key-literal`) and so is the access: every read and write
+      // goes through storage.ts, which swallows the private-mode and quota throws once.
+      "local/no-raw-storage": "error",
     },
   },
   // The feature folders' import boundary. Its own block rather than the one
@@ -258,6 +248,7 @@ export default tseslint.config(
   },
   // ws.ts owns the socket and the health probe behind the watchdog reload.
   { files: ["packages/web/src/ws.ts"], rules: { "local/no-second-socket": "off" } },
+  { files: STORAGE_FACADE, rules: { "local/no-raw-storage": "off" } },
   // `backendCaps.ts` IS the resolution — `hasCap`/`capReason` are where absent
   // becomes "inherit what used to imply it". It reads the fields computed
   // (`b.caps[cap]`), which the rule does not see anyway; the exemption is here

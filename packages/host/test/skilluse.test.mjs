@@ -134,3 +134,96 @@ test("all repos: one walk of the projects folder sums every repo's logs", async 
   const here = await until(store, "repo", [dir], ["alpha"]);
   assert.equal(here.uses.alpha.d30 + 1, r.uses.alpha.d30);
 });
+
+// ── One file per project dir (JsonShards) ───────────────────────────────────
+const { readdirSync, readFileSync, statSync, existsSync, rmSync } = await import("node:fs");
+const shardFiles = (home) => readdirSync(join(home, "skilluse")).filter((n) => n.endsWith(".json")).sort();
+const shardStamp = (home) => Object.fromEntries(shardFiles(home).map((n) => [n, statSync(join(home, "skilluse", n)).mtimeMs]));
+const readShard = (home, n) => JSON.parse(readFileSync(join(home, "skilluse", n), "utf8"));
+
+function multi() {
+  const home = mkdtempSync(join(tmpdir(), "wp-skilluse-shard-"));
+  const projects = join(home, "projects");
+  const dirs = ["a", "b", "c"].map((n) => join(projects, n));
+  dirs.forEach((d, i) => {
+    mkdirSync(join(d, "conv", "subagents"), { recursive: true });
+    writeFileSync(join(d, "x.jsonl"), use(`t${i}`, "alpha", 1) + "\n");
+    writeFileSync(join(d, "conv", "subagents", "agent-1.jsonl"), use(`s${i}`, "alpha", 2) + "\n");
+  });
+  return { home, projects, dirs };
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test("shards: one file per project dir (subagent logs ride in their project's), and a change rewrites only that dir's", async () => {
+  const { home, projects, dirs } = multi();
+  const file = join(home, "skilluse.json");
+  const s = new SkillUseStore({ file, now: () => NOW, freshMs: 0 });
+  s.kick("all", [projects]);
+  const r1 = await until(s, "all", [projects], ["alpha"]);
+  assert.equal(r1.uses.alpha.all, 6);
+  assert.equal(shardFiles(home).length, 3, "three project dirs, not six log files");
+  assert.ok(!existsSync(file), "no whole-store file is written");
+  const before = shardStamp(home);
+  await sleep(30);
+  appendFileSync(join(dirs[1], "x.jsonl"), use("tnew", "alpha", 0) + "\n");
+  s.kick("all", [projects]);
+  let r = r1;
+  for (let i = 0; i < 200 && r.uses.alpha.all === 6; i++) { await sleep(10); r = s.read("all", [projects], ["alpha"]); }
+  assert.equal(r.uses.alpha.all, 7);
+  const after = shardStamp(home);
+  const moved = Object.keys(after).filter((n) => after[n] !== before[n]);
+  assert.equal(moved.length, 1, "exactly one shard rewritten");
+  assert.equal(Object.keys(readShard(home, moved[0]).b.files).length, 2);
+  // A fresh store reads every shard back.
+  const again = new SkillUseStore({ file, now: () => NOW });
+  again.kick("all", [projects]);
+  assert.equal((await until(again, "all", [projects], ["alpha"])).uses.alpha.all, 7);
+});
+
+test("shards: a legacy skilluse.json is migrated into per-dir shards, equal entry for entry, then set aside", async () => {
+  const { home, projects, dirs } = multi();
+  const file = join(home, "skilluse.json");
+  // Build the legacy file by scanning with a store, then folding its shards back into one file.
+  const a = new SkillUseStore({ file, now: () => NOW });
+  a.kick("all", [projects]);
+  const want = (await until(a, "all", [projects], ["alpha"])).uses;
+  const files = {};
+  for (const n of shardFiles(home)) Object.assign(files, readShard(home, n).b.files);
+  assert.equal(Object.keys(files).length, 6);
+  rmSync(join(home, "skilluse"), { recursive: true });
+  writeFileSync(file, JSON.stringify({ version: 1, files }));
+  const s = new SkillUseStore({ file, now: () => NOW });
+  assert.equal(shardFiles(home).length, 3);
+  assert.deepEqual(s.store.files, files, "every entry reads back equal");
+  assert.ok(!existsSync(file) && existsSync(`${file}.migrated`));
+  // Same counts without re-reading a log: freeze the logs by removing them is not needed, the cache is by mtime+size.
+  s.kick("all", [projects]);
+  assert.deepEqual((await until(s, "all", [projects], ["alpha"])).uses, want);
+  assert.deepEqual(s.read("one", [dirs[0]], ["alpha"]).state, "counting");
+});
+
+test("shards: a legacy file of another version is not migrated", () => {
+  const { home } = multi();
+  const file = join(home, "skilluse.json");
+  const entry = { m: 1, s: 1, all: { alpha: 9 }, typedAll: {} };
+  writeFileSync(file, JSON.stringify({ version: 999, files: { [join(home, "projects", "a", "x.jsonl")]: entry } }));
+  const s = new SkillUseStore({ file, now: () => NOW });
+  assert.deepEqual(s.store.files, {});
+  assert.equal(existsSync(join(home, "skilluse")), false, "no shard written");
+});
+
+test("shards: a shard of another version is ignored and that dir is re-scanned", async () => {
+  const { home, projects } = multi();
+  const file = join(home, "skilluse.json");
+  const a = new SkillUseStore({ file, now: () => NOW });
+  a.kick("all", [projects]);
+  await until(a, "all", [projects], ["alpha"]);
+  const n = shardFiles(home)[0];
+  const sh = readShard(home, n);
+  sh.b.v = 0;
+  for (const f of Object.values(sh.b.files)) f.all = { alpha: 50 };
+  writeFileSync(join(home, "skilluse", n), JSON.stringify(sh));
+  const s = new SkillUseStore({ file, now: () => NOW });
+  s.kick("all", [projects]);
+  assert.equal((await until(s, "all", [projects], ["alpha"])).uses.alpha.all, 6, "the stale shard's numbers are not served");
+});

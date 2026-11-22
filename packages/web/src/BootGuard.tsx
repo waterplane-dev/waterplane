@@ -3,6 +3,7 @@ import { logTag } from "@waterplane/shared";
 import { RESET_KEEP_PREFIXES } from "./resetKeys";
 import { appName } from "./themeOverlay";
 import { PULL_CACHE_PREFIXES } from "./boot/brandMigrate";
+import { lsDel, lsKeys } from "./storage";
 
 /**
  * The last line of defence against a BLACK SCREEN.
@@ -23,11 +24,9 @@ import { PULL_CACHE_PREFIXES } from "./boot/brandMigrate";
  */
 
 async function hardReset(): Promise<void> {
-  try {
-    for (const k of Object.keys(localStorage)) {
-      if (!RESET_KEEP_PREFIXES.some((p) => k.startsWith(p))) localStorage.removeItem(k);
-    }
-  } catch { /* storage disabled */ }
+  for (const k of lsKeys()) { // none where storage is disabled
+    if (!RESET_KEEP_PREFIXES.some((p) => k.startsWith(p))) lsDel(k);
+  }
   try {
     const names = await caches.keys();
     // Downloaded artifacts are megabytes someone waited for — same carve-out the

@@ -12,7 +12,7 @@ import {
   PAIR_LINK_INVALID, fieldsFromPaste, pairLinkRequest, pairLinkSentence, pairTargetOf, readRedeemReply, redeemErrorText,
   PAIR_ROW_KEPT, heldTokenFor, pairAddressOf, pairedNoRoute, scopedKeys, sealedAsk, storeRedeemed, storeSealed,
 } from "./pairRedeem.ts";
-import { heldToken, holdToken, releaseTokens } from "./deviceToken.ts";
+import { heldLanIdentities, heldToken, holdToken, releaseTokens } from "./deviceToken.ts";
 import { addHost, finishSwitch, readHosts, setHostPins, setHostTlsOff, setHostUpdateKey, updateHost, writeSwitch } from "./hosts.ts";
 import { LS } from "./storage.ts";
 
@@ -542,6 +542,44 @@ test("sealed mode: a seal's token is held, and the caller is told to re-wrap", (
   assert.equal(heldToken(r.host.id), TOKEN);
   assert.equal(kv.getItem(LS.deviceToken), null);
   assert.equal(kv.getItem(parkedKeyFor(LS.deviceToken, r.host.id)), null);
+});
+
+test("sealed mode: a seal's LAN identity is held with its token and written under no key, bare or parked", (t) => {
+  t.after(releaseTokens);
+  const kv = shim({ [LS.tokenSealOn]: "1" });
+  const r = storeSealed(kv, sealed(), WIFI);
+  assert.equal(r.sealedPending, true, "the same re-wrap carries both");
+  assert.deepEqual(heldLanIdentities(), { [r.host.id]: sealed().lanIdentity });
+  assert.ok(![...kv.m.values()].some((v) => v.includes(sealed().lanIdentity.secret)), "the secret is in no key");
+  assert.ok(!r.wrote.some((k) => k.includes("lanIdentity")));
+});
+
+test("sealed mode: a plain identity an earlier pairing left goes when the seal's is held", (t) => {
+  t.after(releaseTokens);
+  const kv = shim();
+  const first = storeSealed(kv, sealed(), WIFI);
+  assert.ok(kv.getItem(LS.lanIdentity) || kv.getItem(parkedKeyFor(LS.lanIdentity, first.host.id)));
+  kv.setItem(LS.tokenSealOn, "1");
+  storeSealed(kv, sealed(), WIFI);
+  assert.ok(![...kv.m.keys()].some((k) => k.endsWith(LS.lanIdentity.split(".").pop())), "no identity under any key");
+});
+
+test("sealed mode: a re-pair as passive, or by a host that sends none, drops the held identity; with no token to seal it stays plain", (t) => {
+  t.after(releaseTokens);
+  const kv = shim({ [LS.tokenSealOn]: "1" });
+  const full = storeSealed(kv, sealed(), WIFI);
+  storeSealed(kv, sealed({ scope: "passive" }), WIFI);
+  assert.deepEqual(heldLanIdentities(), {});
+  assert.ok(![...kv.m.keys()].some((k) => k.endsWith(LS.lanIdentity.split(".").pop())), "a passive device keeps none, in memory or out");
+  storeSealed(kv, sealed(), WIFI);
+  const { lanIdentity: _l, ...noId } = sealed();
+  storeSealed(kv, noId, WIFI);
+  assert.deepEqual(heldLanIdentities(), {});
+  // No token means nothing of this desktop enters the blob, so memory alone would lose the identity at the next start.
+  const open = storeSealed(kv, sealed({ token: undefined }), WIFI);
+  assert.deepEqual(heldLanIdentities(), {});
+  assert.ok(open.wrote.some((k) => k.includes("lanIdentity")));
+  assert.equal(open.host.id, full.host.id);
 });
 
 test("the old token for a box may come from the row's LAN address; a plain redeem's may not", () => {

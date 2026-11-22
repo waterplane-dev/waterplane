@@ -18,6 +18,13 @@
 .dk-legend i { width: 8px; height: 8px; border-radius: var(--r-2); }
 .dk-legend i.free { background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
 
+/* Several disks: a card each, stacked, the fullest first; the picked one is outlined and the lists follow it. */
+.dk-disks { display: flex; flex-direction: column; gap: var(--sp-8); margin: var(--sp-12) var(--sp-14) var(--sp-4); }
+.dk-disk { display: block; width: 100%; margin: 0; font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.dk-disk.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.dk-disk:not(.on) .dk-vol-free b { font-size: calc(var(--fs-18) * var(--ui-font, 1)); }
+.dk-cut { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); margin: var(--sp-6) var(--sp-14) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+
 .dk-notes { list-style: none; margin: var(--sp-6) 0 0; padding: 0 var(--sp-14); display: flex; flex-direction: column; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
 .dk-notes li { display: flex; gap: var(--sp-6); align-items: flex-start; }
 .dk-notes li svg { flex: none; margin-top: 1px; }

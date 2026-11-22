@@ -24,7 +24,7 @@ import {
 } from "@waterplane/kit";
 import { FETCH_HOURS, type SourceId, TREND_DAYS } from "./constants.ts";
 import {
-  calendarFrom, clockOf, COST_WINDOW_DAYS, dayKeyOf, daysCut, hoursCover, isLiveSpan, spanDayCount, spanDays, spanHours, spanRange, spanUndatedText, trendWithoutUndated, allTimeUndatedText,
+  calendarFrom, clockOf, COST_WINDOW_DAYS, dayKeyOf, daysCut, foldRepoDays, hoursCover, isLiveSpan, spanDayCount, spanDays, spanHours, spanRange, spanUndatedText, trendWithoutUndated, allTimeUndatedText,
   SPANS, type SpanSel,
 } from "./span.ts";
 import { WeekCard } from "./WeekCard.tsx";
@@ -568,7 +568,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, ho
   // The span's repos and conversations: an hour bucket and a day row have none, so the host folds
   // the span (`/api/costwindow`). The live week IS the week card's document ("week"); any other
   // live cut or a calendar span up to the host's 35 days is its own read, keyed to stay put. A
-  // longer calendar span has no fold, and says so (`reposRefusal`).
+  // longer calendar span sums the day rows' repo split (`foldRepoDays`); an older host's days
+  // carry none, and the card says so (`reposRefusal`).
   const liveSS = scopeSpan(active, wk);
   const calSS = !active && calDays != null && calDays <= COST_WINDOW_DAYS && range
     ? { from: range.from, toHour: Infinity, key: `${range.from}:d${calDays}` }
@@ -583,9 +584,14 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, ho
   useRescan(fresh, scopeRead.reload);
   const scopeDoc = ss === "week" ? weekDoc : docFor(scopeRead.data, ssOwn?.from ?? null);
   const scopeRes = ss === "week" ? weekRead : scopeRead;
-  const scopeRepos = useMemo(() => (scopeDoc ? rankRepos(scopeDoc.convos, scopeDoc.rest).map(repoRowAsGroup) : null), [scopeDoc]);
-  const reposRefusal = !active && calDays != null && calDays > COST_WINDOW_DAYS
-    ? `The desktop folds repos over at most ${COST_WINDOW_DAYS} days, so ${calDays} days has no repo split — 30 days and all time do.`
+  const longCal = !active && calDays != null && calDays > COST_WINDOW_DAYS;
+  const dayRepos = useMemo(() => (longCal ? foldRepoDays(days, doc?.repos ?? []) : null), [longCal, days, doc]);
+  const scopeRepos = useMemo(
+    () => (longCal ? dayRepos : scopeDoc ? rankRepos(scopeDoc.convos, scopeDoc.rest).map(repoRowAsGroup) : null),
+    [longCal, dayRepos, scopeDoc],
+  );
+  const reposRefusal = longCal && !dayRepos
+    ? `This desktop’s scan has no per-day repo split yet, so ${calDays} days has none — the next re-scan on an updated desktop adds it. 30 days and all time have one now.`
     : null;
   /** Dollars per weekly point — ONE calibration for the whole screen (the week card and the
    *  costliest list), off the week's readings against its ledger. Readings are INSTANTS, so they

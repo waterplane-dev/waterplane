@@ -47,11 +47,11 @@
  * with respect to its own: a corrupt store rebuilds from scratch, a failed write
  * is dropped. A statistics screen is not worth taking the daemon down for.
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { 
-  addCost, addTotals, costOf, dayToMs, isPriced, priceKeyLabel, priceListSource, tokenTotal, zeroCost, zeroTotals,
+  addCost, addTotals, costOf, dayToMs, isAnthropicModel, isPriced, priceKeyLabel, priceListSource, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc,
   type CostWindowDoc, hourKey, hourKeyMs, windowStartHour, eachFileCell, eachLedgerCell, uncross } from "@waterplane/shared";
@@ -61,7 +61,7 @@ import { notePriceGap } from "./pricegap.js";
 import { type FileSummary, summarizeLog, walkLogs } from "./tokenscan.js";
 import { hostStateDir } from "./branddirs.js";
 import { foldCostWindow, repoOfWorktree, undatedFields, type CostMeta } from "./costwindow.js";
-import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { JsonShards, readJsonGuarded } from "./jsonstore.js";
 
 /** A single log this big is not read. Nothing observed comes near it; the cap
  *  exists so one pathological file cannot stall the sweep. */
@@ -81,6 +81,12 @@ const VERSION = 8; // 7: Haiku 5.5 long-prompt requests tallied under `<alias>@l
  *  intraday chart, which is the longest window anybody reads it over. */
 /** How many conversations `TokenStatsDoc.top` names. */
 const TOP_CONVOS = 12;
+
+/** One repo on one day, as `aggregate()` accumulates it (`RepoDaySlice` on the wire). */
+type DayRepoAcc = {
+  turns: number; pricedTurns: number; usd: number; ctxTok: number;
+  totals: TokenTotals; cost: CostBreakdown; localTotals?: TokenTotals;
+};
 
 /** Moved to `costwindow.ts` (one import direction between the two); re-exported
  *  so `packages/host/test/*` and every caller keep importing it from here. */
@@ -114,6 +120,15 @@ const HOURS_DAYS = Math.max(1, Number(env("TOKENSTATS_HOUR_DAYS") || 14));
  * says which it is.
  */
 type Store = Record<string, Record<string, FileSummary>>;
+
+/** One shard's body: the store VERSION it was written at, and that project slug's per-file summaries. */
+interface SlugShard { v: number; files: Record<string, FileSummary> }
+const isSlugShard = (b: unknown): b is SlugShard =>
+  typeof b === "object" && b !== null && (b as SlugShard).v === VERSION && typeof (b as SlugShard).files === "object" && (b as SlugShard).files !== null;
+
+/** The shard directory and the pre-shard single file, under the state dir. */
+export const TOKEN_SHARD_DIR = "tokenstats";
+export const TOKEN_LEGACY_FILE = "tokenstats.json";
 
 
 
@@ -156,10 +171,9 @@ export function windowCells(hourMs: number, anchor: number, lenMs: number): numb
 }
 
 export class TokenStatsStore {
-  private path: string;
+  private shards: JsonShards;
   private store: Store = {};
   private timer: NodeJS.Timeout | null = null;
-  private dirty = false;
   private lastScan = 0;
   private lastLogs = 0;
   private lastReread = 0;
@@ -170,13 +184,33 @@ export class TokenStatsStore {
   constructor(root: string) {
     const dir = hostStateDir(root);
     mkdirSync(dir, { recursive: true });
-    this.path = join(dir, "tokenstats.json");
+    this.shards = new JsonShards(join(dir, TOKEN_SHARD_DIR));
+    // A shard of another VERSION is absent: that slug is re-read from the logs and its file rewritten.
+    for (const [slug, body] of this.shards.load()) if (isSlugShard(body)) this.store[slug] = body.files;
+    this.migrate(join(dir, TOKEN_LEGACY_FILE));
+  }
+
+  /** Seed the slugs that have no shard yet from the pre-shard single file, write them, and set the file aside as `.migrated` only once every shard is on disk. A failed shard write leaves the file in place for the next boot. */
+  private migrate(legacy: string): void {
     try {
-      if (existsSync(this.path)) {
-        const raw = readJsonGuarded<any>(this.path, null) as { v?: number; store?: Store };
-        if (raw?.v === VERSION && raw.store && typeof raw.store === "object") this.store = raw.store;
+      if (!existsSync(legacy)) return;
+      const raw = readJsonGuarded<{ v?: number; store?: Store } | null>(legacy, null);
+      if (raw?.v === VERSION && raw.store && typeof raw.store === "object") {
+        for (const [slug, files] of Object.entries(raw.store)) {
+          if (this.store[slug] || !files || typeof files !== "object") continue;
+          this.store[slug] = files;
+          this.shards.mark(slug);
+        }
       }
+      if (this.shards.flush((slug) => this.bodyOf(slug)).failed) return;
+      // A corrupt file was already moved aside by `readJsonGuarded`; another VERSION seeds nothing and is set aside all the same.
+      if (existsSync(legacy)) renameSync(legacy, `${legacy}.migrated`);
     } catch { /* corrupt → rebuild from the logs, which are the source anyway */ }
+  }
+
+  private bodyOf(slug: string): SlugShard | undefined {
+    const files = this.store[slug];
+    return files ? { v: VERSION, files } : undefined;
   }
 
   /**
@@ -225,11 +259,11 @@ export class TokenStatsStore {
     } catch {
       // No project directory at all — a fresh machine, or `WATERPLANE_CLAUDE_HOME`
       // pointed somewhere empty. An empty answer, not a stale one.
+      for (const slug of Object.keys(this.store)) this.shards.mark(slug);
       this.store = {};
       this.lastScan = Date.now();
       this.lastLogs = 0;
       this.lastReread = 0;
-      this.dirty = true;
       this.schedule();
       return;
     }
@@ -271,11 +305,14 @@ export class TokenStatsStore {
       }
     }
 
+    // Only a slug that CHANGED is written: a kept summary is the very object the old store held, so a reference walk finds what moved or went without stringifying anything.
+    for (const slug of new Set([...Object.keys(this.store), ...Object.keys(next)])) {
+      if (slugChanged(this.store[slug], next[slug])) this.shards.mark(slug);
+    }
     this.store = next;
     this.lastScan = Date.now();
     this.lastLogs = logs;
     this.lastReread = reread;
-    this.dirty = true;
     this.schedule();
   }
 
@@ -331,7 +368,7 @@ export class TokenStatsStore {
     const dayAgents = new Map<string, Map<string, number>>();
     /** day → repo → requests (all, and priced) and money: the price per
      *  request over time, per repo. Same cross key, one more projection. */
-    const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number; ctxTok: number }>>();
+    const dayRepo = new Map<string, Map<string, DayRepoAcc>>();
     // repo → model → the same two tallies. The bar list says a repo is 42% of
     // the tokens and cannot say why it is 61% of the money; this is the answer,
     // and it is the same cross key the loop is already reading.
@@ -439,9 +476,15 @@ export class TokenStatsStore {
 
           if (day) addTotals(nest(dayModel, day, model, zeroTotals), v);
           if (hour) addTotals(nest(hourModel, hour, model, zeroTotals), v);
-          const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0, ctxTok: 0 })) : null;
+          const dr = day ? nest(dayRepo, day, repoKey, (): DayRepoAcc => ({ turns: 0, pricedTurns: 0, usd: 0, ctxTok: 0, totals: zeroTotals(), cost: zeroCost() })) : null;
           // `cacheWrite1h` is a SUBSET of `cacheWrite`, so it is not added again.
-          if (dr) { dr.turns += v.turns; dr.ctxTok += v.input + v.cacheRead + v.cacheWrite; }
+          if (dr) {
+            dr.turns += v.turns; dr.ctxTok += v.input + v.cacheRead + v.cacheWrite;
+            addTotals(dr.totals, v);
+            // The phone hides non-Anthropic models by default (`localSplit.ts`); a day×repo cell has
+            // no model split, so the local part rides apart for that cut to take off.
+            if (!isAnthropicModel(model)) addTotals(dr.localTotals ??= zeroTotals(), v);
+          }
           addTotals(nest(repoModel, repoKey, model, zeroTotals), v);
           addTotals(cv.totals, v);
           if (sum.sub) addTotals(cv.agentTotals, v);
@@ -452,7 +495,7 @@ export class TokenStatsStore {
             if (!cv.last || hour > cv.last) cv.last = hour;
           }
           if (!c) { addTotals(unpriced, v); if (day) notePriceGap(model, dayToMs(day)); return; }
-          if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }
+          if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; addCost(dr.cost, c); }
           addCost(cv.cost, c);
           if (sum.sub) addCost(cv.agentCost, c);
           if (am) addCost(am.cost, c);
@@ -546,7 +589,11 @@ export class TokenStatsStore {
     ): TokenGroup[] =>
       [...m.entries()]
         .map(([key, t]) => ({
-          key, label: label(key), ...t, cost: costs.get(key) ?? zeroCost(), priced: isPriced(key),
+          key, label: label(key), ...t, cost: costs.get(key) ?? zeroCost(),
+          // `priced` asks whether a MODEL id has a list price. A repo key is a path, which never
+          // does, so stamping it there marked every repo row unpriced and the screen hid its dollars.
+          // A repo is priced per model underneath (`wire/telemetry.ts`): the flag stays absent.
+          ...(split ? {} : { priced: isPriced(key) }),
           ...(split ? {
             byModel: [...(split.get(key) ?? new Map()).entries()]
               .map(([model, tt]) => ({ model, totals: tt, cost: splitCost?.get(key)?.get(model) ?? zeroCost() }))
@@ -716,20 +763,27 @@ export class TokenStatsStore {
   }
 
   private schedule(): void {
-    if (this.timer || !this.dirty) return;
+    if (this.timer || !this.shards.pending) return;
     this.timer = setTimeout(() => { this.timer = null; this.flush(); }, FLUSH_MS);
     this.timer.unref?.();
   }
 
-  /** Write now. Called on the debounce and on SIGTERM — losing it costs a
+  /** Write now — only the slugs that changed since the last flush, never the whole store. Called on the debounce and on SIGTERM: losing it costs a
    *  4.5 s rebuild on the next open, which after a routine restart is exactly
-   *  the wait this store exists to remove. */
+   *  the wait this store exists to remove. A slug whose write failed stays pending for the next flush. */
   flush(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
-    if (!this.dirty) return;
-    try {
-      writeJsonAtomic(this.path, { v: VERSION, store: this.store });
-      this.dirty = false;
-    } catch { /* a statistics cache is not worth taking the daemon down for */ }
+    if (!this.shards.pending) return;
+    // A statistics cache is not worth taking the daemon down for: `JsonShards.flush` never throws.
+    this.shards.flush((slug) => this.bodyOf(slug));
   }
+}
+
+/** Whether a slug's summaries differ from the last sweep's: a file added, gone, or re-read (a new object). Reference compare, no stringify. */
+function slugChanged(was: Record<string, FileSummary> | undefined, now: Record<string, FileSummary> | undefined): boolean {
+  if (!was || !now) return was !== now;
+  const a = Object.keys(was);
+  if (a.length !== Object.keys(now).length) return true;
+  for (const k of a) if (was[k] !== now[k]) return true;
+  return false;
 }

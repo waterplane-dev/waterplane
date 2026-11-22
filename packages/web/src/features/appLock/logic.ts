@@ -14,12 +14,12 @@
  */
 import { BRAND } from "@waterplane/shared";
 import { lockRowRefusal, lockWords, needsReread, type LockPath, type LockReread, type LockVerdict } from "../../appLock.ts";
-import { heldTokens, holdTokens, releaseTokens } from "../../deviceToken.ts";
+import { heldLanIdentities, heldTokens, holdTokens, releaseTokens } from "../../deviceToken.ts";
 import type { KV } from "../../hosts.ts";
 import { LS } from "../../storage.ts";
 import {
-  collectTokens, commitRewrap, commitSeal, commitUnseal, parseSealBlob, readSealPlaintext, sealPlaintext,
-  TOKEN_AAD, TOKEN_ALIAS, type TokenMap,
+  collectIdentities, collectTokens, commitRewrap, commitSeal, commitUnseal, parseSealBlob, readSealLan, readSealPlaintext, sealPlaintext,
+  TOKEN_AAD, TOKEN_ALIAS, type LanMap, type TokenMap,
 } from "../../tokenVault.ts";
 import { askedFor, SEAL_PAIR_HOW, SEAL_WAY_BACK, type SealKeyKind } from "../../tokenSealWords.ts";
 
@@ -158,7 +158,8 @@ async function refused(p: SealPorts, e: unknown): Promise<Refused> {
 }
 
 export type OpenResult =
-  | { ok: true; tokens: TokenMap }
+  /** `lan`: the LAN identities sealed beside the tokens, by row id; empty from a blob without them. */
+  | { ok: true; tokens: TokenMap; lan: LanMap }
   /** `passed`: the sheet was, so the person is here, and what came out was not a token map. */
   | { ok: false; why: "unreadable"; passed: boolean }
   | ({ ok: false } & Refused);
@@ -174,8 +175,13 @@ export async function openBlob(p: SealPorts, text: Text): Promise<OpenResult> {
     return { ok: false, ...(await refused(p, e)) };
   }
   let tokens: TokenMap | null = null;
-  try { tokens = readSealPlaintext(atob(dataB64)); } catch { /* not base64: not ours */ }
-  return tokens ? { ok: true, tokens } : { ok: false, why: "unreadable", passed: true };
+  let lan: LanMap = {};
+  try {
+    const text = atob(dataB64);
+    tokens = readSealPlaintext(text);
+    lan = readSealLan(text);
+  } catch { /* not base64: not ours */ }
+  return tokens ? { ok: true, tokens, lan } : { ok: false, why: "unreadable", passed: true };
 }
 
 /** The blob, copied to `tokenSealDead`. False when the copy did not land: it is then the last one. */
@@ -225,11 +231,13 @@ export async function sealNow(p: SealPorts): Promise<SwitchResult> {
   if (Object.keys(tokens).length === 0) {
     return { ok: false, why: "nothing", words: "nothing to lock: none of your desktops has a password, so this phone holds no sign-in" };
   }
+  // Each desktop's LAN identity goes in with its token: it is what a Wi-Fi answer must know first.
+  const lan = collectIdentities(p.kv, Object.keys(tokens));
   let wrapped: { ct: string; nonce: string };
   let auth: "biometric" | "any";
   try {
     auth = (await p.generate({ alias: TOKEN_ALIAS, replace: true, auth: "any" })).auth ?? "biometric";
-    const w = await p.wrap({ alias: TOKEN_ALIAS, dataB64: btoa(sealPlaintext(tokens)), aadB64: AAD_B64, ...SEAL_PROMPT });
+    const w = await p.wrap({ alias: TOKEN_ALIAS, dataB64: btoa(sealPlaintext(tokens, lan)), aadB64: AAD_B64, ...SEAL_PROMPT });
     wrapped = { ct: w.ctB64, nonce: w.nonceB64 };
   } catch (e) {
     const r = await refused(p, e);
@@ -237,9 +245,9 @@ export async function sealNow(p: SealPorts): Promise<SwitchResult> {
   }
   // Before the flag, and kept after the mode goes off: the key stays, so this stays true of it.
   try { p.kv.setItem(LS.tokenSealAuth, auth); } catch { p.kv.removeItem(LS.tokenSealAuth); }
-  const c = commitSeal(p.kv, wrapped, tokens);
+  const c = commitSeal(p.kv, wrapped, tokens, lan);
   if (!c.ok) return { ok: false, why: c.why === "changed" ? "changed" : "storage", words: c.why === "changed" ? CHANGED_WORDS(true) : STORAGE_WORDS(true) };
-  holdTokens(tokens);
+  holdTokens(tokens, lan);
   return { ok: true, auth };
 }
 
@@ -254,12 +262,12 @@ export async function unsealNow(p: SealPorts, names: readonly string[]): Promise
     if (r.why === "unreadable") return { ok: false, why: "unreadable", words: `not turned off — ${UNREADABLE} Update the app, then try again` };
     if (r.verdict === "stay") return { ok: false, why: "refused", code: r.code, words: lockRowRefusal(r.code, false, r.message, p.savedPlain()) };
     const held = heldTokens();
-    if (held && commitUnseal(p.kv, held).ok) { releaseTokens(); return { ok: true }; }
+    if (held && commitUnseal(p.kv, held, heldLanIdentities()).ok) { releaseTokens(); return { ok: true }; }
     retireSeal(p.kv);
     return { ok: false, why: "lost", code: r.code, words: sealLostWords(r.code, names) };
   }
-  holdTokens(r.tokens);
-  const c = commitUnseal(p.kv, heldTokens() ?? r.tokens);
+  holdTokens(r.tokens, r.lan);
+  const c = commitUnseal(p.kv, heldTokens() ?? r.tokens, heldLanIdentities());
   if (!c.ok) return { ok: false, why: c.why === "changed" ? "changed" : "storage", words: c.why === "changed" ? CHANGED_WORDS(false) : STORAGE_WORDS(false) };
   releaseTokens();
   return { ok: true };
@@ -281,13 +289,15 @@ export async function rewrapNow(p: SealPorts, name: string): Promise<string | nu
   if (!heldTokens()) {
     const r = await openBlob(p, OPEN_PROMPT);
     if (!r.ok) return pairHeldWords(name, r.why === "unreadable" ? "this version of the app cannot read the saved sign-ins" : tailOf(r.code, r.message));
-    holdTokens(r.tokens);
+    holdTokens(r.tokens, r.lan);
   }
   const tokens = heldTokens();
   if (!tokens) return pairHeldWords(name, "the saved sign-ins were not opened");
+  // What is held wins; a plain identity is one a blob from before identities were sealed left out.
+  const lan = { ...collectIdentities(p.kv, Object.keys(tokens)), ...heldLanIdentities() };
   try {
-    const w = await p.wrap({ alias: TOKEN_ALIAS, dataB64: btoa(sealPlaintext(tokens)), aadB64: AAD_B64, ...rewrapPrompt(name) });
-    const c = commitRewrap(p.kv, { ct: w.ctB64, nonce: w.nonceB64 }, tokens);
+    const w = await p.wrap({ alias: TOKEN_ALIAS, dataB64: btoa(sealPlaintext(tokens, lan)), aadB64: AAD_B64, ...rewrapPrompt(name) });
+    const c = commitRewrap(p.kv, { ct: w.ctB64, nonce: w.nonceB64 }, tokens, lan);
     return c.ok ? null : pairHeldWords(name, "this phone's storage refused it");
   } catch (e) {
     const o = (e ?? {}) as { code?: unknown; message?: unknown };

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpFromLine, Check, CloudDownload, Loader, ShieldCheck, X } from "lucide-react";
-import type { GitCommit, GitLog } from "@waterplane/shared";
+import type { GitCommit, GitCommitFile, GitLog, GitShow } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
 import { useRemoteResource } from "./useRemoteResource";
@@ -9,11 +9,15 @@ import { TITLE } from "./sheetNames";
 import { Empty } from "./Empty";
 import { ago } from "./format";
 import { Button } from "./kit/Button";
-import { RowSub } from "./kit/Row";
+import { Row, RowSub, RowTitle } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { useOfflineGate, offlineSentence } from "./kit/offlineGate";
 import { linkOnline } from "./link";
 import { checksHint, commitVerbs, verdictWords, type CommitVerbs } from "./gitChecks";
+import { GitTextDiff, initialDiffMode, type DiffMode } from "./GitTextDiff";
+import { useBackStep } from "./backStep";
+import { ZoomPair } from "./ZoomPair";
+import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./uiScale";
 
 /** Which side the tap came from: the ↑ count opens `out`, the ↓ count `in`. */
 export type GitLogFocus = "in" | "out" | "all";
@@ -35,13 +39,28 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 interface RowVerbs { verbs: CommitVerbs; onCheck: (sha: string) => void; onPushTo: (sha: string, commits: number) => void }
 
-function CommitRow({ repoId, c, act }: { repoId: string; c: GitCommit; act?: RowVerbs }) {
-  const [body, setBody] = useState<string | null>(null);
+/** A file of a commit, opened: whose commit it is rides along for the head. */
+interface OpenCommitFile { c: GitCommit; f: GitCommitFile }
+type OnOpenFile = (c: GitCommit, f: GitCommitFile) => void;
+
+/** git's status letter as the Changes list's word (and its `gstat g-*` colour). */
+function fileWord(status: string): { word: string; cls: string } {
+  switch (status) {
+    case "A": return { word: "added", cls: "added" };
+    case "D": return { word: "deleted", cls: "deleted" };
+    case "R": return { word: "renamed", cls: "renamed" };
+    case "C": return { word: "copied", cls: "added" };
+    default: return { word: "modified", cls: "modified" };
+  }
+}
+
+function CommitRow({ repoId, c, act, onOpenFile, zoomFont }: { repoId: string; c: GitCommit; act?: RowVerbs; onOpenFile: OnOpenFile; zoomFont: CSSProperties }) {
+  const [show, setShow] = useState<GitShow | null>(null);
   const [open, setOpen] = useState(false);
   function toggle() {
     track("action:git.log.show");
     setOpen((o) => !o);
-    if (body == null) api.gitShow(repoId, c.sha).then(setBody, (e) => setBody(`Could not read this commit: ${e instanceof Error ? e.message : String(e)}`));
+    if (show == null) api.gitShow(repoId, c.sha).then(setShow, (e) => setShow({ body: `Could not read this commit: ${e instanceof Error ? e.message : String(e)}` }));
   }
   return (
     <div className="git-commit">
@@ -70,13 +89,30 @@ function CommitRow({ repoId, c, act }: { repoId: string; c: GitCommit; act?: Row
           )}
         </div>
       )}
-      {open && <pre className="git-commit-body">{body ?? "reading…"}</pre>}
+      {open && <pre className="git-commit-body">{show?.body ?? "reading…"}</pre>}
+      {/* Each changed file opens its own diff in this commit. Absent `files` (an older desktop, or
+          the list could not be read) draws no list: the stat above still names them. */}
+      {open && show?.files && show.files.length > 0 && (
+        <div className="git-files git-commit-files" style={zoomFont}>
+          {show.files.map((f) => {
+            const w = fileWord(f.status);
+            return (
+              <Row key={f.path} kind="wrap">
+                <Row as="button" kind="grow" onClick={() => { track("action:git.log.file"); onOpenFile(c, f); }}>
+                  <span className={`gstat g-${w.cls}`}>{w.word}</span>
+                  <RowTitle className="mono">{f.from ? `${f.from} → ${f.path}` : f.path}</RowTitle>
+                </Row>
+              </Row>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function Section({ repoId, title, hint, rows, total, none, act }: {
-  repoId: string; title: string; hint: string; rows: GitCommit[]; total: number; none: string;
+function Section({ repoId, title, hint, rows, total, none, act, onOpenFile, zoomFont }: {
+  repoId: string; title: string; hint: string; rows: GitCommit[]; total: number; none: string; onOpenFile: OnOpenFile; zoomFont: CSSProperties;
   /** The row's verbs, for the list that has any. */
   act?: (c: GitCommit, index: number) => RowVerbs;
 }) {
@@ -84,7 +120,7 @@ function Section({ repoId, title, hint, rows, total, none, act }: {
     <>
       <div className="section">{title} · {total} <span className="section-hint">— {hint}</span></div>
       {rows.length === 0 && <div className="empty">{none}</div>}
-      {rows.map((c, i) => <CommitRow key={c.sha} repoId={repoId} c={c} act={act?.(c, i)} />)}
+      {rows.map((c, i) => <CommitRow key={c.sha} repoId={repoId} c={c} act={act?.(c, i)} onOpenFile={onOpenFile} zoomFont={zoomFont} />)}
       {total > rows.length && <div className="empty">…and {plural(total - rows.length, "older commit")} not drawn here.</div>}
     </>
   );
@@ -103,6 +139,22 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
   const [fetching, setFetching] = useState(false);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
   const fetchingRef = useRef(false);
+
+  // One file of one commit, opened over the list (Back returns to the list, the commit still open).
+  const [openFile, setOpenFile] = useState<OpenCommitFile | null>(null);
+  const [diffMode, setDiffMode] = useState<DiffMode>(initialDiffMode);
+  useBackStep(openFile !== null, () => setOpenFile(null));
+  // A commit never changes, so a cached copy is exact: it is what a re-open shows with the link down.
+  const fileRes = useRemoteResource<string>(
+    `git:showfile:${repoId}:${openFile?.c.sha ?? ""}:${openFile?.f.path ?? ""}`,
+    (signal) => api.gitShowFile(repoId, openFile!.c.sha, openFile!.f.path, openFile!.f.from, signal),
+    { enabled: openFile !== null, cache: { shape: 1 } });
+  // The Changes screen's text size, shared (one stored value for every git diff).
+  const [zoom, setZoomState] = useState(() => gitZoom());
+  const txt = textScale();
+  const zoomFont = { ["--ui-font" as string]: String(readerScale(txt, zoom)) };
+  const applyZoom = (v: number) => { track("action:uiscale.git"); setZoomState(v); setGitZoom(v); };
+  const openCommitFile: OnOpenFile = (c, f) => { setDiffMode(initialDiffMode()); setOpenFile({ c, f }); };
 
   async function fetchRemote() {
     if (fetchingRef.current) return;
@@ -131,14 +183,34 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
     : log?.upstream ? <>{up} has never been checked from this worktree.</>
     : null;
 
+  const fileView = openFile && (
+      <div className="sheet">
+        <SheetHead title={openFile.f.path} brandClass="mono" onClose={() => setOpenFile(null)}>
+          <div className="sb-zoom">
+            <ZoomPair smaller={nextReaderZoom(zoom, -1, txt)} bigger={nextReaderZoom(zoom, 1, txt)} onZoom={applyZoom}
+              smallerHint=" — more of each line on screen" biggerHint=" — fewer characters across" />
+          </div>
+        </SheetHead>
+        <Hint className="git-commit-of">In the commit “{openFile.c.subject || "(no message)"}”</Hint>
+        <Empty res={fileRes} empty={fileRes.data == null} thing="this file's change in the commit" noun="change" />
+        {fileRes.data != null && (
+          <GitTextDiff repoId={repoId} path={openFile.f.path} staged={false} diff={fileRes.data || "(no text change to show)"} zoomFont={zoomFont}
+            mode={diffMode} onMode={setDiffMode} commit />
+        )}
+      </div>
+  );
+
   const total = log ? log.incomingTotal + log.outgoingTotal + log.shared.length : 0;
   const shownN = !log ? 0 : focus === "in" ? log.incomingTotal : focus === "out" ? log.outgoingTotal : total;
   const showIn = focus !== "out";
   const showOut = focus !== "in";
   const showShared = focus === "all";
 
-  return (
-    <div className="sheet">
+  // The list stays mounted under an open file (display none, not unmounted: `.sheet` sets display, so the `hidden` attribute would lose): each row's open/read state
+  // is its own, and Back must land on the commit that was open.
+  return (<>
+    {fileView}
+    <div className="sheet" style={openFile ? { display: "none" } : undefined}>
       <SheetHead title={<>{TITLE.commits.replace(/ - branch$/, "")} - {log?.branch ?? "…"}</>} onClose={onClose}>
         {res.inflight && log && <Loader size={13} className="spin" aria-label="refreshing" />}
         {log?.upstream && (
@@ -171,20 +243,20 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onCheck, onPushT
         {log && log.upstream && showIn && (
           <Section repoId={repoId} title="Incoming" hint={`on ${up}, not here — a pull brings these`}
             rows={log.incoming} total={log.incomingTotal}
-            none={fetching ? "Checking…" : `Nothing on ${up} that is not here.`} />
+            none={fetching ? "Checking…" : `Nothing on ${up} that is not here.`} onOpenFile={openCommitFile} zoomFont={zoomFont} />
         )}
         {log && log.upstream && showOut && checksHint(log) && <Hint>{checksHint(log)}</Hint>}
         {log && log.upstream && showOut && (
           <Section repoId={repoId} title="Not pushed" hint={`here, not on ${up} — a push sends these`}
-            rows={log.outgoing} total={log.outgoingTotal} none="Every commit here is already pushed."
+            rows={log.outgoing} total={log.outgoingTotal} none="Every commit here is already pushed." onOpenFile={openCommitFile} zoomFont={zoomFont}
             act={(c, i) => ({ verbs: commitVerbs(log, i, c.check), onCheck: gate.guard("run the checks", onCheck), onPushTo: gate.guard("push", onPushTo) })} />
         )}
         {log && showShared && (
           <Section repoId={repoId} title={log.upstream ? "On both" : "History"}
             hint={log.upstream ? "recent, already pushed" : "no upstream — nothing to compare against"}
-            rows={log.shared} total={log.shared.length} none="No commits yet." />
+            rows={log.shared} total={log.shared.length} none="No commits yet." onOpenFile={openCommitFile} zoomFont={zoomFont} />
         )}
       </div>
     </div>
-  );
+  </>);
 }

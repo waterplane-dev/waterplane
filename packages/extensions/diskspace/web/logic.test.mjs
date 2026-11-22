@@ -62,7 +62,11 @@ test("result, scan and large-file lines", () => {
   assert.equal(resultLine({ id: "x", label: "~/a", at: 1, ok: false, sizeKb: 1, freeDeltaKb: null, error: "is a symlink" }), "Could not delete ~/a: is a symlink");
   const base = { scanning: false, scanStartedAt: null, scan: null, large: null, deleting: [], results: [] };
   assert.equal(scanLine(base, 0, ago), "Not scanned yet.");
-  assert.match(scanLine({ ...base, scanning: true, scanStartedAt: 0, scan: { at: 7 } }, 30_000, ago), /^Scanning — started 30 s ago\. The lists below are from the scan @7\.$/);
+  assert.match(scanLine({ ...base, scanning: true, scanStartedAt: 10, scan: { at: 7 } }, 30_000, ago), /^Scanning — started 30 s ago\. The lists below are from the scan @7\.$/);
+  // This scan already listed the deletable rows: only the show-only sizes are still being read.
+  assert.match(scanLine({ ...base, scanning: true, scanStartedAt: 10, scan: { at: 12, temp: [], models: [] } }, 30_000, ago), /^Still measuring the show-only folders — started 30 s ago\. Temporary and AI models are done\.$/);
+  // Listed before sized (zenbookj: nothing for 258 s while one PowerShell call ran): the line says the rows are usable now.
+  assert.match(scanLine({ ...base, scanning: true, scanStartedAt: 10, scan: { at: 12, temp: [{ sizeNote: "still being measured" }], models: [] } }, 30_000, ago), /^Measuring sizes — started 30 s ago\. Every row is listed/);
   assert.match(largeLine(null, 0, 120, ago), /stopped after 120 s/);
   assert.equal(largeLine({ at: 3, running: false, tookMs: 120_000, stoppedAfterS: 120, found: 60, items: Array(50).fill({}) }, 0, 120, ago),
     "60 files over 500 MB in 120 s, the biggest 50 listed — stopped after 120 s, so the list is partial (@3).");
@@ -163,5 +167,24 @@ test("the code-root walk says it is still looking, why it waits for a tap on a W
   assert.equal(codeButton(mac), null, "on a Mac every scan walks it");
   // While the walk runs the rest is already measured, so the scan line does not say the lists are old.
   assert.equal(scanLine({ scanning: true, phase: "code", scanStartedAt: 0, scan: { at: 1 }, deleting: [], results: [], large: null }, 10, ago), null);
-  assert.match(scanLine({ scanning: true, phase: "fast", scanStartedAt: 0, scan: { at: 1 }, deleting: [], results: [], large: null }, 10, ago), /from the scan @1/);
+  assert.match(scanLine({ scanning: true, phase: "fast", scanStartedAt: 5, scan: { at: 1 }, deleting: [], results: [], large: null }, 10, ago), /from the scan @1/);
 });
+
+test("disk cut: the fullest disk by default, every disk on request, nothing to cut with one disk", async () => {
+  const { cutDisk, onDisk, cutLine, diskName } = await import("./logic.ts");
+  const volumes = [{ key: "a", label: "Macintosh HD", freeKb: 1, totalKb: 100, path: "/" }, { key: "b", label: "External", freeKb: 90, totalKb: 100, path: "/V" }];
+  assert.equal(cutDisk({ volumes }, undefined).key, "a");
+  assert.equal(cutDisk({ volumes }, "b").key, "b");
+  assert.equal(cutDisk({ volumes }, "gone").key, "a", "a disk no longer listed falls back to the fullest");
+  assert.equal(cutDisk({ volumes }, null), null);
+  assert.equal(cutDisk({ volumes: [volumes[0]] }, undefined), null);
+  assert.equal(cutDisk({}, undefined), null);
+  const rows = [{ vol: "a" }, { vol: "b" }, {}];
+  assert.equal(onDisk(rows, volumes[0]).length, 2, "a row whose disk is not known stays in the cut");
+  assert.equal(onDisk(rows, null).length, 3);
+  assert.equal(cutLine(volumes[0], 1, 3), "Only what is on Macintosh HD: 1 of 3 rows.");
+  assert.equal(cutLine(null, 3, 3), null);
+  assert.equal(diskName({ volumes }, "b"), "External");
+  assert.equal(diskName({ volumes: [volumes[0]] }, "a"), null);
+});
+

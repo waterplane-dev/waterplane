@@ -85,7 +85,9 @@ export function demoGitTree(req: DemoHttpRequest, now: number, repoKnown: (id: s
           return json(l);
         }
         case "branches": return json({ branches: [{ name: "main", current: true, upstream: "origin/main", inUseElsewhere: false }] });
-        case "show": return json({ body: `${DIFF}` });
+        case "show": return req.query?.path
+          ? json({ diff: DIFF })
+          : json({ body: "Add a short README\n\n README.md | 1 +\n 1 file changed, 1 insertion(+)\n", files: [{ path: "README.md", status: "M" }] });
         case "push": return json({ push: null });
         case "explain": return json({ explain: null });
         default: return null; // blob and text stay accepted gaps: the viewer reads a 404 as "no such side"

@@ -135,6 +135,7 @@ const ALLOWED = {
     ["WEEK_WINDOW_MS = 7 * 24 * 3_600_000", "the weekly rate-limit window: 168 elapsed hours"],
     ['"h" ? 3_600_000 : 24 * 3_600_000', "parses a typed '1d' budget window into an elapsed span"],
   ],
+  "packages/host/src/setupcheck/seen.ts": [["FORGET_MS = 30 * 24 * 60 * 60_000", "an age after which an unseen finding is forgotten, elapsed"]],
   "packages/host/src/sessions/knobs.ts": [
     ["LIMIT_GIVEUP_MS", "a give-up age after a limit hit, elapsed"],
     ["ORPHAN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000", "an age threshold, elapsed"],

@@ -31,7 +31,7 @@ import {
   type HostLan, type NetState, type PairRedeemError, type PairRedeemResponse, type PairTarget, type PakeSealedReply, type SavedHost,
 } from "@waterplane/shared";
 import { activeHostId, addHost, readHosts, setHostPins, setHostTlsOff, setHostUpdateKey, updateHost, type KV } from "./hosts.ts";
-import { forgetHeldToken, heldToken, holdToken, isDeviceToken } from "./deviceToken.ts";
+import { forgetHeldLanIdentity, forgetHeldToken, heldToken, holdLanIdentity, holdToken, isDeviceToken } from "./deviceToken.ts";
 import type { PairAsk } from "./pairPake.ts";
 import { parseLanIdentity } from "./lanRoute.ts";
 import { LS } from "./storage.ts";
@@ -327,9 +327,14 @@ export function storeSealed(kv: KV, reply: PakeSealedReply, asked: PairTarget): 
   // re-pair as passive drops the copy a full pairing left (SECURITY.md: passive scope).
   const identity = scopedKeys(LS.lanIdentity, host.id, activeHostId(kv));
   const keep = reply.scope === "passive" ? null : parseLanIdentity(reply.lanIdentity);
-  for (const k of identity) { if (keep) kv.setItem(k, JSON.stringify(keep)); else kv.removeItem(k); }
+  // Sealed, with a token on its way into the blob: the identity goes to memory with it and into the
+  // same re-wrap (`sealedPending`), never to a key. Whatever is not kept that way is not held either.
+  const held = !!keep && kv.getItem(LS.tokenSealOn) === "1" && isDeviceToken(reply.token);
+  if (held) holdLanIdentity(host.id, keep); else forgetHeldLanIdentity(host.id);
+  const plain = keep && !held ? keep : null;
+  for (const k of identity) { if (plain) kv.setItem(k, JSON.stringify(plain)); else kv.removeItem(k); }
   const signIn = writeSignIn(kv, host, reply);
-  return { ok: true, host, added: !row, ...signIn, wrote: [...(keep ? identity : []), ...signIn.wrote], moved: !!row && row.base !== rowBase };
+  return { ok: true, host, added: !row, ...signIn, wrote: [...(plain ? identity : []), ...signIn.wrote], moved: !!row && row.base !== rowBase };
 }
 
 /** The address the pair form opens on: a shell that says there is no tailnet here takes the LAN one. */

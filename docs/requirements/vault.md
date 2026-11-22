@@ -924,3 +924,7 @@ The vault lock actions read 'open the vault' and 'close the vault'.
 - asked: 2026-11-20
 - shipped: 7998668f5
 
+
+### R-vault-174 · requested
+The home banner that tells the person to tap "the code is updated" opens the secret with the "who reads it" group at the top of its card and the handed row's mark choices already open, so the button the banner names is on screen where the link lands.
+- asked: 2026-11-22 (owner: the banner names a button that is not visible where it sends you)

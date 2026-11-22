@@ -25,9 +25,28 @@
  * `tokenForHost()`, so `hostUrl.ts`, `ws.ts` and `lanLink.ts` never learn the mode exists. Storage
  * is still read when nothing is held: what stays plain in this mode is a passive token, which the
  * passive screen needs and no prompt ever guards. With the mode off `held` is never consulted.
+ *
+ * **The LAN identity rides with the token.** `{hostId, secret}` is what a Wi-Fi answer is checked
+ * against before the token goes to it (`lanRoute.ts`), so a copy of it is half of taking the token
+ * on a row with no TLS pin. In sealed mode it lives in the same blob and in `heldLan` below, keyed
+ * like the tokens by the ROW id; `lanIdentity()` is the one reader, `setLanIdentity` and
+ * `dropLanIdentity` the writers, so `lanLink.ts` never learns the mode either. An identity that
+ * arrives while sealed (read over the tailnet) is held for this run and joins the blob at the next
+ * re-wrap: no sheet is raised for a value nobody asked for, and the tailnet hands it out again.
  */
 import { BRAND, parkedKeyFor } from "@waterplane/shared";
-import { LS, lsDel, lsGet, lsSet } from "./storage.ts";
+import { LS, lsDel, lsGet, lsJson, lsSet, lsSetJson } from "./storage.ts";
+
+export interface LanIdentity { hostId: string; secret: string }
+
+/** A stored/served identity, or null for anything that is not one. */
+export function parseLanIdentity(v: unknown): LanIdentity | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  return typeof o.hostId === "string" && o.hostId && typeof o.secret === "string" && o.secret.length >= 16
+    ? { hostId: o.hostId, secret: o.secret }
+    : null;
+}
 
 /** The base subprotocol the host echoes; the token rides as a SECOND offer
  *  (a token-only offer fails the handshake — the host answers only the base protocol). */
@@ -48,6 +67,8 @@ export function isDeviceToken(t: unknown): t is string {
 // ── Sealed mode: the tokens of this run ─────────────────────────────────
 
 const held = new Map<string, string>();
+/** The LAN identities of this run, by row id. Same life as `held`. */
+const heldLan = new Map<string, LanIdentity>();
 /** Did the map get the blob's contents? Until then it may hold only what arrived this run. */
 let heldComplete = false;
 
@@ -62,8 +83,12 @@ export function heldToken(id: string): string | null {
 
 /** Fill the map from an unsealed blob. Something that arrived during this run is newer than the
  *  blob, so it stays. Fires the token event: the background link re-reads what it may carry. */
-export function holdTokens(tokens: Readonly<Record<string, string>>): void {
+export function holdTokens(tokens: Readonly<Record<string, string>>, lan: Readonly<Record<string, unknown>> = {}): void {
   for (const [id, t] of Object.entries(tokens)) if (validToken(t) && !held.has(id)) held.set(id, t);
+  for (const [id, v] of Object.entries(lan)) {
+    const got = parseLanIdentity(v);
+    if (got && !heldLan.has(id)) heldLan.set(id, got);
+  }
   heldComplete = true;
   tokenChanged();
 }
@@ -77,9 +102,25 @@ export function forgetHeldToken(id: string): void {
   held.delete(id);
 }
 
+/** One identity that arrived in sealed mode (a sealed pairing); `rewrap` is the caller's. */
+export function holdLanIdentity(id: string, v: unknown): void {
+  const got = parseLanIdentity(v);
+  if (got) heldLan.set(id, got);
+}
+
+export function forgetHeldLanIdentity(id: string): void {
+  heldLan.delete(id);
+}
+
+/** Every identity held this run, by row id. Not a complete list unless `heldTokens()` is one. */
+export function heldLanIdentities(): Record<string, LanIdentity> {
+  return Object.fromEntries(heldLan);
+}
+
 /** Empty the map (the mode went off, its tokens are back in storage). */
 export function releaseTokens(): void {
   held.clear();
+  heldLan.clear();
   heldComplete = false;
 }
 
@@ -106,6 +147,31 @@ export function tokenForHost(id: string): string | null {
   if (h) return h;
   const t = lsGet(id === lsGet(LS.hostActive) ? LS.deviceToken : parkedKeyFor(LS.deviceToken, id));
   return validToken(t) ? t : null;
+}
+
+/**
+ * The active desktop's LAN identity: the one read. Sealed, the held copy; storage is still read
+ * when nothing is held, which is a blob sealed before identities went into it (its plain copy
+ * stays until the next re-wrap takes it in).
+ */
+export function lanIdentity(): LanIdentity | null {
+  const id = sealedMode() ? lsGet(LS.hostActive) : null;
+  const h = id ? heldLan.get(id) : undefined;
+  return h ?? parseLanIdentity(lsJson<unknown>(LS.lanIdentity, null));
+}
+
+/** Keep the active desktop's identity. Sealed: memory only, never a plain key (the header says why
+ *  no sheet); with no active desktop there is no row to hold it under, so it is not kept. */
+export function setLanIdentity(v: LanIdentity): void {
+  if (!sealedMode()) { lsSetJson(LS.lanIdentity, v); return; }
+  const id = lsGet(LS.hostActive);
+  if (id) heldLan.set(id, v);
+}
+
+/** Never touches the blob: a stale entry there fails its check and is dropped again. */
+export function dropLanIdentity(): void {
+  if (sealedMode()) { const id = lsGet(LS.hostActive); if (id) heldLan.delete(id); }
+  lsDel(LS.lanIdentity);
 }
 
 /** Fired after this phone's token on the active host was set or dropped, so the background link

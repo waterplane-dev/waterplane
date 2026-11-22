@@ -4,6 +4,7 @@
  * the header agrees with what the person already saw on the desktop. An unknown size is said as
  * unknown and never summed as 0: a total over rows with unknowns says "at least".
  */
+import { PENDING_NOTE } from "../shared/wire.mts";
 import type { DiskDeleteResult, DiskEntry, DiskProfile, DiskScan, DiskSide, DiskState, DiskVolume, LargeScan } from "../shared/wire.mts";
 
 /** KiB (du's unit) → "4.2 GB". */
@@ -77,7 +78,14 @@ export function scanLine(s: DiskState, now: number, ago: (ts: number) => string)
   if (s.scanning && s.phase === "code") return null;
   if (s.scanning) {
     const started = s.scanStartedAt != null ? ` — started ${secondsText(now - s.scanStartedAt)} ago` : "";
-    return s.scan ? `Scanning${started}. The lists below are from the scan ${ago(s.scan.at)}.` : `Scanning${started}. du measures every folder, so this takes a minute or two.`;
+    // This scan already listed its rows: say what is still being sized.
+    if (s.scan && s.scanStartedAt != null && s.scan.at >= s.scanStartedAt) {
+      const waiting = (rows: readonly DiskEntry[]) => rows.some((e) => e.sizeNote === PENDING_NOTE);
+      return waiting(s.scan.temp) || waiting(s.scan.models)
+        ? `Measuring sizes${started}. Every row is listed and can be deleted now; sizes fill in as they are measured.`
+        : `Still measuring the show-only folders${started}. Temporary and AI models are done.`;
+    }
+    return s.scan ? `Scanning${started}. The lists below are from the scan ${ago(s.scan.at)}.` : `Scanning${started}. Temporary and AI models show as soon as they are measured.`;
   }
   return s.scan ? null : "Not scanned yet.";
 }
@@ -233,3 +241,33 @@ export function grouped(rows: readonly DiskEntry[]): [string, DiskEntry[]][] {
   return [...m];
 }
 
+
+/**
+ * The disk the lists are cut to: a person cleans up because ONE disk is full, so with several disks
+ * the fullest is picked by default. `pick` undefined = that default; null = every disk. Null back
+ * when there is nothing to cut: one disk, wsl (its own two-disk reading), a host older than `volumes`.
+ */
+export function cutDisk(scan: Pick<DiskScan, "volumes"> | null, pick: string | null | undefined): DiskVolume | null {
+  const vs = scan?.volumes ?? [];
+  if (vs.length < 2 || pick === null) return null;
+  return vs.find((v) => v.key === pick) ?? vs[0]!;
+}
+
+/** The rows on disk `d` (all of them when `d` is null). A row whose disk is not known stays in every
+ *  cut (it may be on this disk — the wp-peer VM's ollama models, 36 GB, had no known folder) and says so. */
+export function onDisk<T extends { vol?: string }>(rows: readonly T[], d: Pick<DiskVolume, "key"> | null): T[] {
+  return d ? rows.filter((r) => r.vol === d.key || r.vol == null) : [...rows];
+}
+
+/** What the cut hides, in words: "Only what is on Macintosh HD: 23 of 31 rows." Null when nothing is cut. */
+export function cutLine(d: Pick<DiskVolume, "label"> | null, shown: number, all: number): string | null {
+  if (!d) return null;
+  return `Only what is on ${d.label ?? "this disk"}: ${shown} of ${all} row${all === 1 ? "" : "s"}.`;
+}
+
+/** A row's disk by name, for the every-disk view; null where there is one disk or it is not known. */
+export function diskName(scan: Pick<DiskScan, "volumes"> | null, vol: string | undefined): string | null {
+  const vs = scan?.volumes ?? [];
+  if (vs.length < 2 || !vol) return null;
+  return vs.find((v) => v.key === vol)?.label ?? null;
+}

@@ -25,6 +25,8 @@ export const LS_PREFS = {
   pad: lsKey("pad"),
   /** Repos hidden from the launcher list. */
   hiddenRepos: lsKey("hiddenRepos"),
+  /** Repos pinned to the top of the launcher, in their placed order (`core/launcher/model.ts` `pinAt`). Synced. */
+  pinnedRepos: lsKey("pinnedRepos"),
   /** Enter submits vs. inserts a newline. */
   enterSends: lsKey("enterSends"),
   /** Dictation vocabulary: terms the transcriber should spell the person's way. */
@@ -128,8 +130,8 @@ export const LS_PREFS = {
    */
   deviceToken: lsKey("deviceToken"), passive: lsKey("passive"), // "1": that token is a passive one (`passiveMode.ts`)
   /**
-   * The sealed sign-ins (`tokenVault.ts`): `{ v, ct, nonce, hosts }`, every full token this phone
-   * holds under the Keystore key, and `"1"` while that mode is on. DEVICE-scoped: one blob for all
+   * The sealed sign-ins (`tokenVault.ts`): `{ v, ct, nonce, hosts, lan? }`, every full token this
+   * phone holds (and those desktops' LAN identities) under the Keystore key, and `"1"` while that mode is on. DEVICE-scoped: one blob for all
    * desktops, so a host switch never moves it. Kept by the hard reset (`resetKeys.ts`), never synced.
    */
   tokenSeal: lsKey("tokenSeal"), tokenSealOn: lsKey("tokenSealOn"),
@@ -142,7 +144,8 @@ export const LS_PREFS = {
   /**
    * The active host's LAN identity `{hostId, secret}` (`GET /api/lan/identity`,
    * read over the tailnet) — what a LAN address must prove it knows before this
-   * phone sends it anything (`lanRoute.ts`). HOST-scoped, like the token.
+   * phone sends it anything (`lanRoute.ts`). HOST-scoped, like the token, and sealed with it:
+   * while the sign-ins are sealed it is in the blob, not here (`deviceToken.ts` `lanIdentity()`).
    */
   lanIdentity: lsKey("lanIdentity"),
   pairCodesSent: lsKey("pairCodesSent"),

@@ -482,7 +482,9 @@ export function fmtUsd(n: number): string {
     return Number(out) >= 0.01 ? `${sign}$${a.toFixed(2)}` : `${sign}$${out}`;
   }
   if (a < 1000) return `${sign}$${a.toFixed(2)}`;
-  return `${sign}$${Math.round(a).toLocaleString()}`;
+  // en-US on purpose: a German phone's toLocaleString() writes $16.956 for
+  // sixteen thousand, which reads as sixteen dollars beside "$455.77".
+  return `${sign}$${Math.round(a).toLocaleString("en-US")}`;
 }
 
 /** The same, compact enough for a chart axis: `$1.2k` / `$421` / `$4.21`. */

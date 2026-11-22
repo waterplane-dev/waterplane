@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { parkedKeyFor } from "@waterplane/shared";
 
 import {
-  TOKEN_AAD, TOKEN_ALIAS, collectTokens, commitRewrap, commitSeal, commitUnseal, parseSealBlob, readSealPlaintext, sealPlaintext,
-  sealWritePlan, sealedHostIds, settleAtBoot, unsealWritePlan,
+  TOKEN_AAD, TOKEN_ALIAS, collectIdentities, collectTokens, commitRewrap, commitSeal, commitUnseal, parseSealBlob, readSealLan, readSealPlaintext,
+  sealPlaintext, sealWritePlan, sealedHostIds, settleAtBoot, unsealWritePlan,
 } from "./tokenVault.ts";
 import { addHost } from "./hosts.ts";
 import { LS } from "./storage.ts";
@@ -322,12 +322,15 @@ function walk(start, act) {
       removeItem: (k) => { try { write.removeItem(k); } catch (e) { whole = false; throw e; } } };
     act(counted, first);
     assert.deepEqual(truth(first.kv), first.tokens, `cut after ${n} writes: a token is gone`);
+    if (first.lan) assert.deepEqual(truthLan(first.kv, first.tokens), first.lan, `cut after ${n} writes: an identity is gone`);
     for (let m = 0; m < 12; m++) {
       const w = { kv: shim(Object.fromEntries(first.kv.m)), tokens: first.tokens };
       try { settleAtBoot(dying(w.kv, m)); } catch { /* the second kill */ }
       assert.deepEqual(truth(w.kv), w.tokens, `cut after ${n}, boot cut after ${m}: a token is gone`);
+      if (first.lan) assert.deepEqual(truthLan(w.kv, w.tokens), first.lan, `cut after ${n}, boot cut after ${m}: an identity is gone`);
       settleAtBoot(w.kv);
       ended(w.kv, w.tokens);
+      if (first.lan) endedLan(w.kv, w.tokens, first.lan);
     }
     if (whole) { assert.ok(n > 3, "the walk reached the end of the writes"); return; }
   }
@@ -348,12 +351,200 @@ test("a re-wrap killed at its one write leaves a blob that opens", () => {
   assert.deepEqual(opened(w.kv), w.tokens);
 });
 
+// ── The LAN identity, sealed with its token ──────────────────────────────
+
+const IA = { hostId: "deska000", secret: "a".repeat(32) };
+const IB = { hostId: "deskb000", secret: "b".repeat(32) };
+const ISTALE = { hostId: "deska000", secret: "z".repeat(32) };
+const SECRETS = [IA, IB, ISTALE].map((i) => i.secret);
+
+/** `world()` plus identities: A's on the bare key (and a stale parked copy), B's parked, the removed desktop has none. */
+function lanWorld() {
+  const w = world();
+  w.kv.setItem(LS.lanIdentity, JSON.stringify(IA));
+  w.kv.setItem(parkedKeyFor(LS.lanIdentity, w.a), JSON.stringify(ISTALE));
+  w.kv.setItem(parkedKeyFor(LS.lanIdentity, w.b), JSON.stringify(IB));
+  return { ...w, lan: { [w.a]: IA, [w.b]: IB } };
+}
+
+const wrapLan = (tokens, lan) => ({ ct: Buffer.from(sealPlaintext(tokens, lan)).toString("base64"), nonce: "bm9uY2U=" });
+const openedText = (kv) => Buffer.from(parseSealBlob(kv.getItem(LS.tokenSeal)).ct, "base64").toString();
+/** Where every identity is, by the tokens' rule. */
+function truthLan(kv, tokens) {
+  return kv.getItem(LS.tokenSealOn) === "1" && kv.getItem(LS.tokenSeal) ? readSealLan(openedText(kv)) : collectIdentities(kv, Object.keys(tokens));
+}
+const secretsLeft = (kv) => [...kv.m.entries()].filter(([k, v]) => k !== LS.tokenSeal && SECRETS.some((s) => v.includes(s)));
+function endedLan(kv, tokens, lan) {
+  assert.equal(secretsLeft(kv).length > 0, kv.getItem(LS.tokenSealOn) !== "1", "a plain identity only when the mode is off");
+  assert.deepEqual(truthLan(kv, tokens), lan);
+}
+/** Sealed by a build from before identities: the blob holds tokens only, the identities are plain. */
+function oldSealed() {
+  const w = sealed(world());
+  w.kv.setItem(LS.lanIdentity, JSON.stringify(IA));
+  w.kv.setItem(parkedKeyFor(LS.lanIdentity, w.b), JSON.stringify(IB));
+  return { ...w, lan: { [w.a]: IA, [w.b]: IB } };
+}
+function sealedLan(w) {
+  assert.deepEqual(commitSeal(w.kv, wrapLan(w.tokens, w.lan), w.tokens, w.lan), { ok: true });
+  return w;
+}
+
+test("identities collected: bare is the active desktop's and beats the parked copy; only for the desktops asked; none for a passive one", () => {
+  const w = lanWorld();
+  assert.deepEqual(collectIdentities(w.kv, Object.keys(w.tokens)), w.lan);
+  assert.deepEqual(collectIdentities(w.kv, [w.b]), { [w.b]: IB });
+  w.kv.setItem(parkedKeyFor(LS.passive, w.b), "1");
+  assert.deepEqual(collectIdentities(w.kv, Object.keys(w.tokens)), { [w.a]: IA });
+  w.kv.setItem(LS.lanIdentity, "{not json");
+  assert.deepEqual(collectIdentities(w.kv, [w.a]), { [w.a]: ISTALE }, "bytes that are no identity are not one");
+});
+
+test("seal plan with identities: blob, flag, the token deletes, THEN every plain identity the blob lists", () => {
+  const w = lanWorld();
+  const blob = { v: 1, ...wrapLan(w.tokens, w.lan), hosts: Object.keys(w.tokens).sort(), lan: Object.keys(w.lan).sort() };
+  const ops = sealWritePlan(w.kv, blob);
+  assert.deepEqual(ops.slice(0, 2).map((o) => [o.op, o.key]), [["set", LS.tokenSeal], ["set", LS.tokenSealOn]]);
+  assert.ok(ops.slice(2).every((o) => o.op === "remove"));
+  assert.ok(ops.slice(2, -3).every((o) => o.key.includes("deviceToken")));
+  assert.equal(ops.at(-3).key, LS.lanIdentity, "the bare key first, as for the tokens");
+  assert.deepEqual(new Set(ops.slice(-2).map((o) => o.key)), new Set([parkedKeyFor(LS.lanIdentity, w.a), parkedKeyFor(LS.lanIdentity, w.b)]));
+  const noList = sealWritePlan(w.kv, { ...blob, lan: undefined });
+  assert.ok(!noList.some((o) => o.key.includes("lanIdentity")), "a blob that lists no identity deletes none");
+});
+
+test("unseal plan with identities: after the tokens and before the flag, bare for the active desktop, parked for the rest", () => {
+  const w = sealedLan(lanWorld());
+  const ops = unsealWritePlan(w.kv, w.tokens, w.lan);
+  assert.deepEqual(ops.slice(3), [
+    { op: "set", key: LS.lanIdentity, value: JSON.stringify(IA) },
+    { op: "set", key: parkedKeyFor(LS.lanIdentity, w.b), value: JSON.stringify(IB) },
+    { op: "remove", key: LS.tokenSealOn },
+    { op: "remove", key: LS.tokenSeal },
+  ]);
+});
+
+test("seal then unseal with identities: no secret in plain storage between, each back on its own key after", () => {
+  const w = sealedLan(lanWorld());
+  assert.deepEqual(secretsLeft(w.kv), []);
+  assert.deepEqual(parseSealBlob(w.kv.getItem(LS.tokenSeal)).lan, [w.a, w.b].sort());
+  assert.deepEqual(readSealPlaintext(openedText(w.kv)), w.tokens);
+  assert.deepEqual(readSealLan(openedText(w.kv)), w.lan);
+  assert.deepEqual(commitUnseal(w.kv, w.tokens, w.lan), { ok: true });
+  assert.deepEqual(JSON.parse(w.kv.getItem(LS.lanIdentity)), IA);
+  assert.deepEqual(JSON.parse(w.kv.getItem(parkedKeyFor(LS.lanIdentity, w.b))), IB);
+  assert.equal(w.kv.getItem(LS.tokenSeal), null);
+});
+
+test("an identity that landed or left while the sheet was up refuses the commit, and nothing moves", () => {
+  const landed = lanWorld();
+  const before = collectIdentities(landed.kv, [landed.b]);
+  assert.deepEqual(commitSeal(landed.kv, wrapLan(landed.tokens, before), landed.tokens, before), { ok: false, why: "changed" });
+  assert.equal(landed.kv.getItem(LS.tokenSeal), null);
+  assert.equal(landed.kv.getItem(LS.deviceToken), TA);
+  const left = lanWorld();
+  left.kv.removeItem(parkedKeyFor(LS.lanIdentity, left.b));
+  assert.deepEqual(commitSeal(left.kv, wrapLan(left.tokens, left.lan), left.tokens, left.lan), { ok: false, why: "changed" });
+  assert.equal(left.kv.getItem(LS.tokenSealOn), null);
+});
+
+test("an identity is sealed with its token or not at all: one for a desktop outside the map goes nowhere", () => {
+  const w = lanWorld();
+  const extra = { ...w.lan, zzzz9999: IB };
+  assert.deepEqual(readSealLan(sealPlaintext(w.tokens, extra)), w.lan);
+  assert.equal(sealPlaintext(w.tokens, { zzzz9999: IB }), sealPlaintext(w.tokens), "and with none, the text is the token map it always was");
+});
+
+test("a build from before identities reads the new text and the new blob as tokens, and deletes nothing of theirs", () => {
+  const w = sealedLan(lanWorld());
+  // What that build's reader does: host-id keys with token values. `lan` is neither.
+  assert.deepEqual(readSealPlaintext(openedText(w.kv)), w.tokens);
+  const { lan: _unknownToIt, ...asItSeesIt } = JSON.parse(w.kv.getItem(LS.tokenSeal));
+  assert.deepEqual(parseSealBlob(JSON.stringify(asItSeesIt)).hosts, Object.keys(w.tokens).sort());
+});
+
+test("a blob from before identities: the plain identities stay through every boot, and a re-wrap takes them in", () => {
+  const w = oldSealed();
+  assert.equal(parseSealBlob(w.kv.getItem(LS.tokenSeal)).lan, undefined);
+  assert.deepEqual(readSealLan(openedText(w.kv)), {});
+  assert.equal(settleAtBoot(w.kv), "sealed");
+  assert.deepEqual(collectIdentities(w.kv, Object.keys(w.tokens)), w.lan, "the only copy, so it is not touched");
+  assert.deepEqual(commitRewrap(w.kv, wrapLan(w.tokens, w.lan), w.tokens, w.lan), { ok: true });
+  assert.deepEqual(readSealLan(openedText(w.kv)), w.lan);
+  assert.deepEqual(secretsLeft(w.kv), []);
+});
+
+test("a list of identities that is not a list, or names a desktop the blob lacks, deletes no identity", () => {
+  const w = lanWorld();
+  for (const lan of ["x", { a: 1 }, ["no such id!"], ["zzzz9999"]]) {
+    const kv = shim(Object.fromEntries(w.kv.m));
+    kv.setItem(LS.tokenSeal, JSON.stringify({ v: 1, ...wrap(w.tokens), hosts: Object.keys(w.tokens).sort(), lan }));
+    kv.setItem(LS.tokenSealOn, "1");
+    settleAtBoot(kv);
+    assert.deepEqual(collectIdentities(kv, Object.keys(w.tokens)), w.lan, JSON.stringify(lan));
+  }
+});
+
+test("a desktop re-paired as passive after sealing gets no identity back on unseal", () => {
+  const w = sealedLan(lanWorld());
+  w.kv.setItem(parkedKeyFor(LS.passive, w.b), "1");
+  assert.deepEqual(commitUnseal(w.kv, w.tokens, w.lan), { ok: true });
+  assert.equal(w.kv.getItem(parkedKeyFor(LS.lanIdentity, w.b)), null);
+  assert.deepEqual(JSON.parse(w.kv.getItem(LS.lanIdentity)), IA);
+});
+
+test("an identity never decides: a flag-off blob goes once the tokens are covered, though an identity it lists is not", () => {
+  const w = sealedLan(lanWorld());
+  assert.deepEqual(commitUnseal(dying(w.kv, 5), w.tokens, { [w.a]: IA }), { ok: true }, "the blob's own delete is the write that died");
+  assert.ok(w.kv.getItem(LS.tokenSeal));
+  assert.equal(settleAtBoot(w.kv), "repair-finished-unseal");
+  assert.equal(w.kv.getItem(LS.tokenSealOn), null);
+  assert.deepEqual(collectTokens(w.kv), w.tokens);
+});
+
+test("an unseal that cannot write takes back the identities it wrote too", () => {
+  const w = sealedLan(lanWorld());
+  assert.deepEqual(commitUnseal(dying(w.kv, 4), w.tokens, w.lan), { ok: false, why: "storage" });
+  const kv = shim(Object.fromEntries(w.kv.m));
+  settleAtBoot(kv);
+  endedLan(kv, w.tokens, w.lan);
+});
+
+test("a seal with identities killed at ANY write, and the boot after it killed at any write, loses no token and no identity", () => {
+  walk(lanWorld, (kv, w) => { commitSeal(kv, wrapLan(w.tokens, w.lan), w.tokens, w.lan); });
+});
+
+test("an unseal with identities killed at ANY write, and the boot after it killed at any write, loses no token and no identity", () => {
+  walk(() => sealedLan(lanWorld()), (kv, w) => { commitUnseal(kv, w.tokens, w.lan); });
+});
+
+test("a re-wrap that takes plain identities in, killed at ANY write, and the boot after it: none is lost, none stays plain", () => {
+  for (let n = 0; n < 6; n++) {
+    const w = oldSealed();
+    commitRewrap(dying(w.kv, n), wrapLan(w.tokens, w.lan), w.tokens, w.lan);
+    assert.deepEqual(truth(w.kv), w.tokens, `cut after ${n}`);
+    const inBlob = readSealLan(openedText(w.kv));
+    const whole = { ...collectIdentities(w.kv, Object.keys(w.tokens)), ...inBlob };
+    assert.deepEqual(whole, w.lan, `cut after ${n}: an identity is in neither place`);
+    settleAtBoot(w.kv);
+    if (n > 0) endedLan(w.kv, w.tokens, w.lan);
+    else assert.deepEqual(collectIdentities(w.kv, Object.keys(w.tokens)), w.lan, "the old blob stands and the plain copies with it");
+  }
+});
+
 // ── The shape of what is stored ──────────────────────────────────────────
 
 test("an unsealed text that is not a token map is null, and junk rows inside one are dropped", () => {
   assert.equal(readSealPlaintext("not json"), null);
   assert.equal(readSealPlaintext("[1]"), null);
   assert.deepEqual(readSealPlaintext(JSON.stringify({ abcd1234: TA, "NOT AN ID": TB, efgh5678: "short" })), { abcd1234: TA });
+});
+
+test("the identities in an unsealed text: none from a text without them, and junk rows are dropped", () => {
+  assert.deepEqual(readSealLan("not json"), {});
+  assert.deepEqual(readSealLan(JSON.stringify({ abcd1234: TA })), {});
+  assert.deepEqual(readSealLan(JSON.stringify({ abcd1234: TA, lan: [IA] })), {});
+  assert.deepEqual(readSealLan(JSON.stringify({ abcd1234: TA, lan: { abcd1234: IA, "NOT AN ID": IB, efgh5678: { hostId: "h", secret: "tiny" } } })), { abcd1234: IA });
 });
 
 test("a blob of any other shape does not parse", () => {

@@ -5,8 +5,8 @@ Watch this computer's screen live on your phone, as video. If you allow it, you 
 It works on a Mac, or on Windows with waterplane running inside WSL. It is experimental and off by default. On a Mac you must give the helper program Screen Recording permission (and Accessibility for control) in System Settings, Privacy and Security. A helper update can reset those permissions.
 
 ## Where to find it
-- **Home menu, "Desktop"** — opens the live view.
-- **Session menu, "Desktop"** — opens the live view as a tab in the session's header, next to Claude and Shell.
+- **Home menu, "Remote desktop"** — opens the live view.
+- **Session menu, "Remote desktop"** — opens the live view as a tab in the session's header, next to Claude and Shell.
 - **Live view** — pick Touch, Trackpad or View only, go fullscreen, and see how much data the video uses.
 
 ## Settings

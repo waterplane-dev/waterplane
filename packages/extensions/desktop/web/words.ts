@@ -13,7 +13,7 @@ export type ProbeState =
   | { k: "ok"; r: ProbeResult; at: number }
   | { k: "failed"; error: string; at: number };
 
-export const NOT_SERVING = "This desktop needs an update to show its screen. Update the app on it, then reopen Desktop.";
+export const NOT_SERVING = "This desktop needs an update to show its screen. Update the app on it, then reopen Remote desktop.";
 export const GRANT_SCREEN = "Grant Screen Recording to wp-desktop in System Settings → Privacy & Security on the desktop";
 
 /** `true`, or the sentence why the Desktop view cannot open. Unknown ⇒ available: the view itself

@@ -17,6 +17,11 @@ function savingOf(f: FindingFacts, extraChars: number): FindingSaving | undefine
 const waiveOf = (c: ComplianceCheck, now: number): { reason?: string; at: string } | undefined =>
   c.ignored || c.accepted ? { at: new Date(now).toISOString() } : undefined;
 
+const watchSince = (c: ComplianceCheck): number | undefined => {
+  const t = c.exposure?.since ? Date.parse(c.exposure.since) : NaN;
+  return Number.isFinite(t) && t > 0 ? t : undefined;
+};
+
 /** One compliance check as a finding or a passed row. */
 function fromCheck(a: Acc, id: string, rule: string, c: ComplianceCheck, o: {
   kind: FindingKind; evidence: EvidenceRoute | null; remedy: FindingRemedy; via: "ignore" | "accept" | "none"; saving?: FindingSaving;
@@ -140,6 +145,8 @@ export function repoRules(f: FindingFacts): FindingsResult {
       evidence: kind === "watch" ? { screen: "readings", repoId, region: "watch", rowId: c.id } : null,
       remedy: c.fix ? { kind: "fix", fixId: c.fix } : { kind: "agent", checkId: c.id, label: c.label, detail: c.detail },
       waveVia: kind === "watch" ? "accept" : c.advisory ? "ignore" : "none", ...(w ? { waiveHint: w } : {}),
+      // The watch knows when it first read this finding; the desktop's own ledger may be younger.
+      ...(watchSince(c) ? { seen: { at: watchSince(c)!, from: "watch" as const } } : {}),
     });
   }
   return a.out;

@@ -135,7 +135,7 @@ export function ScorecardSheet() {
         {v.problem && <Hint tone="warn" style={{ padding: "0 14px" }}>{v.problem}</Hint>}
         {cut && <FilterBar onClear={clearCut} clearLabel="clear">{cut.length} of {v.checks.length} checks — failing, not accepted</FilterBar>}
         {v.score != null ? (
-          <div className="sc-head">
+          <div className="sc-scorehead">
             <span className="sc-score">{v.score}/10</span>
             <div>
               <RowSub as="div">

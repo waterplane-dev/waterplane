@@ -32,6 +32,7 @@ import type { LauncherModel } from "./useLauncherModel";
 import { openingText, openingTitle, queuedChipCut, setupMenuAim, setupMenuLabel, setupMenuTitle, setupTitle } from "./model";
 import { SessionRow } from "./SessionRow";
 import { RepoShownAs } from "./RepoShownAs";
+import { RepoPin } from "./RepoPin";
 import { ExtBoundary } from "../ExtBoundary";
 import { shellBackend } from "../../backendCaps";
 import { repoActions, repoChips } from "../extensionPoints";
@@ -542,6 +543,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             {extActions.setup.map(extAct)}
           </MenuGroup>
           <MenuGroup title="On Home">
+            <RepoPin repoName={repoName} shown={m.groupNames} shownOf={m.shownOf} onDone={() => setRepoMenu(null)} />
             {!focusRepo && <button className="more-act" data-hint="repo.focus" onClick={() => { track("action:repo.focus"); setRepoMenu(null); openFocusWindow(repoName); }}><ExternalLink size={ICON} />{isNativeShell() ? "Focus this repo" : "Focus window"}</button>}
             {/* The name this repo wears on the phone (`RepoShownAs`): per repo, so it is HERE and not in Settings. */}
             <RepoShownAs repo={main} onSaved={() => { setRepoMenu(null); refreshRepos(); }} />

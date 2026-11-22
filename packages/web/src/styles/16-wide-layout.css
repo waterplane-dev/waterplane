@@ -342,6 +342,10 @@ html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
   font-size: calc(var(--fs-12) * var(--ui-font, 1)); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
+/* The files a tapped commit changed, each a row that opens its diff in that commit. */
+.git-commit-files { min-height: 0; margin: 0 0 var(--sp-10); border-bottom: 1px solid var(--line); }
+.git-commit-of { padding: var(--sp-8) var(--sp-14); overflow-wrap: anywhere; }
+
 /* A commit's verbs belong to its row: the row's rule moves below them. */
 .git-commit:has(.git-commit-acts) .git-commit-row { border-bottom: 0; }
 .git-commit-acts { padding: 0 var(--sp-14) var(--sp-10); border-bottom: 1px solid var(--line); }

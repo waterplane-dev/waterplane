@@ -227,7 +227,7 @@ export function DesktopSheet() {
   const waiting = ui.phase === "open" && !ui.drawn && !hostError ? "Waiting for the first picture…" : null;
 
   return (
-    <Sheet full title="Desktop" icon={<Monitor size={16} />}
+    <Sheet full title="Remote desktop" icon={<Monitor size={16} />}
       // The arrow lands where the Back gesture does: an open panel shuts first, then the view.
       onClose={panel !== null ? () => setPanel(null) : closeDesktop}
       actions={<>

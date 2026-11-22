@@ -344,13 +344,17 @@ the app is opened.
 - A token the desktop revoked stays in the blob until the next rewrap.
 - A stray bare token that belongs to no saved desktop can stay plaintext (the row says so).
 - Passive (kids') tokens are not sealed.
-- The LAN identity (`lanIdentity`: the secret the phone checks a Wi-Fi answer against) stays in
-  plain storage. It is accepted by no desktop endpoint, so it signs nobody in; but with it, someone who
-  also imitates a saved Wi-Fi name can answer as the desktop on a row that has no TLS pin, and so
-  receive the sign-in the next time the app is open there. A pinned desktop is not affected. It is not
-  sealed because it adds nothing wherever a pin is in force, every paired phone holds the same value,
-  and the stored copy is what lets the Wi-Fi link work with Tailscale off. A passive pairing is never
-  given it.
+- The LAN identity (`lanIdentity`: the secret the phone checks a Wi-Fi answer against) is sealed in
+  the same blob as its desktop's token, so the Wi-Fi link still works with Tailscale off once the
+  sign-ins are opened. It is accepted by no desktop endpoint, so it signs nobody in; but with a plain
+  copy, someone who also imitates a saved Wi-Fi name can answer as the desktop on a row that has no TLS
+  pin, and so receive the sign-in the next time the app is open there. A pinned desktop is not
+  affected. Plain copies that remain: with the mode off, every one (beside the plain token); with it
+  on, an identity sealed by an older app until the next pairing re-seals it, and one whose desktop has
+  no token in the blob. An identity the app read over the tailnet after sealing is kept in memory only
+  until the next pairing re-seals, so after a restart the Wi-Fi link needs the tailnet once. Every
+  paired phone holds the same value, so sealing it on this phone says nothing of the others. A passive
+  pairing is never given it.
 - On a build without PIN support the start prompt is fingerprint only, and on a plain-HTTP route it
   refuses the key, so its card stays until the route is the tailnet or HTTPS. The row refuses to lock
   in that state, and the host setup form refuses to save a plain address while that app has both locks

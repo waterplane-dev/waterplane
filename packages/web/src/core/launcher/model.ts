@@ -245,9 +245,35 @@ export function openCountByRepo(sessions: readonly SessionInfo[], repoName: (s: 
   return m;
 }
 
+/**
+ * **Pinned repos** sit above every other, in the order the person placed them, and the
+ * `repoSort` above orders only the rest — so a pinned repo never jumps when a session
+ * starts or ends elsewhere. Pins are repo NAMES (the group key), synced like hidden repos.
+ * `pinAt` places `name` at `slot` (0 = first) among the OTHER pins, moving it if it was
+ * already pinned; `unpin` drops it. Both return a new list and never touch another pin.
+ */
+export function pinAt(pins: readonly string[], name: string, slot: number): string[] {
+  const rest = pins.filter((n) => n !== name);
+  const at = Math.max(0, Math.min(rest.length, Math.floor(slot)));
+  return [...rest.slice(0, at), name, ...rest.slice(at)];
+}
+/** `pinAt` when only `shown` pins are on screen (a hidden or removed repo keeps its pin but
+ *  names no place): `slot` counts the shown OTHER pins, and the hidden ones keep their spots. */
+export function pinAtShown(pins: readonly string[], name: string, slot: number, shown: { has(n: string): boolean }): string[] {
+  const rest = pins.filter((n) => n !== name);
+  const seen = rest.filter((n) => shown.has(n));
+  const before = seen[Math.max(0, Math.floor(slot))];
+  if (before !== undefined) return pinAt(rest, name, rest.indexOf(before));
+  const last = seen[seen.length - 1];
+  return pinAt(rest, name, last === undefined ? rest.length : rest.indexOf(last) + 1);
+}
+export function unpin(pins: readonly string[], name: string): string[] {
+  return pins.filter((n) => n !== name);
+}
+
 export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readonly RepoTarget[], filtered: boolean,
   repoName: (s: SessionInfo) => string, keep: readonly string[] = [],
-  openByRepo?: ReadonlyMap<string, number>): { repoName: string; sessions: SessionInfo[] }[] {
+  openByRepo?: ReadonlyMap<string, number>, pins: readonly string[] = []): { repoName: string; sessions: SessionInfo[]; pinned: boolean }[] {
   const byName = new Map<string, SessionInfo[]>();
   const order: string[] = [];
   for (const s of shown) {
@@ -257,9 +283,14 @@ export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readon
     arr.push(s);
   }
   for (const r of visibleRepos) { const n = repoLabel(r); if ((!filtered || keep.includes(n)) && !byName.has(n)) { byName.set(n, []); order.push(n); } }
-  order.sort((a, b) => (openByRepo ? (openByRepo.get(b) ?? 0) - (openByRepo.get(a) ?? 0) : 0)
-    || a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
-  return order.map((name) => ({ repoName: name, sessions: byName.get(name) ?? [] }));
+  const pinRank = new Map(pins.map((n, i) => [n, i] as const));
+  order.sort((a, b) => {
+    const pa = pinRank.get(a), pb = pinRank.get(b);
+    if (pa !== undefined || pb !== undefined) return (pa ?? Infinity) - (pb ?? Infinity);
+    return (openByRepo ? (openByRepo.get(b) ?? 0) - (openByRepo.get(a) ?? 0) : 0)
+      || a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  });
+  return order.map((name) => ({ repoName: name, sessions: byName.get(name) ?? [], pinned: pinRank.has(name) }));
 }
 
 /** What the launcher says in place of the repo list, or null when it has rows to draw. An unread

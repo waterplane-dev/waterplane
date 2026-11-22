@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { parkedKeyFor } from "@waterplane/shared";
 
 import { lockVerdict } from "../../appLock.ts";
-import { heldToken, heldTokens, holdToken, holdTokens, releaseTokens } from "../../deviceToken.ts";
+import { heldLanIdentities, heldToken, heldTokens, holdLanIdentity, holdToken, holdTokens, releaseTokens } from "../../deviceToken.ts";
 import { addHost } from "../../hosts.ts";
 import { RESET_KEEP_PREFIXES } from "../../resetKeys.ts";
 import { LS } from "../../storage.ts";
@@ -205,6 +205,76 @@ test("a rewrap with the blob unopened opens it first, so the new blob holds ever
   assert.equal(ks.calls.generate.length, 0, "the existing key, never a new one");
   assert.deepEqual(JSON.parse(atob(ks.calls.wrap[0].dataB64)), { [a]: TA, [b]: TC });
   assert.deepEqual(parseSealBlob(kv.getItem(LS.tokenSeal)).hosts, [a, b].sort());
+});
+
+// ── The LAN identity goes where its token goes ───────────────────────────
+
+const IA = { hostId: "deska000", secret: "a".repeat(32) };
+const IB = { hostId: "deskb000", secret: "b".repeat(32) };
+const IC = { hostId: "deskb000", secret: "c".repeat(32) };
+const identityKeys = (kv) => [...kv.m.keys()].filter((k) => k.endsWith(LS.lanIdentity.split(".").pop()));
+
+/** `plainPhone` with each desktop's identity beside its token. */
+function plainLanPhone() {
+  const p = plainPhone();
+  p.kv.setItem(LS.lanIdentity, JSON.stringify(IA));
+  p.kv.setItem(parkedKeyFor(LS.lanIdentity, p.b), JSON.stringify(IB));
+  return p;
+}
+
+test("sealing takes each desktop's LAN identity into the same sheet and off the disk; opening gives it back", async (t) => {
+  t.after(releaseTokens);
+  const { kv, a, b } = plainLanPhone();
+  const ks = keystore(kv);
+  assert.deepEqual(await sealNow(ks.ports), { ok: true, auth: "any" });
+  assert.equal(ks.calls.wrap.length, 1);
+  assert.deepEqual(JSON.parse(atob(ks.calls.wrap[0].dataB64)), { [a]: TA, [b]: TB, lan: Object.fromEntries([[a, IA], [b, IB]].sort()) });
+  assert.deepEqual(identityKeys(kv), []);
+  assert.deepEqual(heldLanIdentities(), { [a]: IA, [b]: IB });
+  releaseTokens();
+  const r = await openBlob(ks.ports, { title: "x" });
+  assert.deepEqual(r, { ok: true, tokens: { [a]: TA, [b]: TB }, lan: { [a]: IA, [b]: IB } });
+});
+
+test("unsealing puts every identity back on its own key, with one that arrived this run", async (t) => {
+  t.after(releaseTokens);
+  const { kv, b } = plainLanPhone();
+  const ks = keystore(kv);
+  await sealNow(ks.ports);
+  releaseTokens();
+  holdLanIdentity(b, IC); // read over the tailnet since the blob was written
+  assert.equal((await unsealNow(ks.ports, [])).ok, true);
+  assert.deepEqual(JSON.parse(kv.getItem(LS.lanIdentity)), IA);
+  assert.deepEqual(JSON.parse(kv.getItem(parkedKeyFor(LS.lanIdentity, b))), IC);
+  assert.deepEqual(heldLanIdentities(), {}, "the map is emptied");
+});
+
+test("a rewrap carries the held identities, and takes in a plain one a blob from before them left out", async (t) => {
+  const { kv, a, b, ks } = await sealedPhone(t); // tokens only, as a build before this sealed it
+  kv.setItem(LS.lanIdentity, JSON.stringify(IA));
+  holdToken(b, TC);
+  holdLanIdentity(b, IB);
+  assert.equal(await rewrapNow(ks.ports, "mini"), null);
+  assert.deepEqual(JSON.parse(atob(ks.calls.wrap[0].dataB64)), { [a]: TA, [b]: TC, lan: Object.fromEntries([[a, IA], [b, IB]].sort()) });
+  assert.deepEqual(parseSealBlob(kv.getItem(LS.tokenSeal)).lan, [a, b].sort());
+  assert.deepEqual(identityKeys(kv), [], "the plain copy went once the blob held it");
+});
+
+test("a refused rewrap leaves a plain identity where it was: the old blob does not hold it", async (t) => {
+  const { kv, a, b, ks } = await sealedPhone(t, { refuse: { wrap: "cancelled" } });
+  kv.setItem(LS.lanIdentity, JSON.stringify(IA));
+  holdTokens({ [a]: TA, [b]: TB });
+  assert.match(await rewrapNow(ks.ports, "mini"), /the seal was not updated/);
+  assert.deepEqual(JSON.parse(kv.getItem(LS.lanIdentity)), IA);
+});
+
+test("a dead seal drops the held identities with the tokens, and writes none to a key", async (t) => {
+  t.after(releaseTokens);
+  const { kv } = plainLanPhone();
+  await sealNow(keystore(kv).ports);
+  retireSeal(kv);
+  assert.deepEqual(heldLanIdentities(), {});
+  assert.deepEqual(identityKeys(kv), []);
 });
 
 test("a rewrap with the map complete is one sheet; refused, the old blob stands", async (t) => {

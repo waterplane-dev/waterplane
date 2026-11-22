@@ -599,3 +599,21 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
 }
 /* A proposal's own mark on its backlog row: the same hue, as words. */
 .bl-proposed { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-4); color: var(--accent); font-weight: var(--fw-semibold); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+
+/* Where the pinned repos end (`UnpinnedHead.tsx`): a dashed rule with the count
+   of the rest and their order as two tap targets. Drawn only once a repo is
+   pinned, so the line itself is the clue that the rows below are NOT pinned. */
+.unpinned-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-6);
+  margin: var(--sp-12) var(--sp-8) var(--sp-8); padding-top: var(--sp-8);
+  border-top: 1px dashed var(--line);
+  color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.unpinned-sort {
+  min-height: 36px; padding: 0 var(--sp-12); border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit;
+}
+.unpinned-sort.on { border-color: var(--accent); color: var(--accent); }
+/* The pin's places, unfolded under "Pin…" in a repo's ⋯ menu (`RepoPin.tsx`). */
+.repo-pin-places { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: var(--sp-4) 0; }
+.repo-pin-ask { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }

@@ -23,7 +23,8 @@ const SLICE_RAISED = {
   // 2026-10-30: the week limit chart's older/newer stepper (`.ts-wstep-chart`) extends `.ts-wstep`.
   // 2026-11-02: the always-on strip and list (`.ao-*`) moved here beside `.carried-*`, which they now
   // draw on, out of the readings sheet's slice and VS Code's theme: one copy both ends load.
-  "11-token-stats.css": 681,
+  // 2026-11-22: the clickable bar row (`.ts-barrow-btn`, "Cost per limit week") extends `.ts-barrow`.
+  "11-token-stats.css": 684,
 };
 const MAX_INDEX_LINES = 40;
 const dir = join(dirname(STYLES_INDEX), "styles");

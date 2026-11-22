@@ -4,7 +4,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { ChevronRight, ExternalLink, Wrench } from "lucide-react";
-import { CONTEXT_CLOCK, backendsWhy, backendsWords, passedWords } from "@waterplane/shared";
+import { CONTEXT_CLOCK, backendsWhy, backendsWords, passedWords, seenWords } from "@waterplane/shared";
 import type { BillingProfile, Finding, NotChecked, PassedCheck } from "@waterplane/shared";
 import { api } from "../../api";
 import { core } from "../../sdk";
@@ -32,6 +32,7 @@ export function FindingCard({ f, ctx }: { f: Finding; ctx: RowCtx }) {
   const labels = backendLabels(core().world.backends);
   const be = f.backends.unread.length ? backendsWords(f.backends, labels) : "";
   const why = f.backends.unread.length ? backendsWhy(f.backends, labels) : "";
+  const seen = seenWords(f.seen);
   const evidence = evidenceDoorOf(f);
   const door = evidence && doorOffered(evidence, permissionsDoorOn()) ? evidence : null;
 
@@ -57,6 +58,7 @@ export function FindingCard({ f, ctx }: { f: Finding; ctx: RowCtx }) {
   return (
     <div className="sc-card" data-finding={f.id}>
       <div className="sc-what">{f.what}</div>
+      {seen && <div className="sc-sub">{seen}</div>}
       {f.id === WEIGHT_FINDING_ID && ctx.repoId && <WeightClocks repoId={ctx.repoId} />}
       {saving && <div className="sc-sub">{saving}</div>}
       {be && <div className="sc-sub">{be} <Explain of="which agents this check read">{why}</Explain></div>}

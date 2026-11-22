@@ -1379,6 +1379,6 @@ test("outbox.ts reads and writes through storedGuard, never lsSetJson or a bare 
     "outbox.ts must import readGuarded and writeChecked from ./storedGuard");
   assert.doesNotMatch(src, /\blsSetJson\(|import\s*\{[^}]*\blsSetJson\b[^}]*\}/, "lsSetJson swallows a refused write — the queue and drafts need the boolean");
   assert.doesNotMatch(src, /JSON\.parse\(\s*lsGet\(/, "a bare parse turns an unreadable store into an empty one");
-  assert.match(src, /writeChecked\(\s*localStorage,\s*key,\s*val,\s*shapeOf\(key\)\s*\)/,
+  assert.match(src, /writeChecked\(\s*\w+,\s*key,\s*val,\s*shapeOf\(key\)\s*\)/, // the store is `lsStore()`'s (local/no-raw-storage)
     "write() must pass shapeOf(key): it is what copies an unreadable value aside at write time");
 });

@@ -2,7 +2,7 @@
 import type { BillingProfile } from "../billing.js";
 import { priceListSource, priceSourceText } from "../pricing.js";
 import { fmtCount } from "../tokens.js";
-import type { Finding, FindingSaving, NotChecked, PassedCheck } from "./types.js";
+import type { Finding, FindingSaving, FindingSeen, NotChecked, PassedCheck } from "./types.js";
 
 /** What a dollar figure is: subscription and unknown "at list price, not a bill"; api and cloud "at list price". */
 export function moneyLabel(profile: BillingProfile | undefined, source = priceSourceText(priceListSource())): string {
@@ -69,3 +69,20 @@ export const groupCountWords = (n: number, ranIn: number): string => `in ${n} of
 export const groupUnreadWords = (unreadIn: number): string => (unreadIn > 0 ? `not checked in ${unreadIn}` : "");
 /** A repo with nothing open: what passed, and what could not run. */
 export const clearRowWords = (passed: number, notChecked = 0): string => `${passed} check${passed === 1 ? "" : "s"} passed${notChecked > 0 ? ` · ${notChecked} not checked` : ""}`;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "22 Nov 09:12" in local time; the year only when it is not this year's. */
+export function seenStamp(at: number, now = Date.now()): string {
+  const d = new Date(at), n = new Date(now);
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() === n.getFullYear() ? "" : ` ${d.getFullYear()}`} ${hm}`;
+}
+
+/** When a finding first showed up: "first seen 22 Nov 09:12 by the exposure watch". An `atLeast` one says it may be older. */
+export function seenWords(s: FindingSeen | undefined, now = Date.now()): string {
+  if (!s || !Number.isFinite(s.at) || s.at <= 0) return "";
+  const by = s.from === "watch" ? "the exposure watch" : "this desktop's setup check";
+  return s.atLeast
+    ? `already open at ${by}'s first look, ${seenStamp(s.at, now)}`
+    : `first seen ${seenStamp(s.at, now)} by ${by}`;
+}

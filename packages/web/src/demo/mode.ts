@@ -19,7 +19,7 @@
  * Node-importable (`.ts` specifiers, storage.ts only): `hostUrl.ts` reads it,
  * and that file has node tests.
  */
-import { LS, demoSnapKey, lsDel, lsGet, lsSet } from "../storage.ts";
+import { LS, demoSnapKey, lsDel, lsGet, lsSet, ssDel } from "../storage.ts";
 
 /** The URL parameter. */
 export const DEMO_PARAM = "demo";
@@ -73,7 +73,7 @@ export function setDemoActive(id: string | null, why: string | null = null): voi
  */
 export function enterDemo(id: string): void {
   if (!ID_RE.test(id)) throw new Error(`not a demo scenario id: ${id}`);
-  try { globalThis.sessionStorage?.removeItem(demoSnapKey(id)); } catch { /* storage off */ }
+  ssDel(demoSnapKey(id));
   lsDel(LS.demoTour); // the tour starts over, and opens by itself again
   lsSet(LS.demo, id);
   reloadAt(urlWithDemo(location.href, id));
@@ -85,7 +85,7 @@ export function enterDemo(id: string): void {
  */
 export function exitDemo(): void {
   const id = active ?? demoScenarioId();
-  try { if (id) globalThis.sessionStorage?.removeItem(demoSnapKey(id)); } catch { /* storage off */ }
+  if (id) ssDel(demoSnapKey(id));
   lsDel(LS.demoTour); // what was tried on this visit goes with it
   lsDel(LS.demo);
   reloadAt(urlWithDemo(location.href, null));

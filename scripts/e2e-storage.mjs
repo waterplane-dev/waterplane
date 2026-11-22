@@ -77,7 +77,11 @@ writeFileSync(join(STORE, "intents.json.bak"), "x".repeat(120));      // a lefto
 // Valid but empty, padded to size: a corrupt store is moved aside at boot
 // (jsonstore), and then there is no ledger left for §4 to protect.
 writeFileSync(join(STORE, "sent.json"), `[${" ".repeat(898)}]`);         // a bounded ledger
-writeFileSync(join(STORE, "tokenstats.json"), `{${" ".repeat(698)}}`);   // the unbounded one
+// The unbounded one, in today's layout: one shard per project slug (`tokenstats.ts`, be44806a).
+// Seeded as the old single `tokenstats.json` it would be migrated at boot and renamed
+// `.json.migrated` — a second migration leftover this report would rightly count.
+mkdirSync(join(STORE, "tokenstats"), { recursive: true });
+writeFileSync(join(STORE, "tokenstats", "seed.json"), `{${" ".repeat(698)}}`);
 
 const host = spawn("node", ["packages/host/dist/main.js"], {
   env: {

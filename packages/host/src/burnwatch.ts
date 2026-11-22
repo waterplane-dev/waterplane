@@ -20,9 +20,10 @@
 import { join } from "node:path";
 import {
   BURN_DEFAULT_COOLDOWN_MS, BURN_DEFAULT_PTS_PER_HOUR,
-  SOURCE_BURN_UNITS, burnPushText, burnStretch, sourceBurnPushText, sourceBurnSamples, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText, undatedWhy,
+  SOURCE_BURN_UNITS, burnPushText, burnStretch, sourceBurnPushText, sourceBurnSamples, burnVerdict, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText, undatedWhy,
   type BurnState, type CostWindowDoc, type UsageHistoryDoc, type UsageInfo, type UsageReading, type UsageSourceSample,
 } from "@waterplane/shared";
+import { env } from "./env.js";
 import { writeJsonAtomic, readJsonGuarded } from "./jsonstore.js";
 import type { Notify } from "./notifytypes.js";
 
@@ -46,7 +47,7 @@ export interface BurnWatchDeps {
 
 /** A positive-or-zero finite number from an env string, else the fallback. */
 function envNum(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = env(name);
   if (raw == null || raw.trim() === "") return fallback;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -60,8 +61,8 @@ const isState = (v: unknown): boolean => {
 
 export function createBurnWatch(deps: BurnWatchDeps): { observe(u: UsageInfo): Promise<boolean>; armed(): boolean } {
   const now = deps.now ?? Date.now;
-  const threshold = deps.thresholdPtsPerHour ?? envNum(envName("BURN_PTS_PER_HOUR"), BURN_DEFAULT_PTS_PER_HOUR);
-  const cooldown = deps.cooldownMs ?? envNum(envName("BURN_COOLDOWN_MS"), BURN_DEFAULT_COOLDOWN_MS);
+  const threshold = deps.thresholdPtsPerHour ?? envNum("BURN_PTS_PER_HOUR", BURN_DEFAULT_PTS_PER_HOUR);
+  const cooldown = deps.cooldownMs ?? envNum("BURN_COOLDOWN_MS", BURN_DEFAULT_COOLDOWN_MS);
   const file = join(deps.stateDir, "burnwatch.json");
   let state: BurnState = readJsonGuarded<BurnState>(file, {}, isState);
   let inFlight: Promise<boolean> | null = null;
@@ -134,8 +135,8 @@ export interface SourceBurnWatchDeps {
  */
 export function createSourceBurnWatch(deps: SourceBurnWatchDeps): { observe(r: UsageReading): Promise<boolean>; armed(): boolean } {
   const now = deps.now ?? Date.now;
-  const threshold = deps.thresholdPtsPerHour ?? envNum(envName("BURN_PTS_PER_HOUR"), BURN_DEFAULT_PTS_PER_HOUR);
-  const cooldown = deps.cooldownMs ?? envNum(envName("BURN_COOLDOWN_MS"), BURN_DEFAULT_COOLDOWN_MS);
+  const threshold = deps.thresholdPtsPerHour ?? envNum("BURN_PTS_PER_HOUR", BURN_DEFAULT_PTS_PER_HOUR);
+  const cooldown = deps.cooldownMs ?? envNum("BURN_COOLDOWN_MS", BURN_DEFAULT_COOLDOWN_MS);
   const file = join(deps.stateDir, "burnwatch-sources.json");
   const state: Record<string, BurnState> = readJsonGuarded<Record<string, BurnState>>(
     file, {}, (v) => !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v as object).every(isState),

@@ -40,9 +40,9 @@ Steps ([full](../../../docs/notes/web-architecture.md#adding-a-feature-step-by-s
 
 **The conventions every slice is built on** (all tasks):
 
-- `storage.ts` — **every `localStorage` key this app owns, in one place**, plus the readers that
-  swallow the private-mode and quota throws once. `SYNCED` is checked against
-  `shared/settings.ts`'s allow-list at load; `local/no-storage-key-literal` refuses a new key elsewhere.
+- `storage.ts` — **every `localStorage` key this app owns, in one place**, plus the ONLY access
+  (readers swallow private-mode and quota throws). `SYNCED` is checked against
+  `shared/settings.ts`'s allow-list at load; lint refuses a key literal or a raw access elsewhere.
 - `Sheet.tsx` — `Sheet`/`SheetHead`: every sheet; no hand-rolled Back.
 - `Empty.tsx` — what a list says with no rows (loading/offline/error/nothing) plus the age line,
   **shown above a NON-empty list too**.

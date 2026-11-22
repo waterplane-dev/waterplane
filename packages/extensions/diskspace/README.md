@@ -2,6 +2,8 @@
 
 Shows what is filling this computer's disk, and lets you delete the things that can be rebuilt, such as caches, build output and downloaded AI models. Use it when the desktop runs low on space. It works on a Mac, on Linux, and on Windows when waterplane runs inside WSL. It is experimental, off until you switch it on under Plugins, and spends nothing: no model calls.
 
+On a Mac or Linux with more than one disk (an external drive, a second partition), the screen shows a card for each, the fullest first, and the lists below show only what is on the disk you picked — at first the fullest, since that is the one you are cleaning up. A line says how many rows that leaves out, with an **every disk** button; tap a picked disk again for every disk too. **Clean all** then cleans only that disk's temporary files, and the large-file search on a Mac also looks on the other disks.
+
 On Windows with WSL there are two disks: the Windows drive (C:) and WSL's own virtual disk, which is a file on C:. Every row says which one it is on. Deleting something inside WSL frees space inside WSL only; C: gets that space back once the WSL disk is compacted, and the WSL disk's row under "show only" says how.
 
 A scan lists its rows as soon as they are measured. Build output and node_modules in your code folder come last: while they are still being looked for, a line under "Temporary" says so and since when, and afterwards it says when they were looked for and how long it took.
@@ -9,6 +11,7 @@ A scan lists its rows as soon as they are measured. Build output and node_module
 On Windows, when your code folder is on the Windows drive (for example `C:\dev`), a scan does not look for build output and node_modules there at all. Reading folders on the Windows drive from inside WSL is slow: on one real machine, looking through 38 repos took 29 minutes. Tap **look for them** under "Temporary" when you want them; the rest of the screen keeps working meanwhile, and the rows stay until you tap **look again**. Folders on the Windows side are sized by Windows itself (PowerShell), which is much faster than reading them through WSL. When PowerShell does not answer, a row says it was measured the slow way instead.
 
 ## Where to find it
+- **The launcher's ☰ menu, This desktop, "Disk space"** — opens the screen.
 - **Settings, Tools, "disk space"** — a row with the free space from the last scan and a button to open the full screen.
 - **Disk space screen** — lists temporary files (with, above the list, a line about build output and node_modules and, on Windows, the **look for them** button), AI models, large things shown for information only, and a button to scan for large files. Each temporary item and model has its own delete button, and one button cleans all temporary files. Every delete asks you to confirm.
 
@@ -19,7 +22,7 @@ desktop's disk and lets you delete what can safely be regenerated. `host/index.m
 **profile** once — `mac`, `linux`, or `wsl` (Linux with `WSL_DISTRO_NAME`/`WSL_INTEROP` set, or
 "microsoft" in the kernel release) — and the lists below follow it. The Mac's lists:
 
-1. **Free / total** of the data volume (`statfs` on the home folder), from the last scan.
+1. **Free / total** of the data volume (`statfs` on the home folder), from the last scan. With several disks (`host/volumes.mts`: `mount` on a Mac, `/proc/mounts` on Linux), each is listed, and every row and large file carries the key of the disk it is on (`stat().dev`).
 2. **Temporary** — regenerable caches and build output, a **delete** button on each row and one
    **clean all temporary** button. The fixed list: `~/.gradle/{caches,wrapper/dists,daemon}`,
    `~/.npm/_cacache`, `~/Library/Caches/{ms-playwright,pip,node-gyp,Homebrew,electron,claude-cli-nodejs}`,

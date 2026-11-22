@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitFetch, gitLog, gitShow } from "../dist/gitlog.js";
+import { gitFetch, gitLog, gitShow, gitShowFile, parseNameStatus } from "../dist/gitlog.js";
 
 const g = (cwd, ...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...a], { cwd, stdio: "pipe" }).toString();
 function commit(cwd, name) {
@@ -40,8 +40,12 @@ test("incoming waits for a fetch; outgoing, incoming and shared are disjoint", a
     assert.deepEqual(l.incoming.map((c) => c.subject), ["add theirs"]);
     assert.deepEqual(l.outgoing.map((c) => c.subject), ["add mine"]);
     assert.ok(l.fetchedAt && Date.now() - l.fetchedAt < 60_000);
-    assert.match(await gitShow(a, l.outgoing[0].short), /add mine[\s\S]*mine \| 1 \+/);
+    const shown = await gitShow(a, l.outgoing[0].short);
+    assert.match(shown.body, /add mine[\s\S]*mine \| 1 \+/);
+    assert.deepEqual(shown.files, [{ path: "mine", status: "A" }]);
+    assert.match(await gitShowFile(a, l.outgoing[0].short, "mine"), /^\+mine$/m);
     assert.equal(await gitShow(a, "--output=/tmp/x"), null);
+    assert.equal(await gitShowFile(a, "--output=/tmp/x", "mine"), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -62,4 +66,13 @@ test("no upstream: own history, fetch refused in words", async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("a commit's file list: a rename carries its old path, a tab in a name survives", () => {
+  assert.deepEqual(parseNameStatus("\nM\0a b.ts\0R087\0old.ts\0new.ts\0D\0x\ty\0"), [
+    { path: "a b.ts", status: "M" },
+    { path: "new.ts", status: "R", from: "old.ts" },
+    { path: "x\ty", status: "D" },
+  ]);
+  assert.deepEqual(parseNameStatus(""), []);
 });

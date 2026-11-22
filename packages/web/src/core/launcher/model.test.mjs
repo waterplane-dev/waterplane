@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
-  openCountByRepo, queuedChipCut, queuedKeysByRepo, rescuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuAim, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
+  openCountByRepo, pinAt, pinAtShown, unpin, queuedChipCut, queuedKeysByRepo, rescuedKeysByRepo, activityOpenKeys, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuAim, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
   starredSpared, closeMarked, isCloseSpared, markedWords, sessionRepoShownIn, repoShownByKey,
 } from "./model.ts";
 
@@ -117,6 +117,29 @@ test("most open sessions first, ties alphabetically, counted off live sessions o
   assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf, [], open).map((g) => g.repoName), ["c", "b", "a", "d"]);
   // Without the count it is the alphabetical list it always was.
   assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf).map((g) => g.repoName), ["a", "b", "c", "d"]);
+});
+
+test("pinned repos lead in their placed order; the sort orders only the rest", () => {
+  const shown = [ses("b1", "/r/b", 1), ses("c1", "/r/c", 2), ses("c2", "/r/c", 3)];
+  const repos = [repo("d", "/r/d"), repo("c", "/r/c"), repo("b", "/r/b"), repo("a", "/r/a")];
+  const open = openCountByRepo(shown, repoOf);
+  const g = repoGroupsOf(shown, repos, false, repoOf, [], open, ["d", "a", "gone"]);
+  assert.deepEqual(g.map((x) => `${x.repoName}${x.pinned ? "*" : ""}`), ["d*", "a*", "c", "b"]);
+  assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf, [], undefined, ["c"]).map((x) => x.repoName), ["c", "a", "b", "d"]);
+});
+
+test("pinAt places among the other pins and moves an existing pin; unpin drops only that one", () => {
+  assert.deepEqual(pinAt([], "x", 3), ["x"]);
+  assert.deepEqual(pinAt(["a", "b"], "x", 0), ["x", "a", "b"]);
+  assert.deepEqual(pinAt(["a", "b"], "x", 1), ["a", "x", "b"]);
+  assert.deepEqual(pinAt(["a", "b"], "x", 9), ["a", "b", "x"]);
+  assert.deepEqual(pinAt(["a", "x", "b"], "x", 2), ["a", "b", "x"]);
+  assert.deepEqual(unpin(["a", "x", "b"], "x"), ["a", "b"]);
+  // A hidden pin `h` names no place and keeps its spot among the rest.
+  const shown = new Set(["a", "b", "x"]);
+  assert.deepEqual(pinAtShown(["a", "h", "b"], "x", 1, shown), ["a", "h", "x", "b"]);
+  assert.deepEqual(pinAtShown(["a", "b", "h"], "x", 2, shown), ["a", "b", "x", "h"]);
+  assert.deepEqual(pinAtShown(["h"], "x", 0, shown), ["h", "x"]);
 });
 
 test("the worktree cut keeps its repo's group even when no session runs in a worktree", () => {

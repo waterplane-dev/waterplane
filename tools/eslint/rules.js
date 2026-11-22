@@ -134,6 +134,59 @@ const noStorageKeyLiteral = {
 };
 
 /**
+ * The ACCESS half of `no-storage-key-literal`: `localStorage` and `sessionStorage` are reached
+ * through `storage.ts` (`lsGet`/`lsSet`/`lsDel`/`lsJson…`, `lsSetChecked` for a write that must
+ * say it failed, `lsStore()` to hand a `Storage` to a pure function, `ssGet`/`ssSet`/`ssDel`).
+ *
+ * A key from the registry still slipped past it at the call: a bare `removeItem`, a
+ * `sessionStorage` read, a `globalThis.localStorage?.setItem`, an `Object.keys(localStorage)`
+ * walk — each with its own try/catch, its own idea of "storage off", and invisible to the
+ * warn-level `no-restricted-properties` that only knew `localStorage.getItem`/`setItem`. Refused:
+ * any reference to either GLOBAL (a local or parameter of the same name is not one) and either
+ * one read off `globalThis`/`window`/`self`. The owners (`storage.ts`, the `settings.ts` patch,
+ * the demo's facade `demo/world.ts`) are exempted in `eslint.config.js`.
+ */
+const STORAGE_GLOBALS = new Set(["localStorage", "sessionStorage"]);
+const GLOBAL_OBJECTS = new Set(["globalThis", "window", "self"]);
+/** @type {import("eslint").Rule.RuleModule} */
+const noRawStorage = {
+  meta: {
+    type: "problem",
+    docs: { description: "localStorage/sessionStorage are reached through storage.ts" },
+    schema: [],
+    messages: {
+      raw:
+        "`{{name}}` touched directly. Go through `storage.ts`: `lsGet`/`lsSet`/`lsDel`/`lsJson`/`lsBool`/`lsNum` " +
+        "swallow the private-mode and quota throws once, `lsSetChecked` is the write that says it failed, " +
+        "`lsStore()` hands the store to a pure function, `ssGet`/`ssSet`/`ssDel` are the tab-life corner.",
+    },
+  },
+  create(ctx) {
+    const source = ctx.sourceCode ?? ctx.getSourceCode();
+    const propName = (m) =>
+      !m.computed && m.property.type === "Identifier" ? m.property.name
+        : m.computed && m.property.type === "Literal" && typeof m.property.value === "string" ? m.property.value
+          : null;
+    return {
+      MemberExpression(node) {
+        const name = propName(node);
+        if (name && STORAGE_GLOBALS.has(name) && node.object.type === "Identifier" && GLOBAL_OBJECTS.has(node.object.name)) {
+          ctx.report({ node, messageId: "raw", data: { name: `${node.object.name}.${name}` } });
+        }
+      },
+      "Program:exit"(node) {
+        // `through` = references that resolve to nothing declared in the file: the globals.
+        for (const ref of source.getScope(node).through) {
+          if (STORAGE_GLOBALS.has(ref.identifier.name) && ref.isValueReference !== false) {
+            ctx.report({ node: ref.identifier, messageId: "raw", data: { name: ref.identifier.name } });
+          }
+        }
+      },
+    };
+  },
+};
+
+/**
  * A product name spelled in code instead of read from `shared/src/brand.ts`.
  *
  * Every brand-bearing value is a field of `BRAND` (or of `LEGACY`, for what an
@@ -379,6 +432,7 @@ export default {
     "no-functional-setoutbox": noFunctionalSetOutbox,
     "no-raw-optional-cap": noRawOptionalCap,
     "no-second-socket": noSecondSocket,
+    "no-raw-storage": noRawStorage,
     "no-storage-key-literal": noStorageKeyLiteral,
     "total-wire-words": totalWireWords,
   },

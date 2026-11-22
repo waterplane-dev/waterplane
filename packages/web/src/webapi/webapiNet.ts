@@ -39,17 +39,17 @@ export const netApi = {
       const ms = performance.now() - t0;
       return { bytes: received, ms, mbps: mbps(received, ms) };
     },
-    /** Upload `bytes` of random data to the host; reports client wall time + server receive time. */
-    upload: async (bytes: number): Promise<SpeedResult> => {
+    /** Upload `bytes` of random data; client wall time + server receive time. XHR: fetch has no
+     *  upload progress, which the live graph needs (bytes handed to the stack, a little ahead of the wire). */
+    upload: async (bytes: number, onProgress?: (sent: number) => void): Promise<SpeedResult> => {
       const body = new Uint8Array(bytes);
       for (let off = 0; off < bytes; off += 65536) crypto.getRandomValues(body.subarray(off, Math.min(off + 65536, bytes)));
       const t0 = performance.now();
-      const r = await fetch("/api/speedtest/upload", {
-        method: "POST",
-        headers: { "content-type": "application/octet-stream" },
-        body,
-      });
-      const j = (await r.json()) as { ok: boolean; bytes?: number; ms?: number; error?: string };
+      const text = await new Promise<string>((resolve, reject) => { const x = new XMLHttpRequest();
+        x.open("POST", "/api/speedtest/upload"); x.setRequestHeader("content-type", "application/octet-stream");
+        x.upload.onprogress = (e) => onProgress?.(e.loaded); x.onload = () => resolve(x.responseText); x.onerror = x.onabort = () => reject(new Error("upload failed: no answer"));
+        x.send(body); });
+      const j = JSON.parse(text) as { ok: boolean; bytes?: number; ms?: number; error?: string };
       const ms = performance.now() - t0;
       if (!j.ok) throw new Error(j.error || "upload failed");
       return { bytes, ms, mbps: mbps(bytes, ms), serverMs: j.ms };

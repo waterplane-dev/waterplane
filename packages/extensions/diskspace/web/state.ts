@@ -66,13 +66,18 @@ export async function removeEntry(e: DiskEntry, scannedAt: number | null): Promi
   await readState();
 }
 
-export async function cleanAll(rows: readonly DiskEntry[]): Promise<void> {
+/** `vol`: the disk the sheet is cut to — the host then cleans exactly the rows on that disk, the ones asked about. */
+export async function cleanAll(rows: readonly DiskEntry[], vol: string | null): Promise<void> {
   if (!rows.length) return;
   if (!(await askConfirm({ ...cleanAllAsk(rows), tone: "warn" }))) return;
-  const res = await client.call("cleanTemp", {});
+  const res = await client.call("cleanTemp", vol ? { vol } : {});
   core().say.toast(res.ok ? `deleting ${res.result.accepted} temporary folder${res.result.accepted === 1 ? "" : "s"} on the desktop…` : `nothing deleted: ${res.error}`);
   await readState();
 }
+
+/** Which disk the lists are cut to: undefined = the fullest (the default), null = every disk. Per phone, in memory. */
+export const diskPick = createStore<string | null | undefined>(undefined);
+export const pickDisk = (key: string | null) => diskPick.set(key);
 
 export function openDisk(): void {
   core().nav.open(DISK_SHEET);

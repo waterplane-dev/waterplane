@@ -12,7 +12,7 @@ import { noteHostSeen, noteLinkStatus, noteReload, noteRtt, noteTraffic } from "
 import { SHELL_NUDGE_EVENT } from "./shellLink";
 import { releaseRelay } from "./core/queue/relayOwner";
 import { deviceToken, wsProtocols } from "./deviceToken";
-import { LS } from "./storage";
+import { LS, ssGet, ssSet } from "./storage";
 import { demoTransport } from "./demo/transport";
 import { HeldFrames } from "./heldFrames";
 import { dialTimeoutMs } from "./dialFuse";
@@ -311,11 +311,10 @@ export class HostConnection {
       if (!(await this.hostReachable())) return;
       if (this.ws?.readyState === WebSocket.OPEN) return;
     }
-    try {
-      const last = Number(sessionStorage.getItem(LS.lastForcedReload) || 0);
-      if (Date.now() - last < RELOAD_MIN_GAP_MS) return;
-      sessionStorage.setItem(LS.lastForcedReload, String(Date.now()));
-    } catch { /* storage unavailable — still reload, just without the loop guard */ }
+    // Storage unavailable reads as 0 and the write is dropped — still reload, just without the loop guard.
+    const last = Number(ssGet(LS.lastForcedReload) || 0);
+    if (Date.now() - last < RELOAD_MIN_GAP_MS) return;
+    ssSet(LS.lastForcedReload, String(Date.now()));
     // Written through synchronously by `noteReload` — a debounced write would not
     // survive the navigation it is describing, and "how often does the watchdog
     // nuke the page?" is one of the numbers worth having.

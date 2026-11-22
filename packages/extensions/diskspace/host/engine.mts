@@ -10,12 +10,13 @@
  */
 import { lstat, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { CANDIDATE_ID_RE, type CodeWalk, type DiskDeleteResult, type DiskEntry, type DiskScan, type DiskSide, type DiskState, type DiskVolume, type LargeScan } from "../shared/wire.mjs";
+import { CANDIDATE_ID_RE, PENDING_NOTE, type CodeWalk, type DiskDeleteResult, type DiskEntry, type DiskScan, type DiskSide, type DiskState, type DiskVolume, type LargeScan } from "../shared/wire.mjs";
 import {
   buildCandidates, codeOnTap, driveForm, nodeModulesEntries, ollamaSizeKb, OLLAMA_NAME_RE, onWindowsDrive, profileOf, recheckBuild, resolveCaches, resolveHf, resolveOllama, resolveTmp, resolveWinCaches,
   resolveWinTemp, safeToRemove, showOnly, sideOfPath, tilde, walkRoot, winHomeOf, type Candidate, type Category, type Roots,
 } from "./candidates.mjs";
 import { findLarge } from "./large.mjs";
+import { diskOf, listVolumes } from "./volumes.mjs";
 import { measure, measureWindows, pool, run, volumeOf, windowsVolume, type Measured } from "./run.mjs";
 
 /** What `rm` says when Windows holds a file open (drvfs maps a sharing violation to one of these). */
@@ -48,7 +49,7 @@ export interface Engine {
   /** Look for build output and node_modules now (the only way it runs when `codeOnTap`). */
   scanCode(): DiskState;
   remove(id: string): { accepted: true; label: string };
-  cleanTemp(): { accepted: number };
+  cleanTemp(vol?: string): { accepted: number };
   /** Resolves when no scan, find or delete is running (tests). */
   idle(): Promise<void>;
 }
@@ -82,14 +83,22 @@ async function measured(c: Candidate, r: Roots, pre?: Pre): Promise<DiskEntry> {
  * (du over drvfs took over 120 s per cache folder), the rest to `du` as before. PowerShell missing
  * or answering nothing usable: du for those too, with the reason on each row.
  */
-async function measureAll(list: readonly Candidate[], r: Roots): Promise<DiskEntry[]> {
+async function windowsPre(list: readonly Candidate[], r: Roots): Promise<Pre | undefined> {
   const win = [...new Set(list.filter((c) => c.category !== "ollama").flatMap((c) => c.members ?? (c.path ? [c.path] : [])).filter((p) => onWindowsDrive(r, p)))];
-  let pre: Pre | undefined;
-  if (win.length) {
-    const got = await measureWindows(win, { psBin: r.psBin, timeoutMs: r.psTimeoutMs ?? r.duTimeoutMs, run: r.psRun, winPath: r.winPath });
-    pre = "byPath" in got ? { byPath: got.byPath, duNote: null } : { byPath: new Map(), duNote: `measured with du from inside WSL (slow): ${got.fallback}` };
-  }
+  if (!win.length) return undefined;
+  const got = await measureWindows(win, { psBin: r.psBin, timeoutMs: r.psTimeoutMs ?? r.duTimeoutMs, run: r.psRun, winPath: r.winPath });
+  return "byPath" in got ? { byPath: got.byPath, duNote: null } : { byPath: new Map(), duNote: `measured with du from inside WSL (slow): ${got.fallback}` };
+}
+
+/** `pre`: a Windows-side reading already taken for a bigger list (one PowerShell call per scan phase). */
+async function measureAll(list: readonly Candidate[], r: Roots, pre?: Pre): Promise<DiskEntry[]> {
+  pre ??= await windowsPre(list, r);
   return pool(list, 2, (c) => measured(c, r, pre));
+}
+
+/** A row listed before it has been sized (`PENDING_NOTE`). */
+function pendingEntry(c: Candidate): DiskEntry {
+  return { id: c.id, kind: c.kind, group: c.group, label: c.label, sizeKb: null, sizeNote: PENDING_NOTE, regen: c.regen, mtime: c.mtime ?? null, ...(c.note ? { note: c.note } : {}), ...(c.side ? { side: c.side } : {}) };
 }
 
 const isBuild = (e: DiskEntry) => e.id.startsWith("build:");
@@ -122,6 +131,33 @@ export function createEngine(r: Roots, notify: () => void): Engine {
   /** Which disk a category's bytes are on (wsl only). */
   const sideOf = (cat: Category): DiskSide | undefined => (prof !== "wsl" ? undefined : cat === "wcache" || cat === "wtemp" ? "windows" : "wsl");
 
+  /** mac/linux: the real disks the last scan read (`volumes.mts`), and their keys. */
+  let vols: DiskVolume[] = [];
+  let volKeys = new Set<string>();
+  async function readDisks(): Promise<DiskVolume[]> {
+    if (prof === "wsl") return [];
+    try { vols = await (r.listVolumes ?? (() => listVolumes(r.home, prof)))(); } catch { vols = []; }
+    volKeys = new Set(vols.map((v) => v.key!).filter(Boolean));
+    diskOfPath = diskOf(prof, volKeys);
+    return vols;
+  }
+  let diskOfPath: (p: string) => Promise<string | undefined> = async () => undefined;
+  const volOf = (p: string) => diskOfPath(p);
+  /** Where a candidate's bytes are: its path, else (ollama) the models folder. */
+  const placeOf = async (c: Candidate): Promise<string | undefined> => c.path ?? c.members?.[0] ?? (c.category === "ollama" ? ollamaModels() : undefined);
+  /** Where ollama keeps its models: OLLAMA_MODELS, the user's own folder, or the Linux service's. None found: not known. */
+  async function ollamaModels(): Promise<string | undefined> {
+    const places = [process.env.OLLAMA_MODELS, join(r.home, ".ollama", "models"), "/usr/share/ollama/.ollama/models", "/var/lib/ollama/.ollama/models"];
+    for (const p of places) { if (!p) continue; try { await lstat(p); return p; } catch { /* next */ } }
+    return undefined;
+  }
+  /** `measureAll`, each row tagged with the disk it is on (mac/linux). */
+  async function measureTagged(list: readonly Candidate[], pre?: Pre): Promise<DiskEntry[]> {
+    const rows = await measureAll(list, r, pre);
+    if (!volKeys.size) return rows;
+    return Promise.all(rows.map(async (e, i) => { const p = await placeOf(list[i]!); const vol = p ? await volOf(p) : undefined; return vol ? { ...e, vol } : e; }));
+  }
+
   /** Free space on the disk `side` names: the Windows drive, or the home folder's volume. */
   async function freeOn(side: DiskSide | undefined, drive?: string): Promise<DiskVolume | null> {
     if (side === "windows") { const w = drive ?? winHomeOf(r); return w ? (await windowsVolume(w, r.psBin)).volume : null; }
@@ -130,11 +166,12 @@ export function createEngine(r: Roots, notify: () => void): Engine {
   }
 
   /** The header disk and, on wsl, the second line. */
-  async function readVolumes(notes: string[]): Promise<Pick<DiskScan, "volume" | "wslVolume">> {
+  async function readVolumes(notes: string[]): Promise<Pick<DiskScan, "volume" | "wslVolume" | "volumes">> {
     if (prof !== "wsl") {
       const v = await volumeOf(r.home);
       if (!v) notes.push("Free space could not be read (statfs failed).");
-      return { volume: v };
+      const disks = await readDisks();
+      return { volume: v, ...(disks.length ? { volumes: disks } : {}) };
     }
     const inside = await freeOn("wsl");
     const win = winHomeOf(r);
@@ -154,6 +191,19 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     if (side === "wsl" && winHomeOf(r)) last = { ...last, wslVolume: v };
     // A row on another Windows drive than the header's must not overwrite the header with that drive.
     else if (side !== "windows" || !last.volume?.label || last.volume.label === v.label) last = { ...last, volume: v };
+  };
+
+  /** A fresh reading of one listed disk into the last scan (and the header when it is the home disk). */
+  const keepDisk = (d: DiskVolume, v: { freeKb: number; totalKb: number }) => {
+    if (!last) return;
+    const fresh = { ...d, freeKb: v.freeKb, totalKb: v.totalKb };
+    vols = vols.map((x) => (x.key === d.key ? fresh : x));
+    const home = last.volumes?.find((x) => x.path === r.home);
+    last = {
+      ...last,
+      volumes: last.volumes?.map((x) => (x.key === d.key ? fresh : x)),
+      ...(home?.key === d.key && last.volume ? { volume: { ...last.volume, freeKb: v.freeKb, totalKb: v.totalKb } } : {}),
+    };
   };
 
   const code = (): CodeWalk => ({
@@ -201,16 +251,32 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     const temp = await vetted([...(await resolveCaches(r)), ...(await resolveTmp(r)), ...(await resolveWinCaches(r)), ...(await resolveWinTemp(r))], notes);
     const models = await vetted([...(await resolveHf(r)), ...ollama.list], notes);
     const show = await showOnly(r);
-    const all = await measureAll([...temp, ...models, ...show], r);
-    const tempE = all.slice(0, temp.length), modelsE = all.slice(temp.length, temp.length + models.length), showE = all.slice(temp.length + models.length);
+    // Every row is listed as soon as the scan knows it exists ("still being measured", or the last
+    // scan's size), then sized in two stages, each pushed: the rows with a delete button first, the
+    // show-only ones after. One slow folder must not hide the rest — ~/Downloads held a Mac scan for
+    // du's 120 s bound, and on zenbookj (wsl) the one PowerShell call for everything hit its 180 s
+    // bound and nothing was listed for 258 s. Each stage gets its own PowerShell call on wsl.
+    const before = new Map([...(last?.temp ?? []), ...(last?.models ?? []), ...(last?.show ?? [])].map((e) => [e.id, e]));
+    const pending = (list: Candidate[]) => list.map((c) => before.get(c.id) ?? pendingEntry(c));
+    let tempE = pending(temp), modelsE = pending(models);
     // The last walk's rows stay until the next walk replaces them (`code.at` says how old they are).
-    last = {
-      at: Date.now(), tookMs: Date.now() - t0, ...volumes, profile: prof,
-      temp: [...tempE, ...(last?.temp.filter(isBuild) ?? [])],
-      models: modelsE,
-      show: [...showE, ...(last?.show.filter(isNm) ?? [])],
-      notes,
+    const publish = (showE: DiskEntry[]) => {
+      last = {
+        at: Date.now(), tookMs: Date.now() - t0, ...volumes, profile: prof,
+        temp: [...tempE, ...(last?.temp.filter(isBuild) ?? [])],
+        models: modelsE,
+        show: [...showE, ...(last?.show.filter(isNm) ?? [])],
+        notes,
+      };
     };
+    const showPending = pending(show);
+    publish(showPending);
+    notify();
+    const all = await measureTagged([...temp, ...models]);
+    tempE = all.slice(0, temp.length); modelsE = all.slice(temp.length);
+    publish(showPending);
+    notify();
+    publish(await measureTagged(show));
   }
 
   /** The code-root walk: build output (deletable) and the biggest node_modules (show-only). */
@@ -223,7 +289,7 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     if (walk.outsideGit) notes.push(`${walk.outsideGit} folder${walk.outsideGit === 1 ? "" : "s"} named like build output ${walk.outsideGit === 1 ? "is" : "are"} not ignored by git (or not in a repo), so ${walk.outsideGit === 1 ? "it is" : "they are"} not offered.`);
     const builds = await vetted(buildCandidates(r, walk), notes);
     const nms = nodeModulesEntries(r, walk);
-    const all = await measureAll([...builds, ...nms], r);
+    const all = await measureTagged([...builds, ...nms]);
     const kept = builds.map((c, i) => ({ c, e: all[i]! })).filter((x) => !goneDuringWalk.has(x.c.id));
     const buildE = kept.map((x) => x.e).sort(bySize);
     const nm = all.slice(builds.length).sort(bySize);
@@ -279,9 +345,10 @@ export function createEngine(r: Roots, notify: () => void): Engine {
   function scanLarge(): DiskState {
     if (!finding) {
       large = { at: Date.now(), running: true, tookMs: null, stoppedAfterS: null, found: large?.found ?? 0, items: large?.items ?? [] };
-      finding = findLarge(r)
+      finding = (vols.length || prof === "wsl" ? Promise.resolve() : readDisks().then(() => undefined))
+        .then(() => findLarge(r, { mounts: prof === "mac" ? vols.filter((v) => v.path !== r.home).map((v) => v.path) : [], volOf }))
         .then((o) => {
-          const note = prof === "wsl" ? "Only the Linux side was searched. The Windows drive was not: a search over it from inside WSL is too slow to finish in time — use Windows' own Settings › System › Storage there." : undefined;
+          const note = prof === "wsl" ? "Only the Linux side was searched. The Windows drive was not: a search over it from inside WSL is too slow to finish in time — use Windows' own Settings › System › Storage there." : o.note;
           large = { at: Date.now(), running: false, tookMs: o.tookMs, stoppedAfterS: o.stoppedAfterS, found: o.found, items: o.items, ...(o.error ? { error: o.error } : {}), ...(note ? { note } : {}) };
         })
         .catch((e) => { large = { at: Date.now(), running: false, tookMs: null, stoppedAfterS: null, found: 0, items: [], error: (e as Error).message }; })
@@ -297,16 +364,19 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     // Free space is read on the disk this delete touches — inside WSL for a Linux-side row, the
     // Windows drive for a Windows-side one — so a WSL delete never reads as the Windows drive rising.
     let side = sideOf(cat);
-    let before = await freeOn(side);
+    // mac/linux: the disk the row is on (an external disk's cache must not read the home disk).
+    const row = last ? [...last.temp, ...last.models].find((e) => e.id === id) : undefined;
+    const disk = prof !== "wsl" && row?.vol ? vols.find((v) => v.key === row.vol) : undefined;
+    let before = disk ? await volumeOf(disk.path) : await freeOn(side);
     let drive: string | undefined;
     const record = async (ok: boolean, error?: string, counts?: { removed: number; skipped: number }) => {
-      const after = await freeOn(side, drive);
+      const after = disk ? await volumeOf(disk.path) : await freeOn(side, drive);
       results.unshift({
         id, label, at: Date.now(), ok, sizeKb, freeDeltaKb: before && after ? after.freeKb - before.freeKb : null,
         ...(error ? { error } : {}), ...(side ? { side } : {}), ...(counts ?? {}),
       });
       results.length = Math.min(results.length, RESULTS_MAX);
-      if (after) keepVolume(side, after);
+      if (after) { if (disk) keepDisk(disk, after); else keepVolume(side, after); }
     };
     let c: Candidate | undefined;
     if (cat === "build") {
@@ -377,11 +447,11 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     let fresh: DiskEntry[] = [];
     if (c.category === "build") {
       const still = c.path ? (await safeToRemove(c, r, c.path)) == null : false;
-      fresh = still ? await measureAll([c], r) : [];
+      fresh = still ? await measureTagged([c]) : [];
       if (!still) { buildPaths.delete(c.id); if (phase === "code") goneDuringWalk.add(c.id); }
     } else {
       const same = c.category === "ollama" ? list : list.filter((x) => x.id === c.id);
-      fresh = await measureAll(same, r);
+      fresh = await measureTagged(same);
     }
     const swap = (rows: DiskEntry[]) => {
       if (c.category === "ollama") {
@@ -415,8 +485,9 @@ export function createEngine(r: Roots, notify: () => void): Engine {
     return { accepted: true, label: e.label };
   }
 
-  function cleanTemp(): { accepted: number } {
-    const todo = (last?.temp ?? []).filter((e) => !deleting.some((d) => d.id === e.id));
+  function cleanTemp(vol?: string): { accepted: number } {
+    // The phone's cut keeps a row whose disk is not known (`onDisk`), so its clean all asks about it too.
+    const todo = (last?.temp ?? []).filter((e) => !deleting.some((d) => d.id === e.id) && (vol == null || e.vol === vol || e.vol == null));
     for (const e of todo) enqueue(e);
     if (todo.length) notify();
     return { accepted: todo.length };

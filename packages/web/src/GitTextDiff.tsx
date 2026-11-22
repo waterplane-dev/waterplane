@@ -114,7 +114,7 @@ function Cell({ c }: { c: SplitCell }) {
   return <><span className={`ds-n ${cls}`}>{c.n}</span><span className={`ds-t ${cls}`}>{c.text || " "}</span></>;
 }
 
-export function GitTextDiff({ repoId, path, staged, diff, zoomFont, mode, onMode, onOpenPath }: {
+export function GitTextDiff({ repoId, path, staged, diff, zoomFont, mode, onMode, onOpenPath, commit }: {
   repoId: string;
   path: string;
   staged: boolean;
@@ -123,7 +123,13 @@ export function GitTextDiff({ repoId, path, staged, diff, zoomFont, mode, onMode
   mode: DiffMode;
   onMode: (mode: DiffMode) => void;
   onOpenPath?: (relPath: string) => void;
+  /** A file in a past commit (the Commits screen): only the diff and side by side are drawn — the
+   *  whole-side views read the working tree and the index, which is not this commit — and the
+   *  columns say "before/after this commit". */
+  commit?: boolean;
 }) {
+  if (commit && mode !== "diff" && mode !== "split") mode = "diff";
+  const cap = (side: "old" | "new") => commit ? (side === "old" ? "before this commit" : "after this commit") : sideWords(side, staged);
   let body;
   if (mode === "old" || mode === "new" || mode === "rendered") {
     body = <WholeSide repoId={repoId} path={path} side={mode === "old" ? "old" : "new"} staged={staged}
@@ -132,8 +138,8 @@ export function GitTextDiff({ repoId, path, staged, diff, zoomFont, mode, onMode
     body = (
       <div className="diff ds" style={zoomFont}>
         <div className="ds-grid">
-          <span className="ds-cap">{sideWords("old", staged)}</span>
-          <span className="ds-cap">{sideWords("new", staged)}</span>
+          <span className="ds-cap">{cap("old")}</span>
+          <span className="ds-cap">{cap("new")}</span>
           {splitDiff(diff).map((r, i) => r.kind === "line"
             ? <Fragment key={i}><Cell c={r.left} /><Cell c={r.right} /></Fragment>
             : <span key={i} className={`ds-wide ${r.kind === "hunk" ? "d-hunk" : "d-meta"}`}>{r.text}</span>)}
@@ -153,7 +159,7 @@ export function GitTextDiff({ repoId, path, staged, diff, zoomFont, mode, onMode
   return (
     <>
       <div className="ts-filter git-modes">
-        {MODES.filter((m) => m.id !== "rendered" || isMarkdown(path)).map((m) => (
+        {MODES.filter((m) => commit ? m.id === "diff" || m.id === "split" : m.id !== "rendered" || isMarkdown(path)).map((m) => (
           <Button key={m.id} className={mode === m.id ? "active" : ""}
             onClick={() => { track(`action:git.view.${m.id}`); onMode(m.id); }}>{m.label}</Button>
         ))}

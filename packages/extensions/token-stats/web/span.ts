@@ -15,7 +15,7 @@
  */
 import {
   addCost, addTotals, type CostBreakdown, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
-  fmtCount, type TokenTotals, undatedSince, undatedText, undatedWhy, zeroCost, zeroTotals,
+  fmtCount, tokenTotal, type TokenTotals, undatedSince, undatedText, undatedWhy, zeroCost, zeroTotals,
 } from "@waterplane/shared";
 import { TREND_DAYS } from "./constants.ts";
 import { foldModels, type LiveWindowId, type WindowCut } from "./usageCut.ts";
@@ -36,7 +36,8 @@ export const SPANS: readonly { id: SpanId; label: string; days?: number }[] = [
   { id: "all", label: "All time" },
 ];
 
-/** The host's cost window folds at most this many days (`COST_WINDOW_MAX_MS`); a longer span has no repo split. */
+/** The host's cost window folds at most this many days (`COST_WINDOW_MAX_MS`); a longer span ranks its
+ *  repos from the day rows instead (`foldRepoDays`). */
 export const COST_WINDOW_DAYS = 35;
 
 export function isLiveSpan(id: SpanId): id is LiveWindowId {
@@ -99,6 +100,29 @@ export function spanHours(hours: readonly TokenHour[], range: { from: number; to
 export function hoursCover(hoursFrom: number | null | undefined, range: { from: number } | null): boolean {
   if (hoursFrom == null) return false;
   return range != null && hoursFrom <= range.from;
+}
+
+/**
+ * A run of days' repos, summed from each day's `byRepo` — the repo split of a calendar span longer
+ * than the host's cost window. Labels come from the all-time rows (same keys). Null when a day with
+ * activity has no repo split, or a slice has no tokens or money (an older host): a sum missing
+ * some days would be a floor that looks exact. No model split per day×repo, so no `byModel`.
+ */
+export function foldRepoDays(days: readonly TokenDay[], all: readonly TokenGroup[]): TokenGroup[] | null {
+  const acc = new Map<string, { totals: TokenTotals; cost: CostBreakdown }>();
+  for (const d of days) {
+    if (!d.byRepo) { if (tokenTotal(d) > 0 || d.turns > 0) return null; continue; }
+    for (const r of d.byRepo) {
+      if (!r.totals || !r.cost) return null;
+      const a = acc.get(r.repo) ?? acc.set(r.repo, { totals: zeroTotals(), cost: zeroCost() }).get(r.repo)!;
+      addTotals(a.totals, r.totals);
+      addCost(a.cost, r.cost);
+    }
+  }
+  const label = new Map(all.map((g) => [g.key, g.label]));
+  return [...acc.entries()]
+    .filter(([, a]) => tokenTotal(a.totals) > 0 || a.cost.total > 0)
+    .map(([key, a]) => ({ key, label: label.get(key) ?? (key.split("/").filter(Boolean).pop() || key), ...a.totals, cost: a.cost }));
 }
 
 /** A run of days' totals, money and model split — the Totals box under a calendar span. */

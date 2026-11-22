@@ -10,6 +10,7 @@ import { cutSpan, type WindowCut } from "./usageCut.ts";
 import { type DaysCut } from "./span.ts";
 import { CacheVerdict, modelBands } from "@waterplane/kit";
 import { WindowHeats, type WindowScope, WindowStep } from "./WindowHeats.tsx";
+import { WeekCosts } from "./WeekCosts.tsx";
 import { Bars, ModelLegend } from "./charts/Bars.tsx";
 import { Composition, DaysTiles, Tiles, WindowTiles } from "./Readouts.tsx";
 import { TableView } from "./TableView.tsx";
@@ -219,6 +220,9 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
         </>}
         </> : <TableView doc={doc} days={days} cut={active ?? (dcut ? { long: scopeWords, modelSplit: dcut.cut.modelSplit, models: dcut.cut.models } : null)} part="groups"
           repos={reposRefusal ? null : scopeRepos} reposNote={reposRefusal ?? foldStateText(scopeRes ?? { state: "loading" }, "window")} />}
+
+        {/* The limit-week view prints each week's dollars; the grid below only shades them. */}
+        {active?.id === "week" && grids.has("week") && <WeekCosts grid={grids.get("week") ?? null} scope={scope} onScope={setScope} />}
 
         {/* Every window BEFORE this one, as two grids — a tap on a box
             scopes THIS box to that window, which is why they are in it. No grid (an older host, the

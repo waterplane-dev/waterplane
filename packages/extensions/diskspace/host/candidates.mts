@@ -52,8 +52,13 @@ export interface Roots {
   duBin: string;
   gitBin: string;
   findBin: string;
+  /** mac: Spotlight's `mdfind`, which answers the large-file search from its index in under a second
+   *  (a `find` over $HOME did not finish in the 120 s bound). Absent/null: `find`. */
+  mdfindBin?: string | null;
   /** null: no ollama on this desktop. */
   ollamaBin: string | null;
+  /** Tests: the disk list in place of `mount` / /proc/mounts (`volumes.mts`). */
+  listVolumes?: () => Promise<import("../shared/wire.mjs").DiskVolume[]>;
   duTimeoutMs: number;
   concurrency: number;
   walkDepth: number;

@@ -31,7 +31,7 @@ import {
   BRAND, HOST_PARK_PREFIX, LEGACY, currentKeyFor, migrateLegacyStorage,
   type BrandMigrateResult, type KeyValueStore,
 } from "@waterplane/shared";
-import { LS } from "../storage.ts";
+import { LS, lsJson, lsSetJson, lsStore } from "../storage.ts";
 
 // ── localStorage ─────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ export function migrateStorage(store: KeyValueStore, now: number): BrandMigrateR
  *  with nothing to migrate, and the app must start either way. */
 export function runBrandMigration(): void {
   try {
-    const store = globalThis.localStorage;
+    const store = lsStore();
     if (!store) return;
     const r = migrateStorage(store, Date.now());
     if (r.ran && (r.copied.length || r.kept.length)) {
@@ -96,16 +96,13 @@ export function runBrandMigration(): void {
  *  `cache:<name>`). A target is listed only after its copy FINISHED, so an
  *  interrupted one runs again — safe, because every copy is copy-if-absent. */
 function storesDone(): string[] {
-  try {
-    const v = JSON.parse(globalThis.localStorage?.getItem(LS.brandStores) ?? "[]");
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch { return []; }
+  const v = lsJson<unknown>(LS.brandStores, []);
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 function markStoreDone(id: string): void {
-  try {
-    const done = storesDone();
-    if (!done.includes(id)) globalThis.localStorage?.setItem(LS.brandStores, JSON.stringify([...done, id]));
-  } catch { /* private mode: the copy simply runs again next boot, copy-if-absent */ }
+  // private mode: the write is dropped and the copy simply runs again next boot, copy-if-absent
+  const done = storesDone();
+  if (!done.includes(id)) lsSetJson(LS.brandStores, [...done, id]);
 }
 
 // ── IndexedDB ────────────────────────────────────────────────────────────

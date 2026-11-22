@@ -5,7 +5,7 @@
  * the token ledger): their rules say "not checked", never pass. Exit 0 always: a reading, not a gate.
  */
 import { resolve } from "node:path";
-import { BRAND, checkedCountWords, clearRowWords, findingCut, groupCountWords, groupUnreadWords, repoRollupCut, notCheckedWords, passedWords, repoRollup, repoShown, savingWords, type Finding, type FindingsResult, type Rollup, type RollupInput } from "@waterplane/shared";
+import { BRAND, checkedCountWords, clearRowWords, findingCut, groupCountWords, groupUnreadWords, repoRollupCut, notCheckedWords, passedWords, repoRollup, repoShown, savingWords, seenWords, type Finding, type FindingsResult, type Rollup, type RollupInput } from "@waterplane/shared";
 import { discoverTargets } from "../repos.js";
 import { liveDeps } from "../setupcheck/store.js";
 import { installChecklistStores } from "../setupprefs.js";
@@ -50,6 +50,8 @@ export function setupCheckLines(doc: FindingsResult & { absent?: { what: string;
       lines.push(`  ${i + 1}. ${f.what}`);
       const s = f.saving ? savingWords(f.saving) : null;
       if (s) lines.push(`     ${s}`);
+      const seen = seenWords(f.seen);
+      if (seen) lines.push(`     ${seen}`);
       if (f.backends.unread.length) lines.push(`     not read: ${f.backends.unread.map((u) => `${u.id} (${u.why})`).join("; ")}`);
     });
     lines.push("");

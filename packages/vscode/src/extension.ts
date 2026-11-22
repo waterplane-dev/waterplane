@@ -14,16 +14,14 @@
  * reads only what was appended. The week's headline at startup is the small `HeadlineSummary` the
  * last finished scan left in `globalState` (zero IO), printed with its age.
  */
-import { buildText } from "./buildstamp.js";
 import { realpathSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Worker } from "node:worker_threads";
 import * as vscode from "vscode";
 import { BRAND, fmtUsd, healthSpendWeeks } from "@waterplane/shared";
 import { repoOfWorktree } from "../../host/src/costwindow.js";
 import {
-  anyLive, claudeConfigDir, listSessions, projectDirFor, RECENT_MS, recentRows, loadCorpus, saveCorpus, SessionLedger, summaryOf, thisRepoWeek, weighFolder, WINDOW_MS,
+  anyLive, claudeConfigDir, listSessions, projectDirFor, RECENT_MS, recentRows, SessionLedger, thisRepoWeek, weighFolder, WINDOW_MS,
 } from "./data/index.js";
 import type { HeadlineSummary } from "./data/index.js";
 import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
@@ -37,10 +35,10 @@ import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
 import { findingsFor, remedyCopy } from "./data/findings.js";
 import { formJoin } from "./data/promptform.js";
-import type { ScanJob, ScanMsg } from "./scanworker.js";
+import { CorpusScan, sentence } from "./corpusscan.js";
 import type { CopilotSwitches } from "./protocol.js";
 import { COPILOT_LEDGER } from "./protocol.js";
-import type { CorpusDoc, FindingsDoc, HealthDoc, LiveState, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
+import type { FindingsDoc, HealthDoc, LiveState, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
 import { RestartWatch } from "./restartwatch.js";
 import { DEFAULT_DESKTOP_URL, readLive, readPath } from "./hostlink.js";
 import { StatusBar } from "./statusbar.js";
@@ -65,10 +63,6 @@ function repoKeysOf(folder: string): string[] {
 }
 const OPEN_HOSTS = new Set([BRAND.domain, "marketplace.visualstudio.com", "open-vsx.org"]);
 
-const sentence = (e: unknown): string => {
-  const m = (e instanceof Error ? e.message : String(e)).replace(/\.$/, "");
-  return `Could not read the logs: ${m}.`;
-};
 
 /** Only https links to our own site or the marketplaces; anything else is dropped. */
 export function allowedUrl(raw: string): vscode.Uri | null {
@@ -120,22 +114,13 @@ class Ext implements vscode.Disposable {
   private findingsAt = 0;
   /** Each run takes a number; a run that is no longer the latest drops its result (an older one finishing last must not win). */
   private findingsRun = 0;
-  private corpusLoadP: Promise<void> | null = null;
   private lens!: InstructionLens;
-  private corpus: { doc: CorpusDoc | null; why?: string } = { doc: null };
-  private scanning: { done: number; total: number } | null = null;
-  /** The running scan's promise, so an explicit rescan asked during one still has something to show progress for. */
-  private scanP: Promise<void> | null = null;
-  /** The saved fold (`corpus.v1.json`) is read once per config dir, when the panel first needs it — never on activation. */
-  private corpusLoaded = false;
+  /** The all-sessions corpus, its saved fold and the scan that replaces it (`corpusscan.ts`). */
+  private scans: CorpusScan;
   /** The waterplane desktop on this machine, as last read (`hostlink.ts`); null before the first read. */
   private live: LiveState | null = null;
   /** Re-reads the desktop's live facts while the panel is on screen — a limit bar is a clock. */
   private liveTimer2: NodeJS.Timeout | null = null;
-  /** The running scan's worker; terminated when the panel closes or the config dir changes. */
-  private worker: Worker | null = null;
-  /** When the last scan finished (ms); 0 = none this window. */
-  private lastScanAt = 0;
   /** The last finished scan's seven days, from any window; null before one, or for another config dir. */
   private summary: HeadlineSummary | null = null;
   /** `repoKeysOf` for the active folder, kept: the tree asks on every row it draws. */
@@ -148,7 +133,20 @@ class Ext implements vscode.Disposable {
 
   constructor(private ctx: vscode.ExtensionContext) {
     const cfg = vscode.workspace.getConfiguration(BRAND.slug);
-    this.panel = new Panel(ctx.extensionUri, (m) => void this.onMessage(m, "panel"), (v) => this.onVisible(v), () => this.cancelScan());
+    this.scans = new CorpusScan(ctx.globalStorageUri.fsPath, ctx.extensionUri.fsPath, {
+      configDir: () => this.configDir(),
+      disposed: () => this.disposed,
+      post: (m) => this.post(m),
+      setScan: (s) => this.statusBar.setScan(s),
+      summary: (s) => {
+        this.summary = s;
+        void this.ctx.globalState.update(SUMMARY_KEY, s);
+        this.pushSummary();
+      },
+      refreshHealth: () => { if (this.activeFolder) this.postHealth(this.activeFolder); },
+      refreshFindings: () => { if (this.activeFolder) void this.refreshFindings(this.activeFolder, true); },
+    });
+    this.panel = new Panel(ctx.extensionUri, (m) => void this.onMessage(m, "panel"), (v) => this.onVisible(v), () => this.scans.cancel());
     // The tree on screen reads the cheap state and the cached health reading — never a corpus scan.
     // Before the tree, which reads its state; off until the person turns it on (its one network call).
     this.quota = new CopilotQuota(ctx.globalState, new CopilotLocalReader(userDirOf(ctx.globalStorageUri.fsPath)), () => { if (this.panel?.open) this.panel.post(this.quotaMsg()); });
@@ -277,16 +275,12 @@ class Ext implements vscode.Disposable {
     this.watch.setPollSeconds(cfg.get<number>("pollSeconds", 5));
     if (e.affectsConfiguration(`${BRAND.slug}.claudeConfigDir`)) {
       this.ledger.clear();
-      this.cancelScan();
-      this.lastScanAt = 0;
-      this.corpus = { doc: null };
-      this.corpusLoaded = false;
-      this.corpusLoadP = null;
+      this.scans.reset();
       this.summary = null;
       void this.ctx.globalState.update(SUMMARY_KEY, undefined);
       this.pushSummary();
       void this.refreshSession();
-      if (this.panel.visible) void this.scan();
+      if (this.panel.visible) void this.scans.scan();
     }
   }
 
@@ -397,13 +391,13 @@ class Ext implements vscode.Disposable {
     const run = ++this.findingsRun;
     // The log rules need the corpus: read the cached one first (a tree-only user never opens the panel), and
     // while a first scan has nothing to show, say "reading the logs", never a count of rules that could not run.
-    await this.loadCachedCorpus();
+    await this.scans.loadCached();
     if (this.disposed || folder !== this.activeFolder || run !== this.findingsRun) return;
-    if (!this.corpus.doc && this.scanning) {
+    if (!this.scans.corpus.doc && this.scans.scanning) {
       this.findings = { doc: null, why: "Reading the logs first, so the findings count what was checked.", reading: true };
     } else {
       try {
-        const doc = await findingsFor({ folder, weight: this.weight.doc, corpus: this.corpus.doc, now, live: this.desktopUrl() ? this.live?.doc ?? null : null, configDir: this.configDir() });
+        const doc = await findingsFor({ folder, weight: this.weight.doc, corpus: this.scans.corpus.doc, now, live: this.desktopUrl() ? this.live?.doc ?? null : null, configDir: this.configDir() });
         if (this.disposed || folder !== this.activeFolder || run !== this.findingsRun) return;
         this.findings = { doc };
       } catch (e) {
@@ -480,111 +474,10 @@ class Ext implements vscode.Disposable {
     this.rescanShown();
   }
 
-  /** Stop a running scan: its worker is terminated and its result, if one still arrives, dropped. */
-  private cancelScan(): void {
-    const w = this.worker;
-    this.worker = null;
-    if (w) void w.terminate();
-    if (this.scanning) {
-      this.scanning = null;
-      this.statusBar.setScan(null);
-    }
-  }
-
-  private corpusFile(): string { return path.join(this.ctx.globalStorageUri.fsPath, "corpus.v1.json"); }
-
-  /**
-   * Show the last finished fold while the scan that replaces it runs. Async and off the activation
-   * path (called when the panel is shown or says `ready`); a scan that finished first wins.
-   */
-  private loadCachedCorpus(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    if (this.corpusLoaded) return this.corpusLoadP ?? Promise.resolve();
-    this.corpusLoaded = true;
-    return this.corpusLoadP = this.readCachedCorpus();
-  }
-
-  private async readCachedCorpus(): Promise<void> {
-    const dir = this.configDir();
-    const doc = await loadCorpus(this.corpusFile(), dir, buildText);
-    if (!doc || this.disposed || this.corpus.doc || dir !== this.configDir()) return;
-    this.corpus = this.corpus.why ? { doc, why: this.corpus.why } : { doc };
-    this.post({ t: "corpus", ...this.corpus, ...(this.scanning ? { scanning: this.scanning } : {}) });
-    if (this.activeFolder) { this.postHealth(this.activeFolder); void this.refreshFindings(this.activeFolder, true); }
-  }
-
   /** An asked-for scan (the command, the "Re-read" link): the same scan, with VS Code's own spinner until it ends. */
   private rescanShown(): void {
-    const p = this.scan();
+    const p = this.scans.scan();
     void vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `${BRAND.name}: reading Claude Code logs` }, () => p);
-  }
-
-  private scan(): Promise<void> {
-    if (this.scanning) return this.scanP ?? Promise.resolve();
-    const p = this.scanRun().finally(() => { if (this.scanP === p) this.scanP = null; });
-    this.scanP = p;
-    return p;
-  }
-
-  private scanRun(): Promise<void> {
-    this.scanning = { done: 0, total: 0 };
-    this.statusBar.setScan(this.scanning);
-    this.post({ t: "corpus", ...this.corpus, scanning: this.scanning });
-    // A first scan has no corpus to count over: say "reading the logs" now, not a count that scan will change.
-    if (!this.corpus.doc && this.activeFolder) void this.refreshFindings(this.activeFolder, true);
-    const dir = this.ctx.globalStorageUri.fsPath;
-    const job: ScanJob = {
-      configDir: this.configDir(), cacheFile: path.join(dir, "tokenstore.v5.json"),
-      copilot: { userDir: userDirOf(dir), cacheFile: path.join(dir, "copilotchat.v1.json") },
-    };
-    return new Promise<void>((resolve) => {
-      let w: Worker;
-      const finish = (next: { doc: CorpusDoc | null; why?: string }): void => {
-        if (this.worker !== w) { resolve(); return; } // cancelled: the panel closed, or the config dir moved
-        this.worker = null;
-        void w.terminate();
-        this.corpus = next;
-        this.corpusLoaded = true;
-        this.lastScanAt = Date.now();
-        if (next.doc && !next.why) void saveCorpus(this.corpusFile(), job.configDir, next.doc, buildText);
-        if (next.doc && !next.why) {
-          this.summary = summaryOf(next.doc, job.configDir);
-          void this.ctx.globalState.update(SUMMARY_KEY, this.summary);
-          this.pushSummary();
-        }
-        this.scanning = null;
-        this.statusBar.setScan(null);
-        if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
-        // The score's spend line is folded off this scan: the open folder's reading gains it now.
-        if (this.activeFolder) { this.postHealth(this.activeFolder); void this.refreshFindings(this.activeFolder, true); }
-        resolve();
-      };
-      fs.mkdir(dir, { recursive: true }).then(() => {
-        if (!this.scanning || this.disposed) { resolve(); return; }
-        w = new Worker(path.join(this.ctx.extensionUri.fsPath, "dist", "scanworker.js"), { workerData: job });
-        this.worker = w;
-        w.on("message", (m: ScanMsg) => {
-          if (this.worker !== w) return;
-          if (m.t === "progress") {
-            this.scanning = { done: m.done, total: m.total };
-            this.statusBar.setScan(this.scanning);
-            this.post({ t: "corpus", ...this.corpus, scanning: this.scanning });
-          } else if (m.t === "done") finish({ doc: m.doc });
-          else finish({ doc: this.corpus.doc, why: sentence(m.message) });
-        });
-        w.on("error", (e) => finish({ doc: this.corpus.doc, why: sentence(e) }));
-        // An exit before "done" (a crash, an out-of-memory) keeps the last figures and says so.
-        w.on("exit", () => finish({ doc: this.corpus.doc, why: "The log scan stopped before it finished; the figures shown are from the last complete one." }));
-      }, (e: unknown) => {
-        this.scanning = null;
-        this.statusBar.setScan(null);
-        this.corpus = { doc: this.corpus.doc, why: sentence(e) };
-        if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
-        // The score's spend line is folded off this scan: the open folder's reading gains it now.
-        if (this.activeFolder) this.postHealth(this.activeFolder);
-        resolve();
-      });
-    });
   }
 
   private onVisible(visible: boolean): void {
@@ -593,12 +486,12 @@ class Ext implements vscode.Disposable {
     if (this.liveTimer2) clearInterval(this.liveTimer2);
     this.liveTimer2 = null;
     if (!visible || this.disposed) return;
-    void this.loadCachedCorpus();
+    void this.scans.loadCached();
     void this.readLive();
     this.liveTimer2 = setInterval(() => void this.readLive(), LIVE_MS);
     // Revealing the panel again is not a reason to re-read 9k logs: a scan under 10 minutes old stands.
-    if (Date.now() - this.lastScanAt >= RESCAN_MS) void this.scan();
-    this.rescanTimer = setInterval(() => void this.scan(), RESCAN_MS);
+    if (Date.now() - this.scans.lastScanAt >= RESCAN_MS) void this.scans.scan();
+    this.rescanTimer = setInterval(() => void this.scans.scan(), RESCAN_MS);
   }
 
   // ---- the waterplane desktop on this machine (off until `desktopUrl` is set) -------------------
@@ -640,8 +533,8 @@ class Ext implements vscode.Disposable {
       following: !folder || !this.pinned.has(folder),
       older: mine ? this.rows.older : 0, capped: mine ? this.rows.capped : 0, automated: mine ? this.rows.automated : 0,
       why: this.session.folder === folder && !this.session.doc ? this.session.why ?? null : folder ? null : "Open a folder to see its Claude Code sessions.",
-      corpus: this.corpus.doc,
-      scanning: this.scanning,
+      corpus: this.scans.corpus.doc,
+      scanning: this.scans.scanning,
       weight: this.weight.doc,
       findings: this.findings.doc?.folder === folder ? this.findings.doc : null,
       findingsWhy: this.findings.doc?.folder === folder ? null : this.findings.why ? { text: this.findings.why, reading: !!this.findings.reading } : null,
@@ -678,7 +571,7 @@ class Ext implements vscode.Disposable {
    * draws no line and says nothing about one; an empty fold is the chart's own "no request" sentence.
    */
   private withSpend(folder: string, doc: HealthDoc | null): HealthDoc | null {
-    const days = this.corpus.doc?.days;
+    const days = this.scans.corpus.doc?.days;
     if (!doc?.index?.series || !days) return doc;
     const spend = healthSpendWeeks(days, repoKeysOf(folder));
     return { ...doc, index: { ...doc.index, spend } };
@@ -778,8 +671,8 @@ class Ext implements vscode.Disposable {
     if (this.activeFolder && this.rows.folder === this.activeFolder) this.post(this.sessionsMsg(this.activeFolder), to);
     this.post({ t: "weight", ...this.weight }, to);
     this.post({ t: "findings", ...this.findings }, to);
-    this.post({ t: "corpus", ...this.corpus, scanning: this.scanning ?? undefined }, to);
-    void this.loadCachedCorpus();
+    this.post({ t: "corpus", ...this.scans.corpus, scanning: this.scans.scanning ?? undefined }, to);
+    void this.scans.loadCached();
     if (this.live) this.post({ t: "live", live: this.live }, to);
     else void this.readLive();
     this.post(this.quotaMsg(), to);
@@ -820,7 +713,7 @@ class Ext implements vscode.Disposable {
           // Copilot Chat's ledger is this panel's own scan, answered here: a machine with Copilot and
           // no desktop (or no Claude) still has it.
           if (String(m.path).split("?")[0] === `/api/tokenstats/${COPILOT_LEDGER.id}`) {
-            const value = this.corpus.doc?.copilot ?? { available: false, reason: "Copilot Chat's logs are read with the other logs: re-read to count them." };
+            const value = this.scans.corpus.doc?.copilot ?? { available: false, reason: "Copilot Chat's logs are read with the other logs: re-read to count them." };
             this.post({ t: "ledgerAnswer", id, ok: true, value }, from);
             break;
           }
@@ -921,7 +814,7 @@ class Ext implements vscode.Disposable {
 
   dispose(): void {
     this.disposed = true;
-    this.cancelScan();
+    this.scans.cancel();
     if (this.liveTimer) clearTimeout(this.liveTimer);
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     this.rescanTimer = null;

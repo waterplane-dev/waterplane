@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.15 - 2026-11-22
+
+### New
+
+- **Token usage shows "Cost per limit week".** Every weekly window's list-price dollars print as labelled bars, newest first with the running week marked, plus the median finished week and how far this week is into it. A tap sets the span like a heat box does.
+- **90 days has a repo split in Token usage.** Each repo shows its tokens and money over the longer span, and the Anthropic-only view takes local-model tokens off.
+- **Repo rows show their dollars again.** All time no longer hides each repo's cost.
+- **Speed test draws a live graph.** Download and upload Mbps run over time while the test goes and stay after it, with upload now showing progress and a percent.
+- **A tapped commit lists its changed files, and each opens its diff in that commit.** Renames show their old path, and Back lands on the commit still open.
+- **Home lets you pin a repo to a chosen place from its ⋯ menu.** Pinned repos lead in the order you placed them, and a divider reading "N not pinned" switches the order of the rest between open sessions and name.
+- **The image viewer zooms with the mouse wheel and trackpad pinch at the pointer.** Double-tap zooms at the tapped point and fills the width, and the ceiling follows the picture's own pixels, so a tall contact sheet can be read.
+- **Every Setup check finding says when it was first seen.** One already open at a repo's first check says it may be older.
+
+### Fixed
+
+- **Dollar figures from $1,000 up always use a comma.** A German phone no longer shows $16,956 as "$16.956".
+- **The Apps sheet's waiting-to-install filter and delete-after-install switch sit on the side gutter** instead of flush against the edge.
+
 ## 0.9.14 - 2026-11-21
 
 ### New

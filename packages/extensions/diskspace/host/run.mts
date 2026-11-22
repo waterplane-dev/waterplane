@@ -104,7 +104,9 @@ export interface DiskVolumeLike { path: string; freeKb: number; totalKb: number;
  * and are never part of this text: nothing a folder is called can become a command. It prints one
  * line per path as soon as that path is done (`{"i","bytes","bad","found"}`, numbers only), so a
  * run stopped by its time bound still answers for the paths it finished. Folder links (junctions,
- * symlinks) are not followed, as `du -x` would not; `bad` counts what could not be read.
+ * symlinks) are not followed, as `du -x` would not; `bad` counts folders that could not be read.
+ * The walk is .NET's own enumeration, not Get-ChildItem: measured on zenbookj, the same bytes 5.6–6.7×
+ * faster (~/.gradle/caches, 7.3 GB: 19.6 s against 109.8 s), so the 180 s bound is reached far less.
  */
 export const PS_SIZES = [
   "$ErrorActionPreference='SilentlyContinue'",
@@ -115,15 +117,13 @@ export const PS_SIZES = [
   " if($null -eq $it){$found=0}",
   " elseif(-not $it.PSIsContainer){$n=[int64]$it.Length}",
   " else{",
-  "  $st=New-Object System.Collections.Stack;$st.Push($it.FullName)",
+  "  $st=New-Object System.Collections.Stack;$st.Push([IO.DirectoryInfo]::new($it.FullName))",
   "  while($st.Count -gt 0){",
-  "   $d=$st.Pop();$ev=$null",
-  "   $cs=Get-ChildItem -LiteralPath $d -Force -ErrorVariable ev",
-  "   if($ev){$bad+=@($ev).Count}",
-  "   foreach($c in $cs){",
-  "    if($c.PSIsContainer){if(-not ($c.Attributes -band [IO.FileAttributes]::ReparsePoint)){$st.Push($c.FullName)}}",
+  "   $d=$st.Pop()",
+  "   try{foreach($c in $d.EnumerateFileSystemInfos()){",
+  "    if($c -is [IO.DirectoryInfo]){if(-not ($c.Attributes -band [IO.FileAttributes]::ReparsePoint)){$st.Push($c)}}",
   "    else{$n+=[int64]$c.Length}",
-  "   }",
+  "   }}catch{$bad++}",
   "  }",
   " }",
   " [Console]::Out.WriteLine('{\"i\":'+$i+',\"bytes\":'+$n+',\"bad\":'+$bad+',\"found\":'+$found+'}')",

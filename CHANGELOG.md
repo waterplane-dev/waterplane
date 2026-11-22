@@ -5,6 +5,31 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.35
+
+### New
+
+- **Token usage shows what each limit week cost.** "Cost per limit week" lists every weekly window's list-price dollars as labelled bars, newest first, with the running week marked, the median finished week and how far this week is into it. A tap sets the span, as a box does.
+- **Token usage splits 90 days by repo.** Each day's per-repo tokens and money are kept, so a span past 35 days adds up the days. Local-model tokens stay apart, so the Anthropic-only view can leave them out.
+- **Token usage rows show their dollars when counted in tokens.** By-model and by-repo rows carry their list-price cost.
+- **Disk space shows one card per real disk.** The fullest comes first and is picked by default. Lists, large files and "clean all" follow the picked disk and say "n of N", with an every-disk button. A delete reads free space on its own disk.
+- **Disk space appears much sooner.** Temporary and AI-model rows, the ones with a delete button, arrive as soon as they are sized (14 s here instead of waiting two minutes on one big folder). Rows not yet sized say "still being measured".
+- **Disk space is faster on a Mac and on Windows (WSL).** The Mac large-file search asks Spotlight and answers in under a second. On WSL, rows are listed first and sized after: first rows in 29 s instead of 258 s, and no folder is left at "size unknown". The launcher's This desktop menu has a Disk space line.
+- **Home repos can be pinned to a chosen place.** The ⋯ menu's "Pin…" offers the places between the other pins, named by their neighbours. A divider marks the unpinned rest and switches their order between open sessions and name.
+- **The Commits screen shows a commit's changed files.** Each file opens its diff in that commit, and Back returns to the commit still open.
+- **The speed test draws a live graph.** Download and upload Mbps over time are drawn while the run goes and kept after it. Upload now reports progress and a percent.
+- **The image viewer zooms with the wheel and pinch.** Zoom follows the pointer, a double-tap zooms at the tapped point and fills the width, and the ceiling follows the picture's own pixels, so a tall contact sheet can be read.
+- **Every Setup check finding says when it was first seen.** One already open at a repo's first check says it may be older.
+
+### Fixed
+
+- **Dollar figures from $1,000 up always use a comma.** A German phone showed $16,956 as "$16.956".
+- **Token usage repo rows show their dollars again** under All time.
+- **Disk space on Linux counts each disk once.** Btrfs subvolumes and bind mounts no longer list one disk as four, and a row whose disk is unknown says so. A Linux or WSL desktop no longer offers a Mac's Ollama models for delete.
+- **The Apps sheet keeps its side gutter.** The waiting-to-install filter and the delete-after-install switch were flush with the edge.
+- **The Scorecard head keeps its left gutter.**
+- **The Desktop extension is called "Remote desktop" throughout**, instead of sitting next to "This desktop".
+
 ## 0.1.34
 
 ### New

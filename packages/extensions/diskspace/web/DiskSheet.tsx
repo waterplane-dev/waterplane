@@ -15,9 +15,9 @@ import { CircleAlert, CircleCheck, HardDrive, Search, Trash2 } from "lucide-reac
 import { useEffect } from "react";
 import { useConnStatus, useStore } from "@waterplane/sdk";
 import { StaleHead, ago, useNow, Button, Explain } from "@waterplane/kit";
-import { LARGE_LIMIT_S, type DiskEntry, type DiskScan, type DiskState } from "../shared/wire.mts";
-import { barTotals, byWeight, codeButton, codeLine, codeParts, entrySize, largeLine, resultLine, scanLine, sideLine, sizeText, splitLabel, total, totalText, volumeBar, wslVolumeLine } from "./logic.ts";
-import { cleanAll, closeDisk, disk, removeEntry, rescan, scanCode, scanLarge, scanOnOpen } from "./state.ts";
+import { LARGE_LIMIT_S, type DiskEntry, type DiskScan, type DiskState, type DiskVolume } from "../shared/wire.mts";
+import { barTotals, byWeight, codeButton, codeLine, codeParts, cutDisk, cutLine, diskName, entrySize, largeLine, onDisk, resultLine, scanLine, sideLine, sizeText, splitLabel, total, totalText, volumeBar, wslVolumeLine, type VolumeBar } from "./logic.ts";
+import { cleanAll, closeDisk, disk, diskPick, pickDisk, removeEntry, rescan, scanCode, scanLarge, scanOnOpen } from "./state.ts";
 import "./diskspace.css";
 
 const RECENT_MS = 60 * 60_000;
@@ -37,9 +37,11 @@ function Meter({ kb, max }: { kb: number | null; max: number }) {
   return <div className="dk-meter" aria-hidden><span style={{ width: `${Math.max(1, (kb / max) * 100)}%` }} /></div>;
 }
 
-function EntryRow({ e, s, max, deletable, group, howShown }: { e: DiskEntry; s: DiskState; max: number; deletable: boolean; group?: string; howShown?: boolean }) {
+function EntryRow({ e, s, max, deletable, group, howShown, onAll, cutOn }: { e: DiskEntry; s: DiskState; max: number; deletable: boolean; group?: string; howShown?: boolean; onAll?: boolean; cutOn?: boolean }) {
   const busy = s.deleting.some((d) => d.id === e.id);
   const sub = [
+    // Every disk listed at once: each row says which disk it frees.
+    onAll ? diskName(s.scan, e.vol) : cutOn && !e.vol ? "disk not known" : null,
     // A lone row names its group, unless its own label already does (~/Library/Caches/Homebrew).
     group && !e.label.toLowerCase().includes(group.toLowerCase()) ? group : null,
     e.mtime != null ? `changed ${ago(e.mtime)}` : null,
@@ -69,24 +71,24 @@ function EntryRow({ e, s, max, deletable, group, howShown }: { e: DiskEntry; s: 
 
 /** A section's groups: a group of one is a plain row (its group named in the row's sub line); a
  *  show-only group whose rows all free the same way says how once, under its head. */
-function Groups({ rows, s, deletable }: { rows: DiskEntry[]; s: DiskState; deletable: boolean }) {
+function Groups({ rows, s, deletable, onAll, cutOn }: { rows: DiskEntry[]; s: DiskState; deletable: boolean; onAll: boolean; cutOn: boolean }) {
   const max = Math.max(0, ...rows.map((r) => r.sizeKb ?? 0));
   return (
     <>
       {byWeight(rows).map(([g, list]) => list.length === 1
-        ? <ul key={g} className="dk-list"><EntryRow e={list[0]!} s={s} max={max} deletable={deletable} group={g} /></ul>
-        : <Group key={g} g={g} list={list} s={s} max={max} deletable={deletable} />)}
+        ? <ul key={g} className="dk-list"><EntryRow e={list[0]!} s={s} max={max} deletable={deletable} group={g} onAll={onAll} cutOn={cutOn} /></ul>
+        : <Group key={g} g={g} list={list} s={s} max={max} deletable={deletable} onAll={onAll} cutOn={cutOn} />)}
     </>
   );
 }
 
-function Group({ g, list, s, max, deletable }: { g: string; list: DiskEntry[]; s: DiskState; max: number; deletable: boolean }) {
+function Group({ g, list, s, max, deletable, onAll, cutOn }: { g: string; list: DiskEntry[]; s: DiskState; max: number; deletable: boolean; onAll: boolean; cutOn: boolean }) {
   const how = !deletable && list[0]?.regen && list.every((e) => e.regen === list[0]!.regen) ? list[0]!.regen : null;
   return (
     <div className="dk-group">
       <div className="dk-group-head"><span>{g}</span><span className="dk-size">{totalText(total(list))}</span></div>
       {how && <div className="dk-sub dk-how dk-group-how">To free it: <Words text={how} /></div>}
-      <ul className="dk-list">{list.map((e) => <EntryRow key={e.id} e={e} s={s} max={max} deletable={deletable} howShown={!!how} />)}</ul>
+      <ul className="dk-list">{list.map((e) => <EntryRow key={e.id} e={e} s={s} max={max} deletable={deletable} howShown={!!how} onAll={onAll} cutOn={cutOn} />)}</ul>
     </div>
   );
 }
@@ -102,6 +104,50 @@ function SectionHead({ title, size, explain, children }: { title: string; size?:
   );
 }
 
+function Bar({ bar, legend }: { bar: VolumeBar; legend: boolean }) {
+  return (
+    <>
+      <div className="dk-bar" role="img" aria-label={`${Math.round(bar.usedPct)}% used`}>
+        {bar.tempPct > 0 && <span className="dk-seg temp" style={{ width: `${bar.tempPct}%` }} />}
+        {bar.modelPct > 0 && <span className="dk-seg model" style={{ width: `${bar.modelPct}%` }} />}
+        <span className="dk-seg other" style={{ width: `${bar.usedPct - bar.tempPct - bar.modelPct}%` }} />
+      </div>
+      {legend && (bar.tempPct > 0 || bar.modelPct > 0) && (
+        <div className="dk-legend">
+          {bar.tempPct > 0 && <span><i className="temp" />temporary</span>}
+          {bar.modelPct > 0 && <span><i className="model" />AI models</span>}
+          <span><i className="other" />everything else</span>
+          <span><i className="free" />free</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Several disks: one card each, the fullest first. A tap cuts every list below to what is on that
+ * disk (a tap on the picked one shows every disk). The picked card carries the legend.
+ */
+function Disks({ scan, cut }: { scan: DiskScan; cut: DiskVolume | null }) {
+  return (
+    <div className="dk-disks">
+      {scan.volumes!.map((v) => {
+        const on = cut?.key === v.key;
+        const bar = volumeBar(v, total(onDisk(scan.temp, v)).kb, total(onDisk(scan.models, v)).kb);
+        return (
+          <button key={v.key} type="button" className={`dk-vol dk-disk${on ? " on" : ""}${bar?.low ? " low" : ""}`} aria-pressed={on}
+            title={on ? `showing only what is on ${v.label} — tap to show every disk` : `show only what is on ${v.label}`}
+            onClick={() => pickDisk(on ? null : v.key!)}>
+            <div className="dk-vol-free">{v.label} <b>{sizeText(v.freeKb)}</b> free</div>
+            <div className="dk-vol-of">of {sizeText(v.totalKb)}{bar ? ` · ${Math.round(bar.freePct)}% free` : ""}</div>
+            {bar && <Bar bar={bar} legend={on} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Volume({ scan }: { scan: DiskScan | null }) {
   const v = scan?.volume ?? null;
   if (!scan) return <div className="dk-vol"><div className="dk-vol-of">Free space: not read yet.</div></div>;
@@ -113,23 +159,7 @@ function Volume({ scan }: { scan: DiskScan | null }) {
     <div className={`dk-vol${bar?.low ? " low" : ""}`}>
       <div className="dk-vol-free">{v.label ? `${v.label} ` : ""}<b>{sizeText(v.freeKb)}</b> free</div>
       <div className="dk-vol-of">of {sizeText(v.totalKb)}{bar ? ` · ${Math.round(bar.freePct)}% free` : ""}</div>
-      {bar && (
-        <>
-          <div className="dk-bar" role="img" aria-label={`${Math.round(bar.usedPct)}% used`}>
-            {bar.tempPct > 0 && <span className="dk-seg temp" style={{ width: `${bar.tempPct}%` }} />}
-            {bar.modelPct > 0 && <span className="dk-seg model" style={{ width: `${bar.modelPct}%` }} />}
-            <span className="dk-seg other" style={{ width: `${bar.usedPct - bar.tempPct - bar.modelPct}%` }} />
-          </div>
-          {(bar.tempPct > 0 || bar.modelPct > 0) && (
-            <div className="dk-legend">
-              {bar.tempPct > 0 && <span><i className="temp" />temporary</span>}
-              {bar.modelPct > 0 && <span><i className="model" />AI models</span>}
-              <span><i className="other" />everything else</span>
-              <span><i className="free" />free</span>
-            </div>
-          )}
-        </>
-      )}
+      {bar && <Bar bar={bar} legend />}
       {second && <div className="dk-vol-of">{second}</div>}
     </div>
   );
@@ -137,6 +167,7 @@ function Volume({ scan }: { scan: DiskScan | null }) {
 
 export function DiskSheet() {
   const v = useStore(disk);
+  const pick = useStore(diskPick);
   const status = useConnStatus();
   const now = useNow(5_000);
   useEffect(() => { if (status === "open") void scanOnOpen(); }, [status]);
@@ -151,9 +182,17 @@ export function DiskSheet() {
   const scan = s.scan;
   const line = scanLine(s, now, ago);
   const recent = s.results.filter((r) => now - r.at < RECENT_MS).slice(0, 6);
-  const tempIdle = (scan?.temp ?? []).filter((e) => !s.deleting.some((d) => d.id === e.id));
+  // One disk picked (the fullest by default): every list below is what is on it, and says so.
+  const cut = cutDisk(scan, pick);
+  const onAll = !cut && (scan?.volumes?.length ?? 0) > 1;
+  const temp = onDisk(scan?.temp ?? [], cut), models = onDisk(scan?.models ?? [], cut), show = onDisk(scan?.show ?? [], cut);
+  const tempIdle = temp.filter((e) => !s.deleting.some((d) => d.id === e.id));
   const large = s.large;
-  const largeMax = Math.max(0, ...(large?.items ?? []).map((f) => f.sizeKb));
+  const largeItems = onDisk(large?.items ?? [], cut);
+  const largeMax = Math.max(0, ...largeItems.map((f) => f.sizeKb));
+  const allRows = scan ? scan.temp.length + scan.models.length + scan.show.length : 0;
+  const hides = cutLine(cut, temp.length + models.length + show.length, allRows);
+  const on = cut ? ` on ${cut.label}` : "";
   const walkLine = codeLine(s, now, ago);
   const walkButton = codeButton(s);
 
@@ -161,7 +200,8 @@ export function DiskSheet() {
     <div className="sheet">
       {head}
       <div className="sheet-scroll dk">
-        <Volume scan={scan} />
+        {scan && (scan.volumes?.length ?? 0) > 1 ? <Disks scan={scan} cut={cut} /> : <Volume scan={scan} />}
+        {hides && <div className="dk-cut"><span>{hides}</span><Button onClick={() => pickDisk(null)}>every disk</Button></div>}
         {(line || s.deleting.length > 0 || recent.length > 0 || (scan?.notes.length ?? 0) > 0) && (
           <ul className="dk-notes">
             {line && <li>{line}</li>}
@@ -177,11 +217,11 @@ export function DiskSheet() {
 
         {scan && (
           <>
-            <SectionHead title="Temporary" size={totalText(total(scan.temp))}
+            <SectionHead title="Temporary" size={totalText(total(temp))}
               explain="Caches and build output: each rebuilds itself when it is needed again — a slower next build or download. Each delete says what puts it back before it runs.">
               {tempIdle.length > 0 && (
-                <Button onClick={() => void cleanAll(tempIdle)}>
-                  <Trash2 size={14} /> {tempIdle.length === scan.temp.length ? "clean all" : `clean the other ${tempIdle.length}`}
+                <Button onClick={() => void cleanAll(tempIdle, cut?.key ?? null)}>
+                  <Trash2 size={14} /> {tempIdle.length === temp.length ? "clean all" : `clean the other ${tempIdle.length}`}
                 </Button>
               )}
             </SectionHead>
@@ -192,32 +232,32 @@ export function DiskSheet() {
                 {walkButton && <Button onClick={() => void scanCode()}><Search size={14} /> {walkButton}</Button>}
               </div>
             )}
-            {scan.temp.length === 0
-              ? <div className="empty">Nothing temporary found.</div>
-              : <Groups rows={scan.temp} s={s} deletable />}
+            {temp.length === 0
+              ? <div className="empty">Nothing temporary found{on}.</div>
+              : <Groups rows={temp} s={s} deletable onAll={onAll} cutOn={!!cut} />}
 
-            <SectionHead title="AI models" size={totalText(total(scan.models))}
+            <SectionHead title="AI models" size={totalText(total(models))}
               explain="Hugging Face and Ollama downloads. Each is downloaded again the next time something asks for that model." />
-            {scan.models.length === 0 ? <div className="empty">No Hugging Face or Ollama models found.</div> : <Groups rows={scan.models} s={s} deletable />}
+            {models.length === 0 ? <div className="empty">No Hugging Face or Ollama models found{on}.</div> : <Groups rows={models} s={s} deletable onAll={onAll} cutOn={!!cut} />}
 
             <SectionHead title="Show only"
               explain="Where else the space is. Nothing here can be deleted from the phone — each row says how to free it by hand." />
-            {scan.show.length === 0 ? <div className="empty">None of these folders exist on this desktop.</div> : <Groups rows={scan.show} s={s} deletable={false} />}
+            {show.length === 0 ? <div className="empty">{cut ? `None of these folders are${on}.` : "None of these folders exist on this desktop."}</div> : <Groups rows={show} s={s} deletable={false} onAll={onAll} cutOn={!!cut} />}
           </>
         )}
 
         <SectionHead title="Large files">
           {!large?.running && <Button onClick={() => void scanLarge()}><Search size={14} /> {large ? "search again" : "search"}</Button>}
         </SectionHead>
-        <div className="dk-sec-line">{largeLine(large, now, LARGE_LIMIT_S, ago)}</div>
-        {large && large.items.length > 0 && (
+        <div className="dk-sec-line">{largeLine(large, now, LARGE_LIMIT_S, ago)}{cut && large && !large.running && large.items.length > 0 ? ` ${largeItems.length} of the ${large.items.length} listed are${on}.` : ""}</div>
+        {largeItems.length > 0 && (
           <ul className="dk-list">
-            {large.items.map((f) => (
+            {largeItems.map((f) => (
               <li key={f.path} className="dk-row">
                 <div className="dk-body">
                   <div className="dk-line"><Label text={f.path} /><span className="dk-size">{sizeText(f.sizeKb)}</span></div>
                   <Meter kb={f.sizeKb} max={largeMax} />
-                  {f.mtime != null && <div className="dk-sub">changed {ago(f.mtime)}</div>}
+                  {(f.mtime != null || onAll) && <div className="dk-sub">{[onAll ? diskName(scan, f.vol) : null, f.mtime != null ? `changed ${ago(f.mtime)}` : null].filter(Boolean).join(" · ")}</div>}
                 </div>
               </li>
             ))}

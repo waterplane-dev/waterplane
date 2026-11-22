@@ -132,8 +132,9 @@ const HOOKS = {
     "useMemo", "useMemo", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useRemoteResource", "useRescan", "useMemo", "useRemoteResource", "useRescan", "useMemo", "useMemo",
     // range, days, daily, running, trend, mixRows, bands, agentDays, hourRows, hourly, the three fills
     "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
-    // the span's own cost window and its repos; the calibration, the calendar cut, the clock, the span's money words
-    "useRemoteResource", "useRescan", "useMemo", "useMemo", "useMemo", "useMemo",
+    // the span's own cost window; past 35 days the repos summed from the days (2026-11-22), then its
+    // repos; the calibration, the calendar cut, the clock, the span's money words
+    "useRemoteResource", "useRescan", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
     // the Setup check door's scroll-to-box effect. (2026-11-16, setup check X1: the insights panel and
     // its span-before read are gone; `FindingsLine` is one line into the Setup check, its own hooks.)
     "useEffect",

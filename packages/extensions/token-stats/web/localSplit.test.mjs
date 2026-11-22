@@ -92,3 +92,14 @@ test("subtraction clamps at zero and never makes a bucket negative", () => {
   assert.deepEqual(subTotals(T(1), T(5)), T(0));
   assert.equal(subCost(C(1), C(3)).total, 0);
 });
+
+test("the cut takes a local model's tokens off a day's per-repo slice too, which has no model split of its own", () => {
+  const d = doc();
+  d.days[1].byRepo = [{ repo: "/r", turns: 5, pricedTurns: 3, usd: 6, totals: T(5), cost: C(6), localTotals: T(2) }];
+  d.days[2].byRepo = [{ repo: "/r", turns: 1, pricedTurns: 0, usd: 0, totals: T(1), cost: C(0), localTotals: T(1) }];
+  const out = splitLocal(d);
+  const day30 = out.doc.days.find((x) => x.day === "2026-09-30");
+  assert.equal(tokenTotal(day30.byRepo[0].totals), tokenTotal(T(3)));
+  assert.equal(day30.byRepo[0].localTotals, undefined, "the local part is spent once, not carried to be taken off again");
+  assert.equal(out.doc.days.find((x) => x.day === "2026-10-01"), undefined, "an all-local day is gone with its repo slice");
+});

@@ -36,7 +36,7 @@ import { decode, encode } from "@waterplane/shared";
 import type { ClientMessage } from "@waterplane/shared";
 import { assertShippable, createDemoHost, restoreDemoHost } from "./host/index.ts";
 import type { DemoClock, DemoConnection, DemoFaultRule, DemoHost, DemoHttpRequest, DemoHttpResponse, DemoOut, DemoScenario } from "./host/index.ts";
-import { LS, demoSnapKey } from "../storage.ts";
+import { LS, demoSnapKey, lsDel, ssStore } from "../storage.ts";
 import { DEMO_SCENARIOS } from "./scenarios/index.ts";
 import { demoScenarioId, setDemoActive } from "./mode.ts";
 import { rememberDemoUpload } from "./media.ts";
@@ -310,7 +310,7 @@ export function createDemoTransport(cfg: DemoTransportConfig): DemoTransport {
   // A fresh entry (no snapshot of this scenario in the tab) starts with an empty send queue: a refused
   // send left by the scenario before it would otherwise show as "1 send stuck" in this one.
   if (saved === undefined) {
-    for (const k of [LS.outbox, LS.composeOutbox]) { try { globalThis.localStorage?.removeItem(k); } catch { /* storage off */ } }
+    for (const k of [LS.outbox, LS.composeOutbox]) lsDel(k);
   }
   // A scenario naming no plugins lists the builtins the demo fixtures ask for (android-apps: on).
   const defaults = { plugins: demoPluginViews() };
@@ -546,8 +546,7 @@ export function installDemoTransport(): boolean {
     setDemoActive(null, `There is no demo called "${id}" in this build.`);
     return false;
   }
-  let store: DemoStore | null = null;
-  try { store = globalThis.sessionStorage ?? null; } catch { store = null; }
+  const store: DemoStore | null = ssStore();
   const dev = !!(import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV;
   // This runs at module top of `main.tsx`, BEFORE React mounts: a throw here (a scenario with a
   // fault rule, a protocol it cannot speak, a snapshot it cannot restore) would leave a white

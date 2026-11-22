@@ -82,6 +82,21 @@ export interface GitCommit {
   check?: GitCheck;
 }
 
+/** One file a commit changed (`git show --name-status`, first parent for a merge). `status` is git's
+ *  letter: A added, M modified, D deleted, R renamed (`from` = old path), C copied, T type change. */
+export interface GitCommitFile {
+  path: string;
+  status: string;
+  from?: string;
+}
+
+/** A tapped commit: message + stat, and the files it changed. `files` absent = the list could not
+ *  be read (the row draws the body alone); `[]` = the commit changed no file. */
+export interface GitShow {
+  body: string;
+  files?: GitCommitFile[];
+}
+
 /** One run of the pre-push hook over one commit (host `prepushcheck.ts`). Information only: the
  *  real push still runs the hook. */
 export interface GitCheck {

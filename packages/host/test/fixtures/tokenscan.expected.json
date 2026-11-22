@@ -74,7 +74,22 @@
      "turns": 5,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 87766
+     "ctxTok": 87766,
+     "totals": {
+      "input": 1266,
+      "output": 652,
+      "cacheRead": 41000,
+      "cacheWrite": 45500,
+      "cacheWrite1h": 42000,
+      "turns": 5
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
     }
    ]
   },
@@ -138,7 +153,22 @@
      "turns": 2,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 32110
+     "ctxTok": 32110,
+     "totals": {
+      "input": 10,
+      "output": 480,
+      "cacheRead": 17000,
+      "cacheWrite": 15100,
+      "cacheWrite1h": 15100,
+      "turns": 2
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
     }
    ]
   },
@@ -202,7 +232,30 @@
      "turns": 138,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 956153
+     "ctxTok": 956153,
+     "totals": {
+      "input": 9453,
+      "output": 19044,
+      "cacheRead": 945300,
+      "cacheWrite": 1400,
+      "cacheWrite1h": 700,
+      "turns": 138
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     },
+     "localTotals": {
+      "input": 3105,
+      "output": 6256,
+      "cacheRead": 310500,
+      "cacheWrite": 500,
+      "cacheWrite1h": 250,
+      "turns": 46
+     }
     }
    ]
   },
@@ -266,14 +319,60 @@
      "turns": 205,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 4971250
+     "ctxTok": 4971250,
+     "totals": {
+      "input": 49200,
+      "output": 98605,
+      "cacheRead": 4920000,
+      "cacheWrite": 2050,
+      "cacheWrite1h": 1050,
+      "turns": 205
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     },
+     "localTotals": {
+      "input": 16560,
+      "output": 33189,
+      "cacheRead": 1656000,
+      "cacheWrite": 650,
+      "cacheWrite1h": 350,
+      "turns": 69
+     }
     },
     {
      "repo": "/fx/repo-two",
      "turns": 1,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 900
+     "ctxTok": 900,
+     "totals": {
+      "input": 900,
+      "output": 90,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cacheWrite1h": 0,
+      "turns": 1
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     },
+     "localTotals": {
+      "input": 900,
+      "output": 90,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cacheWrite1h": 0,
+      "turns": 1
+     }
     }
    ]
   },
@@ -337,7 +436,30 @@
      "turns": 57,
      "pricedTurns": 0,
      "usd": 0,
-     "ctxTok": 2136397
+     "ctxTok": 2136397,
+     "totals": {
+      "input": 21147,
+      "output": 42351,
+      "cacheRead": 2114700,
+      "cacheWrite": 550,
+      "cacheWrite1h": 250,
+      "turns": 57
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     },
+     "localTotals": {
+      "input": 7068,
+      "output": 14155,
+      "cacheRead": 706800,
+      "cacheWrite": 200,
+      "cacheWrite1h": 100,
+      "turns": 19
+     }
     }
    ]
   }
@@ -819,7 +941,6 @@
     "cacheWrite": 0,
     "total": 0
    },
-   "priced": false,
    "byModel": [
     {
      "model": "claude-test-a",
@@ -911,7 +1032,6 @@
     "cacheWrite": 0,
     "total": 0
    },
-   "priced": false,
    "byModel": [
     {
      "model": "qwen-test:7b",

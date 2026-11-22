@@ -19,7 +19,7 @@ export const manifest: FeatureManifest = {
   id: "desktop",
   // The literal form (`tools/webshape.test.mjs` reads it); `state.ts` opens the same id as DESKTOP_SHEET.
   sheets: [{ id: featureSheetId("desktop", "view"), persisted: false, render: () => createElement(DesktopSheet) }],
-  sessionViews: [{ id: "desktop", label: "Desktop", icon: Monitor, available: desktopAvailability, open: () => openDesktop() }],
-  launcherItems: [{ id: "desktop", label: "Desktop", icon: Monitor, order: 10, available: desktopAvailability, open: () => openDesktop() }],
+  sessionViews: [{ id: "desktop", label: "Remote desktop", icon: Monitor, available: desktopAvailability, open: () => openDesktop() }],
+  launcherItems: [{ id: "desktop", label: "Remote desktop", icon: Monitor, order: 10, available: desktopAvailability, open: () => openDesktop() }],
   messages: { welcome: () => { void refreshProbe(); } },
 };

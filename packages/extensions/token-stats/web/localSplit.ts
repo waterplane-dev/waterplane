@@ -112,6 +112,12 @@ export function splitLocal(doc: TokenStatsDoc): LocalSplit | { refused: string }
   const days: TokenDay[] = doc.days
     .map((d) => {
       const c = cutBucket(d);
+      // A day×repo cell has no model split; its non-Anthropic part rides as `localTotals`.
+      if (c.byRepo) {
+        c.byRepo = c.byRepo
+          .map(({ localTotals, ...r }) => (localTotals && r.totals ? { ...r, totals: subTotals(r.totals, localTotals) } : r))
+          .filter((r) => !r.totals || active(r.totals));
+      }
       return d.agents ? { ...c, agents: d.agents.filter((a) => !isLocal(a.model)) } : c;
     })
     .filter(active);

@@ -9,7 +9,7 @@ import { extname } from "node:path";
 import { logTag, type SessionInfo } from "@waterplane/shared";
 import { cachedBranchRules } from "../branchrules.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
-import { gitFetch, gitLog, gitShow } from "../gitlog.js";
+import { gitFetch, gitLog, gitShow, gitShowFile } from "../gitlog.js";
 import { FIX_SCOPE, confirmGate, fixBind, fixGateRefusal, gateRefusal, withFixConfirms } from "../confirmgate.js";
 import { efficiencyState, isEfficiencyTarget, writeEfficiencyRules } from "../efficiencywrite.js";
 import { invalidateSetupCheck } from "../setupcheck/store.js";
@@ -237,9 +237,17 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     return true;
   }),
   route<RepoReq>("GET", "git/show/*", async ({ res, url, wt }) => {
-    const body = await gitShow(wt, url.searchParams.get("sha") || "");
-    if (body == null) return json(res, { error: "no such commit" }, 404), true;
-    json(res, { body });
+    const sha = url.searchParams.get("sha") || "";
+    const path = url.searchParams.get("path");
+    // `path`: that one file's diff in the commit (read-only; a literal pathspec, never a file read).
+    if (path) {
+      const diff = await gitShowFile(wt, sha, path, url.searchParams.get("from") || undefined);
+      if (diff == null) return json(res, { error: "no such commit" }, 404), true;
+      return json(res, { diff }), true;
+    }
+    const show = await gitShow(wt, sha);
+    if (show == null) return json(res, { error: "no such commit" }, 404), true;
+    json(res, show);
     return true;
   }),
   // POST: it moves remote-tracking refs (never the branch or the tree).

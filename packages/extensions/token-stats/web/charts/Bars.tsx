@@ -100,6 +100,9 @@ export function Bars({ rows, money = false, bands: modelSlots }: {
             <span className="ts-barlabel" title={b.item.key}>{b.label}</span>
             <span className="ts-barval">
               {money ? fmtUsd(b.value) : b.text}
+              {/* Counted in tokens, the row still says what it cost — as the
+                  totals line above does — so the money is never a toggle away. */}
+              {!money && b.item.priced !== false && b.item.cost.total > 0 ? <em>{fmtUsd(b.item.cost.total)}</em> : null}
               {/* A model with no published rate shows the fact rather than a
                   $0 that reads as "free". */}
               {money && b.item.priced === false ? <em>no list price</em> : <em>{fmtShare(b.share)}</em>}
