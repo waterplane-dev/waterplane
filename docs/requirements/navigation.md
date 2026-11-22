@@ -103,3 +103,13 @@ No screen or sheet shows a Home button; the back chevron is the only way back to
 - asked: 2026-11-18, 2026-11-18, 2026-11-19
 - shipped: a2d286174
 
+### R-navigation-022 · shipped
+The menu entry for the live desktop feature is named "Remote desktop", not "Desktop".
+- asked: 2026-11-21
+- shipped: a33ec90dc
+
+### R-navigation-023 · shipped
+The disk-space screen has a line in the launcher's "This desktop" menu, hidden while the extension is off.
+- asked: 2026-11-22
+- shipped: 07ad9b8a4
+

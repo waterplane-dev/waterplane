@@ -13,6 +13,8 @@ test("a remedy is a repo-targeted seed that names where it came from, and sends 
     cwdHint: "/dev/myapp",
     repoId: "r1",
     origin: "From myapp's repo readings — context weight",
+    // The button remembers the session it starts under this key (`lastAsk.ts`).
+    askKey: "readings:r1:context weight",
   });
 });
 

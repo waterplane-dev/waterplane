@@ -178,6 +178,9 @@ export function openEvidence(rawRoute: EvidenceRoute, repoId: string | null): vo
   }
 }
 
+/** What a finding's ask button is remembered under (`lastAsk.ts`): the finding, on the repo the card is for. */
+export const findingAskKey = (f: Finding, repoId: string | null): string => `setup:${repoId ?? "-"}:${f.id}`;
+
 /** An `agent` remedy: the check's own words for that repo's agent, typed into the Send sheet. Sends nothing. */
 export function agentRemedy(f: Finding, repoId: string | null): { ok: true } | { ok: false; why: string } {
   if (f.remedy.kind !== "agent") return { ok: false, why: "no prompt" };
@@ -193,6 +196,7 @@ export function agentRemedy(f: Finding, repoId: string | null): { ok: true } | {
     cwdHint: repo.worktreePath,
     repoId: repo.id,
     origin: `From Setup & health — ${f.what.slice(0, 60)}`,
+    askKey: findingAskKey(f, repoId),
   });
   return { ok: true };
 }
@@ -221,6 +225,7 @@ export function seedRemedy(f: Finding, repoId: string | null): { ok: true } | { 
     cwdHint: repo.worktreePath,
     repoId: repo.id,
     origin: `From Setup & health — ${f.what.slice(0, 60)}`,
+    askKey: findingAskKey(f, repoId),
   };
   c.nav.openSend(seed);
   return { ok: true };

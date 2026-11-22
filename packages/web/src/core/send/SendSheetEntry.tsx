@@ -18,6 +18,7 @@ import { SEND_DRAFT } from "../../sendIntent";
 import type { SendApi } from "./useSend";
 import { seedDiscard, SEED_ROW_GONE_DISCARD } from "../../relayedRow";
 import { isLaterId } from "../queue/logic.ts";
+import { noteAsk } from "../../lastAsk";
 
 export interface SendSheetEntryProps {
   send: SendApi;
@@ -86,6 +87,9 @@ export function SendSheetEntry(p: SendSheetEntryProps) {
         // the INTENT and never off the seed: the seed's target is what was
         // proposed and the intent's is what was chosen.
         if (sendSeed.openAfter && intent.target.kind === "session") openSent(intent.target.sessionId);
+        // An ask button's send into an existing session: that session is where its answer is
+        // (a new session is remembered when its create is minted, in `useSend`).
+        if (sendSeed.askKey && intent.target.kind === "session") noteAsk(sendSeed.askKey, { sid: intent.target.sessionId, cwd: intent.target.cwd });
         return true;
       }}
       onDiscard={sendSeed.ackId || sendSeed.padId

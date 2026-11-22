@@ -110,3 +110,8 @@ The 'Open a shell here' action sits in the repo menu's Work group, not under Git
 - asked: 2026-11-19
 - shipped: 3c8b16f44
 
+### R-shell-018 · shipped
+The updates screen has an "in shell" button beside the hand command that seeds it into the companion shell's prompt box, with a way back.
+- asked: 2026-11-21
+- shipped: d498dc7ce
+

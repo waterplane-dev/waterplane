@@ -691,7 +691,7 @@ export function useLaunch(deps: LaunchDeps) {
    *  the send is accepted. Nothing is queued while the launch question is up,
    *  so a dismissal there has to hand them back (`askLaunchFirst`). A caller
    *  whose prompt is generated (the build sheet's *set up*) passes none. */
-  function startSessionWithPrompt(cwd: string, title: string, prompts: string[], sequential?: boolean, launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget) {
+  function startSessionWithPrompt(cwd: string, title: string, prompts: string[], sequential?: boolean, launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget, onCreated?: (createAck: string) => void) {
     // The prompt chain and its `needs` are rebuilt on the way back in rather
     // than carried through the sheet: they are cheap to derive and the strings
     // are still the caller's, where a half-built op parked in a state field
@@ -699,7 +699,7 @@ export function useLaunch(deps: LaunchDeps) {
     // The caller's budget STARTS the ask's field and the ask's answer wins
     // (`null` is "asked, and none"); a launch that was never asked keeps it.
     if (askLaunchFirst(title, { override: !!launchOverride, launch: launchOverride ?? launch, onCancel, budget },
-      (l, b) => startSessionWithPrompt(cwd, title, prompts, sequential, l, resume, onCancel, b === undefined ? budget : b ?? undefined))) return;
+      (l, b) => startSessionWithPrompt(cwd, title, prompts, sequential, l, resume, onCancel, b === undefined ? budget : b ?? undefined, onCreated))) return;
     const opts = launchOverride ?? launch;
     track("action:session.newprompt");
     const list = prompts.map((p) => p.trim()).filter(Boolean);
@@ -740,6 +740,7 @@ export function useLaunch(deps: LaunchDeps) {
     // exist (see `queueSessionPrompt`), so a whole plan can be written on a
     // train and delivered a step at a time when the link is back.
     for (const text of rest) queueSessionPrompt(cwd, text, createAck);
+    onCreated?.(createAck);
     // The screen comes up now, online or off — the whole point of the pending
     // session. `focus` still fires on the ack, and `adoptPendingSession` is
     // what turns this screen into that one.

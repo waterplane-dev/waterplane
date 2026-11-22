@@ -100,3 +100,8 @@ The release train rebuilds and pushes the static demo at waterplane.dev/demo by 
 - asked: 2026-11-20
 - shipped: 7b27d2cf9
 
+### R-ci-cd-022 · shipped
+The build fails when a module bundled into the VS Code extension imports code it cannot carry, such as node-only code.
+- asked: 2026-11-22
+- shipped: 588c3265e
+

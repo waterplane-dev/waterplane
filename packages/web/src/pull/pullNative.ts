@@ -4,6 +4,7 @@ import { nativeDiscard, nativeEnqueue, nativeList, nativePullSupported, type Nat
 import type { PullRecord } from "./pullTypes";
 import { NATIVE_SYNC_MS, artifactUrl } from "./pullConsts";
 import type { PullManager } from "./pullManager";
+import { nextNativeRate, type RateSample } from "./pullRate";
 
 // ── engine 0: the native service ──────────────────────────────────
 /**
@@ -61,6 +62,10 @@ export async function pullStartNative(this: PullManager, rec: PullRecord): Promi
     return false;
   }
 }
+
+/** The last byte count read per native row, for `nextNativeRate`. Memory
+ *  only: a reading from before a reload is too old to be about this run. */
+const rateSamples = new Map<string, RateSample>();
 
 /**
  * Read the service's queue and write it onto the records.
@@ -175,6 +180,10 @@ export async function pullSyncNative(this: PullManager, state?: NativePullState)
       patch.rate = undefined;
     } else if (row.state === "downloading") {
       patch.state = "downloading";
+      // The service reports bytes, not speed — measured here between syncs.
+      const now = Date.now();
+      patch.rate = nextNativeRate(rec.rate, rateSamples.get(row.id), row.received, now);
+      rateSamples.set(row.id, { received: row.received, at: now });
     } else if (rec.state === "downloading" || rec.state === "queued") {
       // `queued` in the service — a retry is counting down, or the platform
       // refused the start. Either way it is waiting, not running.
@@ -188,6 +197,7 @@ export async function pullSyncNative(this: PullManager, state?: NativePullState)
       // platform allows.
       if (!running && row.nextAt <= Date.now()) patch.nativeOwned = false;
     }
+    if (row.state !== "downloading") rateSamples.delete(row.id);
     this.patch(row.id, patch);
   }
   // A row this page believes the service is holding, which the service does

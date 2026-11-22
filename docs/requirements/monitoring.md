@@ -44,3 +44,13 @@ The desktop sheet always lists the top CPU programs inline and links each to the
 - asked: 2026-11-12, 2026-11-14
 - shipped: df1c9eb86, fcb698e91, 07b813e69
 
+### R-monitoring-010 · shipped
+Each exposure finding has an agent button ("investigate & mark") that checks whether a newer commit already fixes it, else makes the smallest fix, and marks it fixed, investigating or seen accordingly; with several open crash groups, "investigate & mark all N" seeds the Send sheet and sends nothing. It works for any exposure finding, not only one collector's reports.
+- asked: 2026-11-21
+- shipped: d70548af1, 57155dc4b
+
+### R-monitoring-011 · shipped
+The exposure watch screen reads cleanly: a finding's verbs sit in one wrapping row, a crash row shows place, version and count, and bulk dismissal is labelled "dismiss all" so the person knows what it does.
+- asked: 2026-11-21
+- shipped: 57155dc4b, 0a4ab9fab
+

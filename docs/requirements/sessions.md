@@ -332,3 +332,8 @@ The launcher's start-a-repo button reads 'New project…', since its sheet makes
 - asked: 2026-11-19
 - shipped: 1d446b630
 
+### R-sessions-070 · shipped
+An AI button remembers the session it last opened and links to it, so the person can jump back; a closed or still-starting session says so.
+- asked: 2026-11-22
+- shipped: 6d07eb72c
+

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.16 - 2026-11-22
+
+### New
+
+- **Ask buttons remember the session they started.** A "last answer" link under each button jumps to that session while it is open, says where it went once it is closed, and says "still starting" while the new session is being created.
+- **Downloads show a speed for the app's own engine.** The rate is measured between syncs and is left out when there is no recent reading.
+
+### Fixed
+
+- **Combine pictures no longer makes you wait after "combine & mark".** The full-size picture starts drawing while the preview is on screen, so the tap reuses it instead of spending seconds on "combining…".
+- **Token usage always re-reads when asked for fresh figures.** A refresh that landed in the same millisecond as the last scan could be skipped.
+
 ## 0.9.15 - 2026-11-22
 
 ### New

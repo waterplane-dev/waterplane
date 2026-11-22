@@ -93,7 +93,7 @@ export function promptSeen(seen: Set<string>, p: TranscriptPrompt): boolean {
 }
 
 /** Item heading, as the format writes it: `### R-<area>-<nnn> · <status>`. */
-export const REQ_ITEM_HEAD = /^### (R-[a-z0-9-]+-\d+) · (\w+)/gm;
+export const REQ_ITEM_HEAD = /^### (R-[a-z0-9-]+-\d+[a-z]?) · (\w+)/gm;
 
 export function countRequirements(md: string): Record<RequirementStatus, number> {
   const out = { requested: 0, shipped: 0, superseded: 0, dropped: 0 };
@@ -185,7 +185,7 @@ export function parseRequirementsArea(area: string, md: string): RequirementItem
   const out: RequirementItem[] = [];
   for (const raw of md.split(/^(?=### R-)/m).slice(1)) {
     const lines = raw.split("\n");
-    const m = /^### (R-[a-z0-9-]+-\d+) · (\w+)/.exec(lines[0]!);
+    const m = /^### (R-[a-z0-9-]+-\d+[a-z]?) · (\w+)/.exec(lines[0]!);
     if (!m || !(REQUIREMENT_STATUSES as readonly string[]).includes(m[2]!)) continue;
     const it: RequirementItem = { id: m[1]!, area, status: m[2] as RequirementStatus, text: "", asked: [], shipped: [], supersededBy: null };
     const text: string[] = [];

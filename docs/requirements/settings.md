@@ -76,6 +76,8 @@ Each top screen (Connection, This desktop, open tabs) has a gear that opens Sett
 - shipped: b3bb290af
 
 
-### R-settings-016 · requested
+### R-settings-016 · shipped
 A repo can be pinned to a chosen place among the other pinned repos from its own ⋯ menu (no permanent pin button); pinned repos lead the main view in that order, and a divider below them marks the rest as not pinned and switches their order between open sessions and name.
 - asked: 2026-11-21
+- shipped: 10b74b300
+

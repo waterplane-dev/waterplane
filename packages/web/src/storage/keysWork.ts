@@ -13,6 +13,8 @@ export const LS_WORK = {
   composeDrafts: lsKey("compose.drafts"),
   /** `pending:<createAck>` to the session it became (`core/queue/adoptions.ts`), bounded: where a late write aimed at a retired pending id goes. */
   pendingAdopted: lsKey("pending.adopted"),
+  /** Which session each "ask the agent" button last sent to (`lastAsk.ts`), bounded: that host's sessions. */
+  lastAsks: lsKey("lastAsks"),
   composeOutbox: lsKey("compose.outbox"),
   composeSheets: lsKey("compose.sheets"),
   /** Uploads whose bytes are gone: what `attachState` reads as a dead file. */

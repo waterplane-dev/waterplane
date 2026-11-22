@@ -89,3 +89,13 @@ In the image annotator a two-finger gesture pans and zooms and never places a ma
 - asked: 2026-11-20 (session 7d8630ec: "I must be able to scroll the screen with a 2 finger gesture - that kind of works at the moment but it also always places annotations I don't want to place"), 2026-11-20
 - shipped: the commit naming R-images-018
 
+### R-images-019 · shipped
+Images zoom with pinch, mouse wheel, trackpad pinch and zoom buttons, including double-tap zoom at the tapped point and the git before/after pictures.
+- asked: 2026-11-21, 2026-11-21
+- shipped: 1cdb9ebc9, e1749336a
+
+### R-images-020 · shipped
+Combining images finishes quickly: the full-size render starts while the preview is on screen and the tap reuses it.
+- asked: 2026-11-22
+- shipped: a53b73cd6
+

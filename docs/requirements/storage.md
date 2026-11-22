@@ -44,3 +44,18 @@ Each lost store write is recorded with the file, time and where its bytes went, 
 - asked: 2026-11-14
 - shipped: 8f20bba6d, 351d51de6
 
+### R-storage-010 · shipped
+The disk-space screen shows temporary and AI-model rows with their delete buttons as soon as they are sized, finishes its large-file search without timing out, and lists rows as they are found, also on Windows and Linux.
+- asked: 2026-11-22
+- shipped: 1b9a45797, 07ad9b8a4, 147a97118
+
+### R-storage-011 · shipped
+Disk usage is shown per disk or partition, fullest first, with every list cut to the picked disk and an every-disk button.
+- asked: 2026-11-22
+- shipped: d267af353, 0944f4f59
+
+### R-storage-012 · shipped
+All localStorage access goes through storage.ts, and a lint rule rejects direct access elsewhere.
+- asked: 2026-11-22
+- shipped: 5a282693e
+

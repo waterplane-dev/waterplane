@@ -11,7 +11,8 @@ import { core } from "../../sdk";
 import { Button, ConfirmButton, Explain, Hint, useRemoteResource } from "../../kit";
 import { agentVerb, fixConfirmWords, fixNeedsConfirm, fixVerb, setupRows } from "../../setupRemedy";
 import { doorOffered, evidenceLabel, savingLine, writePlanWords } from "../../setupCheckWords";
-import { agentRemedy, openEvidence, permissionsDoorOn, runFix, runHostFix, seedRemedy, waive, writeRules } from "./actions";
+import { LastAskLink } from "../../LastAskLink";
+import { agentRemedy, findingAskKey, openEvidence, permissionsDoorOn, runFix, runHostFix, seedRemedy, waive, writeRules } from "./actions";
 import { WEIGHT_FINDING_ID, backendLabels, blockLines, notCheckedSentences, evidenceDoorOf, fixRoute, weightClocksOf } from "./logic";
 import { SeriesSpark } from "../../RepoHealthTiles";
 import { rankSentence, seriesValueWords } from "../../repoHealthWords";
@@ -65,6 +66,7 @@ export function FindingCard({ f, ctx }: { f: Finding; ctx: RowCtx }) {
       {f.remedy.kind === "write" && ctx.repoId
         ? <WriteControl repoId={ctx.repoId} target={f.remedy.target} done={ctx.reload} setNote={setNote} lead={doorButton} trail={waiveButton} />
         : <div className="sc-acts">{doorButton}<RemedyControl f={f} ctx={ctx} setNote={setNote} doFix={doFix} />{waiveButton}</div>}
+      {(f.remedy.kind === "agent" || f.remedy.kind === "seed") && <LastAskLink askKey={findingAskKey(f, ctx.repoId)} />}
       {note && <Hint>{note}</Hint>}
     </div>
   );

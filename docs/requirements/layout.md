@@ -144,3 +144,8 @@ Repo cards sit close to the screen edge with equal left and right margins, and t
 - asked: 2026-11-19, 2026-11-19
 - shipped: fb2552c28, d61a9d7f1
 
+### R-layout-034 · shipped
+Screens keep a left gutter so content never sits flush against the left edge, including the scorecard title row and the Apps sheet.
+- asked: 2026-11-22, 2026-11-22
+- shipped: 9551d9491, e71ff2d0b
+

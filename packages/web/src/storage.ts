@@ -147,7 +147,7 @@ export const KEY_SCOPE = {
   sessionTabs: "device", sessionTabsPhone: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
   sessionTabsSync: "device", tabsSaverAsked: "device", tabOrderShared: "host", tabOpensShared: "host",
   // work in flight: that host's words, that host's queue
-  outbox: "host", compose: "host", composeDrafts: "host", pendingAdopted: "host", composeOutbox: "host", composeSheets: "host",
+  outbox: "host", compose: "host", composeDrafts: "host", pendingAdopted: "host", lastAsks: "host", composeOutbox: "host", composeSheets: "host",
   deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
   // the language spoken into THIS phone (the vocabulary, `dictateTerms`, is the person's and synced)
   dictateLang: "device", dictateLangs: "device", snippetRecent: "device",

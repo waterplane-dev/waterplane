@@ -105,7 +105,7 @@ function parseArea(src) {
   const preamble = parts[0];
   const items = parts.slice(1).map((raw) => {
     const lines = raw.split("\n");
-    const m = /^### (R-[a-z0-9-]+-\d+) · (\w+)/.exec(lines[0]) || [];
+    const m = /^### (R-[a-z0-9-]+-\d+[a-z]?) · (\w+)/.exec(lines[0]) || [];
     const item = { id: m[1], status: m[2], text: [], asked: [], shipped: [], supersededBy: null, raw };
     for (const l of lines.slice(1)) {
       const b = /^- (asked|shipped|superseded-by): (.*)$/.exec(l);

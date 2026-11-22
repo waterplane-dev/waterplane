@@ -49,3 +49,8 @@ Token and context usage totals agree across every reader: synthetic rows are ski
 - asked: 2026-10-30
 - shipped: 04e4c0b3, 47f47902, 7115cbfa
 
+### R-token-stats-011 · shipped
+Token statistics and skill usage are saved per repo and per skill, so one change writes only that data and the app does not stall while saving.
+- asked: 2026-11-22
+- shipped: be44806aa, f5443c27d
+

@@ -291,7 +291,9 @@ export interface CoreApi {
     openRepo(t: RepoTarget): void;
     openSend(seed: SendSeed): void;
     startSessionWithPrompt(cwd: string, title: string, prompts: string[], sequential?: boolean,
-      launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget): void;
+      launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget,
+      /** Told the create's ackId once it is minted (after any launch ask) — what `lastAsk.ts` remembers. */
+      onCreated?: (createAck: string) => void): void;
     /** The backlog, scoped to one worktree — and, with `ids`, cut to exactly
      *  those rows under `label` (a count is a filter). */
     openBacklogCut(cwd: string, ids?: string[], label?: string): void;

@@ -42,6 +42,7 @@ import { randId } from "./randId";
 import { parsePendingId } from "./core/queue/pendingId";
 import { adoptedSession, recordAdoption, redirectDraftWrite, type Adoptions } from "./core/queue/adoptions";
 import { isRelayedLive } from "./relayedRow";
+import { noteAskAdopted } from "./lastAsk";
 import { rescuedFiledToast } from "@waterplane/shared";
 import { rescueWords, RESCUE_WHY, type RescueFiler, type RescueOutcome } from "./rescueFile";
 
@@ -487,6 +488,7 @@ export function loadAdoptions(): Adoptions {
 /** Remember that `pending:<createAck>` became `sessionId`, whether or not anyone stands on that screen. */
 export function noteAdopted(createAck: string, sessionId: string): void {
   write(LS.pendingAdopted, recordAdoption(loadAdoptions(), createAck, sessionId, Date.now()));
+  noteAskAdopted(createAck, sessionId);
 }
 /**
  * **Words typed on a `pending:<createAck>` screen that nothing can reach any more.**

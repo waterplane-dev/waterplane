@@ -50,6 +50,8 @@ import {
 } from "@waterplane/shared";
 import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint, Button, useOfflineGate } from "./kit";
 import { loadCliHealthSnap } from "./localState";
+import { LastAskLink } from "./LastAskLink";
+import { cliHealthAskKey } from "./lastAskLogic.ts";
 
 /** The `clihealth` frame's checkout pointer — present only from a developer's install. */
 export type CliHealthSource = NonNullable<Extract<HostMessage, { t: "clihealth" }>["source"]>;
@@ -330,6 +332,7 @@ function Row({ sig, now, version, onInspect }: {
           <Bug size={13} /> inspect in a session
         </Button>
       )}
+      {onInspect && (check.verdict === "degraded" || check.verdict === "broken") && <LastAskLink askKey={cliHealthAskKey(sig.id)} />}
     </div>
   );
 }

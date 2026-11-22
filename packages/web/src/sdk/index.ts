@@ -58,6 +58,8 @@ export { listRead, type HostList, type ListRead } from "../listRead.ts";
 export { secretFillers } from "./secretFillers.ts";
 /** Open a URL outside the app — the one call that works in both a browser tab and the Android shell. */
 export { openExternal } from "../openExternal.ts";
+// Under an ask-the-agent button: the session that button started last time (a seed's `askKey`, `lastAsk.ts`).
+export { LastAskLink } from "../LastAskLink.tsx";
 /** A full-resolution screenshot of the desktop into a repo's `.claude/outbox/` — the one capture route. */
 export { desktopScreenshot } from "../desktopShot.ts";
 /** Hide (or bring back) the Android shell's system bars; false where the shell cannot. */

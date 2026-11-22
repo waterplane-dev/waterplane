@@ -208,6 +208,8 @@ export interface SendSeed {
   scheduleId?: string;
   /** One line saying where this came from ("From the pad", "not delivered"). */
   origin?: string;
+  /** The ask button + subject that opened this: the session the send reaches is remembered under it (`lastAsk.ts`). */
+  askKey?: string;
   /** Check the files the text names, and offer to repair each one. */
   repair?: boolean;
   /** Where the half-written send is persisted, per keystroke. */

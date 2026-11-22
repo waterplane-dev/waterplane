@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import {
   autoCols, colChoices, collageFileName, collageLabel, decodeForCollage, planCollage,
-  releaseCollage, renderCollage, type CollageGap, type CollageItem,
+  releaseCollage, renderCollage, type CollageGap, type CollageItem, type CollageResult,
 } from "./collage";
 import { collagePanelNote } from "@waterplane/shared";
 import { effectiveMaxWidth, widthLabel } from "./uploadScale";
@@ -151,6 +151,30 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
     ? planCollage(items, { cols: chosen, gap, ...(upload.width ? { maxWidth: upload.width * chosen } : {}) })
     : null;
 
+  // The full-size render, started BEFORE the tap. Drawing and JPEG-encoding a
+  // canvas at the upload width per panel is seconds on a phone (two screenshots
+  // across are ~4.5 MP since the cap became per panel), and the person is
+  // looking at the preview anyway — so the work runs while they look, and
+  // `combine` picks up the result (or the render still in flight) when its
+  // inputs are the ones on screen. Debounced so a run of picker taps starts
+  // one render, not one per tap; at most one full-size canvas is live at a time
+  // because `renderCollage` releases each before resolving.
+  const fullKeyOf = (its: CollageItem[], c: number, g: CollageGap, l: boolean) => ({ its, c, g, l });
+  const full = useRef<{ key: ReturnType<typeof fullKeyOf>; job: Promise<CollageResult | null> } | null>(null);
+  const sameKey = (a: ReturnType<typeof fullKeyOf>, b: ReturnType<typeof fullKeyOf>) =>
+    a.its === b.its && a.c === b.c && a.g === b.g && a.l === b.l;
+  const fullOpts = (c: number) => ({ cols: c, gap, labels, ...(upload.width ? { maxWidth: upload.width * c } : {}) });
+  useEffect(() => {
+    if (!items || items.length < 2 || busy) return;
+    const key = fullKeyOf(items, chosen, gap, labels);
+    if (full.current && sameKey(full.current.key, key)) return;
+    const t = setTimeout(() => {
+      full.current = { key, job: renderCollage(items, fullOpts(chosen)) };
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `fullOpts` reads gap/labels/upload, which are the deps listed (upload is per mount)
+  }, [items, chosen, gap, labels, busy]);
+
   function thumbUrl(it: CollageItem): string {
     let u = thumbs.current.get(it);
     if (!u) { u = URL.createObjectURL(it.file); thumbs.current.set(it, u); }
@@ -191,12 +215,15 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
     track("action:collage.combine");
     setBusy(true);
     setErr(null);
-    const res = await renderCollage(items, {
-      // `chosen`, not `cols ?? undefined`: the width cap below is per column,
-      // so the column count must be the one it was computed for.
-      cols: chosen, gap, labels,
-      ...(upload.width ? { maxWidth: upload.width * chosen } : {}),
-    });
+    // `chosen`, not `cols ?? undefined`: the width cap is per column, so the
+    // column count must be the one it was computed for. A render already
+    // started for exactly what is on screen is reused (see `full` above).
+    const key = fullKeyOf(items, chosen, gap, labels);
+    const pre = full.current && sameKey(full.current.key, key) ? full.current.job : null;
+    full.current = null;
+    // A failed one already walked the whole fallback ladder; doing it again
+    // would double the wait for the same null.
+    const res = pre ? await pre : await renderCollage(items, fullOpts(chosen));
     if (!res) {
       setBusy(false);
       setErr("This device couldn't draw the combined image at any size — send them separately instead.");

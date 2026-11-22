@@ -54,6 +54,7 @@ import type { HostConnection } from "../../ws";
 import { buildLane, buildNameOf, buildQueueTitle, buildQueuedToast, useBuildNames } from "../../features/build";
 import type { useQueue } from "../queue/useQueue.ts";
 import { randId } from "../../randId";
+import { noteAsk } from "../../lastAsk";
 
 type Ref<T> = { readonly current: T };
 /** The queue core's return, as App holds it (`const q = useQueue(...)`). */
@@ -77,7 +78,9 @@ export interface SendDeps {
   geomRef: Ref<{ cols: number; rows: number }>;
   repoForCwd(cwd: string): RepoTarget | null;
   startSessionWithPrompt(cwd: string, title: string, prompts: string[], sequential?: boolean,
-    launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget): void;
+    launchOverride?: LaunchOpts, resume?: boolean, onCancel?: () => void, budget?: SessionBudget,
+    /** Told the create's ackId once it is minted (after any launch ask) — what `lastAsk.ts` remembers. */
+    onCreated?: (createAck: string) => void): void;
   setOverlay(o: Overlay): void;
   attach(s: SessionInfo): void;
 }
@@ -636,7 +639,9 @@ export function useSend(deps: SendDeps) {
             () => {
               openSend({ prompts: steps, target: i.target, cwdHint: cwd, repoId: seed.repoId, origin: seed.origin });
               showToast("nothing was started — your words are back in the send sheet");
-            }, i.target.budget);
+            }, i.target.budget,
+            // The button this came from remembers the session it started (`lastAsk.ts`).
+            seed.askKey ? (ack) => noteAsk(seed.askKey!, { ack, cwd }) : undefined);
           return true;
         }
         const q = queueBacklog({

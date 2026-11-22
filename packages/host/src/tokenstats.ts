@@ -221,7 +221,8 @@ export class TokenStatsStore {
    * in ten seconds should not walk 9,444 files twice.
    */
   async read(maxAgeMs = 15_000): Promise<TokenStatsDoc> {
-    if (Date.now() - this.lastScan > maxAgeMs) {
+    // `0` means re-read NOW, even when the last scan ended in this same millisecond (`> 0` skipped it then).
+    if (maxAgeMs <= 0 || Date.now() - this.lastScan > maxAgeMs) {
       // Share one walk between concurrent callers — the boot warm-up and a
       // phone opening the screen at the same moment is the ordinary case.
       this.inFlight ??= this.refresh().finally(() => { this.inFlight = null; });

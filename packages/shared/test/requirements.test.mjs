@@ -58,6 +58,12 @@ test("items are counted by the status in their heading; an unknown status counts
   assert.deepEqual(countRequirements(md), { requested: 1, shipped: 1, superseded: 1, dropped: 0 });
 });
 
+test("an ID with a one-letter suffix (R-updates-010a) is counted and parsed, not skipped", () => {
+  const md = "# updates\n\n### R-updates-010 · shipped\nx\n\n### R-updates-010a · shipped\ny\n";
+  assert.deepEqual(countRequirements(md), { requested: 0, shipped: 2, superseded: 0, dropped: 0 });
+  assert.deepEqual(parseRequirementsArea("updates", md).map((it) => it.id), ["R-updates-010", "R-updates-010a"]);
+});
+
 test("the preset names the command and declares it is machine-written", () => {
   const t = requirementsSkillText("node /x/update.mjs .");
   assert.match(t, /^---\nname: requirements\n/);

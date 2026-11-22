@@ -8,6 +8,7 @@ import type { CliHealthDoc, CliHealthSource, InspectFacts } from "../../CliHealt
 import { saveCliHealthSnap } from "../../localState";
 import { inspectPrompt, worsened } from "./logic";
 import { filter, rollup } from "./store";
+import { cliHealthAskKey } from "../../lastAskLogic.ts";
 
 /** The worst rollup this page has SEEN. The toast fires on a worsening, and
  *  only ever on a change — the first frame of a session sets the baseline
@@ -94,6 +95,7 @@ export function inspectInSession(facts: InspectFacts, source: CliHealthSource): 
     when: { kind: "now" },
     cwdHint: source.repo,
     origin: "From CLI health",
+    askKey: cliHealthAskKey(facts.id),
   });
 }
 

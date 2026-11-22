@@ -58,3 +58,7 @@ No code outside shared/ imports shared/format or shared/wire.
 - asked: 2026-11-11, 2026-11-12
 - shipped: 8e5d016de, bcfa1a017, 6dfd37df0
 
+### R-contributing-012 · requested
+Environment knobs for the brand watchers are read through the shared env() helper and listed in .env.example.
+- asked: 2026-11-22
+

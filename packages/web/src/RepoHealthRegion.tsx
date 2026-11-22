@@ -62,6 +62,8 @@ import { AxisRow, HealthNav, RefreshKey, SectionCard, navKeysOf, shownSections }
 import { DailyNotes } from "./RepoHealthNotes";
 import { HEALTH_SECTION } from "./sheetNames";
 import "./repohealth.css";
+import { LastAskLink } from "./LastAskLink";
+import { readingsAskKey } from "./lastAskLogic.ts";
 
 /** The size every button in the repo's action row uses. `ICON` is App-local
  *  (`App.tsx`, `const ICON = 16`) and `App.tsx` is not ours to import from, so
@@ -551,6 +553,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           <Button className="rh-verb" type="button" onClick={askAdopt}>
             <Send size={12} aria-hidden /> {ENGINE_ADOPT_LABEL}…
           </Button>
+          <LastAskLink askKey={readingsAskKey(repo.id, "the repo-health engine")} />
         </div>
       ) : null}
 
@@ -593,11 +596,12 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
                 onRun: () => { void runBackfill(); },
                 onRetry: () => { void runBackfill(true); },
               }}
-              actionsFor={onRemedy ? (s) => (
+              actionsFor={onRemedy ? (s) => (<>
                 <Button className="rh-verb" type="button" onClick={() => askAbout({ ...s, detail: s.means })}>
                   <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
                 </Button>
-              ) : undefined} />
+                {repo && <LastAskLink askKey={readingsAskKey(repo.id, s.label.toLowerCase())} />}
+              </>) : undefined} />
           ) : null}
 
           {/* WHOSE readings these are, once, as a heading — never a badge per

@@ -146,3 +146,21 @@ Dollar amounts are formatted one way everywhere: two decimals, so $0.50 never ap
 - asked: 2026-11-19
 - shipped: baeb85e3c
 
+### R-cost-030 · shipped
+The token usage screen shows each repo's and model's list-price dollars on every span, including all-time and 90 days, even when counting in tokens, and the limit week lists each weekly window's cost in dollars next to the limit window.
+- asked: 2026-11-22, 2026-11-22
+- shipped: c007be1f8, 530274fde, 2be3ba08c, a2be24cd5
+
+### R-cost-031 · requested
+The cost view breaks spend down per day, split by repo.
+- asked: 2026-11-22
+
+### R-cost-032 · requested
+Dollar figures show the subscription's real price alongside the API-equivalent value of usage, so the two are not confused.
+- asked: 2026-11-22
+
+### R-cost-033 · shipped
+Dollar amounts from $1,000 up use a comma thousands separator in every phone locale, so they never read as decimals.
+- asked: 2026-11-22
+- shipped: fed726248
+

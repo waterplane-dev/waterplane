@@ -230,3 +230,8 @@ The connection screen shows either a loading state or a connecting state, never 
 ### R-connection-041 · shipped
 The connection strip can be set to show only when something is wrong: the link is down or connecting, pings go unanswered, round trips are slow, the desktop is reached unprotected, a send is stuck, or the desktop is restarting; it stays a short while after, so a flapping link does not move the screen.
 - asked: 2026-11-20
+### R-connection-042 · shipped
+The speed test draws a live throughput graph of download and upload over time, kept after the run.
+- asked: 2026-11-21
+- shipped: 60c481416, f74aee6d4
+

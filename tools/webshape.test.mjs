@@ -618,7 +618,7 @@ const SEND_SPLIT_FILES = {
   "sendIntent/sendLead.ts": 80,
   "sendIntent/sendRetime.ts": 170,
   "sendIntent/sendRule.ts": 115,
-  "sendIntent/sendTypes.ts": 280,
+  "sendIntent/sendTypes.ts": 282, // +2: SendSeed.askKey (2026-11-22)
 };
 const SEND_SPLIT_DIRS = ["send", "sendIntent"];
 
@@ -868,9 +868,10 @@ const PULLLINK_SPLIT_FILES = {
   "pull/pullEngine.ts": 170,
   "pull/pullManager.ts": 130,
   "pull/pullMime.ts": 60,
-  "pull/pullNative.ts": 245, // +the keep-only-the-Downloads-copy switch
+  "pull/pullNative.ts": 255, // +the keep-only-the-Downloads-copy switch, +measured rate
   "pull/pullQueue.ts": 320,
   "pull/pullRange.ts": 220,
+  "pull/pullRate.ts": 40,
   "pull/pullSave.ts": 240, // +a dropped app copy: no save, and gone from Downloads is gone
   "pull/pullTypes.ts": 185, // +droppedAt
 };

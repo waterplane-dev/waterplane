@@ -20,7 +20,7 @@ const FROM = {
   notification: "a notification", welcome: "Welcome",
 };
 const from = (f) => (FROM[f] ?? (f === "sheet:hosts" ? "the Desktops screen" : f.startsWith("sheet:") ? "the " + f.slice(6) + " screen" : f));
-const cell = (s) => String(s).replace(/\|/g, "\\|");
+const cell = (s) => String(s).replace(/[\\|]/g, "\\$&");
 
 /** The table's lines for a door list: one row per task, doors fewest-taps first. */
 export function table(doors) {

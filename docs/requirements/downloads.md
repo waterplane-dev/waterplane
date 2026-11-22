@@ -81,3 +81,8 @@ Every download in the web app goes through the single download path, never throu
 - asked: 2026-11-10
 - shipped: 7cdcc498
 
+### R-downloads-018 · shipped
+The app's download speed is shown to the user.
+- asked: 2026-11-22
+- shipped: 8d0bcd8d5
+

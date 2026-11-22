@@ -6,6 +6,7 @@
 import type { RepoTarget } from "@waterplane/shared";
 import type { SendSeed } from "../../sendIntent";
 import type { SetupAim } from "./store";
+import { readingsAskKey } from "../../lastAskLogic.ts";
 
 /**
  * A reading whose answer is WORK, as a send seed: the prompt with the repo
@@ -20,6 +21,7 @@ export function remedySeed(prompt: string, repo: RepoTarget, label: string): Sen
     cwdHint: repo.worktreePath,
     repoId: repo.id,
     origin: `From ${repo.repoName}'s repo readings — ${label}`,
+    askKey: readingsAskKey(repo.id, label),
   };
 }
 

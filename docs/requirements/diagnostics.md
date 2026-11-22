@@ -113,3 +113,8 @@ A check that only reads files shows no scope line about backends it does not rea
 - asked: 2026-11-16
 - shipped: 0e0022255
 
+### R-diagnostics-024 · shipped
+The signal confirming a prompt reached the composer reports degraded only when prompts really fail to arrive, and reads a multi-line prompt scrolled past the composer on current Claude CLI versions.
+- asked: 2026-11-21
+- shipped: b345036a6
+

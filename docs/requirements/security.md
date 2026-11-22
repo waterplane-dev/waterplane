@@ -144,3 +144,17 @@ The Scorecard sheet shows the score over time: one point per Scorecard run on a 
 - asked: 2026-11-15
 - shipped: 2c9c1f402
 
+### R-security-030 · shipped
+Each finding in the Setup check says when it was first seen.
+- asked: 2026-11-22
+- shipped: 33d753210
+
+### R-security-031 · shipped
+The LAN identity is sealed with its desktop's token and never stored as a plain key while the mode is on.
+- asked: 2026-11-22
+- shipped: 42be63aa8
+
+### R-security-032 · requested
+The Cloud Run service uses its own key, separate from the keys of other services.
+- asked: 2026-11-22
+

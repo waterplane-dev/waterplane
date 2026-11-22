@@ -5,6 +5,17 @@ version — so entries are grouped by the release they shipped in. A fixed secur
 vulnerability in what ships is listed under a **Security:** bullet of the release that
 fixed it, with its CVE or GHSA id when one exists.
 
+## 0.1.36
+
+### New
+
+- **Ask buttons remember the session they started.** A "last answer" link under the button jumps to that session while it is live, says where it went once it is closed, and says "still starting" while the new session is queued. It is on the Setup & health findings (ask the agent, fix in this repo), the repo readings and the CLI health inspect button.
+- **Downloads show a speed for the app's own engine.** The service reports bytes only, so the rate is measured between syncs and left out when there is no recent reading.
+
+### Fixed
+
+- **Combine pictures no longer makes you wait after "combine & mark".** The full-size picture is drawn while the preview is on screen, and the tap uses it when nothing has changed. Two screenshots side by side took seconds of "combining…" before.
+
 ## 0.1.35
 
 ### New
